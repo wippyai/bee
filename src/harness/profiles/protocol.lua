@@ -20,7 +20,7 @@ type Workspace = access.Workspace
 type Bee = access.Bee
 type Placement = {kind: "native", home: "private" | "machine"} | {kind: "docker", profile_ref: string, overrides: Object?}
 type Profile = {schema_revision: string, definition_ref: string, driver_binding_ref: string, name: string,
-    provider: Provider, bee: Bee, placement: Placement?,
+    provider: Provider, bee: Bee, placement: Placement?, active_traits: {string}?,
     workdir: Workdir?, thread: Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?}
 type Request = {operation: string, workspace_id: string, profile_id: string, profile: Profile?, expected_revision: integer,
     idempotency_key: string, after_key: string, expected_cursor: integer?, limit: integer, definition_ref: string?, query: string?, sort: string?}
@@ -147,7 +147,7 @@ end
 function M.profile(value: unknown): (Profile?, string?)
     local raw = bounds.object(value)
     if not raw then return nil, "profile must be an object" end
-    local extra = bounds.fields(raw, {"schema_revision", "definition_ref", "driver_binding_ref", "name", "provider", "bee", "placement", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"})
+    local extra = bounds.fields(raw, {"schema_revision", "definition_ref", "driver_binding_ref", "name", "provider", "bee", "placement", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "active_traits"})
     if extra then return nil, extra end
     if raw.schema_revision ~= M.SCHEMA then return nil, "profile.schema_revision must be " .. M.SCHEMA end
     local definition, driver, name = bounds.id(raw.definition_ref), bounds.id(raw.driver_binding_ref), bounds.line(raw.name, 80)
@@ -157,6 +157,11 @@ function M.profile(value: unknown): (Profile?, string?)
     local bee, bee_error = M.bee(raw.bee)
     if not bee then return nil, bee_error end
     local result: Profile = {schema_revision = M.SCHEMA, definition_ref = definition, driver_binding_ref = driver, name = name, provider = provider, bee = bee}
+    if raw.active_traits ~= nil then
+        local selected, err = bounds.ids(raw.active_traits, true)
+        if not selected or #selected > 16 then return nil, err or "active_traits exceeds 16 traits" end
+        result.active_traits = selected
+    end
     local placement, placement_error = M.placement(raw.placement)
     if placement_error then return nil, placement_error end
     result.placement = placement
@@ -189,7 +194,7 @@ function M.profile(value: unknown): (Profile?, string?)
     return result, nil
 end
 
-type LaunchPreferences = {authority_grant_id: string?, docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
+type LaunchPreferences = {active_traits: {string}?, authority_grant_id: string?, docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
 function M.preferences(profile: Profile): (LaunchPreferences?, string?)
     local provider = profile.provider
     local options: Object = {}
@@ -210,7 +215,7 @@ function M.preferences(profile: Profile): (LaunchPreferences?, string?)
     local home: "private" | "machine"? = nil
     if profile.placement and profile.placement.kind == "native" then home = profile.placement.home end
     local overrides = profile.placement and profile.placement.kind == "docker" and profile.placement.overrides or nil
-    return {docker_overrides = overrides, home = home, bee = bee, options = options, mcp_tools = tools,
+    return {active_traits = profile.active_traits, docker_overrides = overrides, home = home, bee = bee, options = options, mcp_tools = tools,
         instructions = provider.system_prompt_append or ""}, nil
 end
 function M.agent_preferences(profile: Profile, tool_names: {string}): (LaunchPreferences?, string?)

@@ -146,12 +146,15 @@ end
 -- consent tool the person's profile lists is a base tool the person already
 -- chose, one the profile leaves out is not offered, and without a saved
 -- profile each consent tool waits for the person's approval of its trait.
-local function access_surface(raw: unknown, tools: {string}, selected: boolean): ({[string]: unknown}?, string?)
+local function access_surface(raw: unknown, tools: {string}, selected: boolean, seeds: {string}?): ({[string]: unknown}?, string?)
     local declared = bounds.object(raw)
     if not declared or bounds.fields(declared, {"policy", "traits"}) then return nil, "must be {policy, traits}" end
     local approver = bounds.id(declared.policy)
     local traits, traits_error = bounds.ids(declared.traits, true)
     if not approver or not traits or #traits == 0 then return nil, traits_error or "names no approver policy or trait" end
+    local seen: {[string]: boolean} = {}
+    for _, id in ipairs(traits) do seen[id] = true end
+    for _, id in ipairs(seeds or {}) do if not seen[id] then traits[#traits + 1] = id; seen[id] = true end end
     local consent: {[string]: boolean} = {}
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do consent[trait.id] = true end
     local extensions: {unknown} = {}
@@ -178,7 +181,7 @@ local function access_surface(raw: unknown, tools: {string}, selected: boolean):
         requestable[#requestable + 1] = assert(bounds.id(trait.id))
     end
     table.sort(requestable)
-    local composed: {[string]: unknown} = {tools = {}, traits = extensions, base_tools = base, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
+    local composed: {[string]: unknown} = {tools = {}, traits = extensions, base_tools = base, active_traits = seeds or {}, fixed_context = {}, dynamic_keys = {}}
     if #requestable > 0 then composed.access = {policy = approver, traits = requestable} end
     return composed, nil
 end
@@ -365,7 +368,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     local gateway_surface: {[string]: unknown}? = nil
     if data.gateway_access ~= nil then
         if data.gateway_surface ~= nil then return nil, ref .. ": gateway_access and gateway_surface cannot both declare access" end
-        local synthesized, access_error = access_surface(data.gateway_access, gateway_tools, selected ~= nil and selected.authority_grant_id ~= nil)
+        local synthesized, access_error = access_surface(data.gateway_access, gateway_tools, selected ~= nil and selected.authority_grant_id ~= nil, selected and selected.active_traits or nil)
         if not synthesized then return nil, ref .. ": gateway_access: " .. tostring(access_error) end
         local configured, _, surface_error = surface.prepare(synthesized, mcp.TOOLS, gateway_tools)
         if not configured then return nil, ref .. ": gateway_access: " .. tostring(surface_error) end
@@ -381,6 +384,11 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         local copied, copy_error = json.decode(encoded_surface)
         gateway_surface = bounds.object(copied)
         if not gateway_surface or copy_error then return nil, ref .. ": cannot copy gateway_surface" end
+        if selected and selected.active_traits then
+            gateway_surface.active_traits = selected.active_traits
+            local checked, _, err = surface.prepare(gateway_surface, mcp.TOOLS, admitted_tools)
+            if not checked then return nil, ref .. ": profile active_traits: " .. tostring(err) end
+        end
     end
     local allowed_overrides, overrides_error = bounds.ids(data.allowed_overrides == nil and {} or data.allowed_overrides, true)
     if not allowed_overrides then return nil, ref .. ": allowed_overrides: " .. tostring(overrides_error) end

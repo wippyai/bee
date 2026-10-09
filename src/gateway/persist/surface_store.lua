@@ -7,6 +7,7 @@ local authority = require("authority")
 local clock = require("clock")
 local canonical = require("canonical")
 local mcp = require("mcp")
+local profile_grants = require("profile_grants")
 local M = {}
 type State = {surface_json: string, active_json: string, context_json: string, revision: integer}
 type Fault = {code: string, message: string}
@@ -19,6 +20,8 @@ function M.profile_authority(tx: sql.Transaction, binding_id: string, workspace:
     local grant, err = authority.read(tx,id)
     if not grant or err or grant.workspace_id ~= (workspace or "legacy:unscoped") or authority.state(grant,now or clock.milliseconds()) ~= "active" then return nil,fault("DENIED",err or "surface consent is no longer active") end
     if grant.domain == "profile_choices" then
+        local invalid = profile_grants.live(tx, grant)
+        if invalid then return nil, fault("DENIED", invalid) end
         local parameters = bounds.object(grant.scope.parameters)
         local saved = parameters and bounds.object(parameters.configuration)
         local bee = saved and bounds.object(saved.bee)

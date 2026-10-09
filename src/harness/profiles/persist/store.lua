@@ -173,15 +173,17 @@ end
 local function put(store: sync.Store, tx: sql.Transaction, input: Request, node: string, actor: string, feed_name: string): Result
     local profile = input.profile
     if not profile then return failure("INVALID_ARGUMENT", "put profile is required") end
+    local approving, _, authorization_error = authority.authorize(tx, input.workspace_id, profile)
+    if authorization_error then return failure("DENIED", authorization_error) end
     local result = append(store, tx, input, node, actor, feed_name, input.profile_id, profile, false)
     if not result.ok then return clean(result) end
     local value = bounds.object(result.value)
     local revision = value and bounds.count(value.revision) or nil
     if not revision then return failure("INTERNAL", "profile append omitted revision") end
     if not result.replayed then
-        local retired = authority.retire(tx,node,input.workspace_id,input.profile_id,actor)
+        local retired = authority.retire(tx,node,input.workspace_id,input.profile_id,actor,approving and approving.grant_id or nil)
         if retired then return failure("STORAGE",retired) end
-        local record, err = authority.save(tx,node,input.workspace_id,input.profile_id,revision,profile,actor,false,clock.now())
+        local record, err = authority.save(tx,node,input.workspace_id,input.profile_id,revision,profile,actor,false,clock.now(),approving)
         if not record then return failure("STORAGE",err or "save profile grant") end
     end
     local saved = reply(input,input.profile_id,revision,profile,false)

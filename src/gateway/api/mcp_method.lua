@@ -431,6 +431,8 @@ local function handle(): nil
     if not tool then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "tool is not admitted for this binding")); return nil end
     local admitted = gateway.admit_call(binding,tool.name)
     if not admitted.ok then answer(response,http.STATUS.OK,mcp.result(call.id,reply_result(admitted,nil))); return nil end
+    local admission = bounds.object(admitted.value)
+    binding.approving_grant_id = admission and bounds.id(admission.grant_id)
     local recorded = gateway.record_external_call(binding, tool.name)
     if not recorded.ok then answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(recorded, nil))); return nil end
     local arguments: Object? = nil

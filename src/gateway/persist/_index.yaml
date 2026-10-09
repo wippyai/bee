@@ -34,6 +34,7 @@ entries:
     clock: bee.values:clock
     canonical: bee.values:canonical
     mcp: bee.gateway.api:mcp
+    profile_grants: bee.harness.profiles.persist:grants
 - name: external_store
   kind: library.lua
   source: file://external_store.lua

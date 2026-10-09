@@ -9,4 +9,5 @@ entries:
   imports:
     bounds: bee.values:bounds
     descriptors: bee.driver.descriptor:descriptor
+    agent_trait: bee.values:agent_trait
     protocol: bee.harness.profiles:protocol

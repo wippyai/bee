@@ -27,9 +27,12 @@ function M.call(target: string, request: unknown): {[string]: unknown}
     assert(not err, tostring(err))
     return M.value(raw)
 end
-function M.approve(binding: gateway.Binding): (string, string, {[string]: unknown})
-    local requested = M.value(gateway.request_access(binding, {idempotency_key = harness.key(), traits = {M.TRAIT}, reason = "Remember facts from this session."}))
-    local id = assert(bounds.id(requested.approval_id))
+function M.approve(binding: gateway.Binding, approval: string?): (string, string, {[string]: unknown})
+    local id = approval
+    if not id then
+        local requested = M.value(gateway.request_access(binding, {idempotency_key = harness.key(), traits = {M.TRAIT}, reason = "Remember facts from this session."}))
+        id = assert(bounds.id(requested.approval_id))
+    end
     local person = funcs.new():with_actor(security.new_actor("bee.application:" .. M.WORKSPACE .. ":needs-you", {workspace_id = M.WORKSPACE, definition_id = "bee.approvals.inbox.app:app"}))
     local raw, err = person:call("bee.approvals.binding:read", {approval_id = id})
     assert(not err, tostring(err))
@@ -40,7 +43,7 @@ function M.approve(binding: gateway.Binding): (string, string, {[string]: unknow
     M.value(gateway.access_status(binding, id))
     return id .. ":grant", id, question
 end
-function M.open(): (Session, {[string]: unknown})
+function M.open(seed: boolean?): (Session, {[string]: unknown})
     M.call("bee.gateway.binding:open", {address = assert(configuration.current()).address})
     local owner = harness.session_owner(M.WORKSPACE)
     local opened = harness.value(owner:call("session_create", {operation_key = harness.key()}))
@@ -56,10 +59,10 @@ function M.open(): (Session, {[string]: unknown})
     local declared = assert(traits.load(M.TRAIT))
     local admitted = M.call("bee.gateway.binding:admit", {subject = session, action_id = session, attempt_id = attempt,
         thread_id = thread, workspace_id = M.WORKSPACE, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {},
-        surface = {tools = {}, traits = {declared}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {}, access = {policy = "agent-access", traits = {M.TRAIT}}}})
+        surface = {tools = {}, traits = {declared}, base_tools = {}, active_traits = seed and {M.TRAIT} or {}, fixed_context = {}, dynamic_keys = {}, access = {policy = "agent-access", traits = {M.TRAIT}}}})
     local binding, err = gateway.managed_binding(assert(bounds.id(assert(bounds.object(admitted.binding)).binding_id)))
     if not binding then error(tostring(err and err.error and err.error.message)) end
-    local grant, approval, question = M.approve(binding)
+    local grant, approval, question = M.approve(binding, bounds.id(admitted.trait_approval_id))
     return {session = session, thread = thread, binding = binding, owner = owner, grant_id = grant, approval_id = approval}, question
 end
 function M.revoke(session: Session)

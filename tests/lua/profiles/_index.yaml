@@ -27,7 +27,7 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [bee.harness.profiles.write]
+    actions: [bee.harness.profiles.write, bee.approvals.decide]
     resources: [saved-profile-workspace]
     effect: allow
 - name: service_test
@@ -39,6 +39,8 @@ entries:
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
+    host: bee.tests.memory:host
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: selection_test
   kind: function.lua
   source: file://selection_test.lua
@@ -213,3 +215,11 @@ entries:
     grants: bee.approvals.grants:store
     authority: bee.harness.profiles.persist:grants
     bounds: bee.values:bounds
+
+- name: test_delegated_write
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.harness.profiles.write]
+    resources: [saved-profile-workspace]
+    effect: allow

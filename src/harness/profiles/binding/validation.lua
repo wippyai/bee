@@ -2,9 +2,16 @@
 local registry = require("registry")
 local bounds = require("bounds")
 local descriptors = require("descriptors")
+local agent_trait = require("agent_trait")
 local protocol = require("protocol")
 local M = {}
 function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
+    for _, ref in ipairs(profile.active_traits or {}) do
+        local entry = pinned:get(ref)
+        if not entry then return "Trait unavailable: " .. ref end
+        local trait, err = agent_trait.registry(ref, entry)
+        if not trait then return err end
+    end
     local definition = pinned:get(profile.definition_ref)
     local definition_data = definition and bounds.object(definition.data)
     if not definition_data or definition_data.binding_ref ~= profile.driver_binding_ref then return "Definition has no matching admitted driver binding" end

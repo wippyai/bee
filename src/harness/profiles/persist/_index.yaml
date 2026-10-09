@@ -28,7 +28,7 @@ entries:
 - name: grants
   kind: library.lua
   source: file://grants.lua
-  modules: [sql]
+  modules: [sql, security, ctx]
   imports:
     grants: bee.approvals.grants:store
     bounds: bee.values:bounds

@@ -69,7 +69,7 @@ type Row = {[string]: unknown}
 type Object = {[string]: unknown}
 type OriginView = {view_id: string, instance_id: string}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, owner_incarnation: integer, carrier_epoch: integer,
-    tools: {string}, hooks: {string}, epoch: integer, credential_generation: integer, expires_at: string, revoked: boolean, sealed: boolean, policy_ref: string?, workspace_id: string?, workspace_name: string, origin_view: OriginView?}
+    approving_grant_id: string?, tools: {string}, hooks: {string}, epoch: integer, credential_generation: integer, expires_at: string, revoked: boolean, sealed: boolean, policy_ref: string?, workspace_id: string?, workspace_name: string, origin_view: OriginView?}
 type Generation = {epoch: integer, restarts: integer}
 type BoundSurface = {configuration: surface.Surface, selection: surface.Selection, revision: integer, digest: string}
 type RuntimeGrant = {access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
@@ -465,6 +465,31 @@ end
 -- bytes are minted only when placement materializes them. The caller holds
 -- bee.gateway.admit on the action and names the subject the launch
 -- admission established; it cannot widen the tool set beyond the catalog.
+local function admission_reply(binding: Binding, raw: unknown, replayed: boolean): Reply
+    local seeds = bounds.ids(assert(bounds.object(raw)).active_traits, true) or {}
+    local pending: {string} = {}
+    if #seeds > 0 then
+        local seed_db, seed_failure = open()
+        if not seed_db then return seed_failure end
+        local seed_tx, seed_error = seed_db:begin()
+        if not seed_tx then seed_db:release(); return fail("STORAGE", tostring(seed_error)) end
+        for _, id in ipairs(seeds) do
+            local existing, err = session_traits.read(seed_tx, binding.action_id, id)
+            if err then seed_tx:rollback(); seed_db:release(); return fail("STORAGE", err) end
+            if not existing then pending[#pending + 1] = id end
+        end
+        seed_tx:rollback()
+        seed_db:release()
+    end
+    local approval_id: string? = nil
+    if #pending > 0 then
+        local requested = M.request_access(binding, {idempotency_key = "profile-traits", traits = pending, reason = "This session's profile selects these application traits."})
+        if not requested.ok then return requested end
+        local requested_value = bounds.object(requested.value)
+        approval_id = requested_value and bounds.id(requested_value.approval_id)
+    end
+    return succeed({binding = view(binding), replayed = replayed, trait_approval_id = approval_id})
+end
 function M.admit(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
@@ -568,7 +593,7 @@ function M.admit(value: unknown): Reply
             local binding, decode_error = binding_of(stored)
             if not binding then return fail("STORAGE", decode_error or "binding is corrupt") end
             if stored.request_digest ~= request_digest then return fail("CONFLICT", "idempotency key reused with a different request") end
-            return succeed({binding = view(binding), replayed = true})
+            return admission_reply(binding, selected_surface, true)
         end
     end
     local binding_id, id_error = uuid.v7()
@@ -602,7 +627,7 @@ function M.admit(value: unknown): Reply
         local binding, decode_error = binding_of(stored)
         if not binding then return fail("STORAGE", decode_error or "binding is corrupt") end
         if stored.request_digest ~= request_digest then return fail("CONFLICT", "attempt " .. attempt_id .. " already holds a different binding under carrier epoch " .. tostring(carrier_epoch)) end
-        return succeed({binding = view(binding), replayed = true})
+        return admission_reply(binding, selected_surface, true)
     end
     if workspace_id then
         local names, name_error = binding_store.workspace_name_conflict(tx, workspace_id, workspace_name, action_id, epoch)
@@ -633,7 +658,7 @@ function M.admit(value: unknown): Reply
     if commit_error then return fail("STORAGE", "commit admission") end
     local binding: Binding = {binding_id = binding_id, subject = subject, action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, owner_incarnation = incarnation,
         carrier_epoch = carrier_epoch, tools = tools, hooks = admitted_hooks, epoch = epoch, credential_generation = 0, expires_at = stamp(created + ttl), revoked = false, sealed = false, policy_ref = policy_ref, workspace_id = workspace_id, workspace_name = workspace_name, origin_view = origin_view}
-    return succeed({binding = view(binding), replayed = false})
+    return admission_reply(binding, selected_surface, false)
 end
 -- The binding an attempt holds under a carrier epoch: the one issued at
 -- the highest epoch not above it, so a replacement carrier that took over
@@ -1890,7 +1915,7 @@ function M.admit_call(binding: Binding, name: string): Reply
     local _, commit_error = tx:commit()
     db:release()
     if commit_error then return fail("STORAGE","commit call admission") end
-    return succeed({})
+    return succeed({grant_id = id})
 end
 function M.record_external_call(binding: Binding, name: string): Reply
     local db, failure = open()

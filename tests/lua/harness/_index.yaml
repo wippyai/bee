@@ -2229,6 +2229,7 @@ entries:
     actions:
     - bee.harness.profiles.read
     - bee.harness.profiles.write
+    - bee.approvals.decide
     - funcs.call
     resources:
     - '*'

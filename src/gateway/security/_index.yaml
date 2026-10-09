@@ -727,3 +727,10 @@ entries:
     agent_trait: bee.values:agent_trait
     canonical: bee.values:canonical
     descriptor: bee.app:descriptor
+- name: trait_registry_policy
+  kind: security.policy
+  groups: [external_owner]
+  policy:
+    actions: [registry.get, registry.find, registry.snapshot]
+    resources: ['*']
+    effect: allow

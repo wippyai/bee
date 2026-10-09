@@ -150,6 +150,12 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
         end
         if not requestable[trait.id] then allowed[#allowed + 1] = trait.id end
     end
+    local initial: {string} = {}
+    for _, id in ipairs(active) do
+        local declared = known_traits[id]
+        if not declared or not agent_trait.extension(declared) then initial[#initial + 1] = id end
+    end
+    active = initial
     local selected, selection_error = catalog.select(complete, ceiling, base, allowed, active)
     if not selected then return nil, nil, selection_error end
     local checked, context_error = context.compose(fixed, {}, keys)

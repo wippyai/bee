@@ -146,6 +146,17 @@ local function define_tests()
         end)
     end)
     test.describe("Peer agents", function()
+        test.it("reads peer turn state without await or a false error notice", function()
+            for _, phase in ipairs({"queued", "reserved", "accepted"}) do
+                local sent: {Object} = {}
+                local conv = must_open(fixtures.fixture_client({open = function() return session("working", 0, sent, {}) end}), "d", nil, "k")
+                conv.node, conv.read_only = "bee-peer", true
+                conv.turns = {{work = work("bw:n:w:fixture", {}, phase), input = "hello", state = "queued", text = ""}}
+                test.is_true(agents.refresh(conv))
+                test.eq(conv.notice, "")
+                test.eq(conv.turns[1].state, phase == "queued" and "queued" or phase == "reserved" and "starting" or "working")
+            end
+        end)
         test.it("keeps a list-only conversation read-only", function()
             local sent: {Object} = {}
             local conv = must_open(fixtures.fixture_client({open = function() return session("idle", 0, sent, {}) end}), "d", nil, "k")

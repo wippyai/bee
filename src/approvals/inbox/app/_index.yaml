@@ -125,7 +125,6 @@ entries:
   kind: registry.entry
   meta:
     type: bee.approvals.inbox.workspaces
-    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still
-      decides eligibility per request
+    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still decides eligibility per request
   data:
     workspaces: []

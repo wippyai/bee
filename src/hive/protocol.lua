@@ -9,9 +9,7 @@ local system = require("system")
 local bounds = require("bounds")
 local canonical = require("canonical")
 
--- ttl is how long the caller keeps waiting, in nanoseconds; the receiving
--- supervisor turns it into a deadline on its own clock.
-type Request = {op: string, args: {[string]: unknown}, reply_topic: string, ttl: integer}
+type Request = {op: string, args: {[string]: unknown}, reply_topic: string, ttl: integer, deadline_ns: integer?}
 type Reply = {ok: boolean, value: {[string]: unknown}?, error: string?}
 
 local M = {}
@@ -30,6 +28,16 @@ M.ROUTE = "bee.hive.route"
 M.READY = "bee.hive.ready"
 
 type Forwarded = {op: string, args: {[string]: unknown}, caller: string, reply_topic: string, expires: integer}
+
+function M.deadline(now: integer, ttl: number, source: unknown): (integer?, string?)
+    local duration = math.tointeger(ttl)
+    local relative = duration and math.tointeger(now + duration)
+    if not duration or duration <= 0 or not relative or relative < now then return nil, "invalid Hive TTL" end
+    if source == nil then return relative, nil end
+    local deadline = type(source) == "number" and math.tointeger(source) or nil
+    if not deadline or deadline <= 0 then return nil, "invalid Hive source deadline" end
+    return math.min(relative, deadline), nil
+end
 
 function M.supervisor_name(node: string): string
     return M.SUPERVISOR .. "/" .. node
@@ -143,7 +151,7 @@ function M.call(node: string, op: string, args: {[string]: unknown}, timeout: st
     if remaining <= 0 then return nil, "Hive deadline reached before dispatch" end
     local reply_topic = "bee.hive.reply." .. tostring(uuid.v7())
     local replies = assert(process.listen(reply_topic, {message = true}))
-    local request: Request = {op = op, args = args, reply_topic = reply_topic, ttl = remaining}
+    local request: Request = {op = op, args = args, reply_topic = reply_topic, ttl = remaining, deadline_ns = math.floor(expires)}
     local sent, send_error = process.send(pid, M.CALL, request)
     if not sent then
         process.unlisten(replies)

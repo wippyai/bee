@@ -60,6 +60,15 @@ local function proof(): Object
     if not peer_pid then error("peer fixture is absent") end
     local peer = protocol.node_of(peer_pid, node)
     assert(peer ~= node, "peer fixture must run on a second node")
+    local connected = false
+    for _ = 1, 300 do
+        for _, member in ipairs(assert(system.cluster.members())) do
+            if member.id == peer and member.link ~= nil then connected = true; break end
+        end
+        if connected then break end
+        time.after("100ms"):receive()
+    end
+    assert(connected, "peer fixture has no admitted transport link")
     install(node, peer)
     assert(process.registry.register("bee.e2e.sdk/ready/" .. label, process.pid(), process.registry.EVENTUAL))
     if label == "beta" then return {ok = true, role = label, node = node} end

@@ -57,7 +57,8 @@ local function install(audience: string, mode: string?, blocked: boolean?, calli
             capability_request = {capability = "agent.tools", parameters = {tools = {RUN, "other.runner:run"}},
                 catalog_revision = vocabulary.revision, template_revision = 1, target = APP, path = ".security.policies +="}}
     end
-    local proposal = assert(grants.propose(vocabulary, OWNER, APP, requirements))
+    local proposal, proposal_error = grants.propose(vocabulary, OWNER, APP, requirements)
+    assert(proposal, tostring(proposal_error) .. "; audience=" .. audience)
     local record = assert(grants.record(OWNER, WORKSPACE, APP, proposal, "receiver-approval", 1))
     local entries: {Object} = {
         {id = APP, kind = "process.lua", meta = {type = "bee.app", application = {api_version = 1,

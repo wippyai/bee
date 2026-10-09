@@ -216,13 +216,16 @@ local function main()
                 and type(data.ttl) == "number" then
                 local args: {[string]: unknown} = {}
                 if type(data.args) == "table" then args = data.args end
-                if data.op == receiver.CALL or data.op == "application.discover" or data.op == "application.tests" then
-                    local extra = bounds.fields(data, {"op", "args", "reply_topic", "ttl"})
+                local expires, deadline_error = protocol.deadline(math.floor(time.now():unix_nano()), data.ttl, data.deadline_ns)
+                if not expires then
+                    process.send(caller, data.reply_topic, protocol.fail(deadline_error or "invalid Hive deadline"))
+                elseif data.op == receiver.CALL or data.op == "application.discover" or data.op == "application.tests" then
+                    local extra = bounds.fields(data, {"op", "args", "reply_topic", "ttl", "deadline_ns"})
                     if extra or data.ttl ~= data.ttl or data.ttl <= 0 or data.ttl > receiver.MAX_TTL then
                         process.send(caller, data.reply_topic, protocol.fail(extra or "application deadline exceeds its bound"))
                     else
                         application_call({op = data.op, args = args, caller = caller, reply_topic = data.reply_topic,
-                            expires = math.floor(time.now():unix_nano() + data.ttl)})
+                            expires = expires})
                     end
                 else
                     local prefix, op = data.op:match("^([^.]+)%.(.+)$")
@@ -230,7 +233,6 @@ local function main()
                     if not name or not op then
                         process.send(caller, data.reply_topic, protocol.fail("unknown operation " .. data.op))
                     else
-                        local expires = math.floor(time.now():unix_nano() + data.ttl)
                         deliver(name, {op = op, args = args, caller = caller, reply_topic = data.reply_topic, expires = expires})
                     end
                 end

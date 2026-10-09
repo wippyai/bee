@@ -228,7 +228,7 @@ local function set_values(raw: unknown, kind: string): {string}?
     if not result then return nil end
     for _, value in ipairs(result) do
         if kind == "hive_nodes" then
-            if not value:match("^[a-z][a-z0-9_.-]*$") then return nil end
+            if not value:match("^[a-z0-9][a-z0-9_.-]*$") then return nil end
         elseif kind == "hive_targets" then
             if not value:match("^[A-Za-z0-9][A-Za-z0-9_.:/-]*$") then return nil end
         elseif kind == "hive_names" then
@@ -246,7 +246,7 @@ local function audience_list(raw: unknown): {string}?
     local result = string_set(raw)
     if not result then return nil end
     for _, value in ipairs(result) do
-        if value ~= "*" and not value:match("^[a-z][a-z0-9_.-]*$") then return nil end
+        if value ~= "*" and not value:match("^[a-z0-9][a-z0-9_.-]*$") then return nil end
     end
     return result
 end

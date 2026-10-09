@@ -292,20 +292,24 @@ function M.refresh(conv: Conversation): boolean
     conv.notice = ""
     for _, turn in ipairs(conv.turns) do
         if turn.state == "queued" or turn.state == "starting" or turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then
-            local observed: sessions_protocol.WorkAwait? = nil
-            local await_fault: sessions.Fault? = nil
             if conv.read_only then
                 local state, fault = turn.work:state()
-                await_fault = fault
-                if state and state.phase == "settled" then observed = {tag = "ready", subject_kind = "work", subject = turn.work:ref(), cursor = tostring(state.revision), result = state.result} end
-            else observed, await_fault = turn.work:await({timeout_ms = 0}) end
-            if not observed then
-                conv.notice = describe(await_fault)
-            elseif observed.tag == "pending" then
-                local state = turn.work:state()
-                if turn.state ~= "starting" then turn.state = state and state.phase == "queued" and "queued" or "working" end
+                if not state then conv.notice = describe(fault)
+                elseif state.phase == "settled" then
+                    settle(turn, {tag = "ready", result = state.result})
+                elseif state.blocker then turn.state, turn.text = "blocked", state.blocker.message
+                elseif state.uncertainty then turn.state, turn.text = "uncertain", state.uncertainty.summary
+                else turn.state = state.phase == "queued" and "queued" or state.phase == "reserved" and "starting" or "working" end
             else
-                settle(turn, observed)
+                local observed, await_fault = turn.work:await({timeout_ms = 0})
+                if not observed then
+                    conv.notice = describe(await_fault)
+                elseif observed.tag == "pending" then
+                    local state = turn.work:state()
+                    if turn.state ~= "starting" then turn.state = state and state.phase == "queued" and "queued" or "working" end
+                else
+                    settle(turn, observed)
+                end
             end
         end
     end

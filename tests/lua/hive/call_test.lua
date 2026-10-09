@@ -23,6 +23,15 @@ local function installed(target: string?): Object
 end
 local function define_tests()
     test.describe("granted Hive call", function()
+        test.it("preserves the source deadline across receiver queueing and caps it by the remaining TTL", function()
+            test.eq(protocol.deadline(1791505000000000000, 200000000, 1791505000100000000), 1791505000100000000)
+            test.eq(protocol.deadline(1000, 200, 1050), 1050)
+            test.eq(protocol.deadline(1100, 200, 1050), 1050)
+            test.eq(protocol.deadline(1000, 200, 5000), 1200)
+            test.eq(protocol.deadline(1000, 200, nil), 1200)
+            test.is_nil(protocol.deadline(1000, 200, "forged"))
+            test.is_nil(protocol.deadline(1000, -1, 1050))
+        end)
         test.it("materializes only the host facade permission", function()
             local words = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
             local proposed = assert(grants.propose(words, "bee.tests.hive:outbound", APP, {{id = "sdk.copy:call",

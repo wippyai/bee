@@ -10,3 +10,4 @@ entries:
     frame: bee.ui:frame
     appearance: bee.ui:appearance
     bounds: bee.values:bounds
+    clock: bee.values:clock

@@ -376,6 +376,17 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     listed = result.listing
                 end
                 directory = result.directory or directory
+                if conversation and conversation.node then
+                    local found = false
+                    for _, row in ipairs(directory) do
+                        if row.node == conversation.node and row.session == conversation.session:ref() then
+                            conversation.peer_scope = row.peer_scope
+                            conversation.read_only = row.peer_scope == "list"
+                            found = true
+                        end
+                    end
+                    if not found then conversation.read_only = true; conversation.peer_scope = nil end
+                end
                 workspace_names = result.workspaces or workspace_names
                 local count = catalog_open and #listed.items or #directory
                 selected = math.floor(math.min(math.max(1, selected), count))

@@ -6,6 +6,7 @@ local tty = require("tty")
 local funcs = require("funcs")
 local bounds = require("bounds")
 local json = require("json")
+local clock = require("clock")
 local M = {}
 type Object = {[string]: unknown}
 type State = {form: forms.Form, workspace: string, approval: Object?, rows: {Object}, status: string}
@@ -29,7 +30,7 @@ function M.new(workspace: string, approval: Object?): State
     return {workspace = workspace, approval = approval, rows = rows, status = "", form = forms.form_new({
         forms.field_text("peer", "Bee", peer, {max_length = 160}),
         forms.field_select("scope", "Allow agents here", {{label = "See agents (list only)", value = "list"},
-            {label = "Message and await", value = "message"}, {label = "Open new sessions", value = "open"}}, "list"),
+            {label = "Message and await", value = "message"}, {label = "Open new sessions and control", value = "open"}}, "list"),
         forms.field_select("duration", "Duration", {{label = "1 hour", value = "3600000"}, {label = "24 hours", value = "86400000"},
             {label = "7 days", value = "604800000"}, {label = "Permanent", value = "permanent"}}, "3600000"),
         forms.field_select("action", "Action", {{label = "Allow", value = "grant"}, {label = "Revoke", value = "revoke"}}, "grant"),
@@ -60,7 +61,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     for _, row in ipairs(state.rows) do
         if y >= height - 12 then break end
         frame.line(painter, y, tostring(row.peer) .. " · " .. (row.allowed == true and tostring(row.scope) or "not allowed")
-            .. (row.expires_ms and " · expires" or row.allowed == true and " · permanent" or ""), painter.theme.muted)
+            .. (type(row.expires_ms) == "number" and (" · until " .. clock.stamp(math.floor(row.expires_ms))) or row.allowed == true and " · permanent" or ""), painter.theme.muted)
         y = y + 1
     end
     local sizes: {integer} = {}

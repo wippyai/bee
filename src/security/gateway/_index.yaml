@@ -4,8 +4,7 @@ entries:
 - name: gateway_materialize_policy
   kind: security.policy
   meta:
-    comment: Attached to placement runner entries only; the runner receives a binding's token bytes once for the attempt it
-      runs
+    comment: Attached to placement runner entries only; the runner receives a binding's token bytes once for the attempt it runs
   policy:
     actions:
     - bee.gateway.materialize
@@ -20,8 +19,7 @@ entries:
 - name: gateway_supervision_policy
   kind: security.policy
   meta:
-    comment: Attached to placement service entries and the sweeper only; placement checks and retires the bindings of the
-      attempts it supervises, independently of any carrier
+    comment: Attached to placement service entries and the sweeper only; placement checks and retires the bindings of the attempts it supervises, independently of any carrier
   policy:
     actions:
     - bee.gateway.manage
@@ -36,8 +34,7 @@ entries:
 - name: gateway_tool_application_open_policy
   kind: security.policy
   meta:
-    comment: A binding may open an already applied/admitted application through its own workspace host; this grants no activation,
-      publication or registry write.
+    comment: A binding may open an already applied/admitted application through its own workspace host; this grants no activation, publication or registry write.
   policy:
     actions:
     - funcs.call
@@ -47,9 +44,7 @@ entries:
 - name: gateway_tool_app_tools_policy
   kind: security.policy
   meta:
-    comment: A bound MCP subject lists and calls the tools its workspace's applications offer agents through the node, which
-      runs each as its application with only that application's approved grants; this grants the subject nothing of the application's
-      own
+    comment: A bound MCP subject lists and calls the tools its workspace's applications offer agents through the node, which runs each as its application with only that application's approved grants; this grants the subject nothing of the application's own
   policy:
     actions:
     - funcs.call
@@ -60,12 +55,9 @@ entries:
 - name: gateway_tool_tests_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject may run and read the tests of an application delivered from an overlay it owns through the
-      node's test facade, which verifies ownership through the overlay facade and enters the node's private test backend;
-      this grants no authority for the tests themselves, which run as the application
+    comment: A bound MCP subject may run and read the tests of an application delivered from an overlay it owns through the node's test facade, which verifies ownership through the overlay facade and enters the node's private test backend; this grants no authority for the tests themselves, which run as the application
   policy:
-    expression: (action == "funcs.call" && (resource == "bee.node.binding:tests_call" || resource == "bee.gov.binding:overlay_call"))
-      || (action == "bee.gov.overlay.read" && resource == "own-overlays")
+    expression: (action == "funcs.call" && (resource == "bee.node.binding:tests_call" || resource == "bee.gov.binding:overlay_call")) || (action == "bee.gov.overlay.read" && resource == "own-overlays")
     actions:
     - funcs.call
     - bee.gov.overlay.read
@@ -78,11 +70,10 @@ entries:
 - name: gateway_tool_components_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject may inspect effective installed component state, package previews and effect-free plans through
-      the strict Hub facade; it receives no apply, publication or registry-write authority
+    comment: A bound MCP subject may inspect effective installed component state, package previews and effect-free plans through the strict Hub facade; it receives no apply, publication or registry-write
+      authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.hub.binding:call") || (action == "bee.hub.read" && resource !=
-      "")
+    expression: (action == "funcs.call" && resource == "bee.hub.binding:call") || (action == "bee.hub.read" && resource != "")
     actions:
     - funcs.call
     - bee.hub.read
@@ -93,12 +84,10 @@ entries:
 - name: gateway_tool_delivery_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject may request delivery of its frozen artifact (publication prepare, destination stage and preflight,
-      and once ready the activation that asks the person) and read delivery status; the facade and the owner services enforce
-      workspace, profile and destination authority
+    comment: A bound MCP subject may request delivery of its frozen artifact (publication prepare, destination stage and preflight, and once ready the activation that asks the person) and read delivery
+      status; the facade and the owner services enforce workspace, profile and destination authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || ((action == "bee.gov.delivery.manage"
-      || action == "bee.gov.delivery.read" || action == "bee.gov.delivery.activate") && resource != "")
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || ((action == "bee.gov.delivery.manage" || action == "bee.gov.delivery.read" || action == "bee.gov.delivery.activate") && resource != "")
     actions:
     - funcs.call
     - bee.gov.delivery.manage
@@ -111,8 +100,7 @@ entries:
 - name: gateway_tool_docs_policy
   kind: security.policy
   meta:
-    comment: A bound MCP subject reads the one embedded documentation corpus through the docs facade; the volume is read-only
-      and this grants no host path, registry write or network
+    comment: A bound MCP subject reads the one embedded documentation corpus through the docs facade; the volume is read-only and this grants no host path, registry write or network
   policy:
     actions:
     - funcs.call
@@ -126,8 +114,7 @@ entries:
 - name: gateway_tool_hub_publish_policy
   kind: security.policy
   meta:
-    comment: A bound MCP subject may file Hub publication requests and poll them; the person's thread-bound approval is the
-      only authority to upload one, and this grants no Hub management or registry write
+    comment: A bound MCP subject may file Hub publication requests and poll them; the person's thread-bound approval is the only authority to upload one, and this grants no Hub management or registry write
   policy:
     actions:
     - funcs.call
@@ -138,8 +125,7 @@ entries:
 - name: gateway_tool_install_policy
   kind: security.policy
   meta:
-    comment: A bound MCP subject may file Hub installation requests and poll them; the person's thread-bound approval is the
-      only authority to apply one, and this grants no Hub management or registry write
+    comment: A bound MCP subject may file Hub installation requests and poll them; the person's thread-bound approval is the only authority to apply one, and this grants no Hub management or registry write
   policy:
     actions:
     - funcs.call
@@ -151,9 +137,8 @@ entries:
 - name: gateway_tool_message_policy
   kind: security.policy
   meta:
-    comment: The bound MCP subject may append only a decoded message through the thread authority and register a one-shot
-      notice on its own thread; the endpoint supplies thread, action/attempt context and the addressed session, and reads
-      membership through get so an unreadable session is never reached
+    comment: The bound MCP subject may append only a decoded message through the thread authority and register a one-shot notice on its own thread; the endpoint supplies thread, action/attempt context and
+      the addressed session, and reads membership through get so an unreadable session is never reached
   policy:
     actions:
     - funcs.call
@@ -165,11 +150,10 @@ entries:
 - name: gateway_tool_overlay_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject may author only through the overlay facade; the store enforces actor ownership and this grants
-      no publication or activation authority
+    comment: A bound MCP subject may author only through the overlay facade; the store enforces actor ownership and this grants no publication or activation authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:overlay_call") || ((action == "bee.gov.overlay.read"
-      || action == "bee.gov.overlay.write" || action == "bee.gov.overlay.source") && resource != "")
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:overlay_call") || ((action == "bee.gov.overlay.read" || action == "bee.gov.overlay.write" || action == "bee.gov.overlay.source") &&
+      resource != "")
     actions:
     - funcs.call
     - bee.gov.overlay.read
@@ -182,11 +166,9 @@ entries:
 - name: gateway_tool_publish_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject may publish only the exact locally reviewed and applied version; publication refuses anything
-      else, and this grants no review, selection, approval or overlay authority
+    comment: A bound MCP subject may publish only the exact locally reviewed and applied version; publication refuses anything else, and this grants no review, selection, approval or overlay authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || (action == "bee.gov.delivery.publish"
-      && resource != "")
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || (action == "bee.gov.delivery.publish" && resource != "")
     actions:
     - funcs.call
     - bee.gov.delivery.publish
@@ -197,9 +179,8 @@ entries:
 - name: gateway_tool_read_policy
   kind: security.policy
   meta:
-    comment: The scope a bound subject runs thread_read, thread_wait, thread_sessions, capability elevation and the tools
-      that exercise a held elevation under; membership is still checked by the thread owner, elevation writes only through
-      a thread-bound approval and each held tool call checks that approval again
+    comment: The scope a bound subject runs thread_read, thread_wait, thread_sessions, capability elevation and the tools that exercise a held elevation under; membership is still checked by the thread
+      owner, elevation writes only through a thread-bound approval and each held tool call checks that approval again
   policy:
     actions:
     - funcs.call

@@ -364,8 +364,14 @@ entries:
   kind: function.lua
   source: file://boot_residency_test.lua
   method: run
-  modules: [process, channel, system, time, tty, registry, security]
+  modules: [process, channel, system, time, tty, registry, security, sql]
   meta: {type: boot_test, suite: a_idle_node, timeout: 30s}
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
+- name: boot_backlog_probe
+  kind: function.lua
+  source: file://boot_backlog_probe.lua
+  method: pending
+  modules: [sql]
+  meta: {type: test_support}

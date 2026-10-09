@@ -9,6 +9,7 @@ local tty = require("tty")
 local registry = require("registry")
 local security = require("security")
 local bounds = require("bounds")
+local sql = require("sql")
 
 local SERVICE = "bee.hive.service:supervisor_service"
 local NAME = "bee.hive.supervisor"
@@ -18,9 +19,17 @@ local function diagnostic(): string
     return state.status .. ": " .. tostring(state.details)
 end
 
-local function define_tests()
+local function attempts(): integer
+    local db = assert(sql.get("bee:db"))
+    local rows = assert(db:query("SELECT COUNT(*) AS attempts FROM bee_test_boot_probe"))
+    db:release()
+    return math.floor(tonumber(rows[1].attempts) or 0)
+end
+
+local function define_tests(fault: boolean)
     test.describe("Fresh node boot residency", function()
         test.it("registers the Hive supervisor and serves a display desktop", function()
+            if fault then test.eq(attempts(), 1, "the injected boot probe must have failed before display attachment") end
             local holder, lookup_error = process.registry.lookup(NAME, process.registry.LOCAL)
             test.not_nil(holder, NAME .. " did not register: " .. tostring(lookup_error) .. "; " .. diagnostic())
             local entry = assert(registry.get("bee.shell:main"))
@@ -55,10 +64,24 @@ local function define_tests()
                 end
             end
             test.eq(tostring(process.registry.lookup(NAME, process.registry.LOCAL)), tostring(holder), "Hive must remain resident")
+            if fault then
+                local recovered = time.after("8s")
+                while attempts() < 3 do
+                    test.eq(tostring(process.registry.lookup(NAME, process.registry.LOCAL)), tostring(holder), "probe retries must preserve the Hive PID")
+                    local selected = channel.select({time.after("20ms"):case_receive(), recovered:case_receive()})
+                    test.is_true(selected.channel ~= recovered, "failing owner probe was not retried to recovery")
+                end
+                test.eq(tostring(process.registry.lookup(NAME, process.registry.LOCAL)), tostring(holder), "recovery must preserve the Hive PID")
+                local snapshot = assert(view:snapshot())
+                test.contains(table.concat(snapshot.rows, "\n"), "Desktop ")
+            end
             assert(process.cancel(pid))
             view:close()
         end)
     end)
 end
 
-return test.run_cases(define_tests)
+local healthy = test.run_cases(function() define_tests(false) end)
+local fault = test.run_cases(function() define_tests(true) end)
+return {run = function(options: unknown) return healthy(options) end,
+    run_fault = function(options: unknown) return fault(options) end}

@@ -216,10 +216,15 @@ local function main()
     end) then return end
     demand_owner.recover(demanded, nil)
     while true do
-        local selected = channel.select({calls:case_receive(), readiness:case_receive(), events:case_receive(),
-            registry_changes:case_receive(), completions:case_receive(), demands:case_receive(), supervised:case_receive(), backlog:case_receive()})
+        local retry = demand_owner.deadline(demanded)
+        local cases = {calls:case_receive(), readiness:case_receive(), events:case_receive(),
+            registry_changes:case_receive(), completions:case_receive(), demands:case_receive(), supervised:case_receive(), backlog:case_receive()}
+        if retry then cases[#cases + 1] = retry:case_receive() end
+        local selected = channel.select(cases)
         if not selected.ok then return end
-        if selected.channel == backlog then
+        if retry and selected.channel == retry then
+            demand_owner.retry(demanded)
+        elseif selected.channel == backlog then
             local change: unknown = selected.value
             if type(change) == "table" and type(change.table) == "string" then
                 demand_owner.recover(demanded, change.table)

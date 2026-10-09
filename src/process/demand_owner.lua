@@ -5,6 +5,10 @@ local events = require("events")
 local system = require("system")
 local funcs = require("funcs")
 local security = require("security")
+local logger = require("logger")
+local time = require("time")
+local channel = require("channel")
+local worker = require("worker")
 local bounds = require("bounds")
 local demand = require("demand")
 local state = require("state")
@@ -18,7 +22,8 @@ local ALLOWED: {[string]: boolean} = {
     ["bee.placement.native.service:sweeper_service"] = true,
 }
 type Dispatch = {caller: string, data: unknown}
-type Owner = {id: string, name: string, probe: string?, state: state.Owner, queue: {Dispatch}, tables: {[string]: boolean}, actor: string, policies: {string}}
+type Owner = {id: string, name: string, probe: string?, state: state.Owner, queue: {Dispatch}, tables: {[string]: boolean}, actor: string, policies: {string},
+    probe_error: string?, retry_at: integer?, retry_ms: integer}
 type Owners = {[string]: Owner}
 M.Owners = Owners
 function M.discover(previous: Owners?): Owners
@@ -32,6 +37,8 @@ function M.discover(previous: Owners?): Owners
                 for _, name in ipairs(spec.tables) do if type(name) == "string" then tables[name] = true end end
             end
             local existing = previous and previous[spec.name]
+            local probe = type(spec.probe) == "string" and spec.probe or nil
+            local retry = existing and existing.probe == probe and existing or nil
             local data = assert(bounds.object(entry.data), "demand service data")
             local lifecycle = assert(bounds.object(data.lifecycle), "demand service lifecycle")
             local declared = assert(bounds.object(lifecycle.security), "demand service security")
@@ -42,7 +49,8 @@ function M.discover(previous: Owners?): Owners
                 policies[#policies + 1] = id :: string
             end
             owners[spec.name] = {id = entry.id, name = spec.name, actor = assert(bounds.id(actor.id)), policies = policies,
-                probe = type(spec.probe) == "string" and spec.probe or nil,
+                probe = probe, probe_error = retry and retry.probe_error or nil,
+                retry_at = retry and retry.retry_at or nil, retry_ms = retry and retry.retry_ms or worker.RETRY_FIRST_MS,
                 state = existing and existing.state or state.new(), queue = existing and existing.queue or {},
                 tables = tables}
         end
@@ -130,6 +138,34 @@ function M.tables(owners: Owners): {string}
     for name in pairs(seen) do tables[#tables + 1] = name end
     return tables
 end
+local function now(): integer return math.floor(time.now():unix_nano() / 1000000) end
+
+local function probe(owner: Owner): boolean
+    local policies: {security.Policy} = {}
+    for _, id in ipairs(owner.policies) do policies[#policies + 1] = assert(security.policy(id)) end
+    local executor = funcs.new():with_actor(security.new_actor(owner.actor)):with_scope(security.new_scope(policies))
+    local pending, problem = assert(executor):call(assert(owner.probe))
+    if problem then error(problem) end
+    assert(type(pending) == "boolean", "demand backlog probe must return a boolean")
+    return pending
+end
+
+-- A domain's failed probe is an unknown backlog, not an empty one or a Hive
+-- failure. Retain its error and retry independently with the worker backoff.
+local function recover(owners: Owners, name: string, owner: Owner)
+    local called, pending = pcall(probe, owner)
+    if not called then
+        owner.probe_error = tostring(pending)
+        owner.retry_at = now() + owner.retry_ms
+        logger:error("Demand backlog probe failed", {owner = owner.id, probe = owner.probe,
+            cause = owner.probe_error, retry_ms = owner.retry_ms})
+        owner.retry_ms = math.min(owner.retry_ms * 2, worker.RETRY_LAST_MS)
+        return
+    end
+    owner.probe_error, owner.retry_at, owner.retry_ms = nil, nil, worker.RETRY_FIRST_MS
+    if pending == true then M.wake(owners, name, nil) end
+end
+
 function M.recover(owners: Owners, changed: string?)
     for name, owner in pairs(owners) do
         if not changed and owner.state.phase == "absent" then
@@ -137,14 +173,22 @@ function M.recover(owners: Owners, changed: string?)
             if pid then M.ready(owners, name, tostring(pid)); M.wake(owners, name, nil) end
         end
         if owner.probe and (not changed or owner.tables[changed]) then
-            local policies: {security.Policy} = {}
-            for _, id in ipairs(owner.policies) do policies[#policies + 1] = assert(security.policy(id)) end
-            local executor = funcs.new():with_actor(security.new_actor(owner.actor)):with_scope(security.new_scope(policies))
-            local pending, problem = assert(executor):call(owner.probe)
-            if problem then error("demand backlog " .. owner.id .. ": " .. tostring(problem)) end
-            if pending == true then M.wake(owners, name, nil) end
+            recover(owners, name, owner)
         end
     end
+end
+function M.retry(owners: Owners)
+    local current = now()
+    for name, owner in pairs(owners) do
+        if owner.probe and owner.retry_at and owner.retry_at <= current then recover(owners, name, owner) end
+    end
+end
+function M.deadline(owners: Owners): channel.Channel<time.Time>?
+    local earliest: integer? = nil
+    for _, owner in pairs(owners) do
+        if owner.retry_at and (not earliest or owner.retry_at < earliest) then earliest = owner.retry_at end
+    end
+    return earliest and time.after(tostring(math.max(1, earliest - now())) .. "ms") or nil
 end
 function M.available(owners: Owners, name: string): boolean
     local owner = owners[name]

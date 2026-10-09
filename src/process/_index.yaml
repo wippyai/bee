@@ -29,9 +29,10 @@ entries:
 - name: demand_owner
   kind: library.lua
   source: file://demand_owner.lua
-  modules: [registry, process, events, system, funcs, security]
+  modules: [registry, process, events, system, funcs, security, logger, time, channel]
   imports:
     demand: bee.process:demand
+    worker: bee.process:worker
     state: bee.process:demand_state
     bounds: bee.values:bounds
 - name: client_policy

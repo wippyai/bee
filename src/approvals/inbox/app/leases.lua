@@ -1,14 +1,11 @@
--- MIT. The inbox's lease and batch slice, pure: a bounded spec grammar for a
--- lease request, the governance operations that propose, grant, list and
--- revoke it, the rows shown for active leases, and the marked set decided as
--- one batch. Decision authority stays with the approval and governance
--- owners; nothing here decides or grants.
 local json = require("json")
+local hash = require("hash")
+local grants = require("grants")
+local clock = require("clock")
 local bounds = require("bounds")
 local model = require("model")
 local M = {}
 M.MAX_MARKS = 16
-M.MAX_LEASES = 256
 M.MAX_EXTRAS = 8
 M.MAX_TTL_SECONDS = 86400 * 30
 M.FACADE = "bee.gov.binding:destination_call"
@@ -18,7 +15,7 @@ M.ACTIVATION = "bee.gov:establish-overlay"
 type Object = {[string]: unknown}
 type Extra = {capability: string, parameters: {[string]: string}}
 type Spec = {ttl_seconds: integer?, max_applies: integer?, extras: {Extra}}
-type Row = {lease_id: string, source: string, workspace_id: string, target: string, state: string,
+type Row = {grant_id: string, lease_id: string, source: string, workspace_id: string, target: string, state: string,
     applies_used: integer, max_applies: integer?, expires_at: string?, revision: integer,
     granted_by: string, uses: integer, reserved: integer, envelope_lines: {string}}
 type Slice = {rows: {[string]: Row}, selected: string?, leases_view: boolean, marked: {[string]: boolean}, notice: string,
@@ -164,20 +161,15 @@ function M.propose_intent(view: model.ApprovalView, spec: Spec, key: string): (I
         max_applies = spec.max_applies, idempotency_key = key}}, nil
 end
 
--- grant_intent: the lease approval a person approved becomes a lease.
 function M.grant_intent(view: model.ApprovalView, key: string): (Intent?, string?)
-    local payload = payload_of(view, M.PROPOSAL)
-    if not payload then return nil, "open an approved lease request to grant it" end
-    if view.state ~= "decided" or view.decision ~= "approved" then return nil, "the lease request is not approved" end
-    local workspace, node, source = bounds.id(payload.workspace_id), bounds.id(payload.source_node), bounds.id(payload.source_workspace)
-    if not workspace or not node or not source then return nil, "the lease request does not name its application" end
-    return {target = M.FACADE, source = view.workspace_id, request = {operation = "lease_grant", workspace_id = workspace,
-        source_node = node, source_workspace = source, approval_id = view.source_approval_id or view.approval_id,
-        idempotency_key = key}}, nil
+    local payload = payload_of(view,M.PROPOSAL)
+    if not payload or view.state ~= "decided" or view.decision ~= "approved" then return nil,"open an approved lease request" end
+    local approval = view.source_approval_id or view.approval_id
+    local lease_id = "lease-" .. assert(hash.sha256("bee.gov.lease_grant\n" .. approval))
+    return {target = "bee.approvals.binding:grant",source = view.workspace_id,request = {operation = "read",grant_id = grants.identity("governance_lease",view.owner_node,view.workspace_id,lease_id)}},nil
 end
-
 function M.list_intent(source: string, workspace_id: string): Intent
-    return {target = M.FACADE, source = source, request = {operation = "lease_list", workspace_id = workspace_id}}
+    return {target = "bee.approvals.binding:grant",source = source,request = {operation = "list",workspace_id = workspace_id}}
 end
 
 local function fault(raw: unknown): string?
@@ -202,39 +194,25 @@ local function envelope_lines(envelope: unknown): {string}
 end
 
 local function decode_row(source: string, workspace_id: string, raw: unknown): Row?
-    local item = bounds.object(raw)
-    if not item then return nil end
-    local lease_id, target = bounds.id(item.lease_id), bounds.id(item.target)
-    local used, revision = bounds.count(item.applies_used), bounds.count(item.revision)
-    local state = type(item.state) == "string" and item.state or nil
-    if not lease_id or not target or used == nil or not revision or not state then return nil end
-    local max = item.max_applies == nil and nil or bounds.count(item.max_applies)
-    local uses = type(item.uses) == "table" and #(item.uses) or 0
-    local reserved = 0
-    if type(item.uses) == "table" then
-        for _, raw_use in ipairs(item.uses) do
-            local use = bounds.object(raw_use)
-            if use and use.state == "reserved" then reserved = reserved + 1 end
-        end
-    end
-    return {lease_id = lease_id, source = source, workspace_id = workspace_id, target = model.text(target, model.LINE_LIMIT),
-        state = model.text(state, 20), applies_used = used, max_applies = max,
-        expires_at = type(item.expires_at) == "string" and model.text(item.expires_at, 40) or nil,
-        revision = revision, granted_by = model.text(item.granted_by, 200), uses = uses, reserved = reserved,
-        envelope_lines = envelope_lines(item.envelope)}
+    local grant = grants.decode(raw)
+    if not grant or grant.domain ~= "governance_lease" then return nil end
+    local target, lease = bounds.id(grant.metadata.target),bounds.id(grant.metadata.lease_id)
+    local parameters = bounds.object(grant.scope.parameters)
+    if not target or not lease or not parameters then return nil end
+    return {grant_id = grant.grant_id,lease_id = lease,source = source,workspace_id = workspace_id,target = target,state = grant.state,
+        applies_used = grant.used + grant.reserved,max_applies = grant.max_uses,expires_at = grant.until_ms and clock.stamp(grant.until_ms),revision = grant.revision,
+        granted_by = grant.granted_by,uses = grant.used + grant.reserved,reserved = grant.reserved,envelope_lines = envelope_lines(parameters.envelope)}
 end
-
--- apply_list: replace this source's rows with governance's answer.
 function M.apply_list(slice: Slice, source: string, workspace_id: string, raw: unknown): string?
     local failure = fault(raw)
     if failure then return failure end
     local value = bounds.object((raw).value)
-    local listed = value and value.leases
-    if type(listed) ~= "table" or #(listed) > M.MAX_LEASES then return "INVALID_REPLY: lease list is malformed" end
+    local listed = value and value.grants
+    if type(listed) ~= "table" then return "INVALID_REPLY: grant list is malformed" end
     for key, row in pairs(slice.rows) do if row.source == source then slice.rows[key] = nil end end
     for _, item in ipairs(listed) do
-        local row = decode_row(source, workspace_id, item)
-        if not row then return "INVALID_REPLY: a lease row is malformed" end
+        local row = decode_row(source,workspace_id,item)
+        if not row then return "INVALID_REPLY: a grant row is malformed" end
         slice.rows[source .. "/" .. row.lease_id] = row
     end
     if slice.selected and not slice.rows[slice.selected] then slice.selected = nil end
@@ -280,15 +258,13 @@ function M.revoke_intent(slice: Slice, key: string): (Intent?, string?)
     local row = M.selected(slice)
     if not row then return nil, "select a lease to revoke" end
     if not M.revocable(row) then return nil, "the lease is " .. row.state end
-    return {target = M.FACADE, source = row.source, request = {operation = "lease_revoke", workspace_id = row.workspace_id,
-        lease_id = row.lease_id, expected_revision = row.revision, idempotency_key = key}}, nil
+    return {target = "bee.approvals.binding:grant",source = row.source,request = {operation = "revoke",grant_id = row.grant_id,expected_revision = row.revision}},nil
 end
 
--- notice: the person-facing outcome of a propose, grant or revoke answer.
 function M.notice(kind: string, raw: unknown): string
     local failure = fault(raw)
     if failure then return failure end
-    if kind == "lease_propose" then return "Lease request filed; approve it in the inbox, then grant it" end
+    if kind == "lease_propose" then return "Lease request filed; approval creates its Grant" end
     if kind == "lease_grant" then return "Lease granted" end
     return "Lease revoked"
 end

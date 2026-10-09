@@ -10,6 +10,7 @@ local text = require("text")
 local bounds = require("bounds")
 local caller = require("caller")
 local windows = require("windows")
+local grants = require("grants")
 local glyphs = require("glyphs")
 local M = {}
 M.TEXT_LIMIT = 512
@@ -71,7 +72,7 @@ type Pending =
 type Intent = {target: string, request: Object}
 type Confirmation = {approval_id: string, revision: integer, proposal_digest: string, reviewed_digest: string?, owner_node: string, owner_incarnation: integer}
 type State = {
-    grants_view: boolean, grants: {windows.Grant}, grant_selected: integer, longer: boolean, longer_choices: {windows.Choice},
+    grant_line_count: integer?, grant_detail: {string}?, grants_view: boolean, grants: {grants.Grant}, grant_selected: integer, longer: boolean, longer_choices: {windows.Choice},
     workspaces: {string},
     cursors: {[string]: integer},
     unavailable: {[string]: string},

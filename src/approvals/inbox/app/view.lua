@@ -11,6 +11,8 @@ local tty = require("tty")
 local glyphs = require("glyphs")
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local windows = require("windows")
+local canonical = require("canonical")
+local clock = require("clock")
 local M = {}
 local function prompt_lines(prompt: string, width: integer): {string}
     local rest = "Asked: " .. prompt
@@ -35,57 +37,6 @@ local function state_label(row: model.Row): string
 end
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "A", verb = "approve"},
     {key = "D", verb = "deny"}, {key = "W", verb = "withdraw"}, {key = "R", verb = "refresh"}})
-local LEASE_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "X", verb = "revoke"}, {key = "R", verb = "refresh"}, {key = "V", verb = "requests"}})
-local function lease_label(row: leases.Row): string
-    local used = tostring(row.applies_used) .. "/" .. (row.max_applies and tostring(row.max_applies) or "-")
-    return string.format("%-9s %s  used %s%s", row.state, row.target, used, row.expires_at and ("  until " .. row.expires_at) or "")
-end
-local function draw_leases(width: integer, height: integer, preferences: appearance.Preferences, slice: leases.Slice, offset: integer, status: string, notice: string): Frame
-    local painter = frame.new(width, height, preferences)
-    local footer_buttons: {frame.Button} = {}
-    local theme = painter.theme
-    local rows = leases.rows(slice)
-    local active = 0
-    for _, row in ipairs(rows) do if row.state == "active" then active = active + 1 end end
-    frame.header(painter, "LEASES", tostring(active) .. " active · " .. tostring(#rows) .. " shown")
-    local selected = leases.selected(slice)
-    local detail_rows = selected and height >= 12 and math.floor(math.min(height - 5, 4 + #selected.envelope_lines)) or 0
-    local list_first, list_last = 3, height - 2 - detail_rows
-    local selected_index = 0
-    for index, row in ipairs(rows) do
-        if selected and row.source == selected.source and row.lease_id == selected.lease_id then selected_index = index end
-    end
-    local window = frame.window(#rows, list_last - list_first + 1, selected_index, offset)
-    if #rows == 0 and list_last >= list_first then
-        frame.empty(painter, list_first, "No leases", "Approve a lease request · R refresh")
-    end
-    for slot = 1, window.capacity do
-        local row = rows[window.offset + slot]
-        if not row then break end
-        frame.row(painter, list_first + slot - 1, lease_label(row), window.offset + slot == selected_index, "lease_row", window.offset + slot, row.lease_id)
-    end
-    if selected and detail_rows > 0 then
-        local y = list_last + 1
-        frame.rule(painter, y)
-        local lines: {string} = {"Target: " .. selected.target .. "  granted by " .. selected.granted_by,
-            "Used " .. tostring(selected.applies_used) .. (selected.max_applies and (" of " .. tostring(selected.max_applies)) or "")
-                .. " · " .. tostring(selected.uses) .. " recorded" .. (selected.expires_at and (" · expires " .. selected.expires_at) or "")}
-        for _, line in ipairs(selected.envelope_lines) do lines[#lines + 1] = "Envelope: " .. line end
-        for index, value in ipairs(lines) do
-            if index > detail_rows - 1 then break end
-            frame.line(painter, y + index, value, theme.text)
-        end
-    end
-    if height >= 4 then
-        footer_buttons = {
-            {kind = "revoke", key = "X", label = "Revoke", enabled = selected ~= nil and leases.revocable(selected), primary = true},
-            {kind = "refresh", key = "R", label = "Refresh", enabled = true},
-            {kind = "requests", key = "V", label = "Requests", enabled = true},
-        }
-    end
-    frame.footer(painter, status ~= "" and status or notice, LEASE_HINTS, nil, footer_buttons)
-    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
-end
 local REVIEW_HINTS = frame.hints({{key = "↑↓ PgUp PgDn", verb = "scroll"}, {key = "A", verb = "approve at the end"}, {key = "D", verb = "deny"}, {key = "Esc", verb = "back"}})
 local function draw_review(width: integer, height: integer, preferences: appearance.Preferences, state: model.State,
     detail: model.ApprovalView, slice: leases.Slice, status: string): Frame
@@ -119,20 +70,39 @@ end
 local function draw_windows(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string): Frame
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
-    frame.header(painter, "YOUR APPROVAL GRANTS", tostring(#state.grants) .. " active · this node")
+    if state.grant_detail then
+        local lines: {string} = {}
+        for _, line in ipairs(state.grant_detail) do
+            for _, wrapped in ipairs(frame.flow({{value = model.text(line,8192)}},math.floor(math.max(1,width - 4)),0)) do lines[#lines + 1] = wrapped.value or "" end
+        end
+        state.grant_line_count = #lines
+        local visible = math.floor(math.max(1,height - 5))
+        frame.header(painter,"GRANT HISTORY",tostring(#lines) .. " lines")
+        for slot = 1,visible do
+            local line = lines[offset + slot]
+            if line then frame.line(painter,2 + slot,line,painter.theme.text) end
+        end
+        frame.footer(painter,status,frame.hints({{key = "↑↓",verb = "scroll"},{key = "X",verb = "revoke"},{key = "Esc",verb = "grants"}}))
+        return {rows = frame.rows(painter),hits = painter.hits,controls = frame.controls(painter),capacity = visible,offset = offset}
+    end
+    frame.header(painter, "GRANTS", tostring(#state.grants) .. " records · this node")
     local window = frame.window(#state.grants, height - 5, state.grant_selected, offset)
-    if #state.grants == 0 then frame.empty(painter, 3, "No active grants", "Choose a duration on a pending permission request") end
+    if #state.grants == 0 then frame.empty(painter, 3, "No grants", "Approved authority and saved consent appear here") end
     for slot = 1, window.capacity do
         local index = window.offset + slot
         local grant = state.grants[index]
         if not grant then break end
-        local source = state.rows[grant.grant_id]
-        local scope = source and (source.effect .. " · " .. source.prompt) or ("exact proposal " .. grant.scope_digest)
-        local label = model.text(grant.requester_id, 80) .. " · " .. scope .. " · " .. windows.duration(grant.until_ms - grant.granted_ms) .. " until " .. grant.until_at
+        local subject = model.text(canonical.encode(grant.subject),120)
+        local scope = model.text(canonical.encode(grant.scope),160)
+        local duration = grant.until_ms and ("until " .. clock.stamp(grant.until_ms)) or tostring(grant.terms.kind)
+        local uses = grant.max_uses and (" · " .. tostring(grant.used) .. " admitted, " .. tostring(grant.reserved) .. " reserved / " .. tostring(grant.max_uses)) or ""
+        local provenance = model.text(grant.provenance.kind,32) .. " by " .. model.text(grant.granted_by,80)
+        local label = grant.domain .. " · " .. grant.state .. uses .. " · " .. duration .. " · " .. provenance .. " · " .. subject .. " · " .. scope
         frame.row(painter, 2 + slot, label, index == state.grant_selected, "window_row", index, grant.grant_id)
     end
     if height >= 4 then footer_buttons = {
-        {kind = "window_revoke", key = "X", label = "Revoke now", enabled = state.grants[state.grant_selected] ~= nil, primary = true},
+        {kind = "window_revoke", key = "X", label = "Revoke now", enabled = state.grants[state.grant_selected] ~= nil and state.grants[state.grant_selected].state ~= "revoked", primary = true},
+        {kind = "grant_history", key = "H", label = "Details and history", enabled = state.grants[state.grant_selected] ~= nil},
         {kind = "refresh", key = "R", label = "Refresh", enabled = true},
         {kind = "window_back", key = "U", label = "Requests", enabled = true},
     } end
@@ -210,7 +180,6 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice, workspace_names: {[string]: model.Workspace}?): Frame
     if state.grants_view then return draw_windows(width, height, preferences, state, offset, status) end
-    if slice.leases_view then return draw_leases(width, height, preferences, slice, offset, status, slice.notice) end
     local open = state.detail
     local chosen = model.selected_row(state)
     if open and chosen and open.approval_id == chosen.approval_id and leases.is_review(open) and not (state.longer and slice.review_complete) then
@@ -344,7 +313,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         end
         if can_lease then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
         buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your grants", enabled = true, more = true}
-        buttons[#buttons + 1] = {kind = "leases", key = "V", label = "Leases", enabled = true, more = true}
         footer_buttons = buttons
     end
     local message = status

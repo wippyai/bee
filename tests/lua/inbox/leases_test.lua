@@ -20,6 +20,28 @@ local function approval(id: string, state: string, ref: string, payload: Object,
     for key, value in pairs(extra or {}) do item[key] = value end
     return assert(model.decode_view(item))
 end
+local function grants_reply(raw: Object): Object
+    if raw.ok ~= true then return raw end
+    local value = assert(bounds.object(raw.value))
+    local records: {Object} = {}
+    for _, item in ipairs(assert(bounds.array(value.leases,256))) do
+        local row = assert(bounds.object(item))
+        local reserved = 0
+        for _, raw_use in ipairs(assert(bounds.array(row.uses,256))) do
+            if assert(bounds.object(raw_use)).state == "reserved" then reserved = reserved + 1 end
+        end
+        records[#records + 1] = {grant_id = row.lease_id,domain = "governance_lease",owner_node = "node-1",workspace_id = "ws-1",requester_id = "subject",granted_by = row.granted_by,
+            subject = {principal_id = "subject"},scope = {type = "governance_envelope",parameters = {target = row.target,envelope = row.envelope}},terms = {kind = "bounded"},provenance = {kind = "legacy"},metadata = {lease_id = row.lease_id,target = row.target},state = row.state,revision = row.revision,used = assert(bounds.integer(row.applies_used)) - reserved,reserved = reserved,max_uses = row.max_applies,created_at = "2026-09-09T09:00:00.000Z"}
+    end
+    return {ok = true,value = {grants = records}}
+end
+local function show_grants(state: model.State, slice: leases.Slice)
+    state.grants_view = true
+    state.grants = {}
+    for _, row in ipairs(leases.rows(slice)) do
+        state.grants[#state.grants + 1] = {grant_id = row.lease_id,domain = "governance_lease",owner_node = "node-1",workspace_id = row.workspace_id,requester_id = "subject",granted_by = row.granted_by,subject = {principal_id = "subject"},scope = {type = "exact",parameters = {target = row.target}},terms = {kind = "bounded",time_basis = "absolute"},provenance = {kind = "legacy"},metadata = {},state = row.state,revision = row.revision,used = row.applies_used - row.reserved,reserved = row.reserved,until_ms = nil,max_uses = row.max_applies,created_at = "2026-09-09T09:00:00.000Z"}
+    end
+end
 local ACTIVATION = {workspace_id = "ws-1", source_node = "node-src", source_workspace = "notes"}
 local function rows_of(views: {model.ApprovalView}): {[string]: model.Row}
     local rows: {[string]: model.Row} = {}
@@ -115,8 +137,9 @@ local function define_tests()
         test.it("grants only an approved lease request", function()
             local approved = approval("g1", "decided", leases.PROPOSAL, ACTIVATION, {decision = "approved", decider_id = "bee.test.alice"})
             local intent = assert(leases.grant_intent(approved, "key-1"))
-            test.eq(intent.request.operation, "lease_grant")
-            test.eq(intent.request.approval_id, "g1")
+            test.eq(intent.target,"bee.approvals.binding:grant")
+            test.eq(intent.request.operation, "read")
+            test.not_nil(intent.request.grant_id)
             local denied = approval("g2", "decided", leases.PROPOSAL, ACTIVATION, {decision = "denied", decider_id = "bee.test.alice"})
             test.is_nil((leases.grant_intent(denied, "key-2")))
             test.is_nil((leases.grant_intent(approval("g3", "pending", leases.PROPOSAL, ACTIVATION), "key-3")))
@@ -129,19 +152,20 @@ local function define_tests()
                     expires_at = "2026-09-10T00:00:00.000Z"},
                 {lease_id = "l-2", target = "bee.gov:notes", state = "revoked", applies_used = 1, revision = 2, granted_by = "bee.test.alice", uses = {},
                     envelope = {}}}}}
-            test.is_nil(leases.apply_list(slice, "ws-1", "ws-1", raw))
+            test.is_nil(leases.apply_list(slice, "ws-1", "ws-1", grants_reply(raw)))
             local rows = leases.rows(slice)
             test.eq(#rows, 2)
             test.eq(rows[1].lease_id, "l-1")
-            test.eq(rows[1].uses, 1)
+            test.eq(rows[1].uses, 2)
             test.is_nil((leases.revoke_intent(slice, "k")))
             leases.select(slice, rows[1])
             local intent = assert(leases.revoke_intent(slice, "k"))
-            test.eq(intent.request.operation, "lease_revoke")
+            test.eq(intent.target,"bee.approvals.binding:grant")
+            test.eq(intent.request.operation, "revoke")
             test.eq(intent.request.expected_revision, 3)
             leases.select(slice, rows[2])
             test.is_nil((leases.revoke_intent(slice, "k")))
-            test.is_true(leases.apply_list(slice, "ws-1", "ws-1", {ok = false, error = {code = "DENIED", message = "no"}}) ~= nil)
+            test.is_true(leases.apply_list(slice, "ws-1", "ws-1", grants_reply({ok = false, error = {code = "DENIED", message = "no"}})) ~= nil)
         end)
         test.it("words each outcome and a governance refusal", function()
             test.is_true(leases.notice("lease_grant", {ok = true}):find("granted", 1, true) ~= nil)
@@ -218,7 +242,7 @@ local function define_tests()
                 listed[index] = {lease_id = "l-" .. tostring(index), target = "bee.gov:notes", state = "active", applies_used = 0,
                     revision = 1, granted_by = "p", uses = {}, envelope = {}, max_applies = 1}
             end
-            test.is_nil(leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = listed}}))
+            test.is_nil(leases.apply_list(slice, "ws-1", "ws-1", grants_reply({ok = true, value = {leases = listed}})))
             test.eq(#leases.rows(slice), 200)
         end)
         test.it("shows every term and grant of a long ceiling at a small size and approves only after the end", function()
@@ -271,13 +295,13 @@ local function define_tests()
         test.it("enables Revoke for an exhausted lease that holds a reservation", function()
             local state = model.new({"ws-1"})
             local slice = leases.new()
-            leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "exhausted", applies_used = 1,
-                revision = 2, granted_by = "p", envelope = {}, max_applies = 1, uses = {{intent_id = "i", state = "reserved"}}}}}})
-            leases.show_leases(slice, true)
+            leases.apply_list(slice, "ws-1", "ws-1", grants_reply({ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "exhausted", applies_used = 1,
+                revision = 2, granted_by = "p", envelope = {}, max_applies = 1, uses = {{intent_id = "i", state = "reserved"}}}}}}))
+            show_grants(state,slice)
             leases.select(slice, leases.rows(slice)[1])
             local drawn = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", slice)
             local revoke = false
-            for _, hit in ipairs(drawn.hits) do if hit.kind == "revoke" then revoke = true end end
+            for _, hit in ipairs(drawn.hits) do if hit.kind == "window_revoke" then revoke = true end end
             test.is_true(revoke)
         end)
         test.it("keeps lease requests out of a batch", function()
@@ -287,10 +311,10 @@ local function define_tests()
         end)
         test.it("revokes an exhausted lease that still has a reservation", function()
             local slice = leases.new()
-            leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "exhausted", applies_used = 1,
+            leases.apply_list(slice, "ws-1", "ws-1", grants_reply({ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "exhausted", applies_used = 1,
                 revision = 2, granted_by = "p", envelope = {}, max_applies = 1, uses = {{intent_id = "i", state = "reserved"}}},
                 {lease_id = "l-2", target = "t", state = "exhausted", applies_used = 1, revision = 2, granted_by = "p", envelope = {}, max_applies = 1,
-                    uses = {{intent_id = "j", state = "admitted"}}}}}})
+                    uses = {{intent_id = "j", state = "admitted"}}}}}}))
             local rows = leases.rows(slice)
             leases.select(slice, rows[1])
             test.is_true(leases.revoke_intent(slice, "k") ~= nil)
@@ -316,28 +340,28 @@ local function define_tests()
             local lease_key: string? = nil
             for _, button in ipairs(assert(technical.controls).buttons) do if button.kind == "lease" then lease_key = button.key end end
             test.eq(lease_key, "E")
-            leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "active", applies_used = 0,
-                revision = 1, granted_by = "p", uses = {}, envelope = {}, max_applies = 1}}}})
-            leases.show_leases(slice, true)
+            leases.apply_list(slice, "ws-1", "ws-1", grants_reply({ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "active", applies_used = 0,
+                revision = 1, granted_by = "p", uses = {}, envelope = {}, max_applies = 1}}}}))
+            show_grants(state,slice)
             local listed = view.draw(140, 30, appearance.defaults(), state, model.rows(state), 0, "", slice)
             local rows = 0
             for _, hit in ipairs(listed.hits) do
                 test.is_true(hit.kind ~= "lease")
-                if hit.kind == "lease_row" then rows = rows + 1 end
+                if hit.kind == "window_row" then rows = rows + 1 end
             end
             test.eq(rows, 1)
         end)
-        test.it("shows active leases with usage and the revoke action", function()
+        test.it("shows common governance grants with usage and the revoke action", function()
             local state = model.new({"ws-1"})
             local slice = leases.new()
-            leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "bee.gov:notes", state = "active",
-                applies_used = 2, max_applies = 5, revision = 3, granted_by = "bee.test.alice", uses = {}, envelope = {}}}}})
-            leases.show_leases(slice, true)
+            leases.apply_list(slice, "ws-1", "ws-1", grants_reply({ok = true, value = {leases = {{lease_id = "l-1", target = "bee.gov:notes", state = "active",
+                applies_used = 2, max_applies = 5, revision = 3, granted_by = "bee.test.alice", uses = {}, envelope = {}}}}}))
+            show_grants(state,slice)
             leases.select(slice, leases.rows(slice)[1])
             local frame = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", slice)
             local text = table.concat(frame.rows, "\n"):gsub("\27%[[0-9;]*m", "")
-            test.is_true(text:find("LEASES", 1, true) ~= nil)
-            test.is_true(text:find("used 2/5", 1, true) ~= nil)
+            test.is_true(text:find("GRANTS", 1, true) ~= nil)
+            test.is_true(text:find("2 admitted, 0 reserved / 5", 1, true) ~= nil)
             test.is_true(text:find("Revoke", 1, true) ~= nil)
         end)
         test.it("marks batched requests in the list", function()

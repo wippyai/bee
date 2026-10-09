@@ -10,6 +10,7 @@ local RESIDENT = {
     ["bee.sync.service:sync"] = "bee.sync",
 }
 local DEMAND = {
+    ["bee.credentials.service:worker"] = true,
     ["bee.gateway.service:external"] = true,
     ["bee.gov.service:activation_worker"] = true,
     ["bee.node.service:tests"] = true,

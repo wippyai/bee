@@ -191,6 +191,8 @@ def host_environment():
 
 
 def owner_scheduling(src):
+    replace_once(src / "credentials/service/worker.lua", 'funcs.call("bee.credentials.binding:configuration_effects")', 'nil, nil')
+    replace_once(src / "credentials/service/worker.lua", 'return not backlog.pending()', 'return true')
     replace_once(src / "gov/service/activation_worker.lua", "pass = drain", "pass = function(): boolean return true end")
     replace_once(src / "gov/service/backlog.lua", "return pass.pending() or service.following_pending()", "return false")
     path = src / "threads/service/_index.yaml"
@@ -238,7 +240,24 @@ def hold_docker_cleanup(src):
     end""")
 
 
+def pause_effect_dispatch(src):
+    path = src / "approvals/persist/dispatch.lua"
+    replace_once(path, 'local sql = require("sql")', 'local sql = require("sql")\nlocal process = require("process")')
+    replace_once(path, "function M.deliver(db: sql.DB, sender: Sender?): (integer?, string?)",
+                 """function M.deliver(db: sql.DB, sender: Sender?): (integer?, string?)
+    if not sender and process.registry.lookup("bee.test.effect_dispatch", process.registry.LOCAL) then return 0, nil end""")
+    add_modules(src / "approvals/persist/_index.yaml", "dispatch", ["process"])
+
+
 def observe_effect_delivery(src):
+    replace_once(src / "process/demand_owner.lua",
+                 "function M.receive(owners: Owners, from: string, raw: unknown)",
+                 """function M.receive(owners: Owners, from: string, raw: unknown)
+    local controller = process.registry.lookup("bee.test.effect_delivery", process.registry.LOCAL)
+    if controller and tostring(controller) == from and type(raw) == "table" and raw.action == "bee.test.boot_backlog" then
+        M.recover(owners, nil)
+        return
+    end""")
     replace_once(src / "process/demand_owner.lua",
                  "        for _, request in ipairs(requests) do",
                  """        local observer = process.registry.lookup("bee.test.effect_delivery")
@@ -271,6 +290,7 @@ def main():
     owner_scheduling(src)
     hold_test_runner_quiet(src)
     hold_docker_cleanup(src)
+    pause_effect_dispatch(src)
     observe_effect_delivery(src)
     observe_boot_recovery(src)
     observe_carrier(src)

@@ -211,3 +211,10 @@ materialization retain that reason; the Agent catalog shows it in the login-need
 state. A successful metadata probe checks presence only, without opening login
 contents. Projection still reads only the provider's host-admitted files.
 Writes, creates, renames and deletes retain root containment.
+
+Configuration admission has one on-demand effect owner. Contract 2 discovers
+its consumer through registry metadata and dispatches terminal events through
+Hive demand. A wake starts an absent owner; boot probes recover terminal
+effects and unacknowledged consumer events through the approval API under the
+configuration worker's scope. The owner retains failure retries, drains bounded
+batches, and requests quiet stop only when durable work is empty.

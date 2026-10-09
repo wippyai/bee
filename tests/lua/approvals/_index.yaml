@@ -176,10 +176,11 @@ entries:
   source: file://effect_demand_test.lua
   method: run
   modules: [sql, process, events, channel, time, system]
-  meta: {type: test, suite: a_demand_effects, timeout: 45s}
+  meta: {type: test, suite: a_demand_effects, timeout: 60s}
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
     dispatch: bee.approvals.persist:dispatch
     resources: bee.approvals.env:resources
     demand: bee.process:demand
+    principals: bee.approvals:test_principals

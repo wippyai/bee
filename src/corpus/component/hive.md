@@ -75,13 +75,14 @@ resident Hive, so later starts do not rerun the bootloader or restoration.
 Contract 2 discovers approval effect consumers through registry metadata and
 dispatches their durable terminal events to each registered demand owner.
 Gateway installation and publication share one owner; activation retains its
-own scope and owner. Consumer wakes start absent owners and survive quiet stop.
+own scope and owner. Configuration admission uses the same demand path and
+recovers pending effects and unacknowledged events at boot. Consumer wakes start absent owners and survive quiet stop.
 The approval authority, Hive receiver and delivery processes remain separate.
 
 Within the services audit, excluding the concurrent approvals consolidation,
 an idle node runs four resident owners: Hive, Node, Threads and Sync. Threads
 runs outbound pump rounds as its own scoped task. Gateway, activation, test
-execution, Docker and native supervision run only while work exists. Discovery
+execution, configuration admission, Docker and native supervision run only while work exists. Discovery
 uses service metadata; backlog probes run under each declared domain actor
 and scope. Supervision events, durable work and retry or pairing deadlines
 drive owner lifetime.

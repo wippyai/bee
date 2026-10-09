@@ -10,6 +10,7 @@ local demand = require("demand")
 local state = require("state")
 local M = {}
 local ALLOWED: {[string]: boolean} = {
+    ["bee.credentials.service:configuration_service"] = true,
     ["bee.node.service:tests_service"] = true,
     ["bee.gov.service:activation_service"] = true,
     ["bee.gateway.service:external_service"] = true,

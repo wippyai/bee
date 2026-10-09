@@ -14,6 +14,7 @@ entries:
     metadata_key: binding_id
 - name: store_policy
   kind: security.policy
+  groups: [external_owner]
   meta:
     comment: Gateway private store; target_db injects only the selected database resource
   policy:
@@ -23,6 +24,7 @@ entries:
     effect: allow
 - name: grant_context_policy
   kind: security.policy.expr
+  groups: [external_owner]
   policy:
     actions: [registry.find, registry.get]
     resources: '*'
@@ -43,6 +45,7 @@ entries:
     effect: allow
 - name: address_policy
   kind: security.policy
+  groups: [external_owner]
   meta:
     comment: Gateway address lookup reads only its listener link
     endpoint reference: null
@@ -57,6 +60,7 @@ entries:
     effect: allow
 - name: supervisor_policy
   kind: security.policy
+  groups: [external_owner]
   meta:
     comment: Gateway address lookup reads only supervisor state
   policy:
@@ -68,6 +72,7 @@ entries:
     effect: allow
 - name: address_call_policy
   kind: security.policy
+  groups: [external_owner]
   policy:
     actions:
     - funcs.call
@@ -76,6 +81,7 @@ entries:
     effect: allow
 - name: execute_policy
   kind: security.policy.expr
+  groups: [external_owner]
   meta:
     comment: The HTTP MCP adapter constructs a bound subject and scope; host-selected
       tool policies still define every operation it may invoke
@@ -531,6 +537,7 @@ entries:
     effect: allow
 - name: external_host_policy
   kind: security.policy.expr
+  groups: [external_owner]
   policy:
     actions:
     - bee.gateway.admit
@@ -555,7 +562,7 @@ entries:
       && (resource == "bee.gateway.security:external_principal_policy" || resource
       == "bee.gateway.security:external_withdraw_policy")) || (action == "funcs.call"
       && (resource == "bee.threads.binding:create" || resource == "bee.threads.binding:admit_action"
-      || resource == "bee.threads.binding:prepare_attempt" || resource == "bee.approvals.binding:withdraw"))
+      || resource == "bee.threads.binding:prepare_attempt" || resource == "bee.approvals.binding:read" || resource == "bee.approvals.binding:withdraw"))
       || (action == "cdc.subscribe" && resource == "bee:changes") || (action == "process.registry.register"
       && resource == "bee.gateway.external") || (action == "process.registry.lookup"
       && resource == "bee.hive.supervisor") || (action == "system.read" && resource
@@ -571,6 +578,7 @@ entries:
     effect: allow
 - name: external_reader_host_policy
   kind: security.policy
+  groups: [external_owner]
   policy:
     actions:
     - funcs.call
@@ -588,6 +596,22 @@ entries:
     resources: '*'
     expression: (action == "funcs.call" && resource == "bee.gateway.binding:external_call")
       || (action == "bee.gateway.external.view" && resource != "")
+    effect: allow
+- name: external_facade_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.gateway.security:external_owner, bee.gateway.binding:external_backend]
+    expression: (action == "funcs.security" && resource == "security")
+      || (action == "security.policy_group.get" && resource == "bee.gateway.security:external_owner")
+      || (action == "funcs.call" && resource == "bee.gateway.binding:external_backend")
+    effect: allow
+- name: external_backend_policy
+  kind: security.policy
+  groups: [external_owner]
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.binding:external_backend]
     effect: allow
 - name: external_withdraw_policy
   kind: security.policy

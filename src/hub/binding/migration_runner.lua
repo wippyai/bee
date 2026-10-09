@@ -4,6 +4,7 @@ local sql = require("sql")
 local funcs = require("funcs")
 local security = require("security")
 local migrations = require("migrations")
+local state_guard = require("state_guard")
 local M = {}
 type Applied = {id: string, group: integer}
 type Binding = {database_id: string, table_prefix: string?}
@@ -200,6 +201,8 @@ function M.source(entries: {migrations.Entry}, private_policies: {string}?, bind
         local options: {[string]: unknown} = {target_db = target, database_id = selected_binding.database_id,
             direction = direction, id = id}
         if selected_binding.table_prefix then options.table_prefix = selected_binding.table_prefix end
+        local prepared, prepare_error = state_guard.prepare(selected_binding.database_id)
+        if not prepared then error(prepare_error or "record migration writer version") end
         local result, call_error = executor:call(id, options)
         if call_error then error(tostring(call_error)) end
         if type(result) ~= "table" or type(result.status) ~= "string" then error("invalid migration function result") end

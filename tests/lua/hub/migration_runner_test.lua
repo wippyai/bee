@@ -2,6 +2,7 @@
 local test = require("test")
 local migration_runner = require("migration_runner")
 local migrations = require("migrations")
+local sql = require("sql")
 
 local DB = "bee.tests.hub:migration_runner_db"
 local DEFAULT = "bee.tests.hub:test_default_migration"
@@ -45,6 +46,11 @@ local function define_tests()
             local applied, applied_error = source.is_applied("demo:data", BOUND)
             if applied == nil then error(tostring(applied_error)) end
             test.is_true(applied)
+            local db = assert(sql.get(BOUND_DB))
+            local writer = assert(db:query("SELECT description FROM _migrations WHERE id = 'bee.persist:state_writer'"))
+            test.eq(#writer, 1)
+            test.is_true(tostring(writer[1].description):find('"version"', 1, true) ~= nil)
+            db:release()
         end)
         test.it("refuses missing, malformed and ungranted physical bindings", function()
             local source = migration_runner.source(bound_entries, nil, {})

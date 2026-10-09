@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.tests.stateguard
+entries:
+- name: db
+  kind: db.sql.sqlite
+  file: .wippy/stateguard.db
+  lifecycle: {auto_start: true}
+- name: guard_test
+  kind: function.lua
+  source: file://guard_test.lua
+  method: run
+  modules: [sql, funcs, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    guard: bee.persist:state_guard
+    schema: bee.approvals.migrations:schema

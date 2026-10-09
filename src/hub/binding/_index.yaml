@@ -37,6 +37,7 @@ entries:
   source: file://migration_runner.lua
   modules: [sql, funcs, security]
   imports:
+    state_guard: bee.persist:state_guard
     migrations: bee.hub.activation:migrations
 - name: publication
   kind: library.lua

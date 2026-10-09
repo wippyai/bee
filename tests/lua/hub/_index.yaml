@@ -78,6 +78,7 @@ entries:
   kind: function.lua
   source: file://migration_runner_test.lua
   method: run
+  modules: [sql]
   meta: {type: test, suite: bee}
   security:
     policies:

@@ -9,3 +9,61 @@ entries:
   kind: library.lua
   source: file://transaction.lua
   modules: [sql]
+- name: state_guard
+  kind: library.lua
+  source: file://state_guard.lua
+  modules: [sql, registry, json, process]
+  imports:
+    ledger: wippy.migration:repository
+    writer_version: bee.env:state_writer_version
+    semver: bee.hub.package:semver
+    bounds: bee.values:bounds
+- name: state_guard_bootloader
+  kind: function.lua
+  source: file://state_guard.lua
+  method: run
+  modules: [sql, registry, json, process]
+  imports:
+    ledger: wippy.migration:repository
+    writer_version: bee.env:state_writer_version
+    semver: bee.hub.package:semver
+    bounds: bee.values:bounds
+  meta:
+    type: bootloader
+    order: 5
+    description: Refuse state written by a newer Bee before migrations
+    requires: [bee:db, bee:terminal]
+- name: state_guard_startup
+  kind: process.lua
+  source: file://state_guard.lua
+  method: main
+  modules: [sql, registry, json, process]
+  imports:
+    ledger: wippy.migration:repository
+    writer_version: bee.env:state_writer_version
+    semver: bee.hub.package:semver
+    bounds: bee.values:bounds
+- name: state_guard_service
+  kind: process.service
+  process: bee.persist:state_guard_startup
+  host: bee:workers
+  meta:
+    type: bee.process.boot_gate
+  lifecycle:
+    auto_start: true
+    startup: complete
+    requires: [bee:db, bee:terminal]
+    restart: {max_attempts: 1}
+    security:
+      groups: [wippy.security:process]
+- name: state_refusal
+  kind: process.lua
+  source: file://state_refusal.lua
+  method: main
+  modules: [io]
+- name: guarded_bootloader
+  kind: ns.requirement
+  default: [bee.persist:state_guard_service]
+  targets:
+  - entry: wippy.bootloader:bootloader.service
+    path: .lifecycle.requires

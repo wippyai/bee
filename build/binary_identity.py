@@ -55,7 +55,9 @@ def main():
     entry = generate(manifest, provenance, go_mod, args.version, revision)
     target = ROOT / "src/env/binary_identity/_index.yaml"
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps({"version": "1.0", "namespace": "bee.env", "entries": [entry]}, indent=2) + "\n")
+    writer = {"name": "state_writer_version", "kind": "library.lua",
+              "source": "return {version = " + json.dumps(args.version) + ", build = " + json.dumps(revision) + "}"}
+    target.write_text(json.dumps({"version": "1.0", "namespace": "bee.env", "entries": [entry, writer]}, indent=2) + "\n")
     print(f"bee.binary_identity: runtime {entry['data']['runtime_commit']}, native {entry['data']['native_version']}")
 
 

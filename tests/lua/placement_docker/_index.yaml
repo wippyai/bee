@@ -259,12 +259,21 @@ entries:
   kind: function.lua
   source: file://environment_test.lua
   method: run
+  modules: [registry, uuid]
+  security:
+    policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_owner_policy, bee.security.approvals:grant_adapters_policy]
   meta:
     type: test
     suite: bee
   imports:
     test: wippy.test:test
     environment: bee.placement.docker.env:environment
+    legacy: bee.placement.docker.env:legacy
+    grants: bee.approvals.grants:store
+    bounds: bee.values:bounds
+    schema: bee.tests.support:schema
+    service: bee.approvals.binding:service
+    clock: bee.values:clock
 - name: creator_policy
   kind: security.policy
   meta:

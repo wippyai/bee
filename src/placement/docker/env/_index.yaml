@@ -17,3 +17,29 @@ entries:
       listener: bee.gateway.api:gateway_listener
       approval_policy: docker-environment
       readiness_policy: bee.gateway.security:readiness_policy
+- name: grant
+  kind: function.lua
+  source: file://grant.lua
+  method: build
+  meta:
+    type: bee.approvals.grant-adapter
+    operation_ref: bee.placement.docker.binding:prepare_environment
+    domain: docker_environment
+  imports:
+    bounds: bee.values:bounds
+    grants: bee.approvals.grants:store
+- name: grant_policy
+  kind: registry.entry
+  meta:
+    type: bee.approvals.grant-policy
+    domain: docker_environment
+    allow_permanent: true
+- name: legacy
+  kind: library.lua
+  source: file://legacy.lua
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+    grants: bee.approvals.grants:store
+    clock: bee.values:clock
+    canonical: bee.values:canonical

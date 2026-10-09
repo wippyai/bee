@@ -116,3 +116,17 @@ entries:
     - uid
     - gid
     effect: allow
+
+- name: environment_grants_policy
+  kind: security.policy
+  policy:
+    actions: [bee.approvals.grant.use]
+    resources: [docker_environment]
+    effect: allow
+
+- name: grant_migration_policy
+  kind: security.policy
+  policy:
+    actions: [fs.get, registry.get, registry.find, system.read]
+    resources: ['bee.placement.native.env:root_ref', 'bee.placement.native.env:root', node, '*']
+    effect: allow

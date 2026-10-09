@@ -106,6 +106,7 @@ entries:
       - bee.placement.docker.security:image_policy
       - bee.placement.docker.security:image_client_policy
       - bee.placement.docker.security:environment_owner_policy
+      - bee.placement.docker.security:environment_grants_policy
       - bee.placement.docker.security:environment_listener_policy
       - bee.placement.native.security:placement_service_policy
       - bee.resources.security:resource_resolve_policy
@@ -120,6 +121,7 @@ entries:
   kind: library.lua
   source: file://environment.lua
   modules:
+  - uuid
   - registry
   - hash
   - funcs
@@ -131,6 +133,8 @@ entries:
   - system
   - events
   imports:
+    grants: bee.approvals.grants:store
+    clock: bee.values:clock
     canonical: bee.values:canonical
     bounds: bee.values:bounds
     environment: bee.placement.docker.env:environment

@@ -2,24 +2,25 @@
 local M = {}
 type Selection = {workspace: string, profile: string, digest: string, network: string, policy: string}
 type Approval = {approval_id: string, proposal_digest: string, owner_incarnation: integer}
-type Receipt = {state: string, selection_digest: string, approval_id: string, proposal_digest: string, owner_incarnation: integer, address: string?}
+type Receipt = {grant_id: string?, state: string, selection_digest: string, approval_id: string, proposal_digest: string, owner_incarnation: integer, address: string?}
 type IO = {
     load: () -> (Receipt?, string?), save: (Receipt) -> string?,
     request: (Selection) -> (Approval?, string?), await: (Approval) -> (string?, string?),
-    consume: (Approval) -> string?, provision: (Selection) -> (string?, string?),
+    check: (Receipt, Selection) -> string?, consume: (Approval) -> string?, provision: (Selection) -> (string?, string?),
     activate: (Receipt) -> string?, progress: (string) -> (),
 }
 function M.prepare(io: IO, selected: Selection): (Receipt?, string?)
     local receipt, load_error = io.load()
     if load_error then return nil, load_error end
     if receipt and receipt.selection_digest ~= selected.digest then return nil, "Docker environment selection changed; review its admission again" end
-    if receipt and receipt.state == "revoked" then return nil, "Docker environment admission was revoked" end
     if receipt and receipt.state == "denied" then return nil, "The person declined Docker network and gateway admission" end
-    if receipt and receipt.state == "approved" then
+    if receipt and (receipt.state == "approved" or receipt.state == "revoked") then
+        local authority_error = io.check(receipt,selected)
+        if authority_error then return nil,authority_error end
         io.progress("Connecting the approved Docker gateway")
         local address, provision_error = io.provision(selected)
         if not address then return nil, provision_error or "Approved Docker network is unavailable" end
-        local refreshed: Receipt = {state = receipt.state, selection_digest = receipt.selection_digest,
+        local refreshed: Receipt = {grant_id = receipt.grant_id,state = receipt.state, selection_digest = receipt.selection_digest,
             approval_id = receipt.approval_id, proposal_digest = receipt.proposal_digest,
             owner_incarnation = receipt.owner_incarnation, address = address}
         local save_error = io.save(refreshed)
@@ -32,7 +33,7 @@ function M.prepare(io: IO, selected: Selection): (Receipt?, string?)
         io.progress("Waiting for approval to provision the Docker network and restricted Bee gateway")
         local approval, request_error = io.request(selected)
         if not approval then return nil, request_error or "Docker environment approval could not be recorded" end
-        receipt = {state = "pending", selection_digest = selected.digest, approval_id = approval.approval_id,
+        receipt = {grant_id = approval.approval_id .. ":grant",state = "pending", selection_digest = selected.digest, approval_id = approval.approval_id,
             proposal_digest = approval.proposal_digest, owner_incarnation = approval.owner_incarnation}
         local saved = io.save(receipt)
         if saved then return nil, saved end
@@ -50,6 +51,8 @@ function M.prepare(io: IO, selected: Selection): (Receipt?, string?)
     end
     local consume_error = io.consume(approval)
     if consume_error then return nil, consume_error end
+    local authority_error = io.check(receipt,selected)
+    if authority_error then return nil,authority_error end
     io.progress("Provisioning the approved Docker network and restricted gateway")
     local address, provision_error = io.provision(selected)
     if not address then return nil, provision_error or "Docker environment provisioning outcome is unknown" end

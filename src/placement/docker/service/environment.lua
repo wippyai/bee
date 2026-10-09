@@ -15,14 +15,17 @@ local hash = require("hash")
 local canonical = require("canonical")
 local events = require("events")
 local system = require("system")
+local grants = require("grants")
+local clock = require("clock")
+local uuid = require("uuid")
 local M = {}
 type Channel = channel.Channel
 type Object = {[string]: unknown}
-local function approval_call(method: string, request: Object): (Object?, string?)
+local function approval_call(method: string, request: Object): (Object?, string?, string?)
     local reply, call_error = funcs.call("bee.approvals.binding:" .. method, request)
     local value = bounds.object(reply)
     local fault = value and bounds.object(value.error)
-    if call_error or not value or value.ok ~= true then return nil, tostring(call_error or fault and fault.message or "approval owner did not answer") end
+    if call_error or not value or value.ok ~= true then return nil, tostring(call_error or fault and fault.message or "approval owner did not answer"),fault and bounds.id(fault.code) end
     return bounds.object(value.value), nil
 end
 local function configuration(): (Object?, string?)
@@ -37,7 +40,7 @@ local function configuration(): (Object?, string?)
 end
 local function receipt(value: unknown): environment.Receipt?
     local data = bounds.object(value)
-    if not data or bounds.fields(data, {"state", "selection_digest", "approval_id", "proposal_digest", "owner_incarnation", "address"}) then return nil end
+    if not data or bounds.fields(data, {"state", "selection_digest", "approval_id", "proposal_digest", "owner_incarnation", "address", "grant_id"}) then return nil end
     local state = bounds.member(data.state, {"pending", "approved", "denied", "revoked"})
     local digest, id, proposal = bounds.line(data.selection_digest,64), bounds.id(data.approval_id), bounds.line(data.proposal_digest,64)
     local incarnation = bounds.count(data.owner_incarnation)
@@ -49,7 +52,7 @@ local function receipt(value: unknown): environment.Receipt?
     if not incarnation or incarnation < 1 then return nil end
     if data.address ~= nil and not address then return nil end
     if state == "approved" and not address then return nil end
-    local result: environment.Receipt = {state = state, selection_digest = digest, approval_id = id, proposal_digest = proposal, owner_incarnation = incarnation, address = address}
+    local result: environment.Receipt = {state = state, selection_digest = digest, approval_id = id, proposal_digest = proposal, owner_incarnation = incarnation, address = address,grant_id = bounds.id(data.grant_id)}
     return result
 end
 function M.run(profile_ref: string, digest: string, network: string, workspace: string, recipient: string?, cancel: Channel<boolean>?, revoke: boolean?): (string?, string?)
@@ -80,6 +83,16 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
         if not written then return tostring(write_error or "record Docker environment") end
         return nil
     end
+    local function authority(recorded: environment.Receipt, selected: environment.Selection): (grants.Grant?,string?)
+        local id = recorded.approval_id .. ":grant"
+        local raw, err, code = approval_call("grant",{operation = "read",grant_id = id})
+        local body = raw and bounds.object(raw.grant)
+        if not body then return nil,err or "Docker consent grant is unavailable" end
+        local grant, decode_error = grants.decode(body)
+        if not grant then return nil,decode_error end
+        if grant.domain ~= "docker_environment" or grant.owner_node ~= system.node.id() or grant.metadata.selection_digest ~= selected.digest or grant.metadata.network ~= selected.network then return nil,"Docker consent grant scope differs" end
+        return grant,nil
+    end
     local function listener_action(kind: string, expected: string): string?
         local sent, send_error = events.send("supervisor", "service." .. kind, tostring(config.listener))
         if not sent then return tostring(send_error or "gateway listener lifecycle request refused") end
@@ -94,19 +107,12 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
     if revoke then
         local recorded, read_error = load()
         if not recorded then return nil, read_error or "Docker environment has no admission to revoke" end
-        local revoked_receipt: environment.Receipt = {state = "revoked", selection_digest = recorded.selection_digest, approval_id = recorded.approval_id, proposal_digest = recorded.proposal_digest, owner_incarnation = recorded.owner_incarnation, address = recorded.address}
-        local saved = save(revoked_receipt)
-        if saved then return nil, saved end
-        local overlay = registry.overlay("bee.placement.docker.env:environment")
-        if not overlay then return nil, "Docker environment overlay unavailable" end
-        local stopped = listener_action("stop", "stopped")
-        if stopped then return nil, stopped end
-        local changes = overlay:changes()
-        changes:delete(tostring(config.endpoint)); changes:delete(tostring(config.listener)); changes:delete(tostring(config.readiness_policy))
-        local _, apply_error = changes:apply()
-        if apply_error then return nil, tostring(apply_error) end
-        local started = listener_action("start", "running")
-        return started == nil and "revoked" or nil, started
+        local selected: environment.Selection = {workspace = workspace,profile = profile_ref,digest = digest,network = network,policy = tostring(config.approval_policy)}
+        local grant, authority_error = authority(recorded,selected)
+        if not grant then return nil,authority_error end
+        local revoked, revoke_error = approval_call("grant",{operation = "revoke",grant_id = grant.grant_id,expected_revision = grant.revision})
+        if not revoked then return nil,revoke_error end
+        return "revoked",nil
     end
     local io: environment.IO = {
         load = load, save = save,
@@ -118,7 +124,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
                 request_kind = "permission", policy = selected.policy,
                 proposal = {kind = "operation", ref = "bee.placement.docker.binding:prepare_environment", revision = selected.digest,
                     input_digest = selected.digest, payload = {network = selected.network, endpoint = config.endpoint, listener = config.listener, profile = selected.profile}},
-                prompt = {text = "Allow Bee to create the " .. selected.network .. " Docker network and bind the restricted agent gateway to its host bridge? This network and gateway admission lasts until revoked from the Agent window."}})
+                prompt = {text = "Allow Bee to create the " .. selected.network .. " Docker network and bind the restricted agent gateway to its host bridge? This network and gateway admission lasts until revoked from Needs you > Grants."}})
             local decoded = filed and receipt({state = "pending", selection_digest = selected.digest, approval_id = filed.approval_id,
                 proposal_digest = filed.proposal_digest, owner_incarnation = filed.owner_incarnation})
             if not decoded then return nil, error or "approval owner returned an invalid Docker environment approval" end
@@ -136,6 +142,16 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
                 local next_event = channel.select(cases)
                 if not next_event.ok or next_event.channel == cancel then return nil, "Docker environment approval wait was cancelled; no launch occurred" end
             end
+        end,
+        check = function(recorded: environment.Receipt,selected: environment.Selection): string?
+            local grant, err = authority(recorded,selected)
+            if not grant then return err or "Docker consent grant is unavailable" end
+            local effect = assert(uuid.v7())
+            local reserved, reserve_error = approval_call("grant",{operation = "reserve",grant_id = grant.grant_id,subject = grant.subject,scope = grant.scope,effect_key = effect,expected_revision = grant.revision})
+            if not reserved then return reserve_error or "Docker consent could not reserve admission" end
+            local admitted, admission_error = approval_call("grant",{operation = "admit",grant_id = grant.grant_id,subject = grant.subject,scope = grant.scope,effect_key = effect,expected_revision = reserved.revision})
+            if not admitted then return admission_error or "Docker consent no longer admits provisioning" end
+            return nil
         end,
         consume = function(approval: environment.Approval): string?
             local consumed, error = approval_call("consume", {approval_id = approval.approval_id, proposal_digest = approval.proposal_digest,
@@ -215,6 +231,9 @@ function M.revoked(): boolean
     local raw = volume and volume:readfile("/images/environment.json")
     local value = raw and json.decode(raw)
     local recorded = receipt(value)
-    return recorded ~= nil and recorded.state == "revoked"
+    if not recorded then return false end
+    local current = approval_call("grant",{operation = "read",grant_id = recorded.approval_id .. ":grant"})
+    local grant = current and bounds.object(current.grant)
+    return grant ~= nil and grant.state == "revoked"
 end
 return M

@@ -13,6 +13,7 @@ local preferences = require("preferences")
 local mcp = require("mcp")
 local gateway_protocol = require("gateway_protocol")
 local surface = require("surface")
+local trait_access = require("trait_access")
 local gateway_hooks_catalog = require("gateway_hooks_catalog")
 local M = {}
 M.MAX_AGENT_DELEGATES = 16
@@ -153,9 +154,14 @@ local function access_surface(raw: unknown, tools: {string}, selected: boolean):
     if not approver or not traits or #traits == 0 then return nil, traits_error or "names no approver policy or trait" end
     local consent: {[string]: boolean} = {}
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do consent[trait.id] = true end
+    local extensions: {unknown} = {}
     local offered: {[string]: boolean} = {}
     for _, id in ipairs(traits) do
-        if not consent[id] then return nil, id .. " is not a built-in consent trait" end
+        if not consent[id] then
+            local trait, err = trait_access.load(id)
+            if not trait then return nil, err end
+            extensions[#extensions + 1] = trait
+        end
         offered[id] = true
     end
     local base: {string} = {}
@@ -167,8 +173,12 @@ local function access_surface(raw: unknown, tools: {string}, selected: boolean):
             if not requested[trait] then requestable[#requestable + 1] = trait; requested[trait] = true end
         else base[#base + 1] = name end
     end
+    for _, raw_trait in ipairs(extensions) do
+        local trait = assert(bounds.object(raw_trait))
+        requestable[#requestable + 1] = assert(bounds.id(trait.id))
+    end
     table.sort(requestable)
-    local composed: {[string]: unknown} = {tools = {}, traits = {}, base_tools = base, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
+    local composed: {[string]: unknown} = {tools = {}, traits = extensions, base_tools = base, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
     if #requestable > 0 then composed.access = {policy = approver, traits = requestable} end
     return composed, nil
 end

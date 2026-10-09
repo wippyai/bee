@@ -116,6 +116,21 @@ function M.create(tx: sql.Transaction | sql.DB, grant: Grant): string?
     if err then return err end
     return M.history(tx,grant,"grant.created",grant.granted_by,grant.provenance,grant.created_at)
 end
+local function fence_traits(tx: sql.Transaction | sql.DB, grant: Grant, at: string): string?
+    local proposal = bounds.object(grant.scope.parameters)
+    local payload = proposal and bounds.object(proposal.payload)
+    if grant.domain ~= "gateway_access" or #(payload and bounds.array(payload.declarations, 16) or {}) == 0 then return nil end
+    local statements = {
+        [[UPDATE bee_session_trait_intervals SET end_sequence = (SELECT h.head_sequence FROM bee_session_traits t JOIN bee_thread_heads h ON h.thread_id=t.thread_id WHERE t.session_ref=bee_session_trait_intervals.session_ref AND t.trait_id=bee_session_trait_intervals.trait_id) WHERE end_sequence IS NULL AND EXISTS (SELECT 1 FROM bee_session_traits t WHERE t.grant_id=? AND t.session_ref=bee_session_trait_intervals.session_ref AND t.trait_id=bee_session_trait_intervals.trait_id)]],
+        [[UPDATE bee_thread_subscription_pages SET acknowledged=1 WHERE subscription_id IN (SELECT s.subscription_id FROM bee_thread_subscriptions s JOIN bee_session_traits t ON json_extract(s.filter_json,'$.session_ref')=t.session_ref AND json_extract(s.filter_json,'$.trait_id')=t.trait_id WHERE t.grant_id=?)]],
+        [[UPDATE bee_session_traits SET selected=0,revision=revision+1 WHERE grant_id=? AND selected=1]],
+    }
+    for _, statement in ipairs(statements) do
+        local err = execute(tx, statement, {grant.grant_id})
+        if err then return err end
+    end
+    return execute(tx, [[UPDATE bee_thread_subscriptions SET closed_at=? WHERE subscription_id IN (SELECT s.subscription_id FROM bee_thread_subscriptions s JOIN bee_session_traits t ON json_extract(s.filter_json,'$.session_ref')=t.session_ref AND json_extract(s.filter_json,'$.trait_id')=t.trait_id WHERE t.grant_id=?)]], {at,grant.grant_id})
+end
 function M.revoke(tx: sql.Transaction | sql.DB, grant: Grant, expected: integer, actor: string, now: integer): string?
     local rows, query_error = tx:query("SELECT * FROM bee_approval_grants WHERE grant_id = ?",{grant.grant_id})
     if not rows or query_error then return "read grant revocation: " .. tostring(query_error) end
@@ -129,6 +144,8 @@ function M.revoke(tx: sql.Transaction | sql.DB, grant: Grant, expected: integer,
     if err then return err end
     err = execute(tx,"UPDATE bee_approval_grant_uses SET state = 'fenced' WHERE grant_id = ? AND state = 'reserved'",{grant.grant_id})
     if err then return err end
+    err = fence_traits(tx, grant, at)
+    if err then return err end
     grant.state,grant.revision,grant.revoked_at,grant.revoked_by = "revoked",grant.revision + 1,at,actor
     return M.history(tx,grant,"grant.revoked",actor,{},at)
 end
@@ -137,6 +154,8 @@ function M.expire(tx: sql.Transaction | sql.DB, grant: Grant, now: integer): str
     local err = execute(tx,"UPDATE bee_approval_grants SET state = 'expired',revision = revision + 1 WHERE grant_id = ? AND revision = ?",{grant.grant_id,grant.revision})
     if err then return err end
     err = execute(tx,"UPDATE bee_approval_grant_uses SET state = 'fenced' WHERE grant_id = ? AND state = 'reserved'",{grant.grant_id})
+    if err then return err end
+    err = fence_traits(tx, grant, clock.stamp(now))
     if err then return err end
     grant.state,grant.revision = "expired",grant.revision + 1
     return M.history(tx,grant,"grant.expired",grant.owner_node,{},clock.stamp(now))

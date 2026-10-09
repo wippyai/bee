@@ -13,7 +13,7 @@ local TABLES = {"bee_thread_actions", "bee_thread_app_alias", "bee_thread_attemp
 table.sort(TABLES)
 
 -- The Sessions journal Threads keeps for the Sessions owner.
-local SESSION_TABLES = {"bee_session_operations", "bee_session_turns", "bee_session_work", "bee_session_work_cancellations", "bee_sessions"}
+local SESSION_TABLES = {"bee_session_operations", "bee_session_trait_intervals", "bee_session_traits", "bee_session_turns", "bee_session_work", "bee_session_work_cancellations", "bee_sessions"}
 
 local function refused(db: sql.DB, statement: string, params: {unknown}): boolean
     local _, err = db:execute(statement, params)

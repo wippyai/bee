@@ -91,3 +91,9 @@ entries:
   method: run
   imports:
     migration: wippy.migration:migration
+- name: traits
+  kind: function.lua
+  source: file://traits.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-09T20:40:00Z'}
+  imports: {migration: 'wippy.migration:migration'}

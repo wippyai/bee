@@ -1,0 +1,57 @@
+version: '1.0'
+namespace: bee.tests.memory
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      lifetime: view
+      title: Tiny memory fixture
+      revision: '1'
+      instance_policy: multiple
+- name: trait
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Remember completed turns
+    application_ref: bee.tests.memory:app
+  data:
+    prompt: Remember facts from completed turns.
+    tools: []
+    listens: [turn.completed]
+- name: read_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.get, registry.find, registry.snapshot]
+    resources: ['*']
+    effect: allow
+- name: host
+  kind: library.lua
+  source: file://host.lua
+  modules: [funcs, security]
+  imports:
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway
+    traits: bee.gateway.security:traits
+    harness: bee.tests.threads:harness
+    app_identity: bee.threads.records:app_identity
+    configuration: bee.gateway.env:configuration
+- name: host_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, funcs.security, funcs.context, security.actor.create, security.scope.create, security.policy.get, registry.get, registry.find, registry.snapshot, bee.gateway.manage, bee.threads.app_alias, bee.approvals.read, bee.approvals.decide, bee.approvals.grant, db.get, system.read]
+    resources: ['*']
+    effect: allow
+- name: client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: ['bee.threads.binding:subscribe', 'bee.threads.binding:page', 'bee.threads.binding:ack_page', 'bee.threads.binding:resume', 'bee.threads.binding:read_after', 'bee.threads.binding:search', 'bee.threads.binding:timeline']
+    effect: allow

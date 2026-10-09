@@ -25,6 +25,9 @@ local configuration = require("configuration")
 local hooks = require("hooks")
 local mcp = require("mcp")
 local surface = require("surface")
+local trait_access = require("trait_access")
+local agent_trait = require("agent_trait")
+local session_traits = require("session_traits")
 local surface_store = require("surface_store")
 local grant_store = require("grant_store")
 local binding_store = require("binding_store")
@@ -1197,12 +1200,35 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
         if not extended then return nil, fail("STORAGE", extend_error or "invalid grant") end
         configured = extended
     end
+    for _, trait in ipairs(configured.catalog.traits) do
+        if agent_trait.extension(trait) then
+            local live, err = trait_access.review(trait)
+            if not live then return nil, fail("DENIED", err or "trait changed; person re-approval required") end
+        end
+    end
+    local session_db, session_failure = open()
+    if not session_db then return nil, session_failure end
+    local session_tx, session_error = session_db:begin()
+    if not session_tx then session_db:release(); return nil, fail("STORAGE", tostring(session_error)) end
+    local session_allowed, session_active, trait_error = session_traits.selection(session_tx, binding.action_id, binding.thread_id, binding.workspace_id or "", configured.catalog.traits)
+    if not session_allowed or not session_active then session_tx:rollback(); session_db:release(); return nil, fail("STORAGE", trait_error or "read session selection") end
+    local _, commit_error = session_tx:commit()
+    session_db:release()
+    if commit_error then return nil, fail("STORAGE", "commit trait consent check") end
+    if #session_allowed > 0 then
+        local extended, err = surface.grant(configured, session_allowed)
+        if not extended then return nil, fail("DENIED", err or "invalid trait grant") end
+        configured = extended
+    end
     local active_traits = bounds.ids(active,true)
     if not active_traits then return nil,fail("STORAGE","binding selection is invalid") end
     local allowed: {[string]: boolean} = {}
     for _, id in ipairs(configured.allowed_traits) do allowed[id] = true end
     local live: {string} = {}
-    for _, id in ipairs(active_traits) do if allowed[id] then live[#live + 1] = id end end
+    local extension: {[string]: boolean} = {}
+    for _, trait in ipairs(configured.catalog.traits) do if agent_trait.extension(trait) then extension[trait.id] = true end end
+    for _, id in ipairs(active_traits) do if allowed[id] and not extension[id] then live[#live + 1] = id end end
+    for _, id in ipairs(session_active) do if allowed[id] then live[#live + 1] = id end end
     local selected, selection_error = surface.select(configured, live, dynamic)
     if not selected then return nil, fail("STORAGE", selection_error or "binding selection is invalid") end
     return {configuration = configured, selection = selected, revision = stored.revision, digest = digest}, nil
@@ -1258,6 +1284,8 @@ function M.select_surface(binding: Binding, expected_revision: integer, active: 
     if not row or row.revoked_at ~= nil or integer(row.credential_generation) ~= binding.credential_generation then
         tx:rollback(); db:release(); return fail("DENIED", "binding was revoked or credential replaced")
     end
+    local trait_error = session_traits.select(tx, binding.action_id, binding.thread_id, binding.workspace_id or "", current.configuration.catalog.traits, selected.active)
+    if trait_error then tx:rollback(); db:release(); return fail("DENIED", trait_error) end
     local updated, update_error = surface_store.replace(tx, binding.binding_id, expected_revision, active_json, context_json)
     if not updated then tx:rollback(); db:release(); return fail(update_error and update_error.code or "STORAGE", update_error and update_error.message or "update surface") end
     local _, commit_error = tx:commit()
@@ -1309,6 +1337,8 @@ function M.access_status(binding: Binding, approval_id: string): Reply
     if not stored then tx:rollback(); db:release(); return fail("STORAGE", stored_error and stored_error.message or "read surface") end
     local digest = hash.sha256(stored.surface_json)
     if digest ~= current.digest then tx:rollback(); db:release(); return fail("CONFLICT", "MCP declaration changed") end
+    local trait_error = session_traits.approve(tx, grant.approval_id .. ":grant")
+    if trait_error then tx:rollback(); db:release(); return fail("DENIED", trait_error) end
     local updated, update_error = surface_store.grant(tx, binding.binding_id, grant.approval_id, grant.proposal_digest, encoded,now_ms())
     if not updated then tx:rollback(); db:release(); return fail(update_error and update_error.code or "STORAGE", update_error and update_error.message or "apply grant") end
     local _, commit_error = tx:commit()

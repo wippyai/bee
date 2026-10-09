@@ -1,6 +1,7 @@
 -- MIT. The host's MCP configuration and one binding's current selection.
 local bounds = require("bounds")
 local catalog = require("catalog")
+local agent_trait = require("agent_trait")
 local context = require("context")
 local mcp = require("mcp")
 local capability_model = require("capability_model")
@@ -144,6 +145,9 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
         end
     end
     for _, trait in ipairs(complete.traits) do
+        if agent_trait.extension(trait) and not requestable[trait.id] then
+            return nil, nil, trait.id .. " requires person approval of its listens and hooks"
+        end
         if not requestable[trait.id] then allowed[#allowed + 1] = trait.id end
     end
     local selected, selection_error = catalog.select(complete, ceiling, base, allowed, active)
@@ -174,6 +178,9 @@ function M.grant(surface: Surface, trait_ids: unknown): (Surface?, string?)
         selectable[id] = true
     end
     for _, id in ipairs(requested) do
+        for _, trait in ipairs(surface.catalog.traits) do
+            if trait.id == id and #(trait.hooks or {}) > 0 then return nil, "hooks not yet supported: " .. id end
+        end
         if not selectable[id] then
             allowed[#allowed + 1] = id
             selectable[id] = true

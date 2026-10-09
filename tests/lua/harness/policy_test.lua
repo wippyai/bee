@@ -209,7 +209,7 @@ local function define_tests()
             test.eq(table.concat(((assert(unreviewed.gateway_surface)).access :: {traits: {string}}).traits,","),"bee.app:tools")
             data.gateway_access = {policy = "agent-access", traits = {"research:notes"}}
             local _, refused = policy.decode("test:policy", raw)
-            test.eq(refused, "test:policy: gateway_access: research:notes is not a built-in consent trait")
+            test.eq(refused, "test:policy: gateway_access: trait unavailable: research:notes")
         end)
         test.it("rejects legacy harness turn ceilings in host and profile preferences", function()
             local raw = entry({claude = "/bin/claude"})

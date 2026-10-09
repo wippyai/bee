@@ -6,6 +6,8 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local capability_model = require("capability_model")
 local surface = require("surface")
+local trait_access = require("trait_access")
+local agent_trait = require("agent_trait")
 local subject_call = require("subject_call")
 local M = {}
 M.ACCESS_CALL_POLICY = "bee.gateway.security:access_call_policy"
@@ -17,9 +19,17 @@ local NO_WORKSPACE = "this binding names no workspace to request MCP access in"
 local fail = subject_call.fail
 local function proposal(binding: Binding, configuration: surface.Surface, digest: string,
     capability: Object): Object
+    local declarations: {agent_trait.Declaration} = {}
+    local scope = bounds.object(capability.scope)
+    for _, id in ipairs(scope and bounds.ids(scope.traits, true) or {}) do
+        for _, trait in ipairs(configuration.catalog.traits) do
+            if trait.id == id and agent_trait.extension(trait) then declarations[#declarations + 1] = trait end
+        end
+    end
     return {grant_adapter = "bee.gateway.security:grant",kind = "attempt", ref = binding.attempt_id, action_id = binding.action_id, revision = capability_model.REVISION,
         payload = {binding_id = binding.binding_id, subject = binding.subject, thread_id = binding.thread_id,
-            configuration_digest = digest, capability = capability, fixed_context = configuration.fixed_context}}
+            configuration_digest = digest, capability = capability, fixed_context = configuration.fixed_context,
+            session_ref = binding.action_id, declarations = declarations}}
 end
 function M.request(binding: Binding, configuration: surface.Surface, digest: string, raw: unknown): Reply
     local request = bounds.object(raw)
@@ -43,7 +53,17 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     local titles: {string} = {}
     for _, id in ipairs(traits) do
         local title = id
-        for _, trait in ipairs(configuration.catalog.traits) do if trait.id == id then title = trait.title end end
+        for _, trait in ipairs(configuration.catalog.traits) do
+            if trait.id == id then
+                title = trait.title
+                if agent_trait.extension(trait) then
+                    local live, err = trait_access.review(trait)
+                    if not live then return fail("UNSUPPORTED_CAPABILITY", err or "trait unavailable") end
+                    title = title .. " (app " .. tostring(trait.application_ref) .. " @ " .. tostring(trait.application_revision)
+                        .. "; listens: " .. table.concat(trait.listens or {}, ", ") .. "; hooks: " .. table.concat(trait.hooks or {}, ", ") .. ")"
+                end
+            end
+        end
         titles[#titles + 1] = title
     end
     return subject_call.approvals(binding, M.ACCESS_CALL_POLICY)("request", {workspace_id = workspace_id, idempotency_key = "mcp:" .. request_key,
@@ -71,6 +91,14 @@ function M.approved(binding: Binding, configuration: surface.Surface, digest: st
         return nil, fail("DENIED", "approval does not belong to this agent and MCP configuration")
     end
     table.sort(traits)
+    for _, id in ipairs(traits) do
+        for _, trait in ipairs(configuration.catalog.traits) do
+            if trait.id == id and agent_trait.extension(trait) then
+                local live, err = trait_access.review(trait)
+                if not live then return nil, fail("DENIED", err or "person re-approval required") end
+            end
+        end
+    end
     local permitted, permission_error = surface.grant(configuration, traits)
     if not permitted then return nil, fail("DENIED", permission_error or "traits are not requestable") end
     local expected_capability, capability_error = capability_model.traits(binding.binding_id, traits)

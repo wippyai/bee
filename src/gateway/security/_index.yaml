@@ -232,6 +232,8 @@ entries:
     canonical: bee.values:canonical
     capability_model: bee.capability:model
     surface: bee.gateway.catalog:surface
+    trait_access: bee.gateway.security:traits
+    agent_trait: bee.values:agent_trait
     subject_call: bee.gateway.security:subject_call
 - name: elevation_policy
   kind: security.policy
@@ -715,3 +717,13 @@ entries:
     resources: ['*']
     expression: (action == "security.policy.get" && resource == "bee.gateway.security:origin_withdraw_policy") || (action == "funcs.call" && resource == "bee.approvals.binding:withdraw_origin")
     effect: allow
+
+- name: traits
+  kind: library.lua
+  source: file://traits.lua
+  modules: [registry]
+  imports:
+    bounds: bee.values:bounds
+    agent_trait: bee.values:agent_trait
+    canonical: bee.values:canonical
+    descriptor: bee.app:descriptor

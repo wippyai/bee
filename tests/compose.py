@@ -320,6 +320,7 @@ def main():
     hold_attempt_snapshot(src)
     gate_runner(src)
     fixture_clock(src)
+    shutil.copytree(TESTS / "fixtures/memory", src / "test_memory")
     yield_session_defaults(src)
     managed_gateway(src)
     runner_fixture_type(src)

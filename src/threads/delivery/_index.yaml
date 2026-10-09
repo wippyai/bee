@@ -52,3 +52,16 @@ entries:
 - name: session
   kind: library.lua
   source: file://session.lua
+- name: traits
+  kind: library.lua
+  source: file://traits.lua
+  modules: [sql, json]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    grants: bee.approvals.grants:store
+    clock: bee.values:clock
+    trait_access: bee.gateway.security:traits
+    agent_trait: bee.values:agent_trait
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction

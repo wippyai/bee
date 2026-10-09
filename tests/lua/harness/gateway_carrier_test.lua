@@ -16,6 +16,7 @@ local time = require("time")
 local channel = require("channel")
 local json = require("json")
 local placement_fixture = require("placement_fixture")
+local harness = require("harness")
 local ACTOR = "bee.test.gateway_carrier"
 local POLICY = "bee.harness.catalog:gateway_fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
@@ -323,6 +324,34 @@ local function define_tests()
         open_gateway()
         local readiness = call("bee.gateway.binding:ready", {})
         if readiness.listening ~= true then error("managed gateway readiness route did not become ready") end
+        test.it("starts a carrier when seeded session traits produce an approval reply", function()
+            local workspace = string.rep("e", 32)
+            local owner = harness.session_owner(workspace)
+            local opened = harness.value(owner:call("session_create", {operation_key = fresh("session")}))
+            local session = assert(bounds.id(opened.session))
+            local described = harness.value(owner:call("session_describe", {session = session}))
+            local member = harness.principal("sessions-owner", harness.ALL, workspace)
+            harness.value(member:call("join", {thread_id = described.thread_ref, member_id = ACTOR, role = "participant", expected_revision = 1, idempotency_key = fresh("join")}))
+            local entry = assert(registry.get(POLICY))
+            local original = assert(bounds.object(entry.data))
+            local changed: Object = {}
+            for key, item in pairs(original) do changed[key] = item end
+            changed.gateway_access = {policy = "agent-access", traits = {"bee.tests.memory:trait"}}
+            entry.data = changed
+            local changes = registry.snapshot():changes(); changes:update(entry); assert(changes:apply())
+            local ok, err = pcall(function()
+                local requested = request(assert(bounds.id(described.thread_ref)), fresh("seeded"), {})
+                requested.workspace_id = workspace
+                requested.action_id = session
+                requested.preferences = {active_traits = {"bee.tests.memory:trait"}, options = {}, instructions = ""}
+                local outcome = run_carrier(requested, "open")
+                test.not_nil(outcome.value, tostring(outcome.error))
+                test.eq(assert(bounds.object(assert(outcome.value).settlement)).outcome, "succeeded")
+            end)
+            entry.data = original
+            changes = registry.snapshot():changes(); changes:update(entry); assert(changes:apply())
+            if not ok then error(tostring(err)) end
+        end)
         test.it("reports the monitored startup exit cause while waiting for a pause", function()
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier(request(thread(), fresh("pause-exit"), {}), "open", "prepared", "attempt_started")

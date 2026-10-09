@@ -159,9 +159,11 @@ end
 function M.admitted_binding(value: unknown): (Binding?, string?)
     local result = bounds.object(value)
     if not result then return nil, "admission value must be an object" end
-    local unknown_field = bounds.fields(result, {"binding", "replayed"})
+    local unknown_field = bounds.fields(result, {"binding", "replayed", "trait_approval_id"})
     if unknown_field then return nil, "admission: " .. unknown_field end
     if result.replayed ~= nil and type(result.replayed) ~= "boolean" then return nil, "admission replayed flag is malformed" end
+    local _, valid_approval = bounds.optional_id(result, "trait_approval_id")
+    if not valid_approval then return nil, "admission trait approval is malformed" end
     return decode_binding(result.binding, false)
 end
 

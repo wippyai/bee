@@ -68,6 +68,9 @@ entries:
     - bee.gateway.security:store_policy
     - bee.gateway.security:grant_context_policy
     - bee.gateway.security:trait_registry_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: revoke

@@ -192,7 +192,7 @@ function M.reply(result: Result): Reply
 end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
-local mutating: {[string]: boolean} = {read = true, request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
+local mutating: {[string]: boolean} = {read = true, request = true, decide = true, decide_batch = true, withdraw = true, withdraw_origin = true, consume = true, revalidate = true,
     grant_window = true, runtime_lease = true, reconcile = true, effect = true, events = true, end_request = true, grant = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
@@ -271,6 +271,10 @@ local function run(request: unknown, name: string): Reply
         local announced: unknown = result.value
         local envelope = bounds.object(announced)
         if name == "withdraw" then announced = envelope and envelope.request
+        elseif name == "withdraw_origin" then
+            local requests = envelope and bounds.array(envelope.requests, M.MAX_PENDING)
+            for _, current in ipairs(requests or {}) do announce(current, db, false) end
+            announced = nil
         elseif name == "decide_batch" then
             local decisions = envelope and bounds.array(envelope.decisions, M.MAX_BATCH)
             announced = decisions and decisions[1]
@@ -772,6 +776,13 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
         end
         return success(M.view(existing), true)
     end
+    local origin = bounds.object(contract.value.origin)
+    local instance = origin and bounds.id(origin.instance_id)
+    if instance then
+        local closed, closed_error = tx:query("SELECT instance_id FROM bee_approval_closed_origins WHERE requester_id = ? AND instance_id = ?", {actor, instance})
+        if closed_error or not closed then return storage("read closed approval origin") end
+        if #closed > 0 then return failure("INVALID_STATE", "approval origin is closed") end
+    end
     local pending_count_value, pending_error = store.pending_count(tx, actor)
     if pending_error then return storage("count pending requests") end
     local pending_count = integer(pending_count_value)
@@ -1021,6 +1032,28 @@ local function op_decide_batch(tx: sql.Transaction, actor: string, object: Objec
         views[#views + 1] = settled.value
     end
     return success({decisions = views}, false)
+end
+local function op_withdraw_origin(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local instance = bounds.id(object.instance_id)
+    if bounds.fields(object, {"instance_id"}) or not instance then return failure("INVALID_ARGUMENT", "instance_id is required") end
+    local _, closed_error = tx:execute("INSERT OR IGNORE INTO bee_approval_closed_origins(requester_id, instance_id, closed_at) VALUES (?, ?, ?)", {actor, instance, stamp(now)})
+    if closed_error then return storage("close approval origin") end
+    local rows, err = tx:query("SELECT * FROM bee_approval_requests WHERE requester_id = ? AND state = 'pending' AND json_extract(contract_json, '$.origin.instance_id') = ?", {actor, instance})
+    if err or not rows then return storage("read pending origin approvals") end
+    local requests: {Object} = {}
+    for _, raw in ipairs(rows) do
+        local row, decode_error = decode_row(raw, tx)
+        if not row then return storage(decode_error or "decode origin approval") end
+        local current, expire_error = expire_if_due(tx, row, now)
+        if not current then return storage(expire_error or "expire origin approval") end
+        if current.state == "pending" then
+            local settled, settle_error = settle(tx, current, "withdrawn", nil, nil, nil, actor, "requester transport closed", now)
+            if not settled then return storage(settle_error or "withdraw origin approval") end
+            current = settled
+        end
+        requests[#requests + 1] = M.view(current)
+    end
+    return success({requests = requests}, false)
 end
 -- withdraw: the requester ends its own pending request; a request already
 -- settled reports the outcome that actually committed.
@@ -1813,6 +1846,7 @@ operations.runtime_lease = op_runtime_lease
 operations.attention_count = op_attention_count
 operations.node_summary = op_node_summary
 operations.decide_batch = op_decide_batch
+operations.withdraw_origin = op_withdraw_origin
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.effect_queue = op_effect_queue
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
@@ -1827,6 +1861,7 @@ function M.runtime_lease(value: unknown): Reply return run(value, "runtime_lease
 function M.request(value: unknown): Reply return run(value, "request") end
 function M.decide(value: unknown): Reply return run(value, "decide") end
 function M.decide_batch(value: unknown): Reply return run(value, "decide_batch") end
+function M.withdraw_origin(value: unknown): Reply return run(value, "withdraw_origin") end
 function M.withdraw(value: unknown): Reply return run(value, "withdraw") end
 function M.consume(value: unknown): Reply return run(value, "consume") end
 function M.effect_queue(value: unknown): Reply return run(value, "effect_queue") end

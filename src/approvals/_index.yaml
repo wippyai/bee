@@ -40,6 +40,8 @@ entries:
     description: Settle several pending requests of one requester in one workspace
       in one transaction; each item is a full decide and one failing item rolls the
       batch back
+  - name: withdraw_origin
+    description: Close the caller's transport instance, withdraw its pending requests and fence later requests from that instance
   - name: withdraw
     description: Withdraw the caller's pending revision with proposal and reviewed
       digest checks, or learn the outcome that already committed

@@ -72,3 +72,13 @@ entries:
   method: run
   imports:
     migration: wippy.migration:migration
+- name: closed_origins
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-14T00:00:00Z'
+  source: file://closed_origins.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

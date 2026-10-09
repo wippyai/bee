@@ -925,6 +925,41 @@ local function define_tests()
             test.eq(service.execute(db, REQUESTER, "effect", receipt, 1006, nil).replayed, true)
             db:release()
         end)
+        test.it("withdraws a transport origin and fences late requests without touching another transport", function()
+            local db = open_test_store()
+            local workspace = "origin-" .. key()
+            local first = request_of(workspace, {origin = {instance_id = "transport-one"}, request_kind = "question"})
+            local pending = executed(service.execute(db, REQUESTER, "request", first, 1000, nil))
+            local other = executed(service.execute(db, REQUESTER, "request", request_of(workspace, {origin = {instance_id = "transport-two"}}), 1000, nil))
+            local closed = executed(service.execute(db, REQUESTER, "withdraw_origin", {instance_id = "transport-one"}, 1001, nil))
+            test.eq(#assert(bounds.array(closed.requests, 32)), 1)
+            test.eq(executed(service.execute(db, REQUESTER, "read", {approval_id = pending.approval_id}, 1002, nil)).state, "withdrawn")
+            test.eq(executed(service.execute(db, REQUESTER, "read", {approval_id = other.approval_id}, 1002, nil)).state, "pending")
+            test.eq(service.execute(db, REQUESTER, "request", first, 1002, nil).replayed, true)
+            first.idempotency_key = key()
+            test.eq(service.execute(db, REQUESTER, "request", first, 1002, nil).code, "INVALID_STATE")
+            test.eq(#assert(bounds.array(executed(service.execute(db, REQUESTER, "withdraw_origin", {instance_id = "transport-one"}, 1003, nil)).requests, 32)), 0)
+            executed(service.execute(db, REQUESTER, "withdraw", {approval_id = other.approval_id, expected_revision = other.revision,
+                proposal_digest = other.proposal_digest, reviewed_digest = other.reviewed_digest}, 1004, nil))
+            db:release()
+        end)
+        test.it("closing an origin preserves expiry and a decision that already committed", function()
+            local db = open_test_store()
+            for _, outcome in ipairs({"expired", "decided"}) do
+                local instance = "origin-race-" .. key()
+                local created = executed(service.execute(db, REQUESTER, "request", request_of("origin-race-" .. key(), {
+                    origin = {instance_id = instance}, ttl_ms = 10}), 1000, nil))
+                if outcome == "decided" then
+                    executed(service.execute(db, ALICE, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
+                        proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"}, 1001, nil))
+                end
+                executed(service.execute(db, REQUESTER, "withdraw_origin", {instance_id = instance}, 1011, nil))
+                local current = executed(service.execute(db, REQUESTER, "read", {approval_id = created.approval_id}, 1012, nil))
+                test.eq(current.state, outcome)
+                if outcome == "decided" then test.eq(current.decision, "approved") end
+            end
+            db:release()
+        end)
         test.it("validates question fields and delivers every terminal answer to the requester", function()
             local db = open_test_store()
             for _, outcome in ipairs({"answer", "expired", "withdrawn"}) do

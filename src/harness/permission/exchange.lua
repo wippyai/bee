@@ -13,7 +13,7 @@ type Object = {[string]: unknown}
 type Request = {owner_id: string, attempt_id: string, action_id: string, thread_id: string,
     workspace_id: string?, session_ref: string?, preferences: preferences.Value?}
 type Exchange = {answer_mode: string?, adapter: permission.Adapter, approver_policy: string, poll_ms: integer, ttl_ms: integer}
-type State = {request: Request, plan_digest: string, exchange: Exchange?, permissions: {checkpoint.Permission},
+type State = {binding_id: string?, request: Request, plan_digest: string, exchange: Exchange?, permissions: {checkpoint.Permission},
     epoch: integer, turn_id: string?, proposal_kind: "operation" | "attempt"?}
 type PermissionEventPhase = "refused" | "intended" | "acknowledged" | "requested" | "decided" | "revalidated" | "consumed" | "declined" | "closed"
 type Context = {state: State, recovered: boolean?, now_ms: () -> integer, approvals: string, max_consume_attempts: integer,
@@ -163,7 +163,7 @@ local function approval_view(value: unknown): (ApprovalView?, string?)
     if view.requesting_session ~= nil and not bounds.id(view.requesting_session) then return nil, "approval requesting session is malformed" end
     local approval_id, workspace_id = bounds.id(view.approval_id), bounds.id(view.workspace_id)
     local proposal_digest = bounds.text(view.proposal_digest, 64)
-    local incarnation, state = bounds.count(view.owner_incarnation), bounds.member(view.state, {"pending", "decided", "expired", "withdrawn"})
+    local incarnation, state = bounds.count(view.owner_incarnation), bounds.member(view.state, {"pending", "decided", "expired", "withdrawn", "superseded", "invalidated"})
     local decision: ApprovalDecision? = nil
     if view.decision ~= nil then
         local selected = bounds.member(view.decision, {"approved", "denied"})
@@ -219,7 +219,7 @@ local function request_approval(ctx: Context, session: State, exchange: Exchange
         if not fault or (fault.code ~= "DENIED" and fault.code ~= "NOT_FOUND") then return false, "runtime lease: " .. (fault and fault.message or "invalid owner reply") end
     end
     local value, err = must(ctx, ctx.approvals .. ":request", {contract_version = 2,
-        origin = {session_id = request.session_ref, thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id},
+        origin = {instance_id = session.binding_id, session_id = request.session_ref, thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id},
         workspace_id = request.workspace_id, idempotency_key = state.idempotency_key, request_kind = "permission", policy = exchange.approver_policy,
         proposal = proposal_of(session, exchange, request_of(state)), prompt = {text = state.prompt}, thread_id = request.thread_id, ttl_ms = exchange.ttl_ms})
     if err then return false, err end
@@ -246,6 +246,19 @@ local function poll_decision(ctx: Context, session: State, state: checkpoint.Per
     if view.approval_id ~= state.approval_id or view.proposal_digest ~= state.proposal_digest or view.workspace_id ~= session.request.workspace_id then
         return false, "approval owner returned another approval or proposal"
     end
+    if view.state == "pending" and state.deadline_ms and ctx.now_ms() >= state.deadline_ms then
+        local current = assert(bounds.object(value))
+        local closed, close_error = must(ctx, ctx.approvals .. ":withdraw", {approval_id = state.approval_id,
+            expected_revision = current.revision, proposal_digest = state.proposal_digest, reviewed_digest = current.reviewed_digest})
+        if close_error then return false, close_error end
+        local result = bounds.object(closed)
+        local ended, ended_error = approval_view(result and result.request)
+        if not ended then return false, "withdrawal returned malformed data: " .. tostring(ended_error) end
+        if ended.approval_id ~= state.approval_id or ended.proposal_digest ~= state.proposal_digest or ended.workspace_id ~= session.request.workspace_id or ended.state == "pending" then
+            return false, "withdrawal did not settle the requested approval"
+        end
+        view = ended
+    end
     local decision: checkpoint.PermissionDecision
     if view.state == "decided" then
         if not view.decision then return false, "decided approval has no decision" end
@@ -254,8 +267,6 @@ local function poll_decision(ctx: Context, session: State, state: checkpoint.Per
         decision = "expired"
     elseif view.state == "withdrawn" then
         decision = "withdrawn"
-    elseif state.deadline_ms and ctx.now_ms() >= state.deadline_ms then
-        decision = "expired"
     else
         return true, nil
     end
@@ -267,6 +278,19 @@ local function poll_decision(ctx: Context, session: State, state: checkpoint.Per
     return true, nil
 end
 local function close_permission(ctx: Context, session: State, state: checkpoint.Permission, reason: string): (boolean, string?)
+    if state.approval_id then
+        local raw, err = must(ctx, ctx.approvals .. ":read", {approval_id = state.approval_id})
+        if err then return false, err end
+        local current = bounds.object(raw)
+        if not current or current.approval_id ~= state.approval_id or current.proposal_digest ~= state.proposal_digest then
+            return false, "approval owner returned another request while closing"
+        end
+        if current.state == "pending" then
+            local _, withdrawn = must(ctx, ctx.approvals .. ":withdraw", {approval_id = state.approval_id,
+                expected_revision = current.revision, proposal_digest = state.proposal_digest, reviewed_digest = current.reviewed_digest})
+            if withdrawn then return false, withdrawn end
+        end
+    end
     state.phase = "closed"
     return ctx.commit( {permission_record(session, state, "closed", {reason = reason})})
 end

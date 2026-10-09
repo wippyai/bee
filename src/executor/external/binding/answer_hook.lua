@@ -122,7 +122,7 @@ local function handle(raw: unknown): Reply
         if recovered.plan_digest ~= plan_digest then return fail("permission checkpoint admission changed") end
         point = recovered
     end
-    local state: exchange.State = {request = {owner_id = session, session_ref = session, workspace_id = workspace, thread_id = thread_id,
+    local state: exchange.State = {binding_id = binding_id, request = {owner_id = session, session_ref = session, workspace_id = workspace, thread_id = thread_id,
             preferences = pinned.effective_profile and profiles.preferences(pinned.effective_profile), action_id = action_id, attempt_id = attempt_id}, plan_digest = plan_digest, epoch = 1, permissions = point.permissions, proposal_kind = "operation",
         exchange = {adapter = accepted.adapter, approver_policy = declaration.approver_policy, poll_ms = declaration.poll_ms,
             ttl_ms = declaration.ttl_ms, answer_mode = pinned.permission_answers}}
@@ -186,7 +186,11 @@ local function handle(raw: unknown): Reply
     while not response do
         local advanced, advance_error = exchange.advance(ctx, true)
         if not advanced then return fail(tostring(advance_error)) end
-        if not ctx.waiting() then return fail("hook binding no longer waits") end
+        if not ctx.waiting() then
+            local closed, close_error = exchange.close(ctx)
+            if not closed then return fail(tostring(close_error)) end
+            return fail("hook binding no longer waits")
+        end
         if not response then time.sleep(tostring(declaration.poll_ms) .. "ms") end
     end
     return {ok = true, value = {permission_response = response}}

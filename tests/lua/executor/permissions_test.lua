@@ -14,7 +14,7 @@ type Object = {[string]: unknown}
 type Labels = {owner_id: string, attempt_id: string, action_id: string, plan_digest: string,
     workspace_id: string, session_ref: string}
 type Exchange = permissions.Exchange
-type IO = {request_approval: (Object) -> (Object?, string?), read_approval: (string) -> (Object?, string?),
+type IO = {withdraw: (Object) -> (Object?, string?), request_approval: (Object) -> (Object?, string?), read_approval: (string) -> (Object?, string?),
     consume: (string, string, string, integer) -> (boolean, string?, integer?),
     revalidate: (string, string, integer) -> (boolean, string?), write_stdin: (string, string) -> (boolean, string?),
     wait_ms: (integer) -> (), now_ms: () -> integer, waiting: () -> boolean}
@@ -61,6 +61,7 @@ local function context(io: IO, declared: Exchange, labels: Labels): permissions.
             local err: string? = nil
             if target == "approvals:request" then result, err = io.request_approval(fields)
             elseif target == "approvals:read" then result, err = io.read_approval(tostring(fields.approval_id))
+            elseif target == "approvals:withdraw" then result, err = io.withdraw(fields)
             elseif target == "approvals:consume" then
                 local consumed, consume_error, current = io.consume(tostring(fields.approval_id), tostring(fields.proposal_digest),
                     tostring(fields.effect_key), bounds.count(fields.owner_incarnation) or 0)
@@ -171,11 +172,18 @@ local function script_io(script: Script, calls: {[string]: integer}): Harness
                 owner_incarnation = 3, state = "pending", decision = nil,
                 workspace_id = "workspace-1", expires_at = "2030-01-01T00:00:00Z"}, nil
         end,
+        withdraw = function(request: Object): (Object?, string?)
+            test.eq(request.expected_revision, 1)
+            test.eq(request.proposal_digest, recorded_digest)
+            calls.withdraw = (calls.withdraw or 0) + 1
+            return {withdrawn = true, request = {approval_id = "approval-1", workspace_id = "workspace-1",
+                proposal_digest = recorded_digest, owner_incarnation = 3, state = "withdrawn", revision = 2}}, nil
+        end,
         read_approval = function(_: string): (Object?, string?)
             script.reads_made = script.reads_made + 1
             local next_state = script.reads[math.min(script.reads_made, #script.reads)]
             calls.read = (calls.read or 0) + 1
-            return {approval_id = next_state.approval_id, proposal_digest = recorded_digest,
+            return {approval_id = next_state.approval_id, revision = 1, proposal_digest = recorded_digest,
                 owner_incarnation = next_state.owner_incarnation, state = next_state.state,
                 decision = next_state.decision, workspace_id = next_state.workspace_id,
                 expires_at = "2030-01-01T00:00:00Z"}, nil
@@ -316,6 +324,7 @@ local function run()
         shortened.ttl_ms = 100
         local outcome, err = answer(harness.io, shortened, labels(), observation())
         test.eq(err, nil)
+        test.eq(calls.withdraw, 1)
         test.eq(outcome, "denied")
         test.eq(calls.consume, nil)
         local written = harness.written()

@@ -146,6 +146,15 @@ end
 -- host-linked approval policies.
 function M.approvals(binding: Binding, call_policy: string, extra: {string}?): Approvals
     return function(operation: string, value: Object): Reply
+        if operation == "request" then
+            local request: Object, origin: Object = {}, {}
+            for name, item in pairs(value) do request[name] = item end
+            for name, item in pairs(bounds.object(value.origin) or {}) do origin[name] = item end
+            origin.instance_id, origin.thread_id = binding.binding_id, binding.thread_id
+            origin.action_id, origin.attempt_id = binding.action_id, binding.attempt_id
+            request.origin, request.contract_version = origin, 2
+            value = request
+        end
         local linked, link_error = M.approval_policies()
         if not linked then return assert(link_error) end
         local ids: {string} = {call_policy, linked[1], linked[2]}

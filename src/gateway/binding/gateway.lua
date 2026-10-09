@@ -836,6 +836,10 @@ function M.reissue(value: unknown): Reply
     binding.credential_generation = expected + 1
     return succeed({binding = view(binding), generation = expected + 1})
 end
+local function close_origin(binding: Binding): Reply
+    return subject_call.call(binding, {"bee.gateway.security:origin_withdraw_policy"},
+        "bee.approvals.binding:withdraw_origin", {instance_id = binding.binding_id})
+end
 -- revoke: the admitting carrier, a manager, or the runner that
 -- materialized the attempt retires one binding.
 function M.revoke(value: unknown): Reply
@@ -854,6 +858,8 @@ function M.revoke(value: unknown): Reply
         db:release()
         return fail("DENIED", "caller may not revoke bindings for action " .. binding.action_id)
     end
+    local closed = close_origin(binding)
+    if not closed.ok then db:release(); return closed end
     local revocation = capability_model.revocation_report({}, {binding.attempt_id})
     if not revocation then db:release(); return fail("STORAGE", "report binding revocation") end
     -- Revocation invalidates credentials and rejects rows no carrier began.
@@ -892,6 +898,8 @@ function M.seal(value: unknown): Reply
         db:release()
         return fail("DENIED", "caller may not seal this binding")
     end
+    local closed = close_origin(binding)
+    if not closed.ok then db:release(); return closed end
     local _, write_error = binding_store.seal(db, binding_id, stamp(now_ms()))
     db:release()
     if write_error then return fail("STORAGE", "seal binding") end
@@ -918,6 +926,17 @@ function M.revoke_attempt(value: unknown): Reply
     local db, open_failure = open()
     if not db then return open_failure end
     local at = stamp(now_ms())
+    local origins, origins_error = binding_store.origins(db, attempt_id, carrier_epoch)
+    if origins_error or not origins then db:release(); return fail("STORAGE", "read attempt origins") end
+    for _, raw in ipairs(origins) do
+        local row = bounds.object(raw)
+        local id = row and bounds.id(row.binding_id)
+        if not id then db:release(); return fail("STORAGE", "invalid attempt origin") end
+        local binding, missing = binding_by_id(db, id)
+        if not binding then db:release(); return missing end
+        local closed = close_origin(binding)
+        if not closed.ok then db:release(); return closed end
+    end
     local result, write_error = binding_store.revoke_attempt(db, attempt_id, carrier_epoch, at)
     if write_error then db:release(); return fail("STORAGE", "revoke attempt bindings") end
     local revoked = result and bounds.count(result.rows_affected)

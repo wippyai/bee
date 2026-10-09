@@ -1257,7 +1257,7 @@ local function revalidate_permission(io: IO, session: Session): string?
     return nil
 end
 local function permission_context(io: IO, session: Session): permission_exchange.Context
-    return {state = {request = session.plan.request, plan_digest = session.plan.plan_digest, exchange = session.plan.exchange,
+    return {state = {binding_id = session.checkpoint.gateway_binding, request = session.plan.request, plan_digest = session.plan.plan_digest, exchange = session.plan.exchange,
             permissions = session.checkpoint.permissions, epoch = session.epoch, turn_id = session.turn_open and session.turn_id or nil},
         now_ms = io.now_ms, approvals = M.APPROVALS, max_consume_attempts = permission_exchange.MAX_CONSUME_ATTEMPTS,
         commit = function(records: {Object}): (boolean, string?) return M.commit(io, session, records) end,

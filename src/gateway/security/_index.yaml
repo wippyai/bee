@@ -700,3 +700,18 @@ entries:
   imports:
     bounds: bee.values:bounds
     grants: bee.approvals.grants:store
+
+- name: origin_withdraw_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:withdraw_origin]
+    effect: allow
+- name: origin_cleanup_policy
+  kind: security.policy.expr
+  groups: [external_owner]
+  policy:
+    actions: [security.policy.get, funcs.call]
+    resources: ['*']
+    expression: (action == "security.policy.get" && resource == "bee.gateway.security:origin_withdraw_policy") || (action == "funcs.call" && resource == "bee.approvals.binding:withdraw_origin")
+    effect: allow

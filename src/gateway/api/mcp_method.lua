@@ -227,7 +227,7 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
             local reply, err = executor:call(tool.operation, {contract_version = 2, workspace_id = binding.workspace_id,
                 idempotency_key = request.idempotency_key, request_kind = "question", policy = "agent-access", proposal = proposal,
                 prompt = {text = request.prompt}, response_schema = request.response_schema, ttl_ms = request.ttl_ms,
-                thread_id = binding.thread_id, origin = {thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id},
+                thread_id = binding.thread_id, origin = {instance_id = binding.binding_id, thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id},
                 scope = {type = "exact", parameters = proposal}, presentation = "inbox"})
             return reply_result(reply, err)
         end

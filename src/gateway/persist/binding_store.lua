@@ -72,6 +72,10 @@ function M.seal(db: sql.DB, binding_id: string, at: string)
     return db:execute("UPDATE bee_gateway_bindings SET sealed_at = COALESCE(sealed_at, ?) WHERE binding_id = ?", {at, binding_id})
 end
 
+function M.origins(db: sql.DB, attempt_id: string, carrier_epoch: integer)
+    return db:query("SELECT binding_id FROM bee_gateway_bindings WHERE attempt_id = ? AND carrier_epoch <= ?", {attempt_id, carrier_epoch})
+end
+
 function M.revoke_attempt(db: sql.DB, attempt_id: string, carrier_epoch: integer, at: string)
     return db:execute("UPDATE bee_gateway_bindings SET revoked_at = ? WHERE attempt_id = ? AND carrier_epoch <= ? AND revoked_at IS NULL", {at, attempt_id, carrier_epoch})
 end

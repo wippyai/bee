@@ -73,6 +73,8 @@ entries:
     gateway: bee.gateway.binding:gateway
   security:
     policies:
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:origin_cleanup_policy
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:grant_context_policy
@@ -138,6 +140,8 @@ entries:
     gateway: bee.gateway.binding:gateway
   security:
     policies:
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:origin_cleanup_policy
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:grant_context_policy
@@ -343,6 +347,8 @@ entries:
     gateway: bee.gateway.binding:gateway
   security:
     policies:
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:origin_cleanup_policy
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:grant_context_policy

@@ -346,6 +346,7 @@ entries:
       decide: bee.approvals.binding:decide
       decide_batch: bee.approvals.binding:decide_batch
       withdraw: bee.approvals.binding:withdraw
+      withdraw_origin: bee.approvals.binding:withdraw_origin
       consume: bee.approvals.binding:consume
       revalidate: bee.approvals.binding:revalidate
       read: bee.approvals.binding:read
@@ -426,3 +427,12 @@ entries:
     policies:
     - bee.security.approvals:approval_store_policy
     - bee.security.approvals:approval_announce_policy
+
+- name: withdraw_origin
+  kind: function.lua
+  source: file://withdraw_origin_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001

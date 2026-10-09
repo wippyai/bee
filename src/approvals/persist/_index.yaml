@@ -7,6 +7,7 @@ entries:
   modules:
   - sql
   imports:
+    canonical: bee.values:canonical
     lifecycle: bee.approvals.persist:lifecycle
     windows: bee.approvals.types:windows
     bounds: bee.values:bounds

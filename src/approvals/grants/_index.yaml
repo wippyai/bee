@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.approvals.grants
+entries:
+- name: schema
+  kind: library.lua
+  source: file://schema.lua
+  modules: [sql]
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules: [sql, json, hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    clock: bee.values:clock

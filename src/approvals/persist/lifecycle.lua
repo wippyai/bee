@@ -148,10 +148,18 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
     local decision_error = execute(tx, "INSERT INTO bee_approval_decisions (decision_id, approval_id, revision, kind, decider_json, reviewed_digest, reviewed_revision, reason, assurance_json, response_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         {decision_id, approval_id, revision, kind, principal_json, row.reviewed_digest, revision - 1, reason, '{"kind":"policy_decision"}', windows[1].response_json, at})
     if decision_error or decision ~= "approved" or row.request_kind == "question" then return decision_error end
+    local window_id = bounds.id(windows[1].window_grant_id)
+    if window_id then
+        local err = execute(tx, "UPDATE bee_approval_grants SET decision_id = COALESCE(decision_id, ?) WHERE grant_id = ?", {decision_id,window_id})
+        if err then return err end
+        return execute(tx, "INSERT OR IGNORE INTO bee_approval_grant_history SELECT grant_id,revision,'grant.created',granted_by,provenance_json,created_at FROM bee_approval_grants WHERE grant_id = ?", {window_id})
+    end
     local subject_json = canonical.encode(contract.subject)
     local scope_json = canonical.encode(contract.scope)
-    return execute(tx, "INSERT INTO bee_approval_grants (grant_id, approval_id, decision_id, subject_json, scope_json, terms_json, state, revision, until_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?, ?)",
-        {approval_id .. ":grant", approval_id, decision_id, subject_json, scope_json, '{"kind":"once","time_basis":"absolute"}', row.effect_admission_ms, at})
+    local err = execute(tx, "INSERT INTO bee_approval_grants (grant_id, approval_id, decision_id, subject_json, scope_json, terms_json, state, revision, until_ms, max_uses, created_at, owner_node, workspace_id, requester_id, granted_by, provenance_json) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?, 1, ?, ?, ?, ?, ?, ?)",
+        {approval_id .. ":grant", approval_id, decision_id, subject_json, scope_json, '{"kind":"once","time_basis":"absolute"}', row.effect_admission_ms, at, row.owner_node,row.workspace_id,row.requester_id,actor,canonical.encode({kind = "decision",approval_id = approval_id,reviewed_digest = row.reviewed_digest})})
+    if err then return err end
+    return execute(tx, "INSERT INTO bee_approval_grant_history SELECT grant_id,revision,'grant.created',granted_by,provenance_json,created_at FROM bee_approval_grants WHERE grant_id = ?", {approval_id .. ":grant"})
 end
 function M.grant_revoked(tx: sql.Transaction, approval_id: string, requester: string, revision: integer, at: string): string?
     local effect, read_error = M.read(tx, approval_id)
@@ -177,7 +185,7 @@ function M.expire_effects(tx: sql.Transaction, now: integer, at: string): (integ
     for _, row in ipairs(rows) do
         local canceled = execute(tx, "UPDATE bee_approval_effects SET state = 'canceled', revision = revision + 1, updated_at = ? WHERE approval_id = ?", {at, row.approval_id})
         if canceled then return nil, canceled end
-        local expired = execute(tx, "UPDATE bee_approval_grants SET state = 'expired', revision = revision + 1 WHERE approval_id = ? AND state = 'active'", {row.approval_id})
+        local expired = execute(tx, "UPDATE bee_approval_grants SET state = 'expired', revision = revision + 1 WHERE approval_id = ? AND domain = 'decision' AND state = 'active'", {row.approval_id})
         if expired then return nil, expired end
         local body = canonical.encode({approval_id = row.approval_id, revision = row.revision, effect_id = row.effect_id,
             state = "canceled", reason = "effect admission deadline passed"})
@@ -197,7 +205,7 @@ function M.consume(tx: sql.Transaction, approval_id: string, actor: string, effe
     if bound and effect.effect_id ~= effect_id then return "registered continuation effect identity differs" end
     local update_error = execute(tx, "UPDATE bee_approval_effects SET effect_id = ?, state = 'admitted', consumer_id = ?, owner_incarnation = ?, revision = revision + 1, updated_at = ? WHERE approval_id = ? AND state IN ('authorized','reserved')", {effect_id, actor, incarnation, at, approval_id})
     if update_error then return update_error end
-    return execute(tx, "UPDATE bee_approval_grants SET state = 'exhausted', used = 1, revision = revision + 1 WHERE approval_id = ? AND state = 'active'", {approval_id})
+    return execute(tx, "UPDATE bee_approval_grants SET state = 'exhausted', used = 1, revision = revision + 1 WHERE approval_id = ? AND domain = 'decision' AND state = 'active'", {approval_id})
 end
 function M.complete(tx: sql.Transaction, approval_id: string, state: string, result_json: string, at: string): string?
     return execute(tx, "UPDATE bee_approval_effects SET state = ?, receipt_json = ?, revision = revision + 1, updated_at = ? WHERE approval_id = ?", {state, result_json, at, approval_id})

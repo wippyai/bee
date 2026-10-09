@@ -60,6 +60,7 @@ local function define_tests()
             assert(not failed_history_error, tostring(failed_history_error))
             local _, unused_history_error = db:execute("INSERT INTO bee_approval_history SELECT 'legacy-unused',revision,state,decision,actor_id,reason,at FROM bee_approval_history WHERE approval_id = 'legacy-id'")
             assert(not unused_history_error, tostring(unused_history_error))
+            assert(db:execute("INSERT INTO bee_approval_window_grants VALUES ('legacy-id','node','workspace','requester','policy',?,'decider',NULL,1,'2026-10-01T00:00:00Z',2,'2026-10-01T00:00:01Z',NULL)",{string.rep("c",64)}))
             migrate("universal")
             migrate("universal")
             local rows = assert(db:query("SELECT * FROM bee_approval_requests WHERE approval_id = 'legacy-id'"))
@@ -96,6 +97,15 @@ local function define_tests()
             test.eq(failed.state, "failed")
             local unused = assert(db:query("SELECT * FROM bee_approval_effects WHERE approval_id = 'legacy-unused'"))[1]
             test.eq(unused.effect_id, "legacy-unused")
+            migrate("grants")
+            migrate("grants")
+            local window = assert(db:query("SELECT * FROM bee_approval_grants WHERE grant_id = 'legacy-id'"))[1]
+            test.eq(window.domain,"approval_window")
+            test.eq(window.until_ms,2)
+            test.eq(window.max_uses,nil)
+            test.eq(window.provenance_json,'{"kind":"legacy","source":"approval_window","approval_id":"legacy-id"}')
+            test.eq(assert(db:query("SELECT COUNT(*) AS n FROM bee_approval_grants WHERE approval_id = 'legacy-id'"))[1].n,1)
+            test.eq(#assert(db:query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bee_approval_window_grants'")),0)
             local claim = {operation = "claim", approval_id = "legacy-unused", proposal_digest = assert(hash.sha256(proposal)),
                 effect_key = "existing-domain-effect", owner_incarnation = 1}
             local claimed = service.execute(db, "requester", "effect", claim, nil, nil)

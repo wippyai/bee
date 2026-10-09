@@ -1150,8 +1150,19 @@ local function op_effect(tx: sql.Transaction, actor: string, object: Object, now
     return success(M.view(updated), false)
 end
 local function op_grant(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local extra = bounds.fields(object, {"operation", "grant_id", "expected_revision", "subject", "scope", "effect_key", "owner_incarnation", "reviewed_digest"})
+    local extra = bounds.fields(object, {"operation", "grant_id", "expected_revision", "subject", "scope", "effect_key", "owner_incarnation", "reviewed_digest", "workspace_id", "after_id"})
     if extra then return failure("INVALID_ARGUMENT", extra) end
+    if object.operation == "list" then
+        local workspace = bounds.id(object.workspace_id)
+        local after = object.after_id == nil and "" or bounds.id(object.after_id)
+        if not workspace or not after then return failure("INVALID_ARGUMENT", "workspace_id and valid after_id are required") end
+        if not security.can(M.DECIDE, workspace) and not security.can(M.MANAGE, workspace) then return failure("DENIED", "caller cannot list grants") end
+        local rows, err = tx:query("SELECT * FROM bee_approval_grants WHERE workspace_id = ? AND (granted_by = ? OR granted_definition = ? OR requester_id = ?) AND state = 'active' AND (until_ms IS NULL OR until_ms > ?) AND grant_id > ? ORDER BY grant_id LIMIT 65", {workspace,actor,authenticated_definition(actor),actor,now,after})
+        if not rows or err then return storage("list grants") end
+        local more = #rows > 64
+        if more then rows[65] = nil end
+        return success({grants = rows,more = more,next_id = more and rows[#rows].grant_id or nil}, false)
+    end
     local id = bounds.id(object.grant_id)
     if not id then return failure("INVALID_ARGUMENT", "grant_id is required") end
     local rows, err = tx:query("SELECT * FROM bee_approval_grants WHERE grant_id = ?", {id})
@@ -1161,6 +1172,14 @@ local function op_grant(tx: sql.Transaction, actor: string, object: Object, now:
     local approval_id = bounds.id(grant.approval_id)
     local row, row_error = approval_id and load(tx, approval_id) or nil, nil
     if not row then return storage(row_error or "grant source is missing") end
+    if grant.domain == "approval_window" and object.operation == "revoke" then
+        if not security.can(M.DECIDE, row.workspace_id) or (actor ~= grant.granted_by and (authenticated_definition(actor) == nil or authenticated_definition(actor) ~= grant.granted_definition)) then return failure("DENIED", "caller does not own this grant") end
+        if grant.state == "revoked" then return success(grant,true) end
+        if object.expected_revision ~= grant.revision then return failure("CONFLICT", "grant revision differs",grant) end
+        local err = store.revoke_window(tx,id,stamp(now))
+        if err then return storage(err) end
+        return success({grant_id = id,state = "revoked"},false)
+    end
     local can_revoke = row.requester_id == actor or security.can(M.MANAGE, row.workspace_id)
     if object.operation == "revoke" then
         local may_decide, policy_error = eligible(actor, row)
@@ -1518,8 +1537,8 @@ local function op_reconcile(tx: sql.Transaction, actor: string, object: Object, 
         if delete_error then return storage("forget retained request") end
         forgotten = forgotten + 1
     end
-    local window_error = store.forget_windows(tx, horizon)
-    if window_error then return storage(window_error) end
+    local grant_error = store.forget_grants(tx,horizon)
+    if grant_error then return storage(grant_error) end
     return success({expired = expired, expired_effects = expired_effects, forgotten = forgotten, more = #due == M.EXPIRE_BOUND or expired_effects == M.EXPIRE_BOUND}, expired == 0 and forgotten == 0 and expired_effects == 0)
 end
 -- establish: the authority process advances the incarnation once per start,

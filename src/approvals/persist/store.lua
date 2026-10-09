@@ -2,6 +2,7 @@
 local sql = require("sql")
 local bounds = require("bounds")
 local windows = require("windows")
+local canonical = require("canonical")
 local lifecycle = require("lifecycle")
 local M = {}
 type NewRequest = {
@@ -144,12 +145,12 @@ function M.due(tx: sql.Transaction, now: integer, limit: integer): ({unknown}?, 
 end
 
 function M.retained(tx: sql.Transaction, horizon: integer, now: integer, limit: integer): ({unknown}?, string?)
-    return query(tx, "SELECT approval_id FROM bee_approval_requests WHERE state <> 'pending' AND expires_ms < ? AND NOT EXISTS (SELECT 1 FROM bee_approval_window_grants g WHERE g.grant_id = bee_approval_requests.approval_id AND g.revoked_at IS NULL AND g.until_ms > ?) AND NOT EXISTS (SELECT 1 FROM bee_approval_events e WHERE e.approval_id = bee_approval_requests.approval_id AND e.acknowledged_at IS NULL) AND NOT EXISTS (SELECT 1 FROM bee_approval_effects f WHERE f.approval_id = bee_approval_requests.approval_id AND f.state NOT IN ('succeeded','failed','canceled')) AND NOT EXISTS (SELECT 1 FROM bee_approval_outbox o WHERE o.approval_id = bee_approval_requests.approval_id AND o.acknowledged_at IS NULL) LIMIT ?",
+    return query(tx, "SELECT approval_id FROM bee_approval_requests WHERE state <> 'pending' AND expires_ms < ? AND NOT EXISTS (SELECT 1 FROM bee_approval_grants g WHERE g.approval_id = bee_approval_requests.approval_id AND g.domain <> 'decision' AND g.revoked_at IS NULL AND (g.until_ms IS NULL OR g.until_ms > ?)) AND NOT EXISTS (SELECT 1 FROM bee_approval_events e WHERE e.approval_id = bee_approval_requests.approval_id AND e.acknowledged_at IS NULL) AND NOT EXISTS (SELECT 1 FROM bee_approval_effects f WHERE f.approval_id = bee_approval_requests.approval_id AND f.state NOT IN ('succeeded','failed','canceled')) AND NOT EXISTS (SELECT 1 FROM bee_approval_outbox o WHERE o.approval_id = bee_approval_requests.approval_id AND o.acknowledged_at IS NULL) LIMIT ?",
         {horizon, now, limit})
 end
 
 function M.forget(tx: sql.Transaction, approval_id: string): string?
-    for _, statement in ipairs({"DELETE FROM bee_approval_events WHERE approval_id = ?", "DELETE FROM bee_approval_effects WHERE approval_id = ?", "DELETE FROM bee_approval_grants WHERE approval_id = ?", "DELETE FROM bee_approval_decisions WHERE approval_id = ?", "DELETE FROM bee_approval_outbox WHERE approval_id = ?", "DELETE FROM bee_approval_inbox WHERE approval_id = ?",
+    for _, statement in ipairs({"DELETE FROM bee_approval_events WHERE approval_id = ?", "DELETE FROM bee_approval_effects WHERE approval_id = ?", "DELETE FROM bee_approval_grants WHERE approval_id = ? AND NOT EXISTS (SELECT 1 FROM bee_approval_requests r WHERE r.window_grant_id = bee_approval_grants.grant_id AND r.approval_id <> bee_approval_grants.approval_id)", "DELETE FROM bee_approval_decisions WHERE approval_id = ?", "DELETE FROM bee_approval_outbox WHERE approval_id = ?", "DELETE FROM bee_approval_inbox WHERE approval_id = ?",
         "DELETE FROM bee_approval_history WHERE approval_id = ?", "DELETE FROM bee_approval_requests WHERE approval_id = ?"}) do
         local err = execute(tx, statement, {approval_id}, "forget retained request")
         if err then return err end
@@ -157,11 +158,9 @@ function M.forget(tx: sql.Transaction, approval_id: string): string?
     return nil
 end
 
-function M.forget_windows(tx: sql.Transaction, horizon: integer): string?
-    return execute(tx, [[DELETE FROM bee_approval_window_grants WHERE grant_id IN
-        (SELECT g.grant_id FROM bee_approval_window_grants g WHERE g.until_ms < ?
-        AND NOT EXISTS (SELECT 1 FROM bee_approval_requests r WHERE r.window_grant_id = g.grant_id) LIMIT 64)]],
-        {horizon}, "forget expired approval windows")
+function M.forget_grants(tx: sql.Transaction, horizon: integer): string?
+    return execute(tx, [[DELETE FROM bee_approval_grants WHERE until_ms < ?
+        AND NOT EXISTS (SELECT 1 FROM bee_approval_requests r WHERE r.approval_id = bee_approval_grants.approval_id OR r.window_grant_id = bee_approval_grants.grant_id)]], {horizon}, "forget retained grants")
 end
 function M.attention_count(tx: sql.Transaction, workspace: string, now: integer): (integer?, string?)
     local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ?", {workspace, now})
@@ -182,21 +181,25 @@ function M.node_pending_count(tx: sql.Transaction, node: string, now: integer): 
     if type(count) ~= "number" or count < 0 or count ~= math.floor(count) then return nil, "node pending approval count is corrupt" end
     return math.floor(count), nil
 end
+local WINDOW_COLUMNS = "grant_id, owner_node, workspace_id, requester_id, policy, scope_digest, granted_by, granted_definition, granted_ms, granted_at, until_ms, until_at, revoked_at"
+local WINDOW_SOURCE = "(SELECT grant_id,owner_node,workspace_id,requester_id,json_extract(metadata_json,'$.policy') AS policy,json_extract(metadata_json,'$.scope_digest') AS scope_digest,granted_by,granted_definition,json_extract(metadata_json,'$.granted_ms') AS granted_ms,created_at AS granted_at,until_ms,json_extract(metadata_json,'$.until_at') AS until_at,revoked_at FROM bee_approval_grants WHERE domain = 'approval_window')"
 function M.matching_windows(tx: sql.Transaction, owner: string, workspace: string, requester: string, policy: string, digest: string): ({unknown}?, string?)
-    return query(tx, "SELECT * FROM bee_approval_window_grants WHERE owner_node = ? AND workspace_id = ? AND requester_id = ? AND policy = ? AND scope_digest = ? ORDER BY granted_ms DESC, grant_id DESC LIMIT 1",
+    return query(tx, "SELECT " .. WINDOW_COLUMNS .. " FROM " .. WINDOW_SOURCE .. " WHERE owner_node = ? AND workspace_id = ? AND requester_id = ? AND policy = ? AND scope_digest = ? ORDER BY granted_ms DESC, grant_id DESC LIMIT 1",
         {owner, workspace, requester, policy, digest})
 end
 function M.window(tx: sql.Transaction, id: string): (unknown?, string?)
-    local rows, err = query(tx, "SELECT * FROM bee_approval_window_grants WHERE grant_id = ?", {id})
+    local rows, err = query(tx, "SELECT " .. WINDOW_COLUMNS .. " FROM " .. WINDOW_SOURCE .. " WHERE grant_id = ?", {id})
     if err then return nil, err end
     return rows and rows[1], nil
 end
 function M.insert_window(tx: sql.Transaction, grant: windows.Grant): string?
-    return execute(tx, "INSERT INTO bee_approval_window_grants (grant_id, owner_node, workspace_id, requester_id, policy, scope_digest, granted_by, granted_definition, granted_ms, granted_at, until_ms, until_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        {grant.grant_id, grant.owner_node, grant.workspace_id, grant.requester_id, grant.policy, grant.scope_digest, grant.granted_by, grant.granted_definition, grant.granted_ms, grant.granted_at, grant.until_ms, grant.until_at}, "record approval window")
+    local metadata = canonical.encode({policy = grant.policy, scope_digest = grant.scope_digest, granted_ms = grant.granted_ms, until_at = grant.until_at})
+    return execute(tx, [[INSERT INTO bee_approval_grants(grant_id,approval_id,subject_json,scope_json,terms_json,state,revision,until_ms,max_uses,created_at,domain,owner_node,workspace_id,requester_id,granted_by,granted_definition,metadata_json,provenance_json)
+        SELECT ?,approval_id,json_extract(contract_json,'$.subject'),json_extract(contract_json,'$.scope'),?, 'active',1,?,NULL,?,'approval_window',?,?,?,?,?,?,json_object('kind','decision','approval_id',approval_id,'reviewed_digest',reviewed_digest) FROM bee_approval_requests WHERE approval_id = ?]],
+        {grant.grant_id, grant.until_ms == windows.PERMANENT_UNTIL_MS and '{"kind":"until_revoked","time_basis":"absolute"}' or '{"kind":"window","time_basis":"absolute"}', grant.until_ms, grant.granted_at, grant.owner_node, grant.workspace_id, grant.requester_id, grant.granted_by, grant.granted_definition, metadata, grant.grant_id}, "record approval window grant")
 end
 function M.supersede_windows(tx: sql.Transaction, grant: windows.Grant): string?
-    return execute(tx, "UPDATE bee_approval_window_grants SET revoked_at = ? WHERE owner_node = ? AND workspace_id = ? AND requester_id = ? AND policy = ? AND scope_digest = ? AND revoked_at IS NULL",
+    return execute(tx, "UPDATE bee_approval_grants SET state = 'revoked', revision = revision + 1, revoked_at = ? WHERE domain = 'approval_window' AND owner_node = ? AND workspace_id = ? AND requester_id = ? AND json_extract(metadata_json,'$.policy') = ? AND json_extract(metadata_json,'$.scope_digest') = ? AND revoked_at IS NULL",
         {grant.granted_at, grant.owner_node, grant.workspace_id, grant.requester_id, grant.policy, grant.scope_digest}, "supersede approval window")
 end
 function M.attach_window(tx: sql.Transaction, approval_id: string, grant_id: string, automatic: boolean): string?
@@ -204,10 +207,12 @@ function M.attach_window(tx: sql.Transaction, approval_id: string, grant_id: str
         {grant_id, automatic and grant_id or nil, approval_id}, "record approval window settlement")
 end
 function M.active_windows(tx: sql.Transaction, owner: string, workspace: string, actor: string, definition: string?, now: integer, after: string): ({unknown}?, string?)
-    return query(tx, "SELECT * FROM bee_approval_window_grants WHERE owner_node = ? AND workspace_id = ? AND (granted_by = ? OR granted_definition = ?) AND revoked_at IS NULL AND until_ms > ? AND grant_id > ? ORDER BY grant_id LIMIT 65",
+    return query(tx, "SELECT " .. WINDOW_COLUMNS .. " FROM " .. WINDOW_SOURCE .. " WHERE owner_node = ? AND workspace_id = ? AND (granted_by = ? OR granted_definition = ?) AND revoked_at IS NULL AND until_ms > ? AND grant_id > ? ORDER BY grant_id LIMIT 65",
         {owner, workspace, actor, definition, now, after})
 end
 function M.revoke_window(tx: sql.Transaction, id: string, at: string): string?
-    return execute(tx, "UPDATE bee_approval_window_grants SET revoked_at = COALESCE(revoked_at, ?) WHERE grant_id = ?", {at, id}, "revoke approval window")
+    local err = execute(tx, "UPDATE bee_approval_grants SET state = 'revoked', revision = revision + 1, revoked_at = ?, revoked_by = granted_by WHERE grant_id = ? AND state <> 'revoked'", {at, id}, "revoke approval window")
+    if err then return err end
+    return execute(tx, "INSERT OR IGNORE INTO bee_approval_grant_history SELECT grant_id,revision,'grant.revoked',granted_by,'{}',? FROM bee_approval_grants WHERE grant_id = ?", {at,id}, "record window revocation")
 end
 return M

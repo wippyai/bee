@@ -16,7 +16,7 @@ entries:
   modules: [sql]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gateway:surface_test_policy, bee.tests.support:schema_policy]}
-  imports: {test: wippy.test:test, schema: bee.tests.support:schema, store: bee.gateway.persist:surface_store}
+  imports: {test: wippy.test:test, schema: bee.tests.support:schema, store: bee.gateway.persist:surface_store, bounds: bee.values:bounds, grants: bee.approvals.grants:store, grant_schema: bee.approvals.grants:schema, clock: bee.values:clock}
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua
@@ -297,3 +297,26 @@ entries:
     test: wippy.test:test
     protocol: bee.hive:protocol
     effects: bee.gateway.service:effects
+- name: grants_migration_db
+  kind: db.sql.sqlite
+  file: .wippy/gateway-grants-migration.db
+  lifecycle: {auto_start: true}
+  meta: {type: test_support}
+- name: grants_migration_policy
+  kind: security.policy
+  policy: {actions: [db.get], resources: ['bee.gateway:grants_migration_db'], effect: allow}
+- name: grants_migration_test
+  kind: function.lua
+  source: file://grants_migration_test.lua
+  method: run
+  modules: [sql, json, funcs]
+  meta: {type: test, suite: bee}
+  security: {policies: ['bee.gateway:grants_migration_policy', 'bee.tests.support:schema_policy', 'bee.approvals.inbox.security:grants_policy']}
+  imports:
+    test: wippy.test:test
+    schema: bee.tests.support:schema
+    grants: bee.approvals.grants:store
+    bounds: bee.values:bounds
+    store: bee.gateway.persist:surface_store
+    clock: bee.values:clock
+    service: bee.approvals.binding:service

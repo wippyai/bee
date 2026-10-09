@@ -17,7 +17,7 @@ local NO_WORKSPACE = "this binding names no workspace to request MCP access in"
 local fail = subject_call.fail
 local function proposal(binding: Binding, configuration: surface.Surface, digest: string,
     capability: Object): Object
-    return {kind = "attempt", ref = binding.attempt_id, action_id = binding.action_id, revision = capability_model.REVISION,
+    return {grant_adapter = "bee.gateway.security:grant",kind = "attempt", ref = binding.attempt_id, action_id = binding.action_id, revision = capability_model.REVISION,
         payload = {binding_id = binding.binding_id, subject = binding.subject, thread_id = binding.thread_id,
             configuration_digest = digest, capability = capability, fixed_context = configuration.fixed_context}}
 end

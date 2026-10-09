@@ -3,12 +3,92 @@
 local bounds = require("bounds")
 local json = require("json")
 local capability_model = require("capability_model")
+local authority = require("authority")
+local clock = require("clock")
+local canonical = require("canonical")
+local mcp = require("mcp")
 local M = {}
 type State = {surface_json: string, active_json: string, context_json: string, revision: integer}
 type Fault = {code: string, message: string}
 type Grant = {approval_id: string, proposal_digest: string, traits: {string}}
 local function fault(code: string, message: string): Fault return {code = code, message = message} end
 local function text(value: string, limit: integer): boolean return #value > 0 and #value <= limit end
+function M.profile_authority(tx: sql.Transaction, binding_id: string, workspace: string?, declaration: {[string]: unknown}, now: integer?): (authority.Grant?, Fault?)
+    local id = bounds.id(declaration.authority_grant_id)
+    if not id then return nil,fault("DENIED","surface consent identity is missing") end
+    local grant, err = authority.read(tx,id)
+    if not grant or err or grant.workspace_id ~= (workspace or "legacy:unscoped") or authority.state(grant,now or clock.milliseconds()) ~= "active" then return nil,fault("DENIED",err or "surface consent is no longer active") end
+    if grant.domain == "profile_choices" then
+        local parameters = bounds.object(grant.scope.parameters)
+        local saved = parameters and bounds.object(parameters.configuration)
+        local bee = saved and bounds.object(saved.bee)
+        if not saved or canonical.encode(bee) ~= canonical.encode(declaration.profile) then return nil,fault("DENIED","surface differs from saved profile consent") end
+        local chosen: {[string]: boolean} = {}
+        for _, raw in ipairs(bee and bounds.array(bee.mcp,64) or {}) do
+            local item = bounds.object(raw)
+            local tool = item and bounds.id(item.tool)
+            if tool then chosen[tool] = true end
+        end
+        local base = bounds.ids(declaration.base_tools,true)
+        if not base then return nil,fault("DENIED","surface base tools are invalid") end
+        for _, trait in ipairs(mcp.CONSENT_TRAITS) do
+            for _, name in ipairs(trait.tools) do
+                for _, tool in ipairs(base) do if tool == name and not chosen[tool] then return nil,fault("DENIED","surface exceeds saved profile consent") end end
+            end
+        end
+        return grant,nil
+    end
+    if grant.domain ~= "gateway_access" or (grant.metadata.legacy_surface ~= true and grant.metadata.surface_projection ~= true) or grant.metadata.binding_id ~= binding_id or grant.subject.audience ~= binding_id then return nil,fault("DENIED","surface consent belongs to another context") end
+    local parameters = bounds.object(grant.scope.parameters)
+    local expected = parameters and bounds.object(parameters.configuration)
+    local configuration: {[string]: unknown} = {}
+    for key, value in pairs(declaration) do if key ~= "authority_grant_id" then configuration[key] = value end end
+    if not expected or canonical.encode(expected) ~= canonical.encode(configuration) then return nil,fault("DENIED","surface exceeds legacy consent") end
+    return grant,nil
+end
+function M.call_authority(tx: sql.Transaction, binding_id: string, workspace: string?, declaration: {[string]: unknown}, name: string, now: integer): (string?, Fault?)
+    local id = bounds.id(declaration.authority_grant_id)
+    if id then
+        local record, err = M.profile_authority(tx,binding_id,workspace,declaration,now)
+        if not record then return nil,err end
+    end
+    local access = bounds.object(declaration.access)
+    local requested = access and bounds.ids(access.traits,true) or {}
+    local traits: {[string]: {string}} = {[mcp.APPLICATION_RUNTIME_TRAIT.id] = mcp.APPLICATION_RUNTIME_TRAIT.tools}
+    for _, trait in ipairs(mcp.CONSENT_TRAITS) do traits[trait.id] = trait.tools end
+    for _, raw in ipairs(bounds.array(declaration.traits,64) or {}) do
+        local trait = bounds.object(raw)
+        local trait_id = trait and bounds.id(trait.id)
+        local tools = trait and bounds.ids(trait.tools,true)
+        if trait_id and tools then traits[trait_id] = tools end
+    end
+    for _, trait in ipairs(requested or {}) do
+        for _, tool in ipairs(traits[trait] or {}) do
+            if tool == name then
+                local receipt, err = M.runtime_grant(tx,binding_id,trait,now)
+                if not receipt then return nil,err or fault("DENIED","access grant no longer admits calls") end
+                return receipt.approval_id .. ":grant",nil
+            end
+        end
+    end
+    return id,nil
+end
+function M.bind_authority(tx: sql.Transaction, owner: string, workspace: string?, subject: string, binding_id: string, configuration: {[string]: unknown}, policy_ref: string?): (string?, Fault?)
+    if configuration.authority_grant_id ~= nil then return canonical.encode(configuration),nil end
+    local base = bounds.ids(configuration.base_tools,true) or {}
+    local consent = configuration.profile ~= nil
+    for _, trait in ipairs(mcp.CONSENT_TRAITS) do for _, name in ipairs(trait.tools) do for _, tool in ipairs(base) do if tool == name then consent = true end end end end
+    if not consent then return canonical.encode(configuration),nil end
+    local scope: {[string]: unknown} = {}
+    for key, value in pairs(configuration) do scope[key] = value end
+    local issuer, definition = authority.principal(owner)
+    local record: authority.Grant = {grant_id = authority.identity("gateway_access",owner,workspace or "legacy:unscoped",binding_id .. ":surface"),domain = "gateway_access",owner_node = owner,workspace_id = workspace or "legacy:unscoped",requester_id = subject,granted_by = issuer,granted_definition = definition,
+        subject = {principal_id = subject,audience = binding_id},scope = {type = "exact",parameters = {configuration = scope}},terms = {kind = "binding",time_basis = "absolute"},provenance = {kind = "host_policy",policy_ref = policy_ref,configuration_digest = authority.identity("surface",owner,binding_id,assert(canonical.encode(scope)))},metadata = {binding_id = binding_id,surface_projection = true},state = "active",revision = 1,used = 0,reserved = 0,created_at = clock.now()}
+    local err = authority.create(tx,record)
+    if err then return nil,fault("STORAGE",err) end
+    configuration.authority_grant_id = record.grant_id
+    return canonical.encode(configuration),nil
+end
 local function decode_traits(binding_id: string, encoded: string, code: string,
     message: string): ({string}?, Fault?)
     local decoded, decode_error = json.decode(encoded)
@@ -56,8 +136,8 @@ function M.replace(tx: sql.Transaction, binding_id: string, expected_revision: i
 end
 -- The approval owner has consumed the exact effect before this transaction.
 -- Recording the receipt and revision together makes a lost commit reply replayable.
-function M.grants(tx: sql.Transaction, binding_id: string): ({string}?, Fault?)
-    local rows, err = tx:query("SELECT traits_json FROM bee_gateway_access_grants WHERE binding_id = ?", {binding_id})
+function M.grants(tx: sql.Transaction, binding_id: string, now: integer?): ({string}?, Fault?)
+    local rows, err = tx:query("SELECT a.traits_json FROM bee_gateway_access_receipts a JOIN bee_approval_grants g ON g.grant_id = a.grant_id JOIN bee_gateway_bindings b ON b.binding_id = a.binding_id WHERE a.binding_id = ? AND g.state = 'active' AND (g.until_ms IS NULL OR g.until_ms > ?) AND (g.max_uses IS NULL OR g.used + g.reserved < g.max_uses) AND b.revoked_at IS NULL AND b.sealed_at IS NULL AND b.expires_at > ?", {binding_id,now or clock.milliseconds(),clock.stamp(now or clock.milliseconds())})
     if not rows or err then return nil, fault("STORAGE", "read MCP access grants") end
     if #rows > 64 then return nil, fault("STORAGE", "MCP access receipt capacity exceeded") end
     local result: {string} = {}
@@ -77,14 +157,14 @@ function M.grants(tx: sql.Transaction, binding_id: string): ({string}?, Fault?)
     return result, nil
 end
 function M.receipt(db: sql.DB, binding_id: string, approval_id: string)
-    return db:query("SELECT traits_json FROM bee_gateway_access_grants WHERE binding_id = ? AND approval_id = ?", {binding_id, approval_id})
+    return db:query("SELECT traits_json FROM bee_gateway_access_receipts WHERE binding_id = ? AND approval_id = ?", {binding_id, approval_id})
 end
 -- A receipt is durable evidence, not a new authorization mechanism.  When
 -- several approved effects carry one trait, the explicit approval-ID order
 -- makes the provenance selected for a retried runtime call stable.
-function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: string): (Grant?, Fault?)
+function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: string, now: integer?): (Grant?, Fault?)
     if not bounds.id(binding_id) or not bounds.id(trait_id) then return nil, fault("INVALID", "invalid runtime receipt lookup") end
-    local rows, err = tx:query("SELECT approval_id, proposal_digest, traits_json FROM bee_gateway_access_grants WHERE binding_id = ? ORDER BY approval_id ASC", {binding_id})
+    local rows, err = tx:query("SELECT a.approval_id,a.proposal_digest,a.traits_json FROM bee_gateway_access_receipts a JOIN bee_approval_grants g ON g.grant_id = a.grant_id JOIN bee_gateway_bindings b ON b.binding_id = a.binding_id WHERE a.binding_id = ? AND g.state = 'active' AND (g.until_ms IS NULL OR g.until_ms > ?) AND (g.max_uses IS NULL OR g.used + g.reserved < g.max_uses) AND b.revoked_at IS NULL AND b.sealed_at IS NULL AND b.expires_at > ? ORDER BY a.approval_id ASC", {binding_id,now or clock.milliseconds(),clock.stamp(now or clock.milliseconds())})
     if not rows or err then return nil, fault("STORAGE", "read application runtime access receipt") end
     if #rows > 64 then return nil, fault("STORAGE", "MCP access receipt capacity exceeded") end
     for _, raw in ipairs(rows) do
@@ -104,19 +184,23 @@ function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: stri
     end
     return nil, nil
 end
-function M.grant(tx: sql.Transaction, binding_id: string, approval_id: string, digest: string, traits_json: string): (State?, Fault?)
+function M.grant(tx: sql.Transaction, binding_id: string, approval_id: string, digest: string, traits_json: string, now: integer?): (State?, Fault?)
     if not bounds.id(binding_id) or not bounds.id(approval_id) or #digest ~= 64 or not digest:match("^%x+$")
         or not text(traits_json, 8192) then return nil, fault("INVALID", "invalid grant receipt") end
     local added, traits_fault = decode_traits(binding_id, traits_json, "INVALID", "invalid grant receipt")
     if not added then return nil, traits_fault end
-    local rows, err = tx:query("SELECT proposal_digest, traits_json FROM bee_gateway_access_grants WHERE binding_id = ? AND approval_id = ?", {binding_id, approval_id})
+    local rows, err = tx:query("SELECT proposal_digest, traits_json FROM bee_gateway_access_receipts WHERE binding_id = ? AND approval_id = ?", {binding_id, approval_id})
     if not rows or err then return nil, fault("STORAGE", "read grant receipt") end
     if #rows > 0 then
         local row = bounds.object(rows[1])
         if not row or row.proposal_digest ~= digest or row.traits_json ~= traits_json then return nil, fault("CONFLICT", "grant receipt differs") end
         return M.read(tx, binding_id)
     end
-    local count, count_error = tx:query("SELECT COUNT(*) AS n FROM bee_gateway_access_grants WHERE binding_id = ?", {binding_id})
+    local record, record_error = authority.read(tx,approval_id .. ":grant")
+    if not record then return nil,fault("DENIED",record_error or "gateway access grant is missing") end
+    if record.domain ~= "gateway_access" or record.metadata.binding_id ~= binding_id or authority.state(record,now or clock.milliseconds()) ~= "active" then return nil,fault("DENIED","gateway access grant is not active for this binding") end
+    if canonical.encode(record.metadata.traits) ~= canonical.encode(added) then return nil,fault("CONFLICT","gateway access grant traits differ") end
+    local count, count_error = tx:query("SELECT COUNT(*) AS n FROM bee_gateway_access_receipts WHERE binding_id = ?", {binding_id})
     if not count or count_error then return nil, fault("STORAGE", "count grant receipts") end
     local first = bounds.object(count[1])
     local n = first and bounds.count(first.n)
@@ -134,7 +218,7 @@ function M.grant(tx: sql.Transaction, binding_id: string, approval_id: string, d
     table.sort(active)
     local active_json, encode_error = json.encode(active)
     if not active_json or encode_error then return nil, fault("STORAGE", "encode active traits") end
-    local inserted, insert_error = tx:execute("INSERT INTO bee_gateway_access_grants (binding_id, approval_id, proposal_digest, traits_json) VALUES (?, ?, ?, ?)", {binding_id, approval_id, digest, traits_json})
+    local inserted, insert_error = tx:execute("INSERT INTO bee_gateway_access_receipts (binding_id, approval_id, proposal_digest, traits_json, grant_id) VALUES (?, ?, ?, ?, ?)", {binding_id, approval_id, digest, traits_json,approval_id .. ":grant"})
     if not inserted or insert_error then return nil, fault("STORAGE", "record MCP grant receipt") end
     local updated, update_error = tx:execute("UPDATE bee_gateway_surfaces SET active_json = ?, revision = revision + 1 WHERE binding_id = ? AND revision < 9007199254740991", {active_json, binding_id})
     if not updated or update_error or updated.rows_affected ~= 1 then return nil, fault("STORAGE", "advance MCP grant revision") end

@@ -29,6 +29,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: hook_http
@@ -52,6 +53,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
     - bee.gateway.security:execute_policy
@@ -76,6 +78,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
     - bee.gateway.security:execute_policy
@@ -103,6 +106,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
     - bee.gateway.security:execute_policy
@@ -136,6 +140,7 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
     - bee.gateway.security:execute_policy

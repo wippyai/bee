@@ -390,6 +390,8 @@ local function handle(): nil
                 nil, false, "call tools/list or app_tools for the current tools")))
             return nil
         end
+        local admitted = gateway.admit_call(binding,"app_tools")
+        if not admitted.ok then answer(response,http.STATUS.OK,mcp.result(call.id,reply_result(admitted,nil))); return nil end
         local recorded = gateway.record_external_call(binding, offered.alias)
         if not recorded.ok then answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(recorded, nil))); return nil end
         local app_arguments, app_argument_error = mcp.app_tool_arguments(offered, parameters)
@@ -400,6 +402,8 @@ local function handle(): nil
         return nil
     end
     if not tool then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "tool is not admitted for this binding")); return nil end
+    local admitted = gateway.admit_call(binding,tool.name)
+    if not admitted.ok then answer(response,http.STATUS.OK,mcp.result(call.id,reply_result(admitted,nil))); return nil end
     local recorded = gateway.record_external_call(binding, tool.name)
     if not recorded.ok then answer(response, http.STATUS.OK, mcp.result(call.id, reply_result(recorded, nil))); return nil end
     local arguments: Object? = nil

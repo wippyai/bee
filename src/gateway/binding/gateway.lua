@@ -26,6 +26,7 @@ local hooks = require("hooks")
 local mcp = require("mcp")
 local surface = require("surface")
 local surface_store = require("surface_store")
+local grant_store = require("grant_store")
 local binding_store = require("binding_store")
 local credential_store = require("credential_store")
 local external_store = require("external_store")
@@ -619,6 +620,9 @@ function M.admit(value: unknown): Reply
         json.encode(tools), json.encode(admitted_hooks), epoch, stamp(created + ttl), ttl, idempotency_key, request_digest, stamp(created),
         policy_ref or "", workspace_id or "", workspace_name, origin_json)
     if insert_error then tx:rollback(); db:release(); return fail("STORAGE", "record binding") end
+    local authorized_surface, authority_error = surface_store.bind_authority(tx,assert(system.node.id()),workspace_id,subject,binding_id,assert(bounds.object(selected_surface)),policy_ref)
+    if not authorized_surface then tx:rollback(); db:release(); return fail("STORAGE",authority_error and authority_error.message or "record surface authority") end
+    surface_json = authorized_surface
     local initialized, initialize_error = surface_store.initialize(tx, binding_id, surface_json, json.encode(initial.active) or "[]", "{}")
     if not initialized then tx:rollback(); db:release(); return fail("STORAGE", initialize_error and initialize_error.message or "record binding surface") end
     local _, commit_error = tx:commit()
@@ -1150,7 +1154,13 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
     local tx, tx_error = db:begin()
     if not tx or tx_error then db:release(); return nil, fail("STORAGE", "open surface read") end
     local stored, read_error = surface_store.read(tx, binding.binding_id)
-    local granted, grant_error = surface_store.grants(tx, binding.binding_id)
+    local granted, grant_error = surface_store.grants(tx, binding.binding_id,now_ms())
+    local declaration = stored and bounds.object(json.decode(stored.surface_json))
+    local profile_grant = declaration and bounds.id(declaration.authority_grant_id)
+    if profile_grant then
+        local record, err = surface_store.profile_authority(tx,binding.binding_id,binding.workspace_id,assert(declaration),now_ms())
+        if not record then tx:rollback(); db:release(); return nil,fail("DENIED",err and err.message or "saved profile consent is no longer active") end
+    end
     tx:rollback()
     db:release()
     if not stored then return nil, fail("STORAGE", read_error and read_error.message or "read surface") end
@@ -1168,7 +1178,13 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
         if not extended then return nil, fail("STORAGE", extend_error or "invalid grant") end
         configured = extended
     end
-    local selected, selection_error = surface.select(configured, active, dynamic)
+    local active_traits = bounds.ids(active,true)
+    if not active_traits then return nil,fail("STORAGE","binding selection is invalid") end
+    local allowed: {[string]: boolean} = {}
+    for _, id in ipairs(configured.allowed_traits) do allowed[id] = true end
+    local live: {string} = {}
+    for _, id in ipairs(active_traits) do if allowed[id] then live[#live + 1] = id end end
+    local selected, selection_error = surface.select(configured, live, dynamic)
     if not selected then return nil, fail("STORAGE", selection_error or "binding selection is invalid") end
     return {configuration = configured, selection = selected, revision = stored.revision, digest = digest}, nil
 end
@@ -1195,7 +1211,7 @@ function M.application_runtime(binding: Binding, current: BoundSurface): (Runtim
     if not db then return nil, open_failure end
     local tx, begin_error = db:begin()
     if not tx or begin_error then db:release(); return nil, fail("STORAGE", "open application runtime access receipt") end
-    local receipt, receipt_error = surface_store.runtime_grant(tx, binding.binding_id, trait)
+    local receipt, receipt_error = surface_store.runtime_grant(tx, binding.binding_id, trait,now_ms())
     tx:rollback()
     db:release()
     if receipt_error then return nil, fail(receipt_error.code, receipt_error.message) end
@@ -1274,7 +1290,7 @@ function M.access_status(binding: Binding, approval_id: string): Reply
     if not stored then tx:rollback(); db:release(); return fail("STORAGE", stored_error and stored_error.message or "read surface") end
     local digest = hash.sha256(stored.surface_json)
     if digest ~= current.digest then tx:rollback(); db:release(); return fail("CONFLICT", "MCP declaration changed") end
-    local updated, update_error = surface_store.grant(tx, binding.binding_id, grant.approval_id, grant.proposal_digest, encoded)
+    local updated, update_error = surface_store.grant(tx, binding.binding_id, grant.approval_id, grant.proposal_digest, encoded,now_ms())
     if not updated then tx:rollback(); db:release(); return fail(update_error and update_error.code or "STORAGE", update_error and update_error.message or "apply grant") end
     local _, commit_error = tx:commit()
     db:release()
@@ -1797,6 +1813,35 @@ function M.managed_binding(binding_id: string): (Binding?, Reply?)
     local binding, missing = binding_by_id(db, binding_id)
     db:release()
     return binding, missing
+end
+function M.admit_call(binding: Binding, name: string): Reply
+    local db, failure = open()
+    if not db then return failure or fail("STORAGE","open call authority") end
+    local tx, err = db:begin({isolation = sql.isolation.SERIALIZABLE})
+    if not tx then db:release(); return fail("STORAGE","begin call admission") end
+    local rows = binding_store.surface_authority(tx,binding.binding_id)
+    local row = rows and #rows == 1 and bounds.object(rows[1]) or nil
+    local now = now_ms()
+    if not row or row.revoked_at ~= nil or row.sealed_at ~= nil or row.credential_generation ~= binding.credential_generation or type(row.expires_at) ~= "string" or row.expires_at <= stamp(now) then tx:rollback(); db:release(); return fail("DENIED","binding no longer admits calls") end
+    local stored, stored_error = surface_store.read(tx,binding.binding_id)
+    local declaration = stored and bounds.object(json.decode(stored.surface_json))
+    if not declaration then tx:rollback(); db:release(); return fail("STORAGE",stored_error and stored_error.message or "invalid call surface") end
+    local id, authority_error = surface_store.call_authority(tx,binding.binding_id,binding.workspace_id,declaration,name,now)
+    if authority_error then tx:rollback(); db:release(); return fail("DENIED",authority_error.message) end
+    if id then
+        local grant, read_error = grant_store.read(tx,id)
+        if not grant or read_error or grant.workspace_id ~= (binding.workspace_id or "legacy:unscoped") or grant_store.state(grant,now) ~= "active" then tx:rollback(); db:release(); return fail("DENIED","consent grant no longer admits calls") end
+        local effect = assert(uuid.v7())
+        local digest = assert(hash.sha256(assert(canonical.encode({binding_id = binding.binding_id,tool = name}))))
+        local reserved, reserve_error = grant_store.use(tx,grant,"reserve",effect,digest,grant.revision,binding.subject,now)
+        if reserved == nil then tx:rollback(); db:release(); return fail("DENIED",reserve_error or "call reservation denied") end
+        local admitted, admission_error = grant_store.use(tx,grant,"admit",effect,digest,grant.revision,binding.subject,now)
+        if admitted == nil then tx:rollback(); db:release(); return fail("DENIED",admission_error or "call admission denied") end
+    end
+    local _, commit_error = tx:commit()
+    db:release()
+    if commit_error then return fail("STORAGE","commit call admission") end
+    return succeed({})
 end
 function M.record_external_call(binding: Binding, name: string): Reply
     local db, failure = open()

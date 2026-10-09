@@ -28,6 +28,7 @@ entries:
     sessions: bee.gateway.catalog:sessions
     surface: bee.gateway.catalog:surface
     surface_store: bee.gateway.persist:surface_store
+    grant_store: bee.approvals.grants:store
     binding_store: bee.gateway.persist:binding_store
     credential_store: bee.gateway.persist:credential_store
     external_store: bee.gateway.persist:external_store
@@ -48,6 +49,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: admit
@@ -60,6 +62,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: revoke
@@ -72,6 +75,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: materialize
@@ -84,6 +88,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: authorize_materialization
@@ -96,6 +101,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: reissue
@@ -108,6 +114,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: renew_attempt
@@ -120,6 +127,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: revoke_attempt
@@ -132,6 +140,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: check
@@ -144,6 +153,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: request_capability
@@ -155,6 +165,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:elevation_policy
     - bee.gateway.security:access_reference_policy
@@ -169,6 +180,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:elevation_policy
     - bee.gateway.security:access_reference_policy
@@ -183,6 +195,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:elevation_policy
     - bee.gateway.security:access_reference_policy
@@ -198,6 +211,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:elevation_policy
     - bee.gateway.security:access_reference_policy
@@ -212,6 +226,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
     - bee.gateway.security:installation_library_policy
@@ -226,6 +241,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
     - bee.gateway.security:installation_library_policy
@@ -240,6 +256,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
     - bee.gateway.security:installation_library_policy
@@ -261,6 +278,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:publication_policy
     - bee.gateway.security:access_reference_policy
@@ -274,6 +292,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:publication_policy
     - bee.gateway.security:access_reference_policy
@@ -287,6 +306,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:installation_worker_policy
 - name: drain
   kind: function.lua
@@ -298,6 +318,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: ready
@@ -310,6 +331,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
     - bee.gateway.security:readiness_policy
@@ -323,6 +345,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: hook_claim
@@ -335,6 +358,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: hook_ack
@@ -347,6 +371,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: hook_reject
@@ -359,6 +384,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
 - name: hook_queue
@@ -373,6 +399,7 @@ entries:
   security:
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:supervisor_policy
 - name: describe
   kind: function.lua
@@ -384,6 +411,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
     - bee.gateway.security:directory_projection_policy
@@ -397,6 +425,7 @@ entries:
     policies:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
     - bee.gateway.security:directory_projection_policy
@@ -438,6 +467,7 @@ entries:
     - bee.gateway.security:external_reader_host_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy

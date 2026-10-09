@@ -1,6 +1,17 @@
 version: '1.0'
 namespace: bee.gateway.security
 entries:
+- name: grant_context
+  kind: registry.entry
+  meta:
+    type: bee.approvals.grant-context
+    domain: gateway_access
+    table_name: bee_gateway_bindings
+    identity_field: binding_id
+    expires_field: expires_at
+    revoked_field: revoked_at
+    sealed_field: sealed_at
+    metadata_key: binding_id
 - name: store_policy
   kind: security.policy
   meta:
@@ -8,8 +19,14 @@ entries:
   policy:
     actions:
     - db.get
-    resources:
-    - bee:db
+    resources: [bee:db]
+    effect: allow
+- name: grant_context_policy
+  kind: security.policy.expr
+  policy:
+    actions: [registry.find, registry.get]
+    resources: '*'
+    expression: (action == "registry.find" && resource == "*") || (action == "registry.get" && resource == "bee.gateway.security:grant_context")
     effect: allow
 - name: readiness_policy
   kind: security.policy.expr
@@ -47,6 +64,7 @@ entries:
     - system.read
     resources:
     - supervisor
+    - node
     effect: allow
 - name: address_call_policy
   kind: security.policy
@@ -638,3 +656,11 @@ entries:
     resources:
     - bee.gateway.service:publication_worker
     effect: allow
+- name: grant
+  kind: function.lua
+  source: file://grant.lua
+  method: build
+  meta: {type: bee.approvals.grant-adapter, adapter_id: 'bee.gateway.security:grant', domain: gateway_access}
+  imports:
+    bounds: bee.values:bounds
+    grants: bee.approvals.grants:store

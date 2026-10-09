@@ -88,6 +88,7 @@ entries:
       - bee.gateway.security:external_host_policy
       - bee.gateway.security:execute_policy
       - bee.gateway.security:store_policy
+      - bee.gateway.security:grant_context_policy
       - bee.gateway.security:address_call_policy
       - bee.gateway.security:address_policy
       - bee.gateway.security:supervisor_policy
@@ -116,6 +117,7 @@ entries:
     entry: bee.gateway.service:worker
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
     - bee.gateway.security:installation_queue_policy
@@ -140,6 +142,7 @@ entries:
     entry: bee.gateway.service:publication_worker
     policies:
     - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:publication_policy
     - bee.gateway.security:publication_queue_policy

@@ -36,7 +36,7 @@ local function rpc(endpoint: string, action: string, token: string, method: stri
     return assert(bounds.object(json.decode(tostring(response.body)))), math.floor(tonumber(response.status_code) or 0)
 end
 local function names(reply: Object): {[string]: boolean}
-    local result = assert(bounds.object(reply.result))
+    local result = assert(bounds.object(reply.result),assert(json.encode(reply)))
     local rows = assert(bounds.array(result.tools, 64))
     local found: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do local tool = assert(bounds.object(raw)); found[assert(bounds.id(tool.name))] = true end

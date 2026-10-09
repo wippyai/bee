@@ -30,6 +30,10 @@ entries:
   imports:
     bounds: bee.values:bounds
     capability_model: bee.capability:model
+    authority: bee.approvals.grants:store
+    clock: bee.values:clock
+    canonical: bee.values:canonical
+    mcp: bee.gateway.api:mcp
 - name: external_store
   kind: library.lua
   source: file://external_store.lua

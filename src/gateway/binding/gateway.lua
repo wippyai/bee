@@ -1220,16 +1220,20 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
     if raw_error or active_error or dynamic_error then return nil, fail("STORAGE", "binding surface JSON is corrupt") end
     local configured, _, config_error = surface.prepare(raw, mcp.TOOLS, binding.tools)
     if not configured then return nil, fail("STORAGE", config_error or "binding surface is invalid") end
-    if #granted > 0 then
-        local extended, extend_error = surface.grant(configured, granted)
+    local extensions: {[string]: boolean} = {}
+    for index, trait in ipairs(configured.catalog.traits) do
+        if agent_trait.extension(trait) then
+            extensions[trait.id] = true
+            local live = trait_access.load(trait.id)
+            if live then configured.catalog.traits[index] = live end
+        end
+    end
+    local binding_traits: {string} = {}
+    for _, id in ipairs(granted) do if not extensions[id] then binding_traits[#binding_traits + 1] = id end end
+    if #binding_traits > 0 then
+        local extended, extend_error = surface.grant(configured, binding_traits)
         if not extended then return nil, fail("STORAGE", extend_error or "invalid grant") end
         configured = extended
-    end
-    for _, trait in ipairs(configured.catalog.traits) do
-        if agent_trait.extension(trait) then
-            local live, err = trait_access.review(trait)
-            if not live then return nil, fail("DENIED", err or "trait changed; person re-approval required") end
-        end
     end
     local session_db, session_failure = open()
     if not session_db then return nil, session_failure end

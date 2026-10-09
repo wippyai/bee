@@ -25,6 +25,7 @@ entries:
   source: file://interaction.lua
   imports:
     bounds: bee.values:bounds
+    canonical: bee.values:canonical
 - name: names
   kind: library.lua
   source: file://names.lua

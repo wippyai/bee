@@ -1,13 +1,14 @@
 -- MIT. Bounded interaction values; identity checks belong to the receiving owner.
 type Kind = "confirm" | "text"
 type Spec = {request_id: string, id: string, instance_id: string, kind: Kind,
-    title: string, message: string, accept: string, initial: string, restoration: boolean?}
+    title: string, message: string, accept: string, initial: string, restoration: boolean?, target: {[string]: unknown}?}
 type Wire = {version: integer, request_id: string, id: string, instance_id: string, kind: Kind,
-    title: string, message: string, accept: string, initial: string, restoration: boolean?}
+    title: string, message: string, accept: string, initial: string, restoration: boolean?, target: {[string]: unknown}?}
 type Response = {request_id: string, id: string, instance_id: string, action: "accept" | "cancel", value: string}
 type Result = {version: integer, request_id: string, id: string, instance_id: string, error_code: string, error: string}
 local M = {}
 local bounds = require("bounds")
+local canonical = require("canonical")
 local function text(value: unknown, limit: integer, required: boolean): string?
     local decoded = bounds.text(value, limit)
     if not decoded or decoded:find("%c") or (required and decoded == "") then return nil end
@@ -24,12 +25,14 @@ function M.spec(value: unknown): Spec?
     if not request_id or not id or not instance_id or not title or not message or not accept or not initial then return nil end
     if kind == "confirm" and initial ~= "" then return nil end
     if value.restoration ~= nil and type(value.restoration) ~= "boolean" then return nil end
-    return {request_id = request_id, id = id, instance_id = instance_id, kind = kind,
+    local target = value.target == nil and nil or bounds.object(value.target)
+    if value.target ~= nil and (not target or not canonical.encode(target, 8192)) then return nil end
+    return {target = target, request_id = request_id, id = id, instance_id = instance_id, kind = kind,
         title = title, message = message, accept = accept, initial = initial, restoration = value.restoration == true or nil}
 end
 function M.wire(value: Spec): Wire
     return {version = 1, request_id = value.request_id, id = value.id, instance_id = value.instance_id,
-        kind = value.kind, title = value.title, message = value.message, accept = value.accept, initial = value.initial, restoration = value.restoration}
+        kind = value.kind, title = value.title, message = value.message, accept = value.accept, initial = value.initial, restoration = value.restoration, target = value.target}
 end
 function M.response(value: unknown): Response?
     if type(value) ~= "table" or value.version ~= 1 then return nil end

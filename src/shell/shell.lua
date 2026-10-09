@@ -28,6 +28,7 @@ local model = require("model")
 local layout = require("layout")
 local menu = require("menu")
 local dialog = require("dialog")
+local confirmation = require("confirmation")
 local title_editor = require("title_editor")
 local watch = require("watch")
 local selection = require("selection")
@@ -95,6 +96,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     local start: menu.State? = nil
     local editor: title_editor.State? = nil
     local modal: dialog.State? = nil
+    local desktop_review: {id: string, approval_id: string, node: string}? = nil
     -- pending_launch is the command this display opens once it knows the
     -- node; full holds the app instances to show full-pane when they come.
     local pending_launch = launch
@@ -517,12 +519,12 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     end
 
     -- answer_app sends the person's answer to the dialog spec_id names.
-    local function answer_app(spec_id: string, action: string, value: string)
+    local function answer_app(spec_id: string, action: string, value: string, gesture: string?)
         local id, request_id = spec_id:sub(#APP_DIALOG + 1):match("^([^:]+):(.+)$")
         if not id or not request_id then return end
         app_dialogs[id] = nil
         run(function(): Result
-            return call_job("answer", {id = id, request_id = request_id, action = action, value = value})
+            return call_job("answer", {id = id, request_id = request_id, action = action, value = value, gesture = gesture})
         end)
     end
 
@@ -823,9 +825,9 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         node_event(event)
     end
 
-    local function answer(spec_id: string, value: string)
+    local function answer(spec_id: string, value: string, gesture: string)
         if spec_id:sub(1, #APP_DIALOG) == APP_DIALOG then
-            answer_app(spec_id, "accept", value)
+            answer_app(spec_id, "accept", value, gesture)
         elseif spec_id == "workspace_add" then
             local path, shown = value, desktop
             run(function(): Result
@@ -839,7 +841,13 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             run(function(): Result return call_job("desktop_rename", {id = id, title = value}) end)
         elseif spec_id:sub(1, 14) == "desktop_close:" then
             local id = spec_id:sub(15)
-            run(function(): Result return call_job("desktop_close", {id = id}) end)
+            local review = desktop_review
+            desktop_review = nil
+            if not review or review.id ~= id then status = "Desktop confirmation is unavailable"; return end
+            run(function(): Result
+                local result, err = client.call(review.node, "desktop_close", {id = id, approval_id = review.approval_id, gesture = gesture})
+                return result and {kind = "done"} or {kind = "failed", problem = err}
+            end)
         end
     end
 
@@ -984,8 +992,12 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
                 message = "", accept = "Rename", initial = response.rename.title})
         end
         if response.remove then
-            ask({id = "desktop_close:" .. response.remove.id, kind = "confirm", title = "Close desktop",
-                message = "Close " .. response.remove.title .. " and stop its apps?", accept = "Close", initial = ""})
+            local opened, err = client.call(target, "desktop_confirmation", {id = response.remove.id})
+            if opened and type(opened.approval_id) == "string" then
+                desktop_review = {id = response.remove.id, approval_id = opened.approval_id, node = target}
+                ask({id = "desktop_close:" .. response.remove.id, kind = "confirm", title = "Close desktop",
+                    message = "Close " .. response.remove.title .. " and stop its apps?", accept = "Close", initial = ""})
+            else status = err or "Confirmation is unavailable" end
         end
         if response.add then
             ask({id = "workspace_add", kind = "text", title = "Add workspace",
@@ -1041,11 +1053,19 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             modal = response.state
             if response.action == "accept" then
                 modal = nil
-                answer(current_modal.spec.id, response.value)
+                answer(current_modal.spec.id, response.value, confirmation.gesture(event))
                 show_app_dialog()
             elseif response.action == "cancel" then
                 modal = nil
-                if current_modal.spec.id:sub(1, #APP_DIALOG) == APP_DIALOG then answer_app(current_modal.spec.id, "cancel", "") end
+                if current_modal.spec.id:sub(1, #APP_DIALOG) == APP_DIALOG then answer_app(current_modal.spec.id, "cancel", "", confirmation.gesture(event)) end
+                local review = desktop_review
+                if review then
+                    desktop_review = nil
+                    run(function(): Result
+                        local result, err = client.call(review.node, "desktop_confirmation", {operation = "cancel", id = review.id, approval_id = review.approval_id})
+                        return result and {kind = "done"} or {kind = "failed", problem = err}
+                    end)
+                end
                 show_app_dialog()
             end
             return false

@@ -41,6 +41,20 @@ local function define_tests()
                 instance_id = "settings", kind = "confirm", title = "Disable edit mode",
                 message = message, accept = "Disable", initial = ""}))
         end)
+        test.it("retains all sixteen reviewed decisions in a broker confirmation target", function()
+            local decisions: {{[string]: unknown}} = {}
+            for index = 1, 16 do
+                decisions[index] = {approval_id = "approval-" .. string.rep("a", 24) .. tostring(index), expected_revision = 1,
+                    proposal_digest = string.rep("a", 64), reviewed_digest = string.rep("b", 64), decision = "approved"}
+            end
+            local decoded = assert(interaction.spec({version = 1, request_id = "batch-1", id = "bee.inbox:batch",
+                instance_id = "inbox", kind = "confirm", title = "Approve 16 requests?", message = "Review these requests",
+                accept = "Approve all", initial = "", target = {decisions = decisions}}))
+            test.eq(assert(decoded.target).decisions, decisions)
+            test.is_nil(interaction.spec({version = 1, request_id = "batch-2", id = "bee.inbox:batch", instance_id = "inbox",
+                kind = "confirm", title = "Batch", message = "", accept = "Approve", initial = "",
+                target = {oversized = string.rep("x", 8192)}}))
+        end)
         test.it("builds a decoder-valid single-line edit-mode confirmation", function()
             local message = view.confirm_message("bee.ux_demo --for 1m")
             test.is_nil((message:find("%c")))

@@ -8,7 +8,7 @@ local appearance = require("appearance")
 local M = {}
 type Launch = {version: integer, broker_pid: string, workspace_pid: string, workspace_id: string, instance_id: string,
     view_id: string, definition_id: string, thread_id: string?, execution_generation: integer,
-    definition_revision: string, registry_revision: string, launch_token: string, resume_schema: string, resume_state: string, arguments: {string},
+    definition_revision: string, registry_revision: string, execution_id: string?, launch_token: string, resume_schema: string, resume_state: string, arguments: {string},
     appearance: appearance.Preferences}
 local function field(value: unknown, size: integer): string?
     if type(value) ~= "string" or value == "" or #value > size or value:find("%c") then return nil end
@@ -31,6 +31,8 @@ function M.launch(value: unknown): Launch?
         or generation > 2147483647 then return nil end
     local registry_revision, token = field(value.registry_revision, 160), field(value.launch_token, 80)
     if not broker or not workspace or not instance or not view or not definition or not revision or not registry_revision or not token then return nil end
+    local execution_id = value.execution_id == nil and nil or bounds.id(value.execution_id)
+    if value.execution_id ~= nil and not execution_id then return nil end
     local schema = type(value.resume_schema) == "string" and value.resume_schema or ""
     local state = type(value.resume_state) == "string" and value.resume_state or ""
     if #schema > 80 or #state > 65536 then return nil end
@@ -38,7 +40,7 @@ function M.launch(value: unknown): Launch?
     if not args then return nil end
     return {version = 1, broker_pid = broker, workspace_pid = workspace, workspace_id = workspace_id, instance_id = instance,
         view_id = view, definition_id = definition, thread_id = thread_id, execution_generation = math.floor(generation),
-        definition_revision = revision, registry_revision = registry_revision, launch_token = token, resume_schema = schema, resume_state = state, arguments = args,
+        definition_revision = revision, registry_revision = registry_revision, execution_id = execution_id, launch_token = token, resume_schema = schema, resume_state = state, arguments = args,
         appearance = appearance.chosen(value)}
 end
 -- A logical view reference carries no PID, mount, token or permission.
@@ -84,17 +86,17 @@ function M.close_reply(launch: Launch, request_id: string, decision: CloseDecisi
     if not sent then return false, tostring(err) end
     return true, nil
 end
-type Query = {kind: interaction.Kind, title: string, message: string?, accept: string?, initial: string?}
+type Query = {kind: interaction.Kind, title: string, message: string?, accept: string?, initial: string?, target: {[string]: unknown}?}
 -- Listen for bee.app.query.result before sending; success means queued.
 function M.query(launch: Launch, options: Query): (string?, string?)
     local request_id = uuid.v7()
     local spec = interaction.spec({version = 1, request_id = request_id, id = launch.view_id,
         instance_id = launch.instance_id, kind = options.kind, title = options.title,
-        message = options.message or "", accept = options.accept or "Continue", initial = options.initial or ""})
+        message = options.message or "", accept = options.accept or "Continue", initial = options.initial or "", target = options.target})
     if not spec then return nil, "Invalid interaction" end
     local sent, err = process.send(launch.broker_pid, "bee.app.query", {version = 1,
         launch_token = launch.launch_token, request_id = request_id, id = spec.id, instance_id = spec.instance_id,
-        kind = spec.kind, title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial})
+        kind = spec.kind, title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial, target = spec.target})
     if not sent then return nil, tostring(err) end
     return request_id, nil
 end
@@ -104,7 +106,7 @@ function M.query_result(launch: Launch, sender: string, value: unknown): QueryRe
     local response = interaction.response(value)
     if not response or response.id ~= launch.view_id or response.instance_id ~= launch.instance_id then return nil end
     local error_code = value.error
-    if error_code ~= "" and error_code ~= "busy" then return nil end
+    if error_code ~= "" and error_code ~= "busy" and error_code ~= "unavailable" then return nil end
     return {request_id = response.request_id, action = response.action, value = response.value, error = error_code}
 end
 function M.checkpoint(launch: Launch, state: string): (string?, string?)

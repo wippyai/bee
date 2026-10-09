@@ -6,7 +6,7 @@ local process = require("process")
 local appearance = require("appearance")
 
 -- pid is the app's process on its node.
-type Instance = {id: string, app: string, title: string, desktop: string, pid: string}
+type Instance = {id: string, app: string, title: string, desktop: string, pid: string, execution_id: string?}
 -- A dialog an app asks the person: id is the app instance it belongs to;
 -- the answer names request_id.
 type Dialog = {id: string, request_id: string, kind: "confirm" | "text", title: string, message: string, accept: string, initial: string}
@@ -74,7 +74,7 @@ local function instance(value: unknown): Instance?
         or type(value.title) ~= "string" or type(value.desktop) ~= "string" or type(value.pid) ~= "string" then
         return nil
     end
-    return {id = value.id, app = value.app, title = value.title, desktop = value.desktop, pid = value.pid}
+    return {id = value.id, app = value.app, title = value.title, desktop = value.desktop, pid = value.pid, execution_id = type(value.execution_id) == "string" and value.execution_id or nil}
 end
 
 -- dialog decodes a dialog an app asks.

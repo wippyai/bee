@@ -41,6 +41,7 @@ local command = require("command")
 local arguments = require("arguments")
 local env = require("env")
 local boot_gate = require("boot_gate")
+local confirmation = require("confirmation")
 
 -- terminal marks an app that renders a terminal emulator, which takes the
 -- theme's terminal page colors.
@@ -48,15 +49,15 @@ local boot_gate = require("boot_gate")
 -- app's own id comes back in its answer; closing marks the confirmation an
 -- app asked for before it closes.
 type Dialog = {request_id: string, client_request_id: string, kind: string, title: string, message: string,
-    accept: string, initial: string, closing: boolean}
+    accept: string, initial: string, closing: boolean, target: {[string]: unknown}?, confirmation: confirmation.Pending?}
 -- token is the launch token the app's broker messages carry; negotiate marks
 -- an app that answers close requests; closing is the close request it is
 -- answering; args are what it was opened with, kept with its checkpoint.
 type Instance = {id: string, app: string, title: string, desktop: string, workspace: string, view: tty.Viewport, pid: string, terminal: boolean,
-    token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
+    execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
     singleton: boolean, revision: string?, relaunch: boolean?}
 type SavedInstance = {id: string, app: string, title: string, desktop: string, workspace: string, handle: string, pid: string, terminal: boolean,
-    token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
+    execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
     singleton: boolean}
 type SavedWatcher = {pid: string, desktop: string}
 type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: integer, alerts: {client.Alert}}
@@ -264,7 +265,7 @@ local function main(saved: unknown)
     local alerts: {[string]: client.Alert} = {}
 
     local function describe(instance: Instance): {[string]: unknown}
-        return {id = instance.id, app = instance.app, title = instance.title, desktop = instance.desktop, pid = instance.pid}
+        return {id = instance.id, app = instance.app, title = instance.title, desktop = instance.desktop, pid = instance.pid, execution_id = instance.execution_id}
     end
 
     -- dialog_of is the wire form of an instance's pending dialog.
@@ -377,12 +378,13 @@ local function main(saved: unknown)
         local owner_pid = tostring(process.pid())
         local version = assert(registry.current_version())
         local token = tostring(uuid.v7())
+        local execution_id = tostring(uuid.v7())
         -- The launch carries the node's options and the bee.app launch an app
         -- built on the bee.app SDK reads; the node owner is its broker.
         local options: {[string]: unknown} = {appearance = current, owner = owner_pid, args = app_args, desktop = desktop.id,
             workspace = {id = workspace.id, path = workspace.path, label = workspace.label},
             version = 1, broker_pid = owner_pid, workspace_pid = owner_pid, workspace_id = workspace.id, instance_id = id, view_id = id,
-            definition_id = definition.process, execution_generation = 1, definition_revision = definition.revision,
+            definition_id = definition.process, execution_generation = 1, execution_id = execution_id, definition_revision = definition.revision,
             registry_revision = version:string(), launch_token = token, resume_schema = definition.resume_schema,
             resume_state = type(app_args.resume_state) == "string" and app_args.resume_state or "", arguments = words(app_args)}
         -- The host context names the workspace; the functions an app calls
@@ -396,7 +398,7 @@ local function main(saved: unknown)
         end
         local instance: Instance = {id = id, app = app, title = definition.title, desktop = desktop.id, workspace = workspace.id,
             view = view, pid = tostring(pid),
-            terminal = definition.terminal, token = token, negotiate = false, closing = nil, dialog = nil, args = app_args,
+            terminal = definition.terminal, execution_id = execution_id, token = token, negotiate = false, closing = nil, dialog = nil, args = app_args,
             resume_schema = definition.resume_schema, singleton = definition.singleton, revision = definition.revision}
         instances[id] = instance
         by_pid[instance.pid] = id
@@ -418,7 +420,7 @@ local function main(saved: unknown)
                         instances[item.id] = {id = item.id, app = item.app, title = item.title, desktop = item.desktop,
                             workspace = type(item.workspace) == "string" and item.workspace or "",
                             view = view, pid = item.pid, terminal = item.terminal == true,
-                            token = type(item.token) == "string" and item.token or "", negotiate = item.negotiate == true,
+                            execution_id = type(item.execution_id) == "string" and item.execution_id or tostring(uuid.v7()), token = type(item.token) == "string" and item.token or "", negotiate = item.negotiate == true,
                             closing = type(item.closing) == "string" and item.closing or nil,
                             dialog = type(dialog) == "table" and dialog :: Dialog or nil,
                             args = type(item.args) == "table" and item.args or {},
@@ -588,23 +590,40 @@ local function main(saved: unknown)
     -- drop_dialog forgets an instance's dialog and tells the displays.
     local function drop_dialog(instance: Instance)
         if not instance.dialog then return end
+        local pending = instance.dialog.confirmation
+        if pending then
+            local review = confirmation.new({workspace_id = instance.workspace, origin = {app_id = instance.app, instance_id = instance.id}})
+            review.pending = pending
+            local canceled, err = confirmation.cancel(review)
+            if not canceled then error(err) end
+        end
         instance.dialog = nil
         broadcast({kind = "dialog_closed", id = instance.id})
     end
 
     -- show_dialog puts a dialog an app asked for to the displays.
-    local function show_dialog(instance: Instance, dialog: Dialog)
+    local function show_dialog(instance: Instance, dialog: Dialog): (boolean, string?)
+        if dialog.kind == "confirm" then
+            local review = confirmation.new({workspace_id = instance.workspace, origin = {app_id = instance.app, instance_id = instance.id}})
+            local opened, err = confirmation.open(review, dialog.closing and "app.close" or "app.query",
+                {instance_id = instance.id, execution_id = instance.execution_id, definition_id = instance.app, revision = instance.revision,
+                    request_id = dialog.client_request_id, title = dialog.title, message = dialog.message, target = dialog.target}, "dialog", dialog.title, dialog.message)
+            if not opened then return false, err end
+            dialog.confirmation = review.pending
+        end
         instance.dialog = dialog
         broadcast({kind = "dialog", dialog = dialog_of(instance)})
+        return true, nil
     end
 
     -- close stops an app; an app that negotiates its close is asked first and
     -- answers with accept, cancel or a confirmation for the person. force
     -- stops it without asking.
-    local function close(id: unknown, force: unknown): protocol.Reply
+    local function close(id: unknown, force: unknown, expected_execution: unknown): protocol.Reply
         if type(id) ~= "string" then return protocol.fail("close needs an instance id") end
         local instance = instances[id]
         if not instance then return protocol.fail("no running instance " .. id) end
+        if expected_execution ~= nil and expected_execution ~= instance.execution_id then return protocol.fail("application execution changed") end
         if force == true or not instance.negotiate then return stop(instance) end
         if not instance.closing then
             local request_id = tostring(uuid.v7())
@@ -655,8 +674,12 @@ local function main(saved: unknown)
             elseif reply.action == "cancel" then
                 cancel_close(instance)
             else
-                show_dialog(instance, {request_id = tostring(uuid.v7()), client_request_id = reply.request_id, kind = "confirm",
+                local shown, err = show_dialog(instance, {request_id = tostring(uuid.v7()), client_request_id = reply.request_id, kind = "confirm",
                     title = reply.title, message = reply.message, accept = reply.accept, initial = "", closing = true})
+                if not shown then
+                    logger:warn("Close confirmation failed", {id = instance.id, error = err})
+                    cancel_close(instance)
+                end
             end
         elseif topic == broker.QUERY then
             local spec = broker.query(data)
@@ -666,8 +689,13 @@ local function main(saved: unknown)
                     instance_id = instance.id, action = "cancel", value = "", error = "busy"})
                 return
             end
-            show_dialog(instance, {request_id = tostring(uuid.v7()), client_request_id = spec.request_id, kind = spec.kind,
-                title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial, closing = false})
+            local shown, err = show_dialog(instance, {request_id = tostring(uuid.v7()), client_request_id = spec.request_id, kind = spec.kind,
+                title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial, closing = false, target = spec.target})
+            if not shown then
+                logger:warn("Application confirmation failed", {id = instance.id, error = err})
+                process.send(instance.pid, broker.QUERY_RESULT, {version = 1, request_id = spec.request_id, id = instance.id,
+                    instance_id = instance.id, action = "cancel", value = "", error = "unavailable"})
+            end
         elseif topic == broker.CHECKPOINT then
             local checkpoint = broker.checkpoint(data)
             if not checkpoint then return end
@@ -735,6 +763,20 @@ local function main(saved: unknown)
         if value == nil then value = "" end
         if type(value) ~= "string" or #value > 256 or value:find("%c") or (action == "cancel" and value ~= "") then
             return protocol.fail("answer value is invalid")
+        end
+        if dialog.confirmation then
+            local review = confirmation.new({workspace_id = instance.workspace, origin = {app_id = instance.app, instance_id = instance.id}})
+            review.pending = dialog.confirmation
+            local confirmed: boolean
+            local err: string?
+            if action == "accept" then
+                local gesture = args.gesture
+                if gesture ~= "enter" and gesture ~= "space" and gesture ~= "click" and gesture ~= "shortcut" then return protocol.fail("answer needs its confirmed gesture") end
+                confirmed, err = confirmation.accept(review, {instance_id = instance.id, execution_id = instance.execution_id, definition_id = instance.app, revision = instance.revision,
+                    request_id = dialog.client_request_id, title = dialog.title, message = dialog.message, target = dialog.target}, gesture)
+            else confirmed, err = confirmation.cancel(review) end
+            if not confirmed then return protocol.fail(err or "confirmation failed") end
+            dialog.confirmation = nil
         end
         drop_dialog(instance)
         if dialog.closing then
@@ -862,6 +904,49 @@ local function main(saved: unknown)
 
     -- close_desktop stops a desktop's apps and removes it; a desktop a display
     -- shows stays.
+    local desktop_reviews: {[string]: confirmation.State} = {}
+    local function desktop_target(id: string): {[string]: unknown}?
+        local desktop = workspaces.desktop(id)
+        if not desktop then return nil end
+        local apps: {{[string]: unknown}} = {}
+        for _, instance in pairs(instances) do
+            if instance.desktop == id then apps[#apps + 1] = {instance_id = instance.id, execution_id = instance.execution_id, definition_id = instance.app, revision = instance.revision} end
+        end
+        table.sort(apps, function(a, b) return tostring(a.instance_id) < tostring(b.instance_id) end)
+        return {desktop_id = id, workspace_id = desktop.workspace_id, title = desktop.title, apps = apps}
+    end
+    local function desktop_confirmation(args: {[string]: unknown}): protocol.Reply
+        local id = args.id
+        if type(id) ~= "string" then return protocol.fail("confirmation needs a desktop") end
+        if args.operation == "cancel" then
+            local review = type(args.approval_id) == "string" and desktop_reviews[args.approval_id] or nil
+            if not review then return protocol.fail("no such desktop confirmation") end
+            local canceled, err = confirmation.cancel(review)
+            if not canceled then return protocol.fail(err or "withdrawal failed") end
+            desktop_reviews[tostring(args.approval_id)] = nil
+            return protocol.ok({})
+        end
+        local target = desktop_target(id)
+        local desktop = workspaces.desktop(id)
+        if not target or not desktop then return protocol.fail("no such desktop") end
+        local review = confirmation.new({workspace_id = desktop.workspace_id, origin = {app_id = "bee.shell:shell", instance_id = id}})
+        local opened, err = confirmation.open(review, "desktop.close", target, "dialog", "Close desktop", "Close " .. desktop.title .. " and stop its apps?")
+        if not opened then return protocol.fail(err or "confirmation failed") end
+        local approval_id = assert(review.pending).view.approval_id
+        desktop_reviews[tostring(approval_id)] = review
+        return protocol.ok({approval_id = approval_id})
+    end
+    local function confirm_desktop(args: {[string]: unknown}): protocol.Reply
+        local id, approval_id, gesture = args.id, args.approval_id, args.gesture
+        if type(id) ~= "string" or type(approval_id) ~= "string" then return protocol.fail("confirmation identity is invalid") end
+        local review, target = desktop_reviews[approval_id], desktop_target(id)
+        if not review or not target then return protocol.fail("desktop confirmation is unavailable") end
+        if gesture ~= "enter" and gesture ~= "space" and gesture ~= "click" then return protocol.fail("confirmation gesture is invalid") end
+        local accepted, err = confirmation.accept(review, target, gesture)
+        if not accepted then return protocol.fail(err or "confirmation failed") end
+        desktop_reviews[approval_id] = nil
+        return protocol.ok({})
+    end
     local function close_desktop(id: unknown): protocol.Reply
         if type(id) ~= "string" or not workspaces.desktop(id) then return protocol.fail("no such desktop") end
         for _, desktop in pairs(watchers) do
@@ -981,7 +1066,7 @@ local function main(saved: unknown)
         if op == "leave" then return leave(request.caller) end
         if op == "open" then return open(args.app, args.desktop, args.args) end
         if op == "attach" then return attach(request.caller, args.id) end
-        if op == "close" then return close(args.id, args.force) end
+        if op == "close" then return close(args.id, args.force, args.execution_id) end
         if op == "answer" then return answer(args) end
         if op == "command" then return resolve_command(args.name, args.arguments) end
         if op == "stats" then return stats() end
@@ -998,7 +1083,14 @@ local function main(saved: unknown)
         if op == "workspace_remove" then return remove_workspace(args.id) end
         if op == "desktop_create" then return create_desktop(args.workspace, args.title) end
         if op == "desktop_rename" then return rename_desktop(args.id, args.title) end
-        if op == "desktop_close" then return close_desktop(args.id) end
+        if op == "desktop_confirmation" then return desktop_confirmation(args) end
+        if op == "desktop_close" then
+            if args.approval_id ~= nil then
+                local confirmed = confirm_desktop(args)
+                if not confirmed.ok then return confirmed end
+            end
+            return close_desktop(args.id)
+        end
         return protocol.fail("unknown node operation " .. op)
     end
 
@@ -1013,6 +1105,7 @@ local function main(saved: unknown)
         if not id then return end
         by_pid[pid] = nil
         local instance = instances[id]
+        if instance then drop_dialog(instance) end
         instances[id] = nil
         workspaces.forget(id)
         if instance then
@@ -1038,7 +1131,7 @@ local function main(saved: unknown)
         for _, instance in pairs(instances) do
             saved_instances[#saved_instances + 1] = {id = instance.id, app = instance.app, title = instance.title,
                 desktop = instance.desktop, workspace = instance.workspace, handle = instance.view:handle(), pid = instance.pid, terminal = instance.terminal,
-                token = instance.token, negotiate = instance.negotiate, closing = instance.closing, dialog = instance.dialog,
+                execution_id = instance.execution_id, token = instance.token, negotiate = instance.negotiate, closing = instance.closing, dialog = instance.dialog,
                 args = instance.args, resume_schema = instance.resume_schema, singleton = instance.singleton}
         end
         local saved_watchers: {SavedWatcher} = {}

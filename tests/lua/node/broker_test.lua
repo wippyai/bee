@@ -8,6 +8,8 @@ local system = require("system")
 local time = require("time")
 local tty = require("tty")
 local sql = require("sql")
+local json = require("json")
+local bounds = require("bounds")
 local client = require("client")
 
 local BROKER = "bee.tests.node:broker_probe"
@@ -114,10 +116,61 @@ local function define_tests()
             test.eq(dialog.kind, "confirm")
             test.eq(dialog.title, "Close probe?")
             test.eq(dialog.message, "It has work")
-            call("answer", {id = id, request_id = dialog.request_id, action = "accept", value = ""})
+            call("answer", {id = id, request_id = dialog.request_id, action = "accept", value = "", gesture = "enter"})
+            closed(events, id)
+            local db = assert(sql.get("bee:db"))
+            local decisions = assert(db:query([[SELECT d.assurance_json FROM bee_approval_decisions d
+                JOIN bee_approval_requests r ON r.approval_id = d.approval_id
+                WHERE json_extract(r.proposal_json, '$.payload.target.instance_id') = ?]], {id}))
+            test.eq(#decisions, 1)
+            local assurance = assert(bounds.object(json.decode(tostring(decisions[1].assurance_json))))
+            test.eq(assurance.gesture, "enter")
+            test.eq(assurance.presentation, "dialog")
+            test.eq(#assert(db:query([[SELECT g.grant_id FROM bee_approval_grants g
+                JOIN bee_approval_requests r ON r.approval_id = g.approval_id
+                WHERE json_extract(r.proposal_json, '$.payload.target.instance_id') = ?]], {id})), 0)
+            db:release()
+            view:close()
+            process.unlisten(events)
+        end)
+
+        test.it("withdraws the broker confirmation on cancel without recording a decision", function()
+            local events = assert(process.listen(client.EVENTS, {message = true}))
+            local id, view = open(events, {"confirm"})
+            raw_event(events, "title")
+            call("close", {id = id})
+            local asked = raw_event(events, "dialog")
+            local dialog = asked.dialog :: Object
+            call("answer", {id = id, request_id = dialog.request_id, action = "cancel", value = ""})
+            local db = assert(sql.get("bee:db"))
+            local decisions = assert(db:query([[SELECT d.decision_id FROM bee_approval_decisions d
+                JOIN bee_approval_requests r ON r.approval_id = d.approval_id
+                WHERE json_extract(r.proposal_json, '$.payload.target.instance_id') = ?]], {id}))
+            test.eq(#decisions, 0)
+            local requests = assert(db:query("SELECT state FROM bee_approval_requests WHERE json_extract(proposal_json, '$.payload.target.instance_id') = ?", {id}))
+            test.eq(#requests, 1)
+            test.eq(requests[1].state, "withdrawn")
+            db:release()
+            call("close", {id = id, force = true})
             closed(events, id)
             view:close()
             process.unlisten(events)
+        end)
+
+        test.it("fences desktop confirmation when its app instances change", function()
+            local desktop = tostring(call("desktop_create", {}).desktop)
+            local approval = call("desktop_confirmation", {id = desktop})
+            local opened = call("open", {app = BROKER, desktop = desktop})
+            local _, conflict = client.call(assert(system.node.id()), "desktop_close", {id = desktop, approval_id = approval.approval_id, gesture = "enter"})
+            test.not_nil(conflict)
+            local current = call("desktop_confirmation", {id = desktop})
+            call("desktop_close", {id = desktop, approval_id = current.approval_id, gesture = "enter"})
+            local db = assert(sql.get("bee:db"))
+            local decisions = assert(db:query([[SELECT d.decision_id FROM bee_approval_decisions d
+                JOIN bee_approval_requests r ON r.approval_id = d.approval_id
+                WHERE json_extract(r.proposal_json, '$.payload.target.desktop_id') = ?]], {desktop}))
+            test.eq(#decisions, 1)
+            db:release()
         end)
 
         test.it("puts an app's question to the display, lists it to a new watcher and returns the answer", function()

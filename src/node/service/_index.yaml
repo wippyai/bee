@@ -18,6 +18,7 @@ entries:
     appearance: bee.ui:appearance
     client: bee.node:client
     boot_gate: bee.process:boot_gate
+    confirmation: bee.approvals.app:confirmation
 - name: owner_service
   meta:
     title: Node · owner
@@ -29,7 +30,7 @@ entries:
     requires: [bee.hive.service:supervisor_service]
     security:
       actor: {id: bee.node}
-      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_attention, bee.node.security:owner_role, bee.process:boot_gate_policy, bee.hive.security:messaging]
+      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_attention, bee.security.approvals:confirmation_client, bee.security.approvals:confirmation_authority, bee.node.security:owner_role, bee.process:boot_gate_policy, bee.hive.security:messaging]
     restart:
       max_attempts: 10
 - name: tests

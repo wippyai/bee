@@ -167,7 +167,8 @@ local function main(options: unknown)
             or view.confirm_message(edit_input, operation ~= "enable_confirm")
         local accept = kind == "text" and "Review" or (operation == "enable_confirm" and "Enable" or "Disable")
         local request_id, query_error = app.query(launch, {kind = kind, title = title, message = message, accept = accept,
-            initial = kind == "text" and (initial or "") or ""})
+            initial = kind == "text" and (initial or "") or "",
+            target = kind == "confirm" and {operation = operation, input = edit_input, workspace_id = launch.workspace_id} or nil})
         if not request_id then status = tostring(query_error or "Could not ask the person"); dirty = true; return end
         edit_query, edit_operation = request_id, operation
         if kind == "text" then edit_input = "" end
@@ -224,7 +225,7 @@ local function main(options: unknown)
             if answer and answer.request_id == edit_query then
                 local operation = edit_operation
                 edit_query, edit_operation = "", ""
-                if answer.error ~= "" then status = "Another question is open; try again"
+                if answer.error ~= "" then status = answer.error == "busy" and "Another question is open; try again" or "Confirmation owner is unavailable"
                 elseif answer.action ~= "accept" then status = "Edit mode unchanged"; edit_input = ""
                 elseif operation == "enable_input" then
                     if answer.value == "" then status = "Enter at least one namespace and a duration"

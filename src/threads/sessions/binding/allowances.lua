@@ -37,7 +37,7 @@ local function ask(peer: string, workspace: string): (Object?, string?)
     return approval("request", {workspace_id = workspace, idempotency_key = id(peer, workspace),
         request_kind = "question", policy = "hive-session-agents",
         proposal = {kind = "operation", ref = "bee.threads.sessions:allowance", revision = "1", payload = {peer = peer, workspace_id = workspace}},
-        prompt = {text = "Allow agents from bee " .. peer .. " to see / message agents here. Choose list only, message and await, or open new sessions and control sessions; choose a duration or permanent. You can revoke in Sessions."},
+        prompt = {text = "Allow agents from bee " .. peer .. " to see / message agents here. Choose list only, message and await, or open new sessions and control sessions; choose a duration or permanent. You can revoke in Needs you > Grants or Sessions."},
         response_schema = {type = "object", required = {"text"}, properties = {text = {type = "string"}}}}, workspace)
 end
 local function payload(view: Object): Object?
@@ -106,18 +106,19 @@ local function active_windows(workspace: string): ({Object}?, string?)
     local rows: {Object} = {}
     local after: string? = nil
     for _ = 1, 16 do
-        local active, active_error = approval("grant_window", {operation = "list", workspace_id = workspace, after_id = after}, workspace)
+        local active, active_error = approval("grant", {operation = "list", workspace_id = workspace, after_id = after}, workspace)
         if not active then return nil, active_error end
         for _, raw in ipairs(bounds.dense_list(active.grants, 64, "approval windows") or {}) do
             local window = bounds.object(raw)
-            if window and window.policy == "hive-session-agents" then
+            local metadata = window and bounds.object(window.metadata)
+            if window and metadata and window.domain == "approval_window" and window.state == "active" and metadata.policy == "hive-session-agents" then
                 local view, read_error = approval("read", {approval_id = window.grant_id}, workspace)
                 if not view then return nil, read_error end
                 local data = payload(view)
                 local scope = data and bounds.member(data.scope, {"list", "message", "open"})
                 if data and scope then
                     rows[#rows + 1] = {peer = data.peer, workspace_id = workspace, scope = scope, allowed = true, approval_id = window.grant_id,
-                            grant_id = window.grant_id, revision = window.granted_ms,
+                            grant_id = window.grant_id, revision = metadata.granted_ms,grant_revision = window.revision,
                             expires_ms = window.until_ms ~= windows.PERMANENT_UNTIL_MS and window.until_ms or nil}
                 end
             end
@@ -180,7 +181,7 @@ function M.manage(raw: unknown): Object
     if not active then return failure(tostring(active_error)) end
     for _, item in ipairs(active) do
         if item.peer == peer then
-            local ended, end_error = approval("grant_window", {operation = "revoke", grant_id = item.grant_id}, workspace)
+            local ended, end_error = approval("grant", {operation = "revoke", grant_id = item.grant_id,expected_revision = item.grant_revision}, workspace)
             if not ended then return failure(tostring(end_error)) end
         end
     end

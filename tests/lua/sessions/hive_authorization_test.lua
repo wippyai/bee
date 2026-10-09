@@ -71,19 +71,21 @@ local function define_tests()
             test.is_nil(invocation)
             test.contains(tostring(err), "allowance")
         end)
-        test.it("uses only central windows and observes central revocation immediately", function()
+        test.it("uses common grants and observes central revocation immediately", function()
             test.eq(consent("message", 3600000).ok, true)
             test.eq(#assert(registry.find({["meta.type"] = "bee.sessions.allowance"})), 0)
-            local listed = authority("grant_window", {operation = "list", workspace_id = WORKSPACE})
+            local listed = authority("grant", {operation = "list", workspace_id = WORKSPACE})
             local found = false
             for _, raw in ipairs(assert(bounds.array(listed.grants, 64))) do
                 local grant = assert(bounds.object(raw))
-                local view = authority("read", {approval_id = grant.grant_id})
+                if grant.domain == "approval_window" then
+                local view = authority("read", {approval_id = grant.approval_id})
                 local payload = assert(bounds.object(assert(bounds.object(view.proposal)).payload))
                 if payload.peer == "peer-a" then
                     found = true
                     test.eq(payload.scope, "message")
-                    authority("grant_window", {operation = "revoke", grant_id = grant.grant_id})
+                    authority("grant", {operation = "revoke", grant_id = grant.grant_id,expected_revision = grant.revision})
+                end
                 end
             end
             test.is_true(found)

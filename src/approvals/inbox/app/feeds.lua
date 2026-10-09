@@ -252,6 +252,25 @@ local function invoke(self: Client, target: string, value: unknown): model.Reply
         if not source then return failure("DENIED", "inbox source is not admitted") end
         return refresh(self, source)
     end
+    if target == "bee.approvals.binding:grant" then
+        if not bounds.member(request.operation, {"list", "read", "history", "revoke"}) then
+            return failure("DENIED", "operation is not a grant management action")
+        end
+        local source: Source? = nil
+        if request.workspace_id ~= nil then
+            local workspace = bounds.id(request.workspace_id)
+            source = workspace and self.sources[workspace] or nil
+        else
+            for _, workspace in ipairs(self.workspaces) do
+                local candidate = self.sources[workspace]
+                if candidate and candidate.local_owner then source = candidate; break end
+            end
+        end
+        if not source or not source.local_owner then
+            return failure("DENIED", "grants belong to the local authoritative node")
+        end
+        return invoke_owner(self, source, target, request)
+    end
     if target == "bee.approvals.binding:grant_window" then
         local workspace = bounds.id(request.workspace_id)
         local source = workspace and self.sources[workspace]

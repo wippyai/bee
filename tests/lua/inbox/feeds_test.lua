@@ -32,6 +32,29 @@ local function projection(source: Source, value: Object, sequence: integer): Obj
 end
 local function define_tests()
     test.describe("Inbox sync feed adapter", function()
+        test.it("routes grant inspection and revocation only to the local authority", function()
+            local configured = assert(source_config.configure("node-a", {"ws"}))
+            local calls = 0
+            local client = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
+                calls = calls + 1
+                test.eq(source.node_id, "node-a")
+                test.eq(target, "bee.approvals.binding:grant")
+                return {ok = true, value = {grants = {}, more = false}, replayed = false}, nil
+            end)
+            for _, operation in ipairs({"list", "read", "history", "revoke"}) do
+                local reply = client:invoke("bee.approvals.binding:grant", {operation = operation, grant_id = "grant-a"})
+                test.eq(reply and reply.kind, "success")
+            end
+            test.eq(calls, 4)
+            test.eq(reply_code(client:invoke("bee.approvals.binding:grant", {operation = "use", grant_id = "grant-a"})), "DENIED")
+            test.eq(reply_code(client:invoke("bee.approvals.binding:grant", {operation = "list", workspace_id = "foreign"})), "DENIED")
+            local absent = feeds.new(assert(source_config.configure("node-a", {})), function(source: Source, target: string, request: unknown): (unknown, string?)
+                calls = calls + 1
+                return nil, "no local owner"
+            end)
+            test.eq(reply_code(absent:invoke("bee.approvals.binding:grant", {operation = "list"})), "DENIED")
+            test.eq(calls, 4)
+        end)
         test.it("uses a typed incremental page, then purges and replaces a reset source", function()
             local snapshots, reads = 0, 0
             local configured, configure_error = source_config.configure("node-a", {"ws"}, nil)

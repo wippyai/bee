@@ -406,8 +406,13 @@ local function remeasure_restoration(config: Config, intent: Object): Result?
             return failure("CONFLICT", "settled activation grant no longer matches its artifact, version and approval")
         end
     end
-    return remeasure_migration_policy(intent, current, "decode activation restoration policy",
-        "activation database policy changed since apply")
+    local blob = object(current.migration_work)
+    local work, work_error = migration_work.decode(blob and blob.bytes, blob and blob.digest)
+    if not work then return failure("INTERNAL", tostring(work_error)) end
+    if #work.migrations > 0 then
+        return failure("CONFLICT", "settled activation has pending database migrations")
+    end
+    return nil
 end
 
 -- One step performs at most one durable transition around an external effect.

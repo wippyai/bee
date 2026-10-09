@@ -190,6 +190,24 @@ default request lifetime of ten minutes. The owner retains settled requests
 and deduplication receipts for the configured retention window; retention does
 not remove an unacknowledged delivery.
 
+## Agent questions
+
+The additive MCP `question` tool uses the approval owner's contract 2. `ask`
+accepts a stable `idempotency_key`, `prompt`, `response_schema` and optional
+`ttl_ms`. The gateway binds the authenticated workspace, thread and attempt;
+the agent cannot select an approver policy or answer its own question. `read`
+returns the same request and its schema-validated response. Poll until the
+request leaves `pending`; denial, expiry and withdrawal finish the wait without
+an answer. `withdraw` supplies the observed revision and proposal/review digests.
+
+Needs you presents a question card and an Answer action. The typed answer form
+uses Library Configure's field declarations, parser, assignment and validation
+with the shared UI widgets. Required fields, numbers, booleans and enum choices
+retain their types. The owner independently validates the complete response
+before committing it. Terminal requester events and thread notices include the
+answer, or the reason the question ended. An expired or withdrawn question
+closes its open answer form when the inbox catches up.
+
 ## Delivery and recovery
 
 A committed projection creates a durable outbox event with a stable event ID,
@@ -422,6 +440,28 @@ replacement carrier recovers the approval and pending write from its
 checkpoint and asks the fenced runner for status before a first dispatch.
 Unknown runner state leaves the write uncertain. Transcript presence or a
 permission adapter's eligibility never authorizes an effect by itself.
+
+Accepted driver permission requests carry contract 2 origin identities alongside
+the exact tool, input digest, plan and adapter measurement. Claude window/stdio,
+Codex window, Agy gates, Grok headless ACP, Muse hooks and the OpenCode window
+observer share the same durable exchange. A recorded decision produces one
+response write; retries replay the recorded response. Codex and OpenCode batch
+contexts and Grok windows retain provider permission handling. Agy's independent
+command checks remain provider-owned. Session details show the selected mode and
+the descriptor's context-specific ownership explanation.
+
+Transport owners call `withdraw_origin({instance_id})` as the authenticated
+requester before sealing or revoking a gateway binding. It withdraws that
+requester's pending requests from that instance, emits terminal events, and
+records a durable fence against later requests from the same instance. The fence
+outlives request retention. Gateway access and capability requests carry the
+same binding origin. Replays
+of existing requests return their committed outcomes, including decisions that
+won a cancellation race. Other transport instances and replacement carrier
+epochs retain their own authority. Carriers also withdraw an individual pending
+approval before closing its exchange. The approval owner enforces expiry;
+a carrier reaching its local deadline withdraws the pending owner request and
+uses the committed race outcome instead of declaring a local-only expiry.
 
 ## Runtime leases
 

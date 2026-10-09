@@ -651,6 +651,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     gateway_hooks: []
     prepare_options: {}
     placement_profiles:
@@ -699,6 +700,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     - capabilities
     - overlay
     - docs

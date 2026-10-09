@@ -37,6 +37,8 @@ local resource_resolution = require("resource_resolution")
 local workdir_preparers = require("workdir_preparers")
 local system = require("system")
 type LocalPreparation = {binding: string, kind: string, spec_json: string, home_directory: string, capability: types.Capability, exit_observation: types.ExitObservation, stdin_close: boolean}
+local supervision = require("supervision")
+local demand = require("demand")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -1001,10 +1003,21 @@ function M.reconcile(value: unknown): Reply
 end
 -- sweep: placement's own supervision reconciles every live attempt, which
 -- bounds how long a revoked grant or projection stays in use.
+function M.wake_supervision(kind: unknown)
+    assert(demand.wake(kind == "docker" and "bee.placement.docker/image" or M.SWEEPER_NAME))
+end
+function M.pending(): boolean
+    local db, problem = store.open()
+    if not db then error(problem or "open placement backlog") end
+    local called, pending = pcall(supervision.pending, db, "native")
+    db:release()
+    if not called then error(tostring(pending)) end
+    return pending == true
+end
 function M.sweep(): Reply
     local db, open_error = store.open()
     if not db then return fail("STORAGE", open_error or "open placement store") end
-    local rows, err = db:query("SELECT attempt_id FROM bee_placement_attempts WHERE COALESCE(placement_kind, 'native') = 'native' AND (execution_state IN ('starting', 'running', 'stopping') OR (execution_state = 'exited' AND cleanup_state != 'complete' AND EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'workdir_preparer.state') AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'workdir_preparers.settled'))  ) ORDER BY updated_at LIMIT ?", {M.SWEEP_BOUND})
+    local rows, err = supervision.rows(db, "native", M.SWEEP_BOUND)
     if err or not rows then
         db:release()
         return fail("STORAGE", "read live attempts")

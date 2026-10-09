@@ -25,6 +25,12 @@ entries:
     - docker
     - /var/run/docker.sock
     effect: allow
+- name: cleanup_policy
+  kind: security.policy
+  policy:
+    actions: [cdc.subscribe]
+    resources: ["bee:changes"]
+    effect: allow
 - name: image_policy
   kind: security.policy
   meta:
@@ -45,7 +51,7 @@ entries:
 - name: image_client_policy
   kind: security.policy.expr
   policy:
-    expression: (action == "bee.placement.image" || action == "process.send" || action == "process.monitor" || action == "process.unmonitor" || (action == "process.registry.lookup" && resource == "bee.placement.docker/image"))
+    expression: (action == "bee.placement.image" || action == "process.send" || action == "process.monitor" || action == "process.unmonitor" || (action == "process.registry.lookup" && resource in ["bee.placement.docker/image", "bee.hive.supervisor"]))
     actions:
     - bee.placement.image
     - process.send

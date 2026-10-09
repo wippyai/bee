@@ -115,6 +115,8 @@ entries:
     resource_resolution: bee.placement.native.service:resource_resolution
     workdir_preparers: bee.placement.native.service:workdir_preparers
     placement_profiles: bee.placement.profiles:profiles
+    supervision: bee.placement.native.persist:supervision
+    demand: bee.process:demand
 - name: materialization
   kind: library.lua
   source: file://materialization.lua
@@ -171,6 +173,7 @@ entries:
     - bee.placement.native.security:placement_runner_policy
     - bee.credentials.security:credential_materialize_policy
     - bee.security.gateway:gateway_materialize_policy
+    - bee.process:client_policy
 - name: window
   kind: library.lua
   source: file://window.lua
@@ -202,12 +205,18 @@ entries:
     service: bee.placement.native.service:service
 - name: sweeper_service
   meta:
-    title: Native agents · supervision
+    title: "Native agents \xB7 supervision"
+    type: bee.process.demand
+    demand:
+      name: bee.placement.sweeper
+      probe: bee.placement.native.service:backlog
   kind: process.service
   process: bee.placement.native.service:sweeper
   lifecycle:
-    auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
+    auto_start: false
+    requires:
+    - wippy.bootloader:bootloader.service
+    - bee.hive.service:supervisor_service
     security:
       actor:
         id: bee.placement.sweeper
@@ -219,6 +228,9 @@ entries:
       - bee.credentials.security:credential_materialize_policy
       - bee.placement.native.security:placement_sweeper_policy
       - bee.security.gateway:gateway_supervision_policy
+      - bee.process:client_policy
+    restart:
+      max_attempts: 10
   host: bee:workers
 - name: provider_projection
   kind: library.lua
@@ -279,7 +291,13 @@ entries:
 - name: observer
   kind: library.lua
   source: file://observer.lua
-  modules: [registry, process, channel, time, uuid, exec]
+  modules:
+  - registry
+  - process
+  - channel
+  - time
+  - uuid
+  - exec
   imports:
     bounds: bee.values:bounds
     resolver: bee.driver.binding:resolver
@@ -287,3 +305,9 @@ entries:
     resources: bee.placement.native.env:resources
     quote: bee.driver.binding:quote
     types: bee.placement:types
+- name: backlog
+  kind: function.lua
+  source: file://backlog.lua
+  method: pending
+  imports:
+    service: bee.placement.native.service:service

@@ -21,6 +21,7 @@ type Options = {
     every: string?,
     pass: Pass,
     demand: boolean?,
+    active: (() -> boolean)?,
 }
 
 function M.run(options: Options)
@@ -33,9 +34,14 @@ function M.run(options: Options)
     local demanded = options.demand and assert(process.listen(demand.WAKE, {message = true})) or nil
     if demanded and options.name then assert(demand.ready(options.name)) end
     local ticker = options.every and assert(time.ticker(options.every)) or nil
+    local generation = 0
     local retry_ms = M.RETRY_FIRST_MS
     local retrying = not options.pass()
     while true do
+        if demanded and options.name and generation > 0 and not retrying
+            and (not options.active or not options.active()) then
+            assert(demand.quiet(options.name, generation))
+        end
         local cases = {lifecycle:case_receive()}
         if wakes then cases[#cases + 1] = wakes:case_receive() end
         if demanded then cases[#cases + 1] = demanded:case_receive() end
@@ -46,9 +52,18 @@ function M.run(options: Options)
         if selected.channel == lifecycle then
             if selected.value.kind == process.event.CANCEL then break end
         else
+            if selected.channel == demanded then
+                local supervisor = process.registry.lookup(demand.SUPERVISOR, process.registry.LOCAL)
+                local message = selected.value
+                local value: unknown = message:payload():data()
+                if not supervisor or tostring(message:from()) ~= tostring(supervisor)
+                    or type(value) ~= "table" or type(value.generation) ~= "number" then goto continue end
+                generation = math.floor(value.generation)
+            end
             retrying = not options.pass()
             retry_ms = retrying and math.min(retry_ms * 2, M.RETRY_LAST_MS) or M.RETRY_FIRST_MS
         end
+        ::continue::
     end
     if ticker then ticker:stop() end
     if wakes then process.unlisten(wakes) end

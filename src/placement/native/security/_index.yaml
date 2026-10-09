@@ -4,9 +4,11 @@ entries:
 - name: placement_store_policy
   kind: security.policy.expr
   meta:
-    comment: The receipts store, the linked references, the placement root and the executor, for the runner and the service
+    comment: The receipts store, the linked references, the placement root and the
+      executor, for the runner and the service
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || action != "funcs.call"
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings")
+      || action != "funcs.call"
     actions:
     - funcs.call
     - db.get
@@ -39,7 +41,8 @@ entries:
 - name: placement_exec_policy
   kind: security.policy
   meta:
-    comment: Commands and host environment values resolve at launch; the request names them, the host admits them
+    comment: Commands and host environment values resolve at launch; the request names
+      them, the host admits them
   policy:
     actions:
     - exec.run
@@ -61,6 +64,7 @@ entries:
     - process.send
     - funcs.call
     - bee.placement.workdir_preparer.cleanup
+    - process.registry.lookup
     resources:
     - bee.placement.native.service:runner
     - bee:workers
@@ -77,8 +81,9 @@ entries:
 - name: placement_runner_policy
   kind: security.policy
   meta:
-    comment: A runner answers its starter and its bound recipient, watches the recipient so a lost carrier retires the gateway binding, and invokes the plan, setup and cleanup methods of host-authorized
-      workdir preparers
+    comment: A runner answers its starter and its bound recipient, watches the recipient
+      so a lost carrier retires the gateway binding, and invokes the plan, setup and
+      cleanup methods of host-authorized workdir preparers
   policy:
     actions:
     - process.send
@@ -92,5 +97,10 @@ entries:
   kind: security.policy
   policy:
     effect: allow
-    actions: [process.spawn, process.host, process.cancel, registry.snapshot]
-    resources: ['*']
+    actions:
+    - process.spawn
+    - process.host
+    - process.cancel
+    - registry.snapshot
+    resources:
+    - '*'

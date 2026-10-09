@@ -17,3 +17,7 @@ entries:
     transitions: bee.placement:transitions
     request_protocol: bee.placement:request
     configuration: bee.driver.binding:configuration
+- name: supervision
+  kind: library.lua
+  source: file://supervision.lua
+  modules: [sql]

@@ -41,6 +41,8 @@ entries:
     image: bee.placement.docker.service:image
     runtime_probe: bee.placement.docker.service:runtime_probe
     environment: bee.placement.docker.service:environment
+    supervision: bee.placement.native.persist:supervision
+    demand: bee.process:demand
   security:
     policies: &id004
     - bee.placement.native.security:placement_store_policy
@@ -59,6 +61,7 @@ entries:
   - registry
   - funcs
   - json
+  - cdc
 - name: start
   kind: function.lua
   source: file://methods.lua
@@ -114,7 +117,18 @@ entries:
   method: cleanup
   imports: *id001
   security:
-    policies: *id003
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:host_user_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:cleanup_policy
+    - bee.process:client_policy
   modules: *id002
 - name: evidence
   kind: function.lua

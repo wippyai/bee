@@ -3,7 +3,7 @@ local process = require("process")
 local M = {}
 M.TOPIC = "bee.process.demand"
 M.WAKE = "bee.process.wake"
-M.DISPATCH = "bee.process.dispatch"
+M.ACCEPTED = "bee.process.accepted"
 M.SUPERVISOR = "bee.hive.supervisor"
 local function signal(name: string, action: string, value: unknown): (boolean, string?)
     local pid, problem = process.registry.lookup(M.SUPERVISOR, process.registry.LOCAL)

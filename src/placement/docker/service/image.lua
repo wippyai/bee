@@ -15,6 +15,7 @@ local spec = require("spec")
 local channel = require("channel")
 local uuid = require("uuid")
 local security = require("security")
+local demand = require("demand")
 local M = {}
 M.TOPIC = "bee.placement.image_progress"
 type Channel = channel.Channel
@@ -261,8 +262,7 @@ end
 function M.resolve(profile: profiles.Resolved, progress_recipient: string?, operation: string?, workspace: string?): (string?, string?, string?)
     if not operation and not profile.profile.image_recipe_ref then return profile.profile.image_ref, profile.profile.interactive_route_ref, nil end
     if not security.can("bee.placement.image", profile.ref) then return nil, nil, "runtime image preparation is not authorized" end
-    local owner = process.registry.lookup(M.OWNER)
-    if not owner then return nil, nil, "runtime image owner is unavailable" end
+    local owner: string? = nil
     local root_ref = resources.root()
     local volume = root_ref and fs.get(root_ref) or nil
     if not volume then return nil, nil, "image request root unavailable" end
@@ -280,11 +280,29 @@ function M.resolve(profile: profiles.Resolved, progress_recipient: string?, oper
     if not written then return nil, nil, tostring(write_error) end
     local replies = process.listen(M.REPLY, {message = true})
     if not replies then volume:remove(path); return nil, nil, "image reply listener unavailable" end
+    local accepted = assert(process.listen(demand.ACCEPTED, {message = true}))
     local events = assert(process.events())
-    local monitored = process.monitor(owner)
-    if not monitored then process.unlisten(replies); volume:remove(path); return nil, nil, "runtime image owner could not be monitored" end
-    local sent = process.send(owner, M.REQUEST, {version = 1, request_id = id})
-    if not sent then process.unmonitor(owner); process.unlisten(replies); volume:remove(path); return nil, nil, "image request was not queued" end
+    local sent, dispatch_error = demand.dispatch(M.OWNER, {version = 1, request_id = id})
+    if not sent then
+        process.unlisten(accepted); process.unlisten(replies); volume:remove(path)
+        return nil, nil, "image request was not queued: " .. tostring(dispatch_error)
+    end
+    while not owner do
+        local selected = channel.select({accepted:case_receive(), events:case_receive()})
+        if not selected.ok or (selected.channel == events and selected.value.kind == process.event.CANCEL) then break end
+        if selected.channel == accepted then
+            local message = selected.value
+            local value = bounds.object(message:payload():data())
+            local supervisor = process.registry.lookup(demand.SUPERVISOR, process.registry.LOCAL)
+            if supervisor and tostring(message:from()) == tostring(supervisor) and value
+                and value.name == M.OWNER and value.request_id == id then owner = bounds.line(value.pid, 512) end
+        end
+    end
+    process.unlisten(accepted)
+    if not owner or not process.monitor(owner) then
+        process.unlisten(replies); volume:remove(path)
+        return nil, nil, "runtime image owner could not be monitored; preparation outcome is unknown"
+    end
     local result: {[string]: unknown}? = nil
     local failure: string? = nil
     while not result do

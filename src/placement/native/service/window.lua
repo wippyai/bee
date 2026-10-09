@@ -82,6 +82,10 @@ local function fail(db, backend: process_backend.Backend?, reason: string, gatew
             end
         end
     end
+    if db and attempt_id then
+        local row = store.row(db, attempt_id)
+        if row then service.wake_supervision(row.placement_kind) end
+    end
     if db then db:release() end
     return nil, reason
 end
@@ -378,6 +382,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     end
 
     if observed then observed.release() end
+    service.wake_supervision(row.placement_kind)
 
     local function retire_gateway(why: string)
         if not gateway_binding then return end
@@ -418,6 +423,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
                 if not cleaned.ok then cleanup_error = cleaned.error and cleaned.error.message or "cleanup failed" end
             end
         end
+        service.wake_supervision(row.placement_kind)
         db:release()
         return cleanup_error == nil, cleanup_error
     end

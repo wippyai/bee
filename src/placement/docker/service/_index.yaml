@@ -37,42 +37,13 @@ entries:
     - bee.placement.docker.security:docker_policy
     - bee.placement.docker.security:host_user_policy
     - bee.placement.docker.security:docker_socket_policy
+    - bee.process:client_policy
 - name: window
   kind: library.lua
   source: file://window.lua
   imports:
     window: bee.placement.native.service:window
     execution: bee.placement.docker.service:execution
-- name: sweeper
-  kind: process.lua
-  source: file://sweeper.lua
-  method: main
-  imports:
-    worker: bee.process:worker
-    service: bee.placement.docker.binding:methods
-- name: sweeper_service
-  meta:
-    title: Docker · supervision
-  kind: process.service
-  process: bee.placement.docker.service:sweeper
-  lifecycle:
-    auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
-    security:
-      actor:
-        id: bee.placement.docker.sweeper
-      policies:
-      - bee.placement.native.security:placement_store_policy
-      - bee.placement.native.security:placement_exec_policy
-      - bee.placement.native.security:placement_service_policy
-      - bee.resources.security:resource_resolve_policy
-      - bee.credentials.security:credential_materialize_policy
-      - bee.placement.native.security:placement_sweeper_policy
-      - bee.security.gateway:gateway_supervision_policy
-      - bee.placement.docker.security:docker_policy
-      - bee.placement.docker.security:host_user_policy
-      - bee.placement.docker.security:docker_socket_policy
-  host: bee:workers
 - name: image
   kind: library.lua
   source: file://image.lua
@@ -94,6 +65,7 @@ entries:
     homes: bee.placement.native.service:homes
     daemon: bee.placement.docker.service:daemon
     spec: bee.placement.docker.binding:spec
+    demand: bee.process:demand
 - name: image_owner
   kind: process.lua
   source: file://image_owner.lua
@@ -105,14 +77,23 @@ entries:
     bounds: bee.values:bounds
     image: bee.placement.docker.service:image
     environment: bee.placement.docker.service:environment
+    service: bee.placement.docker.binding:methods
+    demand: bee.process:demand
+    task: bee.process:task
 - name: image_owner_service
   meta:
-    title: Docker · images
+    title: "Docker \xB7 owner"
+    type: bee.process.demand
+    demand:
+      name: bee.placement.docker/image
+      probe: bee.placement.docker.service:backlog
   kind: process.service
   process: bee.placement.docker.service:image_owner
   lifecycle:
-    auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
+    auto_start: false
+    requires:
+    - wippy.bootloader:bootloader.service
+    - bee.hive.service:supervisor_service
     security:
       actor:
         id: bee.placement.docker.image
@@ -127,6 +108,13 @@ entries:
       - bee.placement.docker.security:image_client_policy
       - bee.placement.docker.security:environment_owner_policy
       - bee.placement.docker.security:environment_listener_policy
+      - bee.placement.native.security:placement_service_policy
+      - bee.resources.security:resource_resolve_policy
+      - bee.credentials.security:credential_materialize_policy
+      - bee.security.gateway:gateway_supervision_policy
+      - bee.process:client_policy
+    restart:
+      max_attempts: 10
   host: bee:workers
 - name: environment
   kind: library.lua
@@ -168,3 +156,9 @@ entries:
     bounds: bee.values:bounds
     resources: bee.placement.native.env:resources
     quote: bee.driver.binding:quote
+- name: backlog
+  kind: function.lua
+  source: file://backlog.lua
+  method: pending
+  imports:
+    service: bee.placement.docker.binding:methods

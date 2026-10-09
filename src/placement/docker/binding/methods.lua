@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local process = require("process")
+local cdc = require("cdc")
 local security = require("security")
 local registry = require("registry")
 local funcs = require("funcs")
@@ -19,6 +20,8 @@ local resources = require("resources")
 local image_service = require("image")
 local environment = require("environment")
 local runtime_probe = require("runtime_probe")
+local supervision = require("supervision")
+local demand = require("demand")
 local M = {}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
@@ -333,7 +336,38 @@ end
 function M.cleanup(value: unknown): Reply
     local loaded, load_error = M.load(value)
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
-    return M.cleanup_loaded(loaded)
+    if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end
+    if loaded.attempt.execution_state ~= "exited" and loaded.attempt.execution_state ~= "start_failed" then
+        return fail("CONFLICT", "cleanup requires proven container exit")
+    end
+    local changes, subscribe_error = cdc.stream("bee:changes", {tables = {"bee_placement_attempts", "bee_placement_evidence"}, ops = {"insert", "update"}})
+    if not changes then return fail("UNAVAILABLE", tostring(subscribe_error)) end
+    local called, result = pcall(function(): Reply
+        local requested = M.change(loaded.attempt.attempt_id, {evidence = {kind = "docker.cleanup_requested", detail = "authorized cleanup"}})
+        if not requested.ok then return requested end
+        local sequence = assert(bounds.count(assert(bounds.object(requested.value)).evidence_count))
+        local sent, problem = demand.wake("bee.placement.docker/image")
+        if not sent then return fail("UNAVAILABLE", tostring(problem)) end
+        while true do
+            local current, failure = M.load(value)
+            if not current then return fail("STORAGE", failure or "cleanup receipt unavailable") end
+            if current.attempt.cleanup_state == "complete" then return succeed(current.attempt) end
+            local db = assert(store.open())
+            local rows, read_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND sequence > ? AND kind = 'docker.cleanup_failed' ORDER BY sequence LIMIT 1", {current.attempt.attempt_id, sequence})
+            db:release()
+            if read_error or not rows then return fail("STORAGE", tostring(read_error or "cleanup outcome unavailable")) end
+            if rows[1] then
+                local code, message = tostring(rows[1].detail):match("^([A-Z_]+): ([%s%S]*)$")
+                if not code or not message then return fail("STORAGE", "cleanup failure evidence is malformed") end
+                return fail(code, message)
+            end
+            local _, open = changes:channel():receive()
+            if not open then return fail("UNAVAILABLE", "cleanup observation closed") end
+        end
+    end)
+    changes:close()
+    if not called then error(tostring(result)) end
+    return result
 end
 function M.cleanup_loaded(loaded: Loaded): Reply
     if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end
@@ -362,27 +396,45 @@ function M.cleanup_loaded(loaded: Loaded): Reply
     return M.change(loaded.attempt.attempt_id, {cleanup = "complete", evidence = {kind = "cleanup.complete", detail = "container absent; attempt scratch removed; provider session home retained"}})
 end
 M.SWEEP_INTERVAL_MS = 30000
-M.SWEEPER_NAME = "bee.placement.docker.sweeper"
+function M.pending(): boolean
+    local db, problem = store.open()
+    if not db then error(problem or "open placement backlog") end
+    local called, pending = pcall(supervision.pending, db, "docker")
+    db:release()
+    if not called then error(tostring(pending)) end
+    return pending == true
+end
 function M.sweep(): Reply
     local db, open_error = store.open()
     if not db then return fail("STORAGE", open_error or "receipt store unavailable") end
-    local rows, read_error = db:query("SELECT attempt_id FROM bee_placement_attempts WHERE placement_kind = 'docker' AND (execution_state IN ('starting', 'running', 'stopping', 'uncertain') OR (execution_state = 'exited' AND cleanup_state != 'complete')) ORDER BY updated_at LIMIT 64", {})
+    local rows, read_error = supervision.rows(db, "docker", 64)
     db:release()
     if not rows or read_error then return fail("STORAGE", "read Docker attempts") end
     local count = 0
+    local failure: Reply? = nil
     for _, row in ipairs(rows) do
         local loaded = M.load({attempt_id = row.attempt_id}, true)
         if loaded then
             local result: Reply
-            if loaded.attempt.execution_state == "exited" then
+            if loaded.attempt.execution_state == "exited" or loaded.attempt.execution_state == "start_failed" then
                 local present = local_attempts.runner_present(loaded.row)
-                if present == false then result = M.cleanup_loaded(loaded)
+                local pending_db = assert(store.open())
+                local requests, request_error = pending_db:query("SELECT 1 FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'docker.cleanup_requested' LIMIT 1", {loaded.attempt.attempt_id})
+                pending_db:release()
+                if not requests or request_error then return fail("STORAGE", tostring(request_error or "cleanup intent unavailable")) end
+                if present == false or (requests and requests[1]) then result = M.cleanup_loaded(loaded)
                 else result = succeed(loaded.attempt) end
             else result = M.reconcile_loaded(loaded) end
-            if result.ok then count = count + 1 end
+            if result.ok then count = count + 1
+            elseif loaded.attempt.execution_state == "exited" or loaded.attempt.execution_state == "start_failed" then
+                local cause = assert(result.error)
+                local recorded = M.change(loaded.attempt.attempt_id, {evidence = {kind = "docker.cleanup_failed", detail = cause.code .. ": " .. cause.message}})
+                if not recorded.ok then return recorded end
+                failure = failure or result
+            end
         end
     end
-    return succeed({reconciled = count})
+    return failure or succeed({reconciled = count})
 end
 function M.attach(value: unknown): Reply
     local loaded, load_error = M.load(value)

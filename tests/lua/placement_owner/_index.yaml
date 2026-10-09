@@ -1,0 +1,73 @@
+version: '1.0'
+namespace: bee.tests.placement_owner
+entries:
+- name: eligibility_db
+  kind: db.sql.sqlite
+  file: .wippy/placement-eligibility.db
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}
+- name: eligibility_test
+  kind: function.lua
+  source: file://eligibility_test.lua
+  method: run
+  modules: [sql]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    supervision: bee.placement.native.persist:supervision
+- name: image_fixture
+  kind: library.lua
+  source: file://image_fixture.lua
+  modules: [process, channel]
+- name: sweep_fixture
+  kind: library.lua
+  source: file://sweep_fixture.lua
+  modules: [process]
+- name: environment_fixture
+  kind: library.lua
+  source: file://environment_fixture.lua
+  modules: [channel]
+- name: owner_fixture_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.send, process.spawn, process.host, process.monitor, process.unmonitor, process.cancel, process.registry.register, process.registry.unregister, process.registry.lookup]
+    resources: '*'
+    effect: allow
+- name: docker_owner_fixture
+  kind: process.lua
+  source: file://image_owner.lua
+  method: main
+  modules: [process, channel]
+  meta: {type: test_support}
+  imports:
+    image: bee.tests.placement_owner:image_fixture
+    environment: bee.tests.placement_owner:environment_fixture
+    service: bee.tests.placement_owner:sweep_fixture
+    bounds: bee.values:bounds
+    demand: bee.process:demand
+    task: bee.process:task
+  security:
+    policies: [bee.tests.placement_owner:owner_fixture_policy]
+- name: docker_owner_test
+  kind: function.lua
+  source: file://docker_owner_test.lua
+  method: run
+  modules: [process, channel, time]
+  meta: {type: test, suite: bee, timeout: 20s}
+  imports:
+    test: wippy.test:test
+    image: bee.tests.placement_owner:image_fixture
+  security:
+    policies: [bee.tests.placement_owner:owner_fixture_policy]
+- name: demand_dispatch_test
+  kind: function.lua
+  source: file://demand_dispatch_test.lua
+  method: run
+  modules: [process, channel, time, uuid]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    demand: bee.process:demand
+    image: bee.placement.docker.service:image
+    bounds: bee.values:bounds

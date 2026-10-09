@@ -534,6 +534,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             if type(outcome.code) == "number" then exit_code = math.floor(outcome.code) end
             local detail = exit_code and ("exit code " .. tostring(exit_code)) or ("wait returned no code: " .. tostring(outcome.error))
             store.transition(db, attempt_id, {execution = "exited", fields = {exit_code = exit_code, exit_source = "runner"}, evidence = {kind = "child.exited", detail = detail}})
+            service.wake_supervision(row.placement_kind)
             -- The child's end seals intake; the carrier drains what was
             -- accepted and revokes when it closes.
             seal_gateway("child exited")
@@ -684,6 +685,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                     local outcome = exits:receive()
                     if type(outcome) == "table" and type(outcome.code) == "number" then exit_code = math.floor(outcome.code) end
                     store.transition(db, attempt_id, {execution = "exited", fields = {exit_code = exit_code, exit_source = "runner"}, evidence = {kind = "child.exited", detail = "after runner cancellation, exit code " .. tostring(exit_code)}})
+                    service.wake_supervision(row.placement_kind)
                     exited = true
                 end
                 retire_gateway("runner cancelled")

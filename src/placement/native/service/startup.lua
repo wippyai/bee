@@ -39,6 +39,8 @@ local function main(attempt_id: string, caller: string, reply_topic: string, run
     end
     assert(store.transition(db, attempt_id, {fields = {runner_pid = tostring(runner)},
         evidence = {kind = "runner.monitored", detail = "runner " .. tostring(runner) .. " by " .. process.pid()}}).ok)
+    local monitored_row = assert(store.row(db, attempt_id))
+    service.wake_supervision(monitored_row.placement_kind)
     local accepted = assert(starting.attempt)
     accepted.runner = tostring(runner)
     assert(process.send(caller, reply_topic, {ok = true, value = accepted}))
@@ -114,6 +116,8 @@ local function main(attempt_id: string, caller: string, reply_topic: string, run
     end
     process.unmonitor(runner)
     process.unlisten(replies)
+    local final_row = assert(store.row(db, attempt_id))
+    service.wake_supervision(final_row.placement_kind)
     db:release()
 end
 return {main = main}

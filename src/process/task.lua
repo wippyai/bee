@@ -10,7 +10,7 @@ M.Task = Task
 local function now(): integer return math.floor(time.now():unix_nano() / 1000000) end
 function M.new(name: string, pass: () -> boolean): Task
     return {name = name, pass = pass, active = false, pending = true, retry_ms = worker.RETRY_FIRST_MS,
-        due = nil, completed = channel.new(1)}
+        due = nil, completed = channel.new(1) :: channel.Channel<boolean>}
 end
 function M.wake(task: Task)
     task.pending, task.due = true, nil
@@ -35,7 +35,7 @@ function M.finish(task: Task, quiet: boolean)
         task.retry_ms = math.min(task.retry_ms * 2, worker.RETRY_LAST_MS)
     end
 end
-function M.deadline(task: Task): channel.Channel<unknown>?
+function M.deadline(task: Task): channel.Channel<time.Time>?
     if task.due then return time.after(tostring(math.max(1, task.due - now())) .. "ms") end
     return nil
 end

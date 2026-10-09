@@ -44,7 +44,14 @@ local function deliver(owner: Owner)
     local pid = owner.state.pid
     if not pid then return end
     local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = owner.queue})
-    if sent then owner.queue = {}
+    if sent then
+        for _, request in ipairs(owner.queue) do
+            local data: unknown = request.data
+            if type(data) == "table" and type(data.request_id) == "string" then
+                assert(process.send(request.caller, demand.ACCEPTED, {name = owner.name, pid = pid, request_id = data.request_id}))
+            end
+        end
+        owner.queue = {}
     else owner.state.pid, owner.state.phase = nil, "starting" end
 end
 function M.wake(owners: Owners, name: string, request: Dispatch?): boolean

@@ -5,6 +5,9 @@ local editor = require("editor")
 local appearance = require("appearance")
 local caller = require("caller")
 local canonical = require("canonical")
+local confirmation = require("confirmation")
+local confirmation_fixture = require("confirmation_fixture")
+local confirmations = confirmation_fixture.new()
 type Object = {[string]: unknown}
 local function ok(value: unknown): caller.Reply
     return {ok = true, error = nil, value = value, replayed = false}
@@ -12,6 +15,8 @@ end
 -- The owner calls the folder and thread choosers make, answered in place.
 local calls: {string} = {}
 local function ask(target: string, request: Object): caller.Reply
+    local approval = confirmation_fixture.ask(confirmations, target, request)
+    if approval then return approval end
     calls[#calls + 1] = target
     if target == "bee.node.binding:roots" then return ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}}}) end
     if target == "bee.node.binding:folders" then
@@ -176,29 +181,40 @@ local function define_tests()
                 test.contains(shown.rows[math.floor(size[2])], "Revoke Docker access")
             end
             view.action(current, "revoke_docker")
-            test.is_true(current.confirming_revoke == true)
+            test.is_true(confirmation.matches(current.confirmation, "docker.revoke"))
         end)
 
         test.it("requires confirmation before the person revokes Docker access", function()
             local s = state()
+            local before = #confirmations.decisions
+            local withdrawals = confirmations.withdrawals
             s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
-            local revoked = false
+            local revocations: {Object} = {}
             s.ask = function(target: string, request: Object): caller.Reply
+                local approval = confirmation_fixture.ask(confirmations, target, request)
+                if approval then return approval end
                 test.eq(target, "bee.placement.docker.binding:prepare_environment")
                 test.eq(request.revoke, true)
                 test.eq(request.workspace_id, "workspace")
-                revoked = true; return ok({address = "revoked"})
+                revocations[#revocations + 1] = request; return ok({address = "revoked"})
             end
             view.action(s, "advanced")
             view.action(s, "revoke_docker")
-            test.is_true(s.confirming_revoke == true)
-            test.is_false(revoked)
+            test.is_true(confirmation.matches(s.confirmation, "docker.revoke"))
+            test.eq(#revocations, 0)
             view.action(s, "cancel")
-            test.is_false(s.confirming_revoke == true)
+            test.is_false(confirmation.matches(s.confirmation, "docker.revoke"))
+            test.eq(#confirmations.decisions, before)
+            test.eq(confirmations.withdrawals, withdrawals + 1)
             view.action(s, "revoke_docker")
             local drawn = view.draw(90, 20, appearance.defaults(), s)
             view.input(s, key("enter"), drawn)
-            test.is_true(revoked)
+            test.eq(#revocations, 1)
+            test.eq(#confirmations.decisions, before + 1)
+            test.eq(confirmation_fixture.gesture(confirmations, before + 1), "enter")
+            view.input(s, key("enter"), drawn)
+            test.eq(#confirmations.decisions, before + 1)
+            test.eq(#revocations, 1)
             test.is_true(s.status:find("revoked", 1, true) ~= nil)
         end)
         test.it("decodes owner replies only when their exact result shape is consistent", function()
@@ -294,10 +310,15 @@ local function define_tests()
             test.is_nil(view.action(s, "remove"))
             test.is_nil(view.action(s, "save"))
             test.is_nil(view.action(s, "cancel"))
-            test.is_false(s.confirming_remove)
+            test.is_false(confirmation.matches(s.confirmation, "profile.remove"))
             view.action(s, "remove")
-            test.eq(view.action(s, "remove"), "remove")
-            s.confirming_remove = false
+            local before = #confirmations.decisions
+            test.eq(view.input(s, key("enter"), view.draw(90, 20, appearance.defaults(), s)), "remove")
+            test.eq(#confirmations.decisions, before + 1)
+            test.eq(confirmation_fixture.gesture(confirmations, before + 1), "enter")
+            view.input(s, key("enter"), view.draw(90, 20, appearance.defaults(), s))
+            test.eq(#confirmations.decisions, before + 1)
+            confirmation.cancel(s.confirmation)
             s.form.pending = "save"
             local frame = view.draw(60, 16, appearance.defaults(), s)
             view.input(s, {type = "paste", text = "Cannot append"}, frame)
@@ -358,7 +379,7 @@ local function define_tests()
             test.is_nil(actions.remove)
             test.is_true(actions.cancel)
             s.form.pending = nil
-            s.confirming_remove = true
+            view.action(s, "remove")
             local confirming = view.draw(60, 16, appearance.defaults(), s)
             actions = {}
             for _, hit in ipairs(confirming.hits) do actions[hit.kind] = true end

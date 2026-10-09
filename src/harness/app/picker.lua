@@ -22,6 +22,7 @@ local sessions_protocol = require("sessions_protocol")
 local frame = require("frame")
 local forms = require("forms")
 local profile_view = require("profile_view")
+local confirmation = require("confirmation")
 local terminal_view = require("terminal_view")
 local text = require("text")
 local M = {}
@@ -73,6 +74,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local states = assert(process.listen(appearance.TOPIC, {message = true}))
     local navigation = assert(process.listen("bee.app.navigate", {message = true}))
     local output = assert(tty.surface())
+    local review = confirmation.new({workspace_id = launch.workspace_id, origin = {app_id = launch.definition_id, instance_id = launch.instance_id, attempt_id = launch.execution_id}})
     local running = true
     local load_serial = 0
     local loads = channel.new(1)
@@ -83,6 +85,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     end
     local ticker: time.Ticker? = time.ticker("1s")
     local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?)
+        confirmation.cancel(review)
         running = false
         load_serial = load_serial + 1
         process.unlisten(states)
@@ -114,7 +117,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local clicks = frame.clicks()
     local conversation: agents.Conversation? = nil
     local draft = ""
-    local confirming = ""
     local session_busy = false
     local session_frame: session_view.Frame = {rows = {}, hits = {}}
     local menu = frame.menu()
@@ -266,15 +268,35 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             setup_open = true; status = "Approve configuration setup in Needs you; this launch continues after approval."; dirty = true
         elseif entry and not entry.ready then status = "Setup: " .. entry.reason .. ". Install or sign in with the provider, then R refresh."; dirty = true end
     end
+    local function control_target(action: string): {[string]: unknown}?
+        local entry = action == "close_listed" and directory[selected] or (conversation and conversation.session.snapshot)
+        if not entry then return nil end
+        return {session = entry.session, incarnation = entry.incarnation, node = entry.node,
+            work_id = action == "stop" and conversation and agents.current_work(conversation) or nil}
+    end
+    local function ask_control(action: string, message: string)
+        local target = control_target(action)
+        if not target then return end
+        local opened, err = confirmation.open(review, action, target, "inline", action == "stop" and "Stop current work?" or "Close session?", message)
+        status = opened and message or err or "Confirmation is unavailable"
+        dirty = true
+    end
+    local function accept_control(gesture: "enter" | "space" | "click" | "shortcut"): boolean
+        local target = control_target(confirmation.action(review))
+        if not target then confirmation.cancel(review); status = "Session is unavailable"; dirty = true; return false end
+        local accepted, err = confirmation.accept(review, target, gesture)
+        if not accepted then status = err or "Confirmation failed"; dirty = true end
+        return accepted
+    end
     local function close_session()
         start_task(function(current: agents.Conversation)
             close_key = close_key or assert(uuid.v7())
             if agents.close(current, close_key) then agents.refresh(current) end
         end)
     end
-    local function stop_work()
+    local function stop_work(expected_work: string?)
         start_task(function(current: agents.Conversation)
-            agents.stop(current, function(): string return assert(uuid.v7()) end)
+            agents.stop(current, function(): string return assert(uuid.v7()) end, expected_work)
         end)
     end
     local function open_existing(index: integer)
@@ -482,7 +504,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif action == "driver" and editing.driver_choice then
                         editing.form.draft.name = editing.title
                         local form, err = forms.change_driver(editing.form, editing.driver_choice)
-                        if form then editing = profile_view.new(form, ask, driver_choices)
+                        if form then editing = profile_view.new(form, ask, driver_choices, review.context.origin)
                         else editing.status = err or "Driver could not be selected" end
                     elseif action == "copy" then
                         local ok, err = forms.copy(editing.form)
@@ -490,7 +512,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         if ok then editing = nil; refresh = true else editing.status = err or "Copy failed" end
                     elseif action == "reload" then
                         local form, err = forms.reload(editing.form)
-                        if form then editing = profile_view.new(form, ask, driver_choices) else editing.status = err or "Reload failed" end
+                        if form then editing = profile_view.new(form, ask, driver_choices, review.context.origin) else editing.status = err or "Reload failed" end
                     elseif action == "save" or action == "remove" then
                         local ok: boolean = false
                         local err: string? = nil
@@ -502,15 +524,17 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     dirty = true
                 elseif conversation then
                     if data.type == "key" and data.action == "press" and (data.key_type == "escape" or data.key_type == "esc") then
-                        if confirming ~= "" then confirming = ""; status = ""; dirty = true else leave_session() end
+                        if confirmation.active(review) then confirmation.cancel(review); status = ""; dirty = true else leave_session() end
                     elseif data.type == "key" and data.action == "press" and data.key_type == "enter" then
-                        if confirming == "stop" then confirming = ""; status = ""; stop_work()
-                        elseif confirming == "close" then confirming = ""; status = ""; close_session()
+                        if confirmation.matches(review, "stop") then
+                            local work_id = conversation and agents.current_work(conversation)
+                            if accept_control("enter") then status = ""; stop_work(work_id) end
+                        elseif confirmation.matches(review, "close") then if accept_control("enter") then status = ""; close_session() end
                         elseif conversation.lifecycle == "closed" then start_from_session()
                         else submit() end
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then conversation.details = not conversation.details; dirty = true
-                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "x" then confirming = "close"; status = "Close session? Accepted work finishes; new work is refused. Enter confirms · Esc keeps it"; dirty = true
-                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "k" then confirming = "stop"; status = "Stop current work? Session stays available. Enter confirms · Esc keeps it"; dirty = true
+                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "x" then ask_control("close", "Close session? Accepted work finishes; new work is refused. Enter confirms · Esc keeps it")
+                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "k" then ask_control("stop", "Stop current work? Session stays available. Enter confirms · Esc keeps it")
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                         local hit = frame.hit(session_frame.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         local kind = hit and hit.kind or ""
@@ -520,8 +544,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "details" then conversation.details = not conversation.details; dirty = true
                         elseif kind == "new_from_session" then start_from_session()
                         elseif kind == "send" then submit()
-                        elseif kind == "close_session" then confirming = "close"; status = "Close session? Enter confirms · Esc keeps it"; dirty = true
-                        elseif kind == "stop_work" then confirming = "stop"; status = "Stop current work? Enter confirms · Esc keeps it"; dirty = true end
+                        elseif kind == "close_session" then ask_control("close", "Close session? Enter confirms · Esc keeps it")
+                        elseif kind == "stop_work" then ask_control("stop", "Stop current work? Enter confirms · Esc keeps it") end
                     else
                         local next_draft = not conversation.read_only and session_view.edit(draft, data) or draft
                         if next_draft ~= draft then draft = next_draft; dirty = true end
@@ -530,9 +554,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     local kind = ""
                     if data.type == "key" and data.action == "press" then
                         local key = data.key:lower()
-                        if confirming == "close_listed" then
-                            if data.key_type == "enter" then confirming = ""; close_listed(selected)
-                            elseif data.key_type == "esc" or data.key_type == "escape" then confirming = ""; status = ""; dirty = true end
+                        if confirmation.matches(review, "close_listed") then
+                            if data.key_type == "enter" then if accept_control("enter") then close_listed(selected) end
+                            elseif data.key_type == "esc" or data.key_type == "escape" then confirmation.cancel(review); status = ""; dirty = true end
                         elseif data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); dirty = true
                         elseif data.key_type == "down" then selected = math.floor(math.min(#directory, selected + 1)); dirty = true
                         elseif data.key_type == "enter" then open = true
@@ -556,9 +580,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     end
                     if kind == "new_session" or kind == "profiles" then catalog_open = true; selected = 0; refresh = true
                     elseif kind == "close_listed" and directory[selected] and directory[selected].lifecycle ~= "closed" and directory[selected].lifecycle ~= "closing" then
-                        confirming = "close_listed"
-                        status = "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it"
-                        dirty = true
+                        ask_control("close_listed", "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it")
                     elseif kind == "allowances" then allowances = allowance_form.new(launch.workspace_id); dirty = true
                     elseif kind == "mcp_clients" then client.navigate(launch, "bee.gateway.app:app", {})
                     elseif kind == "closed" then show_closed = not show_closed; refresh = true
@@ -618,7 +640,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if entry.kind == "definition" then subject.definition_ref = entry.ref
                 else subject.saved_profile_id, subject.saved_profile_revision = entry.ref, entry.revision end
                 local opened, open_error = forms.load(launch.workspace_id, subject, duplicate)
-                if opened then editing = profile_view.new(opened, ask, driver_choices)
+                if opened then editing = profile_view.new(opened, ask, driver_choices, review.context.origin)
                 else status = open_error or "Profile could not be opened" end
                 dirty = true
             elseif duplicate then status = "Choose an installed driver for a new profile"; dirty = true end

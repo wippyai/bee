@@ -40,6 +40,7 @@ entries:
   - uuid
   - json
   imports:
+    confirmation: bee.approvals.app:confirmation
     client: bee.app:client
     text: bee.ui:text
     bounds: bee.values:bounds
@@ -84,6 +85,8 @@ entries:
         fullscreen: false
   security:
     policies:
+    - bee.security.approvals:confirmation_client
+    - bee.security.approvals:confirmation_authority
     - bee.harness.security:carrier_policy
     - bee.harness.security:interactive_session_policy
     - bee.harness.security:presentation_viewer_policy
@@ -152,6 +155,7 @@ entries:
   - uuid
   - funcs
   imports:
+    confirmation: bee.approvals.app:confirmation
     frame: bee.ui:frame
     bounds: bee.values:bounds
     client: bee.app:client
@@ -203,6 +207,7 @@ entries:
   modules:
   - tty
   imports:
+    confirmation: bee.approvals.app:confirmation
     canonical: bee.values:canonical
     settings: bee.harness.app:profile_settings
     bounds: bee.values:bounds

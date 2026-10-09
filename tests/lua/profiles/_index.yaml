@@ -142,6 +142,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    confirmation: bee.approvals.app:confirmation
+    confirmation_fixture: bee.approvals:confirmation_fixture
     canonical: bee.values:canonical
     test: wippy.test:test
     view: bee.harness.app:profile_view

@@ -13,6 +13,7 @@ local forms = require("forms")
 local canonical = require("canonical")
 local settings = require("settings")
 local bounds = require("bounds")
+local confirmation = require("confirmation")
 local M = {}
 M.THREADS = "bee.threads.binding:list"
 M.THREAD_PAGE = 64
@@ -24,11 +25,11 @@ type Threads = {items: {ThreadRow}, selected: integer, error: string?}
 type Driver = {definition_ref: string, title: string}
 type State = {drivers: {Driver}?, driver_choice: Driver?, settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
     credential_text: {[string]: string},
-    status: string, confirming_remove: boolean, confirming_revoke: boolean?, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
+    status: string, confirmation: confirmation.State, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
     thread_titles: {[string]: string}, list_offset: integer, advanced: boolean}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 
-function M.new(form: forms.Form, ask: Ask, drivers: {Driver}?): State
+function M.new(form: forms.Form, ask: Ask, drivers: {Driver}?, origin: {[string]: unknown}?): State
     local option_text: {[string]: string} = {}
     local options = editor.options(form.draft) or {}
     for _, option in ipairs(options) do
@@ -36,9 +37,11 @@ function M.new(form: forms.Form, ask: Ask, drivers: {Driver}?): State
             option_text[option.name] = type(option.value) == "string" and option.value or ""
         end
     end
-    return {drivers = drivers, settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
-        option_text = option_text, credential_text = {}, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirming_remove = false, confirming_revoke = false, ask = ask,
+    local state: State = {drivers = drivers, settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
+        option_text = option_text, credential_text = {}, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirmation = confirmation.new({workspace_id = form.workspace_id, origin = origin or {app_id = "bee.harness.app:app", instance_id = form.profile_id}}, ask), ask = ask,
         browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
+    state.confirmation.ask = function(target: string, request: {[string]: unknown}): caller.Reply return state.ask(target, request) end
+    return state
 end
 local function folder_label(state: State): string
     local workdir = state.form.draft.workdir
@@ -145,30 +148,44 @@ local function erase(value: string): string
     end
     return value:sub(1, index - 1)
 end
-function M.action(state: State, action: string): string?
+local function confirm_target(state: State, action: string): {[string]: unknown}
+    return {profile_id = state.form.profile_id, revision = state.form.revision,
+        placement_profile_ref = action == "docker.revoke" and editor.placement_ref(state.form.draft) or nil}
+end
+function M.action(state: State, action: string, gesture: "enter" | "space" | "click" | "shortcut"?): string?
     if action == "advanced" and not state.form.pending then
         state.advanced = not state.advanced; state.selected = 1; return nil
     end
     if action == "revoke_docker" and state.advanced and (state.form.draft.placement and state.form.draft.placement.kind == "docker") then
-        state.confirming_revoke = true
-        state.status = "Revoke Docker network and gateway access? Enter confirms; Esc keeps it."
+        local opened, err = confirmation.open(state.confirmation, "docker.revoke", confirm_target(state, "docker.revoke"), "inline",
+            "Revoke Docker access?", "Revoke Docker network and gateway access?")
+        state.status = opened and "Revoke Docker network and gateway access? Enter confirms; Esc keeps it." or err or "Confirmation is unavailable"
         return nil
     end
     if action == "cancel" then
         state.credential_text = {}
-        if state.confirming_revoke then state.confirming_revoke = false; state.status = ""; return nil end
-        if state.confirming_remove then state.confirming_remove = false; return nil end
+        if confirmation.active(state.confirmation) then
+            local canceled, err = confirmation.cancel(state.confirmation)
+            state.status = canceled and "" or err or "Withdrawal is unavailable"
+            return nil
+        end
         return "cancel"
     end
     if action == "remove" then
         if state.form.revision < 1 or state.form.pending == "save" then return nil end
-        if state.confirming_remove then return "remove" end
-        state.confirming_remove = true
+        if confirmation.matches(state.confirmation, "profile.remove") then
+            local accepted, err = confirmation.accept(state.confirmation, confirm_target(state, "profile.remove"), gesture or "shortcut")
+            if accepted then return "remove" end
+            state.status = err or "Confirmation is unavailable"
+            return nil
+        end
+        local opened, err = confirmation.open(state.confirmation, "profile.remove", confirm_target(state, "profile.remove"), "inline", "Remove this profile?", "Remove this profile?")
+        if not opened then state.status = err or "Confirmation is unavailable" end
         return nil
     end
     if action == "copy" or action == "reload" then return action end
     if action == "save" then
-        if state.confirming_remove then return nil end
+        if confirmation.matches(state.confirmation, "profile.remove") then return nil end
         if state.form.pending then return state.form.pending end
         local named, name_error = editor.set_title(state.form.draft, state.title)
         if not named then state.status = name_error or "Invalid name"; return nil end
@@ -298,21 +315,22 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     if event.type == "mouse" and event.action == "press" and event.button == "left" then
         local hit = frame.hit(drawn.hits, math.floor(tonumber(event.x) or 0), math.floor(tonumber(event.y) or 0))
         if hit and hit.kind == "field" then state.selected = hit.index
-        elseif hit then return M.action(state, hit.kind) end
+        elseif hit then return M.action(state, hit.kind, "click") end
     elseif event.type == "key" and event.action == "press" then
         if event.key_type == "escape" or event.key_type == "esc" then return M.action(state, "cancel") end
-        if state.confirming_revoke then
+        if confirmation.matches(state.confirmation, "docker.revoke") then
             if event.key_type == "enter" then
+                local accepted, err = confirmation.accept(state.confirmation, confirm_target(state, "docker.revoke"), "enter")
+                if not accepted then state.status = err or "Confirmation is unavailable"; return nil end
                 local reply = state.ask("bee.placement.docker.binding:prepare_environment", {workspace_id = state.form.workspace_id,
                     placement_profile_ref = editor.placement_ref(state.form.draft), revoke = true})
                 state.status = reply.ok and "Docker network and gateway access revoked" or reply.error and reply.error.message or "Revocation did not answer"
-                state.confirming_revoke = false
             end
             return nil
         end
         if event.ctrl and event.key == "r" then return M.action(state, "revoke_docker") end
-        if state.confirming_remove then
-            if event.key_type == "enter" then return M.action(state, "remove") end
+        if confirmation.matches(state.confirmation, "profile.remove") then
+            if event.key_type == "enter" then return M.action(state, "remove", "enter") end
             return nil
         end
         if event.ctrl and event.key == "p" then return M.action(state, "advanced") end
@@ -324,7 +342,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
             return nil
         end
     end
-    if state.form.pending or state.confirming_remove then return nil end
+    if state.form.pending or confirmation.matches(state.confirmation, "profile.remove") then return nil end
     local field = listed[state.selected]
     if not field or field.kind == "unsupported" or field.kind == "info" then return nil end
     if field.kind == "driver" then
@@ -469,17 +487,17 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         elseif field.kind == "guidance" then label = label .. ": " .. state.guidance:gsub("\r?\n", " ↵ ") end
         frame.row(painter, slot + 2, text.bound(label, 4096), index == state.selected, "field", index, "")
     end
-    frame.line(painter, height - 3, state.confirming_remove and "Remove this profile? Enter confirms; Esc keeps it." or
+    frame.line(painter, height - 3, confirmation.matches(state.confirmation, "profile.remove") and "Remove this profile? Enter confirms; Esc keeps it." or
         (state.form.pending and "Request submitted. Retry uses the same values." or "Instructions append to the harness. Saving does not launch."),
-        state.confirming_remove and painter.theme.text or painter.theme.muted)
+        confirmation.matches(state.confirmation, "profile.remove") and painter.theme.text or painter.theme.muted)
     if height >= 3 then
-        local buttons: {frame.Button} = {{kind = "save", key = "Ctrl+S", label = "Save", enabled = not state.confirming_remove and state.form.pending ~= "remove", primary = true}}
+        local buttons: {frame.Button} = {{kind = "save", key = "Ctrl+S", label = "Save", enabled = not confirmation.matches(state.confirmation, "profile.remove") and state.form.pending ~= "remove", primary = true}}
         if state.advanced and editor.placement_ref(state.form.draft) == "bee.placement.docker.profiles:coding" then
             buttons[#buttons + 1] = {kind = "revoke_docker", key = "Ctrl+R", label = "Revoke Docker access", enabled = not state.form.pending}
         end
         if state.form.revision > 0 then
-            buttons[#buttons + 1] = {kind = "remove", key = "Ctrl+D", label = state.confirming_remove and "Confirm" or "Remove",
-                enabled = state.form.pending ~= "save", primary = state.confirming_remove}
+            buttons[#buttons + 1] = {kind = "remove", key = "Ctrl+D", label = confirmation.matches(state.confirmation, "profile.remove") and "Confirm" or "Remove",
+                enabled = state.form.pending ~= "save", primary = confirmation.matches(state.confirmation, "profile.remove")}
         end
         buttons[#buttons + 1] = {kind = "cancel", key = "Esc", label = "Cancel", enabled = true}
         if state.advanced and (state.form.draft.placement and state.form.draft.placement.kind == "docker") then

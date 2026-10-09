@@ -230,6 +230,20 @@ local function define_tests()
             test.eq(keys[1], keys[2])
             test.eq(conv.lifecycle, "active")
         end)
+        test.it("refuses to stop replacement work after the confirmed work changes", function()
+            local canceled = 0
+            local current: agents.Turn = {state = "working", input = "fix", text = "", work = fixtures.fixture_work("bw:original", {
+                cancel = function(): (sessions.Operation?, sessions.Fault?) canceled = canceled + 1; return nil, nil end})}
+            local conv: agents.Conversation = {session = session("idle", 0, {}, {}), title = "Worker", activity = "working", queued = 1,
+                turns = {current}, lifecycle = "active", notice = ""}
+            local reviewed = agents.current_work(conv)
+            test.eq(reviewed, "bw:original")
+            current.work = fixtures.fixture_work("bw:replacement", {
+                cancel = function(): (sessions.Operation?, sessions.Fault?) canceled = canceled + 1; return nil, nil end})
+            test.is_false(agents.stop(conv, key_source(), reviewed))
+            test.eq(canceled, 0)
+            test.eq(conv.notice, "Current work changed; review it again")
+        end)
     end)
     test.describe("Agent window session conversation", function()
         test.it("opens a session under an operation key and profile", function()

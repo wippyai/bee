@@ -5,7 +5,8 @@
 local test = require("test")
 local bounds = require("bounds")
 local registry = require("registry")
-local principals = require("principals")
+local application = require("application")
+local sql = require("sql")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -52,7 +53,8 @@ local function define_tests()
             local self = tostring(process.pid())
             local instance_id = "window-ready-" .. uuid.v7()
             -- The broker runs an application under a principal bound to its workspace.
-            local principal = principals.actor("bee.application:" .. WORKSPACE .. ":" .. instance_id, WORKSPACE)
+            local definition = assert(application.definition("bee.harness.app:app"))
+            local principal = assert(application.actor(WORKSPACE, instance_id, definition, 1))
             local window, spawn_error = process.with_options({terminal = grant}):with_actor(principal):spawn_monitored(
                 "bee.harness.catalog:window_ready_probe", "bee:workers", {version = 1,
                     broker_pid = self, workspace_pid = self, workspace_id = WORKSPACE,
@@ -95,6 +97,19 @@ local function define_tests()
                     reached = true
                 end
             end
+            local db = assert(sql.get("bee:db"))
+            local decisions = assert(db:query([[SELECT d.assurance_json FROM bee_approval_decisions d
+                JOIN bee_approval_requests r ON r.approval_id = d.approval_id
+                WHERE json_extract(r.contract_json, '$.origin.instance_id') = ?
+                AND json_extract(r.proposal_json, '$.payload.action') = 'login.acknowledge']], {instance_id}))
+            test.eq(#decisions, 1)
+            local assurance = assert(bounds.object(json.decode(tostring(decisions[1].assurance_json))))
+            test.eq(assurance.gesture, "enter")
+            test.eq(assurance.presentation, "inline")
+            test.eq(#assert(db:query([[SELECT g.grant_id FROM bee_approval_grants g
+                JOIN bee_approval_requests r ON r.approval_id = g.approval_id
+                WHERE json_extract(r.contract_json, '$.origin.instance_id') = ?]], {instance_id})), 0)
+            db:release()
             local starting = assert(view:snapshot())
             test.is_true(table.concat(starting.rows, "\n"):find("Starting process", 1, true) ~= nil,
                 "the launch surface does not identify the blocked native-open phase")

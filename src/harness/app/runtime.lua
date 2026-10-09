@@ -13,6 +13,7 @@ local time = require("time")
 local funcs = require("funcs")
 local uuid = require("uuid")
 local client = require("client")
+local confirmation = require("confirmation")
 local window_request = require("window_request")
 local input_event = require("input_event")
 local admission = require("admission")
@@ -310,6 +311,10 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         output:close()
     end
     local function show_login(notice: {code: "LOGIN_REQUIRED", provider: string, command: string}): boolean
+        local review = confirmation.new({workspace_id = launch.workspace_id, origin = {app_id = launch.definition_id, instance_id = launch.instance_id, attempt_id = launch.execution_id}})
+        local target = {instance_id = launch.instance_id, definition_id = launch.definition_id, provider = notice.provider}
+        local opened, err = confirmation.open(review, "login.acknowledge", target, "inline", "Login complete?", "Continue after signing in with " .. notice.provider)
+        if not opened then error(err) end
         local output = assert(tty.surface())
         local width, height = tty.screen_size()
         local preferences = launch.appearance
@@ -357,6 +362,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                         dirty = true
                     elseif data.type == "key" and data.action == "press" then
                         if data.key_type == "enter" or data.key_type == "return" then
+                            local accepted, err = confirmation.accept(review, target, "enter")
+                            if not accepted then error(err) end
                             process.unlisten(states)
                             output:close()
                             return true
@@ -366,6 +373,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 end
             end
         end
+        confirmation.cancel(review)
         process.unlisten(states)
         output:close()
         return false

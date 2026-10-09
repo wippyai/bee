@@ -390,13 +390,22 @@ function M.directory(client: sessions.Client, workspace: string?, include_closed
     return rows, "More sessions are available; narrow the workspace filter"
 end
 
-function M.stop(conv: Conversation, new_key: () -> string): boolean
-    if conv.node and conv.peer_scope ~= "open" then conv.notice = "Session control is not allowed by this bee"; return false end
+local function stop_turn(conv: Conversation): Turn?
     local chosen: Turn? = nil
     for _, turn in ipairs(conv.turns) do
         if turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then chosen = turn; break end
         if not chosen and turn.state == "queued" then chosen = turn end
     end
+    return chosen
+end
+function M.current_work(conv: Conversation): string?
+    local chosen = stop_turn(conv)
+    return chosen and chosen.work:ref() or nil
+end
+function M.stop(conv: Conversation, new_key: () -> string, expected_work: string?): boolean
+    if conv.node and conv.peer_scope ~= "open" then conv.notice = "Session control is not allowed by this bee"; return false end
+    local chosen = stop_turn(conv)
+    if expected_work and (not chosen or chosen.work:ref() ~= expected_work) then conv.notice = "Current work changed; review it again"; return false end
     if not chosen then conv.notice = "No current work to stop"; return false end
     chosen.cancel_key = chosen.cancel_key or new_key()
     local operation, fault = chosen.work:cancel({operation_key = chosen.cancel_key, reason = "Stopped from Sessions"})

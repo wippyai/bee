@@ -1,0 +1,17 @@
+-- SPDX-License-Identifier: MIT
+local test = require("test")
+local task = require("task")
+local function define_tests()
+    test.describe("Guarded owner tasks", function()
+        test.it("becomes quiet only after its pass completes", function()
+            local work = task.new("probe", function(): boolean return true end)
+            task.advance(work)
+            test.eq(task.quiet(work), false)
+            local quiet, open = work.completed:receive()
+            test.eq(open, true)
+            task.finish(work, quiet == true)
+            test.eq(task.quiet(work), true)
+        end)
+    end)
+end
+return test.run_cases(define_tests)

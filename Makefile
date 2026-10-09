@@ -121,8 +121,6 @@ test: binary-identity compose $(TEST_FIXTURES)/harness/bin/gateway-client
 		CLAUDE_CONFIG_DIR=$(TEST_ROOT)/shell/claude CODEX_HOME=$(TEST_ROOT)/shell/codex \
 		ANTHROPIC_API_KEY=fixture-shell-value-not-a-key \
 		$(abspath $(WIPPY)) test --host bee:terminal \
-		-o bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false \
-		-o bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false \
 		-o bee.gov.service:activation_service:lifecycle.auto_start=false \
 		-o bee.credentials.service:configuration_service:lifecycle.auto_start=false \
 		$(if $(TESTS),test $(TESTS))

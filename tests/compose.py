@@ -195,6 +195,10 @@ def owner_scheduling(src):
     document = yaml.safe_load(path.read_text())
     next(entry for entry in document["entries"] if entry["name"] == "service")["meta"]["pump"] = False
     path.write_text(yaml.safe_dump(document, sort_keys=False))
+    path = src / "gateway/service/_index.yaml"
+    document = yaml.safe_load(path.read_text())
+    next(entry for entry in document["entries"] if entry["name"] == "external_service")["meta"]["demand"]["effects"] = False
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
 def main():
@@ -214,6 +218,8 @@ def main():
     runner_fixture_type(src)
     shutil.copy2(ROOT / "src/placement/native/service/materialization.lua",
                  TESTS / "lua/placement_publication/materialization.lua")
+    shutil.copy2(ROOT / "src/placement/docker/service/image_owner.lua",
+                 TESTS / "lua/placement_owner/image_owner.lua")
     host_environment()
 
 

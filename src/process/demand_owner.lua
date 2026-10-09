@@ -90,8 +90,8 @@ end
 function M.update(owners: Owners)
     for _, owner in pairs(owners) do
         local current = system.supervisor.state(owner.id)
-        if current and (current.status == "stopped" or current.status == "exited")
-            and owner.state.phase ~= "absent" and owner.state.phase ~= "starting" then
+        if current and current.desired == "stopped" and owner.state.phase == "stopping"
+            and (current.status == "stopped" or current.status == "exited") then
             if state.stopped(owner.state) == "start" then start(owner :: Owner) end
         end
     end

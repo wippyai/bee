@@ -91,3 +91,11 @@ refuses the call.
 | `bee.gateway.persist`, `.migrations` | Binding, credential, hook, listener and surface stores and their migrations |
 | `bee.gateway.security` | Policies and the approval, installation and publication libraries |
 | `bee.gateway.service` | The `worker` and `publication_worker` processes |
+
+The gateway owner starts for routed pairing or durable effect work and stops
+when waits and both effect tasks drain. Installation and publication execute
+as the gateway worker under separate declared scopes; their grants are not
+combined with the external owner's scope. Boot recovery reads both effect
+queues. Existing approval wakes reach the owner while it holds the legacy
+worker names; starting it for an approval decision belongs to the approvals
+wake consolidation described in `component/hive`.

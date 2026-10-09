@@ -11,3 +11,5 @@ tests/lua/harness/host/_index.yaml
 
 src/env/binary_identity/_index.yaml
 __pycache__/
+
+/tests/lua/placement_owner/image_owner.lua

@@ -2,13 +2,12 @@ version: '1.0'
 namespace: bee.gateway.service
 entries:
 - name: worker
-  kind: process.lua
+  kind: function.lua
   source: file://worker.lua
   method: main
   modules:
   - logger
   imports:
-    worker: bee.process:worker
     installation: bee.gateway.security:installation
     approval_service: bee.approvals.binding:service
   meta:
@@ -18,81 +17,27 @@ entries:
     worker_name: bee.approvals.installation_effect_worker
     effect_prefix: 'hub-install:'
 - name: publication_worker
-  kind: process.lua
+  kind: function.lua
   source: file://publication_worker.lua
   method: main
   modules:
   - logger
   imports:
-    worker: bee.process:worker
     publish: bee.gateway.security:publish
     approval_service: bee.approvals.binding:service
+
   meta:
     type: bee.approvals.effect-consumer
     destination: gateway.publication
     operation_ref: bee.hub:publish
     worker_name: bee.approvals.publication_effect_worker
     effect_prefix: 'hub-publish:'
-- name: gateway_installation_service
-  meta:
-    title: Gateway · Hub installs
-  kind: process.service
-  process: bee.gateway.service:worker
-  host: bee:workers
-  lifecycle:
-    auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
-    security:
-      actor:
-        id: bee.gateway.worker
-      policies:
-      - bee.gateway.security:store_policy
-      - bee.gateway.security:execute_policy
-      - bee.gateway.security:installation_policy
-      - bee.gateway.security:installation_queue_policy
-      - bee.gateway.security:installation_resolver_policy
-      - bee.gateway.security:installation_worker_policy
-      - bee.gateway.security:installation_read_policy
-      - bee.gateway.security:installation_apply_policy
-      - bee.gateway.security:installation_library_policy
-      - bee.gateway.security:access_reference_policy
-      - bee.gateway.security:access_policy_read_policy
-      - bee.security.approvals:approval_installation_effects_policy
-      - bee.security.approvals:approval_request_policy
-      - bee.security.approvals:approval_consume_policy
-      - bee.gateway.security:worker_host_policy
-- name: gateway_publication_service
-  meta:
-    title: Gateway · Hub publishing
-  kind: process.service
-  process: bee.gateway.service:publication_worker
-  host: bee:workers
-  lifecycle:
-    auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
-    security:
-      actor:
-        id: bee.gateway.worker
-      policies:
-      - bee.gateway.security:store_policy
-      - bee.gateway.security:execute_policy
-      - bee.gateway.security:publication_policy
-      - bee.gateway.security:publication_queue_policy
-      - bee.gateway.security:installation_resolver_policy
-      - bee.gateway.security:installation_worker_policy
-      - bee.gateway.security:publication_read_policy
-      - bee.gateway.security:publication_apply_policy
-      - bee.gateway.security:access_reference_policy
-      - bee.gateway.security:access_policy_read_policy
-      - bee.security.approvals:approval_publication_effects_policy
-      - bee.security.approvals:approval_request_policy
-      - bee.security.approvals:approval_consume_policy
-      - bee.gateway.security:worker_host_policy
 - name: external_cli
   kind: process.lua
   source: file://external_cli.lua
   method: main
-  modules: [io]
+  modules:
+  - io
   imports:
     protocol: bee.hive:protocol
     node_client: bee.node:client
@@ -104,27 +49,45 @@ entries:
       host: bee:terminal
       short: Pair an external MCP client through Needs you
       security:
-        actor: {id: bee.gateway.cli}
-        policies: [bee.hive.security:caller, bee.hive.security:messaging]
+        actor:
+          id: bee.gateway.cli
+        policies:
+        - bee.hive.security:caller
+        - bee.hive.security:messaging
 - name: external
   kind: process.lua
   source: file://external.lua
   method: main
-  modules: [process, channel, time, cdc, env, system]
+  modules:
+  - process
+  - channel
+  - time
+  - cdc
+  - env
+  - system
+  - registry
   imports:
     protocol: bee.hive:protocol
     bounds: bee.values:bounds
     external: bee.gateway.binding:external
     node_client: bee.node:client
+    demand: bee.process:demand
+    task: bee.process:task
+    effects: bee.gateway.service:effects
 - name: external_service
   kind: process.service
   process: bee.gateway.service:external
   host: bee:workers
   lifecycle:
-    auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
+    auto_start: false
+    restart:
+      max_attempts: 10
+    requires:
+    - wippy.bootloader:bootloader.service
+    - bee.hive.service:supervisor_service
     security:
-      actor: {id: bee.gateway.external}
+      actor:
+        id: bee.gateway.external
       policies:
       - bee.gateway.security:external_host_policy
       - bee.gateway.security:execute_policy
@@ -136,3 +99,81 @@ entries:
       - bee.gateway.security:access_reference_policy
       - bee.gateway.security:access_policy_read_policy
       - bee.hive.security:messaging
+      - bee.gateway.security:effects_host_policy
+      - bee.gateway.security:effects_discovery_policy
+      - bee.process:client_policy
+      - bee.gateway.security:effects_names
+  meta:
+    title: "Gateway \xB7 owner"
+    type: bee.process.demand
+    demand:
+      name: bee.gateway.external
+      probe: bee.gateway.service:backlog
+      tables: [bee_approval_requests]
+      wake_active: false
+- name: installation_scope
+  kind: registry.entry
+  meta:
+    type: bee.gateway.effect_scope
+  data:
+    kind: installation
+    entry: bee.gateway.service:worker
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:installation_queue_policy
+    - bee.gateway.security:installation_resolver_policy
+    - bee.gateway.security:installation_worker_policy
+    - bee.gateway.security:installation_read_policy
+    - bee.gateway.security:installation_apply_policy
+    - bee.gateway.security:installation_library_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.security.approvals:approval_installation_effects_policy
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
+    - bee.gateway.security:worker_host_policy
+    - bee.gateway.security:installation_task_policy
+- name: publication_scope
+  kind: registry.entry
+  meta:
+    type: bee.gateway.effect_scope
+  data:
+    kind: publication
+    entry: bee.gateway.service:publication_worker
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:publication_policy
+    - bee.gateway.security:publication_queue_policy
+    - bee.gateway.security:installation_resolver_policy
+    - bee.gateway.security:installation_worker_policy
+    - bee.gateway.security:publication_read_policy
+    - bee.gateway.security:publication_apply_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.security.approvals:approval_publication_effects_policy
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
+    - bee.gateway.security:worker_host_policy
+    - bee.gateway.security:publication_task_policy
+- name: effects
+  kind: library.lua
+  source: file://effects.lua
+  modules:
+  - registry
+  - security
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+- name: backlog
+  kind: function.lua
+  source: file://effects.lua
+  method: pending
+  modules:
+  - registry
+  - security
+  - funcs
+  imports:
+    bounds: bee.values:bounds

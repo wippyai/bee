@@ -119,3 +119,4 @@ entries:
   data:
     prefix: mcp
     name: bee.gateway.external
+    service: bee.gateway.service:external_service

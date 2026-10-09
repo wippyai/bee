@@ -25,3 +25,11 @@ entries:
   imports:
     test: wippy.test:test
     demand_state: bee.process:demand_state
+- name: task_test
+  kind: function.lua
+  source: file://task_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    task: bee.process:task

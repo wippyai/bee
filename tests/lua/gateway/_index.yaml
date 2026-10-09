@@ -287,3 +287,12 @@ entries:
     installer: bee.gateway.security:installation
     installation: bee.hub.activation:installation
     bounds: bee.values:bounds
+- name: demand_test
+  kind: function.lua
+  source: file://demand_test.lua
+  method: run
+  modules: [registry, system, events, channel, time]
+  meta: {type: test, suite: bee, timeout: 15s}
+  imports:
+    test: wippy.test:test
+    protocol: bee.hive:protocol

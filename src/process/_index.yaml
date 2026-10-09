@@ -27,3 +27,9 @@ entries:
     actions: [process.registry.lookup, process.send]
     resources: '*'
     effect: allow
+- name: task
+  kind: library.lua
+  source: file://task.lua
+  modules: [channel, time, logger]
+  imports:
+    worker: bee.process:worker

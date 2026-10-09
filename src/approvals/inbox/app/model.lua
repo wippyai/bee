@@ -73,6 +73,7 @@ type Pending =
 type Intent = {target: string, request: Object}
 type Confirmation = {approval_id: string, revision: integer, proposal_digest: string, reviewed_digest: string?, owner_node: string, owner_incarnation: integer}
 type State = {
+    resyncing: {[string]: boolean},
     grant_line_count: integer?, grant_detail: {string}?, grants_view: boolean, grants: {grants.Grant}, grant_selected: integer, longer: boolean, longer_choices: {windows.Choice},
     workspaces: {string},
     cursors: {[string]: integer},
@@ -399,7 +400,7 @@ function M.reset_cursor(state: State, workspace: string)
     state.cursors[workspace] = 0
 end
 function M.new(workspaces: {string}): State
-    return {grants_view = false, grants = {}, grant_selected = 1, longer = false, longer_choices = {}, workspaces = workspaces, cursors = {}, unavailable = {}, rows = {}, selected = nil, detail = nil, technical = false, pending = nil, notice = ""}
+    return {resyncing = {}, grants_view = false, grants = {}, grant_selected = 1, longer = false, longer_choices = {}, workspaces = workspaces, cursors = {}, unavailable = {}, rows = {}, selected = nil, detail = nil, technical = false, pending = nil, notice = ""}
 end
 -- inbox_intent: the next bounded page of one workspace's changes.
 function M.inbox_intent(state: State, workspace: string): Intent
@@ -424,6 +425,7 @@ end
 -- retained change, a refusal marks the workspace unavailable. Returns true
 -- when more changes wait.
 function M.apply_inbox(state: State, workspace: string, reply: Reply): boolean
+    state.resyncing[workspace] = nil
     if reply.kind ~= "success" then
         local code, message = fault_details(reply)
         if code == "DENIED" or code == "RESET_REQUIRED" then
@@ -435,13 +437,16 @@ function M.apply_inbox(state: State, workspace: string, reply: Reply): boolean
             end
         end
         if reply.kind == "reset" then
+            state.resyncing[workspace] = true
             state.cursors[workspace] = reply.oldest_seq - 1
             state.unavailable[workspace] = nil
             return true
         end
         if code == "RESET_REQUIRED" then
-            state.unavailable[workspace] = M.text("RESET_REQUIRED: " .. message, M.LINE_LIMIT)
-            return false
+            state.resyncing[workspace] = true
+            state.cursors[workspace] = 0
+            state.unavailable[workspace] = nil
+            return true
         end
         state.unavailable[workspace] = M.text(code .. ": " .. message, M.LINE_LIMIT)
         return false

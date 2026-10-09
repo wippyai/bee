@@ -38,6 +38,25 @@ local function define_tests()
             test.eq(proposed.bindings[1].policy_id, proposed.policies[1].id)
             test.eq(proposed.thread_access, "none")
         end)
+        test.it("preserves an unchanged capability when unrelated catalog entries advance", function()
+            local catalog = vocabulary()
+            local item = request("app.database", {name = "notes"})
+            local current = assert(grants.propose(catalog, OWNER, APP, {item}))
+            local declared = assert(bounds.object(item.capability_request))
+            declared.catalog_revision = catalog.revision - 1
+            local restored = assert(grants.propose(catalog, OWNER, APP, {item}))
+            test.eq(restored.digest, current.digest)
+            local record = assert(grants.record(OWNER, "workspace-1", APP, current, "approved", 1))
+            local installed = assert(grants.decode(record, OWNER, "workspace-1", APP, catalog))
+            test.is_false(assert(grants.diff(catalog, installed, restored)).requires_approval)
+            declared.template_revision = 999
+            test.is_nil(grants.propose(catalog, OWNER, APP, {item}))
+            declared.template_revision = 1
+            for _, revision in ipairs({0, catalog.revision + 1, 1.5}) do
+                declared.catalog_revision = revision
+                test.is_nil(grants.propose(catalog, OWNER, APP, {item}))
+            end
+        end)
         test.it("rejects capability request identities before catalog resolution", function()
             local malformed: {unknown} = {false, 17, {}, "", "Threads.read", "threads.read\n", string.rep("a", 161)}
             for _, capability in ipairs(malformed) do

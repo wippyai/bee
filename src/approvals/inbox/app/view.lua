@@ -220,7 +220,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local capacity = math.floor((list_height + 1) / (card_height + 1))
     local window = frame.window(#rows, capacity, selected_index, offset)
     if #rows == 0 and list_last >= list_first then
-        frame.empty(painter, list_first, "No decisions needed", list_last > list_first and "Requests that need your decision appear here · R refresh" or nil)
+        local resyncing = next(state.resyncing) ~= nil
+        frame.empty(painter, list_first, resyncing and "Refreshing approvals…" or "No decisions needed",
+            list_last > list_first and (resyncing and "Rebuilding the current workspace snapshot" or "Requests that need your decision appear here · R refresh") or nil)
     end
     for slot = 1, window.capacity do
         local row = rows[window.offset + slot]

@@ -45,6 +45,16 @@ local function define_tests()
                 for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), width) end
             end
         end)
+        test.it("never presents a snapshot reset as an unavailable workspace", function()
+            local state = model.new({"ws-1"})
+            test.is_true(model.apply_inbox(state, "ws-1", {kind = "failure", code = "RESET_REQUIRED", message = "approval snapshot identity mismatch"}))
+            local shown = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            test.contains(table.concat(shown.rows, "\n"), "Refreshing approvals")
+            for _, row in ipairs(shown.rows) do
+                test.is_nil((tty.text.plain(row):find("unavailable", 1, true)))
+                test.is_nil((tty.text.plain(row):find("RESET_REQUIRED", 1, true)))
+            end
+        end)
         test.it("leads MCP pairing cards with the client name and the requested trait summary", function()
             local state = model.new({"ws-1"})
             local item = request("mcp-card", "pending", "Let this agent session use Read Bee documentation and this client's thread? It asks: Pair external MCP client Terminal Claude. Bee shows its configuration once in the requesting terminal.")

@@ -281,7 +281,9 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
             return nil, "capability requirement is not a measured app policy append"
         end
         local catalog_revision, template_revision = capability_model.revisions(vocabulary, capability)
-        if not catalog_revision or not template_revision or request.catalog_revision ~= catalog_revision
+        local requested_catalog = bounds.integer(request.catalog_revision)
+        if not catalog_revision or not template_revision or not requested_catalog
+            or requested_catalog < 1 or requested_catalog > catalog_revision
             or request.template_revision ~= template_revision then
             return nil, "capability template changed since resolution"
         end

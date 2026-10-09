@@ -6,6 +6,7 @@ local semver = require("semver")
 local bounds = require("bounds")
 local writer_version = require("writer_version")
 local ledger = require("ledger")
+local application_databases = require("application_databases")
 local process = require("process")
 local M = {}
 M.WRITER = "bee.persist:state_writer"
@@ -87,6 +88,9 @@ local function targets(): {Target}
     local state = assert(snapshot:state())
     for _, entry in ipairs(state.entries) do
         local id, target = tostring(entry.id), entry.meta and entry.meta.target_db
+        if entry.kind == "db.sql.sqlite" and id:sub(1, #application_databases.DATABASE_PREFIX) == application_databases.DATABASE_PREFIX then
+            selected[id] = selected[id] or {id = id, known = {}, namespaces = {}, migrations = {}}
+        end
         if entry.meta and entry.meta.type == "migration" and type(target) == "string" then
             local item = selected[target]
             if not item then

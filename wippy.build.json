@@ -3,7 +3,7 @@
   "name": "bee",
   "runtime": {
     "module": "github.com/wippyai/runtime",
-    "version": "2bb9e144ab062548be9e5914a84f4c38cf39f797",
+    "version": "18f25931b0c7739017b9da31e91efac01b2228ee",
     "go": "1.27.0",
     "tags": [
       "fts5",

@@ -310,6 +310,7 @@ entries:
   - events
   - logger
   imports:
+    state_guard: bee.persist:state_guard
     follow_store: bee.gov.persist:follow_store
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake
@@ -396,6 +397,7 @@ entries:
   - events
   - logger
   imports:
+    state_guard: bee.persist:state_guard
     follow_store: bee.gov.persist:follow_store
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake
@@ -446,6 +448,7 @@ entries:
   - events
   - logger
   imports:
+    state_guard: bee.persist:state_guard
     follow_store: bee.gov.persist:follow_store
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake

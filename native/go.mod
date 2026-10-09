@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/stretchr/testify v1.12.1
-	github.com/wippyai/runtime v0.1.14-0.20261007011850-2bb9e144ab06
+	github.com/wippyai/runtime v0.1.14-0.20261009164051-18f25931b0c7
 	golang.org/x/sys v0.48.0
 )
 

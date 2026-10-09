@@ -5,8 +5,9 @@ loads only the boot/residency tests, so real backlog probes run without those
 seams or the suite's synthetic contract owners.
 """
 from pathlib import Path
-import shutil
+import json
 import sqlite3
+import shutil
 import subprocess
 import sys
 
@@ -14,6 +15,41 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 ROOT = REPO / "tests/.wippy/boot"
+
+
+def check_future_writer(toolchain, root, workspace, application, environment):
+    database = root / "bee.db"
+    with sqlite3.connect(database) as connection:
+        writer = json.loads(connection.execute(
+            "SELECT description FROM _migrations WHERE id = 'bee.persist:state_writer'").fetchone()[0])
+        writer["version"] = "999.0.0"
+        connection.execute("UPDATE _migrations SET description = ? WHERE id = 'bee.persist:state_writer'",
+                           (json.dumps(writer),))
+    index_path = application / "src/persist/_index.yaml"
+    index = yaml.safe_load(index_path.read_text())
+    reporter = next(entry for entry in index["entries"] if entry["name"] == "state_refusal")
+    reporter["modules"].append("time")
+    index_path.write_text(yaml.safe_dump(index, sort_keys=False))
+    script = application / "src/persist/state_refusal.lua"
+    script.write_text('local time = require("time")\n' + script.read_text().replace(
+        '    assert(io.eprint(message))', '    time.sleep("50ms")\n    assert(io.eprint(message))'))
+    command = [str(toolchain), "run", "--silent", "-x", "bee.node:headless", "--host", "bee:terminal",
+               "--set", "security.strict_mode=true", "-o", "bee.gateway.api:gateway_listener:addr=127.0.0.1:0"]
+    try:
+        result = subprocess.run(command, cwd=workspace, env=environment,
+                                capture_output=True, text=True, timeout=10)
+    except subprocess.TimeoutExpired as error:
+        (root / "future-refusal.log").write_bytes((error.stdout or b"") + (error.stderr or b""))
+        raise AssertionError("future-writer refusal must finish cleanup and exit within 10 seconds") from error
+    output = result.stdout + result.stderr
+    (root / "future-refusal.log").write_text(output)
+    assert result.returncode == 1, f"future-writer refusal exit={result.returncode}: {output}"
+    assert "Bee refuses to start:" in output, output
+    assert str(database.parent) in output, output
+    assert "Install Bee 999.0.0 or newer" in output, output
+    assert "is running" not in output and "no such table" not in output, output
+    print("PASS: future writer prints its refusal before clean non-zero shutdown")
+
 
 
 def run(toolchain, fault):
@@ -90,6 +126,8 @@ def run(toolchain, fault):
         print(result.stdout + result.stderr)
     else:
         print("PASS: " + ("failing probe retries without restarting Hive or losing its display" if fault else "fresh strict boot retains resident names, serves a display desktop and dispatches Gateway effects"))
+        if not fault:
+            check_future_writer(toolchain, root, workspace, application, environment)
     return result.returncode
 
 

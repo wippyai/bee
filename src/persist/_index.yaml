@@ -14,6 +14,7 @@ entries:
   source: file://state_guard.lua
   modules: [sql, registry, json, process]
   imports:
+    application_databases: bee.gov.types:capability_files
     ledger: wippy.migration:repository
     writer_version: bee.env:state_writer_version
     semver: bee.hub.package:semver
@@ -24,6 +25,7 @@ entries:
   method: run
   modules: [sql, registry, json, process]
   imports:
+    application_databases: bee.gov.types:capability_files
     ledger: wippy.migration:repository
     writer_version: bee.env:state_writer_version
     semver: bee.hub.package:semver
@@ -39,6 +41,7 @@ entries:
   method: main
   modules: [sql, registry, json, process]
   imports:
+    application_databases: bee.gov.types:capability_files
     ledger: wippy.migration:repository
     writer_version: bee.env:state_writer_version
     semver: bee.hub.package:semver

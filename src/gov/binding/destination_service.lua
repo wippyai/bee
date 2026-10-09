@@ -27,6 +27,7 @@ local delivery = require("delivery")
 local destination = require("destination")
 local preflight = require("preflight")
 local materializer = require("materializer")
+local state_guard = require("state_guard")
 local headless_revert = require("headless_revert")
 local uninstall = require("activation_uninstall")
 local artifact = require("artifact")
@@ -1467,6 +1468,10 @@ local function restore_databases(resource: string, node_id: string): string?
         if not present then
             local provided, provide_error = materializer.provide(owner_id, provisioned)
             if not provided then return "restore application databases of " .. owner_id .. ": " .. tostring(provide_error) end
+        end
+        for _, database in ipairs(provisioned.databases) do
+            local prepared, prepare_error = state_guard.prepare(assert(bounds.id(database.id)))
+            if not prepared then return tostring(prepare_error) end
         end
     end
     return nil

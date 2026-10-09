@@ -176,7 +176,7 @@ local function define_tests()
             local expected: {[string]: {string}} = {
                 claude = {"stdio", "hook_http"}, codex = {"provider", "hook_mcp"},
                 agy = {"hook_http", "hook_http"}, grok = {"stdio", "provider"},
-                muse = {"hook_http", "hook_http"}, opencode = {"provider", "provider"}}
+                muse = {"hook_http", "hook_http"}, opencode = {"provider", "hook_http"}}
             for provider, transports in pairs(expected) do
                 local loaded = assert(descriptor.load("bee.driver." .. provider .. ".descriptor:cli"))
                 local headless = descriptor.permission_answer(loaded, "first_turn")
@@ -185,6 +185,8 @@ local function define_tests()
                 test.eq(window.transport, transports[2])
                 test.eq(descriptor.permission_answer(loaded, "resume").transport, transports[1])
                 if headless.transport == "provider" then test.not_nil(headless.reason) else test.not_nil(headless.adapter_ref) end
+                if window.transport == "provider" then test.not_nil(window.reason) else test.not_nil(window.adapter_ref) end
+                if provider == "opencode" then test.eq(window.adapter_ref, "bee.driver.permission:permission_request_hook") end
             end
         end)
         test.it("decodes bounded any-of login evidence and rejects malformed alternatives", function()

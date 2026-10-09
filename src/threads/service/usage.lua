@@ -33,7 +33,7 @@ local function data(record: record_types.Record, session: string, turn: string):
         if not event or event.session_ref ~= session or event.kind ~= "turn.observation" or not detail or detail.turn ~= turn or not observation then return nil end
         return bounds.object(observation.data)
     end
-    if record.action_id == session then return bounds.object(observed) end
+    if record.action_id == session and record.turn_id == turn then return bounds.object(observed) end
     return nil
 end
 function M.turn(tx: sql.Transaction, thread: string, turn: journal.Turn, reported: unknown): (Usage?, string?)

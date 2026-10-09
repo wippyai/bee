@@ -5,6 +5,7 @@
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
+local demand = require("demand")
 local M = {}
 M.RETRY_FIRST_MS = 1000
 M.RETRY_LAST_MS = 30000
@@ -19,6 +20,7 @@ type Options = {
     -- every is a tick interval such as "5000ms" that triggers a pass.
     every: string?,
     pass: Pass,
+    demand: boolean?,
 }
 
 function M.run(options: Options)
@@ -28,12 +30,15 @@ function M.run(options: Options)
         local registered, register_error = process.registry.register(options.name)
         if not registered then error("register " .. options.name .. ": " .. tostring(register_error)) end
     end
+    local demanded = options.demand and assert(process.listen(demand.WAKE, {message = true})) or nil
+    if demanded and options.name then assert(demand.ready(options.name)) end
     local ticker = options.every and assert(time.ticker(options.every)) or nil
     local retry_ms = M.RETRY_FIRST_MS
     local retrying = not options.pass()
     while true do
         local cases = {lifecycle:case_receive()}
         if wakes then cases[#cases + 1] = wakes:case_receive() end
+        if demanded then cases[#cases + 1] = demanded:case_receive() end
         if ticker then cases[#cases + 1] = ticker:channel():case_receive() end
         if retrying then cases[#cases + 1] = time.after(tostring(retry_ms) .. "ms"):case_receive() end
         local selected = channel.select(cases)

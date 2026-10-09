@@ -1,5 +1,5 @@
 -- MIT. Plans associated application tests and records authenticated runs.
-local process = require("process")
+local demand = require("demand")
 local registry = require("registry")
 local uuid = require("uuid")
 local application = require("application")
@@ -103,9 +103,8 @@ start = function(workspace_id: string, actor_id: string, overlay: string, planne
         state = "pending", result = nil}
     local created, code, message = test_runs.create(run)
     if not created then return tests.fail(code or "UNAVAILABLE", message or "the run was not recorded") end
-    -- The wake is a hint; the run waits in the database whether or not it arrives.
-    local pid = process.registry.lookup(tests.NAME)
-    if pid then process.send(pid, tests.WAKE, {run_id = run.run_id}) end
+    local signalled, wake_error = demand.wake(tests.NAME)
+    if not signalled then return tests.fail("UNAVAILABLE", "run " .. run.run_id .. " is recorded: " .. tostring(wake_error)) end
     return tests.succeed({run_id = run.run_id, application = run.application, total = #run.plan})
 end
 

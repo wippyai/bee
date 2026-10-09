@@ -5,3 +5,25 @@ entries:
   kind: library.lua
   source: file://worker.lua
   modules: [process, channel, time]
+  imports:
+    demand: bee.process:demand
+- name: demand_state
+  kind: library.lua
+  source: file://demand_state.lua
+- name: demand
+  kind: library.lua
+  source: file://demand.lua
+  modules: [process]
+- name: demand_owner
+  kind: library.lua
+  source: file://demand_owner.lua
+  modules: [registry, process, events, system, funcs]
+  imports:
+    demand: bee.process:demand
+    state: bee.process:demand_state
+- name: client_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.lookup, process.send]
+    resources: '*'
+    effect: allow

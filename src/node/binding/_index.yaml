@@ -79,6 +79,7 @@ entries:
     application: bee.node:application
     tests: bee.node:tests
     test_runs: bee.node:test_runs
+    demand: bee.process:demand
     discovery: wippy.test:discovery
     application_tests: bee.node:application_tests
     activation_profiles: bee.gov.types:activation_profile_decoder
@@ -154,6 +155,7 @@ entries:
     application: bee.node:application
     tests: bee.node:tests
     test_runs: bee.node:test_runs
+    demand: bee.process:demand
     discovery: wippy.test:discovery
     application_tests: bee.node:application_tests
     activation_profiles: bee.gov.types:activation_profile_decoder

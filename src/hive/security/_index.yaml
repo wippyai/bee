@@ -28,7 +28,7 @@ entries:
   meta:
     comment: The node supervisor reads route entries, resolves the services they name and monitors the processes serving them
   policy:
-    actions: [registry.get, process.registry.lookup, process.monitor, process.unmonitor]
+    actions: [registry.get, registry.find, process.registry.lookup, process.monitor, process.unmonitor]
     resources: '*'
     effect: allow
 - name: routing_changes
@@ -60,4 +60,16 @@ entries:
   policy:
     actions: [registry.get, registry.find, registry.snapshot, registry.version, registry.overlay.get, process.registry.lookup]
     resources: '*'
+    effect: allow
+- name: demand
+  kind: security.policy
+  policy:
+    actions: [events.send, events.subscribe, system.read]
+    resources: [supervisor]
+    effect: allow
+- name: demand_changes
+  kind: security.policy
+  policy:
+    actions: [cdc.subscribe]
+    resources: [bee:changes]
     effect: allow

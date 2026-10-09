@@ -129,3 +129,8 @@ entries:
     outbound: bee.hive:outbound
     schemas: bee.gateway.catalog:json_schema
     declarations: bee.values:agent_tool
+- name: test_backlog
+  kind: function.lua
+  source: file://test_backlog.lua
+  method: pending
+  modules: [sql]

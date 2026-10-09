@@ -73,6 +73,8 @@ entries:
 - name: activation_service
   meta:
     title: Library · activation
+    type: bee.process.demand
+    demand: {name: bee.gov.activation_worker}
   kind: process.service
   process: bee.gov.service:activation_worker
   host: bee:workers
@@ -81,6 +83,7 @@ entries:
     requires:
     - wippy.bootloader:bootloader.service
     - bee.gov.service:recovery_service
+    - bee.hive.service:supervisor_service
     security:
       actor:
         id: bee.gov.activation
@@ -93,4 +96,5 @@ entries:
 - name: follow_wake
   kind: library.lua
   source: file://follow_wake.lua
-  modules: [process]
+  imports:
+    demand: bee.process:demand

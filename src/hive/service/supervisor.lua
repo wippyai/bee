@@ -20,6 +20,9 @@ local time = require("time")
 local receiver = require("receiver")
 local bounds = require("bounds")
 local remote = require("remote")
+local cdc = require("cdc")
+local demand = require("demand")
+local demand_owner = require("demand_owner")
 
 type Completion = {request: protocol.Forwarded, reply: protocol.Reply?, complete: boolean}
 
@@ -58,6 +61,9 @@ local function main()
     -- The routes, read again when a registry change commits.
     local registry_changes = assert(eventbus.subscribe("registry", "registry.commit")):channel()
     local routing = routes()
+    local demanded = demand_owner.discover(nil)
+    local demands = assert(process.listen(demand.TOPIC, {message = true}))
+    local supervised = assert(eventbus.subscribe("supervisor", "service.update")):channel()
 
     local function expired(request: protocol.Forwarded): boolean
         return request.expires <= time.now():unix_nano()
@@ -164,7 +170,11 @@ local function main()
     local function deliver(name: string, request: protocol.Forwarded)
         if expired(request) then return end
         local pid = services[name]
-        if pid then
+        if demanded[name] and demand_owner.available(demanded, name) then
+            demand_owner.wake(demanded, name, {caller = request.caller, data = {hive = request}})
+            return
+        end
+        if pid and not demanded[name] then
             if protocol.forward(pid, request) then return end
             -- The service exited before its exit event reached the supervisor.
             forget(pid)
@@ -179,6 +189,7 @@ local function main()
         end
         waiting[#waiting + 1] = request
         parked[name] = waiting
+        demand_owner.wake(demanded, name, nil)
     end
 
     -- ready records the process that announced it serves name; only the
@@ -188,23 +199,44 @@ local function main()
         local holder = process.registry.lookup(data.name, process.registry.LOCAL)
         if not holder or tostring(holder) ~= from then return end
         serve(data.name, from)
+        demand_owner.ready(demanded, data.name, from)
         local waiting = parked[data.name]
         parked[data.name] = nil
         for _, request in ipairs(waiting or {}) do deliver(data.name, request) end
     end
 
     adopt()
+    local backlog_stream = assert(cdc.stream("bee:changes", {tables = demand_owner.tables(demanded), ops = {"insert", "update", "delete"}}))
+    local backlog = backlog_stream:channel()
+    demand_owner.recover(demanded, nil)
     while true do
         local selected = channel.select({calls:case_receive(), readiness:case_receive(), events:case_receive(),
-            registry_changes:case_receive(), completions:case_receive()})
+            registry_changes:case_receive(), completions:case_receive(), demands:case_receive(), supervised:case_receive(), backlog:case_receive()})
         if not selected.ok then return end
-        if selected.channel == registry_changes then
+        if selected.channel == backlog then
+            local change: unknown = selected.value
+            if type(change) == "table" and type(change.table) == "string" then
+                demand_owner.recover(demanded, change.table)
+            end
+        elseif selected.channel == demands then
+            local message = selected.value
+            demand_owner.receive(demanded, tostring(message:from()), message:payload():data())
+        elseif selected.channel == supervised then
+            demand_owner.update(demanded)
+        elseif selected.channel == registry_changes then
+            demanded = demand_owner.discover(demanded)
+            backlog_stream:close()
+            backlog_stream = assert(cdc.stream("bee:changes", {tables = demand_owner.tables(demanded), ops = {"insert", "update", "delete"}}))
+            backlog = backlog_stream:channel()
             routing = routes()
             adopt()
         elseif selected.channel == events then
             local event = selected.value
             if event.kind == process.event.CANCEL then return end
-            if event.kind == process.event.EXIT or event.kind == process.event.MONITOR_DOWN then forget(tostring(event.from)) end
+            if event.kind == process.event.EXIT or event.kind == process.event.MONITOR_DOWN then
+                forget(tostring(event.from))
+                demand_owner.exit(demanded, tostring(event.from))
+            end
         elseif selected.channel == readiness then
             local message = selected.value
             ready(tostring(message:from()), message:payload():data())

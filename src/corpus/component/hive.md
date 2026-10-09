@@ -60,3 +60,16 @@ Host services use explicit route entries, node-local registration,
 `protocol.ready` and authenticated forwarded requests. They retain their own
 domain authorization. Adding a legacy route is host composition, not an
 application exposure grant.
+
+Hive serializes demand for an explicit allowlist of host owners declared with
+`meta.type: bee.process.demand`. A demand starts a supervised service, waits
+for the registered owner to acknowledge readiness, and delivers a generation
+with its requests. Quiet stop accepts only that owner's current generation.
+Demand arriving during stop starts the owner after the supervised stop
+completes. Boot recovery calls each domain's durable backlog probe.
+
+The approvals consolidation retains a separate integration obligation:
+`src/approvals/binding/service.lua` still sends direct wakes only to existing
+worker names. Its wake path needs demand delivery to the consolidated approval
+owner and the gateway and activation owners. The services lane leaves both
+approvals namespaces unchanged.

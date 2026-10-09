@@ -45,19 +45,22 @@ entries:
     application: bee.node:application
     tests: bee.node:tests
     test_runs: bee.node:test_runs
+    demand: bee.process:demand
     receiver: bee.hive:receiver
     bounds: bee.values:bounds
 - name: tests_service
   meta:
     title: Node · tests
+    type: bee.process.demand
+    demand: {name: bee.node.tests, probe: "bee.node:test_backlog", tables: [bee_node_test_runs]}
   kind: process.service
   process: bee.node.service:tests
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires: [wippy.bootloader:bootloader.service, bee.gov.service:recovery_service]
+    requires: [wippy.bootloader:bootloader.service, bee.gov.service:recovery_service, bee.hive.service:supervisor_service]
     security:
       actor: {id: bee.node.tests}
-      policies: [bee.node.security:tests_runner, bee.node.security:tests_store, bee.node.security:tests_name, bee.node.security:identity]
+      policies: [bee.node.security:tests_runner, bee.node.security:tests_store, bee.node.security:tests_name, bee.node.security:identity, bee.process:client_policy]
     restart:
       max_attempts: 10

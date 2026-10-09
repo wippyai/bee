@@ -79,7 +79,7 @@ entries:
   meta:
     comment: Every app may message processes; what else it may do comes from its own process entry and its governed admission
   policy:
-    actions: [process.send]
+    actions: [process.send, process.registry.lookup]
     resources: '*'
     effect: allow
 - name: application_boundary
@@ -262,6 +262,6 @@ entries:
   meta:
     comment: The test backend wakes the runner after it records a run
   policy:
-    actions: [process.send]
+    actions: [process.send, process.registry.lookup]
     resources: '*'
     effect: allow

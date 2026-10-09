@@ -17,3 +17,11 @@ entries:
   modules: [process, channel, time]
   imports:
     test: wippy.test:test
+- name: demand_test
+  kind: function.lua
+  source: file://demand_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    demand_state: bee.process:demand_state

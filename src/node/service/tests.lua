@@ -20,6 +20,7 @@ local tests = require("tests")
 local test_runs = require("test_runs")
 local receiver = require("receiver")
 local bounds = require("bounds")
+local demand = require("demand")
 
 type Object = {[string]: unknown}
 type Case = {name: string, status: string, error: string?, duration_ms: integer}
@@ -219,6 +220,8 @@ local function main()
     if not registered then error("register test runner: " .. tostring(register_error)) end
     local wakes = assert(process.listen(tests.WAKE, {message = true}))
     local lifecycle = assert(process.events())
+    local demanded = assert(process.listen(demand.WAKE, {message = true}))
+    assert(demand.ready(tests.NAME))
     local interrupted, interrupt_error = test_runs.interrupt()
     if not interrupted then logger:error("Interrupted test runs not recorded", {error = interrupt_error}) end
     local function sweep()
@@ -229,7 +232,7 @@ local function main()
     sweep()
     logger:info("Test runner ready")
     while true do
-        local selected = channel.select({lifecycle:case_receive(), wakes:case_receive()})
+        local selected = channel.select({lifecycle:case_receive(), wakes:case_receive(), demanded:case_receive()})
         if selected.channel == lifecycle then
             if not selected.ok or selected.value.kind == process.event.CANCEL then return end
         else

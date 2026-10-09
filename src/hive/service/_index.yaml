@@ -12,12 +12,15 @@ entries:
   - registry
   - logger
   - events
+  - cdc
   - time
   imports:
     protocol: bee.hive:protocol
     receiver: bee.hive:receiver
     bounds: bee.values:bounds
     remote: bee.hive:remote
+    demand: bee.process:demand
+    demand_owner: bee.process:demand_owner
 - name: supervisor_service
   meta:
     title: "Hive \xB7 supervisor"
@@ -26,6 +29,7 @@ entries:
   host: bee:workers
   lifecycle:
     auto_start: true
+    requires: [wippy.bootloader:bootloader.service, bee:changes]
     security:
       actor:
         id: bee.hive.supervisor
@@ -33,6 +37,8 @@ entries:
       - bee.hive.security:supervisor
       - bee.hive.security:routing
       - bee.hive.security:routing_changes
+      - bee.hive.security:demand
+      - bee.hive.security:demand_changes
       - bee.hive.security:messaging
       - bee.hive.security:application_dispatch
       - bee.hive.security:admission_store

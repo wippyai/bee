@@ -897,6 +897,7 @@ entries:
   method: cleanup
   modules:
   - registry
+  - process
 - name: provider_projection_test
   kind: function.lua
   source: file://provider_projection_test.lua

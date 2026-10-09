@@ -224,6 +224,28 @@ def hold_test_runner_quiet(src):
             else sweep() end""")
 
 
+def observe_preparer_cleanup(src):
+    replace_once(src / "placement/native/service/workdir_preparers.lua",
+                 "local after = assert(bounds.count(row.evidence_count))",
+                 """local after = assert(bounds.count(row.evidence_count))
+    local fixture = registry.get("bee.placement.native:preparer_fixture_config")
+    if fixture and fixture.data and type(fixture.data.cleanup_observer) == "string" then
+        assert(process.send(fixture.data.cleanup_observer, "bee.test.preparer.observed", {}))
+    end""")
+    replace_once(src / "placement/native/service/workdir_preparers.lua",
+                 'local db, open_error = store.open()\n    if not db then return false, open_error end\n    local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)',
+                 '''local fixture = registry.get("bee.placement.native:preparer_fixture_config")
+    if fixture and fixture.data and fixture.data.cleanup_crash_attempt == attempt.attempt_id and type(fixture.data.cleanup_crash) == "string" then
+        local crash = assert(process.listen("bee.test.preparer.crash", {message = true}))
+        assert(process.send(fixture.data.cleanup_crash, "bee.test.preparer.claimed", {}))
+        assert((crash:receive()))
+        error("fixture cleanup owner crashed")
+    end
+    local db, open_error = store.open()
+    if not db then return false, open_error end
+    local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)''')
+
+
 def hold_docker_cleanup(src):
     replace_once(src / "placement/docker/binding/methods.lua",
                  "function M.cleanup_loaded(loaded: Loaded): Reply",
@@ -290,6 +312,7 @@ def main():
     owner_scheduling(src)
     hold_test_runner_quiet(src)
     hold_docker_cleanup(src)
+    observe_preparer_cleanup(src)
     pause_effect_dispatch(src)
     observe_effect_delivery(src)
     observe_boot_recovery(src)
@@ -306,6 +329,8 @@ def main():
                  TESTS / "lua/placement_owner/image_owner.lua")
     shutil.copy2(ROOT / "src/gov/service/activation_worker.lua",
                  TESTS / "lua/gov/activation_worker.lua")
+    shutil.copy2(ROOT / "src/process/demand_owner.lua",
+                 TESTS / "lua/process/demand_owner.lua")
     host_environment()
 
 

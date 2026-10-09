@@ -170,6 +170,62 @@ local function define_tests()
             cleanup_dir(root); cleanup_dir(outside)
         end)
 
+        for _, outcome in ipairs({"cleaned", "retained", "failed"}) do
+            test.it("concurrent cleanups invoke once and share the " .. outcome .. " outcome", function()
+                local root = temp_dir()
+                local entered = assert(process.listen("bee.test.preparer.entered", {message = true}))
+                local observed = assert(process.listen("bee.test.preparer.observed", {message = true}))
+                with_preparer({cleanup_observer = tostring(process.pid()), cleanup_failure = outcome == "failed", cleanup_retained = outcome == "retained"}, function()
+                    local db = assert(store.open())
+                    local req = make_request(fresh("cleanup-race"))
+                    claim_attempt(db, req)
+                    test.not_nil((workdir_preparers.setup(db, req, req.attempt_id, root, {root})))
+                    if outcome ~= "failed" then
+                        test.is_true(store.transition(db, req.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
+                            evidence = {kind = "child.not_started", detail = "fixture setup ended"}}).ok)
+                    end
+                    local attempt = assert(store.attempt(db, req.attempt_id))
+                    db:release()
+                    local results = channel.new(2) :: channel.Channel<{ok: boolean, err: string?}>
+                    for _ = 1, 2 do
+                        coroutine.spawn(function()
+                            local ok, err = workdir_preparers.cleanup(attempt)
+                            results:send({ok = ok, err = err})
+                        end)
+                    end
+                    local deadline = time.after("5s")
+                    for _ = 1, 2 do
+                        local selected = channel.select({observed:case_receive(), deadline:case_receive()})
+                        assert(selected.ok and selected.channel == observed, "cleanup caller did not observe its plans")
+                    end
+                    local calls = 0
+                    local finished = 0
+                    while finished < 2 do
+                        local selected = channel.select({entered:case_receive(), results:case_receive(), deadline:case_receive()})
+                        assert(selected.ok and selected.channel ~= deadline, "concurrent cleanup did not finish: " .. tostring(calls) .. " invocations, " .. tostring(finished) .. " replies")
+                        if selected.channel == entered then
+                            calls = calls + 1
+                            assert(process.send(tostring(selected.value:from()), "bee.test.preparer.release", {}))
+                        else
+                            test.eq(selected.value.ok, outcome ~= "failed", selected.value.err)
+                            if outcome == "failed" then test.contains(selected.value.err or "", "fixture cleanup failure") end
+                            finished = finished + 1
+                        end
+                    end
+                    db = assert(store.open())
+                    local rows = assert(db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind = ?",
+                        {req.attempt_id, "workdir_preparer." .. outcome}))
+                    db:release()
+                    test.eq(calls, 1, "preparer cleanup invocations")
+                    test.eq(#rows, 1, "cleanup outcome evidence rows")
+                end)
+                process.unlisten(entered)
+                process.unlisten(observed)
+                cleanup_dir(root)
+            end)
+        end
+
+
         test.it("cleanup failures surface and a later call completes from evidence", function()
             local root = temp_dir()
             with_preparer({cleanup_failure = true}, function()
@@ -371,6 +427,47 @@ local function define_tests()
             test.eq(#retained_rows, 1)
 
             cleanup_dir(repo)
+        end)
+        test.it("a crashed cleanup owner releases ownership for a later caller", function()
+            local root = temp_dir()
+            local claimed = assert(process.listen("bee.test.preparer.claimed", {message = true}))
+            with_preparer({}, function()
+                local db = assert(store.open())
+                local req = make_request(fresh("cleanup-owner-crash"))
+                claim_attempt(db, req)
+                test.not_nil((workdir_preparers.setup(db, req, req.attempt_id, root, {root})))
+                local attempt = assert(store.attempt(db, req.attempt_id))
+                db:release()
+                local entry = assert(registry.get("bee.placement.native:preparer_fixture_config"))
+                entry.data = {cleanup_crash = tostring(process.pid()), cleanup_crash_attempt = req.attempt_id}
+                local changes = registry.snapshot():changes(); changes:update(entry); assert(changes:apply())
+                local result = channel.new(1) :: channel.Channel<boolean>
+                coroutine.spawn(function() result:send((workdir_preparers.cleanup(attempt))) end)
+                local deadline = time.after("5s")
+                local selected = channel.select({claimed:case_receive(), deadline:case_receive()})
+                assert(selected.ok and selected.channel == claimed, "cleanup owner did not accept")
+                local owner = tostring(selected.value:from())
+                entry.data = {}
+                changes = registry.snapshot():changes(); changes:update(entry); assert(changes:apply())
+                assert(process.send(owner, "bee.test.preparer.crash", {}))
+                selected = channel.select({result:case_receive(), deadline:case_receive()})
+                assert(selected.ok and selected.channel == result, "crashed owner caller did not finish")
+                test.is_false(selected.value)
+                test.is_true(tostring(process.registry.lookup(workdir_preparers.OWNER, process.registry.LOCAL)) ~= owner)
+                local owned, ownership_error = workdir_preparers.execute_cleanup(attempt, 0)
+                test.is_false(owned)
+                test.eq(ownership_error, "preparer cleanup belongs to the sweeper")
+                coroutine.spawn(function() result:send((workdir_preparers.cleanup(attempt))) end)
+                selected = channel.select({result:case_receive(), deadline:case_receive()})
+                assert(selected.ok and selected.channel == result, "replacement owner did not finish")
+                test.is_true(selected.value)
+                db = assert(store.open())
+                local rows = assert(db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'workdir_preparer.cleaned'", {req.attempt_id}))
+                db:release()
+                test.eq(#rows, 1)
+            end)
+            process.unlisten(claimed)
+            cleanup_dir(root)
         end)
     end)
 end

@@ -14,3 +14,4 @@ __pycache__/
 
 /tests/lua/placement_owner/image_owner.lua
 /tests/lua/gov/activation_worker.lua
+/tests/lua/process/demand_owner.lua

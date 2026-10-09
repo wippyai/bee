@@ -61,10 +61,20 @@ entries:
   imports:
     canonical: bee.values:canonical
     driver_types: bee.driver:types
+- name: cleanup_request
+  kind: function.lua
+  source: file://cleanup_request.lua
+  method: main
+  modules: [process, channel]
+  imports:
+    demand: bee.process:demand
+    bounds: bee.values:bounds
 - name: workdir_preparers
   kind: library.lua
   source: file://workdir_preparers.lua
   modules:
+  - uuid
+  - process
   - registry
   - funcs
   - sql
@@ -200,7 +210,11 @@ entries:
   kind: process.lua
   source: file://sweeper.lua
   method: main
+  modules: [process]
   imports:
+    bounds: bee.values:bounds
+    store: bee.placement.native.persist:store
+    workdir_preparers: bee.placement.native.service:workdir_preparers
     worker: bee.process:worker
     service: bee.placement.native.service:service
 - name: sweeper_service

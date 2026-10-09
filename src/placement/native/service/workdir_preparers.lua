@@ -9,8 +9,11 @@ local paths = require("paths")
 local types = require("types")
 local resources = require("resources")
 local store = require("store")
+local process = require("process")
+local uuid = require("uuid")
 
 local M = {}
+M.OWNER = "bee.placement.sweeper"
 type Preparer = {binding_id: string, plan: string, setup: string, cleanup: string}
 
 local function resolve_preparer(binding_ref: string): (Preparer?, string?)
@@ -161,13 +164,35 @@ function M.setup(db: sql.DB, request: types.LaunchRequest, attempt_id: string, i
 end
 
 function M.cleanup(attempt: types.Attempt): (boolean, string?)
+    if tostring(process.registry.lookup(M.OWNER, process.registry.LOCAL)) == tostring(process.pid()) then
+        return M.execute_cleanup(attempt, nil)
+    end
+    local db, open_error = store.open()
+    if not db then return false, open_error end
+    local row = store.row(db, attempt.attempt_id)
+    if not row then db:release(); return false, "cleanup attempt is not recorded" end
+    local after = assert(bounds.count(row.evidence_count))
+    local id = tostring(uuid.v7())
+    local recorded = record(db, attempt.attempt_id, "workdir_preparer.cleanup_requested", id .. ": " .. tostring(after))
+    db:release()
+    if recorded then return false, recorded end
+    local result, err = funcs.call("bee.placement.native.service:cleanup_request", attempt.attempt_id, after, id)
+    local reply = bounds.object(result)
+    return reply ~= nil and reply.ok == true, err and tostring(err) or (reply and bounds.text(reply.error, 65536))
+end
+
+function M.execute_cleanup(attempt: types.Attempt, after: integer?): (boolean, string?)
+    if tostring(process.registry.lookup(M.OWNER, process.registry.LOCAL)) ~= tostring(process.pid()) then
+        return false, "preparer cleanup belongs to the sweeper"
+    end
     local db, open_error = store.open()
     if not db then return false, open_error end
     local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)
     if not plans then db:release(); return false, plans_error end
-    local rows, query_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'workdir_preparer.cleaned' ORDER BY sequence", {attempt.attempt_id})
+    local rows, query_error = db:query("SELECT sequence, kind, detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('workdir_preparer.cleaned', 'workdir_preparer.retained', 'workdir_preparer.failed') ORDER BY sequence", {attempt.attempt_id})
     if query_error or not rows then db:release(); return false, "read preparer cleanup evidence" end
     local completed: {[string]: boolean} = {}
+    local failed: {[string]: string} = {}
     local pending: {{[string]: unknown}} = {}
     for _, plan in ipairs(plans) do
         local value = bounds.object(json.decode(plan.record_json))
@@ -177,7 +202,9 @@ function M.cleanup(attempt: types.Attempt): (boolean, string?)
     for _, row in ipairs(rows) do
         local detail = bounds.text(row.detail, 65536)
         if not detail then db:release(); return false, "corrupt preparer evidence" end
-        completed[detail] = true
+        local binding = detail:match("^(.-): ") or detail
+        if row.kind ~= "workdir_preparer.failed" then completed[binding] = true
+        elseif after and (bounds.count(row.sequence) or 0) > after then failed[binding] = detail end
     end
     local failures: {string} = {}
     for index = #pending, 1, -1 do
@@ -185,7 +212,8 @@ function M.cleanup(attempt: types.Attempt): (boolean, string?)
         local binding = bounds.id(saved.binding_id)
         local target = bounds.id(saved.cleanup)
         if not binding or not target then db:release(); return false, "invalid cleanup binding" end
-        if not completed[binding] then
+        if failed[binding] then failures[#failures + 1] = failed[binding]
+        elseif not completed[binding] then
             local input: types.WorkdirPreparerCleanupInput = {attempt_id = attempt.attempt_id, owner_id = attempt.owner_id,
                 state = saved.state, exit = attempt.exit, execution_state = attempt.execution_state}
             local value, cleanup_error = invoke(target, input)

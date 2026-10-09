@@ -1,6 +1,44 @@
 version: '1.0'
 namespace: bee.tests.process
 entries:
+- name: demand_runtime
+  kind: library.lua
+  source: file://demand_runtime.lua
+  imports:
+    demand: bee.process:demand
+- name: demand_owner
+  kind: library.lua
+  source: file://demand_owner.lua
+  modules: [registry, funcs, security, logger, time, channel]
+  imports:
+    process: bee.tests.process:demand_runtime
+    events: bee.tests.process:demand_events
+    system: bee.tests.process:demand_system
+    demand: bee.process:demand
+    worker: bee.process:worker
+    state: bee.process:demand_state
+    bounds: bee.values:bounds
+- name: demand_events
+  kind: library.lua
+  source: file://demand_events.lua
+  imports:
+    runtime: bee.tests.process:demand_runtime
+- name: demand_system
+  kind: library.lua
+  source: file://demand_system.lua
+  imports:
+    runtime: bee.tests.process:demand_runtime
+- name: demand_owner_test
+  kind: function.lua
+  source: file://demand_owner_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    owner: bee.tests.process:demand_owner
+    runtime: bee.tests.process:demand_runtime
+    state: bee.process:demand_state
+    demand: bee.process:demand
 - name: probe_worker
   kind: process.lua
   source: file://probe_worker.lua

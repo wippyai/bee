@@ -70,7 +70,11 @@ local function deliver(owner: Owner)
         if not first then owner.state.generation = owner.state.generation + 1 end
         first = false
         local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})
-        if not sent then owner.state.pid, owner.state.phase = nil, "starting"; return end
+        if not sent then
+            owner.state.pid, owner.state.phase = nil, "starting"
+            M.update({[owner.name] = owner})
+            return
+        end
         for _, request in ipairs(requests) do
             local data: unknown = request.data
             if type(data) == "table" and type(data.request_id) == "string" then
@@ -118,13 +122,16 @@ function M.exit(owners: Owners, pid: string)
     for _, owner in pairs(owners) do
         if owner.state.pid == pid then
             owner.state.pid = nil
-            if owner.state.phase ~= "stopping" then owner.state.phase = "starting" end
+            if owner.state.phase ~= "stopping" then
+                owner.state.phase = "absent"
+            end
         end
     end
 end
 function M.update(owners: Owners)
     for _, owner in pairs(owners) do
         local current = system.supervisor.state(owner.id)
+        if current and current.status == "exited" and owner.state.phase == "starting" and not owner.state.pid then start(owner) end
         if current and current.desired == "stopped" and owner.state.phase == "stopping"
             and (current.status == "stopped" or current.status == "exited") then
             if state.stopped(owner.state) == "start" then start(owner :: Owner) end

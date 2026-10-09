@@ -615,12 +615,30 @@ local function credentials_tests()
             local sleeping = native_fixture.launch({"sh", "-c", "sleep 8"}, "direct_process")
             sleeping.attempt_id = revoked_attempt
             sleeping.projections = {revocable.projection_id}
+            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
             native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", sleeping))
-            test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = revoked_attempt})).execution_state, "running")
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "attach", {attempt_id = revoked_attempt, recipient = process.pid(), generation = 1}))
+            local started = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = revoked_attempt}))
+            test.eq(started.execution_state, "running")
             native_fixture.credential_call("revoke", {projection_id = revocable.projection_id})
-            local swept = native_fixture.value(service.sweep())
-            test.is_true((swept.reconciled) >= 1)
+            service.wake_supervision("native")
+            while true do
+                local message = assert((exits:receive()))
+                local outcome = assert(bounds.object(message:payload():data()))
+                if outcome.attempt_id == revoked_attempt then
+                    test.eq(tostring(message:from()), started.runner)
+                    test.eq(outcome.generation, 1)
+                    break
+                end
+            end
+            process.unlisten(exits)
             local recorded = native_fixture.kinds(revoked_attempt)
+            local reconciled = false
+            for _, kind in ipairs(recorded) do
+                if kind == "credential.revoked" or kind:sub(1, 10) == "reconcile." then reconciled = true end
+            end
+            test.is_true(reconciled, "the supervised sweeper did not reconcile the attempt")
+            test.is_true(native_fixture.has(recorded, "child.exited"))
             if capability == "process_group" then
                 test.is_true(native_fixture.has(recorded, "credential.revoked"))
                 test.is_false(native_fixture.has(recorded, "grant.revoked"), "credential revocation was also recorded as a resource grant revocation")
@@ -640,17 +658,29 @@ local function credentials_tests()
             local unrunnable = native_fixture.launch({"/nonexistent/binary/for/bee", "--flag"}, "direct_process")
             unrunnable.attempt_id = missing_attempt
             unrunnable.projections = {missing.projection_id}
+            local completions = assert(process.listen(protocol.TOPIC_STARTED, {message = true}))
             native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", unrunnable))
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "attach", {attempt_id = missing_attempt, recipient = process.pid(), generation = 1}))
             local failed = native_fixture.call(native_fixture.OWNER, "start", {attempt_id = missing_attempt})
             test.is_true(failed.ok)
             test.eq(native_fixture.attempt_of(failed).execution_state, "start_failed")
             if tostring(native_fixture.attempt_of(failed).start_failure):find(native_fixture.SENTINEL, 1, true) then error("sentinel leaked into the start reply") end
+            while true do
+                local message = assert((completions:receive()))
+                local completed = assert(bounds.object(message:payload():data()))
+                if completed.attempt_id == missing_attempt then
+                    test.eq(completed.generation, 1)
+                    break
+                end
+            end
+            process.unlisten(completions)
             local failed_page = native_fixture.value(native_fixture.call(native_fixture.OWNER, "evidence", {attempt_id = missing_attempt, limit = 64}))
             for _, item in ipairs(principals.objects(failed_page.evidence)) do
                 if tostring(item.detail):find(native_fixture.SENTINEL, 1, true) then error("sentinel leaked into failure evidence") end
             end
-            local sweeper = process.registry.lookup(service.SWEEPER_NAME)
-            test.not_nil(sweeper)
+            local failed_kinds = native_fixture.kinds(missing_attempt)
+            test.is_true(native_fixture.has(failed_kinds, "child.not_started"), "failed startup has no no-child proof")
+            test.is_true(native_fixture.has(failed_kinds, "workdir_preparers.settled"), "failed runner did not settle its preparers")
         end)
         test.it("refuses colliding credential destinations without starting a child or leaking bytes", function()
             native_fixture.admit_credential_source()

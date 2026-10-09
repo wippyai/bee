@@ -22,6 +22,7 @@ type Options = {
     pass: Pass,
     demand: boolean?,
     active: (() -> boolean)?,
+    dispatch: ((string, unknown) -> ())?,
 }
 
 function M.run(options: Options)
@@ -59,6 +60,12 @@ function M.run(options: Options)
                 if not supervisor or tostring(message:from()) ~= tostring(supervisor)
                     or type(value) ~= "table" or type(value.generation) ~= "number" then goto continue end
                 generation = math.floor(value.generation)
+                if options.dispatch and type(value.requests) == "table" then
+                    for _, request in ipairs(value.requests) do
+                        if type(request.caller) == "string" then options.dispatch(request.caller, request.data) end
+                    end
+                    if #value.requests > 0 then goto continue end
+                end
             end
             retrying = not options.pass()
             retry_ms = retrying and math.min(retry_ms * 2, M.RETRY_LAST_MS) or M.RETRY_FIRST_MS

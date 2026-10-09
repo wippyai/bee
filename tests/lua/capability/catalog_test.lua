@@ -223,6 +223,31 @@ local function define_tests()
             test.not_nil(catalog.normalize(shipped, "hive.expose", {operations = {"bee.hive:probe"}, mode = "policy", audiences = {node}}))
             test.not_nil(catalog.normalize(shipped, "hive.call", {nodes = {node}, workspaces = {"project"}, applications = {"bee.harness.app:app"}, services = {"sessions"}, operations = {"list"}}))
         end)
+        test.it("keeps numeric-leading Hive identities exact and refuses malformed authority", function()
+            local vocabulary = assert(catalog.decode(shipped()))
+            local node, other = "0123456789abcdef0123456789abcdef", "1123456789abcdef0123456789abcdef"
+            local function exposure(id: string): {[string]: unknown}
+                return {operations = {"bee.hive:probe"}, mode = "policy", audiences = {id}}
+            end
+            local function call(id: string): {[string]: unknown}
+                return {nodes = {id}, workspaces = {"project"}, applications = {"bee.harness.app:app"},
+                    services = {"sessions"}, operations = {"list"}}
+            end
+            local exposed = assert(catalog.resolve(vocabulary, "hive.expose", exposure(node)))
+            local outbound = assert(catalog.resolve(vocabulary, "hive.call", call(node)))
+            test.eq(fixtures.strings(exposed[1].scope.audiences)[1], node)
+            test.eq(fixtures.strings(outbound[1].scope.nodes)[1], node)
+            test.is_false(catalog.contains(exposed[1], assert(catalog.resolve(vocabulary, "hive.expose", exposure(other)))[1]))
+            test.is_false(catalog.contains(outbound[1], assert(catalog.resolve(vocabulary, "hive.call", call(other)))[1]))
+            for _, invalid in ipairs({"", "_peer", "peer:other", "Peer", "peer/other"}) do
+                test.is_nil(catalog.normalize(vocabulary, "hive.expose", exposure(invalid)))
+                test.is_nil(catalog.normalize(vocabulary, "hive.call", call(invalid)))
+            end
+            test.is_nil(catalog.normalize(vocabulary, "hive.expose", {operations = {"bee.hive:probe"}, mode = "policy",
+                audiences = {[1] = node, [3] = other}}))
+            test.is_nil(catalog.normalize(vocabulary, "hive.call", {nodes = {[1] = node, [3] = other}, workspaces = {"project"},
+                applications = {"bee.harness.app:app"}, services = {"sessions"}, operations = {"list"}}))
+        end)
         test.it("refuses malformed Hive exposure parameters", function()
             local shipped = assert(catalog.decode(hive_fixture()))
             test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {}, mode = "open", audiences = {"*"}}))

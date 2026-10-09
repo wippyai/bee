@@ -2550,3 +2550,19 @@ entries:
   directory: .wippy/grok-acp-login-fixture
   auto_init: true
   meta: {type: test_support}
+
+- name: permission_contexts_test
+  kind: function.lua
+  source: file://permission_contexts_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, fs, json, hash]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    descriptor: bee.driver.descriptor:descriptor
+    adapter: bee.harness.permission:adapter
+    exchange: bee.harness.permission:exchange
+    grok: bee.driver.grok.binding:normalize
+    opencode: bee.driver.opencode.observer:events

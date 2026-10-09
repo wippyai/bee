@@ -218,7 +218,9 @@ local function request_approval(ctx: Context, session: State, exchange: Exchange
         local fault = reply.error
         if not fault or (fault.code ~= "DENIED" and fault.code ~= "NOT_FOUND") then return false, "runtime lease: " .. (fault and fault.message or "invalid owner reply") end
     end
-    local value, err = must(ctx, ctx.approvals .. ":request", {workspace_id = request.workspace_id, idempotency_key = state.idempotency_key, request_kind = "permission", policy = exchange.approver_policy,
+    local value, err = must(ctx, ctx.approvals .. ":request", {contract_version = 2,
+        origin = {session_id = request.session_ref, thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id},
+        workspace_id = request.workspace_id, idempotency_key = state.idempotency_key, request_kind = "permission", policy = exchange.approver_policy,
         proposal = proposal_of(session, exchange, request_of(state)), prompt = {text = state.prompt}, thread_id = request.thread_id, ttl_ms = exchange.ttl_ms})
     if err then return false, err end
     ctx.step( "approval_created")

@@ -138,7 +138,9 @@ entries:
   source: file://session_view.lua
   modules:
   - tty
+  - registry
   imports:
+    descriptor: bee.driver.descriptor:descriptor
     frame: bee.ui:frame
     appearance: bee.ui:appearance
     text: bee.ui:text

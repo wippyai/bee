@@ -19,6 +19,15 @@ local function conversation(activity: string, turns: {agents.Turn}, ref: string?
         activity = activity, queued = 1, activity_evidence = evidence, turns = turns, notice = ""}
 end
 local function define_tests()
+    test.describe("Permission ownership", function()
+        test.it("reports provider-owned contexts on the session screen", function()
+            local conv = conversation("idle", {})
+            conv.session.snapshot.provider = "codex"
+            conv.session.snapshot.terminal = false
+            conv.details = true
+            test.contains(screen(session_view.draw(100, 25, appearance.defaults(), conv, "", "").rows), "Provider-owned")
+        end)
+    end)
     test.describe("Peer session screen", function()
         test.it("shows its bee and disables messaging for list-only access", function()
             local conv = conversation("idle", {})

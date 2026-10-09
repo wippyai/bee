@@ -1,6 +1,8 @@
 -- MIT. One open Agent session: its activity, the work given to it and each
 -- result, with a line to give it more work. Text is bounded to the display.
 local tty = require("tty")
+local registry = require("registry")
+local descriptor = require("descriptor")
 local appearance = require("appearance")
 local frame = require("frame")
 local text = require("text")
@@ -11,6 +13,21 @@ type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 -- The footer names only keys the buttons above it do not show; help lists
 -- them all.
 local HINTS = frame.hints({{key = "Ctrl+D", verb = "details"}})
+function M.permission_status(snapshot: protocol.SessionSnapshot): string
+    local profile = snapshot.effective_profile
+    local mode = profile and profile.bee and profile.bee.permission_answers or "provider"
+    local provider = snapshot.provider
+    if not provider then return "Permission answers: provider context unavailable" end
+    local declared = descriptor.find_provider(registry.snapshot(), provider)
+    if not declared then return "Permission answers: provider context unavailable" end
+    local selected = descriptor.permission_answer(declared, snapshot.terminal == true and "window" or "first_turn")
+    if selected.transport == "provider" or mode == "provider" then
+        return "Permission answers: Provider-owned" .. (selected.reason and " · " .. selected.reason or "")
+    end
+    return "Permission answers: " .. (mode == "deny" and "Deny" or "Needs you") .. " · " .. selected.transport
+        .. (selected.reason and " · " .. selected.reason or "")
+end
+
 local MORE = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+K", verb = "stop work"},
     {key = "Ctrl+X", verb = "close session"}, {key = "Esc", verb = "sessions"}})
 local ACTIVITY_ROLE = {idle = "muted", working = "accent", blocked = "warn", stalled = "warn"}
@@ -148,6 +165,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if conv.details then
         lines = {{text = "Session: " .. conv.session:ref()}, {text = "Definition: " .. (conv.session.snapshot.definition or "Unavailable")},
             {text = "Workspace: " .. (conv.session.snapshot.workspace or "Unavailable")}}
+        for _, row in ipairs(wrap(M.permission_status(conv.session.snapshot), width - 4)) do
+            lines[#lines + 1] = {text = row, role = "muted"}
+        end
         for _, turn in ipairs(conv.turns) do
             lines[#lines + 1] = {text = "Work: " .. turn.work:ref()}
             for _, row in ipairs(wrap(turn.diagnostics or "", width - 4)) do

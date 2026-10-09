@@ -90,8 +90,13 @@ local function define_tests()
             test.eq(#installed, 1)
             test.eq(installed[1].application, application)
 
+            local stale = call({operation = "uninstall", workspace_id = workspace, source_workspace = name,
+                receipt_key = "stale-remove-" .. suffix, expected_intent_id = "replaced-" .. suffix})
+            test.eq(stale.ok, false)
+            local fault = assert(bounds.object(stale.error))
+            test.eq(fault.code, "CONFLICT")
             local removed = ok(call({operation = "uninstall", workspace_id = workspace, source_workspace = name,
-                receipt_key = "remove-" .. suffix}))
+                receipt_key = "remove-" .. suffix, expected_intent_id = "intent-" .. suffix}))
             test.eq(removed.intent_id, "intent-" .. suffix)
             test.is_nil((registry.get(application)))
             local history = principals.objects(ok(call({operation = "activations", workspace_id = workspace})).activations)

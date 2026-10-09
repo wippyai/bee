@@ -14,6 +14,7 @@ local time = require("time")
 local appearance = require("appearance")
 local frame = require("frame")
 local client = require("client")
+local confirmation = require("confirmation")
 local model = require("model")
 local governed = require("governed")
 local hub = require("hub")
@@ -87,6 +88,9 @@ local function main(options: unknown)
     local preferences = appearance.chosen(options)
     local state: model.State = model.new(workspace_of(options))
     local launch = client.launch(options)
+    local review = confirmation.new({workspace_id = state.workspace_id, origin = {app_id = "bee.apps.library:app", instance_id = launch and launch.instance_id or "library", attempt_id = launch and launch.execution_id}})
+    local gesture: "enter" | "space" | "click" | "shortcut" = "shortcut"
+    local effect_gesture: "enter" | "space" | "click" | "shortcut" = "shortcut"
     state.can_open = launch ~= nil
     local gov = state.governed
     local hubs = state.hub
@@ -138,6 +142,7 @@ local function main(options: unknown)
             return false
         end
         busy = true
+        effect_gesture = gesture
         ui.status = "Working…"
         dirty = true
         coroutine.spawn(function()
@@ -205,8 +210,8 @@ local function main(options: unknown)
             attempt = {app = removal.app, key = new_key()}
             pending_revert = attempt
         end
-        local request = removal.kind == "back" and governed.revert_request(gov, removal.app, attempt.key)
-            or governed.uninstall_request(gov, removal.app, attempt.key)
+        local request = removal.kind == "back" and governed.revert_request(gov, removal.app, attempt.key, removal.intent_id)
+            or governed.uninstall_request(gov, removal.app, attempt.key, removal.intent_id)
         local answer = invoke(request)
         if not answer then state.notice = "No answer yet; try Refresh"; return end
         pending_revert = nil
@@ -278,6 +283,12 @@ local function main(options: unknown)
         if not governed.accepts_review(item) or not item then
             state.notice = "This version has already been reviewed"; return false
         end
+        local target = {plan_digest = item.plan_digest, revision = item.revision, artifact_digest = item.artifact_digest,
+            preflight_digest = item.preflight_digest, source_workspace = item.source_workspace, source_node = item.source_node, version = item.version}
+        local opened, err = confirmation.open(review, "library.review", target, "inline", "Review " .. item.version, "Review the displayed preflight and changes")
+        if not opened then state.notice = err or "Confirmation is unavailable"; return false end
+        local confirmed, confirm_error = confirmation.accept(review, target, effect_gesture, accepted and "allow_once" or "deny")
+        if not confirmed then state.notice = confirm_error or "Confirmation failed"; return false end
         local applied = governed.apply_plan(gov, invoke(governed.review_request(gov, item, accepted, new_key())))
         if not applied then state.notice = gov.notice end
         return applied
@@ -649,10 +660,28 @@ local function main(options: unknown)
     end
     -- Reaching confirm only changes presentation state. Dispatching apply is
     -- a separate, explicit event and is never retried by this client.
+    local function hub_target(): {[string]: unknown}?
+        local intent = hub.confirm_intent(hubs)
+        if not intent then return nil end
+        return {digest = intent.expected_digest, action = hubs.action, component = hubs.selected,
+            recovery_id = hubs.recovery and hubs.recovery.digest or nil}
+    end
+    local function open_hub_confirmation(): boolean
+        local target = hub_target()
+        if not target then ui.status = "Confirmation target is unavailable"; changed(); return false end
+        local opened, err = confirmation.open(review, hubs.recovery and "hub.recover" or "hub.apply", target, "inline", "Confirm package changes", "Apply exactly the displayed changes")
+        if not opened then ui.status = err or "Confirmation is unavailable" end
+        changed()
+        return opened
+    end
     local function confirm()
         if apply_pending then ui.status = "Applying is still pending; check the status if the result is uncertain"; changed(); return end
         local intent, problem = hub.confirm_intent(hubs)
         if not intent then ui.status = problem or "These changes cannot be applied"; changed(); return end
+        local target = hub_target()
+        if not target then ui.status = "Confirmation target is unavailable"; changed(); return end
+        local accepted, err = confirmation.accept(review, target, gesture)
+        if not accepted then ui.status = err or "Confirmation failed"; changed(); return end
         apply_pending = true
         ui.status = "Applying the changes…"
         begin_apply(intent)
@@ -666,6 +695,7 @@ local function main(options: unknown)
         details()
     end
     local function cancel_confirmation()
+        confirmation.cancel(review)
         if hubs.recovery then
             model.show_tab(state, "history")
             operation_history()
@@ -783,7 +813,14 @@ local function main(options: unknown)
         changed()
     end
     local function ask_remove(row: model.Row?, kind: model.RemovalKind?)
-        if row and model.ask_remove(state, row, kind) then changed(); return end
+        if row and model.ask_remove(state, row, kind) then
+            local removal = assert(state.removal)
+            local opened, err = confirmation.open(review, "library." .. removal.kind,
+                {app = removal.app, version = removal.version, baseline = removal.baseline, installed_intent_id = row.intent_id},
+                "dialog", removal.kind == "back" and "Go back?" or "Remove application?", table.concat(model.removal_lines(removal), "\n"))
+            if not opened then model.cancel_remove(state); state.notice = err or "Confirmation is unavailable" end
+            changed(); return
+        end
         state.notice = kind == "back" and "There is no earlier version to go back to" or "This can't be removed from here"
         changed()
     end
@@ -854,7 +891,7 @@ local function main(options: unknown)
             else
                 if row and row.operation then hub.select_operation(hubs, row.operation) end
                 local problem = hub.recover(hubs)
-                if problem then ui.status = problem else ui.offset = 0; invalidate() end
+                if problem then ui.status = problem else ui.offset = 0; invalidate(); open_hub_confirmation() end
             end
             changed()
         else
@@ -965,7 +1002,7 @@ local function main(options: unknown)
         elseif kind == "policy_block" then hub.set_policy(hubs, "block"); invalidate(); changed()
         elseif kind == "policy_leave" then hub.set_policy(hubs, "leave"); invalidate(); changed()
         elseif kind == "policy_down" then hub.set_policy(hubs, "down"); invalidate(); changed()
-        elseif kind == "review" then local problem = hub.confirm(hubs); if problem then failure(problem) end; changed()
+        elseif kind == "review" then local problem = hub.confirm(hubs); if problem then failure(problem) else open_hub_confirmation() end; changed()
         elseif kind == "install_governed" then perform(confirm_hub_now)
         elseif kind == "confirm" then confirm()
         elseif kind == "cancel" then cancel_confirmation()
@@ -999,9 +1036,16 @@ local function main(options: unknown)
         local removal = state.removal
         if removal then
             if kind == "confirm_remove" then
-                model.cancel_remove(state)
-                perform(function() remove_now(removal) end)
-            elseif kind == "cancel_remove" then model.cancel_remove(state); state.notice = "Kept"; changed() end
+                local current: model.Row? = nil
+                for _, row in ipairs(model.rows(state)) do if row.app == removal.app and row.version == removal.version then current = row end end
+                local target = {app = removal.app, version = current and current.version or "", baseline = current and current.baseline,
+                    installed_intent_id = current and current.intent_id}
+                local accepted, err = confirmation.accept(review, target, gesture)
+                if accepted then
+                    model.cancel_remove(state)
+                    perform(function() remove_now(removal) end)
+                else state.notice = err or "Confirmation failed"; changed() end
+            elseif kind == "cancel_remove" then confirmation.cancel(review); model.cancel_remove(state); state.notice = "Kept"; changed() end
         elseif ui.editor then package_hit(kind, key)
         elseif screen == "package" then package_hit(kind, key)
         elseif screen == "version" then version_hit(kind)
@@ -1072,6 +1116,7 @@ local function main(options: unknown)
                     local data, handled = frame.route(menu, event.value, ui.editor ~= nil)
                     if handled then changed() end
                     if data then
+                        gesture = confirmation.gesture(data)
                         local screen = view.screen(state)
                         if data.type == "close" then running = false
                         elseif data.type == "resize" then width, height = data.width, data.height; changed()
@@ -1232,6 +1277,7 @@ local function main(options: unknown)
     if reading then reading.future:cancel() end
     for _, item in ipairs(pending) do item.future:cancel() end
     process.unlisten(changes)
+    confirmation.cancel(review)
     ticker:stop()
     updates:close()
     output:close()

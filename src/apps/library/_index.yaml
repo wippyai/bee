@@ -169,6 +169,7 @@ entries:
   - funcs
   - time
   imports:
+    confirmation: bee.approvals.app:confirmation
     frame: bee.ui:frame
     client: bee.app:client
     appearance: bee.ui:appearance
@@ -179,6 +180,8 @@ entries:
     contents: bee.apps.library:contents
   security:
     policies:
+    - bee.security.approvals:confirmation_client
+    - bee.security.approvals:confirmation_authority
     - bee.apps.library:destination_client
     - bee.apps.library:delivery_operations
     - bee.apps.library:delivery_share

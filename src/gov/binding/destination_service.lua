@@ -889,7 +889,7 @@ type RevertMethods = {
 -- need a compensation plan is refused.
 local function revert_application(request: Object, workspace_id: string, actor_id: string?,
     plan_store: plans.Store, activation_store: activations.Store, lease_handle: leases.Store): Result
-    if exact(request, {"source_workspace", "receipt_key"}) then return failure("INVALID", "revert has unknown fields") end
+    if exact(request, {"source_workspace", "receipt_key", "expected_intent_id"}) then return failure("INVALID", "revert has unknown fields") end
     local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
     local identity = source_workspace and (activation_profiles.hub_identity(workspace_id, source_workspace)
         or workspace_applications.identity(workspace_id, source_workspace)) or nil
@@ -900,6 +900,9 @@ local function revert_application(request: Object, workspace_id: string, actor_i
     end
     local desired = activations.desired(activation_store, overlay_owner)
     local current = desired.ok and bounds.object(desired.value) or nil
+    if request.expected_intent_id ~= nil and (not current or request.expected_intent_id ~= current.intent_id) then
+        return failure("CONFLICT", "installed activation differs from the confirmed revert")
+    end
     local baseline_result = activations.baseline(activation_store, overlay_owner)
     local baseline = baseline_result.ok and bounds.object(baseline_result.value) or nil
     if not current then return desired end

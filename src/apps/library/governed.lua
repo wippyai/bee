@@ -593,13 +593,13 @@ end
 function M.share_request(state: State, source_workspace: string, version: string): Object
     return {operation = "publish", workspace_id = state.workspace_id, source_overlay_id = source_workspace, version = version}
 end
-function M.uninstall_request(state: State, source_workspace: string, key: string): Object
+function M.uninstall_request(state: State, source_workspace: string, key: string, expected_intent_id: string?): Object
     return {operation = "uninstall", workspace_id = state.workspace_id, source_workspace = source_workspace,
-        receipt_key = key}
+        receipt_key = key, expected_intent_id = expected_intent_id}
 end
-function M.revert_request(state: State, source_workspace: string, key: string): Object
+function M.revert_request(state: State, source_workspace: string, key: string, expected_intent_id: string?): Object
     return {operation = "revert", workspace_id = state.workspace_id, source_workspace = source_workspace,
-        receipt_key = key}
+        receipt_key = key, expected_intent_id = expected_intent_id}
 end
 function M.activations_request(state: State): Object
     return {operation = "activations", workspace_id = state.workspace_id}

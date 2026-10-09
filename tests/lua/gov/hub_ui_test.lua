@@ -88,7 +88,7 @@ local function inbox(workspace: string): {unknown}
 end
 local function define_tests()
     test.describe("Library Hub key flow", function()
-        test.it("reviews a measured application and requests exactly one approval after confirmation", function()
+        test.it("records the keyboard review once and requests exactly one activation approval", function()
             local window = open()
             local ok, failure = pcall(function()
                 details(window)
@@ -110,8 +110,31 @@ local function define_tests()
                 await(window.view, "Waiting for your approval")
                 await(window.view, "Approval waits in Needs you")
                 local items = inbox(window.workspace)
-                test.eq(#items, 1)
-                local item = assert(bounds.object(assert(bounds.object(items[1])).value))
+                test.eq(#items, 2)
+                local item: {[string]: unknown}? = nil
+                local confirmed: {[string]: unknown}? = nil
+                for _, raw in ipairs(items) do
+                    local value = assert(bounds.object(assert(bounds.object(raw)).value))
+                    local proposal = assert(bounds.object(value.proposal))
+                    if proposal.ref == "bee.approvals:confirmation" then
+                        test.is_nil(confirmed)
+                        confirmed = value
+                    else
+                        test.is_nil(item)
+                        item = value
+                    end
+                end
+                assert(confirmed)
+                test.eq(confirmed.state, "decided")
+                test.eq(confirmed.decision, "approved")
+                test.eq(assert(bounds.object(confirmed.contract)).presentation, "inline")
+                local records = assert(bounds.object(confirmed.lifecycle_records))
+                local decisions = assert(bounds.array(records.decisions, 8))
+                test.eq(#decisions, 1)
+                local assurance = tostring(assert(bounds.object(decisions[1])).assurance_json)
+                test.is_true(assurance:find('"gesture":"enter"', 1, true) ~= nil)
+                test.eq(#assert(bounds.array(records.grants, 8)), 0)
+                assert(item)
                 test.eq(item.state, "pending")
                 local proposal = assert(bounds.object(item.proposal))
                 local payload = assert(bounds.object(proposal.payload))

@@ -38,7 +38,7 @@ type Screen = "list" | "version" | "platform"
 -- A removal waits for the person's confirmation. Remove takes the application
 -- off this bee; back puts the version before it in its place.
 type RemovalKind = "remove" | "back"
-type Removal = {kind: RemovalKind, app: string, name: string, version: string, baseline: string?}
+type Removal = {kind: RemovalKind, app: string, name: string, version: string, baseline: string?, intent_id: string?}
 type State = {workspace_id: string, tab: Tab, screen: Screen, selected: Selection, governed: governed.State, hub: hub.State,
     notice: string, can_open: boolean, removal: Removal?, hub_open: boolean}
 
@@ -518,7 +518,7 @@ function M.ask_remove(state: State, row: Row?, kind: RemovalKind?): boolean
     if not row or not row.app then return false end
     if asked == "remove" and not M.can_remove(row) then return false end
     if asked == "back" and not M.can_go_back(row) then return false end
-    state.removal = {kind = asked, app = row.app, name = row.name, version = row.version, baseline = row.baseline}
+    state.removal = {kind = asked, app = row.app, name = row.name, version = row.version, baseline = row.baseline, intent_id = row.intent_id}
     return true
 end
 

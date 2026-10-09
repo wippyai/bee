@@ -80,13 +80,6 @@ local function model_of(value: unknown, ref: string): (string?, string?)
     end
     return model, nil
 end
--- A required trait capability is any nonempty behavior, contract, wrapper,
--- hook, option or delegate declaration: the CLI route proves none of them.
-local function required(value: unknown): boolean
-    if value == nil then return false end
-    if type(value) == "table" then return next(value) ~= nil end
-    return true
-end
 local function tuning_of(value: unknown, ref: string): ({[string]: Scalar}?, string?)
     local object = bounds.object(value == nil and {} or value)
     if not object then return nil, ref .. ": tuning must be an object" end

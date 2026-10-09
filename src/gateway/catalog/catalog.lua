@@ -112,7 +112,6 @@ function M.select(catalog: Catalog, ceiling: {string}, base: {string}, allowed_t
     return tools, nil
 end
 type FrameworkTool = {alias: string, operation: string, description: string, schema: Object, annotations: Object}
-type FrameworkTrait = {id: string, title: string, prompt: string, tools: {string}}
 -- from_framework: project an admitted agent closure's selected function
 -- tools and traits into catalog declarations. The MCP name is an adapter
 -- alias for the function id, never a second tool definition: authority

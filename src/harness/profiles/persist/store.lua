@@ -173,7 +173,7 @@ end
 local function put(store: sync.Store, tx: sql.Transaction, input: Request, node: string, actor: string, feed_name: string): Result
     local profile = input.profile
     if not profile then return failure("INVALID_ARGUMENT", "put profile is required") end
-    local approving, _, authorization_error = authority.authorize(tx, input.workspace_id, profile)
+    local approving, authorization_error = authority.authorize(tx, input.workspace_id, profile)
     if authorization_error then return failure("DENIED", authorization_error) end
     local result = append(store, tx, input, node, actor, feed_name, input.profile_id, profile, false)
     if not result.ok then return clean(result) end

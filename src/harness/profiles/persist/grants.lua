@@ -8,23 +8,23 @@ local M = {}
 function M.id(owner: string, workspace: string, profile: string, revision: integer): string
     return grants.identity("profile_choices",owner,workspace,profile .. ":" .. tostring(revision))
 end
-function M.authorize(tx: sql.Transaction | sql.DB, workspace: string, configuration: unknown): (grants.Grant?, boolean, string?)
+function M.authorize(tx: sql.Transaction | sql.DB, workspace: string, configuration: unknown): (grants.Grant?, string?)
     local bound = bounds.object(ctx.get("bee.gateway.binding"))
-    if not bound and security.can("bee.approvals.decide", workspace) then return nil, true, nil end
+    if not bound and security.can("bee.approvals.decide", workspace) then return nil, nil end
     local id = bound and bounds.id(bound.approving_grant_id)
-    if not id then return nil, false, "DENIED: delegated profile writes require the approving grant" end
+    if not id then return nil, "DENIED: delegated profile writes require the approving grant" end
     local parent, err = grants.read(tx, id)
     local issuer = grants.principal("")
     if not parent or err or parent.workspace_id ~= workspace or grants.state(parent, clock.milliseconds()) ~= "active"
-        or bound.subject ~= issuer then return nil, false, "DENIED: approving profile grant is no longer valid" end
+        or bound.subject ~= issuer then return nil, "DENIED: approving profile grant is no longer valid" end
     local parameters = bounds.object(parent.scope.parameters)
     local approved = parameters and bounds.object(parameters.configuration)
     local requested = bounds.object(configuration)
-    if parent.domain ~= "profile_choices" or M.live(tx, parent) or not approved or not requested then return nil, false, "DENIED: grant does not approve profile choices" end
+    if parent.domain ~= "profile_choices" or M.live(tx, parent) or not approved or not requested then return nil, "DENIED: grant does not approve profile choices" end
     for _, field in ipairs({"definition_ref", "driver_binding_ref", "provider", "bee", "placement", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"}) do
-        if canonical.encode(approved[field]) ~= canonical.encode(requested[field]) then return nil, false, "DENIED: delegated profile exceeds approved " .. field end
+        if canonical.encode(approved[field]) ~= canonical.encode(requested[field]) then return nil, "DENIED: delegated profile exceeds approved " .. field end
     end
-    return parent, false, nil
+    return parent, nil
 end
 function M.live(tx: sql.Transaction | sql.DB, record: grants.Grant): string?
     local seen: {[string]: boolean} = {}
@@ -46,8 +46,8 @@ function M.save(tx: sql.Transaction | sql.DB, owner: string, workspace: string, 
     local existing, read_error = grants.read(tx,id)
     if existing or read_error then return existing,read_error end
     local issuer, definition = grants.principal(actor)
-    local parent, person, authorization_error = approving, false, nil
-    if not legacy and not parent then parent, person, authorization_error = M.authorize(tx, workspace, configuration) end
+    local parent, authorization_error = approving, nil
+    if not legacy and not parent then parent, authorization_error = M.authorize(tx, workspace, configuration) end
     if authorization_error then return nil, authorization_error end
     local provenance: {[string]: unknown} = {kind = legacy and "legacy" or "consent", source = "saved_profile", consenting_actor = legacy and (actor:match("^legacy:") and "unrecorded" or actor) or issuer}
     if parent then provenance = {kind = "delegated", source = "saved_profile", approving_grant_id = parent.grant_id, delegated_actor = issuer} end

@@ -5,7 +5,6 @@ local harness = require("harness")
 local gateway = require("gateway")
 local registry = require("registry")
 local json = require("json")
-local trait_access = require("trait_access")
 local owner = require("owner")
 local function subscribed(session: host.Session, client: funcs.Executor): {[string]: unknown}
     return host.value(host.receive(client, "subscribe", {thread_id = session.thread, idempotency_key = harness.key(), filter = {session_ref = session.session, trait_id = session.trait_id or host.TRAIT}}))

@@ -277,7 +277,6 @@ entries:
     - bee.approvals.binding:read
     - bee.approvals.binding:effect
     - bee.approvals.binding:revalidate
-    - bee.approvals.binding:effect
     - bee.hub.binding:call
     - bee.gateway.env:install_configuration_ref
     - bee.threads.binding:get
@@ -391,7 +390,6 @@ entries:
     - bee.approvals.binding:read
     - bee.approvals.binding:effect
     - bee.approvals.binding:revalidate
-    - bee.approvals.binding:effect
     - bee.hub.binding:call
     - bee.gateway.env:publish_configuration_ref
     - bee.threads.binding:get

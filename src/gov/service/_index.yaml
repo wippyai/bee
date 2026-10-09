@@ -30,7 +30,7 @@ entries:
     service: bee.gov.binding:destination_service
 - name: recovery_service
   meta:
-    title: "Library \xB7 boot recovery"
+    title: Library · boot recovery
   kind: process.service
   process: bee.gov.service:recovery
   host: bee:workers
@@ -72,7 +72,7 @@ entries:
     worker_name: bee.gov.activation_worker
 - name: activation_service
   meta:
-    title: "Library \xB7 activation"
+    title: Library · activation
   kind: process.service
   process: bee.gov.service:activation_worker
   host: bee:workers
@@ -89,8 +89,8 @@ entries:
       - bee.security.approvals:approval_activation_effects_policy
       - bee.gov.security:activation_announce_policy
       - bee.gov.security:activation_worker_policy
+
 - name: follow_wake
   kind: library.lua
   source: file://follow_wake.lua
-  modules:
-  - process
+  modules: [process]

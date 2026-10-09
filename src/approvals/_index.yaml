@@ -20,26 +20,29 @@ entries:
     description: Grant an approved exact runtime lease, check references, consume
       one effect idempotently, list or revoke
   - name: effect
-    description: Versioned lifecycle effect
+    description: Read, claim, start, complete or reconcile one stable effect with
+      receipt replay and authority incarnation fencing
   - name: events
-    description: Versioned lifecycle events
+    description: Read durable requester or registered consumer events after a cursor
+      and acknowledge stable event IDs
   - name: end_request
-    description: Versioned lifecycle end_request
+    description: Supersede or invalidate a pending request with revision and digest
+      checks, returning any outcome that already committed
   - name: grant
     description: Check, reserve, admit, release or revoke exact decision authority
   - name: request
     description: Ask for a decision on one exact proposal under a host approver policy;
       the same key replays and a different request under it conflicts
   - name: decide
-    description: Settle the pending revision for the recorded proposal digest; an
+    description: Settle the pending revision for the recorded proposal and reviewed digests; an
       identical retry replays and any other decision conflicts
   - name: decide_batch
     description: Settle several pending requests of one requester in one workspace
       in one transaction; each item is a full decide and one failing item rolls the
       batch back
   - name: withdraw
-    description: End the caller's own pending request, or learn the outcome that already
-      committed
+    description: Withdraw the caller's pending revision with proposal and reviewed
+      digest checks, or learn the outcome that already committed
   - name: consume
     description: The effect owner binds an approved decision to one effect identity
       under the authority incarnation it observed; it revalidates policy, attempt

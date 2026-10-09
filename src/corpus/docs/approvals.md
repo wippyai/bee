@@ -129,10 +129,12 @@ exhausted until an authorized manager returns it to the queue. A queued send is
 not execution success. An uncertain native effect is reconciled by its effect
 owner before a retry.
 
-A decision nobody is told of is not delivered. Only a message commit creates a
-recipient obligation, so a transition record states the outcome and owes no
-one anything. When a request is bound to a thread, every terminal change
-therefore enqueues a second event beside its transition, under
+A request creates a durable notification obligation to its authenticated
+requester. The generic event outbox records each terminal outcome whether or
+not the request has a thread. `events` supplies cursor-based catch-up and
+acknowledgment; the inbox and live attention signals project that stored state.
+When a request is bound to a thread, every terminal change also
+enqueues a second event beside its transition, under
 `<approval_id>:<revision>:notice`: a `notification` addressed to the requester
 that names the outcome and the approval. An approval, a denial, an expiry and a
 withdrawal are announced alike, because what leaves an agent waiting is the
@@ -140,6 +142,12 @@ silence rather than the answer. The notice is a side effect of the decision and
 never a condition of it: it rides the same outbox, so a thread that refuses it
 is retried and finally exhausted in view of `deliveries` while the decision it
 announces stands.
+
+An uncertain effect keeps its provisional receipt and remains in its registered
+consumer queue. Recording uncertainty does not acknowledge terminal events or
+mark the effect complete. The consumer reconciles its domain receipt before
+recording success, failure or cancellation; identical final receipts replay
+and different receipts conflict.
 
 The owner enforces persisted deadlines on every operation and on worker
 passes. A disconnected or unavailable owner is shown as unavailable; missing

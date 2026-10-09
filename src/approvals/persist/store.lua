@@ -100,7 +100,7 @@ function M.complete_effect(tx: sql.Transaction, approval_id: string, completed_a
     local ack_error = lifecycle.ack_effect(tx, approval_id, updated_at)
     if ack_error then return ack_error end
     return execute(tx, "UPDATE bee_approval_requests SET effect_completed_at = ?, effect_result_json = ?, updated_at = ? WHERE approval_id = ? AND effect_completed_at IS NULL",
-        {completed_at, result_json, updated_at, approval_id}, "complete installation effect")
+        {completed_at, result_json, updated_at, approval_id}, "complete approval effect")
 end
 
 function M.oldest_inbox(tx: sql.Transaction, workspace_id: string): (unknown?, string?)

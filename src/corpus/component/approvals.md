@@ -11,9 +11,10 @@ ingress `bee.threads.binding:append` under a stable event id, and
 acknowledges a row only after the ingress replies; a lost acknowledgement
 repeats the delivery and the thread replays the same record.
 
-A transition record states the outcome but owes nobody anything, and only a
-message commit creates the recipient obligation the delivery layer carries. So
-every terminal change of a thread-bound request enqueues a second outbox row
+Every request creates a durable requester notification obligation in the
+generic event outbox, including requests without a thread. Cursor catch-up
+and acknowledgment expose that obligation independently of live attention.
+Every terminal change of a thread-bound request also enqueues a second outbox row
 beside its transition, under `<approval_id>:<revision>:notice`: a
 `notification` addressed to the requester naming the outcome and the approval.
 A denial, an expiry and a withdrawal are announced as an approval is, because
@@ -58,8 +59,10 @@ Effect consumers register `meta.type: bee.approvals.effect-consumer` with
 registrations through registry metadata. `effect_queue` reads terminal,
 uncompleted effects for one destination; `phase=ready|ended|all` selects its
 work. `effect` records claims, starts, completions and reconciliation. A
-completion acknowledges the consumer's durable terminal events in the same
-transaction. Missing receivers keep their events for restart and catch-up.
+final completion acknowledges the consumer's durable terminal events in the
+same transaction. An uncertain effect keeps its provisional receipt queued
+for reconciliation and leaves those events unacknowledged. Missing receivers
+keep their events for restart and catch-up.
 
 Gateway installation (`gateway.installation`), publication
 (`gateway.publication`) and governed activation (`gov.activation`) are domain

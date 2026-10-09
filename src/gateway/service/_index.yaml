@@ -35,14 +35,13 @@ entries:
     effect_prefix: 'hub-publish:'
 - name: gateway_installation_service
   meta:
-    title: "Gateway \xB7 Hub installs"
+    title: Gateway · Hub installs
   kind: process.service
   process: bee.gateway.service:worker
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires:
-    - wippy.bootloader:bootloader.service
+    requires: [wippy.bootloader:bootloader.service]
     security:
       actor:
         id: bee.gateway.worker
@@ -64,14 +63,13 @@ entries:
       - bee.gateway.security:worker_host_policy
 - name: gateway_publication_service
   meta:
-    title: "Gateway \xB7 Hub publishing"
+    title: Gateway · Hub publishing
   kind: process.service
   process: bee.gateway.service:publication_worker
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires:
-    - wippy.bootloader:bootloader.service
+    requires: [wippy.bootloader:bootloader.service]
     security:
       actor:
         id: bee.gateway.worker
@@ -94,8 +92,7 @@ entries:
   kind: process.lua
   source: file://external_cli.lua
   method: main
-  modules:
-  - io
+  modules: [io]
   imports:
     protocol: bee.hive:protocol
     node_client: bee.node:client
@@ -107,22 +104,13 @@ entries:
       host: bee:terminal
       short: Pair an external MCP client through Needs you
       security:
-        actor:
-          id: bee.gateway.cli
-        policies:
-        - bee.hive.security:caller
-        - bee.hive.security:messaging
+        actor: {id: bee.gateway.cli}
+        policies: [bee.hive.security:caller, bee.hive.security:messaging]
 - name: external
   kind: process.lua
   source: file://external.lua
   method: main
-  modules:
-  - process
-  - channel
-  - time
-  - cdc
-  - env
-  - system
+  modules: [process, channel, time, cdc, env, system]
   imports:
     protocol: bee.hive:protocol
     bounds: bee.values:bounds
@@ -134,11 +122,9 @@ entries:
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires:
-    - wippy.bootloader:bootloader.service
+    requires: [wippy.bootloader:bootloader.service]
     security:
-      actor:
-        id: bee.gateway.external
+      actor: {id: bee.gateway.external}
       policies:
       - bee.gateway.security:external_host_policy
       - bee.gateway.security:execute_policy

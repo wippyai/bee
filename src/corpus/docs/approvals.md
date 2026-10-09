@@ -19,7 +19,7 @@ original `proposal_digest` continues to identify the unchanged proposal.
 `request`, `decide`, `decide_batch`, `withdraw`, `end_request`, `read`, `inbox`,
 `feed_snapshot`, `feed_read_after` and `list` manage requests and decisions.
 `end_request` records `superseded` or `invalidated`. `grant` provides `check`,
-`reserve`, `admit`, `release` and `revoke` for exact, single-use decision grants.
+`reserve`, `admit`, `release`, `revoke`, `list`, `read` and `history` for common Grant records across all local domains.
 `effect` provides `read`, `claim`, `start`, `complete` and `reconcile`.
 `effect_queue` selects uncompleted terminal effects for a registered destination.
 `consume` and `revalidate` share effect admission and restart fencing.
@@ -54,8 +54,44 @@ record and digests. New envelope metadata does not rewrite that record;
 changed subject, scope, evidence, destination, admission deadline or original
 request fields conflict. The original deadline and effect identity remain
 authoritative.
-Governance leases, follow consent, Docker admission and other reusable authorities remain
-in their domain stores until the later grant migration.
+Approval windows, governance leases, follow consent, Docker admission,
+saved profile choices, gateway consent and runtime leases use the same Grant
+ledger. Domain tables retain enforcement projections and recovery receipts.
+
+A Grant records identity, owner/workspace, subject/audience, exact or envelope
+scope, time/use limits, source decision, issuer, provenance and durable history.
+Reserved uses and admitted uses have separate counters and receipts. Revocation
+fences future reservations and admissions; admitted receipts replay without
+undoing completed effects. Persistent `until_revoked` authority requires an
+explicit domain policy. Binding grants remain bounded by their live binding. Registered
+`bee.approvals.grant-context` metadata names the enforcement projection used
+to derive current context expiry/revocation; renewal does not override explicit
+Grant revocation. Host-selected consent surfaces create binding-scoped Grants
+with policy provenance. Saved profiles keep their original consent Grant pointer.
+Gateway dispatch checks the saved profile's exact consent configuration and
+uses a separate access Grant for requestable traits, including runtime access.
+
+`grant list` accepts optional `workspace_id` and `after_id`; it returns all
+states in pages of 64 with `more` and `next_id`. Node-wide administration needs
+`bee.approvals.grants`; ordinary approvers see their own grants in the requested
+workspace. `grant read` and `history` return the Grant and history pages of 64;
+`after_revision` resumes with `next_revision`. Revoke requires the observed
+`expected_revision`. New uses require the exact stored subject/scope.
+
+A registered `bee.approvals.grant-adapter` materializes domain authority inside
+the original decision transaction. Operation proposals select it by registered
+operation metadata; dynamic attempts may name `proposal.grant_adapter`, a
+registered metadata selector included in the proposal digest. These proposals
+review their own Grant terms and do not create an additional approval window.
+One approval creates one Grant; compatibility grant operations retrieve and
+consume the original source effect without a second person ceremony.
+
+Legacy migrations retain recorded actors, exact bounds, old identities where
+present, receipt history and explicit legacy provenance. Unrecorded consenting
+actors remain unrecorded. Follow progress, Docker provisioning, gateway access
+receipts and saved profile configuration survive central revocation, while
+future admission checks the live common Grant. Docker consent retains its
+original node-wide network and selection scope across workspaces.
 
 ## Ownership and authority
 
@@ -202,7 +238,7 @@ application. `bee.gov` exposes the destination operations `lease_propose`,
   profile's approver policy. It requires a `ttl_seconds` (at most 30 days), a
   `max_applies`, or both.
 - `lease_grant` reads that exact approval, requires it decided and approved
-  for this application, consumes it once, and stores the lease. The envelope
+  for this application, consumes its source effect once, and returns the Grant created by the decision. The envelope
   comes from the approved proposal, never from the caller.
 - While a lease is active, a revision whose full proposed capability set is
   contained in the envelope is authorized by `bee.gov.lease_apply` without a
@@ -226,7 +262,7 @@ application. `bee.gov` exposes the destination operations `lease_propose`,
   operation.
 - A pending lease approval opens as a full review in the inbox: the
   requester and the request's own expiry, then the target, the duration and
-  that it starts when the lease is granted, the maximum applies and every
+  that it starts when the person approves, the maximum applies and every
   grant of the ceiling, wrapped to the screen and scrollable. Approve stays
   disabled until the last line has been on screen, deny is always available,
   and a lease request cannot join a batch. The ceiling is limited to 16
@@ -251,10 +287,11 @@ The lease operations need the dedicated delivery action
 inbox, `E` on an open pending activation request opens a form with an expiry
 choice, a max-applies number and up to three ceiling extras (a capability id
 and its `key=value` parameters, validated as typed), and files the lease
-request; once a person approves it, `G` on that request grants the lease. `V`
-switches to the Active leases view, which lists each lease with its usage,
-expiry and envelope and revokes the selected one with `X`. Lease operations
-reach a local governance owner only.
+request. Approval creates its Grant immediately. `U` opens the unified Grants
+view; the existing `V` shortcut opens it too. It lists every local domain with
+scope, subject/audience, usage, limits and provenance. `H` or Enter opens details
+and paginated history; `X` revokes at the displayed revision. Revocation takes
+effect immediately. Lease operations reach a local governance owner only.
 
 `decide_batch` settles up to 16 pending requests of one requester in one
 workspace in a single transaction. Each item carries the same fields as
@@ -270,7 +307,7 @@ the end of the UTC day, and 24 hours; choices exceeding the smallest policy
 ceiling in the displayed batch are absent. The bundled host policies cap windows
 at one day and retain the default ten-minute request lifetime. Permanent
 "until revoked" windows require explicit host-policy `allow_permanent` opt-in.
-Sessions stores its peer consent in these central windows. Questions
+Sessions stores its peer consent in common approval-window Grants. Questions
 still require their explicit response and cannot create an automatic window.
 Governance lease reviews retain their full terms and scroll-before-allow check.
 
@@ -351,6 +388,6 @@ permission adapter's eligibility never authorizes an effect by itself.
 
 ## Runtime leases
 
-The Approvals owner exposes runtime approval leases through `bee.approvals.binding:runtime_lease` (also the `bee.approvals.binding:local` binding). Its operations are `grant`, `check`, `use`, `revoke`, `list`; requests carry `operation`, `lease_ref?`, `workspace_id?`, `tool?`, `input_digest?`, `effect_key?`. An ordinary permission approval with operation proposal ref `bee.approvals:runtime-lease` carries `{subject, workspace_id, tool, input_digest, expires_ms, max_uses}`. The digest is lowercase SHA-256; expiry is within 30 days and uses are 1..10000. Grant consumes that exact approved proposal, revalidating its owner incarnation after a restart. The Approvals ledger stores leases and per-effect receipts.
+The Approvals owner exposes runtime approval leases through `bee.approvals.binding:runtime_lease` (also the `bee.approvals.binding:local` binding). Its operations are `grant`, `check`, `use`, `revoke`, `list`; requests carry `operation`, `lease_ref?`, `workspace_id?`, `tool?`, `input_digest?`, `effect_key?`. An ordinary permission approval with operation proposal ref `bee.approvals:runtime-lease` carries `{subject, workspace_id, tool, input_digest, expires_ms, max_uses}`. The digest is lowercase SHA-256; expiry is within 30 days and uses are 1..10000. The original approval creates the exact runtime Grant. The compatibility `grant` operation consumes its source effect, revalidating its owner incarnation after a restart. Runtime authority and use receipts live in the common ledger.
 
-Check/use require consume authority and the exact subject/workspace. Use additionally checks tool/input digest, expiry, revocation and the use bound; the same effect key replays only the same exact operation. Persisted runtime authority survives an owner restart. Subject or workspace manager may revoke; list exposes only the caller's records in one workspace. Saved profile references cannot transfer authority. The shared permission exchange uses matching references before requesting another decision and rechecks the same receipt before dispatch/recovery; Deny still wins.
+Check/use require consume authority and the exact subject/workspace. New uses check tool/input digest, expiry, revocation and the use bound; an admitted effect key replays the same exact operation after expiry or revocation. Persisted runtime authority survives an owner restart. Subject or workspace manager may revoke; list exposes only the caller's records in one workspace. Saved profile references cannot transfer authority. The shared permission exchange uses matching references before requesting another decision and rechecks the same receipt before dispatch/recovery; Deny still wins.

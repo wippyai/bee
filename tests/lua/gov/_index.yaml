@@ -295,6 +295,8 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
+    common_grants: bee.approvals.grants:store
+    clock: bee.values:clock
     principals: bee.tests.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -1467,3 +1469,5 @@ entries:
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
+    grant_schema: bee.approvals.grants:schema
+    grants: bee.approvals.grants:store

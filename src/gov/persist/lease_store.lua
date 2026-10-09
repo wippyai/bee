@@ -196,7 +196,11 @@ local function lease_row(grant: grants.Grant): Object
         past_expiry = grant.until_ms and grant.until_ms <= clock.milliseconds() and 1 or 0}
 end
 local function load(tx: sql.Transaction, store: Scope, lease_id: string): (Lease?, Result?)
-    local grant, err = grants.read(tx,grant_identity(store,lease_id))
+    local rows, query_error = tx:query("SELECT * FROM bee_approval_grants WHERE domain = 'governance_lease' AND owner_node = ? AND workspace_id = ? AND json_extract(metadata_json,'$.lease_id') = ?",{store.node,store.workspace,lease_id})
+    if not rows or query_error then return nil,storage(tostring(query_error),"read lease grant") end
+    if #rows == 0 then return nil,nil end
+    if #rows ~= 1 then return nil,failure("STORAGE","lease grant identity is ambiguous") end
+    local grant, err = grants.decode(rows[1])
     if err then return nil,storage(err,"read lease grant") end
     if not grant then return nil,nil end
     if grant.domain ~= "governance_lease" or grant.owner_node ~= store.node or grant.workspace_id ~= store.workspace then return nil,failure("DENIED","lease scope differs") end

@@ -84,14 +84,15 @@ approver needs both the `bee.approvals.decide` action on the workspace and a
 place in the policy. Workspace membership alone exposes nothing. The
 operations `feed_snapshot`, `feed_read_after`, `read`, `decide` and `withdraw`
 declare Hive operations under `hive: policy`; the host ceiling decides what a
-mapped remote principal may call. Grant administration (`grant_window`) has no
+mapped remote principal may call. Grant administration (`grant` and compatibility `grant_window`) has no
 Hive operation.
 
 | Namespace | Responsibility |
 |---|---|
 | `bee.approvals` | Public contract (`bee.approvals:contract`) |
 | `bee.approvals.binding` | Callable approval operations, the local contract binding `bee.approvals.binding:local` and the domain library `bee.approvals.binding:service` |
-| `bee.approvals.persist` | Request, decision, grant, effect, history, inbox, incarnation and durable event/thread outbox storage |
+| `bee.approvals.persist` | Request, decision, effect, inbox, incarnation and durable event/thread outbox storage |
+| `bee.approvals.grants` | Common Grant authority, use reservations/admissions and durable history across local domains |
 | `bee.approvals.migrations` | Approval schema migrations |
 | `bee.approvals.env` | Host-linked approver-policy reference and its reader |
 | `bee.approvals.types` | Runtime lease proposal and ceiling decoder (`runtime_lease`), window-grant decoder and capped duration choices (`windows`) |
@@ -100,7 +101,7 @@ Hive operation.
 
 Approval views expose `requesting_session` when the authenticated requester is a SessionRef. The read-only `bee.approvals.binding:attention_count` accepts `{workspace_id}` and returns `{ok=true,value={count=N}}` for pending, unexpired requests. It requires the exact `bee.approvals.attention` grant for that workspace and provides neither request details nor decision authority.
 
-The Approvals owner exposes runtime approval leases through `bee.approvals.binding:runtime_lease` (also `local.runtime_lease`). Its operations are `grant`, `check`, `use`, `revoke`, `list`; requests carry `operation`, `lease_ref?`, `workspace_id?`, `tool?`, `input_digest?`, `effect_key?`. An ordinary permission approval with operation proposal ref `bee.approvals:runtime-lease` carries `{subject, workspace_id, tool, input_digest, expires_ms, max_uses}`. The digest is lowercase SHA-256; expiry is within 30 days and uses are 1..10000. Grant consumes that exact approved proposal, revalidating its owner incarnation after a restart. Leases and per-effect receipts persist in the Approvals database.
+The Approvals owner exposes runtime approval leases through `bee.approvals.binding:runtime_lease` (also `local.runtime_lease`). Its operations are `grant`, `check`, `use`, `revoke`, `list`; requests carry `operation`, `lease_ref?`, `workspace_id?`, `tool?`, `input_digest?`, `effect_key?`. An ordinary permission approval with operation proposal ref `bee.approvals:runtime-lease` carries `{subject, workspace_id, tool, input_digest, expires_ms, max_uses}`. The digest is lowercase SHA-256; expiry is within 30 days and uses are 1..10000. Approval creates its Grant automatically. The compatibility grant operation consumes the source effect and revalidates its owner incarnation after a restart. The common Grant ledger stores runtime authority and use receipts.
 
 Check/use require consume authority and the exact subject/workspace. Use additionally checks tool/input digest, expiry, revocation and the use bound; the same effect key replays only the same exact operation. Persisted runtime authority survives an owner restart. Subject or workspace manager may revoke; list exposes only the caller's records in one workspace. Saved profile references cannot transfer authority. The shared permission exchange uses matching references before requesting another decision and rechecks the same receipt before dispatch/recovery; Deny still wins.
 
@@ -143,8 +144,24 @@ settlement references them; an active window keeps its source request retained.
 `decide` also accepts `window_permanent = true` for a permission without a
 response, mutually exclusive with `window_ttl_ms`. The host approver policy
 must explicitly set `allow_permanent: true`; omission denies it. This uses the
-existing central window store and `grant_window` list/revoke API, with a
+common Grant ledger and compatibility `grant_window` list/revoke API, with a
 non-expiring horizon (`windows.PERMANENT_UNTIL_MS`, 9999-12-31T23:59:59Z).
-Sessions uses these central windows for exact peer/workspace/scope consent.
+Sessions uses these common approval-window Grants for exact peer/workspace/scope consent.
 Its protected consent adapter records the person's approval evidence; the
 receiving Hive dispatcher reads central active windows for every dispatch.
+
+
+The existing Needs you Grants view lists every local authority domain, including
+governance leases, follow-source consent, Docker admission, saved profiles,
+gateway consent, runtime leases and windows. `grant list` pages all states;
+`read` and `history` page by revision. Revocation requires the observed revision,
+fences future admission and leaves admitted effects and domain recovery receipts.
+Persistent authority needs explicit policy opt-in. Legacy imports preserve exact
+scope, bounds, original source history and explicit legacy provenance.
+
+Registered Grant adapters create domain authority in the original approval
+transaction. Binding-scoped Grants use metadata-registered context projections
+for the live binding expiry, revocation and seal; renewal never overrides an
+explicit Grant revocation. Host-selected consent surfaces record policy
+provenance, while saved profile and approved session choices retain their own
+Grant identities. Old domain consent tables are removed by forward migrations.

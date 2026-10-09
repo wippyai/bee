@@ -114,7 +114,7 @@ entries:
     actions:
     - bee.approvals.own
     resources:
-    - installation_effects
+    - gateway.installation
     effect: allow
 - name: approval_activation_effects_policy
   kind: security.policy
@@ -124,8 +124,7 @@ entries:
     actions:
     - bee.approvals.own
     resources:
-    - activation_effects
-    - activation_closures
+    - gov.activation
     effect: allow
 - name: approval_publication_effects_policy
   kind: security.policy
@@ -135,7 +134,7 @@ entries:
     actions:
     - bee.approvals.own
     resources:
-    - publication_effects
+    - gateway.publication
     effect: allow
 - name: approval_decide_policy
   kind: security.policy

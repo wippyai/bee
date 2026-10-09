@@ -161,7 +161,7 @@ end
 local function approve(workspace: string, approval_id: unknown)
     local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = approval_id})
     call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = approval_id,
-        expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
+        expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest, reviewed_digest = read.reviewed_digest})
 end
 local function define_tests()
     test.describe("Capability elevation", function()
@@ -206,7 +206,7 @@ local function define_tests()
                 test.eq(proposal.attempt_id, attempt)
                 test.is_true(tostring(proposal.wording):find("Use an isolated application database named elevdb", 1, true) ~= nil)
                 call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = approval_id,
-                    expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
+                    expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest, reviewed_digest = read.reviewed_digest})
                 if type(association_revision) ~= "number" then error("invalid fixture association_revision") end
                 call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
                     name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "read",

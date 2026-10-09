@@ -95,7 +95,10 @@ function M.request(port: Port, binding: Binding, policy: string, raw: unknown): 
     if not key then return fail("INVALID", "cannot measure the publication request") end
     local filed = port.approvals("request", {workspace_id = workspace_id, idempotency_key = key,
         request_kind = "permission", policy = policy, proposal = proposal, prompt = {text = prompt},
-        thread_id = binding.thread_id})
+        thread_id = binding.thread_id, contract_version = 2, subject = {principal_id = binding.subject},
+        origin = {thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id},
+        continuation = {destination = "gateway.publication", effect_id = key,
+            context = {binding_id = binding.binding_id}}})
     if not filed.ok then return filed end
     local approval = bounds.object(filed.value)
     local approval_id = approval and bounds.id(approval.approval_id) or nil
@@ -128,7 +131,9 @@ function M.apply_approved(port: Port, binding: Binding, policy: string, raw: unk
     end
     local decision = publishing.decision(view)
     if decision.status ~= "approved" then return reply(decision) end
-    local effect_key = publishing.effect_key(request_id)
+    local effect_record = bounds.object(view.effect)
+    local effect_key = effect_record and bounds.id(effect_record.effect_id) or nil
+    if not effect_key then return fail("UNAVAILABLE", "approval effect identity is missing") end
     if view.effect_completed_at ~= nil then
         if view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
             return fail("DENIED", "approval was consumed by another effect owner")
@@ -139,7 +144,7 @@ function M.apply_approved(port: Port, binding: Binding, policy: string, raw: unk
     if view.consumed_effect == nil and view.consumer_id == nil then
         local digest = bounds.id(view.proposal_digest)
         if not digest then return fail("UNAVAILABLE", "approval carries no proposal digest") end
-        local consumed = subject_call.consume(port.approvals, request_id, digest, effect_key, view.owner_incarnation)
+        local consumed = subject_call.claim_effect(port.approvals, request_id, digest, effect_key, view.owner_incarnation)
         if not consumed.ok then return consumed end
     elseif view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
         return fail("DENIED", "approval was consumed by another effect owner")
@@ -150,7 +155,7 @@ function M.apply_approved(port: Port, binding: Binding, policy: string, raw: unk
     if outcome.status ~= "approved" then
         local digest = bounds.id(view.proposal_digest)
         if not digest then return fail("UNAVAILABLE", "approval carries no proposal digest") end
-        local completed = port.approvals("complete_publication_effect", {approval_id = request_id,
+        local completed = port.approvals("effect", {operation = "complete", approval_id = request_id,
             proposal_digest = digest, effect_key = effect_key, result = publishing.effect_result(effect)})
         if not completed.ok then return completed end
     end
@@ -179,7 +184,9 @@ function M.status(port: Port, binding: Binding, policy: string, raw: unknown): R
     end
     local decision = publishing.decision(view)
     if decision.status ~= "approved" then return reply(decision) end
-    local effect_key = publishing.effect_key(request_id)
+    local effect_record = bounds.object(view.effect)
+    local effect_key = effect_record and bounds.id(effect_record.effect_id) or nil
+    if not effect_key then return fail("UNAVAILABLE", "approval effect identity is missing") end
     if view.effect_completed_at ~= nil then
         if view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
             return fail("DENIED", "approval was consumed by another effect owner")
@@ -201,7 +208,7 @@ end
 function M.drain_approved(): (integer, string?)
     local policy, policy_error = M.approval_policy()
     if not policy then return 0, policy_error and policy_error.error.message or "publication policy unavailable" end
-    local raw, call_error = funcs.new():call("bee.approvals.binding:publication_effects", {limit = 16})
+    local raw, call_error = funcs.new():call("bee.approvals.binding:effect_queue", {destination = "gateway.publication", limit = 16})
     if call_error then return 0, tostring(call_error) end
     local listed = bounds.object(raw)
     local queue = listed and bounds.object(listed.value) or nil
@@ -217,7 +224,14 @@ function M.drain_approved(): (integer, string?)
         local proposal = view and bounds.object(view.proposal) or nil
         local payload = proposal and bounds.object(proposal.payload) or nil
         local binding_id = payload and bounds.id(payload.binding_id) or nil
-        if approval_id and view.policy == policy and proposal and proposal.ref == publishing.REF and payload and binding_id then
+        if approval_id and ((bounds.object(view.effect) or {}).state == "canceled" or view.state ~= "decided" or view.decision ~= "approved") then
+            local raw_closed, close_error = funcs.new():call("bee.approvals.binding:effect", {operation = "complete",
+                approval_id = approval_id, proposal_digest = view.proposal_digest, result = {closed = true}})
+            local closed = bounds.object(raw_closed)
+            if close_error or not closed or closed.ok ~= true then
+                retry_error = "ended effect could not be closed"
+            end
+        elseif approval_id and view.policy == policy and proposal and proposal.ref == publishing.REF and payload and binding_id then
             local raw_resolved, resolve_error = funcs.new():call("bee.gateway.binding:effect_binding",
                 {binding_id = binding_id, tools = {"publish_request"}})
             if resolve_error then return count, tostring(resolve_error) end

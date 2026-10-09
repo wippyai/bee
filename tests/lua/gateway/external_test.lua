@@ -27,7 +27,7 @@ local function decide(paired: Object, decision: string)
         {workspace_id = WORKSPACE, definition_id = "bee.approvals.inbox.app:app"}))
     local approval = value(executor:call("bee.approvals.binding:read", {approval_id = paired.approval_id}))
     value(executor:call("bee.approvals.binding:decide", {approval_id = paired.approval_id, decision = decision,
-        expected_revision = approval.revision, proposal_digest = approval.proposal_digest}))
+        expected_revision = approval.revision, proposal_digest = approval.proposal_digest, reviewed_digest = approval.reviewed_digest}))
 end
 local function rpc(endpoint: string, action: string, token: string, method: string, params: Object): (Object, integer)
     local response, err = http_client.post("http://" .. endpoint .. "/mcp/" .. action, {headers = {["Content-Type"] = "application/json",

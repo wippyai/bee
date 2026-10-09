@@ -319,7 +319,7 @@ local function pending_request(workspace: string): Object
     error("no pending approval request in workspace " .. workspace)
 end
 local function decide(view: Object, decision: string)
-    approve_call("bee.approvals.binding:decide", {approval_id = view.approval_id, expected_revision = view.revision, decision = decision, proposal_digest = view.proposal_digest})
+    approve_call("bee.approvals.binding:decide", {approval_id = view.approval_id, expected_revision = view.revision, decision = decision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest})
 end
 local function records_of(thread_id: string): {Object}
     local all: {Object} = {}

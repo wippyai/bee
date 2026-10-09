@@ -158,7 +158,7 @@ local function approval_view(value: unknown): (ApprovalView?, string?)
     local unknown_field = bounds.fields(view, {"approval_id", "owner_node", "owner_incarnation", "workspace_id", "requester_id", "requesting_session", "request_kind", "policy",
         "proposal", "proposal_digest", "prompt", "response_schema", "thread_id", "binding", "revision", "state", "decision", "decider_id",
         "decided_at", "response", "validated_incarnation", "validated_by", "validated_at", "consumer_id", "consumed_effect", "consumed_at",
-        "window_grant", "allowed_by_grant", "window_max_ttl_ms", "reallow", "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at"})
+        "window_grant", "allowed_by_grant", "window_max_ttl_ms", "reallow", "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at", "request_digest", "contract_version", "contract", "reviewed_digest", "effect_admission_ms", "effect", "lifecycle_records"})
     if unknown_field then return nil, "approval: " .. unknown_field end
     if view.requesting_session ~= nil and not bounds.id(view.requesting_session) then return nil, "approval requesting session is malformed" end
     local approval_id, workspace_id = bounds.id(view.approval_id), bounds.id(view.workspace_id)

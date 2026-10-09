@@ -8,18 +8,17 @@ local service = require("service")
 
 local M = {}
 
-local EFFECTS = "bee.approvals.binding:activation_effects"
-local CLOSURES = "bee.approvals.binding:activation_closures"
+local EFFECTS = "bee.approvals.binding:effect_queue"
 
 -- One activation the pass carried: approved and applied, or ended.
 type Outcome = {approval_id: string, kind: "approved" | "ended", ok: boolean,
     phase: unknown, outcome: unknown, code: unknown, message: unknown}
 
-local function queue(method: string, field: string): ({unknown}?, string?)
-    local raw, call_error = funcs.call(method, {limit = 16})
+local function queue(phase: string): ({unknown}?, string?)
+    local raw, call_error = funcs.call(EFFECTS, {destination = "gov.activation", phase = phase, limit = 16})
     local reply = bounds.object(raw)
     local value = reply and reply.ok == true and bounds.object(reply.value) or nil
-    local items = value and bounds.array(value[field], 64) or nil
+    local items = value and bounds.array(value.effects, 64) or nil
     if call_error or not items then return nil, tostring(call_error or (reply and reply.error)) end
     return items, nil
 end
@@ -46,10 +45,10 @@ end
 -- run carries both queues once; nil with the cause when a queue is unreadable.
 function M.run(): ({Outcome}?, string?)
     local outcomes: {Outcome} = {}
-    local approved, approved_error = queue(EFFECTS, "effects")
+    local approved, approved_error = queue("ready")
     if not approved then return nil, "approved activations are unreadable: " .. tostring(approved_error) end
     carry(approved, "approved", outcomes)
-    local ended, ended_error = queue(CLOSURES, "closures")
+    local ended, ended_error = queue("ended")
     if not ended then return nil, "ended activations are unreadable: " .. tostring(ended_error) end
     carry(ended, "ended", outcomes)
     return outcomes, nil

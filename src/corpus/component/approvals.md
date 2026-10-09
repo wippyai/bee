@@ -22,7 +22,7 @@ is a side effect of the decision and never a condition of it: a thread that
 refuses it is retried, and an exhausted row stays visible with its last error
 while the decision it announces stands.
 
-States run `pending` to `decided`, `expired` or `withdrawn`; the thread
+States run `pending` to `decided`, `expired`, `withdrawn`, `superseded` or `invalidated`; the thread
 projection records them as `approved`/`denied`, `expired` and `cancelled`.
 Expiry is enforced by the owner when a decision or withdrawal arrives and by
 the worker on every pass. Delivery retries and retention are separate from
@@ -48,25 +48,28 @@ one effect key. Retention forgets a request only after its lifetime plus the
 retention window, with every delivery acknowledged; an idempotency key older
 than that horizon creates a fresh request.
 
-The host-authorized Hub installation worker reads its bounded queue through
-`bee.approvals.binding:installation_effects`, which returns approved installation
-requests whose effect result is not complete. After Hub returns an applied or
-terminal result, the requesting attempt records its bounded status outcome through
-`bee.approvals.binding:complete_installation_effect`. The operation checks the
-requester, workspace consume authority, proposal digest and consumed effect key;
-an identical completion replays and a different result conflicts. A worker
-restart can therefore submit an already-consumed request again until the Hub
-outcome is recorded, without reading the approvals table from the gateway store.
-Hub retains the complete receipt, including migration details; the approval
-owner stores only the bounded state and message needed for status.
+Contract `2` stores separate Request, Decision, Grant and Effect records.
+The public surface and event names are defined in [the approval lifecycle
+contract](../docs/approvals.md#public-contract). Every request has a durable
+requester notification obligation, including requests without a thread.
 
-The host-authorized Hub publication worker reads its bounded queue through
-`bee.approvals.binding:publication_effects`, which returns approved publication
-requests whose effect result is not complete, and records its bounded outcome
-through `bee.approvals.binding:complete_publication_effect` under the same
-requester, digest and effect-key checks. A committed decision wakes the
-publication worker, so an approved publication uploads without any status
-poll.
+Effect consumers register `meta.type: bee.approvals.effect-consumer` with
+`destination`, `operation_ref` and `worker_name`. The authority discovers these
+registrations through registry metadata. `effect_queue` reads terminal,
+uncompleted effects for one destination; `phase=ready|ended|all` selects its
+work. `effect` records claims, starts, completions and reconciliation. A
+completion acknowledges the consumer's durable terminal events in the same
+transaction. Missing receivers keep their events for restart and catch-up.
+
+Gateway installation (`gateway.installation`), publication
+(`gateway.publication`) and governed activation (`gov.activation`) are domain
+adapters. They keep Hub/governance receipts and validate bindings, exact
+artifacts and live destination state before acting. Denial, expiry, withdrawal,
+supersession and invalidation cancel waiting effects. Admitted effects remain
+queued until their receipt is reconciled; identical receipts replay and changed
+receipts conflict. The request's decision deadline is independent of effect
+admission. Once the effect is admitted, later deadline expiry does not revoke
+its receipt or authorize another effect.
 
 Approver policies are host-owned under `bee.security.approvals:approver_policies`:
 each names its approvers and the longest request or approval-window lifetime it allows. An
@@ -81,7 +84,7 @@ Hive operation.
 |---|---|
 | `bee.approvals` | Public contract (`bee.approvals:contract`) |
 | `bee.approvals.binding` | Callable approval operations, the local contract binding `bee.approvals.binding:local` and the domain library `bee.approvals.binding:service` |
-| `bee.approvals.persist` | Request, history, inbox, incarnation and thread-projection outbox storage |
+| `bee.approvals.persist` | Request, decision, grant, effect, history, inbox, incarnation and durable event/thread outbox storage |
 | `bee.approvals.migrations` | Approval schema migrations |
 | `bee.approvals.env` | Host-linked approver-policy reference and its reader |
 | `bee.approvals.types` | Runtime lease proposal and ceiling decoder (`runtime_lease`), window-grant decoder and capped duration choices (`windows`) |

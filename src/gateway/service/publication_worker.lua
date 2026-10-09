@@ -15,7 +15,7 @@ local function drain(): boolean
 end
 
 local function main()
-    worker.run({name = approval_service.PUBLICATION_WORKER_NAME, wake = approval_service.TOPIC_WAKE, pass = drain})
+    worker.run({name = "bee.approvals.publication_effect_worker", wake = approval_service.TOPIC_WAKE, pass = drain})
 end
 
 return {main = main}

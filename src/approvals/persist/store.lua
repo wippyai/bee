@@ -92,42 +92,6 @@ function M.consume(tx: sql.Transaction, approval_id: string, actor: string, effe
         {actor, effect_key, at, at, approval_id}, "consume approval")
 end
 
-function M.installation_effects(tx: sql.Transaction, now: integer, limit: integer): ({unknown}?, string?)
-    return query(tx, [[SELECT * FROM bee_approval_requests
-        WHERE state = 'decided' AND decision = 'approved' AND effect_completed_at IS NULL
-        AND ((consumed_effect IS NULL AND expires_ms > ?)
-            OR (consumer_id = requester_id AND consumed_effect = 'hub-install:' || approval_id))
-        AND proposal_json LIKE '%"ref":"bee.hub:apply"%'
-        ORDER BY approval_id LIMIT ?]], {now, limit})
-end
-
-function M.publication_effects(tx: sql.Transaction, now: integer, limit: integer): ({unknown}?, string?)
-    return query(tx, [[SELECT * FROM bee_approval_requests
-        WHERE state = 'decided' AND decision = 'approved' AND effect_completed_at IS NULL
-        AND ((consumed_effect IS NULL AND expires_ms > ?)
-            OR (consumer_id = requester_id AND consumed_effect = 'hub-publish:' || approval_id))
-        AND proposal_json LIKE '%"ref":"bee.hub:publish"%'
-        ORDER BY approval_id LIMIT ?]], {now, limit})
-end
-
--- Approved governance activations their owner has not yet consumed.
-function M.activation_effects(tx: sql.Transaction, now: integer, limit: integer): ({unknown}?, string?)
-    return query(tx, [[SELECT * FROM bee_approval_requests
-        WHERE state = 'decided' AND decision = 'approved' AND consumed_effect IS NULL AND expires_ms > ?
-        AND proposal_json LIKE '%"ref":"bee.gov:establish-overlay"%'
-        ORDER BY approval_id LIMIT ?]], {now, limit})
-end
-
--- Governance activations whose request ended without approval (denied,
--- expired or withdrawn) and whose requester has not yet closed them.
-function M.activation_closures(tx: sql.Transaction, limit: integer): ({unknown}?, string?)
-    return query(tx, [[SELECT * FROM bee_approval_requests
-        WHERE (state IN ('expired', 'withdrawn') OR (state = 'decided' AND decision = 'denied'))
-        AND effect_completed_at IS NULL
-        AND proposal_json LIKE '%"ref":"bee.gov:establish-overlay"%'
-        ORDER BY approval_id LIMIT ?]], {limit})
-end
-
 function M.complete_effect(tx: sql.Transaction, approval_id: string, completed_at: string, result_json: string, updated_at: string, state: string?): string?
     local effect, read_error = lifecycle.read(tx, approval_id)
     if not effect then return read_error end

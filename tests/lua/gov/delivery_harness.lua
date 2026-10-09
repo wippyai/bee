@@ -111,7 +111,7 @@ function M.answer(workspace: string, approval_id: unknown, decision: string): Ob
     local person = M.person(workspace)
     local read = M.value(M.reply(person:call("bee.approvals.binding:read", {approval_id = approval_id})))
     M.value(M.reply(person:call("bee.approvals.binding:decide", {approval_id = approval_id,
-        expected_revision = read.revision, decision = decision, proposal_digest = read.proposal_digest})))
+        expected_revision = read.revision, decision = decision, proposal_digest = read.proposal_digest, reviewed_digest = read.reviewed_digest})))
     return read
 end
 

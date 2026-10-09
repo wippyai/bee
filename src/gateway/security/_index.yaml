@@ -136,7 +136,7 @@ entries:
     resources:
     - bee.approvals.binding:request
     - bee.approvals.binding:read
-    - bee.approvals.binding:consume
+    - bee.approvals.binding:effect
     - bee.approvals.binding:revalidate
     - bee.threads.binding:get
     - bee.threads.binding:read_after
@@ -206,7 +206,7 @@ entries:
     resources:
     - bee.approvals.binding:request
     - bee.approvals.binding:read
-    - bee.approvals.binding:consume
+    - bee.approvals.binding:effect
     - bee.approvals.binding:revalidate
     - bee.resources.binding:check_grant
     - bee.resources.binding:grant
@@ -275,9 +275,9 @@ entries:
     resources:
     - bee.approvals.binding:request
     - bee.approvals.binding:read
-    - bee.approvals.binding:consume
+    - bee.approvals.binding:effect
     - bee.approvals.binding:revalidate
-    - bee.approvals.binding:complete_installation_effect
+    - bee.approvals.binding:effect
     - bee.hub.binding:call
     - bee.gateway.env:install_configuration_ref
     - bee.threads.binding:get
@@ -292,7 +292,8 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.approvals.binding:installation_effects
+    - bee.approvals.binding:effect_queue
+    - bee.approvals.binding:effect
     effect: allow
 - name: installation_resolver_policy
   kind: security.policy
@@ -388,9 +389,9 @@ entries:
     resources:
     - bee.approvals.binding:request
     - bee.approvals.binding:read
-    - bee.approvals.binding:consume
+    - bee.approvals.binding:effect
     - bee.approvals.binding:revalidate
-    - bee.approvals.binding:complete_publication_effect
+    - bee.approvals.binding:effect
     - bee.hub.binding:call
     - bee.gateway.env:publish_configuration_ref
     - bee.threads.binding:get
@@ -405,7 +406,8 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.approvals.binding:publication_effects
+    - bee.approvals.binding:effect_queue
+    - bee.approvals.binding:effect
     effect: allow
 - name: publication_read_policy
   kind: security.policy

@@ -33,7 +33,7 @@ local function define_tests()
                 {workspace_id = workspace, definition_id = "bee.approvals.inbox.app:app"}))
             local approval = value(approver:call("bee.approvals.binding:read", {approval_id = pairing.approval_id}))
             value(approver:call("bee.approvals.binding:decide", {approval_id = pairing.approval_id,
-                expected_revision = approval.revision, proposal_digest = approval.proposal_digest, decision = "approved"}))
+                expected_revision = approval.revision, proposal_digest = approval.proposal_digest, reviewed_digest = approval.reviewed_digest, decision = "approved"}))
             local delivered = assert(bounds.object(completed:receive()))
             test.is_nil(delivered.error)
             local reply = assert(bounds.object(delivered.reply))

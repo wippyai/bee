@@ -95,7 +95,7 @@ local function define_tests()
             local second = assert(bounds.object(ok(lease_grants.propose(executor, vocabulary, installed, profile, workspace,
                 {ttl_seconds = 3600}, "propose-2")).approval))
             alice:call("bee.approvals.binding:decide", {approval_id = second.approval_id,
-                expected_revision = second.revision, proposal_digest = second.proposal_digest, decision = "approved"})
+                expected_revision = second.revision, proposal_digest = second.proposal_digest, reviewed_digest = second.reviewed_digest, decision = "approved"})
             -- The approval owner restarts between the decision and the grant: the
             -- real owner answers REVALIDATE and the grant completes under the new incarnation.
             local store = assert(service.open())

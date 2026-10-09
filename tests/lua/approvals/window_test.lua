@@ -35,7 +35,7 @@ local function request(db: sql.DB, workspace: string, payload: Object?, at: inte
         prompt = {text = "Write one file"}}, at or NOW))
 end
 local function item(view: Object, ttl: integer?): Object
-    return {approval_id = view.approval_id, expected_revision = view.revision, proposal_digest = view.proposal_digest, decision = "approved", window_ttl_ms = ttl}
+    return {approval_id = view.approval_id, expected_revision = view.revision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest, decision = "approved", window_ttl_ms = ttl}
 end
 local function managed_request(db: sql.DB, workspace: string, tool: string?, input: string?, adapter: string?): Object
     return value(service.execute(db, SUBJECT, "request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY,
@@ -161,9 +161,15 @@ local function define_tests()
             local first = request(db, workspace)
             local granted = value(service.execute(db, PERSON, "decide", item(first, 1800000), NOW))
             local grant = assert(bounds.object(granted.window_grant))
-            request(db, workspace, nil, NOW + 1)
+            local second = request(db, workspace, nil, NOW + 1)
             value(service.execute(db, PERSON, "reconcile", {}, NOW + 1800001))
             test.eq(#assert(db:query("SELECT grant_id FROM bee_approval_window_grants WHERE grant_id = ?", {grant.grant_id})), 1)
+            value(service.execute(db, PERSON, "reconcile", {}, NOW + 1800001 + service.RETENTION_MS))
+            test.eq(#assert(db:query("SELECT grant_id FROM bee_approval_window_grants WHERE grant_id = ?", {grant.grant_id})), 1)
+            local notices = assert(db:query("SELECT event_id FROM bee_approval_events WHERE approval_id IN (?, ?) AND acknowledged_at IS NULL", {first.approval_id, second.approval_id}))
+            local acknowledgments: {unknown} = {}
+            for _, notice in ipairs(notices) do acknowledgments[#acknowledgments + 1] = notice.event_id end
+            value(service.execute(db, SUBJECT, "events", {acknowledge = acknowledgments}, NOW + 1800001 + service.RETENTION_MS))
             value(service.execute(db, PERSON, "reconcile", {}, NOW + 1800001 + service.RETENTION_MS))
             test.eq(#assert(db:query("SELECT grant_id FROM bee_approval_window_grants WHERE grant_id = ?", {grant.grant_id})), 0)
             db:release()

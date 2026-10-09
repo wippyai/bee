@@ -20,7 +20,7 @@ M.INBOX_PAGE = 64
 type Object = {[string]: unknown}
 type Workspace = {label: string, folder: string}
 type Decision = "approved" | "denied"
-type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
+type ApprovalState = "pending" | "decided" | "expired" | "withdrawn" | "superseded" | "invalidated"
 type RequestKind = "permission" | "question"
 type ProposalKind = "operation" | "attempt"
 type Prompt = {text: string, artifact_ref: nil} | {text: nil, artifact_ref: string}
@@ -30,7 +30,7 @@ type Proposal = OperationProposal | AttemptProposal
 type ApprovalView = {window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer?, reallow: boolean?, requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     requester_id: string, request_kind: RequestKind, policy: string, proposal: Proposal,
-    proposal_digest: string, prompt: Prompt, revision: integer, state: ApprovalState,
+    proposal_digest: string, reviewed_digest: string?, prompt: Prompt, revision: integer, state: ApprovalState,
     decision: Decision?, decider_id: string?, expires_at: string, created_at: string,
     response_schema: Object?, thread_id: string?, binding: Object?, response: unknown,
     decided_at: string?, validated_incarnation: integer?, validated_by: string?, validated_at: string?,
@@ -69,7 +69,7 @@ type Pending =
     {kind: "decide", request_id: string, approval_id: string, revision: integer, decision: Decision} |
     {kind: "withdraw", request_id: string, approval_id: string, revision: integer, decision: nil}
 type Intent = {target: string, request: Object}
-type Confirmation = {approval_id: string, revision: integer, proposal_digest: string, owner_node: string, owner_incarnation: integer}
+type Confirmation = {approval_id: string, revision: integer, proposal_digest: string, reviewed_digest: string?, owner_node: string, owner_incarnation: integer}
 type State = {
     grants_view: boolean, grants: {windows.Grant}, grant_selected: integer, longer: boolean, longer_choices: {windows.Choice},
     workspaces: {string},
@@ -120,6 +120,8 @@ local function approval_state(value: unknown): ApprovalState?
     if value == "decided" then return "decided" end
     if value == "expired" then return "expired" end
     if value == "withdrawn" then return "withdrawn" end
+    if value == "superseded" then return "superseded" end
+    if value == "invalidated" then return "invalidated" end
     return nil
 end
 
@@ -181,7 +183,7 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     local extra = bounds.fields(view, {"approval_id", "owner_node", "owner_incarnation", "workspace_id", "requester_id", "request_kind", "policy",
         "proposal", "proposal_digest", "prompt", "response_schema", "thread_id", "binding", "revision", "state", "decision", "decider_id",
         "decided_at", "response", "validated_incarnation", "validated_by", "validated_at", "consumer_id", "consumed_effect", "consumed_at",
-        "window_grant", "allowed_by_grant", "window_max_ttl_ms", "reallow", "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at", "source_approval_id", "source_workspace_id", "requesting_session"})
+        "window_grant", "allowed_by_grant", "window_max_ttl_ms", "reallow", "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at", "source_approval_id", "source_workspace_id", "requesting_session", "request_digest", "contract_version", "contract", "reviewed_digest", "effect_admission_ms", "effect", "lifecycle_records"})
     if extra then return nil, extra end
     local approval_id, owner_node, workspace_id = bounds.id(view.approval_id), bounds.id(view.owner_node), bounds.id(view.workspace_id)
     local requester_id, policy = bounds.id(view.requester_id), bounds.id(view.policy)
@@ -266,7 +268,7 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     if cap == nil or (view.reallow ~= nil and type(view.reallow) ~= "boolean")
         or (view.allowed_by_grant ~= nil and (not automatic or not grant or automatic ~= grant.grant_id)) then return nil, "approval window metadata is invalid" end
     local decoded_view: ApprovalView = {window_grant = grant, allowed_by_grant = automatic, window_max_ttl_ms = cap, reallow = view.reallow == true, requesting_session = requesting_session, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
-        requester_id = requester_id, request_kind = request_kind_value, policy = policy, proposal = proposal, proposal_digest = proposal_digest,
+        requester_id = requester_id, request_kind = request_kind_value, policy = policy, proposal = proposal, proposal_digest = proposal_digest, reviewed_digest = bounds.id(view.reviewed_digest),
         prompt = prompt, revision = revision, state = state, decision = approval_decision, decider_id = decider_id,
         expires_at = expires_at, created_at = created_at, response_schema = response_schema, thread_id = thread_id, binding = binding,
         response = view.response, decided_at = decided_at, validated_incarnation = validated_incarnation, validated_by = validated_by,
@@ -521,13 +523,13 @@ end
 function M.confirmation(state: State): Confirmation?
     local detail = state.detail
     if not detail or detail.approval_id ~= state.selected or detail.state ~= "pending" then return nil end
-    return {approval_id = detail.approval_id, revision = detail.revision, proposal_digest = detail.proposal_digest,
+    return {approval_id = detail.approval_id, revision = detail.revision, proposal_digest = detail.proposal_digest, reviewed_digest = detail.reviewed_digest,
         owner_node = detail.owner_node, owner_incarnation = detail.owner_incarnation}
 end
 function M.confirmation_matches(state: State, asked: Confirmation): boolean
     local current = M.confirmation(state)
     return current ~= nil and current.approval_id == asked.approval_id and current.revision == asked.revision
-        and current.proposal_digest == asked.proposal_digest and current.owner_node == asked.owner_node
+        and current.proposal_digest == asked.proposal_digest and current.reviewed_digest == asked.reviewed_digest and current.owner_node == asked.owner_node
         and current.owner_incarnation == asked.owner_incarnation
 end
 function M.apply_read(state: State, approval_id: string, reply: Reply)
@@ -569,7 +571,7 @@ function M.decision_intent(state: State, request_id: string, decision: string, t
     if ttl_ms and (ttl_ms < 1 or ttl_ms > (detail.window_max_ttl_ms or 0) or selected_decision ~= "approved" or detail.request_kind ~= "permission") then return nil, "duration exceeds this request's policy" end
     local revision = detail.revision
     state.pending = {kind = "decide", request_id = request_id, approval_id = selected, revision = revision, decision = selected_decision}
-    return {target = "bee.approvals.binding:decide", request = {approval_id = selected, expected_revision = revision, decision = selected_decision, proposal_digest = detail.proposal_digest, window_ttl_ms = ttl_ms}}, nil
+    return {target = "bee.approvals.binding:decide", request = {approval_id = selected, expected_revision = revision, decision = selected_decision, proposal_digest = detail.proposal_digest, reviewed_digest = detail.reviewed_digest, window_ttl_ms = ttl_ms}}, nil
 end
 function M.decision_group(state: State): {ApprovalView}
     local detail = state.detail
@@ -604,7 +606,7 @@ function M.combined_intent(state: State, request_id: string, decision: string, t
     if decision ~= "approved" and decision ~= "denied" then return nil, "decision must be approved or denied" end
     if ttl_ms and (ttl_ms < 1 or ttl_ms > M.window_cap(state) or decision ~= "approved") then return nil, "duration exceeds this batch's policy" end
     local items: {Object} = {}
-    for _, view in ipairs(group) do items[#items + 1] = {approval_id = view.approval_id, expected_revision = view.revision, proposal_digest = view.proposal_digest, decision = decision} end
+    for _, view in ipairs(group) do items[#items + 1] = {approval_id = view.approval_id, expected_revision = view.revision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest, decision = decision} end
     local detail = assert(state.detail)
     state.pending = {kind = "batch", request_id = request_id, approval_id = detail.approval_id, revision = detail.revision, decision = decision, items = group}
     return {target = "bee.approvals.binding:decide_batch", request = {decisions = items, window_ttl_ms = ttl_ms}}, nil
@@ -623,7 +625,7 @@ function M.withdraw_intent(state: State, request_id: string): (Intent?, string?)
     if not detail or not selected or detail.approval_id ~= selected then return nil, "open the request before withdrawing" end
     if detail.state ~= "pending" then return nil, "the request is " .. M.text(detail.state, 40) end
     state.pending = {kind = "withdraw", request_id = request_id, approval_id = selected, revision = detail.revision, decision = nil}
-    return {target = "bee.approvals.binding:withdraw", request = {approval_id = selected, expected_revision = detail.revision, proposal_digest = detail.proposal_digest}}, nil
+    return {target = "bee.approvals.binding:withdraw", request = {approval_id = selected, expected_revision = detail.revision, proposal_digest = detail.proposal_digest, reviewed_digest = detail.reviewed_digest}}, nil
 end
 -- Who decided, as the person reads it: the person's own Bee application is
 -- "you"; any other approver is named by the last part of its identity.

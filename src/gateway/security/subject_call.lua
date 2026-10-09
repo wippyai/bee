@@ -157,11 +157,11 @@ end
 -- consume: bind an approved decision to one effect key. A decision observed
 -- under an earlier authority incarnation is revalidated once under the
 -- current one; a second restart returns to the caller.
-function M.consume(approvals: Approvals, approval_id: string, proposal_digest: string, effect_key: string,
+function M.claim_effect(approvals: Approvals, approval_id: string, proposal_digest: string, effect_key: string,
     incarnation_raw: unknown): Reply
     local incarnation = bounds.count(incarnation_raw)
     if not incarnation or incarnation == 0 then return M.fail("UNAVAILABLE", "approval authority identity missing") end
-    local consumed = approvals("consume", {approval_id = approval_id, proposal_digest = proposal_digest,
+    local consumed = approvals("effect", {operation = "claim", approval_id = approval_id, proposal_digest = proposal_digest,
         effect_key = effect_key, owner_incarnation = incarnation})
     if not consumed.ok and consumed.error and consumed.error.code == "REVALIDATE" then
         local state = bounds.object(consumed.value)
@@ -170,7 +170,7 @@ function M.consume(approvals: Approvals, approval_id: string, proposal_digest: s
         local validated = approvals("revalidate", {approval_id = approval_id, proposal_digest = proposal_digest,
             owner_incarnation = current})
         if not validated.ok then return validated end
-        consumed = approvals("consume", {approval_id = approval_id, proposal_digest = proposal_digest,
+        consumed = approvals("effect", {operation = "claim", approval_id = approval_id, proposal_digest = proposal_digest,
             effect_key = effect_key, owner_incarnation = current})
     end
     return consumed

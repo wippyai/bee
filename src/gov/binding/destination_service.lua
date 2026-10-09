@@ -1331,8 +1331,8 @@ function M.close_ended(raw: unknown): Result
         if not executor then
             result = failure("BLOCKED", executor_error or "approval executor is unavailable")
         else
-            local closed, close_error = executor:call("bee.approvals.binding:close_activation",
-                {approval_id = approval_id, proposal_digest = proposal_digest})
+            local closed, close_error = executor:call("bee.approvals.binding:effect",
+                {operation = "complete", approval_id = approval_id, proposal_digest = proposal_digest, result = {closed = true}})
             local reply = bounds.object(closed)
             result = (reply and reply.ok == true) and transaction.success({approval_id = approval_id}, false)
                 or failure("UNAVAILABLE", tostring(close_error or (reply and bounds.object(reply.error) or {}).message or "close ended activation"))
@@ -1404,6 +1404,19 @@ function M.apply_approved(raw: unknown): Result
                     if not sent then logger:warn("Applied application not announced", {component = chosen.component, error = tostring(send_error)}) end
                 end
             end
+        end
+    end
+    local settled = result.ok and bounds.object(result.value) or nil
+    if settled and settled.phase == "settled" then
+        local executor, executor_error = approval_executor()
+        if not executor then result = failure("UNAVAILABLE", executor_error or "approval executor is unavailable")
+        else
+            local raw_complete, complete_error = executor:call("bee.approvals.binding:effect", {operation = "complete",
+                approval_id = approval_id, proposal_digest = effect.proposal_digest,
+                effect_key = settled.consumed_effect_key, result = {ok = settled.outcome == "applied", outcome = settled.outcome,
+                    intent_id = settled.intent_id}, state = settled.outcome == "uncertain" and "uncertain" or (settled.outcome == "applied" and "succeeded" or "failed")})
+            local completed = bounds.object(raw_complete)
+            if complete_error or not completed or completed.ok ~= true then result = failure("UNAVAILABLE", "complete activation effect receipt") end
         end
     end
     close(plan_store, activation_store, lease_handle)

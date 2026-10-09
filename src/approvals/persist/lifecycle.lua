@@ -84,6 +84,18 @@ function M.attach(tx: sql.Transaction, approval_id: string, contract: Contract, 
     if err then return err end
     local continuation = bounds.object(contract.value.continuation)
     local effect_id = continuation and bounds.id(continuation.effect_id) or approval_id
+    if not continuation then
+        local consumers, consumer_error = resources.consumers()
+        if not consumers then return consumer_error end
+        local action = bounds.object(contract.value.action)
+        for _, consumer in ipairs(consumers) do
+            if action and action.ref == consumer.operation_ref then
+                if continuation then return "operation has multiple effect consumers; name a destination" end
+                continuation = {destination = consumer.destination, context = {}}
+                effect_id = (consumer.effect_prefix or "") .. approval_id
+            end
+        end
+    end
     local context = canonical.encode(continuation and continuation.context or {})
     return execute(tx, "INSERT INTO bee_approval_effects (approval_id, effect_id, destination, context_json, state, updated_at) VALUES (?, ?, ?, ?, 'waiting', ?)",
         {approval_id, effect_id, continuation and continuation.destination, context, at})
@@ -93,7 +105,10 @@ function M.read(tx: sql.Transaction, approval_id: string): (Object?, string?)
     if err or not rows or #rows ~= 1 then return nil, "read approval effect" end
     local row = bounds.object(rows[1])
     if not row then return nil, "invalid approval effect" end
+    if not bounds.id(row.effect_id) or not bounds.member(row.state, M.EFFECT_STATES) or not bounds.integer(row.revision)
+        or (row.destination ~= nil and not bounds.id(row.destination)) then return nil, "approval effect identity or state is corrupt" end
     local context = type(row.context_json) == "string" and json.decode(row.context_json) or nil
+    if not bounds.object(context) then return nil, "approval effect context is corrupt" end
     local receipt = type(row.receipt_json) == "string" and json.decode(row.receipt_json) or nil
     return {effect_id = row.effect_id, destination = row.destination, context = context, state = row.state,
         revision = row.revision, consumer_id = row.consumer_id, owner_incarnation = row.owner_incarnation,
@@ -125,21 +140,61 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
     local update_error = execute(tx, "UPDATE bee_approval_effects SET state = ?, revision = revision + 1, updated_at = ? WHERE approval_id = ? AND state = 'waiting'", {effect_state, at, approval_id})
     if update_error then return update_error end
     if state ~= "decided" then return nil end
-    local kind = decision == "denied" and "deny" or (row.request_kind == "question" and "answer" or (row.window_grant_id ~= nil and "allow_grant" or "allow_once"))
+    local windows, window_error = tx:query("SELECT window_grant_id, response_json FROM bee_approval_requests WHERE approval_id = ?", {approval_id})
+    if not windows or window_error then return "read decision grant terms" end
+    local kind = decision == "denied" and "deny" or (row.request_kind == "question" and "answer" or (windows[1].window_grant_id ~= nil and "allow_grant" or "allow_once"))
     local decision_id = approval_id .. ":decision:" .. tostring(revision)
     local principal_json = canonical.encode(M.principal(actor))
-    local decision_error = execute(tx, "INSERT INTO bee_approval_decisions (decision_id, approval_id, revision, kind, decider_json, reviewed_digest, reviewed_revision, reason, assurance_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        {decision_id, approval_id, revision, kind, principal_json, row.reviewed_digest, revision - 1, reason, '{"kind":"policy_decision"}', at})
+    local decision_error = execute(tx, "INSERT INTO bee_approval_decisions (decision_id, approval_id, revision, kind, decider_json, reviewed_digest, reviewed_revision, reason, assurance_json, response_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        {decision_id, approval_id, revision, kind, principal_json, row.reviewed_digest, revision - 1, reason, '{"kind":"policy_decision"}', windows[1].response_json, at})
     if decision_error or decision ~= "approved" or row.request_kind == "question" then return decision_error end
     local subject_json = canonical.encode(contract.subject)
     local scope_json = canonical.encode(contract.scope)
     return execute(tx, "INSERT INTO bee_approval_grants (grant_id, approval_id, decision_id, subject_json, scope_json, terms_json, state, revision, until_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?, ?)",
         {approval_id .. ":grant", approval_id, decision_id, subject_json, scope_json, '{"kind":"once","time_basis":"absolute"}', row.effect_admission_ms, at})
 end
-function M.consume(tx: sql.Transaction, approval_id: string, actor: string, effect_id: string, incarnation: integer, at: string): string?
+function M.grant_revoked(tx: sql.Transaction, approval_id: string, requester: string, revision: integer, at: string): string?
+    local effect, read_error = M.read(tx, approval_id)
+    if not effect then return read_error end
+    local body, encode_error = canonical.encode({contract_version = M.VERSION, approval_id = approval_id,
+        grant_id = approval_id .. ":grant", revision = revision, state = "revoked", effect_id = effect.effect_id,
+        already_admitted = effect.consumer_id ~= nil})
+    if not body then return encode_error end
+    local destinations: {string} = {"requester:" .. requester}
+    if type(effect.destination) == "string" then destinations[#destinations + 1] = effect.destination end
+    for _, destination in ipairs(destinations) do
+        local err = execute(tx, "INSERT INTO bee_approval_events(event_id, approval_id, revision, kind, destination, body_json, created_at) VALUES (?, ?, ?, 'grant.revoked', ?, ?, ?)",
+            {approval_id .. ":grant-revoked:" .. tostring(revision) .. ":" .. destination, approval_id, revision, destination, body, at})
+        if err then return err end
+    end
+    return nil
+end
+function M.expire_effects(tx: sql.Transaction, now: integer, at: string): (integer?, string?)
+    local rows, err = tx:query([[SELECT r.approval_id, r.requester_id, r.revision, e.effect_id, e.destination
+        FROM bee_approval_requests r JOIN bee_approval_effects e ON e.approval_id = r.approval_id
+        WHERE r.effect_admission_ms <= ? AND e.state IN ('authorized','reserved') LIMIT 64]], {now})
+    if not rows or err then return nil, "read expired effect admissions" end
+    for _, row in ipairs(rows) do
+        local canceled = execute(tx, "UPDATE bee_approval_effects SET state = 'canceled', revision = revision + 1, updated_at = ? WHERE approval_id = ?", {at, row.approval_id})
+        if canceled then return nil, canceled end
+        local expired = execute(tx, "UPDATE bee_approval_grants SET state = 'expired', revision = revision + 1 WHERE approval_id = ? AND state = 'active'", {row.approval_id})
+        if expired then return nil, expired end
+        local body = canonical.encode({approval_id = row.approval_id, revision = row.revision, effect_id = row.effect_id,
+            state = "canceled", reason = "effect admission deadline passed"})
+        local destinations: {string} = {"requester:" .. tostring(row.requester_id)}
+        if type(row.destination) == "string" then destinations[#destinations + 1] = row.destination end
+        for _, destination in ipairs(destinations) do
+            local queued = execute(tx, "INSERT INTO bee_approval_events(event_id, approval_id, revision, kind, destination, body_json, created_at) VALUES (?, ?, ?, 'effect.canceled', ?, ?, ?)",
+                {tostring(row.approval_id) .. ":admission-expired:" .. destination, row.approval_id, row.revision, destination, body, at})
+            if queued then return nil, queued end
+        end
+    end
+    return #rows, nil
+end
+function M.consume(tx: sql.Transaction, approval_id: string, actor: string, effect_id: string, incarnation: integer, at: string, bound: boolean): string?
     local effect, err = M.read(tx, approval_id)
     if not effect then return err end
-    if effect.destination ~= nil and effect.effect_id ~= effect_id then return "registered continuation effect identity differs" end
+    if bound and effect.effect_id ~= effect_id then return "registered continuation effect identity differs" end
     local update_error = execute(tx, "UPDATE bee_approval_effects SET effect_id = ?, state = 'admitted', consumer_id = ?, owner_incarnation = ?, revision = revision + 1, updated_at = ? WHERE approval_id = ? AND state IN ('authorized','reserved')", {effect_id, actor, incarnation, at, approval_id})
     if update_error then return update_error end
     return execute(tx, "UPDATE bee_approval_grants SET state = 'exhausted', used = 1, revision = revision + 1 WHERE approval_id = ? AND state = 'active'", {approval_id})

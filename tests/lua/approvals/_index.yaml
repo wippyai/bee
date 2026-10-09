@@ -18,7 +18,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.approvals.binding:grant_window, bee.approvals.binding:node_summary, bee.approvals.binding:runtime_lease, bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.approvals.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:list, bee.approvals.binding:deliveries, bee.approvals.binding:reconcile, bee.approvals.binding:capabilities, bee.threads.binding:append, bee.threads.binding:create, bee.threads.binding:get, bee.threads.binding:read_after, bee.threads.binding:watch]
+    resources: [bee.approvals.binding:effect, bee.approvals.binding:effect_queue, bee.approvals.binding:events, bee.approvals.binding:end_request, bee.approvals.binding:grant, bee.approvals.binding:grant_window, bee.approvals.binding:node_summary, bee.approvals.binding:runtime_lease, bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.approvals.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:list, bee.approvals.binding:deliveries, bee.approvals.binding:reconcile, bee.approvals.binding:capabilities, bee.threads.binding:append, bee.threads.binding:create, bee.threads.binding:get, bee.threads.binding:read_after, bee.threads.binding:watch]
     effect: allow
 - name: manage_test_policy
   kind: security.policy
@@ -85,6 +85,7 @@ entries:
     worker: bee.approvals.service:worker
     resources: bee.approvals.env:resources
     outbox: bee.approvals.persist:outbox
+    dispatch: bee.approvals.persist:dispatch
     schema: bee.tests.support:schema
     thread_harness: bee.tests.threads:harness
 - name: lease_flow_test_policy
@@ -142,11 +143,14 @@ entries:
   source: file://migration_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [sql, funcs]
+  modules: [sql, funcs, hash]
   imports:
     test: wippy.test:test
+    clock: bee.values:clock
+    service: bee.approvals.binding:service
+    bounds: bee.values:bounds
   security:
-    policies: [bee.approvals:migration_test_policy, bee.tests.support:schema_policy]
+    policies: [bee.approvals:migration_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_consume_policy]
 - name: migration_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -154,3 +158,10 @@ entries:
     actions: [db.get]
     resources: [bee.approvals:migration_test_db]
     effect: allow
+- name: fixture_effect_consumer
+  kind: registry.entry
+  meta:
+    type: bee.approvals.effect-consumer
+    destination: fixture.effect
+    operation_ref: bee.test:effect
+    worker_name: bee.test.effect_worker

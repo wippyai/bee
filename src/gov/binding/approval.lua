@@ -6,10 +6,10 @@ local bounds = require("bounds")
 local drivers = require("drivers")
 local M = {}
 local REQUEST = "bee.approvals.binding:request"
-local CONSUME = "bee.approvals.binding:consume"
+local CONSUME = "bee.approvals.binding:effect"
 local REVALIDATE = "bee.approvals.binding:revalidate"
 local READ = "bee.approvals.binding:read"
-local CLOSE = "bee.approvals.binding:close_activation"
+local CLOSE = "bee.approvals.binding:effect"
 
 type Object = {[string]: unknown}
 type Executor = {call: (Executor, string, unknown) -> (unknown?, unknown?)}
@@ -211,6 +211,7 @@ function M.request_activation(executor: Executor, value: unknown, policy_raw: un
     end
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy, proposal = proposal,
+        contract_version = 2, continuation = {destination = "gov.activation", effect_id = item.effect_key, context = {}},
         prompt = {text = activation_prompt(item, type(changes) == "table" and changes :: {string} or nil, shown, presentation)}})
     local approved, approved_error = reply(raw, call_error)
     if not approved then return nil, approved_error end
@@ -238,7 +239,7 @@ local function activation_effect(executor: Executor, method: string, value: unkn
     end
     local request: Object = {approval_id = approval_id, proposal_digest = proposal_digest,
         owner_incarnation = incarnation}
-    if method == CONSUME then request.effect_key = item.effect_key end
+    if method == CONSUME then request.operation, request.effect_key = "claim", item.effect_key end
     local raw, call_error = executor:call(method, request)
     local result, fault = typed_reply(raw, call_error)
     if not result then return nil, fault end
@@ -281,7 +282,11 @@ function M.activation_ending(executor: Executor, value: unknown): (string?, stri
         return nil, "approval owner returned another activation approval"
     end
     if read.state == "expired" or read.state == "withdrawn" then return read.state, nil end
+    if read.state == "superseded" then return "withdrawn", nil end
+    if read.state == "invalidated" then return "expired", nil end
     if read.state == "decided" and read.decision == "denied" then return "denied", nil end
+    local effect = bounds.object(read.effect)
+    if effect and effect.state == "canceled" then return "expired", nil end
     return nil, nil
 end
 
@@ -289,8 +294,8 @@ end
 function M.close_activation(executor: Executor, value: unknown): string?
     local item, intent_error = activation(value)
     if not item then return intent_error end
-    local raw, call_error = executor:call(CLOSE, {approval_id = item.approval_id,
-        proposal_digest = item.approval_proposal_digest})
+    local raw, call_error = executor:call(CLOSE, {operation = "complete", approval_id = item.approval_id,
+        proposal_digest = item.approval_proposal_digest, result = {closed = true}})
     local _, close_error = reply(raw, call_error)
     return close_error
 end

@@ -73,7 +73,7 @@ local function define_tests()
             local read = assert(bounds.object(person:call("bee.approvals.binding:read", {approval_id = intent.approval_id})))
             local approval = assert(bounds.object(read.value))
             local decided = assert(bounds.object(person:call("bee.approvals.binding:decide", {approval_id = intent.approval_id,
-                expected_revision = approval.revision, proposal_digest = approval.proposal_digest, decision = "approved"})))
+                expected_revision = approval.revision, proposal_digest = approval.proposal_digest, reviewed_digest = approval.reviewed_digest, decision = "approved"})))
             test.is_true(decided.ok == true, tostring(decided.message))
 
             local settled: Object = intent

@@ -464,7 +464,8 @@ local function authority_tests()
             assert(plan_store.close(plans))
         end)
         test.it("ends an activation whose approval was denied or expired and closes its request", function()
-            for _, ending in ipairs({"denied", "expired"}) do
+            for _, ending in ipairs({"denied", "expired", "withdrawn", "superseded", "invalidated"}) do
+                local projected = ending == "superseded" and "withdrawn" or (ending == "invalidated" and "expired" or ending)
                 local workspace = "workspace-ended-" .. ending
                 local plans = assert(plan_store.open("bee:db", "node-owner", workspace))
                 local activations = assert(activation_store.open("bee:db", "node-owner", workspace))
@@ -490,10 +491,11 @@ local function authority_tests()
                     local shown = assert(requested)
                     if method == "bee.approvals.binding:read" then
                         return {ok = true, value = {approval_id = shown.approval_id, proposal_digest = shown.proposal_digest,
-                            state = ending == "denied" and "decided" or "expired",
-                            decision = ending == "denied" and "denied" or nil}}, nil
+                            state = ending == "denied" and "decided" or ending,
+                            decision = ending == "denied" and "denied" or nil, effect = {state = "canceled"}}}, nil
                     end
-                    if method == "bee.approvals.binding:close_activation" then
+                    if method == "bee.approvals.binding:effect" then
+                        test.eq(input.operation, "complete")
                         test.eq(input.approval_id, shown.approval_id)
                         closed = closed + 1
                         return {ok = true, value = {approval_id = shown.approval_id}}, nil
@@ -515,11 +517,11 @@ local function authority_tests()
                 if ending == "denied" then test.eq(ok(owner.step(config, "intent-ended", "ended")).phase, "consuming") end
                 local ended = ok(owner.close(config, "intent-ended", "ended"))
                 test.eq(ended.phase, "settled")
-                test.eq(ended.outcome, ending)
+                test.eq(ended.outcome, projected)
                 test.is_nil(ended.desired_intent_id)
                 test.eq(closed, 1)
                 -- Closing again finds it settled and closes the request again, which replays.
-                test.eq(ok(owner.close(config, "intent-ended", "ended")).outcome, ending)
+                test.eq(ok(owner.close(config, "intent-ended", "ended")).outcome, projected)
                 test.eq(closed, 2)
                 assert(activation_store.close(activations))
                 assert(plan_store.close(plans))

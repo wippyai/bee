@@ -9,6 +9,11 @@ local bounds = require("bounds")
 type Object = {[string]: unknown}
 local function define_tests()
     test.describe("Hub Library access", function()
+        test.it("closes an approved installation when its unused effect is canceled", function()
+            local outcome = installation.decision({state = "decided", decision = "approved", effect = {state = "canceled"}})
+            test.eq(outcome.status, "refused")
+            test.eq(outcome.code, "CANCELED")
+        end)
         test.it("grants all admitted Hub tools through one trait and preserves the ceiling", function()
             local names = {"components", "install_request", "uninstall_request", "install_status"}
             local raw = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
@@ -65,6 +70,7 @@ local function define_tests()
                 source_workspace = "hub:bee/progress", version = "1.0.0", artifact_digest = string.rep("a", 64),
                 workspace_id = "workspace", phase = "settled", outcome = "applied"}
             local view: Object = {}
+            local effect_id = ""
             local removals, consumes = 0, 0
             local port: installer.Port = {hub = function(_request: Object, _manage: boolean): Object
                 error("application removal never calls legacy Hub apply")
@@ -73,24 +79,26 @@ local function define_tests()
                 if request.operation == "status" then return {ok = true, value = current} end
                 test.eq(request.operation, "uninstall")
                 test.eq(request.expected_intent_id, "library-intent")
-                test.eq(request.receipt_key, installation.effect_key("approval"))
+                test.eq(request.receipt_key, effect_id)
                 removals = removals + 1
                 return {ok = true, value = {removed = true}}
             end, approvals = function(operation: string, request: Object): installer.Reply
                 if operation == "request" then
+                    effect_id = assert(bounds.id(assert(bounds.object(request.continuation)).effect_id))
                     view = {requester_id = "agent", thread_id = "thread", workspace_id = "workspace", policy = "approval-policy",
                         proposal = request.proposal, proposal_digest = string.rep("b", 64), owner_incarnation = 1,
-                        state = "decided", decision = "approved"}
+                        state = "decided", decision = "approved", effect = {effect_id = effect_id, state = "authorized"}}
                     test.eq(assert(bounds.object(assert(bounds.object(request.proposal)).payload)).route, "governed")
                     return {ok = true, value = {approval_id = "approval"}}
                 end
                 if operation == "read" then return {ok = true, value = view} end
-                if operation == "consume" then
+                if operation == "effect" and request.operation == "claim" then
                     consumes = consumes + 1
                     view.consumed_effect, view.consumer_id = request.effect_key, "agent"
                     return {ok = true, value = {}}
                 end
-                test.eq(operation, "complete_installation_effect")
+                test.eq(operation, "effect")
+                test.eq(request.operation, "complete")
                 view.effect_completed_at, view.effect_result = "recorded", request.result
                 return {ok = true, value = {}}
             end}

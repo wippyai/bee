@@ -43,7 +43,7 @@ local function create(workspace: string, expires: integer, uses: integer): Objec
 end
 local function grant(approval: Object): Object
     value(call(APPROVER, "decide", {approval_id = approval.approval_id, expected_revision = approval.revision,
-        proposal_digest = approval.proposal_digest, decision = "approved"}))
+        proposal_digest = approval.proposal_digest, reviewed_digest = approval.reviewed_digest, decision = "approved"}))
     return value(call(ACTOR, "runtime_lease", {operation = "grant", lease_ref = approval.approval_id}))
 end
 local function define_tests()

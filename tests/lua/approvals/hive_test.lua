@@ -84,7 +84,7 @@ local function define_tests()
         test.it("reads and decides nothing for a peer the approver policy does not name", function()
             test.eq(code_of(forward("read", {approval_id = created.approval_id})), "DENIED")
             test.eq(code_of(forward("decide", {approval_id = created.approval_id, expected_revision = created.revision,
-                proposal_digest = created.proposal_digest, decision = "approved"})), "DENIED")
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"})), "DENIED")
             local snapshot = forward("feed_snapshot", {workspace_id = workspace, limit = 64})
             test.is_true(snapshot.ok == true)
             test.eq(#principals.items(assert(bounds.object(snapshot.value)).items), 0)
@@ -97,7 +97,7 @@ local function define_tests()
             assert(process.send(tostring(service), protocol.FORWARD, {op = "decide", caller = tostring(process.pid()),
                 reply_topic = topic, expires = time.now():unix_nano() + 1000000000,
                 args = {approval_id = created.approval_id, expected_revision = created.revision,
-                    proposal_digest = created.proposal_digest, decision = "approved"}}))
+                    proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"}}))
             local deadline = time.after("100ms")
             local selected = channel.select({replies:case_receive(), deadline:case_receive()})
             process.unlisten(replies)
@@ -115,14 +115,14 @@ local function define_tests()
             test.eq(code_of(forward("decide", {approval_id = created.approval_id, expected_revision = created.revision,
                 proposal_digest = string.rep("0", 64), decision = "approved"})), "CONFLICT")
             test.eq(code_of(forward("decide", {approval_id = created.approval_id, expected_revision = 9,
-                proposal_digest = created.proposal_digest, decision = "approved"})), "CONFLICT")
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"})), "CONFLICT")
             local settled = forward("decide", {approval_id = created.approval_id, expected_revision = created.revision,
-                proposal_digest = created.proposal_digest, decision = "approved"})
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"})
             test.is_true(settled.ok == true)
             test.eq(assert(bounds.object(settled.value)).decision, "approved")
             test.eq(assert(bounds.object(settled.value)).decider_id, peer)
             local replayed = forward("decide", {approval_id = created.approval_id, expected_revision = created.revision,
-                proposal_digest = created.proposal_digest, decision = "approved"})
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"})
             test.is_true(replayed.ok == true)
             test.is_true(replayed.replayed == true)
         end)
@@ -132,9 +132,9 @@ local function define_tests()
             local second = direct("request", request_of(workspace))
             local settled = forward("decide_batch", {decisions = {
                 {approval_id = first.approval_id, expected_revision = first.revision,
-                    proposal_digest = first.proposal_digest, decision = "approved"},
+                    proposal_digest = first.proposal_digest, reviewed_digest = first.reviewed_digest, decision = "approved"},
                 {approval_id = second.approval_id, expected_revision = second.revision,
-                    proposal_digest = second.proposal_digest, decision = "denied"}}})
+                    proposal_digest = second.proposal_digest, reviewed_digest = second.reviewed_digest, decision = "denied"}}})
             test.is_true(settled.ok == true)
             local views = principals.objects(assert(bounds.object(settled.value)).decisions)
             test.eq(#views, 2)
@@ -149,7 +149,7 @@ local function define_tests()
         test.it("lists and revokes only windows owned by the destination-authorized peer", function()
             local pending = direct("request", request_of(workspace))
             local settled = forward("decide", {approval_id = pending.approval_id, expected_revision = pending.revision,
-                proposal_digest = pending.proposal_digest, decision = "approved", window_ttl_ms = 30000})
+                proposal_digest = pending.proposal_digest, reviewed_digest = pending.reviewed_digest, decision = "approved", window_ttl_ms = 30000})
             test.is_true(settled.ok == true)
             local grant = assert(bounds.object(assert(bounds.object(settled.value)).window_grant))
             local listed = forward("grant_window", {operation = "list", workspace_id = workspace})

@@ -40,6 +40,8 @@ local function owner(state: Object): lease_grants.Executor
             state.validated = input.owner_incarnation
             return {ok = true, value = {validated_incarnation = input.owner_incarnation}}, nil
         end
+        test.eq(method, "bee.approvals.binding:effect")
+        test.eq(input.operation, "claim")
         if state.restarted and state.validated ~= 2 then
             return {ok = false, error = {code = "REVALIDATE", message = "restarted"}, value = {current_incarnation = 2}}, nil
         end
@@ -118,7 +120,7 @@ local function define_tests()
             local other_key = lease_grants.grant(executor, handle, vocab, PROFILE, "ws", "actor", {approval_id = "approval-1"}, "grant-2")
             test.is_true(other_key.ok == true and other_key.replayed == true)
             local consumes = 0
-            for _, method in ipairs(principals.strings(state.calls)) do if method == "bee.approvals.binding:consume" then consumes = consumes + 1 end end
+            for _, method in ipairs(principals.strings(state.calls)) do if method == "bee.approvals.binding:effect" then consumes = consumes + 1 end end
             test.eq(consumes, 1)
             assert(lease_store.close(handle))
         end)

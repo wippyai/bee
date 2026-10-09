@@ -277,7 +277,11 @@ end
 function M.decision(view_raw: unknown): Status
     local view = bounds.object(view_raw) or {}
     if view.state == "pending" then return {status = "pending"} end
-    if view.state == "decided" and view.decision == "approved" then return {status = "approved"} end
+    if view.state == "decided" and view.decision == "approved" then
+        local effect = bounds.object(view.effect)
+        if effect and effect.state == "canceled" then return {status = "refused", code = "CANCELED", message = "installation authority ended before execution"} end
+        return {status = "approved"}
+    end
     if view.state == "decided" then
         return {status = "refused", code = "DENIED", message = "the person refused the installation"}
     end

@@ -86,7 +86,7 @@ function M.approved(binding: Binding, configuration: surface.Surface, digest: st
     if view.state ~= "decided" or view.decision ~= "approved" then
         return nil, {ok = true, value = {approval_id = approval_id, status = view.decision or view.state}}
     end
-    local consumed = subject_call.consume(approvals, approval_id, expected_digest, "mcp:" .. approval_id, view.owner_incarnation)
+    local consumed = subject_call.claim_effect(approvals, approval_id, expected_digest, "mcp:" .. approval_id, view.owner_incarnation)
     if not consumed.ok then return nil, consumed end
     return {approval_id = approval_id, proposal_digest = expected_digest, traits = traits}, nil
 end

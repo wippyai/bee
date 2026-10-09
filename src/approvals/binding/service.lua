@@ -26,6 +26,7 @@ local approval_outbox = require("outbox")
 local runtime_lease = require("runtime_lease")
 local windows = require("windows")
 local lifecycle = require("lifecycle")
+local dispatch = require("dispatch")
 local M = {}
 M.LABEL = "approval"
 M.REQUEST = "bee.approvals.request"
@@ -33,14 +34,7 @@ M.DECIDE = "bee.approvals.decide"
 M.MANAGE = "bee.approvals.manage"
 M.OWN = "bee.approvals.own"
 M.CONSUME = "bee.approvals.consume"
-M.INSTALLATION_EFFECTS = "installation_effects"
-M.PUBLICATION_EFFECTS = "publication_effects"
-M.ACTIVATION_EFFECTS = "activation_effects"
-M.ACTIVATION_CLOSURES = "activation_closures"
 M.WORKER_NAME = "bee.approvals.outbox"
-M.INSTALLATION_WORKER_NAME = "bee.approvals.installation_effect_worker"
-M.PUBLICATION_WORKER_NAME = "bee.approvals.publication_effect_worker"
-M.ACTIVATION_WORKER_NAME = "bee.gov.activation_worker"
 M.AUTHORITY_NAME = "bee.approvals.authority"
 M.THREAD_GET = "bee.threads.binding:get"
 M.THREAD_READ = "bee.threads.binding:read_after"
@@ -79,7 +73,7 @@ type Row = {contract_version: integer, contract: Object, reviewed_digest: string
     expires_ms: integer, expires_at: string, created_at: string, updated_at: string?,
     effect_completed_at: string?, effect_result_json: string?, effect_result: unknown,
 }
-type ApprovalView = {contract_version: integer, contract: Object, reviewed_digest: string, effect_admission_ms: integer?, effect: Object, lifecycle_records: Object, window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer, reallow: boolean, requesting_session: string?,
+type ApprovalView = {request_digest: string, contract_version: integer, contract: Object, reviewed_digest: string, effect_admission_ms: integer?, effect: Object, lifecycle_records: Object, window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer, reallow: boolean, requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     requester_id: string, request_kind: RequestKind, policy: string, proposal: Object,
     proposal_digest: string, prompt: Object, response_schema: Object, thread_id: string?,
@@ -149,6 +143,30 @@ local function digest_of(value: unknown, maximum_bytes: integer?): (string?, str
     if hash_error or not sum then return nil, nil, "digest failed" end
     return sum, encoded, nil
 end
+local function legacy_replay(object: Object, row: Row, contract: Object): boolean
+    if row.contract_version ~= 1 then return false end
+    if canonical.encode(contract.subject) ~= canonical.encode(row.contract.subject) then return false end
+    local scope, previous_scope = bounds.object(contract.scope), bounds.object(row.contract.scope)
+    if not scope or not previous_scope or scope.type ~= previous_scope.type
+        or canonical.encode(scope.parameters) ~= canonical.encode(previous_scope.parameters) then return false end
+    local evidence = bounds.array(contract.evidence, 64)
+    if not evidence or #evidence ~= 0 then return false end
+    if object.effect_admission_ms ~= nil and object.effect_admission_ms ~= row.effect_admission_ms then return false end
+    local continuation = bounds.object(contract.continuation)
+    if continuation and continuation.destination ~= row.effect.destination then return false end
+    local fields: {[string]: boolean} = {contract_version = true, subject = true, origin = true, scope = true,
+        evidence = true, presentation = true, continuation = true, effect_admission_ms = true}
+    local original: Object = {}
+    for name, value in pairs(object) do
+        if not fields[name] then original[name] = value end
+    end
+    local digest = digest_of(original, M.MAX_PROPOSAL_BYTES + M.MAX_SCHEMA_BYTES + 16384)
+    return digest == row.request_digest
+end
+local function response_schema_bytes(schema: Object): (string?, string?)
+    if next(schema) == nil then return "{}", nil end
+    return canonical.encode(schema, M.MAX_SCHEMA_BYTES)
+end
 function M.open(): (sql.DB?, string?)
     return node_database.open()
 end
@@ -162,11 +180,10 @@ local function wake_worker(name: string)
     if err or not pid then return end
     process.send(tostring(pid), M.TOPIC_WAKE, {version = 1})
 end
-local function wake()
+local function wake(db: sql.DB)
     wake_worker(M.WORKER_NAME)
-    wake_worker(M.INSTALLATION_WORKER_NAME)
-    wake_worker(M.PUBLICATION_WORKER_NAME)
-    wake_worker(M.ACTIVATION_WORKER_NAME)
+    local _, err = dispatch.deliver(db, nil)
+    if err then logger:warn("Approval effect dispatch failed", {cause = err}) end
 end
 function M.reply(result: Result): Reply
     if result.ok then return {ok = true, error = nil, value = result.value, replayed = result.replayed} end
@@ -175,8 +192,7 @@ end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
 local mutating: {[string]: boolean} = {request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
-    grant_window = true, runtime_lease = true, complete_installation_effect = true, complete_publication_effect = true, reconcile = true,
-    close_activation = true, effect = true, events = true, end_request = true, grant = true}
+    grant_window = true, runtime_lease = true, reconcile = true, effect = true, events = true, end_request = true, grant = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
 -- other authorities through the executor; the operation then runs inside
@@ -248,7 +264,7 @@ local function run(request: unknown, name: string): Reply
     if not db then return M.reply(storage(open_error or "open approval store")) end
     local result = M.execute(db, actor, name, request, nil, nil)
     if mutating[name] and result.ok and not result.replayed then
-        wake()
+        wake(db)
         local announced: unknown = result.value
         local envelope = bounds.object(announced)
         if name == "withdraw" then announced = envelope and envelope.request
@@ -262,7 +278,7 @@ local function run(request: unknown, name: string): Reply
     return M.reply(result)
 end
 function M.view(row: Row): ApprovalView
-    return {lifecycle_records = row.lifecycle_records, contract_version = row.contract_version, contract = row.contract, reviewed_digest = row.reviewed_digest, effect_admission_ms = row.effect_admission_ms, effect = row.effect, window_grant = row.window_grant, allowed_by_grant = row.allowed_by_grant, window_max_ttl_ms = row.window_max_ttl_ms, reallow = row.reallow, approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,
+    return {request_digest = row.request_digest, lifecycle_records = row.lifecycle_records, contract_version = row.contract_version, contract = row.contract, reviewed_digest = row.reviewed_digest, effect_admission_ms = row.effect_admission_ms, effect = row.effect, window_grant = row.window_grant, allowed_by_grant = row.allowed_by_grant, window_max_ttl_ms = row.window_max_ttl_ms, reallow = row.reallow, approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,
         requesting_session = row.requester_id:match("^bs:") and row.requester_id or nil,
         requester_id = row.requester_id, request_kind = row.request_kind, policy = row.policy, proposal = row.proposal, proposal_digest = row.proposal_digest,
         prompt = row.prompt, response_schema = row.response_schema, thread_id = row.thread_id, binding = row.binding, revision = row.revision, state = row.state,
@@ -597,8 +613,14 @@ decode_row = function(raw: unknown, tx: sql.Transaction): (Row?, string?)
     local reviewed_digest = bounds.text(value.reviewed_digest, 64)
     local effect_admission_ms = value.effect_admission_ms == nil and nil or bounds.integer(value.effect_admission_ms)
     local effect, effect_error = lifecycle.read(tx, approval_id)
-    if not contract_version or not contract or not reviewed_digest or #reviewed_digest ~= 64 or not effect
+    if not contract_version or (contract_version ~= 1 and contract_version ~= lifecycle.VERSION) or not contract or not reviewed_digest or #reviewed_digest ~= 64 or not effect
         or (value.effect_admission_ms ~= nil and not effect_admission_ms) then return nil, effect_error or "approval lifecycle is corrupt" end
+    if contract_version == lifecycle.VERSION then
+        local encoded = canonical.encode(contract, 32768)
+        local measured = encoded and hash.sha256(encoded) or nil
+        if encoded ~= value.contract_json or measured ~= reviewed_digest then return nil, "approval review digest is corrupt" end
+    end
+    if contract.reviewed_required == true then maximum = 0 end
     local records, records_error = lifecycle.records(tx, approval_id)
     if not records then return nil, records_error end
     local row: Row = {lifecycle_records = records, contract_version = contract_version, contract = contract, reviewed_digest = reviewed_digest,
@@ -706,7 +728,7 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
     if not prompt then return failure("INVALID_ARGUMENT", "prompt: " .. tostring(prompt_error)) end
     local schema = bounds.object(object.response_schema == nil and {} or object.response_schema)
     if not schema then return failure("INVALID_ARGUMENT", "response_schema must be an object") end
-    local schema_json, schema_error = canonical.encode(schema, M.MAX_SCHEMA_BYTES)
+    local schema_json, schema_error = response_schema_bytes(schema)
     if not schema_json then return failure("INVALID_ARGUMENT", "response_schema: " .. tostring(schema_error)) end
     local thread_id, thread_valid = values.optional_id(object, "thread_id")
     if not thread_valid then return failure("INVALID_ARGUMENT", "thread_id is not an identifier") end
@@ -731,7 +753,9 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
     if #existing_rows > 0 then
         local existing, decode_error = decode_row(existing_rows[1], tx)
         if not existing then return storage("decode existing approval request: " .. tostring(decode_error)) end
-        if existing.request_digest ~= request_digest then return failure("CONFLICT", "idempotency key was used by a different request") end
+        if existing.request_digest ~= request_digest and not legacy_replay(object, existing, contract.value) then
+            return failure("CONFLICT", "idempotency key was used by a different request")
+        end
         return success(M.view(existing), true)
     end
     local pending_count_value, pending_error = store.pending_count(tx, actor)
@@ -849,7 +873,9 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     if (row.contract.reviewed_required == true or (evidence and #evidence > 0)) and object.reviewed_digest == nil then return failure("INVALID_ARGUMENT", "reviewed_digest is required for evidence-bound decisions") end
     if row.request_kind == "question" and decision == "approved" then
         if response == nil then return failure("INVALID_ARGUMENT", "a question needs a response to be approved") end
-        local valid, schema_error = json.validate(row.response_schema_json, response)
+        local schema_json, encode_error = response_schema_bytes(row.response_schema)
+        if not schema_json then return storage(encode_error or "encode response schema") end
+        local valid, schema_error = json.validate(schema_json, response)
         if not valid or schema_error then return failure("INVALID_ARGUMENT", "answer does not match its response schema: " .. tostring(schema_error)) end
     end
     local current, expire_error, expired_now = expire_if_due(tx, row, now)
@@ -958,13 +984,13 @@ local function op_withdraw(tx: sql.Transaction, actor: string, object: Object, n
     if load_error then return storage(load_error) end
     if not row then return failure("NOT_FOUND", "approval request does not exist") end
     if row.requester_id ~= actor then return failure("DENIED", "only the requester withdraws a request") end
+    local expected = bounds.integer(object.expected_revision)
+    if not expected or expected < 1 or not bounds.id(object.proposal_digest) then return failure("INVALID_ARGUMENT", "withdraw requires expected_revision and proposal_digest") end
+    if object.proposal_digest ~= row.proposal_digest or ((row.contract.reviewed_required == true or object.reviewed_digest ~= nil) and object.reviewed_digest ~= row.reviewed_digest) then return failure("CONFLICT", "withdraw review differs from the request", M.view(row)) end
     local current, expire_error = expire_if_due(tx, row, now)
     if not current then return storage(expire_error or "expire approval request") end
     if current.state ~= "pending" then return success({withdrawn = false, request = M.view(current)}, current.state == "withdrawn") end
-    local expected = bounds.integer(object.expected_revision)
-    if not expected or not bounds.id(object.proposal_digest) then return failure("INVALID_ARGUMENT", "withdraw requires expected_revision and proposal_digest") end
-    if expected ~= current.revision or object.proposal_digest ~= current.proposal_digest
-        or (object.reviewed_digest ~= nil and object.reviewed_digest ~= current.reviewed_digest) then return failure("CONFLICT", "withdraw review differs from the pending request", M.view(current)) end
+    if expected ~= current.revision then return failure("CONFLICT", "withdraw revision differs from the pending request", M.view(current)) end
     local settled, settle_error = settle(tx, current, "withdrawn", nil, nil, nil, actor, "withdrawn by the requester", now)
     if not settled then return storage(settle_error or "withdraw request") end
     return success({withdrawn = true, request = M.view(settled)}, false)
@@ -986,7 +1012,15 @@ local function effect_view(tx: sql.Transaction, actor: string, object: Object, n
     if load_error then return nil, nil, storage(load_error) end
     if not row then return nil, nil, failure("NOT_FOUND", "approval request does not exist") end
     if not security.can(M.CONSUME, text(row.workspace_id) or "") then return nil, nil, failure("DENIED", "caller is not an effect owner for workspace " .. tostring(row.workspace_id)) end
-    if row.proposal_digest ~= proposal_digest then return nil, nil, failure("CONFLICT", "proposal digest does not match the recorded proposal", M.view(row)) end
+    if row.proposal_digest ~= proposal_digest or (object.reviewed_digest ~= nil and object.reviewed_digest ~= row.reviewed_digest) then return nil, nil, failure("CONFLICT", "effect digest does not match the recorded review", M.view(row)) end
+    local scope = bounds.object(row.contract.scope)
+    local scope_type = scope and bounds.id(scope.type) or nil
+    if not scope or not scope_type then return nil, nil, storage("approval scope is corrupt") end
+    local registered, scope_error = resources.scope(scope_type)
+    if not registered then return nil, nil, failure("INVALID_STATE", scope_error or "scope adapter is unavailable") end
+    if row.contract_version == lifecycle.VERSION and (scope.adapter_version ~= registered.version or scope.adapter_digest ~= registered.digest) then
+        return nil, nil, failure("INVALID_STATE", "reviewed scope adapter changed", M.view(row))
+    end
     local owner = text(row.owner_node)
     if not owner then return nil, nil, storage("approval request has no owner node") end
     local current, unavailable = incarnation(tx, owner)
@@ -1001,7 +1035,7 @@ end
 -- decision in its own domain and records that it holds under the current
 -- incarnation; consumption under that incarnation is then possible.
 local function op_revalidate(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "owner_incarnation"})
+    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "owner_incarnation", "reviewed_digest"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local row, current, refused = effect_view(tx, actor, object, now)
     if not row or not current then return refused or storage("read approval request") end
@@ -1016,7 +1050,7 @@ end
 -- identity. A decision made under an earlier authority incarnation must
 -- have been revalidated under the current one first.
 local function op_consume(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "owner_incarnation"})
+    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "owner_incarnation", "reviewed_digest"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local effect_key = bounds.id(object.effect_key)
     if not effect_key then return failure("INVALID_ARGUMENT", "effect_key is not an identifier") end
@@ -1033,8 +1067,9 @@ local function op_consume(tx: sql.Transaction, actor: string, object: Object, no
     if row.effect_admission_ms and row.effect_admission_ms <= now then return failure("INVALID_STATE", "effect admission deadline has passed", M.view(row)) end
     local bound_effect = row.effect
     if bound_effect.state ~= "authorized" and bound_effect.state ~= "reserved" then return failure("INVALID_STATE", "effect is not authorized", M.view(row)) end
-    if bound_effect.destination ~= nil and bound_effect.effect_id ~= effect_key then return failure("CONFLICT", "effect identity differs from the reviewed continuation", M.view(row)) end
-    local lifecycle_error = lifecycle.consume(tx, row.approval_id, actor, effect_key, current, stamp(now))
+    local bound = (row.contract_version ~= 1 and bound_effect.destination ~= nil) or bound_effect.state == "reserved"
+    if bound and bound_effect.effect_id ~= effect_key then return failure("CONFLICT", "effect identity differs from the reviewed continuation or reservation", M.view(row)) end
+    local lifecycle_error = lifecycle.consume(tx, row.approval_id, actor, effect_key, current, stamp(now), bound)
     if lifecycle_error then return storage(lifecycle_error) end
     local update_error = store.consume(tx, row.approval_id, actor, effect_key, stamp(now))
     if update_error then return storage("record consumption") end
@@ -1052,7 +1087,7 @@ local function op_end(tx: sql.Transaction, actor: string, object: Object, now: i
     if not row then return failure("NOT_FOUND", "approval request does not exist") end
     if row.requester_id ~= actor and not security.can(M.MANAGE, row.workspace_id) then return failure("DENIED", "caller cannot end this request") end
     local expected = bounds.integer(object.expected_revision)
-    if not expected or object.proposal_digest ~= row.proposal_digest or (object.reviewed_digest ~= nil and object.reviewed_digest ~= row.reviewed_digest) then return failure("CONFLICT", "terminal review differs", M.view(row)) end
+    if not expected or object.proposal_digest ~= row.proposal_digest or ((row.contract.reviewed_required == true or object.reviewed_digest ~= nil) and object.reviewed_digest ~= row.reviewed_digest) then return failure("CONFLICT", "terminal review differs", M.view(row)) end
     if row.state ~= "pending" then return success(M.view(row), true) end
     if row.revision ~= expected then return failure("CONFLICT", "terminal revision differs", M.view(row)) end
     local reason = object.reason == nil and outcome or bounds.text(object.reason, 4096)
@@ -1066,18 +1101,19 @@ local function op_effect(tx: sql.Transaction, actor: string, object: Object, now
     if extra then return failure("INVALID_ARGUMENT", extra) end
     if object.operation == "claim" then
         return op_consume(tx, actor, {approval_id = object.approval_id, proposal_digest = object.proposal_digest,
-            effect_key = object.effect_key, owner_incarnation = object.owner_incarnation}, now, nil)
+            effect_key = object.effect_key, owner_incarnation = object.owner_incarnation, reviewed_digest = object.reviewed_digest}, now, nil)
     end
     local approval_id = bounds.id(object.approval_id)
     if not approval_id then return failure("INVALID_ARGUMENT", "approval_id is required") end
     local row, err = load(tx, approval_id)
     if err then return storage(err) end
     if not row then return failure("NOT_FOUND", "approval request does not exist") end
-    if not security.can(M.CONSUME, row.workspace_id) or row.requester_id ~= actor then return failure("DENIED", "caller does not own this effect") end
+    local ended = row.effect.state == "canceled"
+    local receiver = ended and type(row.effect.destination) == "string" and security.can(M.OWN, row.effect.destination)
+    if not receiver and (not security.can(M.CONSUME, row.workspace_id) or (row.requester_id ~= actor and row.consumer_id ~= actor)) then return failure("DENIED", "caller does not own this effect") end
     if object.proposal_digest ~= row.proposal_digest or (object.reviewed_digest ~= nil and object.reviewed_digest ~= row.reviewed_digest) then return failure("CONFLICT", "effect review differs", M.view(row)) end
     local effect = row.effect
     if object.operation == "read" then return success(M.view(row), false) end
-    local ended = row.state ~= "pending" and (row.state ~= "decided" or row.decision == "denied")
     if object.operation == "complete" then
         local receipt = bounds.object(object.result)
         local encoded, encode_error = canonical.encode(receipt, 8192)
@@ -1089,7 +1125,10 @@ local function op_effect(tx: sql.Transaction, actor: string, object: Object, now
             return success(M.view(row), true)
         end
         if not ended and (row.consumer_id ~= actor or row.consumed_effect ~= object.effect_key) then return failure("CONFLICT", "effect was not admitted by this receiver", M.view(row)) end
-        local completion_error = store.complete_effect(tx, approval_id, stamp(now), encoded, stamp(now), state)
+        if state == "uncertain" and effect.state == "uncertain" and canonical.encode(effect.receipt, 8192) == encoded then return success(M.view(row), true) end
+        local completion_error: string? = nil
+        if state == "uncertain" then completion_error = lifecycle.complete(tx, approval_id, state, encoded, stamp(now))
+        else completion_error = store.complete_effect(tx, approval_id, stamp(now), encoded, stamp(now), state) end
         if completion_error then return storage(completion_error) end
     elseif object.operation == "start" or object.operation == "reconcile" then
         local current, refused = incarnation(tx, row.owner_node)
@@ -1109,7 +1148,7 @@ local function op_effect(tx: sql.Transaction, actor: string, object: Object, now
     return success(M.view(updated), false)
 end
 local function op_grant(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local extra = bounds.fields(object, {"operation", "grant_id", "expected_revision", "subject", "scope", "effect_key", "owner_incarnation"})
+    local extra = bounds.fields(object, {"operation", "grant_id", "expected_revision", "subject", "scope", "effect_key", "owner_incarnation", "reviewed_digest"})
     if extra then return failure("INVALID_ARGUMENT", extra) end
     local id = bounds.id(object.grant_id)
     if not id then return failure("INVALID_ARGUMENT", "grant_id is required") end
@@ -1131,6 +1170,10 @@ local function op_grant(tx: sql.Transaction, actor: string, object: Object, now:
         if revoke_error then return storage("revoke grant") end
         local _, fence_error = tx:execute("UPDATE bee_approval_effects SET state = 'canceled', revision = revision + 1, updated_at = ? WHERE approval_id = ? AND state IN ('authorized','reserved')", {stamp(now), approval_id})
         if fence_error then return storage("fence reserved effect") end
+        local revision = bounds.integer(grant.revision)
+        if not revision then return storage("grant revision is corrupt") end
+        local notification_error = lifecycle.grant_revoked(tx, row.approval_id, row.requester_id, revision + 1, stamp(now))
+        if notification_error then return storage(notification_error) end
         return success({grant_id = id, state = "revoked", already_admitted = row.consumed_effect ~= nil}, false)
     end
     if row.requester_id ~= actor or not security.can(M.CONSUME, row.workspace_id) then return failure("DENIED", "caller cannot use this grant") end
@@ -1144,8 +1187,9 @@ local function op_grant(tx: sql.Transaction, actor: string, object: Object, now:
         return refusal("INVALID_STATE", "grant expired", {grant_id = id, state = "expired"})
     end
     if object.operation == "admit" then
+        if row.consumed_effect == nil and object.expected_revision ~= grant.revision then return failure("CONFLICT", "grant revision differs", grant) end
         return op_consume(tx, actor, {approval_id = approval_id, proposal_digest = row.proposal_digest,
-            effect_key = object.effect_key, owner_incarnation = object.owner_incarnation}, now, nil)
+            effect_key = object.effect_key, owner_incarnation = object.owner_incarnation, reviewed_digest = object.reviewed_digest}, now, nil)
     end
     if grant.state ~= "active" then return failure("INVALID_STATE", "grant is " .. tostring(grant.state), grant) end
     if object.operation == "check" then return success(grant, false) end
@@ -1155,7 +1199,7 @@ local function op_grant(tx: sql.Transaction, actor: string, object: Object, now:
     if object.operation == "reserve" then
         if effect_state == "reserved" and row.effect.effect_id == object.effect_key then return success(grant, true) end
         if effect_state ~= "authorized" then return failure("INVALID_STATE", "effect cannot reserve") end
-        if row.effect.destination ~= nil and row.effect.effect_id ~= object.effect_key then return failure("CONFLICT", "effect identity differs") end
+        if row.contract_version ~= 1 and row.effect.destination ~= nil and row.effect.effect_id ~= object.effect_key then return failure("CONFLICT", "effect identity differs") end
         state = "reserved"
     elseif object.operation == "release" then
         if effect_state ~= "reserved" or row.effect.effect_id ~= object.effect_key then return failure("CONFLICT", "effect reservation differs") end
@@ -1205,177 +1249,30 @@ local function op_events(tx: sql.Transaction, actor: string, object: Object, now
     end
     return success({events = events, cursor = cursor}, false)
 end
-local function op_installation_effects(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"limit"})
-    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+local function op_effect_queue(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local extra = bounds.fields(object, {"destination", "limit", "phase"})
+    if extra then return failure("INVALID_ARGUMENT", extra) end
+    local destination = bounds.id(object.destination)
     local limit = bounds.integer(object.limit == nil and 16 or object.limit)
-    if not limit or limit < 1 or limit > 64 then return failure("INVALID_ARGUMENT", "limit must be between 1 and 64") end
-    if not security.can(M.OWN, M.INSTALLATION_EFFECTS) then
-        return failure("DENIED", "caller may not enumerate approved installation effects")
-    end
-    local rows, err = store.installation_effects(tx, now, limit)
-    if err or not rows then return storage("read approved installation effects") end
+    local phase = bounds.member(object.phase == nil and "all" or object.phase, {"all", "ready", "ended"})
+    if not destination or not limit or limit < 1 or limit > 64 or not phase then return failure("INVALID_ARGUMENT", "destination, phase and limit are invalid") end
+    local consumer, consumer_error = resources.consumer(destination)
+    if not consumer then return failure("INVALID_ARGUMENT", consumer_error or "effect consumer is missing") end
+    if not security.can(M.OWN, destination) then return failure("DENIED", "caller cannot enumerate this effect destination") end
+    local rows, err = tx:query([[SELECT r.* FROM bee_approval_requests r JOIN bee_approval_effects e ON e.approval_id = r.approval_id
+        WHERE e.destination = ? AND r.state <> 'pending' AND r.effect_completed_at IS NULL
+        AND (r.consumer_id IS NULL OR r.consumer_id = r.requester_id OR r.consumer_id = ?)
+        AND (? = 'all' OR (? = 'ready' AND e.state <> 'canceled') OR (? = 'ended' AND e.state = 'canceled'))
+        ORDER BY r.approval_id LIMIT ?]], {destination, actor, phase, phase, phase, limit})
+    if not rows or err then return storage("read effect destination queue") end
     local effects: {Object} = {}
     for _, raw in ipairs(rows) do
         local row, decode_error = decode_row(raw, tx)
-        if not row then return storage("decode installation effect: " .. tostring(decode_error)) end
+        if not row then return storage(decode_error or "decode effect") end
+        if row.proposal.ref ~= consumer.operation_ref then return storage("effect destination operation differs") end
         effects[#effects + 1] = M.view(row)
     end
     return success({effects = effects}, false)
-end
--- The activation worker carries each approved activation to its owner,
--- which consumes the approval and applies the exact intent.
-local function op_activation_effects(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"limit"})
-    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local limit = bounds.integer(object.limit == nil and 16 or object.limit)
-    if not limit or limit < 1 or limit > 64 then return failure("INVALID_ARGUMENT", "limit must be between 1 and 64") end
-    if not security.can(M.OWN, M.ACTIVATION_EFFECTS) then
-        return failure("DENIED", "caller may not enumerate approved activations")
-    end
-    local rows, err = store.activation_effects(tx, now, limit)
-    if err or not rows then return storage("read approved activations") end
-    local effects: {Object} = {}
-    for _, raw in ipairs(rows) do
-        local row, decode_error = decode_row(raw, tx)
-        if not row then return storage("decode approved activation: " .. tostring(decode_error)) end
-        effects[#effects + 1] = M.view(row)
-    end
-    return success({effects = effects}, false)
-end
--- The activation worker carries each activation whose request ended without
--- approval to its owner, which settles the intent and closes the request.
-local function op_activation_closures(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"limit"})
-    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local limit = bounds.integer(object.limit == nil and 16 or object.limit)
-    if not limit or limit < 1 or limit > 64 then return failure("INVALID_ARGUMENT", "limit must be between 1 and 64") end
-    if not security.can(M.OWN, M.ACTIVATION_CLOSURES) then
-        return failure("DENIED", "caller may not enumerate ended activations")
-    end
-    local rows, err = store.activation_closures(tx, limit)
-    if err or not rows then return storage("read ended activations") end
-    local closures: {Object} = {}
-    for _, raw in ipairs(rows) do
-        local row, decode_error = decode_row(raw, tx)
-        if not row then return storage("decode ended activation: " .. tostring(decode_error)) end
-        closures[#closures + 1] = M.view(row)
-    end
-    return success({closures = closures}, false)
-end
--- close_activation: the requester records that its activation, whose request
--- ended without approval, is settled; the request leaves the closure queue.
-local function op_close_activation(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest"})
-    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local approval_id, proposal_digest = bounds.id(object.approval_id), bounds.id(object.proposal_digest)
-    if not approval_id or not proposal_digest then return failure("INVALID_ARGUMENT", "approval_id and proposal_digest are required") end
-    local row, load_error = load(tx, approval_id)
-    if load_error then return storage(load_error) end
-    if not row then return failure("NOT_FOUND", "approval request does not exist") end
-    if not security.can(M.CONSUME, text(row.workspace_id) or "") or row.requester_id ~= actor then
-        return failure("DENIED", "only the requester closes its ended activation")
-    end
-    local ended = row.state == "expired" or row.state == "withdrawn" or (row.state == "decided" and row.decision == "denied")
-    if not ended or row.proposal_digest ~= proposal_digest then
-        return failure("CONFLICT", "the activation request has not ended without approval", M.view(row))
-    end
-    if row.effect_completed_at ~= nil then return success(M.view(row), true) end
-    local update_error = store.complete_effect(tx, approval_id, stamp(now), "{\"closed\":true}", stamp(now))
-    if update_error then return storage("close ended activation") end
-    local updated = load(tx, approval_id)
-    if not updated then return storage("read closed activation") end
-    return success(M.view(updated), false)
-end
-local function op_complete_installation_effect(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "result"})
-    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local approval_id = bounds.id(object.approval_id)
-    local proposal_digest = bounds.id(object.proposal_digest)
-    local effect_key = bounds.id(object.effect_key)
-    if not approval_id or not proposal_digest or not effect_key then
-        return failure("INVALID_ARGUMENT", "approval_id, proposal_digest and effect_key are required")
-    end
-    local result = bounds.object(object.result)
-    local result_json: string? = nil
-    local encode_error: string? = nil
-    if result then result_json, encode_error = canonical.encode(result, 8192) end
-    if not result or not result_json then return failure("INVALID_ARGUMENT", "result must be a bounded Hub reply: " .. tostring(encode_error or "invalid result")) end
-    if #result_json > 8192 then return failure("INVALID_ARGUMENT", "Hub reply exceeds the installation receipt bound") end
-    local row, load_error = load(tx, approval_id)
-    if load_error then return storage(load_error) end
-    if not row then return failure("NOT_FOUND", "approval request does not exist") end
-    if not security.can(M.CONSUME, text(row.workspace_id) or "") then
-        return failure("DENIED", "caller is not an effect owner for this workspace")
-    end
-    if row.requester_id ~= actor then return failure("DENIED", "only the consuming requester completes this effect") end
-    if row.state ~= "decided" or row.decision ~= "approved" or row.proposal_digest ~= proposal_digest
-        or row.consumed_effect ~= effect_key or row.consumer_id ~= actor then
-        return failure("CONFLICT", "installation effect is not consumed by this requester", M.view(row))
-    end
-    if row.effect_completed_at ~= nil then
-        if row.effect_result_json ~= result_json then return failure("CONFLICT", "installation effect already has a different receipt", M.view(row)) end
-        return success(M.view(row), true)
-    end
-    local update_error = store.complete_effect(tx, approval_id, stamp(now), result_json, stamp(now))
-    if update_error then return storage("record completed installation effect") end
-    local updated = load(tx, approval_id)
-    if not updated then return storage("read completed installation effect") end
-    return success(M.view(updated), false)
-end
-local function op_publication_effects(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"limit"})
-    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local limit = bounds.integer(object.limit == nil and 16 or object.limit)
-    if not limit or limit < 1 or limit > 64 then return failure("INVALID_ARGUMENT", "limit must be between 1 and 64") end
-    if not security.can(M.OWN, M.PUBLICATION_EFFECTS) then
-        return failure("DENIED", "caller may not enumerate approved publication effects")
-    end
-    local rows, err = store.publication_effects(tx, now, limit)
-    if err or not rows then return storage("read approved publication effects") end
-    local effects: {Object} = {}
-    for _, raw in ipairs(rows) do
-        local row, decode_error = decode_row(raw, tx)
-        if not row then return storage("decode publication effect: " .. tostring(decode_error)) end
-        effects[#effects + 1] = M.view(row)
-    end
-    return success({effects = effects}, false)
-end
-local function op_complete_publication_effect(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "result"})
-    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local approval_id = bounds.id(object.approval_id)
-    local proposal_digest = bounds.id(object.proposal_digest)
-    local effect_key = bounds.id(object.effect_key)
-    if not approval_id or not proposal_digest or not effect_key then
-        return failure("INVALID_ARGUMENT", "approval_id, proposal_digest and effect_key are required")
-    end
-    local result = bounds.object(object.result)
-    local result_json: string? = nil
-    local encode_error: string? = nil
-    if result then result_json, encode_error = canonical.encode(result, 8192) end
-    if not result or not result_json then return failure("INVALID_ARGUMENT", "result must be a bounded Hub reply: " .. tostring(encode_error or "invalid result")) end
-    if #result_json > 8192 then return failure("INVALID_ARGUMENT", "Hub reply exceeds the publication receipt bound") end
-    local row, load_error = load(tx, approval_id)
-    if load_error then return storage(load_error) end
-    if not row then return failure("NOT_FOUND", "approval request does not exist") end
-    if not security.can(M.CONSUME, text(row.workspace_id) or "") then
-        return failure("DENIED", "caller is not an effect owner for this workspace")
-    end
-    if row.requester_id ~= actor then return failure("DENIED", "only the consuming requester completes this effect") end
-    if row.state ~= "decided" or row.decision ~= "approved" or row.proposal_digest ~= proposal_digest
-        or row.consumed_effect ~= effect_key or row.consumer_id ~= actor then
-        return failure("CONFLICT", "publication effect is not consumed by this requester", M.view(row))
-    end
-    if row.effect_completed_at ~= nil then
-        if row.effect_result_json ~= result_json then return failure("CONFLICT", "publication effect already has a different receipt", M.view(row)) end
-        return success(M.view(row), true)
-    end
-    local update_error = store.complete_effect(tx, approval_id, stamp(now), result_json, stamp(now))
-    if update_error then return storage("record completed publication effect") end
-    local updated = load(tx, approval_id)
-    if not updated then return storage("read completed publication effect") end
-    return success(M.view(updated), false)
 end
 local function may_read(actor: string, row: Row): (boolean, string?)
     if row.requester_id == actor then return true, nil end
@@ -1605,6 +1502,8 @@ local function op_reconcile(tx: sql.Transaction, actor: string, object: Object, 
         if not settled then return storage(settle_error or "expire request") end
         if expired_now then expired = expired + 1 end
     end
+    local expired_effects, effect_error = lifecycle.expire_effects(tx, now, stamp(now))
+    if expired_effects == nil then return storage(effect_error or "expire effect admission") end
     local horizon = now - M.RETENTION_MS
     local stale, stale_error = store.retained(tx, horizon, now, M.EXPIRE_BOUND)
     if stale_error or not stale then return storage("read retained requests") end
@@ -1619,7 +1518,7 @@ local function op_reconcile(tx: sql.Transaction, actor: string, object: Object, 
     end
     local window_error = store.forget_windows(tx, horizon)
     if window_error then return storage(window_error) end
-    return success({expired = expired, forgotten = forgotten, more = #due == M.EXPIRE_BOUND}, expired == 0 and forgotten == 0)
+    return success({expired = expired, expired_effects = expired_effects, forgotten = forgotten, more = #due == M.EXPIRE_BOUND or expired_effects == M.EXPIRE_BOUND}, expired == 0 and forgotten == 0 and expired_effects == 0)
 end
 -- establish: the authority process advances the incarnation once per start,
 -- before any request is served under it. Delivery ownership is separate.
@@ -1778,10 +1677,7 @@ operations.attention_count = op_attention_count
 operations.node_summary = op_node_summary
 operations.decide_batch = op_decide_batch
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
-operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
-operations.publication_effects, operations.complete_publication_effect = op_publication_effects, op_complete_publication_effect
-operations.activation_effects = op_activation_effects
-operations.activation_closures, operations.close_activation = op_activation_closures, op_close_activation
+operations.effect_queue = op_effect_queue
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
@@ -1796,13 +1692,7 @@ function M.decide(value: unknown): Reply return run(value, "decide") end
 function M.decide_batch(value: unknown): Reply return run(value, "decide_batch") end
 function M.withdraw(value: unknown): Reply return run(value, "withdraw") end
 function M.consume(value: unknown): Reply return run(value, "consume") end
-function M.installation_effects(value: unknown): Reply return run(value, "installation_effects") end
-function M.complete_installation_effect(value: unknown): Reply return run(value, "complete_installation_effect") end
-function M.publication_effects(value: unknown): Reply return run(value, "publication_effects") end
-function M.complete_publication_effect(value: unknown): Reply return run(value, "complete_publication_effect") end
-function M.activation_effects(value: unknown): Reply return run(value, "activation_effects") end
-function M.activation_closures(value: unknown): Reply return run(value, "activation_closures") end
-function M.close_activation(value: unknown): Reply return run(value, "close_activation") end
+function M.effect_queue(value: unknown): Reply return run(value, "effect_queue") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
 function M.attention_count(value: unknown): Reply return run(value, "attention_count") end
@@ -1818,7 +1708,7 @@ function M.capabilities(): Reply
         bounds = {max_pending_per_requester = M.MAX_PENDING, max_proposal_bytes = M.MAX_PROPOSAL_BYTES, max_schema_bytes = M.MAX_SCHEMA_BYTES,
             max_inbox_page = M.MAX_INBOX, max_list = M.MAX_LIST, default_ttl_ms = M.DEFAULT_TTL_MS},
         expiry = "owner_reconcile", retention_ms = M.RETENTION_MS, dedupe_horizon = "retention_after_expiry", projection = "thread_outbox_at_least_once",
-        consumption = "effect_owner_single_effect_key", authority = "incarnation_per_authority_start", revalidation = "effect_owner_under_current_incarnation",
+        events = "durable_cursor_at_least_once_until_acknowledged", notifications = "durable_without_thread", effect_routing = "registry_meta", consumption = "effect_owner_single_effect_key", authority = "incarnation_per_authority_start", revalidation = "effect_owner_under_current_incarnation",
     }, false))
 end
 return M

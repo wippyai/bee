@@ -21,6 +21,7 @@ original `proposal_digest` continues to identify the unchanged proposal.
 `end_request` records `superseded` or `invalidated`. `grant` provides `check`,
 `reserve`, `admit`, `release` and `revoke` for exact, single-use decision grants.
 `effect` provides `read`, `claim`, `start`, `complete` and `reconcile`.
+`effect_queue` selects uncompleted terminal effects for a registered destination.
 `consume` and `revalidate` share effect admission and restart fencing.
 `events` reads a durable cursor and acknowledges stable event IDs independently
 of thread delivery. `capabilities` reports the version, states and bounds.
@@ -34,7 +35,9 @@ committed outcome if a decision wins the race.
 
 Transactional events are `approval.requested`, `approval.decided`,
 `approval.denied`, `approval.expired`, `approval.withdrawn`,
-`approval.superseded` and `approval.invalidated`. Every request owes its
+`approval.superseded` and `approval.invalidated`. `effect.canceled` records an
+unused admission passing its separate deadline; `grant.revoked` records
+revocation without undoing already admitted work. Every request owes its
 requester a notification, including when there is no thread. Every terminal
 outcome authorizes or cancels its waiting effect and owes its registered
 consumer an event. Stable IDs and explicit acknowledgment support catch-up
@@ -42,15 +45,23 @@ and at-least-once delivery; receivers replay their domain receipts.
 
 Legacy rows retain version `1` provenance, IDs, request/proposal digests,
 decision history and effect receipts. Their effect deadline remains their
-original expiry, so migration does not extend historical authority. Governance
-leases, follow consent, Docker admission and other reusable authorities remain
+original expiry, so migration does not extend historical authority.
+An unconsumed legacy request binds its first claim to the domain's existing
+effect key; every subsequent claim replays that owner and key or conflicts.
+Version 2 continuations bind the effect identity before the decision.
+An upgraded caller replaying a legacy requester/key receives the original
+record and digests. New envelope metadata does not rewrite that record;
+changed subject, scope, evidence, destination, admission deadline or original
+request fields conflict. The original deadline and effect identity remain
+authoritative.
+Governance leases, follow consent, Docker admission and other reusable authorities remain
 in their domain stores until the later grant migration.
 
 ## Ownership and authority
 
 The operation owner decides whether an approval is required and which
 principals may answer. Workspace requests belong to the target workspace. The host selects each database resource; there
-is no central approvals database. Sharing a SQLite file does not grant access
+is one node-owned approval authority. Sharing a SQLite file does not grant access
 to another owner's tables or create a cross-owner transaction.
 
 The authenticated transport peer identifies a node, not automatically a
@@ -85,7 +96,7 @@ effect remain visible after its session and workspace identities.
 The proposal and digest are immutable for one decision. Changing an action or
 its parameters creates a new request. Requester/key pairs are idempotent;
 different content under the same key is a conflict. States are `pending`,
-`decided`, `expired` and `withdrawn`; a decided request has `approved` or
+`decided`, `expired`, `withdrawn`, `superseded` and `invalidated`; a decided request has `approved` or
 `denied`. Approval is not execution and does not promise that the operation
 will succeed.
 

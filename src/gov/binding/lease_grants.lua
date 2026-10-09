@@ -138,9 +138,9 @@ function M.grant(executor: Executor, lease_handle: lease_store.Store, vocabulary
     if not checked then return failure("INVALID", checked_error or "approved lease envelope is invalid") end
     local effect_seed = hash.sha256("bee.gov.lease_grant\n" .. approval_id)
     if not effect_seed then return failure("INTERNAL", "measure lease effect") end
-    local consume = {approval_id = approval_id, proposal_digest = proposal_digest, owner_incarnation = incarnation,
+    local consume = {operation = "claim", approval_id = approval_id, proposal_digest = proposal_digest, owner_incarnation = incarnation,
         effect_key = "lease-" .. effect_seed}
-    local consume_raw, consume_error = executor:call("bee.approvals.binding:consume", consume)
+    local consume_raw, consume_error = executor:call("bee.approvals.binding:effect", consume)
     local consume_reply = bounds.object(consume_raw)
     local fault = consume_reply and consume_reply.ok ~= true and bounds.object(consume_reply.error) or nil
     if fault and fault.code == "REVALIDATE" then
@@ -160,7 +160,7 @@ function M.grant(executor: Executor, lease_handle: lease_store.Store, vocabulary
         end
         incarnation = current
         consume.owner_incarnation = current
-        consume_raw, consume_error = executor:call("bee.approvals.binding:consume", consume)
+        consume_raw, consume_error = executor:call("bee.approvals.binding:effect", consume)
         consume_reply = bounds.object(consume_raw)
         fault = consume_reply and consume_reply.ok ~= true and bounds.object(consume_reply.error) or nil
     end

@@ -202,7 +202,7 @@ desktop with that approval, and approving it lets the activation worker apply
 the exact intent. When the person denies it, or the approval expires or is
 withdrawn, the worker settles the activation as `denied`, `expired` or
 `withdrawn`, which never reaches the registry, and closes the request with the
-approval owner (`activation_closures`, `close_activation`). The version returns
+approval owner (`effect_queue` for `gov.activation`, `effect.complete`). The version returns
 to Library, Shared, and requesting delivery again prepares a fresh activation
 under new keys that asks the person anew. The `publish` tool can publish only an exact applied version,
 and a host may place it behind an approved access trait. Neither tool can

@@ -36,3 +36,17 @@ entries:
   method: run
   imports:
     migration: wippy.migration:migration
+- name: effect_routes
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-12T00:00:00Z'
+  source: file://effect_routes.lua
+  method: run
+  modules: [json]
+  imports:
+    migration: wippy.migration:migration
+    resources: bee.approvals.env:resources
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds

@@ -227,62 +227,6 @@ entries:
     service: bee.approvals.binding:service
   security:
     policies: *id001
-- name: installation_effects
-  kind: function.lua
-  source: file://installation_effects_method.lua
-  method: handle
-  imports:
-    service: bee.approvals.binding:service
-  security:
-    policies: *id001
-- name: activation_effects
-  kind: function.lua
-  source: file://activation_effects_method.lua
-  method: handle
-  imports:
-    service: bee.approvals.binding:service
-  security:
-    policies: *id001
-- name: activation_closures
-  kind: function.lua
-  source: file://activation_closures_method.lua
-  method: handle
-  imports:
-    service: bee.approvals.binding:service
-  security:
-    policies: *id001
-- name: close_activation
-  kind: function.lua
-  source: file://close_activation_method.lua
-  method: handle
-  imports:
-    service: bee.approvals.binding:service
-  security:
-    policies: *id001
-- name: complete_installation_effect
-  kind: function.lua
-  source: file://complete_installation_effect_method.lua
-  method: handle
-  imports:
-    service: bee.approvals.binding:service
-  security:
-    policies: *id001
-- name: publication_effects
-  kind: function.lua
-  source: file://publication_effects_method.lua
-  method: handle
-  imports:
-    service: bee.approvals.binding:service
-  security:
-    policies: *id001
-- name: complete_publication_effect
-  kind: function.lua
-  source: file://complete_publication_effect_method.lua
-  method: handle
-  imports:
-    service: bee.approvals.binding:service
-  security:
-    policies: *id001
 - name: revalidate
   kind: function.lua
   source: file://revalidate_method.lua
@@ -402,13 +346,6 @@ entries:
       decide_batch: bee.approvals.binding:decide_batch
       withdraw: bee.approvals.binding:withdraw
       consume: bee.approvals.binding:consume
-      installation_effects: bee.approvals.binding:installation_effects
-      complete_installation_effect: bee.approvals.binding:complete_installation_effect
-      activation_effects: bee.approvals.binding:activation_effects
-      activation_closures: bee.approvals.binding:activation_closures
-      close_activation: bee.approvals.binding:close_activation
-      publication_effects: bee.approvals.binding:publication_effects
-      complete_publication_effect: bee.approvals.binding:complete_publication_effect
       revalidate: bee.approvals.binding:revalidate
       read: bee.approvals.binding:read
       inbox: bee.approvals.binding:inbox
@@ -416,6 +353,7 @@ entries:
       deliveries: bee.approvals.binding:deliveries
       reconcile: bee.approvals.binding:reconcile
       capabilities: bee.approvals.binding:capabilities
+      effect_queue: bee.approvals.binding:effect_queue
 - name: effect
   kind: function.lua
   source: file://effect_method.lua
@@ -464,6 +402,7 @@ entries:
   - funcs
   imports:
     lifecycle: bee.approvals.persist:lifecycle
+    dispatch: bee.approvals.persist:dispatch
     windows: bee.approvals.types:windows
     runtime_lease: bee.approvals.types:runtime_lease
     bounds: bee.values:bounds
@@ -475,3 +414,13 @@ entries:
     resources: bee.approvals.env:resources
     store: bee.approvals.persist:store
     outbox: bee.approvals.persist:outbox
+- name: effect_queue
+  kind: function.lua
+  source: file://effect_queue_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies:
+    - bee.security.approvals:approval_store_policy
+    - bee.security.approvals:approval_announce_policy

@@ -133,7 +133,7 @@ function M.status(binding: Binding, policy_name: string, approval_id_raw: unknow
     end
     local resource = check_resource(binding, request)
     if not resource.ok then return resource end
-    local consumed = subject_call.consume(owner, approval_id, expected, capability.held_effect(approval_id),
+    local consumed = subject_call.claim_effect(owner, approval_id, expected, capability.held_effect(approval_id),
         view.owner_incarnation)
     if not consumed.ok then return consumed end
     if not request.grant_source then

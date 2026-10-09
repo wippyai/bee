@@ -510,7 +510,11 @@ function M.move(state: State, delta: integer)
 end
 -- read_intent: the selected request's current view from the owner.
 function M.read_intent(state: State): Intent?
-    if not state.selected then return nil end
+    if not state.selected then
+        local first = M.rows(state)[1]
+        if not first then return nil end
+        M.select(state, first.approval_id)
+    end
     return {target = "bee.approvals.binding:read", request = {approval_id = state.selected}}
 end
 -- Bind the shell's question to exactly the owner revision the user opened.

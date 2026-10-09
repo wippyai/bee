@@ -1,6 +1,7 @@
 -- MIT. Decode the binary identity a Bee root pack declares and the shape of
 -- the running executable's identity.
 local bounds = require("bounds")
+local limits = require("limits")
 local semver = require("semver")
 local json = require("json")
 local env = require("env")
@@ -106,7 +107,7 @@ function M.read_packages(raw_packages: unknown): (Identity?, string?)
     for _, raw_package in ipairs(packages) do
         local package = bounds.object(raw_package)
         if package and package.component == "bee/bee" then
-            local entries, entries_error = bounds.dense_list(package.entries, 10000, "resolved Bee root entries")
+            local entries, entries_error = bounds.dense_list(package.entries, limits.MAX_PACKAGE_ENTRIES, "resolved Bee root entries")
             if not entries then return nil, entries_error end
             for _, raw_entry in ipairs(entries) do
                 local entry = bounds.object(raw_entry)

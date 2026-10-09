@@ -2,6 +2,7 @@
 local hub = require("hub")
 local registry = require("registry")
 local bounds = require("bounds")
+local limits = require("limits")
 local M = {}
 
 M.MAX_QUERY_BYTES = 160
@@ -182,7 +183,7 @@ end
 function M.application(metadata: unknown, entries: unknown): boolean
     local meta = bounds.object(metadata)
     if meta and meta.type == "application" then return true end
-    for _, raw in ipairs(bounds.array(entries, 512) or {}) do
+    for _, raw in ipairs(bounds.array(entries, limits.MAX_PACKAGE_ENTRIES) or {}) do
         local entry = bounds.object(raw)
         local declaration = entry and bounds.object(entry.meta)
         if declaration and declaration.type == "bee.app" then return true end

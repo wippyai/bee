@@ -5,12 +5,14 @@ entries:
   kind: library.lua
   source: file://migrations.lua
   imports:
+    limits: bee.hub.package:limits
     bounds: bee.values:bounds
 - name: migration_work
   kind: library.lua
   source: file://migration_work.lua
   modules: [hash]
   imports:
+    limits: bee.hub.package:limits
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     plan: bee.hub.package:plan

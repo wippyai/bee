@@ -3,6 +3,7 @@
 local test = require("test")
 local migration_work = require("migration_work")
 local plan = require("plan")
+local root_pack = require("root_pack")
 
 local ID = "acme.app:001"
 local COMPONENT = "acme/app"
@@ -42,6 +43,15 @@ end
 
 local function define_tests()
     test.describe("Hub migration work", function()
+        test.it("captures a migration after a whole Bee root package of entries", function()
+            local candidate = prepared(package_entry({up = "create users"}))
+            local entries = root_pack.entries()
+            entries[#entries] = candidate.resolved.packages[1].entries[1]
+            candidate.resolved.packages[1].entries = entries
+            local work, problem = migration_work.capture(candidate)
+            test.is_nil(problem); test.not_nil(work)
+            if work then test.eq(#work.entries, 1); test.eq(work.entries[1].id, ID) end
+        end)
         test.it("captures exact package entries, starts with no rows, and round trips receipts", function()
             local work = captured(package_entry({up = "create users", down = "drop users"}))
             test.eq(#work.entries, 1)

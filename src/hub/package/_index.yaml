@@ -1,11 +1,15 @@
 version: '1.0'
 namespace: bee.hub.package
 entries:
+- name: limits
+  kind: library.lua
+  source: file://limits.lua
 - name: requirements
   kind: library.lua
   source: file://requirements.lua
   modules: [json]
   imports:
+    limits: bee.hub.package:limits
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     json_schema: bee.gateway.catalog:json_schema
@@ -19,6 +23,7 @@ entries:
   kind: library.lua
   source: file://inventory.lua
   imports:
+    limits: bee.hub.package:limits
     bounds: bee.values:bounds
     requirements: bee.hub.package:requirements
     operations: bee.hub.types:operations
@@ -30,6 +35,7 @@ entries:
   source: file://binary_identity.lua
   modules: [json, env]
   imports:
+    limits: bee.hub.package:limits
     bounds: bee.values:bounds
     semver: bee.hub.package:semver
 - name: native_compat

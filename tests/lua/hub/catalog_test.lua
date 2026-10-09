@@ -1,5 +1,6 @@
 -- MIT. Catalog conversions are pure and never contact a Hub registry in tests.
 local test = require("test")
+local root_pack = require("root_pack")
 local catalog = require("catalog")
 
 local function module(name: string): {[string]: unknown}
@@ -22,6 +23,9 @@ end
 
 local function define_tests()
     test.describe("Hub catalog", function()
+        test.it("finds application declarations in the whole published Bee pack", function()
+            test.is_true(catalog.application({}, root_pack.entries()))
+        end)
         test.it("classifies applications from Hub metadata without matching package names", function()
             local app, library = module("unrelated/tasks"), module("bee/app-lookalike")
             app.type, library.type = "application", "library"

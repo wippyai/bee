@@ -1,6 +1,13 @@
 version: '1.0'
 namespace: bee.tests.hub
 entries:
+- name: root_pack_fixture
+  kind: library.lua
+  source: file://root_pack_fixture.lua
+  modules: [json]
+  imports:
+    bounds: bee.values:bounds
+    inspection: bee.hub.package:inspection
 - name: migration_runner_db
   kind: db.sql.sqlite
   file: .wippy/hub-migration-runner.db
@@ -103,6 +110,7 @@ entries:
   imports:
     test: wippy.test:test
     requirements: bee.hub.package:requirements
+    root_pack: bee.tests.hub:root_pack_fixture
 - name: inspect_test
   kind: function.lua
   source: file://inspect_test.lua
@@ -140,6 +148,7 @@ entries:
   imports:
     test: wippy.test:test
     catalog: bee.hub.binding:catalog
+    root_pack: bee.tests.hub:root_pack_fixture
 - name: graph_test
   kind: function.lua
   source: file://graph_test.lua
@@ -167,6 +176,7 @@ entries:
     test: wippy.test:test
     migration_work: bee.hub.activation:migration_work
     plan: bee.hub.package:plan
+    root_pack: bee.tests.hub:root_pack_fixture
 - name: migrations_test
   kind: function.lua
   source: file://migrations_test.lua
@@ -175,6 +185,7 @@ entries:
   imports:
     test: wippy.test:test
     migrations: bee.hub.activation:migrations
+    limits: bee.hub.package:limits
 - name: plan_test
   kind: function.lua
   source: file://plan_test.lua
@@ -248,3 +259,5 @@ entries:
   imports:
     test: wippy.test:test
     binary_identity: bee.hub.package:binary_identity
+    limits: bee.hub.package:limits
+    root_pack: bee.tests.hub:root_pack_fixture

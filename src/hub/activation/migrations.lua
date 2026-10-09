@@ -3,6 +3,7 @@
 -- arbitrary entries or lets a request name a database: it runs only the
 -- snapshot-owned migration IDs admitted by the install plan.
 local bounds = require("bounds")
+local limits = require("limits")
 local M = {}
 
 M.MAX_MIGRATIONS = 128
@@ -73,7 +74,7 @@ local function entry_map(entries: unknown): ({[string]: Entry}?, string?)
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "captured registry entries are invalid" end
         count = count + 1
     end
-    if count > M.MAX_MIGRATIONS * 16 or count ~= #supplied then return nil, "captured registry entries are invalid" end
+    if count > limits.MAX_STATE_ENTRIES or count ~= #supplied then return nil, "captured registry entries are invalid" end
     local out: {[string]: Entry} = {}
     for index = 1, count do
         local raw = supplied[index]

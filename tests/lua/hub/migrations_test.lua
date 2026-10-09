@@ -1,6 +1,7 @@
 -- MIT. The Hub migration adapter is tested through its own typed runner surface.
 local test = require("test")
 local migrations = require("migrations")
+local limits = require("limits")
 
 type Call = {operation: string, target_db: string, ids: {string}, count: integer?}
 
@@ -52,6 +53,21 @@ end
 
 local function define_tests()
     test.describe("Hub migrations", function()
+        test.it("uses the registry state envelope independently of migration count", function()
+            local entries: {migrations.Entry} = {}
+            for index = 1, limits.MAX_STATE_ENTRIES do
+                entries[index] = {id = "growth:entry_" .. tostring(index), meta = {}, registry = {owner = "bee/bee"}}
+            end
+            entries[#entries] = entry("growth:migration", "bee/bee", "growth:db", "2026-01-01")
+            local calls: {Call} = {}
+            local request = {operation = "up", entry_ids = {"growth:migration"}, components = {"bee/bee"}}
+            local result, problem = migrations.execute(source(entries, {}, calls), request)
+            test.is_nil(problem); test.not_nil(result)
+            test.eq(#calls, 1)
+            entries[#entries + 1] = {id = "growth:overflow", meta = {}, registry = {owner = "bee/bee"}}
+            local oversized, overflow = migrations.execute(source(entries, {}, {}), request)
+            test.is_nil(oversized); test.eq(overflow, "captured registry entries are invalid")
+        end)
         test.it("uses captured registry ownership and native runner ordering", function()
             local calls: {Call} = {}
             local result, problem = migrations.execute(source({

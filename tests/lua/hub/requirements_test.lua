@@ -2,6 +2,7 @@
 -- supplied configuration without resolving a dependency or modifying a target.
 local test = require("test")
 local requirements = require("requirements")
+local root_pack = require("root_pack")
 
 local function package_entries(): {unknown}
     return {
@@ -21,6 +22,35 @@ end
 
 local function define_tests()
     test.describe("Hub requirements", function()
+        test.it("reads every entry and requirement of the published Bee root pack", function()
+            local entries = root_pack.entries()
+            local declared = 0
+            for _, entry in ipairs(entries) do
+                if entry.kind == "ns.requirement" then declared = declared + 1 end
+            end
+            local selected, problem = requirements.read(entries, {})
+            test.is_nil(problem); test.not_nil(selected)
+            if selected then
+                test.eq(#selected.requirements, declared)
+                local projected, projection_error = requirements.migration_targets(entries, selected)
+                test.is_nil(projection_error); test.not_nil(projected)
+                if projected then test.eq(#projected, #entries) end
+            end
+        end)
+        test.it("accepts the planning envelope and rejects one extra package entry", function()
+            local entries = root_pack.entries()
+            for index = #entries + 1, requirements.MAX_PACKAGE_ENTRIES do
+                entries[index] = {id = "growth:entry_" .. tostring(index), kind = "registry.entry", meta = {}, data = {}}
+            end
+            local selected, problem = requirements.read(entries, {})
+            test.is_nil(problem); test.not_nil(selected)
+            if selected then test.not_nil(requirements.migration_targets(entries, selected)) end
+            entries[#entries + 1] = {id = "growth:overflow", kind = "registry.entry", meta = {}, data = {}}
+            local oversized, overflow = requirements.read(entries, {})
+            test.is_nil(oversized)
+            test.eq(overflow, "package entries exceeds " .. tostring(requirements.MAX_PACKAGE_ENTRIES) .. " items")
+            if selected then test.is_nil(requirements.migration_targets(entries, selected)) end
+        end)
         test.it("validates declared field types, enum values and nested required properties", function()
             local entries: {unknown} = {{id = "demo:options", kind = "ns.requirement",
                 meta = {schema = {type = "object", additionalProperties = false,

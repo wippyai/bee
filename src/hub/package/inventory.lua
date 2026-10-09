@@ -1,5 +1,6 @@
 -- MIT. Pure installed-module snapshot decoder shared by Hub planning and reads.
 local bounds = require("bounds")
+local limits = require("limits")
 local requirements = require("requirements")
 local operations = require("operations")
 local M = {}
@@ -81,7 +82,7 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     local state = bounds.object(raw)
     local version = bounds.integer(revision)
     if not state or not version or version < 0 then return nil, "invalid registry inventory snapshot" end
-    local entries, entry_error = rows(state.entries, 16384)
+    local entries, entry_error = rows(state.entries, limits.MAX_STATE_ENTRIES)
     if not entries then return nil, entry_error end
     local by_name: {[string]: Module} = {}
     local function module(name: string): Module

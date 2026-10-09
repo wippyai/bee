@@ -2,6 +2,7 @@
 -- This module only carries definitions across publication/recovery; execution
 -- remains owned by the host migration runner and package functions.
 local bounds = require("bounds")
+local limits = require("limits")
 local canonical = require("canonical")
 local plan = require("plan")
 local migrations = require("migrations")
@@ -9,8 +10,6 @@ local hash = require("hash")
 local M = {}
 
 local MAX_WORK = migrations.MAX_MIGRATIONS
-local MAX_PACKAGE_ENTRIES = 512
-local MAX_STATE_ENTRIES = 16384
 
 type Definition = {id: string, component: string, target_db: string, timestamp: string, digest: string}
 type Database = {id: string, owner: string, kind: string, digest: string, new: boolean}
@@ -160,7 +159,7 @@ function M.capture(prepared: plan.Prepared): (Work?, string?)
         if not package then return nil, "resolved package " .. tostring(package_index) .. " is invalid" end
         local owner = component(package.component)
         if not owner then return nil, "resolved package " .. tostring(package_index) .. " has an invalid component" end
-        local package_entries, entries_error = bounds.dense_list(package.entries, MAX_PACKAGE_ENTRIES, "resolved package entries")
+        local package_entries, entries_error = bounds.dense_list(package.entries, limits.MAX_PACKAGE_ENTRIES, "resolved package entries")
         if not package_entries then return nil, entries_error end
         for entry_index, raw_entry in ipairs(package_entries) do
             local entry = bounds.object(raw_entry)
@@ -214,7 +213,7 @@ end
 function M.capture_databases(work: Work, prepared: plan.Prepared?, state: unknown): (Work?, string?)
     local snapshot = bounds.object(state)
     if not snapshot then return nil, "invalid database baseline" end
-    local resident, state_error = bounds.dense_list(snapshot.entries, MAX_STATE_ENTRIES, "database baseline entries")
+    local resident, state_error = bounds.dense_list(snapshot.entries, limits.MAX_STATE_ENTRIES, "database baseline entries")
     if not resident then return nil, state_error end
     local candidates: {[string]: Database} = {}
     local present: {[string]: boolean}, wanted: {[string]: boolean} = {}, {}
@@ -271,7 +270,7 @@ end
 function M.capture_removed(state: unknown, components: {[string]: boolean}): (Work?, string?)
     local snapshot = bounds.object(state)
     if not snapshot then return nil, "registry snapshot is invalid" end
-    local supplied, problem = bounds.dense_list(snapshot.entries, MAX_STATE_ENTRIES, "registry snapshot entries")
+    local supplied, problem = bounds.dense_list(snapshot.entries, limits.MAX_STATE_ENTRIES, "registry snapshot entries")
     if not supplied then return nil, problem end
     local entries: {Definition} = {}
     for _, raw in ipairs(supplied) do
@@ -310,7 +309,7 @@ function M.verify(work: Work, state: unknown): (boolean, string?)
     if not checked then return false, work_error end
     local snapshot = bounds.object(state)
     if not snapshot then return false, "registry snapshot is invalid" end
-    local raw_entries, entries_error = bounds.dense_list(snapshot.entries, MAX_STATE_ENTRIES, "registry snapshot entries")
+    local raw_entries, entries_error = bounds.dense_list(snapshot.entries, limits.MAX_STATE_ENTRIES, "registry snapshot entries")
     if not raw_entries then return false, entries_error end
     local wanted: {[string]: Definition} = {}
     for _, definition in ipairs(checked.entries) do wanted[definition.id] = definition end

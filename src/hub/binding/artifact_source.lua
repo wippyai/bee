@@ -1,5 +1,6 @@
 -- MIT. Verified Hub artifacts and captured resident package definitions.
 local bounds = require("bounds")
+local limits = require("limits")
 local catalog = require("catalog")
 local inspect = require("inspect")
 local inspection = require("inspection")
@@ -22,7 +23,7 @@ function M.new(state: unknown, installed: inventory.Result, target: string): {ve
                             if entry and owned and owned.owner == component then
                                 local id, kind = bounds.id(entry.id), bounds.id(entry.kind)
                                 if not id or not kind then return nil, "invalid resident package entry" end
-                                if #entries >= 4096 then return nil, "resident package entry count exceeds planning bound" end
+                                if #entries >= limits.MAX_PACKAGE_ENTRIES then return nil, "resident package entry count exceeds planning bound" end
                                 entries[#entries + 1] = {id = id, kind = kind, meta = bounds.object(entry.meta) or {}, data = entry.data}
                             end
                         end
@@ -45,7 +46,7 @@ function M.new(state: unknown, installed: inventory.Result, target: string): {ve
                 if not page then return nil, problem end
                 head = head or page
                 for _, entry in ipairs(page.entries) do collected[#collected + 1] = entry end
-                if #collected > 4096 then return nil, "artifact entry count exceeds planning bound" end
+                if #collected > limits.MAX_PACKAGE_ENTRIES then return nil, "artifact entry count exceeds planning bound" end
                 offset = page.next_offset
             end
             if not head then return nil, "artifact inspection returned no pages" end

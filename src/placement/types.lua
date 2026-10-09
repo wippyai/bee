@@ -45,6 +45,7 @@ type Gateway = {endpoint: string, tools: {string}, destination: string, hooks: {
 -- metadata supplies the method targets; authority remains with the host.
 type PlacementBinding = {binding_id: string, binding_digest: string, placement_kind: string, methods: {[string]: string}}
 type LaunchRequest = {
+    workspace_id: string?,
     preferences: Preferences?,
     idempotency_key: string,
     owner_id: string,

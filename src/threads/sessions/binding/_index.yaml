@@ -1522,7 +1522,16 @@ entries:
     record_values: bee.threads.records:values
     remote: bee.threads.sessions.binding:remote
   security:
-    policies: *id001
+    policies:
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.threads.sessions.security:owner_delivery_policy
+    - bee.threads.sessions.security:configuration_catalog_policy
   meta:
     application_ref: bee.harness.app:app
     hive: policy
@@ -1839,6 +1848,7 @@ entries:
     profile_protocol: bee.harness.profiles:protocol
     locate: bee.threads.sessions.binding:locate
     locate_driver: bee.driver.locate:locate
+    configuration_setup: bee.harness.launch:configuration_setup
     readiness: bee.harness.launch:readiness
 - name: cancellation
   kind: library.lua

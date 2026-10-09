@@ -259,9 +259,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             end
         end)
     end
+    local setup_open = false
     local function setup_agent()
         local entry = listed.items[selected]
-        if entry and not entry.ready then status = "Setup: " .. entry.reason .. ". Install or sign in with the provider, then R refresh."; dirty = true end
+        if entry and entry.needs_setup then
+            setup_open = true; status = "Approve configuration setup in Needs you; this launch continues after approval."; dirty = true
+        elseif entry and not entry.ready then status = "Setup: " .. entry.reason .. ". Install or sign in with the provider, then R refresh."; dirty = true end
     end
     local function close_session()
         start_task(function(current: agents.Conversation)
@@ -572,7 +575,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.key_type == "down" and selected > 0 and idle() then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
                     elseif data.key_type == "enter" and idle() then
                         local entry = listed.items[selected]
-                        if entry and not entry.ready then setup_agent() else open = true end
+                        if entry and (not entry.ready or entry.needs_setup) then setup_agent() else open = true end
                     elseif data.ctrl or data.alt then
                     elseif data.key:lower() == "u" and idle() then show_unavailable = not show_unavailable; refresh = true
                     elseif data.key:lower() == "r" and idle() then refresh = true
@@ -620,6 +623,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 dirty = true
             elseif duplicate then status = "Choose an installed driver for a new profile"; dirty = true end
         end
+        if setup_open then open = true; setup_open = false end
         if open and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
             local entry = listed.items[selected]
             if entry and entry.ready then

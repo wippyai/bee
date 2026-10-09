@@ -15,6 +15,8 @@ local store = require("store")
 local transaction = require("transaction")
 local sources = require("sources")
 local formats = require("formats")
+local funcs = require("funcs")
+local configuration_admission = require("configuration_admission")
 local M = {}
 M.MANAGE = "bee.credentials.manage"
 M.ISSUE = "bee.credentials.issue"
@@ -1154,5 +1156,61 @@ function M.capabilities(): credential_protocol.Reply
         file_destinations = file_destinations, file_projections = true, provider_revocation = false, refresh = false, write_back = true,
         rotation = "next_materialization", repeat_generation = "refused", max_secret_bytes = M.MAX_SECRET_BYTES, max_file_bytes = M.MAX_FILE_BYTES,
         max_ttl_ms = M.MAX_TTL_MS, revocation_enforcement = "stop_on_reconcile", node = local_node})
+end
+function M.configuration_setup(raw: unknown): credential_protocol.Reply
+    local request = bounds.object(raw)
+    if not request or bounds.fields(request, {"workspace_id", "provider", "base_path", "operation", "attempt_id"}) then return fail("INVALID", "Configuration setup request is invalid.") end
+    local workspace, provider, base_path = bounds.id(request.workspace_id), bounds.id(request.provider), formats.path(request.base_path)
+    local operation = bounds.member(request.operation, {"status", "admit", "materialize"})
+    local attempt = bounds.id(request.attempt_id)
+    if not workspace or not provider or not base_path or not operation then return fail("INVALID", "Configuration setup needs a workspace, provider and file.") end
+    if operation == "materialize" and not attempt then return fail("INVALID", "Configuration setup needs the launch attempt.") end
+    if operation == "admit" then attempt = uuid.v7() end
+    if operation == "materialize" then
+        if not security.can(M.MATERIALIZE, workspace) then return fail("DENIED", "Configuration setup is not authorized for this launch.") end
+    elseif not security.can("bee.harness.setup", workspace) then return fail("DENIED", "Configuration setup is not authorized in this workspace.") end
+    local admitted, source_error = sources.host_sources()
+    if not admitted then return fail("UNAVAILABLE", source_error or "Configuration sources are unavailable.") end
+    local selected_ref: string? = nil
+    local selected_setup: sources.Setup? = nil
+    for _, source in ipairs(admitted.sources) do
+        if source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace) and source.setup and source.setup.destination == base_path then
+            if selected_ref and (selected_ref ~= source.ref or (selected_setup and selected_setup.path ~= source.setup.path)) then return fail("CONFLICT", "Configuration setup names more than one source file.") end
+            selected_ref, selected_setup = source.ref, source.setup
+        end
+    end
+    if not selected_ref or not selected_setup then return fail("FORBIDDEN", "Bee has no approved setup source for this configuration base. Open Agents and choose Setup for this profile.") end
+    local source_ref, setup = selected_ref, selected_setup
+    local volume = fs.get(source_ref)
+    if not volume then return fail("UNAVAILABLE", "Configuration source folder is unavailable.") end
+    local db, db_error = store.open()
+    if not db then return fail("STORAGE", db_error or "Configuration approval store is unavailable.") end
+    local io: configuration_admission.IO = {
+        measure = function(): (configuration_admission.Base?, string?)
+            local content, state, err = read_source_file(volume, setup.path, setup.content_format, M.MAX_FILE_BYTES, "configuration file")
+            if state == "MISSING" and setup.initialize_empty then content = "" end
+            if content == nil then return nil, err or "The configuration file is missing. Create it with your provider, then choose Setup in Agents." end
+            local digest, hash_error = hash.sha256(content)
+            if not digest then return nil, tostring(hash_error or "Configuration file could not be measured.") end
+            local root, root_error = env.get("bee.env:machine_home")
+            if type(root) ~= "string" or root_error then return nil, "Configuration source path is unavailable." end
+            return {content = content, digest = digest, path = root .. "/" .. setup.path}, nil
+        end,
+        admitted = function(base: configuration_admission.Base): (boolean?, string?) return store.configuration_admitted(db, workspace, source_ref, setup.path, base.digest) end,
+        admit = function(base: configuration_admission.Base, approval: string): string? return store.admit_configuration(db, workspace, source_ref, setup.path, base.digest, approval) end,
+        call = function(target: string, value: {[string]: unknown}): (unknown, string?) return funcs.call(target, value) end,
+        wait = function() time.sleep("100ms") end,
+    }
+    if operation == "status" then
+        local status, status_error = configuration_admission.status(io)
+        db:release()
+        if not status then return fail("UNAVAILABLE", status_error or "Configuration setup status is unavailable.") end
+        return succeed(status)
+    end
+    local base, admission_error = configuration_admission.ensure(io, workspace, provider, attempt)
+    db:release()
+    if not base then return fail("DENIED", admission_error or "Configuration setup did not approve the file.") end
+    if operation == "materialize" then return succeed({content = base.content, digest = base.digest, source_path = setup.path}) end
+    return succeed({needs_setup = false, path = base.path})
 end
 return M

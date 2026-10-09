@@ -3,6 +3,8 @@ local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
 local agents = require("agents")
+local picker_view = require("picker_view")
+local appearance = require("appearance")
 local sessions = require("sessions")
 type Object = {[string]: unknown}
 local fixtures = require("fixtures")
@@ -67,6 +69,28 @@ local function key_source(): () -> string
 end
 local function define_tests()
     test.describe("Agent window catalog listing", function()
+        test.it("shows configuration setup on installed profiles and offers Setup", function()
+            local client: unknown = {catalog = function(): (unknown, nil)
+                return {items = {{ref = "opencode:stock", kind = "definition", title = "OpenCode", status = "ready",
+                    checked_at = "2026-09-30T12:00:00.000Z", reasons = {"Allow /synthetic/opencode.json in Needs you"},
+                    features = {"presentation:start_menu", "driver:opencode", "configuration:needs_setup"},
+                    actions = {{operation = "configuration_setup", label = "Setup"}}}}, complete = true, unavailable_count = 0, diagnostics = {}}, nil
+            end}
+            local api = assert(bounds.object(agents))
+            local list = api.list
+            assert(type(list) == "function")
+            local raw = list(client, false)
+            local listing = assert(bounds.object(raw))
+            local items = principals.objects(listing.items)
+            test.eq(#items, 1); test.eq(items[1].needs_setup, true)
+            test.eq(items[1].reason, "Allow /synthetic/opencode.json in Needs you")
+            local entries: {agents.Entry} = {{ref = "opencode:stock", kind = "definition", title = "OpenCode", status = "ready", ready = true, needs_setup = true, reason = "Allow /synthetic/opencode.json in Needs you"}}
+            local drawn = picker_view.draw(100, 20, appearance.defaults(), {items = entries, unavailable = 0, notes = {}}, 1, "")
+            test.is_true(table.concat(drawn.rows, "\n"):find("needs setup", 1, true) ~= nil)
+            local setup = false
+            for _, hit in ipairs(drawn.hits) do if hit.kind == "setup" then setup = true end end
+            test.is_true(setup)
+        end)
         test.it("asks for ready candidates only and orders by title", function()
             local asked: {Object} = {}
             local client: unknown = {catalog = function(_self: unknown, options: unknown): (unknown, nil)

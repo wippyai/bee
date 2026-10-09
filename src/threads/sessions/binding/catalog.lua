@@ -9,6 +9,7 @@ local profile_protocol = require("profile_protocol")
 local locate = require("locate")
 local readiness = require("readiness")
 local locate_driver = require("locate_driver")
+local configuration_setup = require("configuration_setup")
 local M = {}
 
 M.PAGE_SIZE = 64
@@ -234,11 +235,25 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
         plan, refused = admission.read(pinned, ref, "window")
     end
     local candidate, candidate_error = measured_candidate(cache, readiness_cache, kind, candidate_ref, title, revision, decoded, plan, refused, generation)
-    if candidate and decoded.presentation.start_menu then
-        local features: {string} = candidate.features
-        features[#features + 1] = "presentation:start_menu"
+    if not candidate then return nil, candidate_error end
+    local result: locate.Candidate = {ref = candidate.ref, kind = candidate.kind, revision = candidate.revision,
+        title = candidate.title, status = candidate.status, checked_at = candidate.checked_at,
+        features = candidate.features, actions = candidate.actions, reasons = candidate.reasons}
+    if result.status == "ready" and plan then
+        local setup, setup_error = configuration_setup.run(plan, workspace, "status")
+        if setup and setup.needs_setup then
+            result.features[#result.features + 1] = "configuration:needs_setup"
+            local reasons: {string} = {"Needs setup: allow Bee to use " .. table.concat(setup.paths, ", ") .. ". Choose Setup; approve in Needs you to continue."}
+            result.reasons = reasons
+            result.actions[#result.actions + 1] = {operation = "configuration_setup", label = "Setup"}
+        elseif setup_error then
+            result.status = "unknown"
+            local reasons: {string} = {setup_error}
+            result.reasons = reasons
+        end
     end
-    return candidate, candidate_error
+    if decoded.presentation.start_menu then result.features[#result.features + 1] = "presentation:start_menu" end
+    return result, candidate_error
 end
 
 local function valid_cursor(value: unknown): integer?

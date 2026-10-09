@@ -47,6 +47,7 @@ entries:
     - bee.harness.binding:call
     - bee.harness.binding:present
     - bee.harness.launch:admission
+    - bee.credentials.binding:configuration_setup
     - bee.harness.binding:setup
     - bee.harness.binding:locate_probe
     - bee.hive.binding:call
@@ -160,4 +161,12 @@ entries:
     - funcs.call
     resources:
     - bee.threads.sessions.binding:source_identity
+    effect: allow
+
+- name: configuration_catalog_policy
+  kind: security.policy.expr
+  policy:
+    actions: [env.get, funcs.call, security.scope.create]
+    resources: '*'
+    expression: action == "funcs.call" || (action == "security.scope.create" && resource == "custom") || (action == "env.get" && resource in ["bee.env:machine_home", "bee.gateway.env:hook_executable"])
     effect: allow

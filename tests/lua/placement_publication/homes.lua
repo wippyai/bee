@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- Inject only filesystem outcomes. Admission state/evidence uses the real store.
 local real = require("real")
-local M = {publications = 0, creations = 0}
+local M = {publications = 0, creations = 0, configuration = ""}
 M.decode_login_source = real.decode_login_source
 M.login_replayed = real.login_replayed
 M.retain_login = real.retain_login
@@ -19,6 +19,7 @@ M.session_key = real.session_key
 function M.reset()
     M.publications = 0
     M.creations = 0
+    M.configuration = ""
 end
 function M.create_attempt(key: string): (string?, string?)
     M.creations = M.creations + 1
@@ -34,6 +35,7 @@ function M.read_configuration(_: string, _: string, _: string): (string?, string
 end
 function M.publish_configuration(home: string, path: string, content: string, created: {[string]: boolean}?, composed: boolean?): (string?, string?, boolean?)
     M.publications = M.publications + 1
+    M.configuration = content
     return nil, "configuration published; durability requires inspection", true
 end
 return M

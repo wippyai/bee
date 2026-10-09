@@ -133,4 +133,16 @@ function M.active_projections(db: sql.DB, workspace_id: string, at: string, limi
     if err or not rows then return nil, "read workspace credentials" end
     return rows, nil
 end
+function M.configuration_admitted(db: sql.DB, workspace: string, source: string, path: string, digest: string): (boolean?, string?)
+    local rows, err = db:query("SELECT digest FROM bee_configuration_admissions WHERE workspace_id = ? AND source_ref = ? AND source_path = ?", {workspace, source, path})
+    if err or not rows then return nil, "Configuration setup could not read its saved approval." end
+    return #rows == 1 and rows[1].digest == digest, nil
+end
+function M.admit_configuration(db: sql.DB, workspace: string, source: string, path: string, digest: string, approval: string): string?
+    local _, err = db:execute([[INSERT INTO bee_configuration_admissions (workspace_id, source_ref, source_path, digest, approval_id)
+        VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace_id, source_ref, source_path) DO UPDATE SET digest = excluded.digest, approval_id = excluded.approval_id]],
+        {workspace, source, path, digest, approval})
+    if err then return "Configuration setup could not save the approval. Open Agents and choose Setup again." end
+    return nil
+end
 return M

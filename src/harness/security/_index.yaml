@@ -55,7 +55,7 @@ entries:
       resolves the public sessions contracts and opens any definition the person picks, and their owner authorizes each operation
   policy:
     expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call"
-      && resource in ["bee.harness.binding:setup", "bee.harness.binding:set_credential", "bee.gov.binding:driver_bindings"])
+      && resource in ["bee.credentials.binding:configuration_setup", "bee.harness.binding:setup", "bee.harness.binding:set_credential", "bee.gov.binding:driver_bindings"])
       || (action == "contract.get" && (resource == "bee.threads.sessions:contract" || resource == "bee.threads.sessions:catalog"))
       || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel",
       "close"]) || (action == "contract.open" && (resource == "bee.threads.sessions.binding:owner_binding" || resource ==
@@ -187,7 +187,7 @@ entries:
       || (action == "process.context" && resource == "bee.workspace_id") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner")
       || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$")
       || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:get",
-      "bee.apps:open_call", "bee.harness.binding:setup", "bee.harness.service:open", "bee.threads.sessions.binding:restore", "bee.threads.sessions.binding:launch_prompt", "bee.threads.sessions.binding:idle_check"])
+      "bee.apps:open_call", "bee.credentials.binding:configuration_setup", "bee.harness.binding:setup", "bee.harness.service:open", "bee.threads.sessions.binding:restore", "bee.threads.sessions.binding:launch_prompt", "bee.threads.sessions.binding:idle_check"])
     effect: allow
 - name: presentation_owner_policy
   kind: security.policy.expr

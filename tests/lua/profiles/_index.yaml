@@ -90,6 +90,8 @@ entries:
     protocol: bee.threads.sessions.types:protocol
     fixtures: bee.tests.sessions:fixtures
     test: wippy.test:test
+    picker_view: bee.harness.app:picker_view
+    appearance: bee.ui:appearance
     agents: bee.harness.app:agents
     sessions: bee.threads.sessions.client:sessions
 - name: observations_test

@@ -240,3 +240,16 @@ entries:
           kind: fs_directory
           ref: bee.env:machine_login_source
         optional: true
+
+- name: configuration_setup
+  kind: library.lua
+  source: file://configuration_setup.lua
+  modules: [registry, funcs, env]
+  imports:
+    bounds: bee.values:bounds
+    configuration: bee.driver.binding:configuration
+    resolver: bee.driver.binding:resolver
+    profiles: bee.harness.profiles:protocol
+    preferences: bee.driver.profiles:preferences
+    gateway_configuration: bee.gateway.env:configuration
+    descriptors: bee.driver.descriptor:descriptor

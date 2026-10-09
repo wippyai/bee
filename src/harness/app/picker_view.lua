@@ -14,6 +14,7 @@ local MORE = frame.hints({{key = "Enter", verb = "open"}, {key = "Esc", verb = "
 -- The right column names what kind of choice a row is: a saved profile, or
 -- why an agent cannot open.
 local function tag(item: agents.Entry): string
+    if item.needs_setup then return "needs setup" end
     if not item.ready then return text.bound(item.status, 40) end
     if item.kind == "profile" then return "saved profile" end
     return ""
@@ -45,7 +46,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     local item = listing.items[selected]
     local message = count == 0 and "" or status
-    if message == "" and item and not item.ready and item.reason ~= "" then message = item.reason end
+    if message == "" and item and (not item.ready or item.needs_setup) and item.reason ~= "" then message = item.reason end
     if message == "" and not show_unavailable and listing.unavailable > 0 then
         message = tostring(listing.unavailable) .. " unavailable · U to show"
     end
@@ -53,7 +54,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if height >= 3 then
         local chosen = item ~= nil and window.capacity > 0
         footer_buttons = {
-            {kind = item and not item.ready and "setup" or "open", key = "Enter", label = item and not item.ready and "Setup" or "Open", enabled = not busy and chosen, primary = true},
+            {kind = item and (not item.ready or item.needs_setup) and "setup" or "open", key = "Enter", label = item and (not item.ready or item.needs_setup) and "Setup" or "Open", enabled = not busy and chosen, primary = true},
             {kind = "edit", key = "E", label = item and item.kind == "profile" and "Edit" or "Customize", enabled = not busy and chosen},
             {kind = "new", key = "N", label = "New profile", enabled = not busy and chosen and item ~= nil and (item.ready or item.status == "unconfigured")},
             {kind = "close", key = "Esc", label = "Back", enabled = true},

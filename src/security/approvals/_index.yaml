@@ -86,6 +86,12 @@ entries:
     confirm: explicit
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
+  - name: configuration-setup
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
   - name: agent-access
     approvers:
     - definition_id: bee.approvals.inbox.app:app

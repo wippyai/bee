@@ -526,6 +526,7 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
         environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
+        workspace_id = request.workspace_id,
         preferences = request.preferences,
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,

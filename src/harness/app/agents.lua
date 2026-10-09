@@ -20,7 +20,7 @@ M.MAX_HISTORY_ITEMS = 64
 
 type Fault = {code: string, message: string, retry: string, operation_key: string?}
 type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, title: string,
-    status: string, ready: boolean, reason: string, driver: string?}
+    status: string, ready: boolean, needs_setup: boolean?, reason: string, driver: string?}
 type EntrySortKey = {ref: string, title: string, ready: boolean, driver: string?}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "starting" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
@@ -48,22 +48,26 @@ function M.list(client: sessions.Client, include_unavailable: boolean, query: st
             for _, feature in ipairs(candidate.features) do if feature == "presentation:start_menu" then person_launchable = true end end
             if person_launchable then
                 local ready = candidate.status == "ready"
+                local needs_setup = false
+                for _, feature in ipairs(candidate.features) do if feature == "configuration:needs_setup" then needs_setup = true end end
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
                 local provider = ""
                 for _, feature in ipairs(candidate.features) do provider = feature:match("^driver:(.+)$") or provider end
-                if not ready and reason:find("bee.permission_answers=", 1, true) then
-                    reason = reason:gsub("bee.permission_answers=", "Permission answers: ")
-                elseif not ready and reason:find("owner_safe:", 1, true) then
-                    reason = "Login needed · " .. reason
-                elseif provider ~= "" then
-                    if candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."
-                    elseif candidate.status == "unconfigured" then reason = "Run " .. provider .. " to sign in, then refresh."
-                    elseif reason:find("bee.", 1, true) then reason = "This agent cannot run with the current setup. Check its folder and permissions." end
-                elseif reason:find("bee.", 1, true) then reason = "This agent's setup is unavailable. Check installation, folder and permissions." end
+                if not needs_setup then
+                    if not ready and reason:find("bee.permission_answers=", 1, true) then
+                        reason = reason:gsub("bee.permission_answers=", "Permission answers: ")
+                    elseif not ready and reason:find("owner_safe:", 1, true) then
+                        reason = "Login needed · " .. reason
+                    elseif provider ~= "" then
+                        if candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."
+                        elseif candidate.status == "unconfigured" then reason = "Run " .. provider .. " to sign in, then refresh."
+                        elseif reason:find("bee.", 1, true) then reason = "This agent cannot run with the current setup. Check its folder and permissions." end
+                    elseif reason:find("bee.", 1, true) then reason = "This agent's setup is unavailable. Check installation, folder and permissions." end
+                end
                 if not ready then listing.unavailable = listing.unavailable + 1 end
                 if ready or include_unavailable then
                 listing.items[#listing.items + 1] = {ref = candidate.ref, kind = candidate.kind, revision = candidate.revision,
-                    title = candidate.title, status = candidate.status, ready = ready, reason = reason, driver = provider ~= "" and provider or nil}
+                    title = candidate.title, status = candidate.status, ready = ready, needs_setup = needs_setup, reason = reason, driver = provider ~= "" and provider or nil}
                 end
             end
         end

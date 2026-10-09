@@ -355,7 +355,7 @@ end
 function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest", "placement_profile_ref", "placement_profile_digest",
+    local unknown_field = bounds.fields(object, {"workspace_id", "idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest", "placement_profile_ref", "placement_profile_digest",
         "binding_digest", "profile_digest", "launch", "configuration_context", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts", "options"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(object.idempotency_key)
@@ -508,7 +508,9 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not timeouts then return nil, timeouts_error end
     local options, options_error = M.decode_options(object.options)
     if options_error then return nil, options_error end
-    local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
+    local workspace_id = bounds.id(object.workspace_id)
+    if object.workspace_id ~= nil and not workspace_id then return nil, "workspace_id is not an identifier" end
+    local decoded: types.LaunchRequest = {workspace_id = workspace_id, idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
         preferences = selected,
         binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_profile_ref = placement_profile_ref, placement_profile_digest = placement_profile_digest, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_context = configuration_context, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,

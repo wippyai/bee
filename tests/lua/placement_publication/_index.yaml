@@ -83,3 +83,36 @@ entries:
     types: bee.placement:types
     service: bee.placement.native.service:service
     runner_fixture: bee.placement.publication.test:materialization_runner
+- name: configuration_setup_test
+  kind: function.lua
+  source: file://configuration_setup_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: '30s'}
+  modules: [channel, time, json, hash, fs]
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.placement.native:apply_test_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.publication.test:configuration_source_policy
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    store: bee.placement.native.persist:store
+    request: bee.placement:request
+    types: bee.placement:types
+    runner_fixture: bee.placement.publication.test:materialization_runner
+    approval_principals: bee.approvals:test_principals
+- name: configuration_source_policy
+  kind: security.policy
+  policy:
+    actions: [fs.get, fs.read, fs.write, fs.mkdir]
+    resources: [bee.placement.publication.test:configuration_source]
+    effect: allow
+- name: configuration_source
+  kind: fs.directory
+  directory: ${env:bee.env:machine_home}/.config/opencode
+  mode: '0700'
+  auto_init: true

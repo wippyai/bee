@@ -645,19 +645,62 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         if file.composition then
             local provider_home = request.launch.provider_home
             if not retained_home and (not provider_home or not provider_home.private) then
-                evidence(db, attempt_id, "configuration.refused", "configuration composition requires an admitted provider home")
-                return refused("configuration composition requires an admitted provider home")
+                local reason = "This profile needs a provider home for its configuration. Open Agents and choose a profile with a private or retained home."
+                evidence(db, attempt_id, "configuration.refused", reason)
+                return refused(reason)
             end
-            local admitted_digest = composition_bases[file.composition.base_path]
-            if not admitted_digest then
-                evidence(db, attempt_id, "configuration.refused", "configuration base is not admitted by credential setup")
-                return refused("configuration base is not admitted by credential setup")
-            end
-            local base_error: string? = nil
-            base, base_error = homes.read_configuration(selected_home_path, file.composition.base_path, admitted_digest)
-            if base == nil then
-                evidence(db, attempt_id, "configuration.refused", base_error or "configuration base")
-                return refused(base_error or "configuration base")
+            local workspace = request.workspace_id
+            if workspace and provider_home then
+                local raw, call_error = funcs.call("bee.credentials.binding:configuration_setup", {operation = "materialize",
+                    workspace_id = workspace, attempt_id = attempt_id, provider = provider_home.provider, base_path = file.composition.base_path})
+                if not owns_attempt() then return refused("The launch ended while configuration setup was waiting for approval.") end
+                local reply = bounds.object(raw)
+                local value = reply and bounds.object(reply.value)
+                if call_error or not reply or reply.ok ~= true or not value or type(value.content) ~= "string" then
+                    local fault = reply and bounds.object(reply.error)
+                    local reason = tostring(call_error or (fault and fault.message) or "Open Agents and choose Setup to allow its configuration file.")
+                    evidence(db, attempt_id, "configuration.refused", reason)
+                    return refused(reason)
+                end
+                local source_path = bounds.text(value.source_path, 512)
+                if not source_path then return refused("The approved configuration source file is unavailable. Choose Setup in Agents again.") end
+                local selected_format: formats.Format = {schema_revision = "bee.credential-format@1", file = {
+                    path = "configuration-admission", content_format = "opaque", initialize = {
+                        {path = file.composition.base_path, source_path = source_path, content = value.content, on_missing_login = true}}}}
+                local projected_format: formats.Format? = nil
+                local projection_error: string? = nil
+                if guest_home then
+                    local roots: {string} = {guest_home}
+                    if request.placement_profile_ref then
+                        local selected, roots_error = provider_projection.roots(request.placement_profile_ref)
+                        if not selected then return refused(roots_error or "Container configuration roots are unavailable.") end
+                        for _, root in ipairs(selected) do roots[#roots + 1] = root end
+                    end
+                    projected_format, projection_error = provider_projection.container(provider_home, selected_format, roots)
+                elseif provider_home.private then
+                    local machine_home, machine_error = env.get("bee.env:machine_home")
+                    if type(machine_home) ~= "string" or machine_error then return refused("The configuration source home is unavailable.") end
+                    projected_format, projection_error = provider_projection.native(provider_home, selected_format, machine_home, home_os)
+                else
+                    projected_format = selected_format
+                end
+                local projected_file = projected_format and projected_format.file
+                if not projected_file or not projected_file.initialize[1] then return refused(projection_error or "The approved configuration could not be prepared for this agent.") end
+                base = projected_file.initialize[1].content
+            else
+                local admitted_digest = composition_bases[file.composition.base_path]
+                if not admitted_digest then
+                    local reason = "Bee needs permission to use this profile's configuration file. Open Agents, choose Setup, then approve the request in Needs you."
+                    evidence(db, attempt_id, "configuration.refused", reason)
+                    return refused(reason)
+                end
+                local base_error: string? = nil
+                base, base_error = homes.read_configuration(selected_home_path, file.composition.base_path, admitted_digest)
+                if base == nil then
+                    local reason = tostring(base_error) .. ". Open Agents and choose Setup to approve the current configuration file."
+                    evidence(db, attempt_id, "configuration.refused", reason)
+                    return refused(reason)
+                end
             end
         end
         local content, content_error = configuration.render(file, environment, request.gateway, base)

@@ -62,7 +62,7 @@ local function define_tests()
             local outside = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "gamma"}))
             local workspace = "ws-lease-flow-" .. assert(uuid.v4())
             local profile = {overlay_owner = "bee.gov:lease-flow", approval_policy = POLICY, source_workspace = "app-a"}
-            local db = assert(lease_store.open("bee:db", "node-lease-flow", workspace))
+            local db = assert(lease_store.open("bee:db", assert(service.node()), workspace))
 
             local proposed = ok(lease_grants.propose(executor, vocabulary, installed, profile, workspace,
                 {extras = {{capability = "workspace.files.write", parameters = {subpath = "beta"}}}, max_applies = 1}, "propose-1"))
@@ -74,7 +74,11 @@ local function define_tests()
 
             local decided = alice:call("bee.approvals.binding:decide", {approval_id = approval_id,
                 expected_revision = approval.revision, proposal_digest = digest, decision = "approved"})
-            test.is_true((assert(bounds.object(decided))).ok == true)
+            local decision_reply = assert(bounds.object(decided))
+            local fault = bounds.object(decision_reply.error)
+            test.is_true(decision_reply.ok == true,tostring(fault and fault.code) .. ": " .. tostring(fault and fault.message))
+            local automatic = ok(lease_store.by_approval(db,tostring(approval_id)))
+            test.eq(automatic.state,"active")
             local granted = ok(lease_grants.grant(executor, db, vocabulary, profile, workspace, ACTOR,
                 {approval_id = approval_id}, "grant-1"))
             test.eq(granted.state, "active")
@@ -96,15 +100,13 @@ local function define_tests()
                 {ttl_seconds = 3600}, "propose-2")).approval))
             alice:call("bee.approvals.binding:decide", {approval_id = second.approval_id,
                 expected_revision = second.revision, proposal_digest = second.proposal_digest, reviewed_digest = second.reviewed_digest, decision = "approved"})
-            -- The approval owner restarts between the decision and the grant: the
-            -- real owner answers REVALIDATE and the grant completes under the new incarnation.
             local store = assert(service.open())
             local restarted = assert(service.establish(store))
             store:release()
             test.is_true(restarted > (second.owner_incarnation))
             local live = ok(lease_grants.grant(executor, db, vocabulary, profile, workspace, ACTOR,
                 {approval_id = second.approval_id}, "grant-3"))
-            test.eq(live.source_approval_owner_incarnation, restarted)
+            test.eq(live.source_approval_owner_incarnation, second.owner_incarnation)
             local retried = lease_grants.grant(executor, db, vocabulary, profile, workspace, ACTOR,
                 {approval_id = second.approval_id}, "grant-3")
             test.is_true(retried.ok == true and retried.replayed == true)

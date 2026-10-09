@@ -207,3 +207,13 @@ entries:
     - bee.approvals.decide
     resources: '*'
     effect: allow
+- name: grant_adapters_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources:
+    - bee.gov.types:lease_grant
+    - bee.approvals.types:runtime_grant
+    - bee.placement.docker.env:grant
+    - bee.gateway.security:grant
+    effect: allow

@@ -173,3 +173,19 @@ entries:
 - name: drivers
   kind: library.lua
   source: file://drivers.lua
+- name: lease_grant
+  kind: function.lua
+  source: file://lease_grant.lua
+  method: build
+  meta:
+    type: bee.approvals.grant-adapter
+    operation_ref: bee.gov:grant-lease
+    domain: governance_lease
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    grants: bee.approvals.grants:store
+    clock: bee.values:clock
+    lease_model: bee.gov.types:lease_model
+    capability_model: bee.capability:model

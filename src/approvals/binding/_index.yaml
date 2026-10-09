@@ -9,6 +9,7 @@ entries:
     service: bee.approvals.binding:service
   security:
     policies: &id001
+    - bee.security.approvals:grant_adapters_policy
     - bee.security.approvals:approval_store_policy
     - bee.security.approvals:approval_announce_policy
 - name: node_summary
@@ -403,6 +404,7 @@ entries:
   imports:
     lifecycle: bee.approvals.persist:lifecycle
     dispatch: bee.approvals.persist:dispatch
+    grants: bee.approvals.grants:store
     windows: bee.approvals.types:windows
     runtime_lease: bee.approvals.types:runtime_lease
     bounds: bee.values:bounds

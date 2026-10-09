@@ -2,6 +2,9 @@ local sql = require("sql")
 local json = require("json")
 local hash = require("hash")
 local security = require("security")
+local registry = require("registry")
+local funcs = require("funcs")
+local grants = require("grants")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local resources = require("resources")
@@ -153,6 +156,18 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
         local err = execute(tx, "UPDATE bee_approval_grants SET decision_id = COALESCE(decision_id, ?) WHERE grant_id = ?", {decision_id,window_id})
         if err then return err end
         return execute(tx, "INSERT OR IGNORE INTO bee_approval_grant_history SELECT grant_id,revision,'grant.created',granted_by,provenance_json,created_at FROM bee_approval_grants WHERE grant_id = ?", {window_id})
+    end
+    local adapters, adapter_error = registry.find({["meta.type"] = "bee.approvals.grant-adapter",["meta.operation_ref"] = bounds.object(row.proposal) and bounds.object(row.proposal).ref})
+    if not adapters or adapter_error or #adapters > 1 then return "grant adapter discovery failed" end
+    if #adapters == 1 then
+        local seed, build_error = funcs.call(adapters[1].id,{approval_id = approval_id,decision_id = decision_id,owner_node = row.owner_node,workspace_id = row.workspace_id,requester_id = row.requester_id,actor_id = actor,definition_id = M.principal(actor).definition_id,policy_snapshot = contract.policy_snapshot,proposal = row.proposal,proposal_digest = row.proposal_digest,reviewed_digest = row.reviewed_digest,owner_incarnation = row.owner_incarnation,at = at,now = assert(bounds.integer(assert(tx:query("SELECT CAST((julianday(?) - 2440587.5)*86400000 AS INTEGER) AS ms",{at}))[1].ms))})
+        if build_error then return "grant adapter failed: " .. tostring(build_error) end
+        local record = bounds.object(seed)
+        if not record then return "grant adapter returned no record" end
+        local encoded = {grant_id = record.grant_id,approval_id = record.approval_id,decision_id = record.decision_id,subject_json = canonical.encode(record.subject),scope_json = canonical.encode(record.scope),terms_json = canonical.encode(record.terms),state = record.state,revision = record.revision,used = record.used,reserved = record.reserved,until_ms = record.until_ms,max_uses = record.max_uses,created_at = record.created_at,domain = record.domain,owner_node = record.owner_node,workspace_id = record.workspace_id,requester_id = record.requester_id,granted_by = record.granted_by,granted_definition = record.granted_definition,provenance_json = canonical.encode(record.provenance),metadata_json = canonical.encode(record.metadata)}
+        local grant, decode_error = grants.decode(encoded)
+        if not grant or grant.approval_id ~= approval_id or grant.owner_node ~= row.owner_node or grant.workspace_id ~= row.workspace_id or grant.granted_by ~= actor then return decode_error or "grant adapter authority differs" end
+        return grants.create(tx,grant)
     end
     local subject_json = canonical.encode(contract.subject)
     local scope_json = canonical.encode(contract.scope)

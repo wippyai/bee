@@ -57,7 +57,7 @@ local function draw_leases(width: integer, height: integer, preferences: appeara
     end
     local window = frame.window(#rows, list_last - list_first + 1, selected_index, offset)
     if #rows == 0 and list_last >= list_first then
-        frame.empty(painter, list_first, "No leases", "Approve a lease request, then press G to grant it · R refresh")
+        frame.empty(painter, list_first, "No leases", "Approve a lease request · R refresh")
     end
     for slot = 1, window.capacity do
         local row = rows[window.offset + slot]
@@ -319,7 +319,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local marked = #leases.marked(slice, state.rows)
     local lease_source = detail ~= nil and selected ~= nil and detail.approval_id == selected.approval_id
     local can_lease = lease_source and detail.state == "pending" and detail.proposal.ref == leases.ACTIVATION
-    local can_grant = lease_source and detail.state == "decided" and detail.decision == "approved" and detail.proposal.ref == leases.PROPOSAL
     local pending_detail = detail ~= nil and selected ~= nil and detail.approval_id == selected.approval_id and detail.state == "pending"
     local idle = state.pending == nil
     if height >= 4 then
@@ -344,7 +343,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             buttons[#buttons + 1] = {kind = "batch_deny", key = "N", label = "Deny " .. tostring(marked), enabled = idle, more = true}
         end
         if can_lease then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
-        if can_grant then buttons[#buttons + 1] = {kind = "grant", key = "G", label = "Grant", enabled = idle, more = true} end
         buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your grants", enabled = true, more = true}
         buttons[#buttons + 1] = {kind = "leases", key = "V", label = "Leases", enabled = true, more = true}
         footer_buttons = buttons

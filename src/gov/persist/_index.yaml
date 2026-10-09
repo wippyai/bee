@@ -33,6 +33,8 @@ entries:
   - hash
   - json
   imports:
+    grants: bee.approvals.grants:store
+    clock: bee.values:clock
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     transaction: bee.persist:transaction

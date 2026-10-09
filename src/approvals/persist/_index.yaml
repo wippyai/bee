@@ -27,11 +27,12 @@ entries:
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
-  modules: [sql, json, hash, security]
+  modules: [sql, json, hash, security, registry, funcs]
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     resources: bee.approvals.env:resources
+    grants: bee.approvals.grants:store
 - name: dispatch
   kind: library.lua
   source: file://dispatch.lua

@@ -25,6 +25,7 @@ local store = require("store")
 local approval_outbox = require("outbox")
 local runtime_lease = require("runtime_lease")
 local windows = require("windows")
+local grants = require("grants")
 local lifecycle = require("lifecycle")
 local dispatch = require("dispatch")
 local M = {}
@@ -1150,7 +1151,7 @@ local function op_effect(tx: sql.Transaction, actor: string, object: Object, now
     return success(M.view(updated), false)
 end
 local function op_grant(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local extra = bounds.fields(object, {"operation", "grant_id", "expected_revision", "subject", "scope", "effect_key", "owner_incarnation", "reviewed_digest", "workspace_id", "after_id"})
+    local extra = bounds.fields(object, {"operation", "grant_id", "expected_revision", "subject", "scope", "effect_key", "owner_incarnation", "reviewed_digest", "workspace_id", "after_id", "record"})
     if extra then return failure("INVALID_ARGUMENT", extra) end
     if object.operation == "list" then
         local workspace = bounds.id(object.workspace_id)
@@ -1163,12 +1164,58 @@ local function op_grant(tx: sql.Transaction, actor: string, object: Object, now:
         if more then rows[65] = nil end
         return success({grants = rows,more = more,next_id = more and rows[#rows].grant_id or nil}, false)
     end
+    if object.operation == "import" then
+        local record, record_error = grants.decode(object.record)
+        if not record then return failure("INVALID_ARGUMENT",record_error or "legacy record is invalid") end
+        if not security.can("bee.approvals.import",record.domain) or record.provenance.kind ~= "legacy" then return failure("DENIED","caller cannot import legacy authority") end
+        local existing, read_error = grants.read(tx,record.grant_id)
+        if read_error then return storage(read_error) end
+        if existing then
+            if existing.domain ~= record.domain or existing.owner_node ~= record.owner_node or existing.workspace_id ~= record.workspace_id or canonical.encode(existing.scope) ~= canonical.encode(record.scope) or canonical.encode(existing.subject) ~= canonical.encode(record.subject) then return failure("CONFLICT","legacy grant identity differs") end
+            return success(existing,true)
+        end
+        local err = grants.create(tx,record)
+        if err then return storage(err) end
+        return success(record,false)
+    end
     local id = bounds.id(object.grant_id)
     if not id then return failure("INVALID_ARGUMENT", "grant_id is required") end
     local rows, err = tx:query("SELECT * FROM bee_approval_grants WHERE grant_id = ?", {id})
     if not rows or err then return storage("read grant") end
     local grant = #rows == 1 and bounds.object(rows[1]) or nil
     if not grant then return failure("NOT_FOUND", "grant does not exist") end
+    if grant.domain ~= "decision" and grant.domain ~= "approval_window" then
+        local record, record_error = grants.decode(grant)
+        if not record then return storage(record_error or "grant is corrupt") end
+        local definition = authenticated_definition(actor)
+        local owns = record.requester_id == actor or record.granted_by == actor or (definition ~= nil and definition == record.granted_definition) or security.can(M.MANAGE,record.workspace_id) or security.can("bee.approvals.grants",record.workspace_id) or security.can("bee.approvals.grant.use",record.domain)
+        if not owns then return failure("DENIED","caller cannot administer this grant") end
+        if object.operation == "read" or object.operation == "history" then
+            local history, history_error = tx:query("SELECT * FROM bee_approval_grant_history WHERE grant_id = ? ORDER BY revision",{id})
+            if not history or history_error then return storage("read grant history") end
+            return success({grant = record,history = history},false)
+        end
+        if object.operation == "revoke" then
+            if not (record.requester_id == actor or record.granted_by == actor or (definition ~= nil and definition == record.granted_definition) or security.can(M.MANAGE,record.workspace_id) or security.can("bee.approvals.grants",record.workspace_id)) then return failure("DENIED","caller cannot revoke this grant") end
+            if record.state == "revoked" then return success(record,true) end
+            if object.expected_revision ~= record.revision then return failure("CONFLICT","grant revision differs",record) end
+            local revoke_error = grants.revoke(tx,record,record.revision,actor,now)
+            if revoke_error then return storage(revoke_error) end
+            return success(record,false)
+        end
+        local subject, scope = canonical.encode(object.subject),canonical.encode(object.scope)
+        if subject ~= grant.subject_json or scope ~= grant.scope_json then return failure("CONFLICT","grant subject or scope differs") end
+        if object.operation == "check" then
+            local state = grants.state(record,now)
+            if state ~= "active" then return failure("INVALID_STATE","grant is " .. state,record) end
+            return success(record,false)
+        end
+        local effect_key, expected = bounds.id(object.effect_key),bounds.integer(object.expected_revision)
+        if not effect_key or not expected then return failure("INVALID_ARGUMENT","effect_key and expected_revision are required") end
+        local use, use_error = grants.use(tx,record,tostring(object.operation),effect_key,assert(hash.sha256(scope)),expected,actor,now)
+        if use == nil then return failure(use_error and use_error:match("^(%u+):") or "STORAGE",use_error or "grant use failed") end
+        return success(record,use)
+    end
     local approval_id = bounds.id(grant.approval_id)
     local row, row_error = approval_id and load(tx, approval_id) or nil, nil
     if not row then return storage(row_error or "grant source is missing") end

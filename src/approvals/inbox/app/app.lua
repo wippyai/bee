@@ -237,19 +237,8 @@ local function main(value: unknown)
         local detail = state.detail
         local selected = model.selected_row(state)
         if not detail or not selected or detail.approval_id ~= selected.approval_id then status = "Open a request first"; dirty = true; return end
-        local request_id, err
-        if kind == "lease_propose" then
-            if detail.state ~= "pending" or detail.proposal.ref ~= leases.ACTIVATION then status = "Open a pending activation request to lease its application"; dirty = true; return end
-            request_form = lease_form.new(detail)
-            dirty = true
-            return
-        else
-            if detail.state ~= "decided" or detail.decision ~= "approved" or detail.proposal.ref ~= leases.PROPOSAL then status = "Open an approved lease request to grant it"; dirty = true; return end
-            request_id, err = client.query(launch, {kind = "confirm", title = "Grant this lease?",
-                message = model.text(selected.target .. " for " .. selected.requester_id, 512), accept = "Grant"})
-        end
-        if not request_id then status = tostring(err); dirty = true; return end
-        dialog = {request_id = request_id, kind = kind, confirmation = nil, view = detail}
+        if detail.state ~= "pending" or detail.proposal.ref ~= leases.ACTIVATION then status = "Open a pending activation request to lease its application"; dirty = true; return end
+        request_form = lease_form.new(detail)
         dirty = true
     end
     local function ask_batch(decision: string)
@@ -395,9 +384,6 @@ local function main(value: unknown)
                     perform(function() act_batch(asked.kind == "batch_approve" and "approved" or "denied") end)
                 elseif asked.kind == "revoke" then
                     perform(function() lease_answer("lease_revoke", leases.revoke_intent(slice, uuid.v7())) end)
-                elseif asked.kind == "lease_grant" and asked.view then
-                    local view = asked.view
-                    perform(function() lease_answer("lease_grant", leases.grant_intent(view, uuid.v7())) end)
                 elseif not asked.confirmation or not model.confirmation_matches(state, asked.confirmation) then
                     status = "Request changed; open it and confirm again"; dirty = true
                 else perform(function()
@@ -480,7 +466,6 @@ local function main(value: unknown)
                     elseif text == "b" then ask_batch("approved")
                     elseif text == "n" then ask_batch("denied")
                     elseif text == "l" or text == "e" then ask_lease("lease_propose")
-                    elseif text == "g" then ask_lease("lease_grant")
                     elseif text == "s" or text == "b" then
                         local detail = state.detail
                         if detail and detail.requesting_session then
@@ -524,7 +509,6 @@ local function main(value: unknown)
                         elseif hit.kind == "batch_approve" then ask_batch("approved")
                         elseif hit.kind == "batch_deny" then ask_batch("denied")
                         elseif hit.kind == "lease" then ask_lease("lease_propose")
-                        elseif hit.kind == "grant" then ask_lease("lease_grant")
                         elseif hit.kind == "row" then
                             local row = rows[hit.index]
                             if row then model.select(state, row.approval_id); dirty = true end

@@ -304,9 +304,9 @@ function M.operation_by_ref(tx: sql.Transaction, workspace: string, caller: stri
         "FROM bee_session_operations WHERE workspace_id = ? AND owner_actor = ? AND operation_ref = ?", {workspace, caller, operation_ref}, "operation")
 end
 
-function M.feed(tx: sql.Transaction, thread_id: string, cursor: integer, limit: integer): ({Row}?, string?)
+function M.feed(tx: sql.Transaction, thread_id: string, session_ref: string, cursor: integer, limit: integer): ({Row}?, string?)
     return tx:query("SELECT record_id, sequence, record_json, committed_at FROM bee_thread_records " ..
-        "WHERE thread_id = ? AND event_scope = 'sessions' AND sequence > ? ORDER BY sequence LIMIT ?", {thread_id, cursor, limit})
+        "WHERE thread_id = ? AND event_scope = 'sessions' AND json_extract(json_extract(record_json, '$.body.data.payload_json'), '$.session_ref') = ? AND sequence > ? ORDER BY sequence LIMIT ?", {thread_id, session_ref, cursor, limit})
 end
 
 local TURN_COLUMNS = "turn_ref, session_ref, work_ref, claim_token, owner_epoch, input_digest, phase, checkpoint_json, " ..

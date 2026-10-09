@@ -1055,7 +1055,7 @@ function M.feed_read(db: sql.DB, actor: string, request: unknown): Result
         local session, query_error = journal.session(tx, session_ref, target_workspace(session_ref, workspace))
         if query_error then return transaction.storage_failure(query_error) end
         if not session then return failure("NOT_FOUND", "session does not exist") end
-        local rows, records_error = journal.feed(tx, session.thread_id, cursor, page_limit + 1)
+        local rows, records_error = journal.feed(tx, session.thread_id, session_ref, cursor, page_limit + 1)
         if records_error or not rows then return transaction.storage_failure("read session feed") end
         local events: {Row} = {}
         local next_cursor = cursor
@@ -1071,7 +1071,7 @@ function M.feed_read(db: sql.DB, actor: string, request: unknown): Result
             if not payload then return failure("INTERNAL", payload_error or "decode session event") end
             events[#events + 1] = {owner = "threads", id = event_id, schema = "bee.sessions.event@1", sequence = sequence,
                 recorded_at = committed_at, observed_at = observed_at,
-                kind = payload.kind, subject = payload.subject, revision = payload.revision,
+                session_ref = payload.session_ref, kind = payload.kind, subject = payload.subject, revision = payload.revision,
                 operation = payload.operation, data = payload.data}
             next_cursor = sequence
         end

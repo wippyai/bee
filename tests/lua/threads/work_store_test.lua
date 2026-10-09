@@ -19,6 +19,30 @@ end
 
 local function define_tests()
     test.describe("Threads canonical session work store", function()
+        test.it("paginates each session feed independently on a shared thread", function()
+            local sessions = harness.session_owner(WORKSPACE)
+            local owner = harness.principal("sessions-owner", harness.ALL, WORKSPACE)
+            local thread = harness.thread(owner, "shared feed")
+            local a = harness.value(sessions:call("session_create", {thread_id = thread, operation_key = harness.key()})).session
+            local b = harness.value(sessions:call("session_create", {thread_id = thread, operation_key = harness.key()})).session
+            for _, session in ipairs({a, b, a, b}) do
+                harness.value(sessions:call("work_send", {session = session, input = tostring(session), operation_key = harness.key()}))
+            end
+            for _, session in ipairs({a, b}) do
+                local cursor, count = 0, 0
+                repeat
+                    local page = harness.value(sessions:call("feed_read", {session = session, after_sequence = cursor, limit = 1}))
+                    for _, event in ipairs(harness.objects(page.events, 128)) do
+                        test.eq(event.session_ref, session)
+                        if event.kind == "work.queued" then count = count + 1 end
+                    end
+                    local next_cursor = assert(bounds.count(page.cursor))
+                    if page.has_more then test.is_true(next_cursor > cursor) end
+                    cursor = next_cursor
+                until not page.has_more
+                test.eq(count, 2)
+            end
+        end)
         test.it("reports executing sessions across workspaces only to an admitted summary reader", function()
             local reader = harness.principal("summary-reader", {"bee.tests.threads:summary_policy"})
             local sessions = harness.session_owner(WORKSPACE)

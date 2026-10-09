@@ -141,6 +141,7 @@ entries:
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:grant_context_policy
+    - bee.gateway.security:trait_registry_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
     - bee.gateway.security:execute_policy

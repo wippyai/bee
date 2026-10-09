@@ -352,3 +352,11 @@ entries:
   modules: [registry]
   imports: {test: wippy.test:test, surface: bee.gateway.catalog:surface, traits: bee.gateway.security:traits, bounds: bee.values:bounds, host: bee.tests.memory:host, gateway: bee.gateway.binding:gateway}
   security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}
+- name: reattachment_test
+  kind: function.lua
+  source: file://reattachment_test.lua
+  method: run
+  modules: [json]
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, bounds: bee.values:bounds, host: bee.tests.memory:host}
+  security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}

@@ -1,0 +1,30 @@
+local test = require("test")
+local host = require("host")
+local bounds = require("bounds")
+local json = require("json")
+local function define_tests()
+    test.describe("Extension tools across carrier replacement", function()
+        test.it("uses the session's person consent for real MCP calls before and after reattachment", function()
+            local session = host.open(true, "bee.tests.memory:tools_trait")
+            local token, endpoint = host.transport(session)
+            local first = host.rpc(session, token, endpoint, "tools/call", {name = "thread_read", arguments = {limit = 1}})
+            test.neq(first.isError, true, "before replacement: " .. assert(json.encode(first)))
+            test.not_nil(first.structuredContent)
+            host.reattach(session)
+            token, endpoint = host.transport(session)
+            local listed = host.rpc(session, token, endpoint, "tools/list", {})
+            local found = false
+            for _, raw in ipairs(assert(bounds.array(listed.tools, 64))) do
+                if assert(bounds.object(raw)).name == "thread_read" then found = true end
+            end
+            test.is_true(found)
+            local second = host.rpc(session, token, endpoint, "tools/call", {name = "thread_read", arguments = {limit = 1}})
+            test.neq(second.isError, true, "after replacement: " .. assert(json.encode(second)))
+            test.not_nil(second.structuredContent)
+            host.revoke(session)
+            local refused = host.rpc(session, token, endpoint, "tools/call", {name = "thread_read", arguments = {}}, true)
+            test.eq(refused.code, -32602)
+        end)
+    end)
+end
+return test.run_cases(define_tests)

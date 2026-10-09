@@ -8,6 +8,9 @@ local clock = require("clock")
 local canonical = require("canonical")
 local mcp = require("mcp")
 local profile_grants = require("profile_grants")
+local agent_trait = require("agent_trait")
+local session_traits = require("session_traits")
+local trait_access = require("trait_access")
 local M = {}
 type State = {surface_json: string, active_json: string, context_json: string, revision: integer}
 type Fault = {code: string, message: string}
@@ -59,15 +62,40 @@ function M.call_authority(tx: sql.Transaction, binding_id: string, workspace: st
     local requested = access and bounds.ids(access.traits,true) or {}
     local traits: {[string]: {string}} = {[mcp.APPLICATION_RUNTIME_TRAIT.id] = mcp.APPLICATION_RUNTIME_TRAIT.tools}
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do traits[trait.id] = trait.tools end
+    local extensions: {[string]: boolean} = {}
     for _, raw in ipairs(bounds.array(declaration.traits,64) or {}) do
         local trait = bounds.object(raw)
         local trait_id = trait and bounds.id(trait.id)
         local tools = trait and bounds.ids(trait.tools,true)
-        if trait_id and tools then traits[trait_id] = tools end
+        if trait_id and tools then
+            traits[trait_id] = tools
+            local decoded = agent_trait.declaration(raw)
+            if decoded and agent_trait.extension(decoded) then
+                extensions[trait_id] = true
+                local current = trait_access.load(trait_id)
+                if current then traits[trait_id] = current.tools end
+            end
+        end
     end
     for _, trait in ipairs(requested or {}) do
         for _, tool in ipairs(traits[trait] or {}) do
             if tool == name then
+                if extensions[trait] then
+                    local rows, err = tx:query("SELECT action_id,thread_id FROM bee_gateway_bindings WHERE binding_id=?", {binding_id})
+                    if not rows or err or #rows ~= 1 then return nil, fault("STORAGE", "read extension call scope") end
+                    local session, thread = bounds.id(rows[1].action_id), bounds.id(rows[1].thread_id)
+                    if not session or not thread then return nil, fault("STORAGE", "invalid extension call scope") end
+                    local selected, invalid = session_traits.read(tx, session, trait)
+                    if not selected or invalid or not selected.selected or selected.workspace_id ~= workspace or selected.thread_id ~= thread then
+                        return nil, fault("DENIED", invalid or "trait is not active in this session")
+                    end
+                    local consent_error = session_traits.consent(tx, selected)
+                    if consent_error then return nil, fault("DENIED", consent_error) end
+                    local contains = false
+                    for _, offered in ipairs(selected.declaration.tools) do if offered == name then contains = true end end
+                    if not contains then return nil, fault("DENIED", "tool is outside the person's trait consent") end
+                    return selected.grant_id, nil
+                end
                 local receipt, err = M.runtime_grant(tx,binding_id,trait,now)
                 if not receipt then return nil,err or fault("DENIED","access grant no longer admits calls") end
                 return receipt.approval_id .. ":grant",nil

@@ -1364,6 +1364,7 @@ entries:
     principals: bee.tests.principals:bound
     test: wippy.test:test
     bounds: bee.values:bounds
+    trait_access: bee.gateway.security:traits
     admission: bee.harness.launch:admission
     definitions: bee.harness.launch:definitions
     launch_policy: bee.harness.carrier:policy

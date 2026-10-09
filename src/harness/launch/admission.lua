@@ -184,7 +184,7 @@ local function preference_value(selected: Selected?): placement_types.Preference
     if not selected then return nil end
     local value = profiles.preferences(selected.profile)
     if not value then return nil end
-    return {authority_grant_id = selected.grant_id,docker_overrides = value.docker_overrides,home = value.home,bee = value.bee,options = value.options,mcp_tools = value.mcp_tools,instructions = value.instructions}
+    return {active_traits = value.active_traits,authority_grant_id = selected.grant_id,docker_overrides = value.docker_overrides,home = value.home,bee = value.bee,options = value.options,mcp_tools = value.mcp_tools,instructions = value.instructions}
 end
 -- agent_preferences: the carrier preferences for one admitted agent closure.
 -- The run offers exactly the closure's tool aliases through the gateway and
@@ -219,7 +219,7 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     if #instructions > M.MAX_AGENT_INSTRUCTIONS_BYTES then
         return nil, fail("INVALID", "agent instructions exceed " .. tostring(M.MAX_AGENT_INSTRUCTIONS_BYTES) .. " bytes for this route")
     end
-    return {authority_grant_id = selected and selected.grant_id or nil,bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
+    return {active_traits = selected and selected.profile.active_traits or nil,authority_grant_id = selected and selected.grant_id or nil,bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
 local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, placement_override: profiles.Placement?): (Plan?, Reply?, placement_types.Preferences?)
     if selected then

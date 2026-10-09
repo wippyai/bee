@@ -18,6 +18,7 @@ local hash = require("hash")
 local admission = require("admission")
 local definitions = require("definitions")
 local launch_policy = require("launch_policy")
+local trait_access = require("trait_access")
 local machine = require("machine")
 local checkpoint = require("checkpoint")
 local hook_records = require("hook_records")
@@ -478,6 +479,48 @@ local function define_tests()
             test.is_nil((assert(json.encode(value(call("bee.credentials.binding:list", {workspace_id = target})))):find(secret, 1, true)))
             end)
             end)
+        end)
+        test.it("carries saved trait selections through admission and carrier policy on both routes", function()
+            for _, route in ipairs({{definition = DEFINITION, policy = POLICY}, {definition = AGENT_DEFINITION, policy = AGENT_POLICY}}) do
+                local entry = assert(registry.get(route.policy))
+                local original = assert(bounds.object(entry.data))
+                local changed: {[string]: unknown} = {}
+                for key, item in pairs(original) do changed[key] = item end
+                changed.gateway_access = {policy = "agent-access", traits = {"bee.tests.memory:trait"}}
+                if route.definition == AGENT_DEFINITION then
+                    local tools: {{[string]: unknown}} = {}
+                    for _, id in ipairs({"bee.harness.catalog:agent_read_tool", "bee.harness.catalog:agent_report_tool"}) do
+                        local meta = assert(bounds.object(assert(registry.get(id)).meta))
+                        tools[#tools + 1] = {name = meta.llm_alias, operation = id, description = meta.llm_description,
+                            policies = {"bee.harness.catalog:launch_client_policy"}, schema = json.decode(tostring(meta.input_schema)), annotations = {}}
+                    end
+                    changed.gateway_access = nil
+                    changed.gateway_surface = {tools = tools, traits = {assert(trait_access.load("bee.tests.memory:trait"))},
+                        base_tools = {"FileRead", "FileReport"}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
+                        access = {policy = "agent-access", traits = {"bee.tests.memory:trait"}}}
+                end
+                entry.data = changed; apply(entry)
+                local ok, err = pcall(function()
+                    local saved_id = fresh("trait-profile")
+                    value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
+                        expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
+                            name = "Remember", definition_ref = route.definition, driver_binding_ref = "bee.driver.claude.binding:binding",
+                            provider = {}, bee = {mcp = {}}, active_traits = {"bee.tests.memory:trait"}}}))
+                    local measured = value(call("bee.harness.binding:resolve", {definition_ref = route.definition, workspace_id = workspace,
+                        saved_profile_id = saved_id, saved_profile_revision = 1}))
+                    local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("trait-admission"), definition_ref = route.definition, expected_plan_digest = measured.plan_digest,
+                        workspace_id = workspace, brief = "remember", saved_profile_id = saved_id, saved_profile_revision = 1}))
+                    local requested = assert(bounds.object(admitted.request))
+                    local preferences = assert(bounds.object(requested.preferences))
+                    test.eq(assert(bounds.ids(preferences.active_traits, true))[1], "bee.tests.memory:trait")
+                    local planned, problem = machine.plan(carrier_io(workspace), carrier_fixtures.request(requested))
+                    test.not_nil(planned, tostring(problem))
+                    local configured = assert(assert(planned).policy.gateway_surface)
+                    test.eq(assert(bounds.ids(configured.active_traits, true))[1], "bee.tests.memory:trait")
+                end)
+                entry.data = original; apply(entry)
+                if not ok then error(tostring(err)) end
+            end
         end)
         test.it("fences a saved profile revision before admission and rejects preferences outside host policy", function()
             local workspace_id, saved_id = workspace, fresh("profile")

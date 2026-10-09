@@ -734,3 +734,9 @@ entries:
     actions: [registry.get, registry.find, registry.snapshot]
     resources: ['*']
     effect: allow
+- name: access_effect_policy
+  kind: security.policy
+  policy:
+    actions: [bee.approvals.own, bee.gateway.manage, funcs.call, process.registry.register, process.listen]
+    resources: [gateway.access, bindings, bee.gateway.access, bee.process.wake, bee.approvals.binding:effect_queue, bee.approvals.binding:events, bee.approvals.binding:effect, bee.approvals.binding:revalidate]
+    effect: allow

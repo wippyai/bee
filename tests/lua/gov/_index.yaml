@@ -1147,6 +1147,7 @@ entries:
     timeout: 480s
   security:
     policies:
+    - bee.tests.support:approval_effect_policy
     - bee.tests.gov:app_database_test_policy
   imports:
     bounds: bee.values:bounds
@@ -1203,6 +1204,7 @@ entries:
   - env
   - system
   imports:
+    approval_effect: bee.tests.support:approval_effect
     bounds: bee.values:bounds
     client: bee.node:client
     principal: bee.node:principal
@@ -1410,6 +1412,7 @@ entries:
     timeout: 480s
   security:
     policies:
+    - bee.tests.support:approval_effect_policy
     - bee.tests.gov:app_database_test_policy
   imports:
     bounds: bee.values:bounds

@@ -33,3 +33,15 @@ entries:
     actions: [bee.gateway.manage]
     resources: [listener, bindings]
     effect: allow
+- name: approval_effect
+  kind: library.lua
+  source: file://approval_effect.lua
+  modules: [funcs, cdc, channel, time]
+  imports: {bounds: bee.values:bounds}
+- name: approval_effect_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [cdc.stream]
+    resources: ['bee:changes']
+    effect: allow

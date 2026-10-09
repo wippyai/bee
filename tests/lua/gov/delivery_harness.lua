@@ -3,6 +3,7 @@
 -- the person answers in Needs you and works in the Library; the suites run the
 -- activation worker's pass themselves while its service stays stopped.
 local funcs = require("funcs")
+local approval_effect = require("approval_effect")
 local security = require("security")
 local bounds = require("bounds")
 local json = require("json")
@@ -109,10 +110,7 @@ end
 -- answer reads what Needs you shows for the installation and decides it as the person.
 function M.answer(workspace: string, approval_id: unknown, decision: string): Object
     local person = M.person(workspace)
-    local read = M.value(M.reply(person:call("bee.approvals.binding:read", {approval_id = approval_id})))
-    M.value(M.reply(person:call("bee.approvals.binding:decide", {approval_id = approval_id,
-        expected_revision = read.revision, decision = decision, proposal_digest = read.proposal_digest, reviewed_digest = read.reviewed_digest})))
-    return read
+    return approval_effect.decide(person, approval_id, decision)
 end
 
 function M.approve(workspace: string, approval_id: unknown): Object

@@ -1,4 +1,11 @@
 local funcs = require("funcs")
+local cdc = require("cdc")
+local events = require("events")
+local json = require("json")
+local http_client = require("http_client")
+local system = require("system")
+local channel = require("channel")
+local time = require("time")
 local security = require("security")
 local bounds = require("bounds")
 local gateway = require("gateway")
@@ -37,10 +44,29 @@ function M.approve(binding: gateway.Binding, approval: string?, trait_id: string
     local raw, err = person:call("bee.approvals.binding:read", {approval_id = id})
     assert(not err, tostring(err))
     local question = M.value(raw)
+    local logs = assert(events.subscribe("logs", "logs.entry"))
+    local diagnostics: {string} = {}
+    local changes = assert(cdc.stream("bee:changes", {tables = {"bee_approval_requests"}, ops = {"update"}}))
     raw, err = person:call("bee.approvals.binding:decide", {approval_id = id, decision = "approved", expected_revision = question.revision,
         proposal_digest = question.proposal_digest, reviewed_digest = question.reviewed_digest})
     assert(not err, tostring(err)); M.value(raw)
-    M.value(gateway.access_status(binding, id))
+    do
+        local decided = M.value(raw)
+        local effect = assert(bounds.object(decided.effect))
+        assert(effect.destination == "gateway.access", "approval has no durable access continuation")
+        local source = assert(changes):channel()
+        local deadline = time.after("20s")
+        while decided.effect_completed_at == nil do
+            local selected = channel.select({source:case_receive(), logs:channel():case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel ~= deadline, "access effect did not complete: " .. tostring(json.encode(system.supervisor.state("bee.gateway.service:access_service"))) .. " | " .. table.concat(diagnostics, " | "))
+            if selected.channel == logs:channel() then diagnostics[#diagnostics + 1] = assert(json.encode(selected.value.data)) end
+            raw, err = person:call("bee.approvals.binding:read", {approval_id = id})
+            assert(not err, tostring(err)); decided = M.value(raw)
+        end
+        assert(assert(bounds.object(decided.effect_result)).ok == true, "access effect failed")
+        assert(changes):close()
+        logs:close()
+    end
     return id .. ":grant", id, question
 end
 function M.bind(owner: harness.Client, session: string, thread: string, trait_id: string, seed: boolean?, prior: gateway.Binding?): (gateway.Binding, {[string]: unknown})
@@ -49,11 +75,30 @@ function M.bind(owner: harness.Client, session: string, thread: string, trait_id
     if not prior then harness.value(carrier:call("prepare_attempt", {thread_id = thread, action_id = session, attempt_id = attempt, prepared = harness.prepared(), idempotency_key = harness.key()})) end
     local declared = assert(traits.load(trait_id))
     local admitted = M.call("bee.gateway.binding:admit", {subject = session, action_id = session, attempt_id = attempt,
-        thread_id = thread, workspace_id = M.WORKSPACE, owner_incarnation = 1, carrier_epoch = prior and prior.carrier_epoch + 1 or 1, tools = {"thread_read"}, hooks = {},
-        surface = {tools = {}, traits = {declared}, base_tools = {}, active_traits = seed and {trait_id} or {}, fixed_context = {}, dynamic_keys = {}, access = {policy = "agent-access", traits = {trait_id}}}})
+        thread_id = thread, workspace_id = M.WORKSPACE, owner_incarnation = 1, carrier_epoch = prior and prior.carrier_epoch + 1 or 1, tools = {"thread_read", "capabilities"}, hooks = {},
+        surface = {tools = {}, traits = {declared}, base_tools = {"capabilities"}, active_traits = seed and {trait_id} or {}, fixed_context = {}, dynamic_keys = {}, access = {policy = "agent-access", traits = {trait_id}}}})
     local binding, err = gateway.managed_binding(assert(bounds.id(assert(bounds.object(admitted.binding)).binding_id)))
     if not binding then error(tostring(err and err.error and err.error.message)) end
     return binding, admitted
+end
+function M.transport(session: Session): (string, string)
+    local binding = session.binding
+    local input = {attempt_id = binding.attempt_id, carrier_epoch = binding.carrier_epoch, binding_id = binding.binding_id}
+    local permitted = M.call("bee.gateway.binding:authorize_materialization", input)
+    local issued = M.call("bee.gateway.binding:materialize", {attempt_id = binding.attempt_id, carrier_epoch = binding.carrier_epoch,
+        binding_id = binding.binding_id, materialization_key = permitted.materialization_key})
+    session.binding = assert((gateway.managed_binding(binding.binding_id)))
+    return assert(bounds.text(issued.token, 128)), assert(configuration.current()).address
+end
+function M.rpc(session: Session, token: string, endpoint: string, method: string, params: {[string]: unknown}, rpc_failure: boolean?): {[string]: unknown}
+    local response, err = http_client.post("http://" .. endpoint .. "/mcp/" .. session.binding.action_id, {headers = {
+        ["Content-Type"] = "application/json", Authorization = "Bearer " .. token},
+        body = assert(json.encode({jsonrpc = "2.0", id = 1, method = method, params = params})), timeout = 30})
+    assert(response and not err, "fixture MCP request failed")
+    local reply = assert(bounds.object(json.decode(tostring(response.body))))
+    assert(response.status_code == 200, "fixture MCP request refused")
+    if rpc_failure then return assert(bounds.object(reply.error), "fixture MCP must refuse the call") end
+    return assert(bounds.object(reply.result), "fixture MCP " .. method .. " returned an RPC error: " .. assert(json.encode(reply.error)))
 end
 function M.reattach(session: Session): gateway.Binding
     session.binding = (M.bind(session.owner, session.session, session.thread, session.trait_id or M.TRAIT, nil, session.binding))

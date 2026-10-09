@@ -35,7 +35,7 @@ entries:
 - name: host
   kind: library.lua
   source: file://host.lua
-  modules: [funcs, security]
+  modules: [funcs, security, cdc, channel, time, events, json, http_client, system]
   imports:
     bounds: bee.values:bounds
     gateway: bee.gateway.binding:gateway
@@ -47,7 +47,7 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [funcs.call, funcs.security, funcs.context, security.actor.create, security.scope.create, security.policy.get, registry.get, registry.find, registry.snapshot, registry.apply, registry.update.registry.entry, registry.update.process.lua, bee.gateway.manage, bee.threads.app_alias, bee.approvals.read, bee.approvals.decide, bee.approvals.grant, db.get, system.read]
+    actions: [http_client.request, http_client.private_ip, bee.gateway.materialize, events.subscribe, cdc.stream, funcs.call, funcs.security, funcs.context, security.actor.create, security.scope.create, security.policy.get, registry.get, registry.find, registry.snapshot, registry.apply, registry.update.registry.entry, registry.update.process.lua, bee.gateway.manage, bee.threads.app_alias, bee.approvals.read, bee.approvals.decide, bee.approvals.grant, db.get, system.read]
     resources: ['*']
     effect: allow
 - name: client_policy
@@ -78,3 +78,10 @@ entries:
     actions: [bee.threads.create, bee.threads.observe]
     resources: ['*']
     effect: allow
+- name: tools_trait
+  kind: registry.entry
+  meta: {type: agent.trait, title: Memory tools, application_ref: 'bee.tests.memory:app'}
+  data:
+    prompt: Read the session thread and remember completed turns.
+    tools: [thread_read]
+    listens: [turn.completed]

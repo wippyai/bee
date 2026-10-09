@@ -26,8 +26,8 @@ local function proposal(binding: Binding, configuration: surface.Surface, digest
             if trait.id == id and agent_trait.extension(trait) then declarations[#declarations + 1] = trait end
         end
     end
-    return {grant_adapter = "bee.gateway.security:grant",kind = "attempt", ref = binding.attempt_id, action_id = binding.action_id, revision = capability_model.REVISION,
-        payload = {binding_id = binding.binding_id, subject = binding.subject, thread_id = binding.thread_id,
+    return {grant_adapter = "bee.gateway.security:grant",kind = "operation", ref = "bee.gateway:access", revision = capability_model.REVISION,
+        payload = {action_id = binding.action_id, attempt_id = binding.attempt_id, binding_id = binding.binding_id, subject = binding.subject, thread_id = binding.thread_id,
             configuration_digest = digest, capability = capability, fixed_context = configuration.fixed_context,
             session_ref = binding.action_id, declarations = declarations}}
 end
@@ -116,8 +116,6 @@ function M.approved(binding: Binding, configuration: surface.Surface, digest: st
     if view.state ~= "decided" or view.decision ~= "approved" then
         return nil, {ok = true, value = {approval_id = approval_id, status = view.decision or view.state}}
     end
-    local consumed = subject_call.claim_effect(approvals, approval_id, expected_digest, "mcp:" .. approval_id, view.owner_incarnation)
-    if not consumed.ok then return nil, consumed end
     return {approval_id = approval_id, proposal_digest = expected_digest, traits = traits}, nil
 end
 return M

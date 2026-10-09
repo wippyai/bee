@@ -4,6 +4,7 @@ local traits = require("traits")
 local registry = require("registry")
 local bounds = require("bounds")
 local host = require("host")
+local gateway = require("gateway")
 local function raw(hooks: {string}?, active: {string}?, approval: boolean?): {[string]: unknown}
     return {tools = {}, traits = {{id = "memory:trait", title = "Memory", prompt = "Remember facts", tools = {},
         application_ref = "memory:app", application_revision = "1", listens = {"turn.completed"}, hooks = hooks or {}}},
@@ -12,6 +13,14 @@ local function raw(hooks: {string}?, active: {string}?, approval: boolean?): {[s
 end
 local function define_tests()
     test.describe("Extension consent", function()
+        test.it("activates a seeded trait from the person's decision without access status", function()
+            local session = host.open(true)
+            local current = assert((gateway.surface(session.binding)))
+            test.eq(current.selection.active[1], host.TRAIT)
+            local client = host.client("decision-memory")
+            local discovery = host.value(host.receive(client, "subscribe", {trait_id = host.TRAIT, idempotency_key = "decision-memory"}))
+            test.not_nil(discovery)
+        end)
         test.it("reviews app identity, exact declarations, workspace and session before activation", function()
             local session, question = host.open()
             local proposal = assert(bounds.object(question.proposal))

@@ -18,6 +18,7 @@ local ALLOWED: {[string]: boolean} = {
     ["bee.node.service:tests_service"] = true,
     ["bee.gov.service:activation_service"] = true,
     ["bee.gateway.service:external_service"] = true,
+    ["bee.gateway.service:access_service"] = true,
     ["bee.placement.docker.service:image_owner_service"] = true,
     ["bee.placement.native.service:sweeper_service"] = true,
 }

@@ -231,11 +231,13 @@ entries:
   modules: [funcs, security, json, http_client, events, logger, channel, time]
   security:
     policies:
+    - bee.tests.support:approval_effect_policy
     - bee.gateway:external_test_policy
     - bee.gateway.security:access_call_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
   imports:
+    approval_effect: bee.tests.support:approval_effect
     test: wippy.test:test
     external: bee.gateway.binding:external
     gateway: bee.gateway.binding:gateway
@@ -348,5 +350,5 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [registry]
-  imports: {test: wippy.test:test, surface: bee.gateway.catalog:surface, traits: bee.gateway.security:traits, bounds: bee.values:bounds, host: bee.tests.memory:host}
+  imports: {test: wippy.test:test, surface: bee.gateway.catalog:surface, traits: bee.gateway.security:traits, bounds: bee.values:bounds, host: bee.tests.memory:host, gateway: bee.gateway.binding:gateway}
   security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}

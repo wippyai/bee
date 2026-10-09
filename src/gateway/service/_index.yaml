@@ -177,3 +177,60 @@ entries:
   - funcs
   imports:
     bounds: bee.values:bounds
+- name: access_effects
+  kind: library.lua
+  source: file://access_effects.lua
+  modules: [funcs]
+  imports:
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway
+    subject_call: bee.gateway.security:subject_call
+- name: access_backlog
+  kind: function.lua
+  source: file://access_effects.lua
+  method: pending
+  modules: [funcs]
+  imports:
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway
+    subject_call: bee.gateway.security:subject_call
+- name: access_worker
+  kind: process.lua
+  source: file://access_worker.lua
+  method: main
+  modules: [logger]
+  imports:
+    worker: bee.process:worker
+    effects: bee.gateway.service:access_effects
+  meta:
+    type: bee.approvals.effect-consumer
+    destination: gateway.access
+    operation_ref: bee.gateway:access
+    worker_name: bee.gateway.access
+    effect_prefix: 'mcp:'
+- name: access_service
+  kind: process.service
+  process: bee.gateway.service:access_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: false
+    requires: [bee.hive.service:supervisor_service]
+    restart: {max_attempts: 10}
+    security:
+      actor: {id: bee.gateway.access}
+      policies:
+      - bee.gateway.security:access_effect_policy
+      - bee.gateway.security:store_policy
+      - bee.gateway.security:trait_registry_policy
+      - bee.gateway.security:execute_policy
+      - bee.gateway.security:access_call_policy
+      - bee.gateway.security:access_reference_policy
+      - bee.gateway.security:access_policy_read_policy
+      - bee.security.approvals:approval_consume_policy
+      - bee.process:client_policy
+      - bee.process:backlog_policy
+  meta:
+    type: bee.process.demand
+    demand:
+      name: bee.gateway.access
+      probe: bee.gateway.service:access_backlog

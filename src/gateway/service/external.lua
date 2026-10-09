@@ -35,7 +35,7 @@ local function main()
         end
         local reply = external.complete(item.client, item.request.caller)
         local value = bounds.object(reply.value)
-        if reply.ok and value and value.status == "pending" then return false end
+        if reply.ok and value and (value.status == "pending" or value.status == "approved") then return false end
         assert(process.send(item.request.caller, item.request.reply_topic, protocol.ok(reply)))
         return true
     end

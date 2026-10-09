@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
+local approval_effect = require("approval_effect")
 local external = require("external")
 local gateway = require("gateway")
 local funcs = require("funcs")
@@ -25,9 +26,7 @@ end
 local function decide(paired: Object, decision: string)
     local executor = funcs.new():with_actor(security.new_actor("bee.application:" .. WORKSPACE .. ":needs-you",
         {workspace_id = WORKSPACE, definition_id = "bee.approvals.inbox.app:app"}))
-    local approval = value(executor:call("bee.approvals.binding:read", {approval_id = paired.approval_id}))
-    value(executor:call("bee.approvals.binding:decide", {approval_id = paired.approval_id, decision = decision,
-        expected_revision = approval.revision, proposal_digest = approval.proposal_digest, reviewed_digest = approval.reviewed_digest}))
+    approval_effect.decide(executor, paired.approval_id, decision)
 end
 local function rpc(endpoint: string, action: string, token: string, method: string, params: Object): (Object, integer)
     local response, err = http_client.post("http://" .. endpoint .. "/mcp/" .. action, {headers = {["Content-Type"] = "application/json",

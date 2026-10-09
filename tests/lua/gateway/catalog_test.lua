@@ -25,6 +25,25 @@ local function requestable_surface()
 end
 local function define_tests()
     test.describe("Configurable MCP catalog", function()
+        test.it("preserves closed listen and hook declarations", function()
+            local decoded, err = catalog.decode({tools = {}, traits = {{id = "memory:trait", title = "Memory", prompt = "Remember facts", tools = {},
+                application_ref = "memory:app", listens = {"turn.completed"}, hooks = {"tool.before"}}}})
+            if not decoded then error(tostring(err)) end
+            test.eq((decoded.traits[1].listens or {})[1], "turn.completed")
+            test.eq((decoded.traits[1].hooks or {})[1], "tool.before")
+            local projected = assert(catalog.from_framework({tools = {}, traits = decoded.traits}, {}))
+            test.eq(projected.traits[1].application_ref, "memory:app")
+            test.eq((projected.traits[1].listens or {})[1], "turn.completed")
+        end)
+        test.it("names unknown event kinds and hook points", function()
+            for _, field in ipairs({"listens", "hooks"}) do
+                local trait: {[string]: unknown} = {id = "memory:trait", title = "Memory", prompt = "Remember facts", tools = {}, application_ref = "memory:app"}
+                trait[field] = {"unrecognized.point"}
+                local decoded, err = catalog.decode({tools = {}, traits = {trait}})
+                test.is_nil(decoded)
+                test.is_true(tostring(err):find("unrecognized.point", 1, true) ~= nil, tostring(err))
+            end
+        end)
         test.it("names why each form refused a value that matches no form of a choice", function()
             local schema = {oneOf = {
                 {type = "object", additionalProperties = false, required = {"ok", "value"}, properties = {ok = {const = true}, value = {type = "string", maxLength = 3}}},

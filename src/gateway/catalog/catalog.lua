@@ -3,10 +3,11 @@
 local bounds = require("bounds")
 local json = require("json")
 local agent_tool = require("agent_tool")
+local agent_trait = require("agent_trait")
 local M = {}
 type Object = {[string]: unknown}
 type Tool = {name: string, operation: string, description: string, policies: {string}, schema: Object, annotations: Object}
-type Trait = {id: string, title: string, prompt: string, tools: {string}}
+type Trait = agent_trait.Declaration
 type Catalog = {tools: {Tool}, traits: {Trait}}
 local function reference(value: unknown): string?
     local id = bounds.id(value)
@@ -69,16 +70,12 @@ function M.decode(raw: unknown): (Catalog?, string?)
     end
     local ids: {[string]: boolean} = {}
     for _, raw_trait in ipairs(traits) do
-        local trait = bounds.object(raw_trait)
-        if not trait then return nil, "trait must be an object" end
-        local invalid = bounds.fields(trait, {"id", "title", "prompt", "tools"})
-        if invalid then return nil, invalid end
-        local id, title, prompt = reference(trait.id), bounds.line(trait.title, 256), bounds.text(trait.prompt, 16384)
-        local selected = bounds.ids(trait.tools, true)
-        if not id or ids[id] or not title or not prompt or not selected or #selected > 32 then return nil, "invalid or duplicate trait" end
-        for _, name in ipairs(selected) do if not names[name] then return nil, "trait references unknown tool" end end
-        ids[id] = true
-        result.traits[#result.traits + 1] = {id = id, title = title, prompt = prompt, tools = selected}
+        local trait, trait_error = agent_trait.declaration(raw_trait)
+        if not trait then return nil, trait_error end
+        if ids[trait.id] then return nil, "duplicate trait " .. trait.id end
+        for _, name in ipairs(trait.tools) do if not names[name] then return nil, "trait references unknown tool" end end
+        ids[trait.id] = true
+        result.traits[#result.traits + 1] = trait
     end
     return result, nil
 end
@@ -165,16 +162,12 @@ function M.from_framework(framework: unknown, policies: unknown): (Catalog?, str
     end
     local ids: {[string]: boolean} = {}
     for _, raw_trait in ipairs(declared_traits) do
-        local trait = bounds.object(raw_trait)
-        if not trait then return nil, "trait must be an object" end
-        local invalid = bounds.fields(trait, {"id", "title", "prompt", "tools"})
-        if invalid then return nil, invalid end
-        local id, title, prompt = reference(trait.id), bounds.line(trait.title, 256), bounds.text(trait.prompt, 16384)
-        local selected = bounds.ids(trait.tools, true)
-        if not id or ids[id] or not title or not prompt or not selected or #selected > 32 then return nil, "invalid or duplicate framework trait" end
-        for _, name in ipairs(selected) do if not names[name] then return nil, "trait references unknown tool" end end
-        ids[id] = true
-        result.traits[#result.traits + 1] = {id = id, title = title, prompt = prompt, tools = selected}
+        local trait, trait_error = agent_trait.declaration(raw_trait)
+        if not trait then return nil, trait_error end
+        if ids[trait.id] then return nil, "duplicate trait " .. trait.id end
+        for _, name in ipairs(trait.tools) do if not names[name] then return nil, "trait references unknown tool" end end
+        ids[trait.id] = true
+        result.traits[#result.traits + 1] = trait
     end
     return result, nil
 end

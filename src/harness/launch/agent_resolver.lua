@@ -9,6 +9,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local driver_resolver = require("driver_resolver")
 local agent_tool = require("agent_tool")
+local agent_trait = require("agent_trait")
 local M = {}
 M.AGENT_TYPE = "agent.gen1"
 M.TRAIT_TYPE = "agent.trait"
@@ -27,8 +28,7 @@ M.MAX_DELEGATES = 16
 type Pinned = registry.Snapshot
 type Scalar = string | number | boolean
 type Tool = agent_tool.Tool
-type Trait = {ref: string, digest: string, title: string, prompt: string, tool_refs: {string}, context: {[string]: string},
-    behavior: boolean, contracts: boolean, wrappers: boolean, hooks: boolean, options: boolean, delegates: boolean}
+type Trait = agent_trait.Trait
 type Agent = {ref: string, digest: string, prompt: string, trait_refs: {string}, tool_refs: {string}, delegate_refs: {string},
     memory: {string}, context: {[string]: string}, model: string?, tuning: {[string]: Scalar}, declinable: {string}}
 type Delegate = {ref: string, digest: string}
@@ -86,29 +86,6 @@ local function required(value: unknown): boolean
     if value == nil then return false end
     if type(value) == "table" then return next(value) ~= nil end
     return true
-end
-local function decode_trait(ref: string, entry: {[string]: unknown}): (Trait?, string?)
-    if entry.kind ~= "registry.entry" then return nil, ref .. " is not an agent trait" end
-    local meta = bounds.object(entry.meta)
-    if not meta or meta.type ~= M.TRAIT_TYPE then return nil, ref .. " is not an agent trait" end
-    local title = bounds.line(meta.title, 256)
-    if not title or title == "" then return nil, ref .. ": title must be nonempty text" end
-    local data = bounds.object(entry.data)
-    if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"prompt", "tools", "context", "options", "behavior", "contracts", "wrappers", "hooks", "delegates"})
-    if unknown_field then return nil, ref .. ": " .. unknown_field end
-    local prompt, prompt_error = prompt_of(data, ref)
-    if not prompt then return nil, prompt_error end
-    local tools, tools_error = refs(data.tools, ref .. ": tools")
-    if not tools then return nil, tools_error end
-    local context, context_error = context_of(data.context, ref)
-    if not context then return nil, context_error end
-    if data.options ~= nil and not bounds.object(data.options) then return nil, ref .. ": options must be an object" end
-    local digest, digest_error = entry_digest(ref, entry)
-    if not digest then return nil, ref .. ": " .. tostring(digest_error) end
-    return {ref = ref, digest = digest, title = title, prompt = prompt, tool_refs = tools, context = context,
-        behavior = required(data.behavior), contracts = required(data.contracts), wrappers = required(data.wrappers),
-        hooks = required(data.hooks), options = required(data.options), delegates = required(data.delegates)}, nil
 end
 local function tuning_of(value: unknown, ref: string): ({[string]: Scalar}?, string?)
     local object = bounds.object(value == nil and {} or value)
@@ -202,7 +179,7 @@ function M.resolve(pinned: Pinned, agent_ref: string): (Closure?, string?, strin
             if trait_lookup == "INVALID" then return nil, "INVALID", agent_ref .. ": trait reference is not an identifier" end
             return nil, "NOT_FOUND", "agent trait " .. ref .. " is not in the registry"
         end
-        local trait, trait_error = decode_trait(ref, trait_entry)
+        local trait, trait_error = agent_trait.registry(ref, trait_entry)
         if not trait then return nil, "INVALID", trait_error or "invalid agent trait" end
         traits[#traits + 1] = trait
     end
@@ -326,7 +303,7 @@ function M.check_route(pinned: Pinned, closure: Closure, route: Route): (Checked
         if trait.behavior then field = "behavior"
         elseif trait.contracts then field = "contracts"
         elseif trait.wrappers then field = "wrappers"
-        elseif trait.hooks then field = "hooks"
+        elseif #trait.hooks > 0 then return nil, "UNSUPPORTED_CAPABILITY", "hooks not yet supported: " .. trait.ref
         elseif trait.options then field = "options"
         elseif trait.delegates then field = "delegates" end
         if field then

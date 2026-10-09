@@ -9,6 +9,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     agent_tool: bee.values:agent_tool
+    agent_trait: bee.values:agent_trait
 - name: context
   kind: library.lua
   source: file://context.lua
@@ -55,6 +56,7 @@ entries:
     profile_access: bee.driver.profiles:profile_access
     bounds: bee.values:bounds
     catalog: bee.gateway.catalog:catalog
+    agent_trait: bee.values:agent_trait
     capability_model: bee.capability:model
     context: bee.gateway.catalog:context
     mcp: bee.gateway.api:mcp

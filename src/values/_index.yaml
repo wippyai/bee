@@ -26,3 +26,11 @@ entries:
   source: file://reply.lua
   imports:
     bounds: bee.values:bounds
+
+- name: agent_trait
+  kind: library.lua
+  source: file://agent_trait.lua
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical

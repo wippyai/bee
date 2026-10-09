@@ -50,6 +50,7 @@ entries:
     canonical: bee.values:canonical
     driver_resolver: bee.driver.binding:resolver
     agent_tool: bee.values:agent_tool
+    agent_trait: bee.values:agent_trait
 - name: selection
   kind: library.lua
   source: file://selection.lua

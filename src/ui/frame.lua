@@ -24,6 +24,7 @@ type View = {rows: {string}, hits: {Hit}, controls: Controls?}
 type Menu = {mode: string, selected: integer, offset: integer, controls: Controls, hits: {Hit}, signature: string, count: integer}
 
 type Window = {offset: integer, capacity: integer}
+type ListCard = {glyph: string, title: string, requester: string, summary: string, meta: string}
 -- A table column: width 0 is the single flexible column; align "right" for numbers.
 type Column = {title: string, width: integer, align: string?}
 -- A cell rectangle: x and y are one-based, width and height may be zero.
@@ -393,6 +394,32 @@ end
 
 function M.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)
     draw_row(painter, nil, y, value, selected, kind, index, key, fg, focused, span)
+end
+
+function M.list_card(painter: Painter, y: integer, height: integer, value: ListCard, selected: boolean, kind: string, index: integer, key: string)
+    local theme = painter.theme
+    local fg = selected and appearance.selection_text(theme) or theme.text
+    local bg = selected and appearance.selection_background(theme) or theme.surface
+    local muted = selected and fg or theme.muted
+    for line = 0, height - 1 do M.line(painter, y + line, "", fg, bg) end
+    if selected then M.put(painter, 1, y, MARKER, 1, fg, bg) end
+    M.put(painter, 2, y, value.glyph, 1, fg, bg)
+    local room = maximum(0, painter.width - 5)
+    local requester = M.fit(value.requester, room // 3)
+    local tag_width = tty.text.width(requester)
+    local title_room = maximum(0, room - tag_width - 2)
+    local title = M.fit(value.title, title_room)
+    if title ~= "" then painter.canvas:put(4, y, appearance.style(fg, bg) .. "\27[1m" .. title .. RESET, tty.text.width(title)) end
+    M.put(painter, painter.width - tag_width, y, requester, tag_width, muted, bg)
+    if height >= 3 then
+        M.put(painter, 2, y + 1, "│", 1, muted, bg)
+        M.put(painter, 4, y + 1, value.summary, room, fg, bg)
+    end
+    if height >= 2 then
+        M.put(painter, 2, y + height - 1, "└", 1, muted, bg)
+        M.put(painter, 4, y + height - 1, value.meta, room, muted, bg)
+    end
+    M.add_hit(painter, kind, index, key, 1, y, painter.width, height)
 end
 
 -- Column geometry for a table at the canvas width, or nil when the flexible

@@ -23,6 +23,78 @@ local function request(id: string, state: string, prompt: string): Object
 end
 local function define_tests()
     test.describe("Inbox frame", function()
+        test.it("leads MCP pairing cards with the client name and the requested trait summary", function()
+            local state = model.new({"ws-1"})
+            local item = request("mcp-card", "pending", "Let this agent session use Read Bee documentation and this client's thread? It asks: Pair external MCP client Terminal Claude. Bee shows its configuration once in the requesting terminal.")
+            model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
+            local shown = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            test.contains(tty.text.plain(shown.rows[3]), "Pair external MCP client Terminal Claude")
+            test.contains(tty.text.plain(shown.rows[4]), "Can use Read Bee documentation and this client's thread")
+            test.is_nil((tty.text.plain(shown.rows[4]):find("attempt", 1, true)))
+        end)
+        test.it("lays out complete request cards and drops the summary first on narrow screens", function()
+            local state = model.new({"ws-1"})
+            local item = request("small-card", "pending", "Run the API checks?")
+            item.window_max_ttl_ms = 1800000
+            model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
+            for _, width in ipairs({32, 48, 80, 160}) do
+                local shown = view.draw(width, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+                local hit = frames.hit(shown.hits, 2, 3)
+                test.eq(hit and hit.kind, "row")
+                test.eq(hit and hit.height, width < 60 and 2 or 3)
+                local title = shown.rows[3]:gsub("\27%[[0-9;]*m", "")
+                test.contains(title, "◷")
+                test.contains(title, "Run the API")
+                test.is_true(shown.rows[3]:find("\27%[[%d;]*;1m") ~= nil or shown.rows[3]:find("\27[1m", 1, true) ~= nil)
+                local last = math.floor(width < 60 and 4 or 5)
+                test.contains(shown.rows[last], "pending")
+                test.contains(shown.rows[last], "once/30 min")
+                if width >= 60 then
+                    test.contains(title, "bee.test.requester")
+                    test.contains(shown.rows[4], "Bash")
+                    test.contains(shown.rows[5], "expires 2026-09-09")
+                end
+                for y = 3, last do
+                    local target = frames.hit(shown.hits, 2, y)
+                    test.eq(target and target.key, "small-card")
+                end
+                test.is_nil(frames.hit(shown.hits, 2, last + 1))
+                for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), width) end
+            end
+        end)
+        test.it("moves selection and scroll offsets by whole cards", function()
+            local state = model.new({"ws-1"})
+            local changes: {Object} = {}
+            for index = 1, 12 do changes[index] = {seq = index, request = request("card-" .. tostring(index), "pending", "Request " .. tostring(index))} end
+            model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = changes, next_seq = 12, more = false}}))
+            for _, width in ipairs({40, 80, 160}) do
+                local rows = model.rows(state)
+                model.select(state, rows[1].approval_id)
+                local first = view.draw(width, 18, appearance.defaults(), state, rows, 0, "", leases.new())
+                test.eq(first.capacity, width < 60 and 4 or 3)
+                model.move(state, first.capacity)
+                local next = view.draw(width, 18, appearance.defaults(), state, rows, first.offset, "", leases.new())
+                test.eq(next.offset, 1)
+                local selected = assert(model.selected_row(state))
+                local count = 0
+                for _, hit in ipairs(next.hits) do
+                    if hit.kind == "row" then
+                        count = count + 1
+                        test.eq(hit.index, next.offset + count)
+                        test.eq(hit.height, width < 60 and 2 or 3)
+                        for y = hit.y, hit.y + hit.height - 1 do test.eq(frames.hit(next.hits, 2, y).key, hit.key) end
+                        if hit.key == selected.approval_id then test.eq(hit.index, first.capacity + 1) end
+                    end
+                end
+                test.eq(count, next.capacity)
+                local clicked = frames.hit(next.hits, 2, 4)
+                model.select(state, assert(clicked).key)
+                test.eq(model.selected_row(state).approval_id, rows[next.offset + 1].approval_id)
+                model.move(state, -1)
+                local back = view.draw(width, 18, appearance.defaults(), state, rows, next.offset, "", leases.new())
+                test.eq(back.offset, 0)
+            end
+        end)
         test.it("offers only capped windows and one-key re-allow choices on a short prompt", function()
             local state = model.new({"ws-1"})
             local item = request("window", "pending", "Write exactly one file")
@@ -267,7 +339,11 @@ local function define_tests()
             test.is_nil((text:find("Migration:", 1, true)))
             test.is_nil((text:find("bee.application:", 1, true)))
             local first = text:find("Use an isolated application database named tasks", 1, true)
-            test.is_nil((text:find("Use an isolated application database named tasks", (first or 0) + 1, true)))
+            local second = text:find("Use an isolated application database named tasks", (first or 0) + 1, true)
+            test.not_nil(second)
+            test.is_nil((text:find("Use an isolated application database named tasks", (second or 0) + 1, true)))
+            local summary_row = view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows[4]
+            test.contains(tty.text.plain(summary_row), "Use an isolated application database named tasks")
             model.toggle_technical(state)
             test.is_true(drawn_text():find("bee.application:01a06e56ba587c5aa2ab9b0b63c0f001:inbox-instance", 1, true) ~= nil)
         end)
@@ -300,7 +376,9 @@ local function define_tests()
             model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {
                 changes = {{seq = 1, approval_id = "driver-1", revision = 1, request = item}}, next_seq = 1, more = false}, replayed = false}))
             local listed = table.concat(view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n")
-            test.is_true(listed:find("◷ pending", 1, true) ~= nil)
+            local listed_rows = view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows
+            test.contains(tty.text.plain(listed_rows[3]), "◷")
+            test.contains(tty.text.plain(listed_rows[5]), "pending")
             test.is_true(listed:find("Install driver Stub 1.0.0", 1, true) ~= nil)
             test.is_nil((listed:find("Applies to this exact version", 1, true)))
             model.select(state, "driver-1")
@@ -370,7 +448,7 @@ local function define_tests()
             for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
             test.is_true(rows[1]:find("2 pending · 2 shown", 1, true) ~= nil)
             test.eq(rows[3]:sub(1, 1), " ")
-            test.eq(rows[4]:sub(1, #"›"), "›")
+            test.eq(rows[7]:sub(1, #"›"), "›")
             model.apply_read(state, "r2", reply({ok = true, error = nil, value = request("r2", "pending", "y"), replayed = false}))
             model.toggle_technical(state)
             local detailed = table.concat(view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n")

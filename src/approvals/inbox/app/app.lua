@@ -85,6 +85,7 @@ local function main(value: unknown)
     local rows: {model.Row} = {}
     local workspace_names: {[string]: model.Workspace} = {}
     local offset = 0
+    local capacity = 0
     local hits: {frame.Hit} = {}
     local status = ""
     local announced = false
@@ -347,6 +348,7 @@ local function main(value: unknown)
                 frame.render(drawn, menu, preferences)
                 hits = drawn.hits
                 offset = drawn.offset
+                capacity = drawn.capacity
                 assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             end
             if not announced then client.ready(launch); announced = true end
@@ -469,8 +471,8 @@ local function main(value: unknown)
                         dirty = true
                     elseif key == "up" or text == "k" then model.move(state, -1); dirty = true
                     elseif key == "down" or text == "j" then model.move(state, 1); dirty = true
-                    elseif key == "pgup" then model.move(state, -8); dirty = true
-                    elseif key == "pgdown" then model.move(state, 8); dirty = true
+                    elseif key == "pgup" then model.move(state, -math.floor(math.max(1, capacity))); dirty = true
+                    elseif key == "pgdown" then model.move(state, math.floor(math.max(1, capacity))); dirty = true
                     elseif text == "m" then
                         local selected = model.selected_row(state)
                         local refused = selected and leases.toggle_mark(slice, state.rows, selected.approval_id) or "Select a request first"

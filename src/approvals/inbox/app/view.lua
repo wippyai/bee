@@ -8,6 +8,7 @@ local model = require("model")
 local leases = require("leases")
 local names = require("names")
 local tty = require("tty")
+local glyphs = require("glyphs")
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local windows = require("windows")
 local M = {}
@@ -245,7 +246,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if selected then
         for index, row in ipairs(rows) do if row.approval_id == selected.approval_id then selected_index = index end end
     end
-    local window = frame.window(#rows, list_last - list_first + 1, selected_index, offset)
+    local card_height = width < 60 and 2 or 3
+    local list_height = math.floor(math.max(0, list_last - list_first + 1))
+    local capacity = math.floor((list_height + 1) / (card_height + 1))
+    local window = frame.window(#rows, capacity, selected_index, offset)
     if #rows == 0 and list_last >= list_first then
         frame.empty(painter, list_first, "No decisions needed", list_last > list_first and "Requests that need your decision appear here · R refresh" or nil)
     end
@@ -253,13 +257,34 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local row = rows[window.offset + slot]
         if not row then break end
         local card = model.card(row.view)
-        local asked = card and (card.title .. (card.maker and (" · " .. card.maker) or "")) or (row.effect .. " " .. model.text(row.prompt, 256))
-        local label = string.format("%s%s %-9s %s", slice.marked[row.approval_id] and "[x] " or "", model.state_mark(row.state == "decided" and (row.decision or "decided") or row.state), state_label(row), asked)
-        if width >= 60 then
-            local workspace = locations[row.workspace_id]
-            label = label .. " · " .. (workspace and (workspace.label .. " / " .. workspace.folder) or "Workspace unavailable")
+        local capabilities, request = row.prompt:match("^Let this agent session use (.-)%? It asks: (.+)$")
+        local title = card and card.title or request or row.prompt
+        local facts = model.permission_lines(row.view)
+        if card then
+            facts = {}
+            for _, section in ipairs(card.sections) do
+                for _, line in ipairs(section.lines) do facts[#facts + 1] = line end
+            end
         end
-        frame.row(painter, list_first + slot - 1, label, window.offset + slot == selected_index, "row", window.offset + slot, row.approval_id)
+        local summary = #facts > 0 and table.concat(facts, " · ") or (glyphs.capability .. " Can use " .. row.effect)
+        if capabilities then summary = glyphs.capability .. " Can use " .. capabilities end
+        local workspace = locations[row.workspace_id]
+        if workspace then summary = summary .. " · " .. workspace.label .. " / " .. workspace.folder end
+        local one_time = row.view.proposal.ref == leases.ACTIVATION
+        local scope = not one_time and (row.view.window_max_ttl_ms or 0) >= 1800000 and "once/30 min" or "once"
+        if row.view.window_grant then
+            local grant = row.view.window_grant
+            scope = windows.duration(grant.until_ms - grant.granted_ms) .. " until " .. grant.until_at
+        end
+        local expiry = width < 60 and row.expires_at:sub(6, 10) or ("expires " .. row.expires_at:sub(1, 16))
+        local separator = width < 60 and " " or " · "
+        local meta = state_label(row) .. separator .. scope .. separator .. expiry
+        if card and width >= 100 then meta = meta .. " · " .. card.scope end
+        frame.list_card(painter, list_first + (slot - 1) * (card_height + 1), card_height,
+            {glyph = model.state_mark(row.state == "decided" and (row.decision or "decided") or row.state),
+                title = (slice.marked[row.approval_id] and "[x] " or "") .. title,
+                requester = row.requester_id, summary = summary, meta = meta},
+            window.offset + slot == selected_index, "row", window.offset + slot, row.approval_id)
     end
     if detail and selected and detail_rows > 0 then
         local y = list_last + 1

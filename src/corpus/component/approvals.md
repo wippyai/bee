@@ -129,3 +129,12 @@ admitted application definition.
 
 Expired windows are pruned after the owner's retention horizon once no retained
 settlement references them; an active window keeps its source request retained.
+
+`decide` also accepts `window_permanent = true` for a permission without a
+response, mutually exclusive with `window_ttl_ms`. The host approver policy
+must explicitly set `allow_permanent: true`; omission denies it. This uses the
+existing central window store and `grant_window` list/revoke API, with a
+non-expiring horizon (`windows.PERMANENT_UNTIL_MS`, 9999-12-31T23:59:59Z).
+Sessions uses these central windows for exact peer/workspace/scope consent.
+Its protected consent adapter records the person's approval evidence; the
+receiving Hive dispatcher reads central active windows for every dispatch.

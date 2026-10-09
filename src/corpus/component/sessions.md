@@ -65,3 +65,57 @@ local c = sessions.call{definition = "research:quick", input = "Summarize the re
 Requests are validated before dispatch (`INVALID`): bounded text and refs, JSON inputs of at most 64 KiB and depth 16.
 
 The catalog marks each definition or profile `ready`, `missing`, `unconfigured`, `incompatible` or `unknown` by measuring its route through the host-selected driver locator; provider login checks observe file existence, and the provider owns authentication. Person-facing catalogs filter the `presentation:start_menu` feature; programmatic routes stay addressable.
+
+## Agents across bees
+
+Every contract operation and catalog `list` accepts optional `node`. Omission
+keeps local behavior. The Lua client binds a peer with
+`sessions.client{node = "bee-peer"}`; per-call `node` is also available on
+options. Returned Session, Work and Operation handles keep their selected bee.
+The ten existing MCP `session_*` tools accept the same optional field.
+
+The receiving bee requires the person's allowance for the authenticated Hive
+peer in its receiving workspace. Sessions → Allowances grants list only,
+message and await, or open new sessions, for a chosen duration or permanently.
+Revocation takes effect at receiver authorization. A first refused operation
+creates one Needs you question there; background discovery creates no question.
+Approvals owns these permissions as central windows, including permanent
+consent, expiry and revocation. Sessions keeps no independent grant store.
+An agent cannot manage these allowances. Hive membership alone grants no access.
+
+| Scope | Allowed operations |
+|---|---|
+| List only | `list`, `get`, `history`, catalog `list` |
+| Message and await | List operations plus `send`, `await`, `join` |
+| Open new sessions | Message operations plus `open`, `run`, `cancel`, `close` |
+
+Sessions groups allowed peers by bee. Opening a peer's agent shows its history
+and state. The composer stays read-only under list-only consent. The receiving
+workspace's session permissions, current allowance and operation exposure are
+checked again when a queued Hive call dispatches.
+
+```lua
+local peer = sessions.client{node = "bee-peer"}
+local page, fault = peer:list()
+if not page then error(tostring(fault)) end
+local agent = assert(peer:get(page.items[1].session))
+local work = assert(agent:send{input = "Check the baseline", operation_key = "review/123"})
+local observation = assert(work:await{timeout_ms = 10000})
+```
+
+Use a distinct, persistent operation key for each mutation. A peer agent's
+source session is supplied by the host and remains bound to the authenticated
+sending bee; request payloads cannot choose another bee. The receiving Threads
+transaction commits work together with a canonical inbox request, retaining
+source node, source thread and source action. Settlement commits a reply whose
+`in_reply_to` names that request record. Await uses the stored node-qualified
+WorkRef and can be resumed by a new process. The existing pump's outcome
+classification preserves uncertain transport outcomes. A lost mutation reply
+is `UNKNOWN_OUTCOME` with `retry = same_key`; resend identical input and key.
+`pending` is an observation timeout. Transport deadlines end waiting while the
+receiving bee may still commit the mutation. Hive bounds a remote dispatch to
+30 seconds; a longer requested observation can therefore have a transport
+failure and be observed again on the same bee.
+
+Read `docs/hive_sessions` and the overlay guide section `hive_sessions` for the
+application facade, MCP examples and the two-node proof.

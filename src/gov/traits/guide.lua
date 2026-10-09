@@ -580,6 +580,20 @@ function M.hive_sdk(): string
         .. assert(json.encode(M.hive_sdk_example("runner-node", "destination-workspace", "author-node")))
 end
 
+function M.hive_sessions(): string
+    return "The person allows cross-bee agents at the receiving bee in Sessions (A: Allowances), or answers the first"
+        .. " Needs you request there. Scopes are list only; message and await; or open new sessions. Consent has a"
+        .. " duration or is permanent, is workspace-bound and is revocable. Hive membership grants no agent access."
+        .. " Every Sessions contract operation and catalog list accepts optional node; omission keeps local behavior."
+        .. " Import bee.threads.sessions.client:sessions and bind sessions.client{node = \"bee-peer\"}; returned handles"
+        .. " keep that bee. The existing ten MCP session_* tools accept node too. Apps use bee.hive:hive through"
+        .. " their session grants. Sessions operations have registry-declared policy exposure and receiver-owned"
+        .. " peer mapping. Mutations keep an explicit operation_key; hive.call idempotency_key equals that key."
+        .. " Threads commits peer work with inbox request/reply records and in_reply_to correlation. Await reads"
+        .. " its durable node-qualified WorkRef. Transport timeout means UNKNOWN_OUTCOME and identical-key recovery;"
+        .. " an observation's pending timeout does not stop work. See corpus docs/hive_sessions for the complete workflow."
+end
+
 local SECTIONS: {Section} = {
     {id = "pack", title = "Component pack shape", body = function(): string return M.pack_shape() end},
     {id = "contents", title = "Pack contents and authority", body = function(): string return M.pack_contents() end},
@@ -593,6 +607,7 @@ local SECTIONS: {Section} = {
     {id = "tests", title = "Testing your application", body = function(): string return M.tests() end},
     {id = "database", title = "Your application's database", body = function(): string return M.database() end},
     {id = "agent_tools", title = "Tools agents call", body = function(): string return M.agent_tools() end},
+    {id = "hive_sessions", title = "Agents across bees with receiving consent", body = function(): string return M.hive_sessions() end},
     {id = "hive_sdk", title = "A project test SDK across Hive nodes", body = function(): string return M.hive_sdk() end},
     {id = "workspace", title = "Delivering to your own workspace", body = function(): string return M.workspace_delivery() end},
     {id = "drivers", title = "Custom CLI drivers and source inspection", body = function(): string return M.driver_delivery() end},

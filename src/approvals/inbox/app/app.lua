@@ -25,6 +25,7 @@ local inbox = require("inbox")
 local feeds = require("feeds")
 local leases = require("leases")
 local lease_form = require("lease_form")
+local question_form = require("question_form")
 local allowance_form = require("allowance_form")
 local source_config = require("source_config")
 local protocol = require("protocol")
@@ -82,6 +83,7 @@ local function main(value: unknown)
     local owner = routed
     local state: model.State = model.new(configured.workspaces)
     local slice: leases.Slice = leases.new()
+    local answer_form: question_form.State? = nil
     local request_form: lease_form.State? = nil
     local allowance_request: allowance_form.State? = nil
     local form_frame: {rows: {string}, hits: {frame.Hit}} = {rows = {}, hits = {}}
@@ -132,6 +134,13 @@ local function main(value: unknown)
             end
         end
         rows = model.rows(state)
+        if answer_form then
+            local current = state.rows[answer_form.view.approval_id]
+            if not current or current.state ~= "pending" then
+                status = "Question " .. (current and current.state or "closed")
+                answer_form = nil
+            end
+        end
         if state.grants_view then
             local collected: {grants.Grant} = {}
             do
@@ -319,6 +328,11 @@ local function main(value: unknown)
         if kind == "approve" and leases.is_review(state.detail) and not slice.review_complete then
             status = "Scroll to the end of the lease terms before approving"; dirty = true; return
         end
+        if kind == "approve" and state.detail and state.detail.request_kind == "question" then
+            answer_form = question_form.new(state.detail)
+            dirty = true
+            return
+        end
         if kind == "approve" and state.detail and state.detail.proposal.ref == "bee.threads.sessions:allowance" then
             allowance_request = allowance_form.new(state.detail.source_workspace_id or state.detail.workspace_id, state.detail)
             dirty = true
@@ -342,7 +356,11 @@ local function main(value: unknown)
     while running do
         if dirty then
             local open_form = request_form
-            if allowance_request then
+            if answer_form then
+                form_frame = question_form.draw(width, height, preferences, answer_form)
+                frame.render(form_frame, menu, preferences)
+                assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            elseif allowance_request then
                 form_frame = allowance_form.draw(width, height, preferences, allowance_request)
                 frame.render(form_frame, menu, preferences)
                 assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -411,11 +429,36 @@ local function main(value: unknown)
                 end) end
             end
         else
-            local data, handled = frame.route(menu, event.value, request_form ~= nil)
+            local data, handled = frame.route(menu, event.value, request_form ~= nil or answer_form ~= nil)
             if handled then dirty = true end
             if data then
                 if data.type == "close" then running = false
                 elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+                elseif answer_form and (data.type == "key" or data.type == "mouse" or data.type == "paste") then
+                    local opened = answer_form
+                    local outcome = question_form.input(opened, data, form_frame)
+                    if outcome == "cancel" then answer_form = nil
+                    elseif outcome == "submit" then
+                        local response, problem = question_form.answer(opened)
+                        if problem then opened.status = problem
+                        elseif busy or state.pending then opened.status = "Sync in progress"
+                        elseif not state.detail or state.detail.approval_id ~= opened.view.approval_id or state.detail.revision ~= opened.view.revision then
+                            opened.status = "The question changed; reopen it"
+                        else
+                            local request_id = uuid.v7()
+                            local intent, refused = model.decision_intent(state, request_id, "approved", nil, response)
+                            if not intent then opened.status = refused or "Cannot answer this question"
+                            else
+                                perform(function()
+                                    model.apply_answer(state, request_id, owner:invoke(intent.target, intent.request))
+                                    if state.pending then recover() end
+                                    answer_form = nil
+                                    rows = model.rows(state)
+                                end)
+                            end
+                        end
+                    end
+                    dirty = true
                 elseif allowance_request and (data.type == "key" or data.type == "mouse") then
                     local opened_form = allowance_request
                     local outcome = allowance_form.input(opened_form, data, form_frame)

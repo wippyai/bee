@@ -105,7 +105,7 @@ type ApprovalTransition = {
     expected_revision: integer,
     state: ApprovalState,
     decider_id: string?,
-    response: Content?,
+    response: unknown,
     reason: string,
 }
 type Body = Observation | Message | Admitted | Prepared | Started | TurnRequest | TurnEnd | Receipt | DeliveryMark | Answered | ApprovalRequest | ApprovalTransition

@@ -35,6 +35,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     profile_instructions: true
     prepare_options:
       permission_mode: default
@@ -80,6 +81,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     - capabilities
     - overlay
     - docs

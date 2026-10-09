@@ -925,6 +925,46 @@ local function define_tests()
             test.eq(service.execute(db, REQUESTER, "effect", receipt, 1006, nil).replayed, true)
             db:release()
         end)
+        test.it("validates question fields and delivers every terminal answer to the requester", function()
+            local db = open_test_store()
+            for _, outcome in ipairs({"answer", "expired", "withdrawn"}) do
+                local created = executed(service.execute(db, REQUESTER, "request", request_of("question-" .. key(), {
+                    request_kind = "question", ttl_ms = 10, response_schema = {type = "object", required = {"count", "mode", "enabled"},
+                        properties = {count = {type = "integer"}, mode = {enum = {"one", "two"}}, enabled = {type = "boolean"}}}}), 1000, nil))
+                local decision: {[string]: unknown} = {approval_id = created.approval_id, expected_revision = 1,
+                    proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "answer"}
+                if outcome == "answer" then
+                    for _, invalid in ipairs({{count = "2", mode = "one", enabled = false}, {count = 2, mode = "other", enabled = false}, {count = 2, mode = "one"}}) do
+                        decision.response = invalid
+                        test.eq(service.execute(db, ALICE, "decide", decision, 1001, nil).ok, false)
+                    end
+                    decision.response = {count = 2, mode = "two", enabled = false}
+                    executed(service.execute(db, ALICE, "decide", decision, 1002, nil))
+                    local read = executed(service.execute(db, REQUESTER, "read", {approval_id = created.approval_id}, 1003, nil))
+                    test.eq(assert(bounds.object(read.response)).enabled, false)
+                elseif outcome == "withdrawn" then
+                    decision.decision = nil
+                    executed(service.execute(db, REQUESTER, "withdraw", decision, 1002, nil))
+                end
+                local read = executed(service.execute(db, REQUESTER, "read", {approval_id = created.approval_id}, 1011, nil))
+                test.eq(read.state, outcome == "answer" and "decided" or outcome)
+                test.eq(assert(bounds.object(read.effect)).state, outcome == "answer" and "authorized" or "canceled")
+                local events = assert(db:query("SELECT kind, body_json FROM bee_approval_events WHERE approval_id = ?", {created.approval_id}))
+                test.ok(#events >= 2)
+                if outcome == "answer" then
+                    local delivered = false
+                    for _, event in ipairs(events) do
+                        local body = assert(bounds.object(json.decode(event.body_json)))
+                        if body.state == "decided" then
+                            test.eq(assert(bounds.object(body.response)).enabled, false)
+                            delivered = true
+                        end
+                    end
+                    test.is_true(delivered)
+                end
+            end
+            db:release()
+        end)
         test.it("keeps the answer on its separate decision record", function()
             local db = open_test_store()
             local created = executed(service.execute(db, REQUESTER, "request", request_of("ws-answer-" .. key(),

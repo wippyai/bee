@@ -219,3 +219,11 @@ entries:
     resources:
     - '*'
     effect: allow
+
+- name: gateway_tool_question_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.call, bee.approvals.request]
+    resources: ['*']
+    expression: (action == "bee.approvals.request" && resource != "") || (action == "funcs.call" && resource in ["bee.approvals.binding:request", "bee.approvals.binding:read", "bee.approvals.binding:withdraw", "bee.threads.binding:get", "bee.threads.binding:read_after"])
+    effect: allow

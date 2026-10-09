@@ -131,6 +131,21 @@ local function define_tests()
             local noted = rpc(endpoint, action, token, "tools/call", {name = "thread_message", arguments = {
                 idempotency_key = id .. ".note", message_id = id .. ".note", message_kind = "progress", content = {text = "External progress note"}}})
             test.is_false(assert(bounds.object(noted.result)).isError == true)
+            test.is_true(names((rpc(endpoint, action, token, "tools/list", {}))).question == true)
+            local asked = rpc(endpoint, action, token, "tools/call", {name = "question", arguments = {
+                operation = "ask", idempotency_key = "typed-question", prompt = "How many?", response_schema = {
+                    type = "object", required = {"count"}, properties = {count = {type = "integer"}}}}})
+            local question = value(assert(bounds.object(asked.result)).structuredContent)
+            test.eq(question.contract_version, 2)
+            local person = funcs.new():with_actor(security.new_actor("bee.application:" .. WORKSPACE .. ":needs-you",
+                {workspace_id = WORKSPACE, definition_id = "bee.approvals.inbox.app:app"}))
+            value(person:call("bee.approvals.binding:decide", {approval_id = question.approval_id, decision = "answer",
+                expected_revision = question.revision, proposal_digest = question.proposal_digest, reviewed_digest = question.reviewed_digest,
+                response = {count = 3}}))
+            local answered = rpc(endpoint, action, token, "tools/call", {name = "question", arguments = {operation = "read", approval_id = question.approval_id}})
+            local answer = value(assert(bounds.object(answered.result)).structuredContent)
+            test.eq(answer.state, "decided")
+            test.eq(assert(bounds.object(answer.response)).count, 3)
             local transcript = assert(json.encode(value(external.records(id, WORKSPACE))))
             test.is_true(transcript:find("External progress note", 1, true) ~= nil)
             test.is_nil((transcript:find(token, 1, true)))

@@ -39,8 +39,9 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {session: string, read: string, message: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, tests: string, app_tools: string, capabilities: string, capability: string, install: string, hub_publish: string}
+type ToolPolicyRefs = {question: string, session: string, read: string, message: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, tests: string, app_tools: string, capabilities: string, capability: string, install: string, hub_publish: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
+    question = "bee.gateway.env:tool_question_policy_ref",
     session = "bee.gateway.env:tool_session_policy_ref",
     read = "bee.gateway.env:tool_read_policy_ref",
     message = "bee.gateway.env:tool_message_policy_ref",
@@ -62,6 +63,12 @@ for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = 
 M.TOOL_POLICY_REFS = TOOL_POLICY_REFS
 function M.is_tool_policy_reference(value: string): boolean return BUILTIN_POLICY_REFS[value] == true end
 local TOOLS: {Tool} = {
+    {name = "question", description = "Ask the person a typed question in Needs you. Ask with an idempotency_key, prompt and response_schema (JSON Schema). Read the approval_id until terminal: decided responses contain the validated answer; expired, withdrawn or denied finishes without an answer. Withdraw an abandoned question with its observed revision and digests.", operation = "bee.approvals.binding:request",
+        policies = {TOOL_POLICY_REFS.question}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
+            operation = {type = "string", enum = {"ask", "read", "withdraw"}}, idempotency_key = {type = "string", minLength = 1, maxLength = 160},
+            prompt = {type = "string", minLength = 1, maxLength = 4096}, response_schema = {type = "object"}, ttl_ms = {type = "integer", minimum = 1, maximum = 600000},
+            approval_id = {type = "string"}, expected_revision = {type = "integer", minimum = 1}, proposal_digest = {type = "string"}, reviewed_digest = {type = "string"}}}},
     {name = "thread_read", description = "Read committed records of the bound thread after a cursor, or of a member_thread the caller belongs to, such as the thread of a session it opened. A member_thread is refused unless the caller is an active member; the thread owner checks it again.", operation = "bee.threads.binding:read_after",
         policies = {TOOL_POLICY_REFS.read},
         schema = {type = "object", additionalProperties = false, properties = {cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64},
@@ -283,6 +290,7 @@ local DELIVERY_DIAGNOSTIC_SCHEMA: Object = {type = "object", additionalPropertie
 local OUTPUT_SCHEMAS: {[string]: Object} = {
     session = output_schema({type = "object"}),
     call_tool = output_schema(JSON_VALUE_SCHEMA),
+    question = output_schema({type = "object"}),
     thread_read = output_schema({type = "object"}),
     thread_message = output_schema({type = "object"}),
     capabilities = output_schema({type = "object", additionalProperties = false,

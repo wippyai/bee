@@ -171,7 +171,7 @@ local function encode_approval_transition(body: types.ApprovalTransition): strin
     field(fields, "expected_revision", string.format("%d", body.expected_revision))
     field(fields, "state", encode_string(body.state))
     if body.decider_id then field(fields, "decider_id", encode_string(body.decider_id)) end
-    if body.response then field(fields, "response", encode_content(body.response)) end
+    if body.response ~= nil then field(fields, "response", assert(canonical.encode(body.response, 8192))) end
     field(fields, "reason", encode_string(body.reason))
     return encode_object(fields)
 end

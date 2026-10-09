@@ -35,6 +35,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     gateway_hooks:
     - PermissionRequest
     hook_command_ref: bee.gateway.env:hook_executable
@@ -80,6 +81,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     - capabilities
     - overlay
     - docs

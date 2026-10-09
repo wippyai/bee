@@ -7,6 +7,7 @@ local tty = require("tty")
 local model = require("model")
 local leases = require("leases")
 local view = require("view")
+local question_form = require("question_form")
 local frames = require("frames")
 local appearance = require("appearance")
 type Object = {[string]: unknown}
@@ -23,6 +24,27 @@ local function request(id: string, state: string, prompt: string): Object
 end
 local function define_tests()
     test.describe("Inbox frame", function()
+        test.it("renders a typed question form with answer controls at narrow and wide sizes", function()
+            local item = request("question-form", "pending", "Choose a count and mode")
+            item.request_kind = "question"
+            item.response_schema = {type = "object", required = {"count", "mode"}, properties = {
+                count = {type = "integer"}, mode = {type = "string", enum = {"one", "two"}}}}
+            local state = model.new({"ws-1"})
+            model.select(state, "question-form")
+            model.apply_read(state, "question-form", reply({ok = true, value = item}))
+            local opened = question_form.new(assert(state.detail))
+            question_form.input(opened, {type = "paste", text = "3"}, {rows = {}, hits = {}})
+            test.eq(assert(opened.form.fields[1].text).value, "3")
+            for _, width in ipairs({32, 80, 160}) do
+                local drawn = question_form.draw(width, 24, appearance.defaults(), opened)
+                test.contains(tty.text.plain(table.concat(drawn.rows, "\n")), "count *")
+                test.contains(tty.text.plain(table.concat(drawn.rows, "\n")), "mode *")
+                local submit = false
+                for _, hit in ipairs(drawn.hits) do if hit.kind == "submit" then submit = true end end
+                test.is_true(submit)
+                for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), width) end
+            end
+        end)
         test.it("leads MCP pairing cards with the client name and the requested trait summary", function()
             local state = model.new({"ws-1"})
             local item = request("mcp-card", "pending", "Let this agent session use Read Bee documentation and this client's thread? It asks: Pair external MCP client Terminal Claude. Bee shows its configuration once in the requesting terminal.")

@@ -143,7 +143,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
             for _, line in ipairs(card_lines(card)) do lines[#lines + 1] = line end
         else
             for _, line in ipairs(prompt_lines(summary.prompt, width)) do lines[#lines + 1] = line end
-            if not one_time then lines[#lines + 1] = "Capability: " .. summary.effect end
+            if not one_time and item.request_kind ~= "question" then lines[#lines + 1] = "Capability: " .. summary.effect end
             for _, line in ipairs(model.permission_lines(item)) do lines[#lines + 1] = line end
         end
         if not card and not item.proposal.payload.adapter_ref and not one_time then
@@ -165,7 +165,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
         end
     end
     local idle = state.pending == nil
-    local buttons: {frame.Button} = {{kind = "approve", key = "A", label = one_time and "Approve" or "Allow once", enabled = idle, primary = true}}
+    local buttons: {frame.Button} = {{kind = "approve", key = "A", label = detail.request_kind == "question" and "Answer" or (one_time and "Approve" or "Allow once"), enabled = idle, primary = true}}
     if cap >= 1800000 then buttons[#buttons + 1] = {kind = "allow_30", key = "F", label = prefix .. " 30 min", enabled = idle} end
     if cap > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = prefix .. " longer", enabled = idle} end
     buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
@@ -185,7 +185,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if open and chosen and open.approval_id == chosen.approval_id and leases.is_review(open) and not (state.longer and slice.review_complete) then
         return draw_review(width, height, preferences, state, open, slice, status)
     end
-    if open and chosen and open.approval_id == chosen.approval_id and open.state == "pending" and open.request_kind == "permission" and not state.technical then
+    if open and chosen and open.approval_id == chosen.approval_id and open.state == "pending" and not state.technical then
         return draw_prompt(width, height, preferences, state, open, status)
     end
     local painter = frame.new(width, height, preferences)

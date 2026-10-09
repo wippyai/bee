@@ -30,6 +30,7 @@ entries:
     feeds: bee.approvals.inbox.app:feeds
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form
+    question_form: bee.approvals.inbox.app:question_form
     source_config: bee.approvals.inbox.app:source_config
     protocol: bee.hive:protocol
     allowance_form: bee.threads.sessions.app:allowance_form
@@ -72,6 +73,7 @@ entries:
     glyphs: bee.ui:glyphs
     bounds: bee.values:bounds
     caller: bee.app:caller
+    typed_form: bee.apps.library:form
 - name: leases
   kind: library.lua
   source: file://leases.lua
@@ -141,3 +143,15 @@ entries:
     comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still decides eligibility per request
   data:
     workspaces: []
+
+- name: question_form
+  kind: library.lua
+  source: file://question_form.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    forms: bee.ui.forms:forms
+    typed_form: bee.apps.library:form
+    model: bee.approvals.inbox.app:model
+    lease_form: bee.approvals.inbox.app:lease_form

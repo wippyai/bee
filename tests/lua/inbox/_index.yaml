@@ -27,6 +27,7 @@ entries:
     model: bee.approvals.inbox.app:model
     caller: bee.app:caller
     inbox: bee.approvals.inbox.app:client
+    question_form: bee.approvals.inbox.app:question_form
 - name: feeds_test
   kind: function.lua
   source: file://feeds_test.lua
@@ -46,6 +47,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [tty]
   imports:
+    question_form: bee.approvals.inbox.app:question_form
     bounds: bee.values:bounds
     frames: bee.ui:frame
     test: wippy.test:test

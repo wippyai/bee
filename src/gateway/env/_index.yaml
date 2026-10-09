@@ -166,3 +166,8 @@ entries:
     comment: Host-selected approval policy for agent Hub publication requests; a request files one approval and only an approved one uploads
   data:
     approval_policy: module-publication
+
+- name: tool_question_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref}
+  resource_ref: bee.security.gateway:gateway_tool_question_policy

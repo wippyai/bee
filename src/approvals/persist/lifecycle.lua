@@ -118,7 +118,7 @@ function M.read(tx: sql.Transaction, approval_id: string): (Object?, string?)
         revision = row.revision, consumer_id = row.consumer_id, owner_incarnation = row.owner_incarnation,
         receipt = receipt, updated_at = row.updated_at}, nil
 end
-function M.change(tx: sql.Transaction, row: Object, revision: integer, state: string, decision: string?, actor: string, reason: string, at: string): string?
+function M.change(tx: sql.Transaction, row: Object, revision: integer, state: string, decision: string?, actor: string, reason: string, at: string, response: unknown?): string?
     local approval_id = bounds.id(row.approval_id)
     local contract = bounds.object(row.contract)
     if not approval_id or not contract then return "approval contract is missing" end
@@ -128,7 +128,7 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
     local event: Object = {contract_version = row.contract_version, approval_id = approval_id, owner_node = row.owner_node,
         workspace_id = row.workspace_id, revision = revision, state = state, decision = decision,
         reviewed_digest = row.reviewed_digest, effect_id = effect.effect_id, destination = effect.destination,
-        requester = contract.requester, subject = contract.subject, presentation = contract.presentation}
+        requester = contract.requester, subject = contract.subject, presentation = contract.presentation, response = response}
     local body, body_error = canonical.encode(event, 16384)
     if not body then return body_error end
     local destinations: {string} = {"requester:" .. tostring(row.requester_id)}

@@ -37,6 +37,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -99,6 +100,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -162,6 +164,7 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - question
     - capabilities
     - overlay
     - docs

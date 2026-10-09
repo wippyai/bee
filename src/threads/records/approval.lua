@@ -48,11 +48,11 @@ function M.transition(value: unknown): (types.ApprovalTransition?, string?)
     if state ~= "approved" and state ~= "denied" and state ~= "expired" and state ~= "cancelled" then return nil, "state must be approved, denied, expired or cancelled" end
     local decider_id, valid = bounds.optional_id(object, "decider_id")
     if not valid then return nil, "decider_id is not an identifier" end
-    local response: types.Content? = nil
+    local response: unknown = nil
     if object.response ~= nil then
-        local decoded, response_error = values.content(object.response)
-        if not decoded then return nil, "response: " .. tostring(response_error) end
-        response = decoded
+        local encoded, response_error = canonical.encode(object.response, 8192)
+        if not encoded then return nil, "response: " .. tostring(response_error) end
+        response = object.response
     end
     local reason = bounds.text(object.reason, M.MAX_REASON_BYTES)
     if not reason then return nil, "reason must be bounded text" end

@@ -968,7 +968,7 @@ local function define_tests()
                 local retained_tools = {
                     session_catalog = true, session_open = true, session_run = true, session_send = true,
                     session_await = true, session_join = true, session_get = true, session_list = true,
-                    session_cancel = true, session_close = true, thread_read = true, thread_message = true,
+                    session_cancel = true, session_close = true, thread_read = true, thread_message = true, question = true,
                 }
                 local seen_tools: {[string]: boolean} = {}
                 for _, tool in ipairs(policy.gateway_tools) do
@@ -976,7 +976,7 @@ local function define_tests()
                     test.is_false(seen_tools[tool] == true, selected.policy .. " repeats tool " .. tool)
                     seen_tools[tool] = true
                 end
-                test.eq(#policy.gateway_tools, 12)
+                test.eq(#policy.gateway_tools, 13)
                 for tool in pairs(retained_tools) do test.is_true(seen_tools[tool] == true, selected.policy .. " omits " .. tool) end
             end
         end)

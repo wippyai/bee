@@ -16,6 +16,20 @@ local function define_tests()
     test.describe("Thread approval ingress", function()
         local authority = harness.principal("approvals-owner", AUTHORITY)
         local member = harness.principal("member", harness.ALL)
+        test.it("delivers a typed question answer without converting false to missing content", function()
+            local thread_id = harness.thread(authority, "Typed question")
+            local asked = request_body("typed-question")
+            asked.request_kind = "question"
+            harness.value(authority:call("approval_append", {thread_id = thread_id, idempotency_key = harness.key(), owner_event_id = "typed-request",
+                kind = "approval.request", body = asked}))
+            local body = {approval_id = "typed-question", expected_revision = 1, state = "approved", decider_id = "person",
+                response = {count = 3, enabled = false, choice = "one"}, reason = "answered"}
+            local delivered = harness.value(authority:call("approval_append", {thread_id = thread_id, idempotency_key = "typed-answer", owner_event_id = "typed-answer",
+                kind = "approval.transition", body = body}))
+            local replay = harness.value(authority:call("approval_append", {thread_id = thread_id, idempotency_key = "typed-answer", owner_event_id = "typed-answer",
+                kind = "approval.transition", body = body}))
+            test.eq(delivered.record_id, replay.record_id)
+        end)
         test.it("appends typed approval projections under the owner's event id and replays them", function()
             local thread_id = harness.thread(authority, "Approvals")
             harness.value(authority:call("join", {thread_id = thread_id, idempotency_key = harness.key(), member_id = "member", role = "participant", expected_revision = 1}))

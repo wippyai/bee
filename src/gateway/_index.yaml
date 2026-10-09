@@ -17,6 +17,7 @@ entries:
     - docs
     - capabilities
     - thread_message
+    - question
     - app_tools
     - publish
     - application_open
@@ -60,6 +61,7 @@ entries:
         prompt: Record notes on this client's thread
         tools:
         - thread_message
+        - question
       - id: bee.mcp:sessions
         title: Manage agent sessions
         prompt: Open agents, send work, read results and close sessions

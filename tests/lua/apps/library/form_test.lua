@@ -3,6 +3,14 @@ local test = require("test")
 local form = require("form")
 local function define_tests()
     test.describe("Library Configure", function()
+        test.it("parses composite lists through the shared schema validator", function()
+            local fields = form.fields({{id = "items", has_default = false, schema = {type = "array", items = {
+                type = "object", required = {"count"}, properties = {count = {type = "integer"}}}}}}, {})
+            local value, problem = form.parse(fields[1], '[{"count":2}]')
+            test.is_nil(problem)
+            test.not_nil(value)
+            test.not_nil(select(2, form.parse(fields[1], '[{"count":"two"}]')))
+        end)
         test.it("shows declared fields, resolved defaults, required names and descriptions", function()
             local fields = form.fields({{id = "app:options", has_default = true, default = {count = 3},
                 schema = {type = "object", required = {"name"}, properties = {

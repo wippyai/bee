@@ -122,6 +122,7 @@ entries:
     - bee.security.gateway:gateway_tool_app_tools_policy
     - bee.security.gateway:gateway_tool_install_policy
     - bee.security.gateway:gateway_tool_session_policy
+    - bee.security.gateway:gateway_tool_question_policy
     - bee.security.gateway:gateway_tool_hub_publish_policy
     effect: allow
 - name: tool_policy_reference_policy
@@ -135,6 +136,7 @@ entries:
     resources:
     - bee.gateway.env:tool_read_policy_ref
     - bee.gateway.env:tool_message_policy_ref
+    - bee.gateway.env:tool_question_policy_ref
     - bee.gateway.env:tool_overlay_policy_ref
     - bee.gateway.env:tool_docs_policy_ref
     - bee.gateway.env:tool_components_policy_ref

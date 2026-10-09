@@ -192,7 +192,7 @@ function M.reply(result: Result): Reply
 end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
-local mutating: {[string]: boolean} = {request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
+local mutating: {[string]: boolean} = {read = true, request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
     grant_window = true, runtime_lease = true, reconcile = true, effect = true, events = true, end_request = true, grant = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
@@ -364,7 +364,7 @@ local function record_change(tx: sql.Transaction, row: Row, revision: integer, s
     if history_error then return "record approval history" end
     local inbox_error = store.insert_inbox(tx, workspace_id, approval_id, revision, at)
     if inbox_error then return "record inbox change" end
-    local lifecycle_error = lifecycle.change(tx, M.view(row), revision, state, decision, actor, reason, at)
+    local lifecycle_error = lifecycle.change(tx, M.view(row), revision, state, decision, actor, reason, at, body and body.response)
     if lifecycle_error then return lifecycle_error end
     local thread_id = text(row.thread_id)
     if thread_id and body then
@@ -848,9 +848,9 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     if not proposal_digest then return failure("INVALID_ARGUMENT", "proposal_digest is required") end
     local response: unknown = nil
     if object.response ~= nil then
-        local content, content_error = values.content(object.response)
-        if not content then return failure("INVALID_ARGUMENT", "response: " .. tostring(content_error)) end
-        response = content
+        local encoded, content_error = canonical.encode(object.response, 8192)
+        if not encoded then return failure("INVALID_ARGUMENT", "response: " .. tostring(content_error)) end
+        response = object.response
     end
     local row, load_error = load(tx, approval_id)
     if load_error then return storage(load_error) end
@@ -1423,7 +1423,9 @@ local function op_read(tx: sql.Transaction, actor: string, object: Object, now: 
     local allowed, policy_error = may_read(actor, row)
     if policy_error then return storage(policy_error) end
     if not allowed then return failure("DENIED", "caller may not read this request") end
-    return success(M.view(row), false)
+    local current, expire_error, expired_now = expire_if_due(tx, row, now)
+    if not current then return storage(expire_error or "expire approval") end
+    return success(M.view(current), not expired_now)
 end
 -- inbox: an approver's bounded catch-up over one workspace's changes; a
 -- cursor older than the retained window asks for a reset instead of

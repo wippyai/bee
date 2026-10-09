@@ -117,6 +117,8 @@ function M.buffer(field: Field): string
     local value = field.value
     if value == nil then return "" end
     if field.kind == "array" then
+        local items = bounds.object(field.schema.items)
+        if items and (kind(items, nil) == "object" or kind(items, nil) == "array") then return json.encode(value) or "" end
         local values: {string} = {}
         for _, item in ipairs(bounds.array(value, 128) or {}) do values[#values + 1] = tostring(item) end
         return table.concat(values, ", ")
@@ -145,6 +147,12 @@ function M.parse(field: Field, input: string): (unknown, string?)
     local value: unknown, problem: string?
     if field.kind == "array" then
         local items = bounds.object(field.schema.items) or {type = "string"}
+        if kind(items, nil) == "object" or kind(items, nil) == "array" then
+            local decoded, invalid = json.decode(input)
+            if invalid then return nil, field.id .. ": enter a JSON list" end
+            local problem = json_schema.validate(field.schema, decoded)
+            return decoded, problem and field.id .. ": " .. problem or nil
+        end
         local values: {unknown} = {}
         if input ~= "" then
             for token in (input .. ","):gmatch("(.-),") do

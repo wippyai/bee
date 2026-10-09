@@ -9,6 +9,7 @@ local json = require("json")
 local model = require("model")
 local inbox = require("inbox")
 local caller = require("caller")
+local question_form = require("question_form")
 type Object = {[string]: unknown}
 local function view(id: string, revision: integer, state: string, extra: Object?): Object
     local item: Object = {approval_id = id, workspace_id = "ws-1", requester_id = "bee.test.requester", request_kind = "permission", policy = "inbox-test",
@@ -28,6 +29,47 @@ local function page(changes: {Object}, next_seq: integer, more: boolean): model.
 end
 local function define_tests()
     test.describe("Inbox model", function()
+        test.it("requires a typed answer and sends it at the reviewed question revision", function()
+            local state = model.new({"ws-1"})
+            local request = view("question", 1, "pending", {request_kind = "question", response_schema = {
+                type = "object", required = {"count", "mode", "enabled"}, properties = {
+                    count = {type = "integer"}, mode = {type = "string", enum = {"one", "two"}}, enabled = {type = "boolean"}}}})
+            model.apply_inbox(state, "ws-1", page({{seq = 1, request = request}}, 1, false))
+            model.select(state, "question")
+            model.apply_read(state, "question", reply({ok = true, value = request}))
+            local form = question_form.new(assert(state.detail))
+            test.eq(#form.fields, 3)
+            test.not_nil(select(2, question_form.answer(form)))
+            assert(form.form.fields[1].text).value = "2"
+            assert(form.form.fields[2].select).selected = 3
+            assert(form.form.fields[3].select).selected = 3
+            local typed, invalid = question_form.answer(form)
+            test.is_nil(invalid)
+            test.eq(assert(bounds.object(typed)).count, 2)
+            test.eq(assert(bounds.object(typed)).enabled, false)
+            test.eq(assert(bounds.object(typed)).mode, "two")
+            test.is_nil(model.decision_intent(state, "empty", "approved"))
+            test.is_nil(model.decision_intent(state, "wrong", "approved", nil, {count = "2", mode = "one", enabled = false}))
+            test.is_nil(model.decision_intent(state, "enum", "approved", nil, {count = 2, mode = "three", enabled = false}))
+            local intent = assert(model.decision_intent(state, "answer", "approved", nil, {count = 2, mode = "two", enabled = false}))
+            test.eq(intent.request.decision, "answer")
+            test.eq(assert(bounds.object(intent.request.response)).enabled, false)
+            test.eq(intent.request.expected_revision, 1)
+        end)
+        test.it("keeps scalar false and object enum answers typed", function()
+            local boolean = question_form.new(assert(model.decode_view(view("boolean", 1, "pending", {
+                request_kind = "question", response_schema = {type = "boolean"}}))))
+            assert(boolean.form.fields[1].select).selected = 3
+            local answer, problem = question_form.answer(boolean)
+            test.is_nil(problem)
+            test.eq(answer, false)
+            local object = question_form.new(assert(model.decode_view(view("enum-object", 1, "pending", {
+                request_kind = "question", response_schema = {type = "object", enum = {{count = 1}, {count = 2}}}}))))
+            assert(object.form.fields[1].select).selected = 3
+            local selected, invalid = question_form.answer(object)
+            test.is_nil(invalid)
+            test.eq(assert(bounds.object(selected)).count, 2)
+        end)
         test.it("opens the initially highlighted request without approving an unopened request", function()
             local state = model.new({"ws-1"})
             local request = view("first", 1, "pending")

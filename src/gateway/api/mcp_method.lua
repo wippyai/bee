@@ -218,6 +218,33 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
     local executor, failure = subject_executor(binding, tool, values, runtime, grants)
     if not executor then return failure end
     if tool.name == "capabilities" then return capabilities(binding) end
+    if tool.name == "question" then
+        local operation = request.operation
+        if operation == "ask" then
+            if not bounds.text(request.prompt, 4096) or not bounds.object(request.response_schema) then return refused("INVALID_ARGUMENT", "question needs prompt and response_schema") end
+            local proposal = {kind = "operation", ref = "bee.approvals:question", revision = "1",
+                payload = {binding_id = binding.binding_id, attempt_id = binding.attempt_id}}
+            local reply, err = executor:call(tool.operation, {contract_version = 2, workspace_id = binding.workspace_id,
+                idempotency_key = request.idempotency_key, request_kind = "question", policy = "agent-access", proposal = proposal,
+                prompt = {text = request.prompt}, response_schema = request.response_schema, ttl_ms = request.ttl_ms,
+                thread_id = binding.thread_id, origin = {thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id},
+                scope = {type = "exact", parameters = proposal}, presentation = "inbox"})
+            return reply_result(reply, err)
+        end
+        local raw, err = executor:call("bee.approvals.binding:read", {approval_id = request.approval_id})
+        local decoded = bounds.object(raw)
+        local found = decoded and bounds.object(decoded.value)
+        local proposal = found and bounds.object(found.proposal)
+        local payload = proposal and bounds.object(proposal.payload)
+        if err or not decoded or decoded.ok ~= true then return reply_result(raw, err) end
+        if not found or found.request_kind ~= "question" or not payload or payload.binding_id ~= binding.binding_id then
+            return refused("DENIED", "question belongs to another binding")
+        end
+        if operation == "read" then return reply_result(raw, nil) end
+        request.operation = nil
+        local reply, failure = executor:call("bee.approvals.binding:withdraw", request)
+        return reply_result(reply, failure)
+    end
     if tool.name == "thread_read" then
         local selected, missing = member_thread(executor, request, binding.thread_id)
         if not selected then return missing end

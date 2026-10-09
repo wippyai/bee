@@ -12,6 +12,7 @@ local caller = require("caller")
 local windows = require("windows")
 local grants = require("grants")
 local glyphs = require("glyphs")
+local typed_form = require("typed_form")
 local M = {}
 M.TEXT_LIMIT = 512
 M.LINE_LIMIT = 160
@@ -568,7 +569,7 @@ end
 -- loaded and pending, at the revision and digest the viewer saw; nothing
 -- else is asked. The intent stays pending until the owner answers or a
 -- read recovers it.
-function M.decision_intent(state: State, request_id: string, decision: string, ttl_ms: integer?): (Intent?, string?)
+function M.decision_intent(state: State, request_id: string, decision: string, ttl_ms: integer?, response: unknown?): (Intent?, string?)
     if state.pending then return nil, "a request is already awaiting the owner" end
     local selected_decision = bounds.member(decision, {"approved", "denied"})
     if not selected_decision then return nil, "decision must be approved or denied" end
@@ -577,9 +578,13 @@ function M.decision_intent(state: State, request_id: string, decision: string, t
     if not detail or not selected or detail.approval_id ~= selected then return nil, "open the request before deciding" end
     if detail.state ~= "pending" then return nil, "the request is " .. M.text(detail.state, 40) end
     if ttl_ms and (ttl_ms < 1 or ttl_ms > (detail.window_max_ttl_ms or 0) or selected_decision ~= "approved" or detail.request_kind ~= "permission") then return nil, "duration exceeds this request's policy" end
+    if detail.request_kind == "question" and selected_decision == "approved" then
+        local problem = typed_form.validate({id = "answer", schema = detail.response_schema or {}, has_default = false}, response)
+        if problem then return nil, problem end
+    end
     local revision = detail.revision
     state.pending = {kind = "decide", request_id = request_id, approval_id = selected, revision = revision, decision = selected_decision}
-    return {target = "bee.approvals.binding:decide", request = {approval_id = selected, expected_revision = revision, decision = selected_decision, proposal_digest = detail.proposal_digest, reviewed_digest = detail.reviewed_digest, window_ttl_ms = ttl_ms}}, nil
+    return {target = "bee.approvals.binding:decide", request = {approval_id = selected, expected_revision = revision, decision = detail.request_kind == "question" and selected_decision == "approved" and "answer" or selected_decision, response = response, proposal_digest = detail.proposal_digest, reviewed_digest = detail.reviewed_digest, window_ttl_ms = ttl_ms}}, nil
 end
 function M.decision_group(state: State): {ApprovalView}
     local detail = state.detail

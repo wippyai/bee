@@ -58,7 +58,7 @@ type Instance = {id: string, app: string, title: string, desktop: string, worksp
     singleton: boolean, revision: string?, relaunch: boolean?}
 type SavedInstance = {id: string, app: string, title: string, desktop: string, workspace: string, handle: string, pid: string, terminal: boolean,
     execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
-    singleton: boolean}
+    singleton: boolean, revision: string?, relaunch: boolean?}
 type SavedWatcher = {pid: string, desktop: string}
 type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: integer, alerts: {client.Alert}}
 type Definition = application.Definition
@@ -425,7 +425,8 @@ local function main(saved: unknown)
                             dialog = type(dialog) == "table" and dialog :: Dialog or nil,
                             args = type(item.args) == "table" and item.args or {},
                             resume_schema = type(item.resume_schema) == "string" and item.resume_schema or "",
-                            singleton = item.singleton == true}
+                            singleton = item.singleton == true,
+                            revision = type(item.revision) == "string" and item.revision or nil, relaunch = item.relaunch == true or nil}
                         by_pid[item.pid] = item.id
                     else
                         logger:warn("App instance lost across upgrade", {id = item.id, error = tostring(err)})
@@ -1132,7 +1133,8 @@ local function main(saved: unknown)
             saved_instances[#saved_instances + 1] = {id = instance.id, app = instance.app, title = instance.title,
                 desktop = instance.desktop, workspace = instance.workspace, handle = instance.view:handle(), pid = instance.pid, terminal = instance.terminal,
                 execution_id = instance.execution_id, token = instance.token, negotiate = instance.negotiate, closing = instance.closing, dialog = instance.dialog,
-                args = instance.args, resume_schema = instance.resume_schema, singleton = instance.singleton}
+                args = instance.args, resume_schema = instance.resume_schema, singleton = instance.singleton,
+                revision = instance.revision, relaunch = instance.relaunch}
         end
         local saved_watchers: {SavedWatcher} = {}
         for pid, desktop in pairs(watchers) do saved_watchers[#saved_watchers + 1] = {pid = pid, desktop = desktop} end

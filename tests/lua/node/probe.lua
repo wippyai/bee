@@ -44,11 +44,21 @@ local function main(options: unknown)
             "context " .. tostring(ctx.get("bee.workspace_id"))})
     end
     present(appearance.chosen(options).theme.id)
+    local controller = type(options) == "table" and type(options.args) == "table" and options.args.exit_controller or nil
+    local release = type(controller) == "string" and assert(process.listen("bee.test.probe.exit", {message = true})) or nil
     while true do
         local selected = channel.select({changes:case_receive(), lifecycle:case_receive()})
         if not selected.ok then break end
         if selected.channel == lifecycle then
-            if selected.value.kind == process.event.CANCEL then break end
+            if selected.value.kind == process.event.CANCEL then
+                if release and type(controller) == "string" then
+                    assert(process.send(controller, "bee.test.probe.stopping", {}))
+                    local message = assert((release:receive()))
+                    assert(tostring(message:from()) == controller)
+                    process.unlisten(release)
+                end
+                break
+            end
         else
             present(appearance.chosen(selected.value:payload():data()).theme.id)
         end

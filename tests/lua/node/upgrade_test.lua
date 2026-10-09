@@ -8,6 +8,7 @@ local system = require("system")
 local time = require("time")
 local tty = require("tty")
 local registry = require("registry")
+local eventbus = require("events")
 local appearance = require("appearance")
 local client = require("client")
 
@@ -45,25 +46,81 @@ end
 -- edit_owner applies a change to the owner's source, which makes the running
 -- owner outdated.
 local function edit_owner()
+    local ready = assert(process.listen("bee.test.owner.upgraded", {message = true}))
     local snapshot = assert(registry.snapshot())
     local entry = assert(snapshot:get(OWNER))
     local data = entry.data :: {[string]: unknown}
     local changed: {[string]: unknown} = {}
     for key, value in pairs(data) do changed[key] = value end
-    changed.source = tostring(data.source) .. "\n-- upgraded " .. tostring(time.now():unix_nano()) .. "\n"
+    changed.source = (tostring(data.source):gsub('    logger:info%("Node ready",',
+        '    assert(process.send(' .. string.format("%q", tostring(process.pid())) ..
+        ', "bee.test.owner.upgraded", {}))\n    logger:info("Node ready",', 1))
     local changes = snapshot:changes()
     assert(changes:update({id = OWNER, kind = entry.kind, meta = entry.meta, data = changed}))
     assert(changes:apply())
+    local deadline = time.after("5s")
+    local selected = channel.select({ready:case_receive(), deadline:case_receive()})
+    process.unlisten(ready)
+    assert(selected.channel == ready, "owner did not finish its upgrade")
 end
 
 local function define_tests()
     test.describe("owner upgrade", function()
+        test.it("finishes an applied revision restart across an owner upgrade", function()
+            local events = assert(process.listen(client.EVENTS, {message = true}))
+            local stopping = assert(process.listen("bee.test.probe.stopping", {message = true}))
+            local before = assert(client.state(call("watch", {})))
+            local retained: {[string]: boolean} = {}
+            for _, instance in ipairs(before.running) do retained[instance.id] = true end
+            local opened = call("open", {app = PROBE, desktop = before.desktop,
+                args = {exit_controller = tostring(process.pid())}})
+            local id, pid = tostring(opened.id), tostring(opened.pid)
+            while next_event(events, "opened").id ~= id do end
+            local original = assert(registry.get(PROBE))
+            local owner = assert(registry.get(OWNER))
+            local changed = assert(registry.get(PROBE))
+            changed.meta.application.revision = "upgrade-restart"
+            local changes = assert(registry.snapshot()):changes()
+            assert(changes:update(changed))
+            assert(changes:apply())
+            local passed, problem = pcall(function()
+                assert(eventbus.send("bee.attention", "application.applied", before.home, {component = "bee.tests.node"}))
+                local deadline = time.after("5s")
+                local selected = channel.select({stopping:case_receive(), deadline:case_receive()})
+                assert(selected.channel == stopping, "applied revision did not stop the old app")
+                test.eq(tostring(selected.value:from()), pid)
+                edit_owner()
+                assert(process.send(pid, "bee.test.probe.exit", {}))
+                while next_event(events, "closed").id ~= id do end
+                local reopened = next_event(events, "opened")
+                test.eq(reopened.id, id)
+                test.neq(reopened.instance and reopened.instance.pid, pid)
+            end)
+            local restore = assert(registry.snapshot()):changes()
+            assert(restore:update(original))
+            assert(restore:update(owner))
+            assert(restore:apply())
+            local after = assert(client.state(call("list", {})))
+            local waiting: {[string]: boolean} = {}
+            for _, instance in ipairs(after.running) do
+                if not retained[instance.id] then
+                    waiting[instance.id] = true
+                    assert(process.terminate(instance.pid))
+                end
+            end
+            while next(waiting) do waiting[tostring(next_event(events, "closed").id)] = nil end
+            process.unlisten(stopping)
+            process.unlisten(events)
+            if not passed then error(tostring(problem)) end
+        end)
+
         test.it("keeps its process, apps, viewports and watchers across a code change", function()
             local events = assert(process.listen(client.EVENTS, {message = true}))
             local before = assert(client.state(call("watch", {})))
             local opened = call("open", {app = PROBE, desktop = before.desktop})
             local id = tostring(opened.id)
             local view = assert(tty.attach(tostring(call("attach", {id = id}).ref)))
+            local owner = assert(registry.get(OWNER))
 
             edit_owner()
 
@@ -86,6 +143,9 @@ local function define_tests()
             test.eq(next_event(events, "closed").id, id)
             view:close()
             process.unlisten(events)
+            local restore = assert(registry.snapshot()):changes()
+            assert(restore:update(owner))
+            assert(restore:apply())
         end)
     end)
 end

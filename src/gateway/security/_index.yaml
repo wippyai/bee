@@ -637,8 +637,18 @@ entries:
     - registry.get
     resources:
     - bee.gateway.service:external_service
+    - bee.gateway.service:worker
+    - bee.gateway.service:publication_worker
     - bee.gateway.service:installation_scope
     - bee.gateway.service:publication_scope
+    effect: allow
+- name: effects_call_policy
+  kind: security.policy
+  meta:
+    comment: The Gateway owner dispatches queue reads and effect tasks into their declared scopes
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:effect_queue, bee.gateway.service:worker, bee.gateway.service:publication_worker]
     effect: allow
 - name: installation_task_policy
   kind: security.policy

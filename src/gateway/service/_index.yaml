@@ -97,6 +97,7 @@ entries:
       - bee.gateway.security:access_policy_read_policy
       - bee.hive.security:messaging
       - bee.gateway.security:effects_host_policy
+      - bee.gateway.security:effects_call_policy
       - bee.gateway.security:effects_discovery_policy
       - bee.process:client_policy
       - bee.process:backlog_policy

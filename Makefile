@@ -119,7 +119,9 @@ test: binary-identity compose $(TEST_FIXTURES)/harness/bin/gateway-client
 	find tests/.wippy -mindepth 1 -maxdepth 1 ! -name vendor ! -name cache ! -name composition ! -name .artifacts.lock -exec rm -rf {} +
 	mkdir -p $(TEST_ROOT)/home/.claude $(TEST_ROOT)/tmp $(TEST_ROOT)/bin && touch $(TEST_ROOT)/home/.claude/.credentials.json
 	ln -sfn $(TEST_FIXTURES)/harness/bin/claude $(TEST_ROOT)/bin/absolute-claude
-	cd tests && $(abspath $(WIPPY)) install && env -i \
+	cd tests && $(abspath $(WIPPY)) install
+	python3 tests/boot.py $(abspath $(WIPPY))
+	cd tests && env -i \
 		HOME=$(TEST_ROOT)/home XDG_CONFIG_HOME=$(TEST_ROOT)/home/.config \
 		XDG_DATA_HOME=$(TEST_ROOT)/home/.local/share XDG_CACHE_HOME=$(TEST_ROOT)/home/.cache \
 		WIPPY_CACHE_DIR=$(abspath tests/.wippy/cache) TMPDIR=$(TEST_ROOT)/tmp LANG=C.UTF-8 NO_COLOR= \

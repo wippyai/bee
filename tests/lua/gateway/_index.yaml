@@ -1,6 +1,22 @@
 version: '1.0'
 namespace: bee.gateway
 entries:
+- name: effects_scope_probe
+  kind: function.lua
+  source: file://effects_scope_probe.lua
+  method: run
+  meta: {type: test_support}
+  imports:
+    effects: bee.gateway.service:effects
+- name: effects_scope_test
+  kind: function.lua
+  source: file://effects_scope_test.lua
+  method: run
+  modules: [registry, security, funcs]
+  meta: {type: boot_test, suite: a_idle_node}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
 - name: surface_test_db
   kind: db.sql.sqlite
   file: .wippy/surface-test.db

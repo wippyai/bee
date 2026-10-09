@@ -88,7 +88,7 @@ local function main(options: unknown)
             if closing then client.close_reply(launch, closing.request_id, {action = "accept"}); break end
         elseif event.channel == ticks then load()
         else
-            local data = event.value:payload():data()
+            local data = event.value
             if type(data) == "table" and data.type == "key" and data.action == "press" then
                 if data.key_type == "esc" or data.key_type == "escape" then
                     if confirm then confirm = false; status = "" elseif records then records = nil else break end

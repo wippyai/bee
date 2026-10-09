@@ -234,6 +234,15 @@ entries:
     test: wippy.test:test
     view: bee.gateway.app:view
     appearance: bee.ui:appearance
+- name: external_app_test
+  kind: function.lua
+  source: file://external_app_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [process, system, channel, time, tty]
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
 - name: external_hive_test
   kind: function.lua
   source: file://external_hive_test.lua

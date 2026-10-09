@@ -17,10 +17,11 @@ entries:
 - name: demand_owner
   kind: library.lua
   source: file://demand_owner.lua
-  modules: [registry, process, events, system, funcs]
+  modules: [registry, process, events, system, funcs, security]
   imports:
     demand: bee.process:demand
     state: bee.process:demand_state
+    bounds: bee.values:bounds
 - name: client_policy
   kind: security.policy
   policy:
@@ -33,3 +34,9 @@ entries:
   modules: [channel, time, logger]
   imports:
     worker: bee.process:worker
+- name: backlog_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: ["bee.node:test_backlog", "bee.gov.service:backlog", "bee.gateway.service:backlog", "bee.placement.docker.service:backlog", "bee.placement.native.service:backlog"]
+    effect: allow

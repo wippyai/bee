@@ -42,6 +42,14 @@ local function carry(items: {unknown}, kind: "approved" | "ended", outcomes: {Ou
     end
 end
 
+function M.pending(): boolean
+    local approved, problem = queue(EFFECTS, "effects")
+    if not approved then error(problem) end
+    local ended, failure = queue(CLOSURES, "closures")
+    if not ended then error(failure) end
+    return #approved > 0 or #ended > 0
+end
+
 -- run carries both queues once; nil with the cause when a queue is unreadable.
 function M.run(): ({Outcome}?, string?)
     local outcomes: {Outcome} = {}

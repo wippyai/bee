@@ -4,6 +4,8 @@ local process = require("process")
 local events = require("events")
 local system = require("system")
 local funcs = require("funcs")
+local security = require("security")
+local bounds = require("bounds")
 local demand = require("demand")
 local state = require("state")
 local M = {}
@@ -15,7 +17,7 @@ local ALLOWED: {[string]: boolean} = {
     ["bee.placement.native.service:sweeper_service"] = true,
 }
 type Dispatch = {caller: string, data: unknown}
-type Owner = {id: string, name: string, probe: string?, state: state.Owner, queue: {Dispatch}, tables: {[string]: boolean}, wake_active: boolean}
+type Owner = {id: string, name: string, probe: string?, state: state.Owner, queue: {Dispatch}, tables: {[string]: boolean}, actor: string, policies: {string}}
 type Owners = {[string]: Owner}
 M.Owners = Owners
 function M.discover(previous: Owners?): Owners
@@ -29,10 +31,19 @@ function M.discover(previous: Owners?): Owners
                 for _, name in ipairs(spec.tables) do if type(name) == "string" then tables[name] = true end end
             end
             local existing = previous and previous[spec.name]
-            owners[spec.name] = {id = entry.id, name = spec.name,
+            local data = assert(bounds.object(entry.data), "demand service data")
+            local lifecycle = assert(bounds.object(data.lifecycle), "demand service lifecycle")
+            local declared = assert(bounds.object(lifecycle.security), "demand service security")
+            local actor = assert(bounds.object(declared.actor), "demand service actor")
+            local policies: {string} = {}
+            for _, id in ipairs(assert(bounds.array(declared.policies, 64))) do
+                assert(type(id) == "string", "demand service policy identifier")
+                policies[#policies + 1] = id :: string
+            end
+            owners[spec.name] = {id = entry.id, name = spec.name, actor = assert(bounds.id(actor.id)), policies = policies,
                 probe = type(spec.probe) == "string" and spec.probe or nil,
                 state = existing and existing.state or state.new(), queue = existing and existing.queue or {},
-                tables = tables, wake_active = spec.wake_active ~= false}
+                tables = tables}
         end
     end
     return owners
@@ -43,16 +54,24 @@ end
 local function deliver(owner: Owner)
     local pid = owner.state.pid
     if not pid then return end
-    local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = owner.queue})
-    if sent then
-        for _, request in ipairs(owner.queue) do
+    local first = true
+    repeat
+        local requests: {Dispatch} = {}
+        for index = 1, math.min(64, #owner.queue) do requests[index] = owner.queue[index] end
+        if not first then owner.state.generation = owner.state.generation + 1 end
+        first = false
+        local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})
+        if not sent then owner.state.pid, owner.state.phase = nil, "starting"; return end
+        for _, request in ipairs(requests) do
             local data: unknown = request.data
             if type(data) == "table" and type(data.request_id) == "string" then
-                assert(process.send(request.caller, demand.ACCEPTED, {name = owner.name, pid = pid, request_id = data.request_id}))
+                process.send(request.caller, demand.ACCEPTED, {name = owner.name, pid = pid, request_id = data.request_id})
             end
         end
-        owner.queue = {}
-    else owner.state.pid, owner.state.phase = nil, "starting" end
+        local remaining: {Dispatch} = {}
+        for index = #requests + 1, #owner.queue do remaining[#remaining + 1] = owner.queue[index] end
+        owner.queue = remaining
+    until #owner.queue == 0
 end
 function M.wake(owners: Owners, name: string, request: Dispatch?): boolean
     local owner = owners[name]
@@ -112,9 +131,15 @@ function M.tables(owners: Owners): {string}
 end
 function M.recover(owners: Owners, changed: string?)
     for name, owner in pairs(owners) do
-        if owner.probe and (not changed or (owner.tables[changed]
-            and (owner.wake_active or owner.state.phase == "absent" or owner.state.phase == "stopping"))) then
-            local pending, problem = funcs.call(owner.probe)
+        if not changed and owner.state.phase == "absent" then
+            local pid = process.registry.lookup(name, process.registry.LOCAL)
+            if pid then M.ready(owners, name, tostring(pid)); M.wake(owners, name, nil) end
+        end
+        if owner.probe and (not changed or owner.tables[changed]) then
+            local policies: {security.Policy} = {}
+            for _, id in ipairs(owner.policies) do policies[#policies + 1] = assert(security.policy(id)) end
+            local executor = funcs.new():with_actor(security.new_actor(owner.actor)):with_scope(security.new_scope(policies))
+            local pending, problem = assert(executor):call(owner.probe)
             if problem then error("demand backlog " .. owner.id .. ": " .. tostring(problem)) end
             if pending == true then M.wake(owners, name, nil) end
         end

@@ -50,17 +50,31 @@ entries:
     bounds: bee.values:bounds
 - name: tests_service
   meta:
-    title: Node · tests
+    title: "Node \xB7 tests"
     type: bee.process.demand
-    demand: {name: bee.node.tests, probe: "bee.node:test_backlog", tables: [bee_node_test_runs]}
+    demand:
+      name: bee.node.tests
+      probe: bee.node:test_backlog
+      tables:
+      - bee_node_test_runs
   kind: process.service
   process: bee.node.service:tests
   host: bee:workers
   lifecycle:
-    auto_start: true
-    requires: [wippy.bootloader:bootloader.service, bee.gov.service:recovery_service, bee.hive.service:supervisor_service]
+    auto_start: false
+    requires:
+    - wippy.bootloader:bootloader.service
+    - bee.gov.service:recovery_service
+    - bee.hive.service:supervisor_service
     security:
-      actor: {id: bee.node.tests}
-      policies: [bee.node.security:tests_runner, bee.node.security:tests_store, bee.node.security:tests_name, bee.node.security:identity, bee.process:client_policy]
+      actor:
+        id: bee.node.tests
+      policies:
+      - bee.node.security:tests_runner
+      - bee.node.security:tests_store
+      - bee.node.security:tests_name
+      - bee.node.security:identity
+      - bee.process:client_policy
+      - bee.process:backlog_policy
     restart:
       max_attempts: 10

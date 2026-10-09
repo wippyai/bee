@@ -1408,3 +1408,30 @@ entries:
     workspace_applications: bee.gov.types:workspace_applications
     launch_policy: bee.harness.carrier:policy
     principals: bee.tests.principals:bound
+- name: activation_fixture
+  kind: library.lua
+  source: file://activation_fixture.lua
+- name: activation_drain_fixture
+  kind: library.lua
+  source: file://activation_worker.lua
+  modules: [logger]
+  imports:
+    worker: bee.process:worker
+    pass: bee.tests.gov:activation_fixture
+    service: bee.tests.gov:activation_follow_fixture
+    approval_service: bee.approvals.binding:service
+    bounds: bee.values:bounds
+- name: activation_drain_test
+  kind: function.lua
+  source: file://activation_drain_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    fixture: bee.tests.gov:activation_fixture
+    drain: bee.tests.gov:activation_drain_fixture
+- name: activation_follow_fixture
+  kind: library.lua
+  source: file://activation_follow_fixture.lua
+  imports:
+    fixture: bee.tests.gov:activation_fixture

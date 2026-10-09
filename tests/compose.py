@@ -191,6 +191,8 @@ def host_environment():
 
 
 def owner_scheduling(src):
+    replace_once(src / "gov/service/activation_worker.lua", "pass = drain", "pass = function(): boolean return true end")
+    replace_once(src / "gov/service/backlog.lua", "return pass.pending() or service.following_pending()", "return false")
     path = src / "threads/service/_index.yaml"
     document = yaml.safe_load(path.read_text())
     next(entry for entry in document["entries"] if entry["name"] == "service")["meta"]["pump"] = False
@@ -201,6 +203,22 @@ def owner_scheduling(src):
     path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
+def hold_test_runner_quiet(src):
+    replace_once(src / "node/service/tests.lua",
+                 "if #waiting == 0 then assert(demand.quiet(tests.NAME, generation)) else sweep() end",
+                 """if #waiting == 0 then
+                local controller = process.registry.lookup("bee.test.node.quiet")
+                if controller then
+                    local release = assert(process.listen("bee.test.node.quiet.release", {message = true}))
+                    assert(process.send(tostring(controller), "bee.test.node.quiet", {}))
+                    local message = assert((release:receive()))
+                    assert(tostring(message:from()) == tostring(controller))
+                    process.unlisten(release)
+                end
+                assert(demand.quiet(tests.NAME, generation))
+            else sweep() end""")
+
+
 def main():
     shutil.rmtree(COMPOSITION, ignore_errors=True)
     src = COMPOSITION / "src"
@@ -209,6 +227,7 @@ def main():
     # beside src, so module-relative directories resolve as they do in a pack.
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
     owner_scheduling(src)
+    hold_test_runner_quiet(src)
     observe_carrier(src)
     hold_attempt_snapshot(src)
     gate_runner(src)
@@ -220,6 +239,8 @@ def main():
                  TESTS / "lua/placement_publication/materialization.lua")
     shutil.copy2(ROOT / "src/placement/docker/service/image_owner.lua",
                  TESTS / "lua/placement_owner/image_owner.lua")
+    shutil.copy2(ROOT / "src/gov/service/activation_worker.lua",
+                 TESTS / "lua/gov/activation_worker.lua")
     host_environment()
 
 

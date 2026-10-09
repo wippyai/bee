@@ -113,6 +113,7 @@ entries:
       - bee.credentials.security:credential_materialize_policy
       - bee.security.gateway:gateway_supervision_policy
       - bee.process:client_policy
+      - bee.process:backlog_policy
     restart:
       max_attempts: 10
   host: bee:workers

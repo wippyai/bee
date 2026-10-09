@@ -11,6 +11,8 @@ local sql = require("sql")
 local tests = require("tests")
 local application = require("application")
 local registry = require("registry")
+local demand = require("demand")
+local channel = require("channel")
 
 local WORKSPACE = string.rep("c", 32)
 local OVERLAY = "runner_fixture"
@@ -208,15 +210,28 @@ local function define_tests()
 
         test.it("starts nothing from a forged message to the runner", function()
             local before = runs()
-            local runner = assert(process.registry.lookup(tests.NAME))
-            for _, topic in ipairs({tests.WAKE, "bee.node.tests.request"}) do
-                process.send(runner, topic, {run_id = "forged", overlay = OVERLAY, application = APPLICATION, workspace_id = WORKSPACE,
-                    actor_id = "runner-other", filter = "authority", reply_topic = "bee.forged"})
-            end
-            -- The runner reads its wakes in order, so once a genuine run it was woken for completes,
-            -- the forged ones sent before it have been handled.
-            local started = value_of(tests_call(author, {operation = "run", application = OVERLAY, filter = "authority"}))
-            completed(author, tostring(started.run_id))
+            local quiet = assert(process.listen("bee.test.node.quiet", {message = true}))
+            assert(process.registry.register("bee.test.node.quiet"))
+            local runner: string? = nil
+            local called, problem = pcall(function()
+                assert(demand.wake(tests.NAME))
+                local selected = channel.select({quiet:case_receive(), time.after("5s"):case_receive()})
+                test.eq(selected.channel, quiet)
+                runner = tostring(selected.value:from())
+                for _, topic in ipairs({tests.WAKE, "bee.node.tests.request"}) do
+                    assert(process.send(assert(runner), topic, {run_id = "forged", overlay = OVERLAY, application = APPLICATION, workspace_id = WORKSPACE,
+                        actor_id = "runner-other", filter = "authority", reply_topic = "bee.forged"}))
+                end
+                local started = value_of(tests_call(author, {operation = "run", application = OVERLAY, filter = "authority"}))
+                process.registry.unregister("bee.test.node.quiet")
+                assert(process.send(assert(runner), "bee.test.node.quiet.release", {}))
+                runner = nil
+                completed(author, tostring(started.run_id))
+            end)
+            process.registry.unregister("bee.test.node.quiet")
+            if runner then process.send(runner, "bee.test.node.quiet.release", {}) end
+            process.unlisten(quiet)
+            if not called then error(tostring(problem)) end
             test.eq(runs(), before + 1)
         end)
 

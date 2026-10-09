@@ -72,14 +72,16 @@ entries:
     worker_name: bee.gov.activation_worker
 - name: activation_service
   meta:
-    title: Library · activation
+    title: "Library \xB7 activation"
     type: bee.process.demand
-    demand: {name: bee.gov.activation_worker}
+    demand:
+      name: bee.gov.activation_worker
+      probe: bee.gov.service:backlog
   kind: process.service
   process: bee.gov.service:activation_worker
   host: bee:workers
   lifecycle:
-    auto_start: true
+    auto_start: false
     requires:
     - wippy.bootloader:bootloader.service
     - bee.gov.service:recovery_service
@@ -92,9 +94,19 @@ entries:
       - bee.security.approvals:approval_activation_effects_policy
       - bee.gov.security:activation_announce_policy
       - bee.gov.security:activation_worker_policy
-
+      - bee.process:backlog_policy
+      - bee.process:client_policy
+    restart:
+      max_attempts: 10
 - name: follow_wake
   kind: library.lua
   source: file://follow_wake.lua
   imports:
     demand: bee.process:demand
+- name: backlog
+  kind: function.lua
+  source: file://backlog.lua
+  method: pending
+  imports:
+    pass: bee.gov.service:activation_pass
+    service: bee.gov.binding:destination_service

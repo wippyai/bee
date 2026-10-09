@@ -1529,6 +1529,21 @@ function M.recover_all(): (boolean, string?, {string}?)
     return true, nil, refused
 end
 
+function M.following_pending(): boolean
+    local config, config_error = load()
+    local resource, resource_error = resources.database()
+    if not config or not resource then error(config_error or resource_error or "Following configuration is unavailable") end
+    local listing = follows.list(resource, config.node_id)
+    if not listing.ok then error(listing.message) end
+    local listed = assert(bounds.object(listing.value))
+    for _, raw in ipairs(assert(bounds.array(listed.items, 1024))) do
+        local item = bounds.object(raw)
+        local state = item and bounds.object(item.state)
+        if state and state.mode == "following" then return true end
+    end
+    return false
+end
+
 function M.follow_all(): Result
     local config, config_error = load()
     local resource, resource_error = resources.database()

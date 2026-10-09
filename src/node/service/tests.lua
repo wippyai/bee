@@ -153,9 +153,10 @@ local function summary(run: Run): Object
 end
 
 -- publish writes the run's progress or final results where status reads them.
-local function publish(run: Run)
+local function publish(run: Run): boolean
     local saved, save_error = test_runs.save(run.id, run.finished and "complete" or "running", summary(run))
     if not saved then logger:error("Test run results not saved", {run = run.id, error = tostring(save_error)}) end
+    return saved
 end
 
 -- proceed runs the entries of a run one after another.
@@ -181,7 +182,7 @@ end
 
 -- start runs a run in a coroutine of this process; a failure ends that run,
 -- never the service.
-local function start(run: Run)
+local function start(run: Run, completed: channel.Channel<boolean>)
     coroutine.spawn(function()
         local proceeded, failure = pcall(proceed, run)
         if not proceeded then
@@ -191,15 +192,15 @@ local function start(run: Run)
             end
         end
         run.finished = true
-        publish(run)
+        completed:send(publish(run))
     end)
 end
 
 -- take runs the waiting run run_id names, as the row stored it.
-local function take(run_id: string)
+local function take(run_id: string, completed: channel.Channel<boolean>): boolean
     local row, take_error = test_runs.take(run_id)
-    if take_error then logger:error("Test run not read", {run = run_id, error = take_error}); return end
-    if not row then return end
+    if take_error then error("Test run not read: " .. take_error) end
+    if not row then return false end
     local definition, definition_error = application.definition(row.application)
     local entries: {Entry} = {}
     for _, planned in ipairs(row.plan) do
@@ -207,12 +208,13 @@ local function take(run_id: string)
     end
     if not definition then
         for _, entry in ipairs(entries) do fail_entry(entry, tostring(definition_error)) end
-        test_runs.save(row.run_id, "complete", {run_id = row.run_id, application = row.application, state = "complete",
-            progress = {done = #entries, total = #entries}, totals = {passed = 0, failed = 0, skipped = 0, errors = #entries}})
-        return
+        assert(test_runs.save(row.run_id, "complete", {run_id = row.run_id, application = row.application, state = "complete",
+            progress = {done = #entries, total = #entries}, totals = {passed = 0, failed = 0, skipped = 0, errors = #entries}}))
+        return false
     end
     start({id = row.run_id, workspace_id = row.workspace_id, definition = definition, entries = entries,
-        done = 0, finished = false, cases = 0, dropped = 0})
+        done = 0, finished = false, cases = 0, dropped = 0}, completed)
+    return true
 end
 
 local function main()
@@ -224,22 +226,43 @@ local function main()
     assert(demand.ready(tests.NAME))
     local interrupted, interrupt_error = test_runs.interrupt()
     if not interrupted then logger:error("Interrupted test runs not recorded", {error = interrupt_error}) end
+    local active = 0
+    local generation = 0
+    local completed = channel.new(16) :: channel.Channel<boolean>
     local function sweep()
         local waiting, waiting_error = test_runs.waiting()
-        if not waiting then logger:error("Waiting test runs not listed", {error = waiting_error}); return end
-        for _, id in ipairs(waiting) do take(id) end
+        if not waiting then error("Waiting test runs not listed: " .. tostring(waiting_error)) end
+        for _, id in ipairs(waiting) do if take(id, completed) then active = active + 1 end end
     end
     sweep()
     logger:info("Test runner ready")
     while true do
-        local selected = channel.select({lifecycle:case_receive(), wakes:case_receive(), demanded:case_receive()})
+        if active == 0 and generation > 0 then
+            local waiting, problem = test_runs.waiting()
+            assert(waiting, problem)
+            if #waiting == 0 then assert(demand.quiet(tests.NAME, generation)) else sweep() end
+        end
+        local selected = channel.select({lifecycle:case_receive(), wakes:case_receive(), demanded:case_receive(), completed:case_receive()})
         if selected.channel == lifecycle then
             if not selected.ok or selected.value.kind == process.event.CANCEL then return end
+        elseif selected.channel == completed then
+            assert(selected.ok and selected.value == true, "Test run final result is not durable")
+            active = active - 1
+            sweep()
         else
             if not selected.ok then return end
+            if selected.channel == demanded then
+                local supervisor = process.registry.lookup(demand.SUPERVISOR, process.registry.LOCAL)
+                local message = selected.value
+                local value = bounds.object(message:payload():data())
+                if not supervisor or tostring(message:from()) ~= tostring(supervisor) or not value
+                    or type(value.generation) ~= "number" then goto continue end
+                generation = math.floor(value.generation)
+            end
             -- A wake is a hint: it names no request, and what waits is read from the database.
             sweep()
         end
+        ::continue::
     end
 end
 

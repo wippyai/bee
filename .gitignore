@@ -13,3 +13,4 @@ src/env/binary_identity/_index.yaml
 __pycache__/
 
 /tests/lua/placement_owner/image_owner.lua
+/tests/lua/gov/activation_worker.lua

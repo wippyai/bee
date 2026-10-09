@@ -17,6 +17,7 @@ entries:
   imports:
     frame: bee.ui:frame
     client: bee.app:client
+    confirmation_ui: bee.approvals.app:confirmation
     appearance: bee.ui:appearance
     windows: bee.approvals.types:windows
     grants: bee.approvals.grants:store
@@ -49,6 +50,8 @@ entries:
       restart_policy: manual
   security:
     policies:
+    - bee.security.approvals:confirmation_client
+    - bee.security.approvals:confirmation_authority
     - bee.security.approvals:approval_decide_policy
     - bee.gov.security:governance_delivery_lease_policy
     - bee.approvals.inbox.security:client_policy

@@ -313,7 +313,7 @@ function M.batch_intent(slice: Slice, rows: {[string]: model.Row}, decision: str
     local decisions: {Object} = {}
     for _, row in ipairs(marked) do
         decisions[#decisions + 1] = {approval_id = row.approval_id, expected_revision = row.revision,
-            proposal_digest = row.view.proposal_digest, decision = chosen}
+            proposal_digest = row.view.proposal_digest, reviewed_digest = row.view.reviewed_digest, decision = chosen}
     end
     return {target = M.BATCH, source = marked[1].workspace_id, request = {decisions = decisions}}, nil
 end

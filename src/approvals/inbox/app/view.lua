@@ -274,6 +274,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         end
         if state.technical then
             if selected.decider_id then lines[#lines + 1] = "Decided by: " .. selected.decider_id end
+            local assurance = model.assurance(detail)
+            if assurance then lines[#lines + 1] = "Confirmed gesture: " .. assurance end
             lines[#lines + 1] = "Requester: " .. selected.requester_id .. " · Owner: " .. selected.owner_node .. " · Policy: " .. selected.policy
             lines[#lines + 1] = "Target: " .. selected.target
             lines[#lines + 1] = "Request " .. selected.approval_id .. "  revision " .. tostring(selected.revision) .. "  incarnation observed " .. tostring(selected.owner_incarnation)

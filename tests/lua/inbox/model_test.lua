@@ -207,6 +207,26 @@ local function define_tests()
             test.eq(state.notice, "Recovered: approved by bee.test.alice")
             test.not_nil(model.decision_intent(state, "q4", "approved") == nil)
         end)
+        test.it("lists confirmations with the authenticated decider and recorded gesture", function()
+            local record = view("confirmed", 2, "decided", {decision = "approved", decider_id = "bee.node",
+                proposal = {kind = "operation", ref = "bee.approvals:confirmation", revision = "1",
+                    payload = {action = "app.stop", target = {instance_id = "exact-instance"}}},
+                lifecycle_records = {decisions = {{assurance_json = '{"kind":"explicit_gesture","gesture":"enter","presentation":"inline"}'}}}})
+            local decoded = assert(model.decode_view(record))
+            local row = model.summary(decoded, 1)
+            test.eq(row.effect, "app.stop")
+            test.eq(row.target, "exact-instance")
+            test.eq(model.history(decoded), "confirmed")
+            test.eq(model.decision_line(decoded), "Confirmed by bee.node")
+            test.eq(model.assurance(decoded), "enter · inline")
+            local state = model.new({"ws-1"})
+            record.state, record.decision, record.decider_id = "pending", nil, nil
+            model.apply_read(state, "confirmed", reply({ok = true, value = record}))
+            test.eq(#model.rows(state), 0)
+            model.select(state, "confirmed")
+            test.is_nil(model.confirmation(state))
+
+        end)
         test.it("pins confirmation to the exact viewed owner revision and digest", function()
             local state = model.new({"ws-1"})
             model.select(state, "r1")

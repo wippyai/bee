@@ -5,6 +5,7 @@
 -- toggle and one in-flight request; closing the app decides nothing.
 local tty = require("tty")
 local client = require("client")
+local confirmation_ui = require("confirmation_ui")
 local channel = require("channel")
 local process = require("process")
 local time = require("time")
@@ -110,7 +111,7 @@ local function main(value: unknown)
         end)
     end
     -- One dialog at a time: what it asks and what accepting it does.
-    local dialog: {request_id: string, kind: string, confirmation: model.Confirmation?, view: model.ApprovalView?}? = nil
+    local dialog: {request_id: string, kind: string, confirmation: model.Confirmation?, view: model.ApprovalView?, batch: leases.Intent?}? = nil
     local ticker = assert(time.ticker(POLL))
     local ticks = ticker:channel()
     local function refresh()
@@ -213,8 +214,9 @@ local function main(value: unknown)
         leases.say(slice, raw == nil and "Governance did not answer; refresh to see what committed" or leases.notice(kind, raw))
         refresh()
     end
-    local function act_batch(decision: string)
+    local function act_batch(decision: string, reviewed: leases.Intent?)
         local intent, refused = leases.batch_intent(slice, state.rows, decision)
+        if reviewed then intent = reviewed end
         if not intent then status = refused or ""; dirty = true; return end
         local reply = owner:invoke(intent.target, intent.request)
         leases.say(slice, leases.apply_batch(slice, reply, function(view: model.ApprovalView)
@@ -239,12 +241,14 @@ local function main(value: unknown)
         local marked = leases.marked(slice, state.rows)
         if #marked == 0 then status = "Mark pending requests with M first"; dirty = true; return end
         local approve = decision == "approved"
+        local batch, batch_error = leases.batch_intent(slice, state.rows, decision)
+        if not batch then status = batch_error or "Batch is unavailable"; dirty = true; return end
         local request_id, err = client.query(launch, {kind = "confirm",
             title = (approve and "Approve " or "Deny ") .. tostring(#marked) .. " requests?",
             message = model.text(marked[1].effect .. " on " .. marked[1].target .. " for " .. marked[1].requester_id, 512),
-            accept = approve and "Approve all" or "Deny all"})
+            accept = approve and "Approve all" or "Deny all", target = batch.request})
         if not request_id then status = tostring(err); dirty = true; return end
-        dialog = {request_id = request_id, kind = approve and "batch_approve" or "batch_deny", confirmation = nil, view = nil}
+        dialog = {request_id = request_id, kind = approve and "batch_approve" or "batch_deny", confirmation = nil, view = nil, batch = batch}
         dirty = true
     end
     local function allow_window(ttl_ms: integer)
@@ -288,11 +292,18 @@ local function main(value: unknown)
             offset = 0
         end)
     end
-    local function revoke_window()
+    local function revoke_window(gesture: "enter" | "space" | "click" | "shortcut"?)
         if busy or state.pending then return end
         local grant = state.grants[state.grant_selected]
         if not grant then return end
+        local confirmed_gesture = gesture or "shortcut"
         perform(function()
+            local review = confirmation_ui.new({workspace_id = grant.workspace_id, origin = {app_id = launch.definition_id, instance_id = launch.instance_id, attempt_id = launch.execution_id}})
+            local target = {grant_id = grant.grant_id, revision = grant.revision, workspace_id = grant.workspace_id}
+            local opened, err = confirmation_ui.open(review, "grant.revoke", target, "inline", "Revoke grant", "Revoke the selected grant")
+            if not opened then status = err or "Confirmation is unavailable"; return end
+            local accepted, accept_error = confirmation_ui.accept(review, target, confirmed_gesture)
+            if not accepted then status = accept_error or "Confirmation failed"; return end
             local reply = owner:invoke("bee.approvals.binding:grant", {operation = "revoke", workspace_id = grant.workspace_id, grant_id = grant.grant_id,expected_revision = grant.revision})
             if not reply then status = "Revocation outcome unknown; refresh to read grants"
             elseif reply.kind ~= "success" then status = reply.message
@@ -317,7 +328,8 @@ local function main(value: unknown)
         local title = "Withdraw this request?"
         local message = model.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
         local accept = "Withdraw"
-        local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = accept})
+        local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = accept,
+            target = {approval_id = confirmation.approval_id, revision = confirmation.revision, proposal_digest = confirmation.proposal_digest}})
         if not request_id then status = tostring(err); dirty = true; return end
         dialog = {request_id = request_id, kind = kind, confirmation = confirmation}
         dirty = true
@@ -385,9 +397,10 @@ local function main(value: unknown)
             if result and dialog and result.request_id == dialog.request_id then
                 local asked = dialog
                 dialog = nil
-                if result.action ~= "accept" then status = "Cancelled"; dirty = true
+                if result.error ~= "" then status = result.error == "busy" and "Another question is open" or "Confirmation owner is unavailable"; dirty = true
+                elseif result.action ~= "accept" then status = "Cancelled"; dirty = true
                 elseif asked.kind == "batch_approve" or asked.kind == "batch_deny" then
-                    perform(function() act_batch(asked.kind == "batch_approve" and "approved" or "denied") end)
+                    perform(function() act_batch(asked.kind == "batch_approve" and "approved" or "denied", asked.batch) end)
                 elseif asked.kind == "revoke" then
                     revoke_window()
                 elseif not asked.confirmation or not model.confirmation_matches(state, asked.confirmation) then
@@ -494,7 +507,7 @@ local function main(value: unknown)
                     if hit then
                         status = ""
                         if hit.kind == "window_row" then state.grant_selected = hit.index; dirty = true
-                        elseif hit.kind == "window_revoke" then revoke_window()
+                        elseif hit.kind == "window_revoke" then revoke_window("click")
                         elseif hit.kind == "windows" then state.grants_view = true; perform(refresh)
                         elseif hit.kind == "grant_history" then grant_history()
                         elseif hit.kind == "window_back" then state.grants_view = false; dirty = true
@@ -503,7 +516,7 @@ local function main(value: unknown)
                         elseif hit.kind == "window_choice" then
                             local choice = state.longer_choices[hit.index]
                             if choice then allow_window(choice.ttl_ms) end
-                        elseif hit.kind == "revoke" then revoke_window()
+                        elseif hit.kind == "revoke" then revoke_window("click")
                         elseif hit.kind == "requests" then state.grants_view = false; offset = 0; perform(refresh); dirty = true
                         elseif hit.kind == "leases" then state.grants_view = true; offset = 0; perform(refresh); dirty = true
                         elseif hit.kind == "mark" then

@@ -30,7 +30,7 @@ type AttemptProposal = {kind: "attempt", ref: string, revision: string, action_i
 type Proposal = OperationProposal | AttemptProposal
 type ApprovalView = {window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer?, reallow: boolean?, requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
-    requester_id: string, request_kind: RequestKind, policy: string, proposal: Proposal,
+    lifecycle_records: Object?, requester_id: string, request_kind: RequestKind, policy: string, proposal: Proposal,
     proposal_digest: string, reviewed_digest: string?, prompt: Prompt, revision: integer, state: ApprovalState,
     decision: Decision?, decider_id: string?, expires_at: string, created_at: string,
     response_schema: Object?, thread_id: string?, binding: Object?, response: unknown,
@@ -273,7 +273,7 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
         prompt = prompt, revision = revision, state = state, decision = approval_decision, decider_id = decider_id,
         expires_at = expires_at, created_at = created_at, response_schema = response_schema, thread_id = thread_id, binding = binding,
         response = view.response, decided_at = decided_at, validated_incarnation = validated_incarnation, validated_by = validated_by,
-        validated_at = validated_at, consumer_id = consumer_id, consumed_effect = consumed_effect, consumed_at = consumed_at,
+        lifecycle_records = bounds.object(view.lifecycle_records), validated_at = validated_at, consumer_id = consumer_id, consumed_effect = consumed_effect, consumed_at = consumed_at,
         effect_completed_at = effect_completed_at, effect_result = view.effect_result, updated_at = updated_at,
         source_approval_id = source_approval_id, source_workspace_id = source_workspace_id}
     return decoded_view, nil
@@ -370,6 +370,11 @@ local function effect_of(view: ApprovalView): (string, string)
     local payload = proposal.payload
     local effect = M.text(payload.tool_name or payload.operation or proposal.kind or view.request_kind, M.LINE_LIMIT)
     local target = M.text(proposal.ref, M.LINE_LIMIT)
+    if proposal.ref == "bee.approvals:confirmation" then
+        effect = M.text(payload.action, M.LINE_LIMIT)
+        local identity = bounds.object(payload.target)
+        if identity then target = M.text(identity.desktop_id or identity.instance_id or identity.profile_id or identity.app or identity.component or identity.client_id or identity.session or proposal.ref, M.LINE_LIMIT) end
+    end
     if proposal.action_id ~= nil then target = target .. " action " .. M.text(proposal.action_id, M.LINE_LIMIT) end
     return effect, target
 end
@@ -482,7 +487,9 @@ end
 -- rows: pending first, then newest first; bounded.
 function M.rows(state: State): {Row}
     local list: {Row} = {}
-    for _, row in pairs(state.rows) do list[#list + 1] = row end
+    for _, row in pairs(state.rows) do
+        if row.view.proposal.ref ~= "bee.approvals:confirmation" or row.state ~= "pending" then list[#list + 1] = row end
+    end
     table.sort(list, function(a: Row, b: Row): boolean
         local a_pending, b_pending = a.state == "pending", b.state == "pending"
         if a_pending ~= b_pending then return a_pending end
@@ -523,7 +530,7 @@ end
 -- Bind the shell's question to exactly the owner revision the user opened.
 function M.confirmation(state: State): Confirmation?
     local detail = state.detail
-    if not detail or detail.approval_id ~= state.selected or detail.state ~= "pending" then return nil end
+    if not detail or detail.approval_id ~= state.selected or detail.state ~= "pending" or detail.proposal.ref == "bee.approvals:confirmation" then return nil end
     return {approval_id = detail.approval_id, revision = detail.revision, proposal_digest = detail.proposal_digest, reviewed_digest = detail.reviewed_digest,
         owner_node = detail.owner_node, owner_incarnation = detail.owner_incarnation}
 end
@@ -613,6 +620,7 @@ function M.combined_intent(state: State, request_id: string, decision: string, t
     return {target = "bee.approvals.binding:decide_batch", request = {decisions = items, window_ttl_ms = ttl_ms}}, nil
 end
 function M.history(view: ApprovalView): string?
+    if view.proposal.ref == "bee.approvals:confirmation" and view.decision == "approved" then return "confirmed" end
     local grant = view.window_grant
     if view.allowed_by_grant and grant then return "allowed by your " .. windows.duration(grant.until_ms - grant.granted_ms) .. " grant" end
     return nil
@@ -637,9 +645,18 @@ function M.decider(decider_id: string?): string
 end
 -- The decision line of a request: what was decided and by whom, or why it is
 -- not pending any more.
+function M.assurance(view: ApprovalView): string?
+    local decisions = view.lifecycle_records and bounds.array(view.lifecycle_records.decisions, 64)
+    local record = decisions and decisions[#decisions] and bounds.object(decisions[#decisions])
+    local raw = record and bounds.text(record.assurance_json, 4096)
+    local assurance = raw and bounds.object(json.decode(raw))
+    if not assurance or assurance.kind ~= "explicit_gesture" then return nil end
+    return M.text(assurance.gesture, 32) .. " · " .. M.text(assurance.presentation, 32)
+end
 function M.decision_line(view: ApprovalView): string
     if view.state == "decided" and view.decision then
-        return (view.decision == "approved" and "Approved" or "Denied") .. " by " .. M.decider(view.decider_id)
+        local confirmed = view.proposal.ref == "bee.approvals:confirmation"
+        return (view.decision == "approved" and (confirmed and "Confirmed" or "Approved") or "Denied") .. " by " .. M.decider(view.decider_id)
     end
     if view.state == "pending" then return "Waiting for your decision" end
     if view.state == "withdrawn" then return "Withdrawn" end

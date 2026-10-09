@@ -42,7 +42,7 @@ function M.consent(tx: sql.Transaction, selection: Selection): string?
     if not live then return invalid end
     local sessions, session_error = tx:query("SELECT state FROM bee_sessions WHERE session_ref = ? AND thread_id = ? AND workspace_id = ?", {selection.session_ref, selection.thread_id, selection.workspace_id})
     if not sessions or session_error then return "read trait session" end
-    if #sessions ~= 1 or sessions[1].state == "closed" then return "trait session has ended" end
+    if #sessions ~= 1 then return "trait session is missing" end
     return nil
 end
 function M.stop(tx: sql.Transaction, selection: Selection): string?
@@ -68,6 +68,9 @@ function M.start(tx: sql.Transaction, selection: Selection): string?
     local err = M.consent(tx, selection)
     if err then return err end
     if #(selection.declaration.hooks or {}) > 0 then return "hooks not yet supported: " .. selection.trait_id end
+    local sessions, session_error = tx:query("SELECT state FROM bee_sessions WHERE session_ref=?", {selection.session_ref})
+    if not sessions or session_error then return "read trait session lifecycle" end
+    if #sessions ~= 1 or sessions[1].state == "closed" then return "trait session has ended" end
     if selection.selected then return nil end
     local head, head_error = reader.head(tx, selection.thread_id)
     if not head then return head_error or "trait thread is missing" end

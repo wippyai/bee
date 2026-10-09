@@ -34,6 +34,8 @@ entries:
     owner: bee.threads.persist:owner
     authority: bee.threads.service:authority
     record_bounds: bee.threads.records:bounds
+    listens: bee.threads.delivery:listens
+    traits: bee.threads.delivery:traits
 - name: waits
   kind: library.lua
   source: file://waits.lua
@@ -65,3 +67,17 @@ entries:
     agent_trait: bee.values:agent_trait
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
+- name: listens
+  kind: library.lua
+  source: file://listens.lua
+  modules: [sql, json, security, hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    reader: bee.threads.persist:reader
+    access: bee.threads.service:access
+    traits: bee.threads.delivery:traits
+    journal: bee.threads.persist:journal
+    record_types: bee.threads:record_types
+
+    trait_access: bee.gateway.security:traits

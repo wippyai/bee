@@ -8,6 +8,8 @@ and feed events in the same record stream and transaction boundary. Session and
 work callers must hold `bee.threads.sessions_owner`. The public session
 contracts live in `component/sessions`.
 
+Apps declare session listening on an ordinary trait; see `docs/session_traits`.
+
 ## Slices
 
 | Namespace | Responsibility |

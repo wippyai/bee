@@ -166,7 +166,7 @@ end
 
 local function append_event(tx: sql.Transaction, session: Session, actor: string, operation_ref: string, kind: string,
     subject: string, revision: integer, data: unknown): (string?, integer?, string?)
-    local payload_json, payload_error = encode({kind = kind, subject = subject, revision = revision, operation = operation_ref, data = data}, record_bounds.MAX_RECORD_BYTES - 1024)
+    local payload_json, payload_error = encode({kind = kind, session_ref = session.session_ref, subject = subject, revision = revision, operation = operation_ref, data = data}, record_bounds.MAX_RECORD_BYTES - 1024)
     if not payload_json then return nil, nil, "encode journal event: " .. tostring(payload_error) end
     local head, head_error = journal.head(tx, session.thread_id)
     if head_error then return nil, nil, head_error end
@@ -585,6 +585,10 @@ function M.session_transition(db: sql.DB, actor: string, request: unknown): Resu
             record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "session.state_changed", session_ref,
                 revision, {from = session.state, to = target})
             if not record_id or not sequence then return failure("INTERNAL", event_error or "append lifecycle event") end
+        end
+        if target == "closed" and sequence then
+            local _, interval_error = tx:execute("UPDATE bee_session_trait_intervals SET end_sequence=? WHERE session_ref=? AND end_sequence IS NULL", {sequence, session_ref})
+            if interval_error then return failure("INTERNAL", "close session listen intervals") end
         end
         local receipt = {session = session_ref, operation = op_ref, state = target, revision = revision,
             committed_at = now, sequence = sequence}

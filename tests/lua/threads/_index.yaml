@@ -510,3 +510,18 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+- name: listen_test
+  kind: function.lua
+  source: file://listen_test.lua
+  method: run
+  modules: [funcs, registry, json]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    host: bee.tests.memory:host
+    bounds: bee.values:bounds
+    harness: bee.tests.threads:harness
+    gateway: bee.gateway.binding:gateway
+    trait_access: bee.gateway.security:traits
+    owner: bee.threads.persist:owner
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}

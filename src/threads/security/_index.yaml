@@ -381,3 +381,10 @@ entries:
     actions: [funcs.call]
     resources: [bee.threads.service:pump_worker]
     effect: allow
+
+- name: listen_registry
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find, registry.snapshot]
+    resources: ['*']
+    effect: allow

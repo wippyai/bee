@@ -144,6 +144,7 @@ entries:
   security:
     policies:
     - bee.threads.security:store
+    - bee.threads.security:listen_registry
 - name: page
   kind: function.lua
   source: file://page_method.lua
@@ -155,6 +156,7 @@ entries:
   security:
     policies:
     - bee.threads.security:store
+    - bee.threads.security:listen_registry
 - name: ack_page
   kind: function.lua
   source: file://ack_page_method.lua
@@ -166,6 +168,7 @@ entries:
   security:
     policies:
     - bee.threads.security:store
+    - bee.threads.security:listen_registry
 - name: unsubscribe
   kind: function.lua
   source: file://unsubscribe_method.lua
@@ -177,6 +180,7 @@ entries:
   security:
     policies:
     - bee.threads.security:store
+    - bee.threads.security:listen_registry
 - name: close_subscription
   kind: function.lua
   source: file://close_subscription_method.lua
@@ -210,6 +214,7 @@ entries:
   security:
     policies:
     - bee.threads.security:store
+    - bee.threads.security:listen_registry
 - name: wait
   kind: function.lua
   source: file://wait_method.lua

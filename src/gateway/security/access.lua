@@ -43,7 +43,7 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     if not key or not reason or #reason == 0 or not traits or #traits == 0 then return fail("INVALID", traits_error or "access request fields are invalid") end
     table.sort(traits)
     local granted, grant_error = surface.grant(configuration, traits)
-    if not granted then return fail("DENIED", grant_error or "traits are not requestable") end
+    if not granted then return fail(grant_error and grant_error:find("hooks not yet supported", 1, true) and "UNSUPPORTED_CAPABILITY" or "DENIED", grant_error or "traits are not requestable") end
     local capability, capability_error = capability_model.traits(binding.binding_id, traits)
     if not capability then return fail("INVALID", capability_error or "invalid MCP capability") end
     local request_key, key_error = hash.sha256(binding.binding_id .. ":" .. key)
@@ -51,12 +51,14 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     -- The person reads what the agent could do by the traits' titles; the
     -- trait ids stay in the proposal.
     local titles: {string} = {}
+    local exposure = ""
     for _, id in ipairs(traits) do
         local title = id
         for _, trait in ipairs(configuration.catalog.traits) do
             if trait.id == id then
                 title = trait.title
                 if agent_trait.extension(trait) then
+                    exposure = " Listening includes the content of these events."
                     local live, err = trait_access.review(trait)
                     if not live then return fail("UNSUPPORTED_CAPABILITY", err or "trait unavailable") end
                     title = title .. " (app " .. tostring(trait.application_ref) .. " @ " .. tostring(trait.application_revision)
@@ -68,7 +70,7 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     end
     return subject_call.approvals(binding, M.ACCESS_CALL_POLICY)("request", {workspace_id = workspace_id, idempotency_key = "mcp:" .. request_key,
         request_kind = "permission", policy = access.policy, proposal = proposal(binding, configuration, digest, capability),
-        prompt = {text = "Let this agent session use " .. table.concat(titles, ", ") .. "? It asks: " .. reason}, thread_id = binding.thread_id})
+        prompt = {text = "Let this agent session use " .. table.concat(titles, ", ") .. "?" .. exposure .. " It asks: " .. reason}, thread_id = binding.thread_id})
 end
 -- Re-read the authoritative decision; the agent never supplies a proposal or digest.
 function M.approved(binding: Binding, configuration: surface.Surface, digest: string, approval_id: string): (Grant?, Reply?)

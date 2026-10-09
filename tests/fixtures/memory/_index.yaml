@@ -45,7 +45,7 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [funcs.call, funcs.security, funcs.context, security.actor.create, security.scope.create, security.policy.get, registry.get, registry.find, registry.snapshot, bee.gateway.manage, bee.threads.app_alias, bee.approvals.read, bee.approvals.decide, bee.approvals.grant, db.get, system.read]
+    actions: [funcs.call, funcs.security, funcs.context, security.actor.create, security.scope.create, security.policy.get, registry.get, registry.find, registry.snapshot, registry.apply, registry.update.registry.entry, registry.update.process.lua, bee.gateway.manage, bee.threads.app_alias, bee.approvals.read, bee.approvals.decide, bee.approvals.grant, db.get, system.read]
     resources: ['*']
     effect: allow
 - name: client_policy
@@ -55,3 +55,10 @@ entries:
     actions: [funcs.call]
     resources: ['bee.threads.binding:subscribe', 'bee.threads.binding:page', 'bee.threads.binding:ack_page', 'bee.threads.binding:resume', 'bee.threads.binding:read_after', 'bee.threads.binding:search', 'bee.threads.binding:timeline']
     effect: allow
+- name: all_events
+  kind: registry.entry
+  meta: {type: agent.trait, title: Observe session events, application_ref: 'bee.tests.memory:app'}
+  data:
+    prompt: Observe session events.
+    tools: []
+    listens: [session.started, session.ended, prompt.submitted, tool.before, tool.after, turn.completed]

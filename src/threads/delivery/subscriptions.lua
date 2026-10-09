@@ -15,6 +15,8 @@ local reader = require("reader")
 local transaction = require("transaction")
 local owner = require("owner")
 local authority = require("authority")
+local listens = require("listens")
+local traits = require("traits")
 local function record_digest(text: string): (string?, string?)
     local digest, err = hash.sha256(text)
     if err or not digest then return nil, "digest filter" end
@@ -22,7 +24,7 @@ local function record_digest(text: string): (string?, string?)
 end
 local M = {}
 type Result = transaction.Result
-type Filter = {kinds: {string}?, action_id: string?}
+type Filter = {kinds: {string}?, action_id: string?, session_ref: string?, trait_id: string?}
 local SCAN_WINDOW = 1024
 -- A thread's subscriptions, open and closed together, are bounded. A closed
 -- subscription keeps its durable cursor for resume and still counts toward
@@ -42,8 +44,13 @@ local function decode_filter(value: unknown): (Filter?, string?, string?)
     if value ~= nil then
         local object = bounds.object(value)
         if not object then return nil, nil, "filter must be an object" end
-        local unknown_field = bounds.fields(object, {"kinds", "action_id"})
+        local unknown_field = bounds.fields(object, {"kinds", "action_id", "session_ref", "trait_id"})
         if unknown_field then return nil, nil, unknown_field end
+        if object.session_ref ~= nil or object.trait_id ~= nil then
+            local session, trait = bounds.id(object.session_ref), bounds.id(object.trait_id)
+            if not session or not trait or object.kinds ~= nil or object.action_id ~= nil then return nil, nil, "listen filter needs exactly session_ref and trait_id" end
+            filter.session_ref, filter.trait_id = session, trait
+        end
         if object.kinds ~= nil then
             local list, list_error = bounds.ids(object.kinds, true)
             if not list then return nil, nil, "kinds: " .. tostring(list_error) end
@@ -59,7 +66,7 @@ local function decode_filter(value: unknown): (Filter?, string?, string?)
             filter.action_id = id
         end
     end
-    local encoded, encode_error = canonical.encode({kinds = filter.kinds or {}, action_id = filter.action_id})
+    local encoded, encode_error = canonical.encode({kinds = not filter.session_ref and (filter.kinds or {}) or nil, action_id = filter.action_id, session_ref = filter.session_ref, trait_id = filter.trait_id})
     if not encoded then return nil, nil, encode_error end
     return filter, encoded, nil
 end
@@ -78,24 +85,81 @@ local function summary(tx: sql.Transaction, subscription: reader.Subscription): 
         lease_generation = subscription.lease_generation, owner_incarnation = subscription.owner_incarnation, owner_authority = authority_id, durability = subscription.durability,
         filter_digest = subscription.filter_digest, closed = subscription.closed}, nil
 end
+local function authorized(tx: sql.Transaction, thread: string, actor: string, filter: Filter): (reader.Head?, reader.Member?, traits.Selection?, Result?)
+    if filter.session_ref and filter.trait_id then
+        local head, caller, selection, err = listens.authorize(tx, thread, actor, filter.session_ref, filter.trait_id)
+        if not head or not caller or not selection then return nil, nil, nil, failure("DENIED", err or "listener is not authorized") end
+        return head, caller, selection, nil
+    end
+    local head, caller, denied = authority.membership(tx, thread, actor)
+    return head, caller, nil, denied
+end
+local function subscription_authority(tx: sql.Transaction, thread: string, actor: string, id: unknown): (reader.Head?, reader.Member?, traits.Selection?, Result?)
+    local subscription, missing = subscription_of(tx, thread, id)
+    if not subscription then
+        local head, caller, denied = authority.membership(tx, thread, actor)
+        if not head or not caller then return nil, nil, nil, denied end
+        return head, caller, nil, missing
+    end
+    local filter, _, invalid = decode_filter(json.decode(subscription.filter))
+    if not filter then return nil, nil, nil, failure("INTERNAL", invalid or "stored filter is corrupt") end
+    return authorized(tx, thread, actor, filter)
+end
+local function subscribe_trait(db: sql.DB, actor: string, object: {[string]: unknown}): Result
+    local extra = bounds.fields(object, {"trait_id", "idempotency_key"})
+    local trait, key = bounds.id(object.trait_id), bounds.id(object.idempotency_key)
+    if extra or not trait or not key then return failure("INVALID_ARGUMENT", extra or "listen needs trait_id and idempotency_key") end
+    local discovered = transaction.read(db, function(tx: sql.Transaction): Result
+        local selections, err = listens.discover(tx, actor, trait)
+        if not selections then return failure("DENIED", err or "listen is not admitted") end
+        return transaction.success(selections, false)
+    end)
+    if not discovered.ok then return discovered end
+    local rows = bounds.array(discovered.value, 128)
+    if not rows then return failure("INTERNAL", "listen discovery is corrupt") end
+    local subscriptions: {{[string]: unknown}} = {}
+    for _, raw in ipairs(rows) do
+        local selection = assert(bounds.object(raw))
+        local child_key = assert(hash.sha256(key .. ":" .. assert(bounds.id(selection.session_ref)) .. ":" .. trait))
+        local subscribed = M.subscribe(db, actor, {thread_id = selection.thread_id, idempotency_key = child_key,
+            filter = {session_ref = selection.session_ref, trait_id = trait}})
+        if not subscribed.ok then return subscribed end
+        local view = assert(bounds.object(subscribed.value))
+        view.session_ref, view.thread_id, view.trait_id = selection.session_ref, selection.thread_id, trait
+        subscriptions[#subscriptions + 1] = view
+    end
+    return transaction.success({subscriptions = subscriptions}, false)
+end
 function M.subscribe(db: sql.DB, actor: string, request: unknown): Result
+    local declared = bounds.object(request)
+    if declared and declared.trait_id ~= nil then return subscribe_trait(db, actor, declared) end
     local mutation, invalid = authority.mutation(request)
     if not mutation then return invalid or failure("INVALID_ARGUMENT", "invalid request") end
     local object = bounds.object(request) or {}
     local unknown_field = bounds.fields(object, {"thread_id", "idempotency_key", "consumer_id", "after_sequence", "filter", "durability"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local consumer_id = bounds.id(object.consumer_id)
-    if not consumer_id then return failure("INVALID_ARGUMENT", "consumer_id is not an identifier") end
-    local after = record_bounds.cursor(object.after_sequence)
-    if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(record_bounds.MAX_THREAD_RECORDS)) end
-    local durability = bounds.member(object.durability, {"durable", "reconstructible"})
-    if not durability then return failure("INVALID_ARGUMENT", "durability must be durable or reconstructible") end
     local filter, filter_json, filter_error = decode_filter(object.filter)
     if not filter or not filter_json then return failure("INVALID_ARGUMENT", filter_error or "invalid filter") end
+    local extension = filter.session_ref ~= nil
+    if extension and (object.consumer_id ~= nil or object.after_sequence ~= nil or object.durability ~= nil) then
+        return failure("INVALID_ARGUMENT", "listen consumer, cursor and durability are host owned")
+    end
+    local consumer_id = extension and "listen" or bounds.id(object.consumer_id)
+    if not consumer_id then return failure("INVALID_ARGUMENT", "consumer_id is not an identifier") end
+    local after = extension and 0 or record_bounds.cursor(object.after_sequence)
+    if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(record_bounds.MAX_THREAD_RECORDS)) end
+    local durability = extension and "durable" or bounds.member(object.durability, {"durable", "reconstructible"})
+    if not durability then return failure("INVALID_ARGUMENT", "durability must be durable or reconstructible") end
     local digest, digest_error = record_digest(filter_json)
     if not digest then return failure("INTERNAL", digest_error or "digest filter") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local head, caller, denied = authority.membership(tx, mutation.thread_id, actor)
+        local head, caller, selection, denied = authorized(tx, mutation.thread_id, actor, filter)
+        if selection and caller then
+            actor, consumer_id = caller.actor, caller.actor
+            local intervals, err = listens.intervals(tx, selection)
+            if not intervals or #intervals == 0 then return failure("INTERNAL", err or "listener has no activation interval") end
+            after = intervals[1].start
+        end
         if not head or not caller then return denied or failure("DENIED", "caller is not a member of the thread") end
         local replayed, replay_err = authority.replay(tx, actor, "subscribe", mutation)
         if replay_err then return storage(replay_err) end
@@ -105,7 +169,24 @@ function M.subscribe(db: sql.DB, actor: string, request: unknown): Result
         if not incarnation then return failure("UNAVAILABLE", "the thread owner has not started") end
         local existing, existing_err = reader.subscription_identity(tx, head.thread_id, actor, consumer_id, digest)
         if existing_err then return storage(existing_err) end
-        if existing then return failure("CONFLICT", "an open subscription with this identity exists: " .. existing.subscription_id) end
+        if extension and not existing then
+            local rows, err = tx:query("SELECT subscription_id FROM bee_thread_subscriptions WHERE thread_id=? AND actor=? AND consumer_id=? AND filter_digest=? ORDER BY created_at DESC LIMIT 1", {head.thread_id, actor, consumer_id, digest})
+            if not rows or err then return storage("read retained listen subscription") end
+            if #rows == 1 then existing = reader.subscription(tx, head.thread_id, assert(bounds.id(rows[1].subscription_id))) end
+        end
+        if existing then
+            if not extension then return failure("CONFLICT", "an open subscription with this identity exists: " .. existing.subscription_id) end
+            if existing.closed or existing.owner_incarnation ~= incarnation then
+                local err = transaction.resume_subscription(tx, existing.subscription_id, existing.lease_generation + 1, incarnation)
+                if err then return storage(err) end
+                err = transaction.retire_pages(tx, existing.subscription_id)
+                if err then return storage(err) end
+                existing = assert(reader.subscription(tx, head.thread_id, existing.subscription_id))
+            end
+            local view, err = summary(tx, existing)
+            if not view then return storage(err or "read listen subscription") end
+            return authority.remember(tx, actor, "subscribe", mutation, view)
+        end
         local total, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_subscriptions WHERE thread_id = ?", {head.thread_id}, "subscriptions")
         if not total then return storage(count_err or "count subscriptions") end
         if total >= M.MAX_THREAD_SUBSCRIPTIONS then return failure("LIMIT_EXCEEDED", "thread subscription capacity reached; the owner forgets a closed subscription to reclaim it") end
@@ -132,7 +213,8 @@ function M.page(db: sql.DB, actor: string, request: unknown): Result
     local limit = record_bounds.page_limit(object.limit)
     if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(record_bounds.MAX_PAGE_RECORDS)) end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local head, caller, denied = authority.membership(tx, thread_id, actor)
+        local head, caller, selection, denied = subscription_authority(tx, thread_id, actor, object.subscription_id)
+        if caller and selection then actor = caller.actor end
         if not head or not caller then return denied or failure("DENIED", "caller is not a member of the thread") end
         local subscription, missing = subscription_of(tx, thread_id, object.subscription_id)
         if not subscription then return missing or failure("NOT_FOUND", "subscription does not exist") end
@@ -154,7 +236,7 @@ function M.page(db: sql.DB, actor: string, request: unknown): Result
         else
             through = math.floor(math.min(from + SCAN_WINDOW, head.head_sequence))
             if through <= from then
-                return transaction.success({subscription_id = subscription.subscription_id, page_id = nil, records = {}, from_sequence = from, scanned_through = from, has_more = false}, false)
+                return transaction.success({subscription_id = subscription.subscription_id, page_id = nil, records = {}, events = selection and {} or nil, from_sequence = from, scanned_through = from, has_more = false}, false)
             end
             local allocated, id_err = transaction.record_id()
             if not allocated then return failure("INTERNAL", id_err or "allocate page identifier") end
@@ -162,15 +244,37 @@ function M.page(db: sql.DB, actor: string, request: unknown): Result
             local insert_err = transaction.insert_page(tx, page_id, subscription.subscription_id, subscription.lease_generation, from, through, subscription.filter_digest, transaction.now())
             if insert_err then return storage(insert_err) end
         end
-        local rows, rows_err = reader.page(tx, thread_id, from, through, limit, filter.kinds, filter.action_id)
+        if outstanding and selection then limit = record_bounds.MAX_PAGE_RECORDS end
+        local scan_limit = selection and SCAN_WINDOW or limit
+        local rows, rows_err = reader.page(tx, thread_id, from, through, scan_limit, filter.kinds, filter.action_id)
         if not rows then return storage(rows_err or "read thread records") end
         local records: {record_types.Record} = {}
-        for index = 1, math.min(#rows, limit) do
+        local delivered: {listens.Event} = {}
+        local intervals: {listens.Interval} = {}
+        if selection then
+            local found, err = listens.intervals(tx, selection)
+            if not found then return storage(err or "read activation intervals") end
+            intervals = found
+        end
+        local matching = 0
+        for index = 1, #rows do
             local decoded, decode_error = record.decode_json(rows[index].record_json)
             if not decoded then return failure("INTERNAL", decode_error or "stored record is corrupt") end
-            records[index] = decoded
+            local event: listens.Event? = nil
+            if selection then
+                local err: string?
+                event, err = listens.event(tx, selection, intervals, decoded)
+                if err then return storage(err) end
+            end
+            if not selection or event then
+                matching = matching + 1
+                if matching <= limit then
+                    records[#records + 1] = decoded
+                    if event then delivered[#delivered + 1] = event end
+                end
+            end
         end
-        local has_more = #rows > limit
+        local has_more = matching > limit
         local scanned = through
         if has_more then
             -- The page ends at the last returned record; the rest stays ahead.
@@ -179,7 +283,7 @@ function M.page(db: sql.DB, actor: string, request: unknown): Result
             if shrink_err then return storage(shrink_err) end
         end
         return transaction.success({subscription_id = subscription.subscription_id, page_id = page_id, lease_generation = subscription.lease_generation,
-            records = records, from_sequence = from, scanned_through = scanned, has_more = has_more or scanned < head.head_sequence}, false)
+            records = records, events = selection and delivered or nil, from_sequence = from, scanned_through = scanned, has_more = has_more or scanned < head.head_sequence}, false)
     end)
 end
 -- Acknowledges the outstanding page by identity and exact extent.
@@ -194,7 +298,8 @@ function M.ack_page(db: sql.DB, actor: string, request: unknown): Result
     if not page_id then return failure("INVALID_ARGUMENT", "page_id is not an identifier") end
     if not through then return failure("INVALID_ARGUMENT", "scanned_through is out of range") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local head, caller, denied = authority.membership(tx, mutation.thread_id, actor)
+        local head, caller, selection, denied = subscription_authority(tx, mutation.thread_id, actor, object.subscription_id)
+        if caller and selection then actor = caller.actor end
         if not head or not caller then return denied or failure("DENIED", "caller is not a member of the thread") end
         local replayed, replay_err = authority.replay(tx, actor, "ack_page", mutation)
         if replay_err then return storage(replay_err) end
@@ -226,7 +331,8 @@ local function transition(operation: string, db: sql.DB, actor: string, request:
     local unknown_field = bounds.fields(object, {"thread_id", "idempotency_key", "subscription_id"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local head, caller, denied = authority.membership(tx, mutation.thread_id, actor)
+        local head, caller, selection, denied = subscription_authority(tx, mutation.thread_id, actor, object.subscription_id)
+        if caller and selection then actor = caller.actor end
         if not head or not caller then return denied or failure("DENIED", "caller is not a member of the thread") end
         local replayed, replay_err = authority.replay(tx, actor, operation, mutation)
         if replay_err then return storage(replay_err) end

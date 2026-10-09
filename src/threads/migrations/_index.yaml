@@ -97,3 +97,9 @@ entries:
   method: run
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-09T20:40:00Z'}
   imports: {migration: 'wippy.migration:migration'}
+- name: session_scope
+  kind: function.lua
+  source: file://session_scope.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-09T20:41:00Z'}
+  imports: {migration: 'wippy.migration:migration'}

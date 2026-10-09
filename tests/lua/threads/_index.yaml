@@ -46,6 +46,8 @@ entries:
     - bee.threads.binding:close
     - bee.threads.binding:record
     - bee.threads.binding:read_after
+    - bee.threads.binding:search
+    - bee.threads.binding:timeline
     - bee.threads.binding:send
     - bee.threads.binding:send_status
     - bee.threads.binding:notify
@@ -524,4 +526,16 @@ entries:
     gateway: bee.gateway.binding:gateway
     trait_access: bee.gateway.security:traits
     owner: bee.threads.persist:owner
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
+- name: search_test
+  kind: function.lua
+  source: file://search_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+    host: bee.tests.memory:host
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}

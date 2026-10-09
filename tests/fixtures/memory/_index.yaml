@@ -5,6 +5,8 @@ entries:
   kind: process.lua
   source: file://app.lua
   method: main
+  modules: [funcs, security, hash]
+  imports: {bounds: bee.values:bounds}
   meta:
     type: bee.app
     application:
@@ -53,7 +55,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: ['bee.threads.binding:subscribe', 'bee.threads.binding:page', 'bee.threads.binding:ack_page', 'bee.threads.binding:resume', 'bee.threads.binding:read_after', 'bee.threads.binding:search', 'bee.threads.binding:timeline']
+    resources: ['bee.threads.binding:subscribe', 'bee.threads.binding:page', 'bee.threads.binding:ack_page', 'bee.threads.binding:resume', 'bee.threads.binding:read_after', 'bee.threads.binding:search', 'bee.threads.binding:timeline', 'bee.threads.binding:get', 'bee.threads.binding:create', 'bee.threads.binding:record', 'bee.tests.memory:run']
     effect: allow
 - name: all_events
   kind: registry.entry
@@ -62,3 +64,17 @@ entries:
     prompt: Observe session events.
     tools: []
     listens: [session.started, session.ended, prompt.submitted, tool.before, tool.after, turn.completed]
+- name: run
+  kind: function.lua
+  source: file://app.lua
+  method: run
+  meta: {type: test_support}
+  modules: [funcs, security, hash]
+  imports: {bounds: bee.values:bounds}
+- name: index_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.threads.create, bee.threads.observe]
+    resources: ['*']
+    effect: allow

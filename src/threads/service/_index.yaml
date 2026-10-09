@@ -53,6 +53,7 @@ entries:
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     record_bounds: bee.threads.records:bounds
+    search: bee.threads.service:search
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
@@ -221,3 +222,17 @@ entries:
     pump: bee.threads.service:pump
     bounds: bee.values:bounds
     sender: bee.threads.service:pump_sender
+
+- name: search
+  kind: library.lua
+  source: file://search.lua
+  modules: [sql, json, hash]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    record: bee.threads.records:record
+    record_types: bee.threads:record_types
+    values: bee.threads.records:values
+    reader: bee.threads.persist:reader
+    transaction: bee.threads.persist:transaction
+    record_bounds: bee.threads.records:bounds

@@ -90,7 +90,7 @@ function M.client(instance: string, workspace: string?, revision: string?, defin
         M.call("bee.threads.binding:register_app_alias", {stable = stable.id, instance = id, workspace_id = home, definition_id = app})
     end
     local policy = assert(security.policy("bee.tests.memory:client_policy"))
-    return funcs.new():with_actor(security.new_actor(id, {workspace_id = home, definition_id = app, definition_revision = revision or "1"})):with_scope(security.new_scope({policy}))
+    return funcs.new():with_actor(security.new_actor(id, {workspace_id = home, definition_id = app, definition_revision = revision or "1"})):with_scope(security.new_scope({policy, assert(security.policy("bee.tests.memory:index_policy"))}))
 end
 function M.receive(client: funcs.Executor, operation: string, request: unknown): {[string]: unknown}
     local raw, err = client:call("bee.threads.binding:" .. operation, request)

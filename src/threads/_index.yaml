@@ -20,6 +20,10 @@ entries:
     description: Close a thread that has no unsettled actions
   - name: record
     description: Commit a message or observation the caller produced
+  - name: search
+    description: Search authorized records in up to sixteen threads with a stable continuation
+  - name: timeline
+    description: Page authorized records through a pinned committed thread head
   - name: read_after
     description: Read committed records after a cursor with a bounded filter
   - name: send

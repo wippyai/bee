@@ -10,6 +10,23 @@ contracts live in `component/sessions`.
 
 Apps declare session listening on an ordinary trait; see `docs/session_traits`.
 
+The existing `authority` contract also exposes `search` and `timeline`:
+
+```lua
+search({scope = {thread_ids = {index_thread}}, query = "methane",
+    kinds = {"observation"}, limit = 32, cursor = continuation})
+timeline({thread_id = index_thread, after = 0, limit = 32})
+timeline({thread_id = index_thread, cursor = continuation, limit = 32})
+```
+
+Search accepts 1–16 distinct thread IDs and returns `{items, total,
+next_cursor?}`. Each item contains `{thread_id, record_id, sequence, kind,
+record_ref, snippet, score}`. Only readable threads contribute matches, ranks or
+counts. Timeline requires read authority on its thread and returns committed
+records as `{items, next_cursor?}`. Continuations pin committed heads, exclude
+later appends and recheck caller authority on every page; membership changes
+require a fresh query. Listening alone does not authorize either operation.
+
 ## Slices
 
 | Namespace | Responsibility |

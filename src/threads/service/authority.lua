@@ -15,6 +15,7 @@ local types = require("types")
 local access = require("access")
 local reader = require("reader")
 local transaction = require("transaction")
+local search = require("search")
 local M = {}
 type Result = transaction.Result
 type Mutation = {thread_id: string, idempotency_key: string, request_json: string}
@@ -658,5 +659,11 @@ function M.read_after(db: sql.DB, actor: string, request: unknown): Result
         if not has_more and window_end < head.head_sequence then has_more = true end
         return transaction.success({records = records, scanned_through = scanned_through, has_more = has_more}, false)
     end)
+end
+function M.search(db: sql.DB, actor: string, request: unknown): Result
+    return search.search(db, actor, request, M.membership)
+end
+function M.timeline(db: sql.DB, actor: string, request: unknown): Result
+    return search.timeline(db, actor, request, M.membership)
 end
 return M

@@ -534,6 +534,8 @@ entries:
       close: bee.threads.binding:close
       record: bee.threads.binding:record
       read_after: bee.threads.binding:read_after
+      search: bee.threads.binding:search
+      timeline: bee.threads.binding:timeline
       send: bee.threads.binding:send
       send_status: bee.threads.binding:send_status
       notify: bee.threads.binding:notify
@@ -1050,3 +1052,25 @@ entries:
       operation_lookup: bee.threads.binding:operation_lookup
       operation_describe: bee.threads.binding:operation_describe
       feed_read: bee.threads.binding:feed_read
+
+- name: search
+  kind: function.lua
+  source: file://search_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security:
+    policies: [bee.threads.security:store]
+
+- name: timeline
+  kind: function.lua
+  source: file://timeline_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security:
+    policies: [bee.threads.security:store]

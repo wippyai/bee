@@ -268,8 +268,9 @@ On an opened permission request, `A` allows once, `F` allows for 30 minutes,
 `L` opens longer choices, and `D` denies. Longer choices are four hours, until
 the end of the UTC day, and 24 hours; choices exceeding the smallest policy
 ceiling in the displayed batch are absent. The bundled host policies cap windows
-at one day and retain the default ten-minute request lifetime. Indefinite
-"until revoked" authority is unavailable under a finite policy ceiling. Questions
+at one day and retain the default ten-minute request lifetime. Permanent
+"until revoked" windows require explicit host-policy `allow_permanent` opt-in.
+Sessions stores its peer consent in these central windows. Questions
 still require their explicit response and cannot create an automatic window.
 Governance lease reviews retain their full terms and scroll-before-allow check.
 
@@ -289,8 +290,11 @@ attempt/action, plan, adapter, tool and input digest while excluding the two
 exchange correlation identifiers. No path wildcard, broader tool permission,
 new attempt or other node is authorized. Registry metadata grants nothing.
 
-`decide` accepts optional positive `window_ttl_ms` on an approved permission
-without a response. The owner checks the current policy cap, records who granted
+`decide` accepts optional positive `window_ttl_ms` or `window_permanent=true`
+on an approved permission without a response. `allow_grant` requires one of
+these reviewed term choices. Windows bind the exact requester proposal;
+separately reviewed subjects, scopes, evidence or continuations cannot create
+windows. The owner checks the current policy cap or permanent opt-in, records who granted
 it, when, and until when, and retains it durably. A matching new request settles
 as approved by the grant in the request transaction and records its history,
 feed change and thread notices. Its view carries `window_grant` and

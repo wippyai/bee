@@ -190,7 +190,8 @@ function M.manage(raw: unknown): Object
         local view = bounds.object(raw)
         local data = view and payload(view)
         if view and data and data.peer == peer and view.request_kind == "question" and view.state == "pending" then
-            local withdrawn, withdraw_error = approval("withdraw", {approval_id = view.approval_id}, workspace)
+            local withdrawn, withdraw_error = approval("withdraw", {approval_id = view.approval_id,
+                expected_revision = view.revision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest}, workspace)
             if not withdrawn then return failure(tostring(withdraw_error)) end
         end
     end

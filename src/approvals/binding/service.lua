@@ -843,12 +843,15 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     if not row then return failure("NOT_FOUND", "approval request does not exist") end
     if declared_decision == "answer" and row.request_kind ~= "question" then return failure("INVALID_ARGUMENT", "answer needs a question") end
     if declared_decision == "allow_once" and row.request_kind ~= "permission" then return failure("INVALID_ARGUMENT", "allow_once needs a permission") end
-    if declared_decision == "allow_grant" and object.window_ttl_ms == nil then return failure("INVALID_ARGUMENT", "allow_grant requires reviewed window terms") end
+    if declared_decision == "allow_grant" and object.window_ttl_ms == nil and object.window_permanent ~= true then return failure("INVALID_ARGUMENT", "allow_grant requires reviewed window terms") end
     local may_decide, policy_error = eligible(actor, row)
     if policy_error then return storage(policy_error) end
     if not may_decide then return failure("DENIED", "caller is not an eligible approver for this request") end
     local window_ttl: integer? = nil
     if object.window_permanent ~= nil and type(object.window_permanent) ~= "boolean" then return failure("INVALID_ARGUMENT", "window_permanent must be boolean") end
+    if (object.window_permanent == true or object.window_ttl_ms ~= nil) and row.contract.reviewed_required == true then
+        return failure("INVALID_ARGUMENT", "approval windows require the exact requester proposal scope")
+    end
     if object.window_permanent == true then
         if object.window_ttl_ms ~= nil then return failure("INVALID_ARGUMENT", "choose duration or permanent") end
         local policies, policy_error = resources.policies()
@@ -861,7 +864,6 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     if object.window_ttl_ms ~= nil then
         window_ttl = bounds.integer(object.window_ttl_ms)
         if not window_ttl or window_ttl < 1 then return failure("INVALID_ARGUMENT", "window_ttl_ms must be a positive integer") end
-        if row.contract.reviewed_required == true then return failure("INVALID_ARGUMENT", "approval windows require the exact requester proposal scope") end
         if decision ~= "approved" or row.request_kind ~= "permission" or response ~= nil then return failure("INVALID_ARGUMENT", "windows approve permissions without a response") end
         if window_ttl > row.window_max_ttl_ms then return failure("FORBIDDEN", "window_ttl_ms exceeds the policy ceiling of " .. tostring(row.window_max_ttl_ms)) end
     end

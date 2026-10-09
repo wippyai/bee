@@ -100,6 +100,40 @@ local function define_tests()
             test.eq(managed_request(db, workspace, nil, nil, string.rep("d", 64)).state, "pending")
             db:release()
         end)
+        test.it("allow_grant records permanent terms and reuses only the exact requester scope", function()
+            local db, workspace = open(), key()
+            local asked: Object = {contract_version = 2, workspace_id = workspace, idempotency_key = key(),
+                request_kind = "permission", policy = "permanent-window-policy",
+                proposal = {kind = "operation", ref = "test:write", revision = "1", payload = {path = "one.txt"}},
+                prompt = {text = "Allow until revoked"}}
+            local created = value(service.execute(db, SUBJECT, "request", asked, NOW))
+            local decision = item(created)
+            decision.decision, decision.window_permanent = "allow_grant", true
+            local granted = value(service.execute(db, PERSON, "decide", decision, NOW))
+            local grant = assert(bounds.object(granted.window_grant))
+            test.eq(grant.until_ms, 253402300799000)
+            test.eq(value(service.execute(db, PERSON, "decide", decision, NOW + 1)).approval_id, created.approval_id)
+            asked.idempotency_key = key()
+            test.eq(value(service.execute(db, SUBJECT, "request", asked, NOW + 1)).allowed_by_grant, grant.grant_id)
+            asked.idempotency_key = key()
+            test.eq(value(service.execute(db, "other-subject", "request", asked, NOW + 1)).state, "pending")
+            db:release()
+        end)
+        test.it("permanent windows cannot broaden a separately reviewed subject or scope", function()
+            local db, workspace = open(), key()
+            local created = value(service.execute(db, SUBJECT, "request", {contract_version = 2, workspace_id = workspace,
+                idempotency_key = key(), request_kind = "permission", policy = "permanent-window-policy",
+                subject = {principal_id = "other-subject"}, scope = {type = "exact", parameters = {target = "one"}},
+                proposal = {kind = "operation", ref = "test:write", revision = "1", payload = {path = "one.txt"}},
+                prompt = {text = "Allow until revoked"}}, NOW))
+            local decision = item(created)
+            decision.window_permanent = true
+            test.eq(service.execute(db, PERSON, "decide", decision, NOW).code, "INVALID_ARGUMENT")
+            local active = value(service.execute(db, PERSON, "grant_window", {operation = "list", workspace_id = workspace}, NOW))
+            test.eq(#assert(bounds.array(active.grants, 64)), 0)
+            test.eq(value(service.execute(db, SUBJECT, "read", {approval_id = created.approval_id}, NOW)).state, "pending")
+            db:release()
+        end)
         test.it("expiry re-prompts at the exact boundary and revocation stops new automatic decisions", function()
             local db, workspace = open(), key()
             local first = request(db, workspace)

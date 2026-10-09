@@ -22,6 +22,7 @@ local worker = require("worker")
 local resources = require("resources")
 local outbox = require("outbox")
 local dispatch = require("dispatch")
+local demand = require("demand")
 local schema = require("schema")
 local thread_harness = require("thread_harness")
 local TEST_STORE = "bee.approvals:test_db"
@@ -171,6 +172,41 @@ end
 local function until_notices(thread_id: string, count: integer): {{[string]: unknown}}
     return await_records(thread_id, {"message"}, count)
 end
+local function effect_wake(approval_id: string, destination: string, name: string, mutate: () -> ())
+    local wakes = assert(process.listen("bee.test.effect_delivery", {message = true}))
+    assert(process.registry.register("bee.test.effect_delivery"))
+    local ok, problem = pcall(function()
+        mutate()
+        local deadline = time.after("1s")
+        while true do
+            local selected = channel.select({wakes:case_receive(), deadline:case_receive()})
+            test.eq(selected.ok, true)
+            test.eq(selected.channel, wakes, "committed approval wake is not delivered")
+            local supervisor = assert(process.registry.lookup(demand.SUPERVISOR, process.registry.LOCAL))
+            test.eq(tostring(selected.value:from()), tostring(supervisor))
+            local delivered = assert(bounds.object(selected.value:payload():data()))
+            for _, raw in ipairs(assert(bounds.array(delivered.requests, 64))) do
+                local request = assert(bounds.object(raw))
+                local data = assert(bounds.object(request.data))
+                local effect = bounds.object(data.effect)
+                if effect and effect.approval_id == approval_id then
+                    test.eq(delivered.name, name)
+                    test.is_true(type(delivered.pid) == "string")
+                    test.is_true(assert(bounds.integer(delivered.generation)) > 0)
+                    test.eq(data.topic, service.TOPIC_WAKE)
+                    test.eq(data.request_id, effect.event_id)
+                    test.eq(effect.contract_version, 2)
+                    test.eq(effect.revision, 2)
+                    test.eq(effect.destination, destination)
+                    return
+                end
+            end
+        end
+    end)
+    process.registry.unregister("bee.test.effect_delivery")
+    process.unlisten(wakes)
+    if not ok then error(tostring(problem)) end
+end
 local function define_tests()
     test.describe("Approval owner", function()
         install_policy()
@@ -261,40 +297,27 @@ local function define_tests()
             test.eq(value(call(alice, "read", {approval_id = mine.approval_id})).state, "pending")
             test.eq(code(call(outsider, "decide_batch", {decisions = {item(mine)}})), "DENIED")
         end)
-        test.it("wakes installation effect workers when an approval decision commits", function()
+        test.it("wakes the Gateway owner for installation when an approval decision commits", function()
             local workspace = "ws-effect-wake-" .. key()
             local created = value(call(requester, "request", request_of(workspace, {proposal = {kind = "operation", ref = "bee.hub:apply", revision = "1", payload = {}}})))
-            local registered, register_error = process.registry.register("bee.approvals.installation_effect_worker")
-            if not registered then error("register installation effect worker: " .. tostring(register_error)) end
-            local wakes = assert(process.listen(service.TOPIC_WAKE, {message = true}))
-            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
-                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"}))
-            local deadline = time.after("1s")
-            local selected = channel.select({wakes:case_receive(), deadline:case_receive()})
-            test.eq(selected.ok, true)
-            test.eq(selected.channel == wakes, true)
+            effect_wake(assert(bounds.id(created.approval_id)), "gateway.installation", "bee.gateway.external", function()
+                value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
+                    proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"}))
+            end)
         end)
-        test.it("wakes publication effect workers when an approval decision commits", function()
+        test.it("wakes the Gateway owner for publication when an approval decision commits", function()
             local workspace = "ws-publish-wake-" .. key()
             local created = value(call(requester, "request", request_of(workspace, {proposal = {kind = "operation", ref = "bee.hub:publish", revision = "1", payload = {}}})))
-            local registered, register_error = process.registry.register("bee.approvals.publication_effect_worker")
-            if not registered then error("register publication effect worker: " .. tostring(register_error)) end
-            local wakes = assert(process.listen(service.TOPIC_WAKE, {message = true}))
-            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
-                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"}))
-            local deadline = time.after("1s")
-            local selected = channel.select({wakes:case_receive(), deadline:case_receive()})
-            test.eq(selected.ok, true)
-            test.eq(selected.channel == wakes, true)
+            effect_wake(assert(bounds.id(created.approval_id)), "gateway.publication", "bee.gateway.external", function()
+                value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
+                    proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "approved"}))
+            end)
         end)
         test.it("wakes the activation worker and lists an approved activation until it is consumed", function()
             local workspace = "ws-activation-" .. key()
             local activation = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "r1", payload = {source_workspace = "todo"}}
             local created = value(call(requester, "request", request_of(workspace, {proposal = activation})))
             local unrelated = value(call(requester, "request", request_of(workspace)))
-            local registered, register_error = process.registry.register("bee.gov.activation_worker")
-            if not registered then error("register activation worker: " .. tostring(register_error)) end
-            local wakes = assert(process.listen(service.TOPIC_WAKE, {message = true}))
             local worker = caller("bee.test.activation_worker", {"bee.security.approvals:approval_activation_effects_policy"})
             local function listed(): {[string]: boolean}
                 local found: {[string]: boolean} = {}
@@ -304,12 +327,12 @@ local function define_tests()
                 return found
             end
             test.is_nil(listed()[tostring(created.approval_id)])
-            for _, request in ipairs({created, unrelated}) do
-                value(call(alice, "decide", {approval_id = request.approval_id, expected_revision = request.revision,
-                    proposal_digest = request.proposal_digest, reviewed_digest = request.reviewed_digest, decision = "approved"}))
-            end
-            local selected = channel.select({wakes:case_receive(), time.after("1s"):case_receive()})
-            test.eq(selected.channel == wakes, true)
+            effect_wake(assert(bounds.id(created.approval_id)), "gov.activation", "bee.gov.activation_worker", function()
+                for _, request in ipairs({created, unrelated}) do
+                    value(call(alice, "decide", {approval_id = request.approval_id, expected_revision = request.revision,
+                        proposal_digest = request.proposal_digest, reviewed_digest = request.reviewed_digest, decision = "approved"}))
+                end
+            end)
             local approved = listed()
             test.is_true(approved[tostring(created.approval_id)])
             test.is_nil(approved[tostring(unrelated.approval_id)])

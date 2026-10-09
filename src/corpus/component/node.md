@@ -125,3 +125,6 @@ recovery finds pending or running rows; a new runner interrupts earlier running
 rows once and executes pending rows. It requests quiet stop after every
 execution coroutine finishes and the final results are durable. An enqueue
 during quiet stop advances the demand generation and restarts the runner.
+The Node owner waits for the registered boot gates before building its catalog.
+Node and the runner depend on resident Hive, so restarting Node or starting
+another run does not rerun the bootloader or governance recovery.

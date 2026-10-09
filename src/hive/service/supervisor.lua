@@ -23,6 +23,7 @@ local remote = require("remote")
 local cdc = require("cdc")
 local demand = require("demand")
 local demand_owner = require("demand_owner")
+local boot_gate = require("boot_gate")
 
 type Completion = {request: protocol.Forwarded, reply: protocol.Reply?, complete: boolean}
 
@@ -208,6 +209,11 @@ local function main()
     adopt()
     local backlog_stream = assert(cdc.stream("bee:changes", {tables = demand_owner.tables(demanded), ops = {"insert", "update", "delete"}}))
     local backlog = backlog_stream:channel()
+    if not boot_gate.wait(function(): boolean
+        local selected = channel.select({supervised:case_receive(), events:case_receive()})
+        if not selected.ok then return false end
+        return selected.channel ~= events or selected.value.kind ~= process.event.CANCEL
+    end) then return end
     demand_owner.recover(demanded, nil)
     while true do
         local selected = channel.select({calls:case_receive(), readiness:case_receive(), events:case_receive(),

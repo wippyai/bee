@@ -199,7 +199,10 @@ def owner_scheduling(src):
     path.write_text(yaml.safe_dump(document, sort_keys=False))
     path = src / "gateway/service/_index.yaml"
     document = yaml.safe_load(path.read_text())
-    next(entry for entry in document["entries"] if entry["name"] == "external_service")["meta"]["demand"]["effects"] = False
+    next(entry for entry in document["entries"] if entry["name"] == "external")["imports"]["effects"] = "bee.gateway.service:effects_fixture"
+    next(entry for entry in document["entries"] if entry["name"] == "backlog")["source"] = "file://effects_disabled.lua"
+    document["entries"].append({"name": "effects_fixture", "kind": "library.lua", "source": "file://effects_disabled.lua", "meta": {"type": "test_support"}})
+    shutil.copy2(TESTS / "lua/gateway/effects_disabled.lua", src / "gateway/service/effects_disabled.lua")
     path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
@@ -235,6 +238,29 @@ def hold_docker_cleanup(src):
     end""")
 
 
+def observe_effect_delivery(src):
+    replace_once(src / "process/demand_owner.lua",
+                 "        for _, request in ipairs(requests) do",
+                 """        local observer = process.registry.lookup("bee.test.effect_delivery")
+        if observer then
+            process.send(tostring(observer), "bee.test.effect_delivery", {
+                name = owner.name, pid = pid, generation = owner.state.generation, requests = requests})
+        end
+        for _, request in ipairs(requests) do""")
+
+
+def observe_boot_recovery(src):
+    shutil.copy2(TESTS / "lua/gov/recovery_trace.lua", src / "gov/service/recovery_trace.lua")
+    replace_once(src / "gov/service/recovery.lua", 'local logger = require("logger")',
+                 'local trace = require("trace")\nlocal logger = require("logger")')
+    replace_once(src / "gov/service/recovery.lua", "local function main()", "local function main()\n    trace.record()")
+    path = src / "gov/service/_index.yaml"
+    document = yaml.safe_load(path.read_text())
+    next(entry for entry in document["entries"] if entry["name"] == "recovery")["imports"]["trace"] = "bee.gov.service:recovery_trace"
+    document["entries"].append({"name": "recovery_trace", "kind": "library.lua", "source": "file://recovery_trace.lua", "modules": ["sql"], "meta": {"type": "test_support"}})
+    path.write_text(yaml.safe_dump(document, sort_keys=False))
+
+
 def main():
     shutil.rmtree(COMPOSITION, ignore_errors=True)
     src = COMPOSITION / "src"
@@ -245,6 +271,8 @@ def main():
     owner_scheduling(src)
     hold_test_runner_quiet(src)
     hold_docker_cleanup(src)
+    observe_effect_delivery(src)
+    observe_boot_recovery(src)
     observe_carrier(src)
     hold_attempt_snapshot(src)
     gate_runner(src)

@@ -52,6 +52,7 @@ entries:
     - registry.find
     - system.read
     - process.send
+    - process.registry.lookup
     resources:
     - bee:db
     - bee.approvals.env:policies_ref

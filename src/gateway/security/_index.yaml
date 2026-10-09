@@ -638,12 +638,3 @@ entries:
     resources:
     - bee.gateway.service:publication_worker
     effect: allow
-- name: effects_names
-  kind: security.policy
-  policy:
-    actions:
-    - process.registry.register
-    resources:
-    - bee.approvals.installation_effect_worker
-    - bee.approvals.publication_effect_worker
-    effect: allow

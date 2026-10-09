@@ -447,5 +447,9 @@ scope. It drains approved activations and ended requests in bounded batches,
 then reconciles source following. Failed outcomes and following retries keep
 the worker active on its existing retry schedule. Source consent and Sync
 receipt completion demand-wake the worker; boot recovery probes approval
-queues and the following ledger. Approval decision wakes remain a direct-name
-integration for the separate approvals consolidation.
+queues and the following ledger. The registered `gov.activation` consumer
+names this worker as its demand owner. Contract 2 approval events use the same
+supervised demand path as following wakes, including while the worker is absent.
+Resident Hive waits for the one-shot boot recovery gate before probing backlogs.
+Activation depends on Hive, so repeated demand does not restart boot recovery
+beside an activation already applying.

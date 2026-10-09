@@ -87,6 +87,7 @@ entries:
     outbox: bee.approvals.persist:outbox
     dispatch: bee.approvals.persist:dispatch
     schema: bee.tests.support:schema
+    demand: bee.process:demand
     thread_harness: bee.tests.threads:harness
 - name: lease_flow_test_policy
   kind: security.policy
@@ -165,3 +166,20 @@ entries:
     destination: fixture.effect
     operation_ref: bee.test:effect
     worker_name: bee.test.effect_worker
+- name: effect_demand_db
+  kind: db.sql.sqlite
+  file: .wippy/effect-demand.db
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}
+- name: effect_demand_test
+  kind: function.lua
+  source: file://effect_demand_test.lua
+  method: run
+  modules: [sql, process, events, channel, time, system]
+  meta: {type: test, suite: a_demand_effects, timeout: 45s}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    dispatch: bee.approvals.persist:dispatch
+    resources: bee.approvals.env:resources
+    demand: bee.process:demand

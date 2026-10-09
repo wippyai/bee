@@ -17,6 +17,7 @@ entries:
     settings: bee.node:settings
     appearance: bee.ui:appearance
     client: bee.node:client
+    boot_gate: bee.process:boot_gate
 - name: owner_service
   meta:
     title: Node · owner
@@ -25,10 +26,10 @@ entries:
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires: [wippy.bootloader:bootloader.service, bee.gov.service:recovery_service]
+    requires: [bee.hive.service:supervisor_service]
     security:
       actor: {id: bee.node}
-      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_attention, bee.node.security:owner_role, bee.hive.security:messaging]
+      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_attention, bee.node.security:owner_role, bee.process:boot_gate_policy, bee.hive.security:messaging]
     restart:
       max_attempts: 10
 - name: tests
@@ -63,8 +64,6 @@ entries:
   lifecycle:
     auto_start: false
     requires:
-    - wippy.bootloader:bootloader.service
-    - bee.gov.service:recovery_service
     - bee.hive.service:supervisor_service
     security:
       actor:

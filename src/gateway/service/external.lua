@@ -23,9 +23,6 @@ local function main()
     local changes = stream:channel()
     local waiting: {Waiting} = {}
     local demanded = assert(process.listen(demand.WAKE, {message = true}))
-    local approval_wakes = assert(process.listen("bee.approvals.wake", {message = true}))
-    assert(process.registry.register("bee.approvals.installation_effect_worker"))
-    assert(process.registry.register("bee.approvals.publication_effect_worker"))
     local installation = task.new("gateway installation", function(): boolean return effects.drain("installation") end)
     local publication = task.new("gateway publication", function(): boolean return effects.drain("publication") end)
     local generation = 0
@@ -70,7 +67,7 @@ local function main()
         task.advance(publication)
         if #waiting == 0 and task.quiet(installation) and task.quiet(publication) then assert(demand.quiet(NAME, generation)) end
         local cases = {lifecycle:case_receive(), requests:case_receive(), changes:case_receive(), demanded:case_receive(),
-            approval_wakes:case_receive(), installation.completed:case_receive(), publication.completed:case_receive()}
+            installation.completed:case_receive(), publication.completed:case_receive()}
         local install_retry = task.deadline(installation)
         local publish_retry = task.deadline(publication)
         if install_retry then cases[#cases + 1] = install_retry:case_receive() end
@@ -87,7 +84,6 @@ local function main()
             if selected.value.kind == process.event.CANCEL then return end
         elseif selected.channel == installation.completed then task.finish(installation, selected.value == true)
         elseif selected.channel == publication.completed then task.finish(publication, selected.value == true)
-        elseif selected.channel == approval_wakes then task.wake(installation); task.wake(publication)
         elseif selected.channel == demanded then
             local message = selected.value
             local supervisor = process.registry.lookup(demand.SUPERVISOR, process.registry.LOCAL)

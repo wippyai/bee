@@ -34,7 +34,8 @@ entries:
 - name: dispatch
   kind: library.lua
   source: file://dispatch.lua
-  modules: [sql, process]
+  modules: [sql]
   imports:
+    demand: bee.process:demand
     resources: bee.approvals.env:resources
     bounds: bee.values:bounds

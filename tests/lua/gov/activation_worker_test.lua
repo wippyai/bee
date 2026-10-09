@@ -3,6 +3,7 @@
 local test = require("test")
 local registry = require("registry")
 local security = require("security")
+local funcs = require("funcs")
 
 local function service_scope(): security.Scope
     local entry = assert(registry.get("bee.gov.service:activation_service"))
@@ -15,6 +16,11 @@ end
 
 local function define_tests()
     test.describe("Activation worker", function()
+        test.it("reads pending ready and ended effects through the registered consumer queue", function()
+            local pending, problem = funcs.call("bee.tests.gov:activation_pending_probe")
+            test.eq(problem, nil)
+            test.eq(type(pending), "boolean")
+        end)
         test.it("may register the name approvals wakes it by and read approved and ended activations", function()
             local scope = service_scope()
             local actor = security.new_actor("bee.gov.activation")

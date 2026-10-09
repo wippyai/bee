@@ -62,7 +62,11 @@ work. `effect` records claims, starts, completions and reconciliation. A
 final completion acknowledges the consumer's durable terminal events in the
 same transaction. An uncertain effect keeps its provisional receipt queued
 for reconciliation and leaves those events unacknowledged. Missing receivers
-keep their events for restart and catch-up.
+keep their events for restart and catch-up. `worker_name` names a supervised
+demand owner: dispatch starts an absent owner, waits for its authenticated
+readiness, and delivers through the generation handshake. Installation and
+publication share the Gateway owner; activation uses its own owner. Consumers
+have no parallel direct-name wake path.
 
 Gateway installation (`gateway.installation`), publication
 (`gateway.publication`) and governed activation (`gov.activation`) are domain

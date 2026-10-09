@@ -4,7 +4,6 @@ local worker = require("worker")
 local pass = require("pass")
 local service = require("service")
 local bounds = require("bounds")
-local approval_service = require("approval_service")
 
 local function drain(): boolean
     local failed = false
@@ -35,7 +34,7 @@ local function drain(): boolean
 end
 
 local function main()
-    worker.run({name = "bee.gov.activation_worker", wake = approval_service.TOPIC_WAKE, demand = true, pass = drain})
+    worker.run({name = "bee.gov.activation_worker", demand = true, pass = drain})
 end
 
 return {main = main, drain = drain}

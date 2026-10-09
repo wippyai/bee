@@ -9,12 +9,11 @@ entries:
   - logger
   imports:
     installation: bee.gateway.security:installation
-    approval_service: bee.approvals.binding:service
   meta:
     type: bee.approvals.effect-consumer
     destination: gateway.installation
     operation_ref: bee.hub:apply
-    worker_name: bee.approvals.installation_effect_worker
+    worker_name: bee.gateway.external
     effect_prefix: 'hub-install:'
 - name: publication_worker
   kind: function.lua
@@ -24,13 +23,11 @@ entries:
   - logger
   imports:
     publish: bee.gateway.security:publish
-    approval_service: bee.approvals.binding:service
-
   meta:
     type: bee.approvals.effect-consumer
     destination: gateway.publication
     operation_ref: bee.hub:publish
-    worker_name: bee.approvals.publication_effect_worker
+    worker_name: bee.gateway.external
     effect_prefix: 'hub-publish:'
 - name: external_cli
   kind: process.lua
@@ -83,7 +80,6 @@ entries:
     restart:
       max_attempts: 10
     requires:
-    - wippy.bootloader:bootloader.service
     - bee.hive.service:supervisor_service
     security:
       actor:
@@ -102,7 +98,6 @@ entries:
       - bee.gateway.security:effects_host_policy
       - bee.gateway.security:effects_discovery_policy
       - bee.process:client_policy
-      - bee.gateway.security:effects_names
       - bee.process:backlog_policy
   meta:
     title: "Gateway \xB7 owner"

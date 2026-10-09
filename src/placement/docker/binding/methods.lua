@@ -351,7 +351,6 @@ function M.cleanup(value: unknown): Reply
         while true do
             local current, failure = M.load(value)
             if not current then return fail("STORAGE", failure or "cleanup receipt unavailable") end
-            if current.attempt.cleanup_state == "complete" then return succeed(current.attempt) end
             local db = assert(store.open())
             local rows, read_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND sequence > ? AND kind = 'docker.cleanup_failed' ORDER BY sequence LIMIT 1", {current.attempt.attempt_id, sequence})
             db:release()
@@ -361,6 +360,7 @@ function M.cleanup(value: unknown): Reply
                 if not code or not message then return fail("STORAGE", "cleanup failure evidence is malformed") end
                 return fail(code, message)
             end
+            if current.attempt.cleanup_state == "complete" then return succeed(current.attempt) end
             local _, open = changes:channel():receive()
             if not open then return fail("UNAVAILABLE", "cleanup observation closed") end
         end

@@ -296,3 +296,4 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.hive:protocol
+    effects: bee.gateway.service:effects

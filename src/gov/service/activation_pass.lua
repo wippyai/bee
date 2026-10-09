@@ -43,9 +43,9 @@ local function carry(items: {unknown}, kind: "approved" | "ended", outcomes: {Ou
 end
 
 function M.pending(): boolean
-    local approved, problem = queue(EFFECTS, "effects")
+    local approved, problem = queue("ready")
     if not approved then error(problem) end
-    local ended, failure = queue(CLOSURES, "closures")
+    local ended, failure = queue("ended")
     if not ended then error(failure) end
     return #approved > 0 or #ended > 0
 end

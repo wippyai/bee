@@ -37,7 +37,10 @@ end
 -- expect fails the test with step and the screen unless the viewport comes to
 -- show text (present) or stops showing it.
 local function expect(view: tty.Viewport, step: string, text: string, present: boolean)
-    if not shows(view, text, present) then error(step .. ": screen was\n" .. screen(view)) end
+    if not shows(view, text, present) then
+        local supervisor = assert(system.supervisor.state("bee.hive.service:supervisor_service"))
+        error(step .. ": Hive " .. supervisor.status .. " " .. tostring(supervisor.details) .. "; screen was\n" .. screen(view))
+    end
 end
 
 local function key(view: tty.Viewport, name: string, modifiers: {[string]: boolean}?)
@@ -391,6 +394,9 @@ local function define_recovery_tests()
         test.it("waits for an owner that stays away longer than a request waits", function()
             local lifecycle = assert(process.events())
             local service = "bee.node.service:owner_service"
+            local boot = assert(system.supervisor.state("wippy.bootloader:bootloader.service")).started_at
+            local recovery = assert(system.supervisor.state("bee.gov.service:recovery_service")).started_at
+            local hive = assert(process.registry.lookup("bee.hive.supervisor", process.registry.LOCAL))
             local owner = node_state().owner
             assert(process.monitor(owner))
             assert(events.send("supervisor", "service.stop", service))
@@ -409,6 +415,10 @@ local function define_recovery_tests()
             time.sleep("1s")
             assert(events.send("supervisor", "service.start", service))
             expect(view, "the display shows the node once its owner is back", "Bees", true)
+            test.eq(assert(system.supervisor.state("wippy.bootloader:bootloader.service")).started_at, boot)
+            test.eq(assert(system.supervisor.state("bee.gov.service:recovery_service")).started_at, recovery)
+            test.eq(assert(system.supervisor.state("bee:changes")).status, "running")
+            test.eq(process.registry.lookup("bee.hive.supervisor", process.registry.LOCAL), hive)
             exits(lifecycle, {pid})
             view:close()
         end)

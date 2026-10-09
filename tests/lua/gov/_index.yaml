@@ -1019,9 +1019,19 @@ entries:
   source: file://activation_worker_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [registry, security]
+  modules: [registry, security, funcs]
   imports:
     test: wippy.test:test
+- name: activation_pending_probe
+  kind: function.lua
+  source: file://activation_drain_probe.lua
+  method: pending
+  imports:
+    pass: bee.gov.service:activation_pass
+  security:
+    policies:
+    - bee.gov.security:destination_service_policy
+    - bee.security.approvals:approval_activation_effects_policy
 - name: process_grant_call_policy
   kind: security.policy
   meta:
@@ -1419,7 +1429,6 @@ entries:
     worker: bee.process:worker
     pass: bee.tests.gov:activation_fixture
     service: bee.tests.gov:activation_follow_fixture
-    approval_service: bee.approvals.binding:service
     bounds: bee.values:bounds
 - name: activation_drain_test
   kind: function.lua

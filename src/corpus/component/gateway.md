@@ -95,7 +95,7 @@ refuses the call.
 The gateway owner starts for routed pairing or durable effect work and stops
 when waits and both effect tasks drain. Installation and publication execute
 as the gateway worker under separate declared scopes; their grants are not
-combined with the external owner's scope. Boot recovery reads both effect
-queues. Existing approval wakes reach the owner while it holds the legacy
-worker names; starting it for an approval decision belongs to the approvals
-wake consolidation described in `component/hive`.
+combined with the external owner's scope. Boot recovery reads the contract 2
+effect queues for the registered consumer destinations. Both consumers name
+`bee.gateway.external` as their demand owner. Approval events reach that owner
+through supervised demand dispatch, including while it is absent or stopping.

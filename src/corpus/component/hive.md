@@ -66,13 +66,17 @@ Hive serializes demand for an explicit allowlist of host owners declared with
 for the registered owner to acknowledge readiness, and delivers a generation
 with its requests. Quiet stop accepts only that owner's current generation.
 Demand arriving during stop starts the owner after the supervised stop
-completes. Boot recovery calls each domain's durable backlog probe.
+completes. Hive waits for registered `bee.process.boot_gate` services to complete
+before probing durable backlogs or delivering demand. Supervisor events advance
+that startup wait. The gates are startup barriers; restarting a completed gate
+does not stop Hive. Node also waits at that startup barrier. Node and transient owners depend on
+resident Hive, so later starts do not rerun the bootloader or restoration.
 
-The approvals consolidation retains a separate integration obligation:
-`src/approvals/binding/service.lua` still sends direct wakes only to existing
-worker names. Its wake path needs demand delivery to the consolidated approval
-owner and the gateway and activation owners. The services lane leaves both
-approvals namespaces unchanged.
+Contract 2 discovers approval effect consumers through registry metadata and
+dispatches their durable terminal events to each registered demand owner.
+Gateway installation and publication share one owner; activation retains its
+own scope and owner. Consumer wakes start absent owners and survive quiet stop.
+The approval authority, Hive receiver and delivery processes remain separate.
 
 Within the services audit, excluding the concurrent approvals consolidation,
 an idle node runs four resident owners: Hive, Node, Threads and Sync. Threads

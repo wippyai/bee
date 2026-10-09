@@ -88,6 +88,9 @@ Failures are recorded as placement evidence.
 - Docker start refusal records `child.start_failed` and exposes its exact cause
   as `start_failure` in status and placement events. Threads reports a failed
   launch as `start_failed`; cleanup still requires daemon proof of a stopped or absent container.
+- Joined Docker cleanup callers observe the first failure recorded after their
+  request, even if a later supervision round completes cleanup before they read
+  it. A subsequent request observes the durable completion.
 - Signal evidence is not exit evidence. A liveness observation is returned
   beside the recorded state, never folded into it.
 - Capabilities: `direct_process` controls the launched pid only,

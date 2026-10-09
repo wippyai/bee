@@ -6,8 +6,12 @@ local system = require("system")
 local events = require("events")
 local channel = require("channel")
 local time = require("time")
+local effects = require("effects")
 local function define_tests()
     test.describe("Gateway demand", function()
+        test.it("probes both registered consumer queues under their separate execution scopes", function()
+            test.eq(type(effects.pending()), "boolean")
+        end)
         test.it("starts the routed owner while absent and stops after the call drains", function()
             local found = false
             for _, entry in ipairs(registry.find({["meta.type"] = "bee.process.demand"}) or {}) do

@@ -1,6 +1,18 @@
 version: '1.0'
 namespace: bee.process
 entries:
+- name: boot_gate
+  kind: library.lua
+  source: file://boot_gate.lua
+  modules: [registry, system]
+  imports:
+    bounds: bee.values:bounds
+- name: boot_gate_policy
+  kind: security.policy
+  policy:
+    actions: [events.subscribe, system.read]
+    resources: [supervisor]
+    effect: allow
 - name: worker
   kind: library.lua
   source: file://worker.lua

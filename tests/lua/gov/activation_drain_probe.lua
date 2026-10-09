@@ -8,4 +8,4 @@ local function drain(): {pass.Outcome}
     return outcomes
 end
 
-return {drain = drain}
+return {drain = drain, pending = pass.pending}

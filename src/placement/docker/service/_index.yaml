@@ -92,7 +92,6 @@ entries:
   lifecycle:
     auto_start: false
     requires:
-    - wippy.bootloader:bootloader.service
     - bee.hive.service:supervisor_service
     security:
       actor:

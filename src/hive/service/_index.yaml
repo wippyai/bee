@@ -21,6 +21,7 @@ entries:
     remote: bee.hive:remote
     demand: bee.process:demand
     demand_owner: bee.process:demand_owner
+    boot_gate: bee.process:boot_gate
 - name: supervisor_service
   meta:
     title: "Hive \xB7 supervisor"

@@ -40,6 +40,7 @@ local broker = require("broker")
 local command = require("command")
 local arguments = require("arguments")
 local env = require("env")
+local boot_gate = require("boot_gate")
 
 -- terminal marks an app that renders a terminal emulator, which takes the
 -- theme's terminal page colors.
@@ -213,6 +214,14 @@ end
 
 local function main(saved: unknown)
     if env.get("bee:role") == "client" then return idle() end
+    local startup = assert(eventbus.subscribe("supervisor", "service.update"))
+    local lifecycle = assert(process.events())
+    local complete = boot_gate.wait(function(): boolean
+        local selected = channel.select({startup:channel():case_receive(), lifecycle:case_receive()})
+        return selected.ok and (selected.channel ~= lifecycle or selected.value.kind ~= process.event.CANCEL)
+    end)
+    startup:close()
+    if not complete then return end
     local node = assert(system.node.id())
     -- Apps are linked to the owner: an owner that fails takes its apps with
     -- it, so the restarted owner reopens each kept app once. The owner traps

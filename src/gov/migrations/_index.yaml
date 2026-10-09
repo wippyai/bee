@@ -97,3 +97,18 @@ entries:
     grants: bee.approvals.grants:store
     clock: bee.values:clock
     bounds: bee.values:bounds
+- name: follow_grants
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-14T00:01:00Z'
+  source: file://follow_grants.lua
+  method: run
+  modules: [sql, json]
+  imports:
+    migration: wippy.migration:migration
+    grants: bee.approvals.grants:store
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+    clock: bee.values:clock

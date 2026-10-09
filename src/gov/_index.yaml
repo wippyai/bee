@@ -136,3 +136,9 @@ entries:
     - feed: governance.application_versions
       content_kinds:
       - bee.governance-application-version@2
+- name: follow_grant_policy
+  kind: registry.entry
+  meta:
+    type: bee.approvals.grant-policy
+    domain: follow_source
+    allow_permanent: true

@@ -57,6 +57,8 @@ entries:
   source: file://follow_store.lua
   modules: [sql, json, hash]
   imports:
+    grants: bee.approvals.grants:store
+    clock: bee.values:clock
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     transaction: bee.persist:transaction

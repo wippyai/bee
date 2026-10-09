@@ -1444,3 +1444,26 @@ entries:
   source: file://activation_follow_fixture.lua
   imports:
     fixture: bee.tests.gov:activation_fixture
+- name: grant_migration_db
+  kind: db.sql.sqlite
+  file: .wippy/governance-grant-migration.db
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}
+- name: grant_migration_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get, funcs.call, registry.find]
+    resources: '*'
+    effect: allow
+- name: grant_migration_test
+  kind: function.lua
+  source: file://grant_migration_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: 60s}
+  modules: [sql, funcs, json]
+  security:
+    policies: [bee.tests.gov:grant_migration_policy]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds

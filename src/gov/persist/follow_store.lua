@@ -7,11 +7,13 @@ local canonical = require("canonical")
 local transaction = require("transaction")
 local semver = require("semver")
 local version = require("version")
+local grants = require("grants")
+local clock = require("clock")
 local M = {}
 type Store = {db: sql.DB, node: string, workspace: string, closed: boolean}
 type Identity = {source_node: string, source_workspace: string, component: string}
 type Mode = "off" | "following" | "paused" | "pinned"
-type Row = {source_node: string, source_workspace: string, component: string, mode: Mode,
+type Row = {grant_id: string?, source_node: string, source_workspace: string, component: string, mode: Mode,
     revision: integer, cursor: integer, version: string, artifact_digest: string, content_digest: string?,
     pending: version.Descriptor?, intent_id: string?, last_outcome: string?, last_message: string?}
 type Result = transaction.Result
@@ -35,7 +37,7 @@ local function decode(raw: unknown): Row?
     local value = bounds.object(raw)
     if not value then return nil end
     local source_node, source_workspace, component = bounds.id(value.source_node), bounds.id(value.source_workspace), bounds.id(value.component)
-    local selected_mode, revision, cursor = mode(value.mode), bounds.count(value.revision), bounds.count(value.cursor)
+    local selected_mode, revision, cursor = mode(value.mode or "off"), bounds.count(value.revision), bounds.count(value.cursor)
     local release, artifact_digest = bounds.id(value.version), sha(value.artifact_digest)
     if not source_node or not source_workspace or not component or not selected_mode or not revision or not cursor
         or not release or not artifact_digest then return nil end
@@ -44,13 +46,38 @@ local function decode(raw: unknown): Row?
     local intent_id = bounds.id(value.intent_id)
     if pending and not intent_id then return nil end
     if value.content_digest ~= nil and not sha(value.content_digest) then return nil end
-    return {source_node = source_node, source_workspace = source_workspace, component = component,
+    return {grant_id = bounds.id(value.grant_id), source_node = source_node, source_workspace = source_workspace, component = component,
         mode = selected_mode, revision = revision, cursor = cursor, version = release, artifact_digest = artifact_digest,
         content_digest = sha(value.content_digest), pending = pending, intent_id = intent_id,
         last_outcome = bounds.id(value.last_outcome), last_message = bounds.text(value.last_message, 8192)}
 end
+local function hydrate(tx: sql.Transaction, row: Row): string?
+    if not row.grant_id then return "follow consent grant is missing" end
+    local grant, err = grants.read(tx,row.grant_id)
+    if not grant then return err or "follow consent grant is missing" end
+    row.mode = grants.state(grant,clock.milliseconds()) == "active" and "following" or (mode(grant.metadata.mode) or "paused")
+    if row.mode == "following" and grants.state(grant,clock.milliseconds()) ~= "active" then row.mode = "paused" end
+    return nil
+end
+local function consent_in(tx: sql.Transaction, store: Store, row: Row, selected_mode: Mode): Result?
+    local actor, definition = grants.principal(store.node)
+    if row.grant_id then
+        local prior, err = grants.read(tx,row.grant_id)
+        if not prior then return transaction.sql_failure(err,"read follow consent") end
+        local revoke_error = grants.revoke(tx,prior,prior.revision,actor,clock.milliseconds())
+        if revoke_error then return transaction.sql_failure(revoke_error,"end follow consent") end
+    end
+    local id = grants.identity("follow_source",store.node,store.workspace,assert(canonical.encode({source_node = row.source_node,source_workspace = row.source_workspace,component = row.component,revision = row.revision + 1})))
+    local record: grants.Grant = {grant_id = id,domain = "follow_source",owner_node = store.node,workspace_id = store.workspace,requester_id = actor,granted_by = actor,granted_definition = definition,
+        subject = {principal_id = store.node,audience = row.component},scope = {type = "follow_source",parameters = {source_node = row.source_node,source_workspace = row.source_workspace,component = row.component}},
+        terms = {kind = "until_revoked",time_basis = "absolute"},provenance = {kind = "explicit_action",actor_id = actor,action = selected_mode},metadata = {mode = selected_mode},state = selected_mode == "following" and "active" or "revoked",revision = 1,used = 0,reserved = 0,created_at = clock.now()}
+    local err = grants.create(tx,record)
+    if err then return transaction.sql_failure(err,"record follow consent") end
+    row.grant_id,row.mode = id,selected_mode
+    return nil
+end
 local function read(tx: sql.Transaction, store: Store, identity: Identity): (Row?, Result?)
-    local rows, err = tx:query([[SELECT state_json FROM bee_governance_follow WHERE owner_node = ? AND workspace_id = ? AND source_node = ? AND source_workspace = ? AND component = ?]],
+    local rows, err = tx:query([[SELECT state_json FROM bee_governance_follow_progress WHERE owner_node = ? AND workspace_id = ? AND source_node = ? AND source_workspace = ? AND component = ?]],
         {store.node, store.workspace, identity.source_node, identity.source_workspace, identity.component})
     if not rows or err then return nil, transaction.sql_failure(err, "read following") end
     if #rows == 0 then return empty(identity), nil end
@@ -60,13 +87,17 @@ local function read(tx: sql.Transaction, store: Store, identity: Identity): (Row
     local row = not decode_error and decode(raw) or nil
     if not row or row.source_node ~= identity.source_node or row.source_workspace ~= identity.source_workspace
         or row.component ~= identity.component then return nil, transaction.failure("INTERNAL", "following identity is corrupt") end
+    local grant_error = hydrate(tx,row)
+    if grant_error then return nil,transaction.sql_failure(grant_error,"read follow consent") end
     return row, nil
 end
 local function write(tx: sql.Transaction, store: Store, row: Row): Result
     row.revision = row.revision + 1
-    local encoded = canonical.encode(row)
+    local progress: {[string]: unknown} = {}
+    for key,item in pairs(row) do if key ~= "mode" then progress[key] = item end end
+    local encoded = canonical.encode(progress)
     if not encoded then return transaction.failure("INTERNAL", "encode following state") end
-    local _, err = tx:execute([[INSERT INTO bee_governance_follow (owner_node, workspace_id, source_node, source_workspace, component, state_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_node, workspace_id, source_node, source_workspace, component) DO UPDATE SET state_json = excluded.state_json]],
+    local _, err = tx:execute([[INSERT INTO bee_governance_follow_progress (owner_node, workspace_id, source_node, source_workspace, component, state_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_node, workspace_id, source_node, source_workspace, component) DO UPDATE SET state_json = excluded.state_json]],
         {store.node, store.workspace, row.source_node, row.source_workspace, row.component, encoded})
     if err then return transaction.sql_failure(err, "persist following") end
     return transaction.success(row, false)
@@ -97,7 +128,8 @@ function M.consent(store: Store, identity: Identity, raw_mode: unknown, raw_vers
     end
     return mutate(store, identity, function(tx: sql.Transaction, row: Row): Result
         if row.revision == 0 then row.version, row.artifact_digest, row.content_digest = release, artifact_digest, content_digest end
-        row.mode = selected_mode
+        local err = consent_in(tx,store,row,selected_mode)
+        if err then return err end
         return write(tx, store, row)
     end)
 end
@@ -156,7 +188,7 @@ function M.list(resource: string, node: string): Result
     local db, open_error = sql.get(resource)
     if not db then return transaction.sql_failure(open_error, "open following ledger") end
     local result = transaction.read(db, "following", function(tx: sql.Transaction): Result
-        local rows, err = tx:query([[SELECT workspace_id, state_json FROM bee_governance_follow WHERE owner_node = ? ORDER BY workspace_id, source_node, source_workspace, component]], {node})
+        local rows, err = tx:query([[SELECT workspace_id, state_json FROM bee_governance_follow_progress WHERE owner_node = ? ORDER BY workspace_id, source_node, source_workspace, component]], {node})
         if not rows or err then return transaction.sql_failure(err, "list following") end
         local items: {{workspace_id: string, state: Row}} = {}
         for _, raw in ipairs(rows) do
@@ -164,6 +196,8 @@ function M.list(resource: string, node: string): Result
             local parsed = type(encoded) == "string" and json.decode(encoded) or nil
             local row = decode(parsed)
             if not workspace or not row then return transaction.failure("INTERNAL", "following ledger is corrupt") end
+            local grant_error = hydrate(tx,row)
+            if grant_error then return transaction.sql_failure(grant_error,"read follow consent") end
             items[#items + 1] = {workspace_id = workspace, state = row}
         end
         return transaction.success({items = items}, false)
@@ -174,7 +208,7 @@ function M.disable(store: Store, source_workspace: string, raw_mode: unknown): R
     local selected_mode = mode(raw_mode)
     if not selected_mode or not bounds.id(source_workspace) then return transaction.failure("INVALID", "Following pause is invalid") end
     return transaction.write(store.db, "following", function(tx: sql.Transaction): Result
-        local rows, err = tx:query([[SELECT state_json FROM bee_governance_follow WHERE owner_node = ? AND workspace_id = ? AND source_workspace = ?]],
+        local rows, err = tx:query([[SELECT state_json FROM bee_governance_follow_progress WHERE owner_node = ? AND workspace_id = ? AND source_workspace = ?]],
             {store.node, store.workspace, source_workspace})
         if not rows or err then return transaction.sql_failure(err, "read following consent") end
         for _, raw in ipairs(rows) do
@@ -182,7 +216,8 @@ function M.disable(store: Store, source_workspace: string, raw_mode: unknown): R
             local parsed = type(encoded) == "string" and json.decode(encoded) or nil
             local row = decode(parsed)
             if not row then return transaction.failure("INTERNAL", "Following consent is corrupt") end
-            row.mode = selected_mode
+            local consent_error = consent_in(tx,store,row,selected_mode)
+            if consent_error then return consent_error end
             local result = write(tx, store, row)
             if not result.ok then return result end
         end

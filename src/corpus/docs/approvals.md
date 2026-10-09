@@ -4,8 +4,9 @@
 decisions, history, inbox changes and delivery outbox rows in an owner-scoped
 database. See [component/approvals](../component/approvals.md) and
 [sync and inbox](sync_and_inbox.md) for the surrounding owner-feed boundary.
-Application confirmation dialogs are live broker questions; they are not
-durable approvals and never grant remote operation authority.
+Application confirmations use the same request and decision API with inline
+or dialog presentation. They record the confirmed gesture and admit one exact
+effect without creating a reusable Grant.
 
 ## Public contract
 
@@ -92,6 +93,42 @@ actors remain unrecorded. Follow progress, Docker provisioning, gateway access
 receipts and saved profile configuration survive central revocation, while
 future admission checks the live common Grant. Docker consent retains its
 original node-wide network and selection scope across workspaces.
+
+## Application confirmations
+
+The common confirmation model and dialog renderer live in
+`bee.approvals.app`. Library review, removal, revert and measured Hub
+apply/recovery, Settings admission, session/work/app/desktop controls, profile
+deletion, Docker revocation, external MCP revocation, login acknowledgment and
+Inbox administrative dialogs retain their existing appearance and keyboard
+flow. An existing immediate Grant-revoke gesture records an inline Decision
+without adding a prompt. Text entry remains an input operation.
+
+A confirmation uses contract 2, `bee.approvals:confirmation`, exact target
+scope and a sixty-second request and admission deadline. The host's
+`local-confirmation` policy admits only the requesting application instance's
+answer. Broker dialogs record the node's authenticated actor and the
+originating app/instance. Desktop confirmations belong to the destination
+node. App close/stop targets include an opaque execution identity, distinct
+from their logical window identity; a replacement execution needs a new
+confirmation. Session stop binds the current work reference. Library removal
+and revert pass the confirmed installed activation identity to their owner.
+Hub proposals retain measured digests, without entered package values.
+
+The confirmed Enter, Space, shortcut or pointer gesture is the existing
+`allow_once` or `deny` Decision, with `explicit_gesture` assurance and its
+presentation. Inline/dialog requests retain their durable history and requester
+events without opening a second Needs you prompt. Repeating the same answer replays one decision; different
+assurance conflicts. Escape/cancel withdraws the pending revision with its
+proposal and review digests. The model claims the effect through `effect` before the domain action and
+preserves incarnation revalidation. The confirmation creates no reusable
+Grant, cannot create a window and never authorizes a different target.
+
+Inbox history labels approved confirmations as confirmed and exposes the
+authenticated decider, exact action/target and recorded gesture. Existing
+unrecorded local confirmations remain unrecorded. Host-policy admission and
+credential/resource authorization retain policy provenance; they do not
+produce synthetic human decisions.
 
 ## Ownership and authority
 

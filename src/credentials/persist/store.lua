@@ -1,5 +1,6 @@
 -- MIT. SQL repository for credential metadata and consumed generations.
 local sql = require("sql")
+local json = require("json")
 local bounds = require("bounds")
 local node_database = require("node_database")
 local M = {}
@@ -138,11 +139,34 @@ function M.configuration_admitted(db: sql.DB, workspace: string, source: string,
     if err or not rows then return nil, "Configuration setup could not read its saved approval." end
     return #rows == 1 and rows[1].digest == digest, nil
 end
-function M.admit_configuration(db: sql.DB, workspace: string, source: string, path: string, digest: string, approval: string): string?
+function M.admit_configuration(db: Reader, workspace: string, source: string, path: string, digest: string, approval: string): string?
     local _, err = db:execute([[INSERT INTO bee_configuration_admissions (workspace_id, source_ref, source_path, digest, approval_id)
         VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace_id, source_ref, source_path) DO UPDATE SET digest = excluded.digest, approval_id = excluded.approval_id]],
         {workspace, source, path, digest, approval})
     if err then return "Configuration setup could not save the approval. Open Agents and choose Setup again." end
+    return nil
+end
+function M.configuration_receipt(db: sql.DB, approval: string): (Row?, string?)
+    local rows, err = db:query("SELECT receipt_json FROM bee_configuration_effects WHERE approval_id = ?", {approval})
+    if err or not rows then return nil, "Configuration setup receipt could not be read." end
+    if #rows == 0 then return nil, nil end
+    local receipt = bounds.object(json.decode(tostring(rows[1].receipt_json)))
+    if not receipt then return nil, "Configuration setup receipt is invalid." end
+    return receipt, nil
+end
+function M.finish_configuration(db: sql.DB, workspace: string, source: string, path: string, digest: string?, approval: string, receipt: Row): string?
+    local encoded, encode_error = json.encode(receipt)
+    if not encoded then return tostring(encode_error) end
+    local tx, begin_error = db:begin()
+    if not tx then return tostring(begin_error) end
+    if digest then
+        local admit_error = M.admit_configuration(tx, workspace, source, path, digest, approval)
+        if admit_error then tx:rollback(); return "Configuration setup could not save its admission." end
+    end
+    local _, save_error = tx:execute("INSERT INTO bee_configuration_effects (approval_id, receipt_json) VALUES (?, ?)", {approval, encoded})
+    if save_error then tx:rollback(); return "Configuration setup could not save its receipt." end
+    local _, commit_error = tx:commit()
+    if commit_error then return "Configuration setup could not commit its receipt." end
     return nil
 end
 return M

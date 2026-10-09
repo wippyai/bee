@@ -10,6 +10,7 @@ local types = require("types")
 local runner_fixture = require("runner_fixture")
 local principals = require("approval_principals")
 local fs = require("fs")
+local funcs = require("funcs")
 local function cases()
     test.describe("Composed launch without a login projection", function()
         for _, decision in ipairs({"approved", "denied"}) do
@@ -50,6 +51,7 @@ local function cases()
             local timeout = time.after("15s")
             local approvals = 0
             local settled = false
+            local approval_id: string? = nil
             local outcome: runner_fixture.Outcome? = nil
             while not outcome do
                 local event = channel.select({results:case_receive(), ticker:channel():case_receive(), timeout:case_receive()})
@@ -66,12 +68,17 @@ local function cases()
                         local view = assert(bounds.object(change.request))
                         if view.state == "pending" then
                             approvals = approvals + 1
+                            approval_id = bounds.id(view.approval_id)
                             local decision = approver:call("bee.approvals.binding:decide", {approval_id = view.approval_id,
-                                expected_revision = view.revision, proposal_digest = view.proposal_digest, decision = decision})
+                                expected_revision = view.revision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest, decision = decision})
                             test.is_true(assert(bounds.object(decision)).ok == true)
                             settled = true
                         end
                     end
+                end
+                if settled and not outcome then
+                    local problem, call_error = funcs.call("bee.credentials.binding:configuration_effects")
+                    test.is_nil(call_error); test.is_nil(problem)
                 end
             end
             ticker:stop()
@@ -88,6 +95,17 @@ local function cases()
                 test.eq(outcome.observed.publications, 0)
             end
             test.eq(approvals, 1)
+            local completed_raw, completed_error = approver:call("bee.approvals.binding:read", {approval_id = assert(approval_id)})
+            test.is_nil(completed_error)
+            local completed_reply = assert(bounds.object(completed_raw))
+            test.eq(completed_reply.ok, true)
+            local completed = assert(bounds.object(completed_reply.value))
+            local effect = assert(bounds.object(completed.effect))
+            test.eq(completed.contract_version, 2)
+            test.eq(effect.destination, "credentials.configuration")
+            test.eq(effect.state, decision == "approved" and "succeeded" or "canceled")
+            test.not_nil(completed.effect_completed_at)
+            test.eq(assert(bounds.object(completed.effect_result)).ok, decision == "approved")
             db:release()
         end)
         end

@@ -187,6 +187,14 @@ Generated provider configuration is additive and bounded. Drivers return
 validated argument literals and relative files; placement materializes them
 inside the private attempt/session home. Admitted composition retains a measured
 configuration base and publishes the result atomically in a retained session.
+Agents shows Setup when a person-owned base needs digest admission. Launch files
+one contract 2 request in Needs you, naming the source file and its use. The
+registered `credentials.configuration` consumer admits the reviewed digest
+through the credential broker and records its durable receipt before completing
+the central effect and acknowledging its event. The waiting launch continues
+from that effect completion. Denial ends the launch; a changed digest needs a
+new approval. Driver configuration rendering runs behind the driver function
+boundary, so catalog callers need no custom-scope creation authority.
 The composed read, render and publication share a 128 KiB bound; ordinary
 generated files retain their smaller bound. A retained
 session is reused only when host policy names its writable session resource,

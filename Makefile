@@ -124,6 +124,7 @@ test: binary-identity compose $(TEST_FIXTURES)/harness/bin/gateway-client
 		-o bee.gateway.service:gateway_installation_service:lifecycle.auto_start=false \
 		-o bee.gateway.service:gateway_publication_service:lifecycle.auto_start=false \
 		-o bee.gov.service:activation_service:lifecycle.auto_start=false \
+		-o bee.credentials.service:configuration_service:lifecycle.auto_start=false \
 		-o bee.threads.service:pump_service:lifecycle.auto_start=false \
 		$(if $(TESTS),test $(TESTS))
 

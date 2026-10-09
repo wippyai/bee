@@ -57,3 +57,19 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     configuration: bee.driver.binding:configuration
+
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    bounds: bee.values:bounds
+    configuration: bee.driver.binding:configuration
+  security:
+    policies: [bee.driver.binding:configure_policy]
+- name: configure_policy
+  kind: security.policy
+  policy:
+    actions: [registry.snapshot, registry.get, funcs.call, funcs.security, security.scope.create]
+    resources: '*'
+    effect: allow

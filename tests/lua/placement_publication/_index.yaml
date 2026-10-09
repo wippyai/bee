@@ -88,7 +88,7 @@ entries:
   source: file://configuration_setup_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: '30s'}
-  modules: [channel, time, json, hash, fs]
+  modules: [channel, time, json, hash, fs, funcs]
   security:
     policies:
     - bee.placement.native.security:placement_store_policy

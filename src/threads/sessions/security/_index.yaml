@@ -166,7 +166,7 @@ entries:
 - name: configuration_catalog_policy
   kind: security.policy.expr
   policy:
-    actions: [env.get, funcs.call, security.scope.create]
+    actions: [env.get, funcs.call]
     resources: '*'
-    expression: action == "funcs.call" || (action == "security.scope.create" && resource == "custom") || (action == "env.get" && resource in ["bee.env:machine_home", "bee.gateway.env:hook_executable"])
+    expression: action == "funcs.call" || (action == "env.get" && resource in ["bee.env:machine_home", "bee.gateway.env:hook_executable"])
     effect: allow

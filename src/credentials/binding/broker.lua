@@ -1157,34 +1157,23 @@ function M.capabilities(): credential_protocol.Reply
         rotation = "next_materialization", repeat_generation = "refused", max_secret_bytes = M.MAX_SECRET_BYTES, max_file_bytes = M.MAX_FILE_BYTES,
         max_ttl_ms = M.MAX_TTL_MS, revocation_enforcement = "stop_on_reconcile", node = local_node})
 end
-function M.configuration_setup(raw: unknown): credential_protocol.Reply
-    local request = bounds.object(raw)
-    if not request or bounds.fields(request, {"workspace_id", "provider", "base_path", "operation", "attempt_id"}) then return fail("INVALID", "Configuration setup request is invalid.") end
-    local workspace, provider, base_path = bounds.id(request.workspace_id), bounds.id(request.provider), formats.path(request.base_path)
-    local operation = bounds.member(request.operation, {"status", "admit", "materialize"})
-    local attempt = bounds.id(request.attempt_id)
-    if not workspace or not provider or not base_path or not operation then return fail("INVALID", "Configuration setup needs a workspace, provider and file.") end
-    if operation == "materialize" and not attempt then return fail("INVALID", "Configuration setup needs the launch attempt.") end
-    if operation == "admit" then attempt = uuid.v7() end
-    if operation == "materialize" then
-        if not security.can(M.MATERIALIZE, workspace) then return fail("DENIED", "Configuration setup is not authorized for this launch.") end
-    elseif not security.can("bee.harness.setup", workspace) then return fail("DENIED", "Configuration setup is not authorized in this workspace.") end
+local function configuration_io(workspace: string, provider: string, base_path: string): (configuration_admission.IO?, sql.DB?, sources.Setup?, credential_protocol.Reply?)
     local admitted, source_error = sources.host_sources()
-    if not admitted then return fail("UNAVAILABLE", source_error or "Configuration sources are unavailable.") end
+    if not admitted then return nil, nil, nil, fail("UNAVAILABLE", source_error or "Configuration sources are unavailable.") end
     local selected_ref: string? = nil
     local selected_setup: sources.Setup? = nil
     for _, source in ipairs(admitted.sources) do
         if source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace) and source.setup and source.setup.destination == base_path then
-            if selected_ref and (selected_ref ~= source.ref or (selected_setup and selected_setup.path ~= source.setup.path)) then return fail("CONFLICT", "Configuration setup names more than one source file.") end
+            if selected_ref and (selected_ref ~= source.ref or (selected_setup and selected_setup.path ~= source.setup.path)) then return nil, nil, nil, fail("CONFLICT", "Configuration setup names more than one source file.") end
             selected_ref, selected_setup = source.ref, source.setup
         end
     end
-    if not selected_ref or not selected_setup then return fail("FORBIDDEN", "Bee has no approved setup source for this configuration base. Open Agents and choose Setup for this profile.") end
+    if not selected_ref or not selected_setup then return nil, nil, nil, fail("FORBIDDEN", "This profile does not tell Bee where to find its configuration file. Ask the profile author to add a setup file, then choose Setup in Agents.") end
     local source_ref, setup = selected_ref, selected_setup
     local volume = fs.get(source_ref)
-    if not volume then return fail("UNAVAILABLE", "Configuration source folder is unavailable.") end
+    if not volume then return nil, nil, nil, fail("UNAVAILABLE", "Configuration source folder is unavailable.") end
     local db, db_error = store.open()
-    if not db then return fail("STORAGE", db_error or "Configuration approval store is unavailable.") end
+    if not db then return nil, nil, nil, fail("STORAGE", db_error or "Configuration approval store is unavailable.") end
     local io: configuration_admission.IO = {
         measure = function(): (configuration_admission.Base?, string?)
             local content, state, err = read_source_file(volume, setup.path, setup.content_format, M.MAX_FILE_BYTES, "configuration file")
@@ -1197,20 +1186,99 @@ function M.configuration_setup(raw: unknown): credential_protocol.Reply
             return {content = content, digest = digest, path = root .. "/" .. setup.path}, nil
         end,
         admitted = function(base: configuration_admission.Base): (boolean?, string?) return store.configuration_admitted(db, workspace, source_ref, setup.path, base.digest) end,
-        admit = function(base: configuration_admission.Base, approval: string): string? return store.admit_configuration(db, workspace, source_ref, setup.path, base.digest, approval) end,
+        finish = function(base: configuration_admission.Base?, approval: string, receipt: {[string]: unknown}): string?
+            return store.finish_configuration(db, workspace, source_ref, setup.path, base and base.digest, approval, receipt)
+        end,
+        receipt = function(approval: string): ({[string]: unknown}?, string?) return store.configuration_receipt(db, approval) end,
         call = function(target: string, value: {[string]: unknown}): (unknown, string?) return funcs.call(target, value) end,
         wait = function() time.sleep("100ms") end,
     }
+    return io, db, setup, nil
+end
+function M.configuration_setup(raw: unknown): credential_protocol.Reply
+    local request = bounds.object(raw)
+    if not request or bounds.fields(request, {"workspace_id", "provider", "base_path", "operation", "attempt_id"}) then return fail("INVALID", "Configuration setup request is invalid.") end
+    local workspace, provider, base_path = bounds.id(request.workspace_id), bounds.id(request.provider), formats.path(request.base_path)
+    local operation = bounds.member(request.operation, {"status", "admit", "materialize"})
+    local attempt = bounds.id(request.attempt_id)
+    if not workspace or not provider or not base_path or not operation then return fail("INVALID", "Configuration setup needs a workspace, provider and file.") end
+    if operation == "materialize" and not attempt then return fail("INVALID", "Configuration setup needs the launch attempt.") end
+    if operation == "admit" then attempt = uuid.v7() end
+    if operation == "materialize" then
+        if not security.can(M.MATERIALIZE, workspace) then return fail("DENIED", "Configuration setup is not authorized for this launch.") end
+    elseif not security.can("bee.harness.setup", workspace) then return fail("DENIED", "Configuration setup is not authorized in this workspace.") end
+    local io, db, setup, problem = configuration_io(workspace, provider, base_path)
+    if not io or not db or not setup then return problem or fail("UNAVAILABLE", "Configuration setup source is unavailable.") end
     if operation == "status" then
         local status, status_error = configuration_admission.status(io)
         db:release()
         if not status then return fail("UNAVAILABLE", status_error or "Configuration setup status is unavailable.") end
         return succeed(status)
     end
-    local base, admission_error = configuration_admission.ensure(io, workspace, provider, attempt)
+    local base, admission_error = configuration_admission.ensure(io, workspace, provider, attempt, base_path)
     db:release()
     if not base then return fail("DENIED", admission_error or "Configuration setup did not approve the file.") end
     if operation == "materialize" then return succeed({content = base.content, digest = base.digest, source_path = setup.path}) end
     return succeed({needs_setup = false, path = base.path})
 end
+function M.configuration_effects(): string?
+    local raw, err = funcs.call("bee.approvals.binding:effect_queue", {destination = "credentials.configuration", limit = 64})
+    local reply = bounds.object(raw)
+    local page = reply and reply.ok == true and bounds.object(reply.value)
+    local effects = page and bounds.array(page.effects, 64)
+    if err or not effects then return "Configuration setup effects could not be read: " .. tostring(err or (reply and reply.error)) end
+    for _, item in ipairs(effects) do
+        local view = bounds.object(item)
+        local proposal = view and bounds.object(view.proposal)
+        local payload = proposal and bounds.object(proposal.payload)
+        local workspace = payload and bounds.id(payload.workspace_id)
+        local provider = payload and bounds.id(payload.provider)
+        local path = payload and formats.path(payload.base_path)
+        if not view or not workspace or workspace ~= view.workspace_id or not provider or not path then return "Configuration setup effect has invalid source metadata." end
+        local io, db, _, problem = configuration_io(workspace, provider, path)
+        if not io or not db then return problem and problem.error and problem.error.message or "Configuration setup source is unavailable." end
+        local consume_error = configuration_admission.consume(io, view)
+        db:release()
+        if consume_error then return consume_error end
+    end
+    local cursor = 0
+    while true do
+        local events_raw, events_error = funcs.call("bee.approvals.binding:events", {destination = "credentials.configuration", cursor = cursor, limit = 64})
+        local events_reply = bounds.object(events_raw)
+        local events_page = events_reply and events_reply.ok == true and bounds.object(events_reply.value)
+        local events = events_page and bounds.array(events_page.events, 64)
+        local next_cursor = events_page and bounds.count(events_page.cursor)
+        if events_error or not events or not next_cursor then return "Configuration setup events could not be read." end
+        local acknowledgments: {string} = {}
+        local db, open_error = store.open()
+        if not db then return open_error or "Configuration setup receipts are unavailable." end
+        for _, item in ipairs(events) do
+            local event = bounds.object(item)
+            local id = event and bounds.id(event.event_id)
+            local body = event and bounds.object(event.body)
+            local approval = body and bounds.id(body.approval_id)
+            if id and approval and event.acknowledged_at == nil then
+                local receipt, receipt_error = store.configuration_receipt(db, approval)
+                if receipt_error then db:release(); return receipt_error end
+                if receipt then
+                    local effect_raw, effect_error = funcs.call("bee.approvals.binding:effect", {operation = "read", approval_id = approval, proposal_digest = receipt.proposal_digest})
+                    local effect_reply = bounds.object(effect_raw)
+                    local effect_view = effect_reply and effect_reply.ok == true and bounds.object(effect_reply.value)
+                    if effect_error or not effect_view then db:release(); return "Configuration setup effect receipt could not be inspected." end
+                    if effect_view.effect_completed_at ~= nil then acknowledgments[#acknowledgments + 1] = id end
+                end
+            end
+        end
+        db:release()
+        if #acknowledgments > 0 then
+            local acknowledged, acknowledge_error = funcs.call("bee.approvals.binding:events", {destination = "credentials.configuration", acknowledge = acknowledgments})
+            local result = bounds.object(acknowledged)
+            if acknowledge_error or not result or result.ok ~= true then return "Configuration setup events could not be acknowledged." end
+        end
+        if #events < 64 then break end
+        cursor = next_cursor
+    end
+    return nil
+end
+
 return M

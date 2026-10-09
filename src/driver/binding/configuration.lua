@@ -541,6 +541,14 @@ function M.digest(binding_ref: string?, request_value: unknown, target: string):
     return digest, nil
 end
 function M.call(binding_ref: string?, target: string, request_value: unknown): (Delivery?, string?)
+    local raw, err = funcs.call("bee.driver.binding:configure", {binding_ref = binding_ref, target = target, request = request_value})
+    if err then return nil, tostring(err) end
+    local reply = bounds.object(raw)
+    if not reply then return nil, "Agent configuration returned no delivery." end
+    if type(reply.error) == "string" then return nil, reply.error end
+    return M.decode_delivery(reply.delivery)
+end
+function M.execute(binding_ref: string?, target: string, request_value: unknown): (Delivery?, string?)
     local request, request_error = M.decode_request(request_value)
     if not request then return nil, request_error end
     if binding_ref ~= nil and not bounds.id(binding_ref) then return nil, "driver binding is not an identifier" end

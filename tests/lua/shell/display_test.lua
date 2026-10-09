@@ -79,12 +79,11 @@ local function edit(id: string)
     assert(changes:apply())
 end
 
-local function exits(lifecycle: unknown, pids: {string})
+local function wait_exits(lifecycle: unknown, pids: {string})
     local events = lifecycle :: channel.Channel
     local waiting: {[string]: boolean} = {}
     for _, pid in ipairs(pids) do
         waiting[pid] = true
-        assert(process.cancel(pid))
     end
     local deadline = time.after("5s")
     while next(waiting) do
@@ -92,6 +91,11 @@ local function exits(lifecycle: unknown, pids: {string})
         if selected.channel == deadline then error("displays did not exit") end
         if selected.value.kind == process.event.EXIT then waiting[tostring(selected.value.from)] = nil end
     end
+end
+
+local function exits(lifecycle: unknown, pids: {string})
+    for _, pid in ipairs(pids) do assert(process.cancel(pid)) end
+    wait_exits(lifecycle, pids)
 end
 
 -- open_probe selects the probe after Agents and Needs you in the Apps menu.
@@ -201,7 +205,7 @@ local function define_tests()
             assert(client.call(assert(system.node.id()), "close", {id = other.id}))
             assert(client.call(assert(system.node.id()), "close", {id = opened}))
             key(view, "q", {ctrl = true})
-            exits(lifecycle, {pid})
+            wait_exits(lifecycle, {pid})
             view:close()
         end)
 

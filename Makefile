@@ -27,7 +27,7 @@ INSTALL_DIR ?= $(HOME)/.local/bin
 MANIFEST := wippy.build.json
 
 export GOWORK := off
-export GOTOOLCHAIN := go1.27.0
+export GOTOOLCHAIN := go1.27.1
 
 ifdef RUNTIME_SOURCE
 MANIFEST := wippy.build.local.json

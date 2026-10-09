@@ -3,8 +3,8 @@
   "name": "bee",
   "runtime": {
     "module": "github.com/wippyai/runtime",
-    "version": "18f25931b0c7739017b9da31e91efac01b2228ee",
-    "go": "1.27.0",
+    "version": "1049dcce2100dd240b59e574f4b1cdc5edcde2e0",
+    "go": "1.27.1",
     "tags": [
       "fts5",
       "sqlite_vec",

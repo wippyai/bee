@@ -33,6 +33,7 @@ entries:
     canonical: bee.values:canonical
     resources: bee.approvals.env:resources
     grants: bee.approvals.grants:store
+    clock: bee.values:clock
 - name: dispatch
   kind: library.lua
   source: file://dispatch.lua

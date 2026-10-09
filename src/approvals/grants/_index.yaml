@@ -8,7 +8,7 @@ entries:
 - name: store
   kind: library.lua
   source: file://store.lua
-  modules: [sql, json, hash, registry, security]
+  modules: [sql, json, hash, registry, security, time]
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical

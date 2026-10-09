@@ -12,6 +12,14 @@ type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer, request
 M.MAX_POLICIES = 64
 M.MAX_APPROVERS = 64
 M.MAX_TTL_MS = 31536000000
+function M.has_grant_adapter(proposal: {[string]: unknown}): (boolean?, string?)
+    local selector: {[string]: unknown} = {["meta.type"] = "bee.approvals.grant-adapter"}
+    if proposal.grant_adapter ~= nil then selector["meta.adapter_id"] = proposal.grant_adapter
+    else selector["meta.operation_ref"] = proposal.ref end
+    local found, err = registry.find(selector)
+    if not found or err or #found > 1 then return nil,"grant adapter discovery failed" end
+    return #found == 1,nil
+end
 local function reference(id: string, label: string): (string?, string?)
     local entry = registry.get(id)
     if not entry then return nil, label .. " reference is missing" end

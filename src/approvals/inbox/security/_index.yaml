@@ -17,9 +17,16 @@ entries:
     - bee.approvals.binding:read
     - bee.approvals.binding:decide
     - bee.approvals.binding:decide_batch
-    - bee.approvals.binding:grant_window
+    - bee.approvals.binding:grant
     - bee.approvals.binding:withdraw
     - bee.gov.binding:destination_call
     - bee.approvals.inbox.app:workspaces
     - bee.approvals.inbox.app:sources
+    effect: allow
+
+- name: grants_policy
+  kind: security.policy
+  policy:
+    actions: [bee.approvals.grants]
+    resources: '*'
     effect: allow

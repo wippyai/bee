@@ -427,7 +427,7 @@ end
 local function proposal_of(value: unknown): (Object?, string?, string?, string?)
     local object = bounds.object(value)
     if not object then return nil, nil, nil, "proposal must be an object" end
-    local unknown_field = bounds.fields(object, {"kind", "ref", "revision", "action_id", "input_digest", "payload"})
+    local unknown_field = bounds.fields(object, {"kind", "ref", "revision", "action_id", "input_digest", "payload", "grant_adapter"})
     if unknown_field then return nil, nil, nil, "proposal: " .. unknown_field end
     local kind = bounds.member(object.kind, M.PROPOSAL_KINDS)
     if not kind then return nil, nil, nil, "proposal kind must be operation or attempt" end
@@ -444,7 +444,13 @@ local function proposal_of(value: unknown): (Object?, string?, string?, string?)
     end
     local payload = bounds.object(object.payload == nil and {} or object.payload)
     if not payload then return nil, nil, nil, "proposal payload must be an object" end
-    local proposal: Object = {kind = kind, ref = ref, revision = revision, action_id = action_id, input_digest = input_digest, payload = payload}
+    local adapter = bounds.id(object.grant_adapter)
+    if object.grant_adapter ~= nil then
+        if not adapter then return nil,nil,nil,"proposal grant_adapter must name a registered adapter" end
+        local found, err = resources.has_grant_adapter({grant_adapter = adapter})
+        if not found or err then return nil,nil,nil,"proposal grant_adapter is unavailable" end
+    end
+    local proposal: Object = {grant_adapter = adapter,kind = kind, ref = ref, revision = revision, action_id = action_id, input_digest = input_digest, payload = payload}
     local digest, encoded, digest_error = digest_of(proposal, M.MAX_PROPOSAL_BYTES)
     if not digest or not encoded then return nil, nil, nil, "proposal: " .. tostring(digest_error) end
     return proposal, digest, encoded, nil
@@ -605,7 +611,9 @@ decode_row = function(raw: unknown, tx: sql.Transaction): (Row?, string?)
     local policies, policies_error = resources.policies()
     if not policies then return nil, policies_error end
     local configured = policies[policy]
-    local maximum = request_kind == "permission" and configured and configured.max_ttl_ms or 0
+    local adapter, adapter_error = resources.has_grant_adapter(proposal)
+    if adapter_error then return nil,adapter_error end
+    local maximum = request_kind == "permission" and not adapter and configured and configured.max_ttl_ms or 0
     local previous, previous_error = store.matching_windows(tx, owner_node, workspace_id, requester_id, policy, scope_digest)
     if previous_error or not previous then return nil, previous_error end
     local prior = #previous > 0
@@ -844,7 +852,10 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     if not row then return failure("NOT_FOUND", "approval request does not exist") end
     if declared_decision == "answer" and row.request_kind ~= "question" then return failure("INVALID_ARGUMENT", "answer needs a question") end
     if declared_decision == "allow_once" and row.request_kind ~= "permission" then return failure("INVALID_ARGUMENT", "allow_once needs a permission") end
-    if declared_decision == "allow_grant" and object.window_ttl_ms == nil and object.window_permanent ~= true then return failure("INVALID_ARGUMENT", "allow_grant requires reviewed window terms") end
+    local adapter, adapter_error = resources.has_grant_adapter(row.proposal)
+    if adapter_error then return storage(adapter_error) end
+    if adapter and (object.window_ttl_ms ~= nil or object.window_permanent == true) then return failure("INVALID_ARGUMENT","this proposal already reviews its domain grant terms") end
+    if declared_decision == "allow_grant" and not adapter and object.window_ttl_ms == nil and object.window_permanent ~= true then return failure("INVALID_ARGUMENT", "allow_grant requires reviewed window terms") end
     local may_decide, policy_error = eligible(actor, row)
     if policy_error then return storage(policy_error) end
     if not may_decide then return failure("DENIED", "caller is not an eligible approver for this request") end
@@ -1067,11 +1078,32 @@ local function op_consume(tx: sql.Transaction, actor: string, object: Object, no
         if consumed == effect_key and row.consumer_id == actor then return success(M.view(row), true) end
         return failure("CONFLICT", "approval was consumed by " .. tostring(row.consumer_id) .. " for effect " .. consumed, M.view(row))
     end
+    local authority: grants.Grant? = nil
+    if row.request_kind == "permission" then
+        local records, grant_error = tx:query("SELECT * FROM bee_approval_grants WHERE approval_id = ? OR grant_id = ?",{row.approval_id,row.allowed_by_grant or (row.window_grant and row.window_grant.grant_id) or sql.NULL})
+        if not records or grant_error then return storage("read effect grant") end
+        if #records ~= 1 then return failure("INVALID_STATE","effect has no unique grant") end
+        local decoded, invalid = grants.decode(records[1])
+        authority = decoded
+        if not authority then return storage(invalid or "invalid effect grant") end
+        local context_error = grants.observe(tx,authority)
+        if context_error then return storage(context_error) end
+        local authority_state = grants.state(authority,now)
+        if authority_state ~= "active" and not (authority_state == "exhausted" and authority.reserved > 0) then return failure("INVALID_STATE","effect grant is " .. authority_state) end
+    end
     if row.effect_admission_ms and row.effect_admission_ms <= now then return failure("INVALID_STATE", "effect admission deadline has passed", M.view(row)) end
     local bound_effect = row.effect
     if bound_effect.state ~= "authorized" and bound_effect.state ~= "reserved" then return failure("INVALID_STATE", "effect is not authorized", M.view(row)) end
     local bound = (row.contract_version ~= 1 and bound_effect.destination ~= nil) or bound_effect.state == "reserved"
     if bound and bound_effect.effect_id ~= effect_key then return failure("CONFLICT", "effect identity differs from the reviewed continuation or reservation", M.view(row)) end
+    if authority and (authority.domain == "decision" or authority.domain == "approval_window") then
+        local use_key = authority.domain == "approval_window" and (row.approval_id .. ":" .. effect_key) or effect_key
+        local digest = assert(hash.sha256(assert(canonical.encode(row.contract.scope))))
+        local uses = assert(tx:query("SELECT state FROM bee_approval_grant_uses WHERE grant_id = ? AND effect_key = ?",{authority.grant_id,use_key}))
+        local operation = #uses == 1 and uses[1].state == "reserved" and "admit" or "consume"
+        local admitted, err = grants.use(tx,authority,operation,use_key,digest,authority.revision,actor,now)
+        if admitted == nil then return failure(err and err:match("^(%u+):") or "STORAGE",err or "effect grant admission denied") end
+    end
     local lifecycle_error = lifecycle.consume(tx, row.approval_id, actor, effect_key, current, stamp(now), bound)
     if lifecycle_error then return storage(lifecycle_error) end
     local update_error = store.consume(tx, row.approval_id, actor, effect_key, stamp(now))
@@ -1151,32 +1183,29 @@ local function op_effect(tx: sql.Transaction, actor: string, object: Object, now
     return success(M.view(updated), false)
 end
 local function op_grant(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local extra = bounds.fields(object, {"operation", "grant_id", "expected_revision", "subject", "scope", "effect_key", "owner_incarnation", "reviewed_digest", "workspace_id", "after_id", "record"})
+    local extra = bounds.fields(object, {"operation", "grant_id", "expected_revision", "subject", "scope", "effect_key", "owner_incarnation", "reviewed_digest", "workspace_id", "after_id", "after_revision"})
     if extra then return failure("INVALID_ARGUMENT", extra) end
     if object.operation == "list" then
         local workspace = bounds.id(object.workspace_id)
+        local resource = workspace or "node"
         local after = object.after_id == nil and "" or bounds.id(object.after_id)
-        if not workspace or not after then return failure("INVALID_ARGUMENT", "workspace_id and valid after_id are required") end
-        if not security.can(M.DECIDE, workspace) and not security.can(M.MANAGE, workspace) then return failure("DENIED", "caller cannot list grants") end
-        local rows, err = tx:query("SELECT * FROM bee_approval_grants WHERE workspace_id = ? AND (granted_by = ? OR granted_definition = ? OR requester_id = ?) AND state = 'active' AND (until_ms IS NULL OR until_ms > ?) AND grant_id > ? ORDER BY grant_id LIMIT 65", {workspace,actor,authenticated_definition(actor),actor,now,after})
+        if (object.workspace_id ~= nil and not workspace) or not after then return failure("INVALID_ARGUMENT","workspace_id or after_id is invalid") end
+        local all = security.can("bee.approvals.grants",resource) or (workspace ~= nil and security.can(M.MANAGE,workspace))
+        if not all and (not workspace or not security.can(M.DECIDE,workspace)) then return failure("DENIED","caller cannot list grants") end
+        local rows, err = tx:query("SELECT * FROM bee_approval_grants WHERE (? IS NULL OR workspace_id = ?) AND (? = 1 OR granted_by = ? OR granted_definition = ? OR requester_id = ?) AND grant_id > ? ORDER BY grant_id LIMIT 65",{workspace or sql.NULL,workspace or sql.NULL,all and 1 or 0,actor,authenticated_definition(actor) or sql.NULL,actor,after})
         if not rows or err then return storage("list grants") end
         local more = #rows > 64
         if more then rows[65] = nil end
-        return success({grants = rows,more = more,next_id = more and rows[#rows].grant_id or nil}, false)
-    end
-    if object.operation == "import" then
-        local record, record_error = grants.decode(object.record)
-        if not record then return failure("INVALID_ARGUMENT",record_error or "legacy record is invalid") end
-        if not security.can("bee.approvals.import",record.domain) or record.provenance.kind ~= "legacy" then return failure("DENIED","caller cannot import legacy authority") end
-        local existing, read_error = grants.read(tx,record.grant_id)
-        if read_error then return storage(read_error) end
-        if existing then
-            if existing.domain ~= record.domain or existing.owner_node ~= record.owner_node or existing.workspace_id ~= record.workspace_id or canonical.encode(existing.scope) ~= canonical.encode(record.scope) or canonical.encode(existing.subject) ~= canonical.encode(record.subject) then return failure("CONFLICT","legacy grant identity differs") end
-            return success(existing,true)
+        local records: {Object} = {}
+        for _, raw in ipairs(rows) do
+            local record, invalid = grants.decode(raw)
+            if not record then return storage(invalid or "invalid grant") end
+            local context_error = grants.observe(tx,record)
+            if context_error then return storage(context_error) end
+            record.state = grants.state(record,now)
+            records[#records + 1] = record
         end
-        local err = grants.create(tx,record)
-        if err then return storage(err) end
-        return success(record,false)
+        return success({grants = records,more = more,next_id = more and rows[#rows].grant_id or nil},false)
     end
     local id = bounds.id(object.grant_id)
     if not id then return failure("INVALID_ARGUMENT", "grant_id is required") end
@@ -1184,25 +1213,51 @@ local function op_grant(tx: sql.Transaction, actor: string, object: Object, now:
     if not rows or err then return storage("read grant") end
     local grant = #rows == 1 and bounds.object(rows[1]) or nil
     if not grant then return failure("NOT_FOUND", "grant does not exist") end
+    local record, invalid = grants.decode(grant)
+    if not record then return storage(invalid or "grant is corrupt") end
+    local context_error = grants.observe(tx,record)
+    if context_error then return storage(context_error) end
+    local definition = authenticated_definition(actor)
+    local owns = record.requester_id == actor or record.granted_by == actor or (definition ~= nil and definition == record.granted_definition) or security.can(M.MANAGE,record.workspace_id) or security.can("bee.approvals.grants",record.workspace_id)
+    if object.operation == "read" or object.operation == "history" then
+        if not owns and not security.can("bee.approvals.grant.use",record.domain) then return failure("DENIED","caller cannot read this grant") end
+        local after = object.after_revision == nil and 0 or bounds.integer(object.after_revision)
+        if not after or after < 0 then return failure("INVALID_ARGUMENT","after_revision is invalid") end
+        local history, err = tx:query("SELECT * FROM bee_approval_grant_history WHERE grant_id = ? AND revision > ? ORDER BY revision LIMIT 65",{id,after})
+        if not history or err then return storage("read grant history") end
+        local more = #history > 64
+        if more then history[65] = nil end
+        record.state = grants.state(record,now)
+        return success({grant = record,history = history,more = more,next_revision = more and history[#history].revision or nil},false)
+    end
+    if object.operation == "revoke" then
+        if not owns and record.approval_id then
+            local source = load(tx,record.approval_id)
+            if source then owns = eligible(actor,source) == true end
+        end
+        if not owns then return failure("DENIED","caller cannot revoke this grant") end
+        if object.workspace_id ~= nil and object.workspace_id ~= record.workspace_id then return failure("DENIED","grant workspace differs") end
+        if grant.state == "revoked" then return success(record,true) end
+        local expected = bounds.integer(object.expected_revision)
+        if not expected then return failure("INVALID_ARGUMENT","expected_revision is required") end
+        local err = grants.revoke(tx,record,expected,actor,now)
+        if err then return failure(err:match("^(%u+):") or "STORAGE",err) end
+        if record.approval_id and record.domain ~= "approval_window" then
+            local _, fence_error = tx:execute("UPDATE bee_approval_effects SET state = 'canceled',revision = revision + 1,updated_at = ? WHERE approval_id = ? AND state IN ('authorized','reserved')",{stamp(now),record.approval_id})
+            if fence_error then return storage("fence revoked grant effect") end
+            err = lifecycle.grant_revoked(tx,record.approval_id,record.requester_id,record.revision,stamp(now))
+            if err then return storage(err) end
+        end
+        local view: Object = {}
+        for key, item in pairs(record) do view[key] = item end
+        local source = record.approval_id and load(tx,record.approval_id) or nil
+        view.already_admitted = source ~= nil and source.consumed_effect ~= nil
+        return success(view,false)
+    end
     if grant.domain ~= "decision" and grant.domain ~= "approval_window" then
-        local record, record_error = grants.decode(grant)
-        if not record then return storage(record_error or "grant is corrupt") end
         local definition = authenticated_definition(actor)
         local owns = record.requester_id == actor or record.granted_by == actor or (definition ~= nil and definition == record.granted_definition) or security.can(M.MANAGE,record.workspace_id) or security.can("bee.approvals.grants",record.workspace_id) or security.can("bee.approvals.grant.use",record.domain)
         if not owns then return failure("DENIED","caller cannot administer this grant") end
-        if object.operation == "read" or object.operation == "history" then
-            local history, history_error = tx:query("SELECT * FROM bee_approval_grant_history WHERE grant_id = ? ORDER BY revision",{id})
-            if not history or history_error then return storage("read grant history") end
-            return success({grant = record,history = history},false)
-        end
-        if object.operation == "revoke" then
-            if not (record.requester_id == actor or record.granted_by == actor or (definition ~= nil and definition == record.granted_definition) or security.can(M.MANAGE,record.workspace_id) or security.can("bee.approvals.grants",record.workspace_id)) then return failure("DENIED","caller cannot revoke this grant") end
-            if record.state == "revoked" then return success(record,true) end
-            if object.expected_revision ~= record.revision then return failure("CONFLICT","grant revision differs",record) end
-            local revoke_error = grants.revoke(tx,record,record.revision,actor,now)
-            if revoke_error then return storage(revoke_error) end
-            return success(record,false)
-        end
         local subject, scope = canonical.encode(object.subject),canonical.encode(object.scope)
         if subject ~= grant.subject_json or scope ~= grant.scope_json then return failure("CONFLICT","grant subject or scope differs") end
         if object.operation == "check" then
@@ -1219,39 +1274,14 @@ local function op_grant(tx: sql.Transaction, actor: string, object: Object, now:
     local approval_id = bounds.id(grant.approval_id)
     local row, row_error = approval_id and load(tx, approval_id) or nil, nil
     if not row then return storage(row_error or "grant source is missing") end
-    if grant.domain == "approval_window" and object.operation == "revoke" then
-        if not security.can(M.DECIDE, row.workspace_id) or (actor ~= grant.granted_by and (authenticated_definition(actor) == nil or authenticated_definition(actor) ~= grant.granted_definition)) then return failure("DENIED", "caller does not own this grant") end
-        if grant.state == "revoked" then return success(grant,true) end
-        if object.expected_revision ~= grant.revision then return failure("CONFLICT", "grant revision differs",grant) end
-        local err = store.revoke_window(tx,id,stamp(now))
-        if err then return storage(err) end
-        return success({grant_id = id,state = "revoked"},false)
-    end
-    local can_revoke = row.requester_id == actor or security.can(M.MANAGE, row.workspace_id)
-    if object.operation == "revoke" then
-        local may_decide, policy_error = eligible(actor, row)
-        if policy_error then return storage(policy_error) end
-        if not can_revoke and not may_decide then return failure("DENIED", "caller cannot revoke this grant") end
-        if grant.state == "revoked" then return success(grant, true) end
-        if object.expected_revision ~= grant.revision then return failure("CONFLICT", "grant revision differs", grant) end
-        local _, revoke_error = tx:execute("UPDATE bee_approval_grants SET state = 'revoked', revision = revision + 1 WHERE grant_id = ?", {id})
-        if revoke_error then return storage("revoke grant") end
-        local _, fence_error = tx:execute("UPDATE bee_approval_effects SET state = 'canceled', revision = revision + 1, updated_at = ? WHERE approval_id = ? AND state IN ('authorized','reserved')", {stamp(now), approval_id})
-        if fence_error then return storage("fence reserved effect") end
-        local revision = bounds.integer(grant.revision)
-        if not revision then return storage("grant revision is corrupt") end
-        local notification_error = lifecycle.grant_revoked(tx, row.approval_id, row.requester_id, revision + 1, stamp(now))
-        if notification_error then return storage(notification_error) end
-        return success({grant_id = id, state = "revoked", already_admitted = row.consumed_effect ~= nil}, false)
-    end
     if row.requester_id ~= actor or not security.can(M.CONSUME, row.workspace_id) then return failure("DENIED", "caller cannot use this grant") end
     local subject = canonical.encode(object.subject)
     local scope = canonical.encode(object.scope)
     if subject ~= grant.subject_json or scope ~= grant.scope_json then return failure("CONFLICT", "grant subject or exact scope differs") end
     local deadline = bounds.integer(grant.until_ms)
     if grant.state == "active" and deadline and deadline <= now then
-        local _, expire_error = tx:execute("UPDATE bee_approval_grants SET state = 'expired', revision = revision + 1 WHERE grant_id = ?", {id})
-        if expire_error then return storage("expire grant") end
+        local expire_error = grants.expire(tx,record,now)
+        if expire_error then return storage(expire_error) end
         return refusal("INVALID_STATE", "grant expired", {grant_id = id, state = "expired"})
     end
     if object.operation == "admit" then
@@ -1277,8 +1307,8 @@ local function op_grant(tx: sql.Transaction, actor: string, object: Object, now:
     if not effect_key then return failure("INVALID_ARGUMENT", "effect_key is required") end
     local _, update_error = tx:execute("UPDATE bee_approval_effects SET effect_id = ?, state = ?, revision = revision + 1, updated_at = ? WHERE approval_id = ?", {effect_key, state, stamp(now), approval_id})
     if update_error then return storage("reserve or release effect") end
-    local _, revision_error = tx:execute("UPDATE bee_approval_grants SET revision = revision + 1 WHERE grant_id = ?", {id})
-    if revision_error then return storage("advance grant revision") end
+    local used, use_error = grants.use(tx,record,tostring(object.operation),effect_key,assert(hash.sha256(scope)),record.revision,actor,now)
+    if used == nil then return failure(use_error and use_error:match("^(%u+):") or "STORAGE",use_error or "grant reservation failed") end
     local updated, read_error = tx:query("SELECT * FROM bee_approval_grants WHERE grant_id = ?", {id})
     if not updated or read_error then return storage("read updated grant") end
     return success(updated[1], false)
@@ -1629,77 +1659,79 @@ local function op_node_summary(tx: sql.Transaction, _: string, object: Object, n
     if count == nil then return storage(count_error or "count node pending approvals") end
     return success({pending_approvals = count}, false)
 end
+local function runtime_view(record: grants.Grant): Object
+    local ceiling = bounds.object(record.metadata.ceiling) or {}
+    return {grant_id = record.grant_id,lease_ref = record.metadata.lease_ref,subject = ceiling.subject,workspace_id = record.workspace_id,tool = ceiling.tool,input_digest = ceiling.input_digest,expires_ms = record.until_ms,max_uses = record.max_uses,revoked_at = record.revoked_at,used = record.used}
+end
 local function op_runtime_lease(tx: sql.Transaction, actor: string, request: Object, now: integer, prepared: Object?): Result
-    if bounds.fields(request, {"operation", "lease_ref", "workspace_id", "tool", "input_digest", "effect_key"}) then return failure("INVALID_ARGUMENT", "runtime lease request has unknown fields") end
-    local operation = bounds.member(request.operation, {"grant", "check", "use", "revoke", "list"})
-    if not operation then return failure("INVALID_ARGUMENT", "runtime lease operation is invalid") end
+    if bounds.fields(request,{"operation","lease_ref","workspace_id","tool","input_digest","effect_key"}) then return failure("INVALID_ARGUMENT","runtime lease request has unknown fields") end
+    local operation = bounds.member(request.operation,{"grant","check","use","revoke","list"})
+    if not operation then return failure("INVALID_ARGUMENT","runtime lease operation is invalid") end
     if operation == "list" then
         local workspace = bounds.id(request.workspace_id)
-        if not workspace or not security.can(M.CONSUME, workspace) then return failure("DENIED", "runtime lease list needs workspace consume authority") end
-        local rows, err = tx:query("SELECT lease_ref, subject, workspace_id, tool, input_digest, expires_ms, max_uses, revoked_at FROM bee_approval_runtime_leases WHERE subject = ? AND workspace_id = ? ORDER BY lease_ref LIMIT 64", {actor, workspace})
-        if not rows or err then return storage("list runtime leases") end
-        return success({leases = rows}, false)
+        if not workspace or not security.can(M.CONSUME,workspace) then return failure("DENIED","runtime lease list needs workspace consume authority") end
+        local rows, err = tx:query("SELECT * FROM bee_approval_grants WHERE domain = 'runtime_lease' AND requester_id = ? AND workspace_id = ? ORDER BY grant_id LIMIT 64",{actor,workspace})
+        if not rows or err then return storage("list runtime grants") end
+        local leases: {Object} = {}
+        for _, raw in ipairs(rows) do
+            local record, decode_error = grants.decode(raw)
+            if not record then return storage(decode_error or "runtime grant is corrupt") end
+            leases[#leases + 1] = runtime_view(record)
+        end
+        return success({leases = leases},false)
     end
     local ref = bounds.id(request.lease_ref)
-    if not ref then return failure("INVALID_ARGUMENT", "lease_ref is required") end
+    if not ref then return failure("INVALID_ARGUMENT","lease_ref is required") end
+    local record, read_error = grants.read(tx,ref .. ":grant")
+    if read_error then return storage(read_error) end
     if operation == "grant" then
-        local source, err = load(tx, ref)
-        if not source then return failure("NOT_FOUND", err or "lease source approval is missing") end
+        local source, err = load(tx,ref)
+        if not source then return failure("NOT_FOUND",err or "lease source approval is missing") end
         local ceiling, invalid = runtime_lease.decode(source.proposal.payload)
-        if source.proposal.ref ~= runtime_lease.REF or not ceiling then return failure("INVALID_ARGUMENT", invalid or "approval is not a runtime lease") end
-        if actor ~= ceiling.subject or source.requester_id ~= actor or source.workspace_id ~= ceiling.workspace_id then return failure("DENIED", "runtime lease belongs to another subject") end
-        local current, unavailable = incarnation(tx, source.owner_node)
+        if source.proposal.ref ~= runtime_lease.REF or not ceiling then return failure("INVALID_ARGUMENT",invalid or "approval is not a runtime lease") end
+        if actor ~= ceiling.subject or source.requester_id ~= actor or source.workspace_id ~= ceiling.workspace_id then return failure("DENIED","runtime lease belongs to another subject") end
+        if not record then return failure("INVALID_STATE","runtime lease source is not approved") end
+        local current, unavailable = incarnation(tx,source.owner_node)
         if not current then return unavailable or storage("runtime lease authority") end
-        if source.owner_incarnation ~= current and source.validated_incarnation ~= current then return failure("REVALIDATE", "runtime lease approval needs revalidation after restart", {current_incarnation = current}) end
-        local consumed = op_consume(tx, actor, {approval_id = ref, proposal_digest = source.proposal_digest, effect_key = "runtime-lease:" .. ref, owner_incarnation = current}, now, nil)
+        if source.owner_incarnation ~= current and source.validated_incarnation ~= current then return failure("REVALIDATE","runtime lease approval needs revalidation after restart",{current_incarnation = current}) end
+        local consumed = op_consume(tx,actor,{approval_id = ref,proposal_digest = source.proposal_digest,effect_key = "runtime-lease:" .. ref,owner_incarnation = current},now,nil)
         if not consumed.ok then return consumed end
-        if ceiling.expires_ms <= now then return failure("INVALID_STATE", "runtime lease expired") end
-        local _, stored = tx:execute("INSERT INTO bee_approval_runtime_leases (lease_ref, owner_node, subject, workspace_id, tool, input_digest, expires_ms, max_uses, source_digest) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(lease_ref) DO NOTHING",
-            {ref, source.owner_node, actor, ceiling.workspace_id, ceiling.tool, ceiling.input_digest, ceiling.expires_ms, ceiling.max_uses, source.proposal_digest})
-        if stored then return storage("grant runtime lease") end
-        return success({lease_ref = ref, ceiling = ceiling}, consumed.replayed)
+        if grants.state(record,now) ~= "active" then return failure("INVALID_STATE","runtime grant is " .. grants.state(record,now)) end
+        return success({lease_ref = ref,grant_id = record.grant_id,ceiling = ceiling},consumed.replayed)
     end
-    local rows, err = tx:query("SELECT * FROM bee_approval_runtime_leases WHERE lease_ref = ?", {ref})
-    local row = rows and bounds.object(rows[1])
-    if err then return storage("read runtime lease") end
-    if not row then return failure("NOT_FOUND", "runtime lease is missing") end
-    local workspace = bounds.id(row.workspace_id)
-    if not workspace or not security.can(M.CONSUME, workspace) then return failure("DENIED", "runtime lease needs workspace consume authority") end
+    if not record or record.domain ~= "runtime_lease" then return failure("NOT_FOUND","runtime lease is missing") end
+    local workspace = record.workspace_id
+    if not security.can(M.CONSUME,workspace) then return failure("DENIED","runtime lease needs workspace consume authority") end
     if operation == "revoke" then
-        if actor ~= row.subject and not security.can(M.MANAGE, workspace) then return failure("DENIED", "runtime lease belongs to another subject") end
-        local _, failed = tx:execute("UPDATE bee_approval_runtime_leases SET revoked_at = COALESCE(revoked_at, ?) WHERE lease_ref = ?", {stamp(now), ref})
-        if failed then return storage("revoke runtime lease") end
-        return success({lease_ref = ref, revoked = true}, row.revoked_at ~= nil)
+        if actor ~= record.requester_id and not security.can(M.MANAGE,workspace) then return failure("DENIED","runtime lease belongs to another subject") end
+        local err = grants.revoke(tx,record,record.revision,actor,now)
+        if err then return storage(err) end
+        return success(runtime_view(record),false)
     end
-    if actor ~= row.subject or request.workspace_id ~= workspace then return failure("DENIED", "runtime lease subject or workspace differs") end
-    local expires, maximum = bounds.count(row.expires_ms), bounds.count(row.max_uses)
-    if row.revoked_at ~= nil or not expires or expires <= now or not maximum then return failure("DENIED", "runtime lease is revoked or expired") end
-    local counts, count_error = tx:query("SELECT COUNT(*) AS count FROM bee_approval_runtime_lease_uses WHERE lease_ref = ?", {ref})
-    local count = counts and bounds.object(counts[1])
-    local used = count and bounds.count(count.count)
-    if count_error or used == nil then return storage("count runtime lease consumption") end
+    local ceiling = bounds.object(record.metadata.ceiling)
+    if not ceiling then return storage("runtime grant ceiling is corrupt") end
+    if actor ~= record.requester_id or request.workspace_id ~= workspace then return failure("DENIED","runtime lease subject or workspace differs") end
+    if (request.tool ~= nil and request.tool ~= ceiling.tool) or (request.input_digest ~= nil and request.input_digest ~= ceiling.input_digest) then return failure("DENIED","runtime lease does not cover this exact tool input") end
     if operation == "check" then
-        if used >= maximum then return failure("DENIED", "runtime lease use limit is exhausted") end
-        if (request.tool ~= nil and request.tool ~= row.tool) or (request.input_digest ~= nil and request.input_digest ~= row.input_digest) then return failure("DENIED", "runtime lease does not cover this exact tool input") end
-        return success({lease_ref = ref, subject = actor, workspace_id = workspace}, false)
+        local state = grants.state(record,now)
+        if state ~= "active" then return failure("DENIED","runtime grant is " .. state) end
+        return success(runtime_view(record),false)
     end
     local effect = bounds.id(request.effect_key)
-    if not effect or request.tool ~= row.tool or request.input_digest ~= row.input_digest then return failure("DENIED", "runtime lease does not cover this exact tool input") end
-    local digest = digest_of({subject = actor, workspace_id = workspace, tool = request.tool, input_digest = request.input_digest})
-    if not digest then return failure("INVALID_ARGUMENT", "runtime lease effect cannot be measured") end
-    local previous, previous_error = tx:query("SELECT request_digest FROM bee_approval_runtime_lease_uses WHERE lease_ref = ? AND effect_key = ?", {ref, effect})
-    if not previous or previous_error then return storage("read runtime lease consumption") end
-    if #previous > 0 then
-        local stored = bounds.object(previous[1])
-        if not stored or stored.request_digest ~= digest then return failure("CONFLICT", "runtime lease effect key changed") end
-        return success({lease_ref = ref, consumed = true}, true)
+    if not effect or request.tool ~= ceiling.tool or request.input_digest ~= ceiling.input_digest then return failure("DENIED","runtime lease does not cover this exact tool input") end
+    local digest = hash.sha256(assert(canonical.encode({subject = actor,workspace_id = workspace,tool = request.tool,input_digest = request.input_digest})))
+    local previous, previous_error = tx:query("SELECT state FROM bee_approval_grant_uses WHERE grant_id = ? AND effect_key = ?",{record.grant_id,effect})
+    if not previous or previous_error then return storage("read runtime grant receipt") end
+    if #previous == 0 then
+        local reserved, reserve_error = grants.use(tx,record,"reserve",effect,digest,record.revision,actor,now)
+        if reserved == nil then return failure(reserve_error and reserve_error:match("^(%u+):") or "STORAGE",reserve_error or "reserve runtime grant") end
     end
-    if used >= maximum then return failure("DENIED", "runtime lease use limit is exhausted") end
-    local _, failed = tx:execute("INSERT INTO bee_approval_runtime_lease_uses (lease_ref, effect_key, request_digest) VALUES (?, ?, ?)", {ref, effect, digest})
-    if failed then return storage("consume runtime lease") end
-    return success({lease_ref = ref, consumed = true}, false)
+    local admitted, admission_error = grants.use(tx,record,"admit",effect,digest,record.revision,actor,now)
+    if admitted == nil then return failure(admission_error and admission_error:match("^(%u+):") or "STORAGE",admission_error or "admit runtime grant") end
+    local view = runtime_view(record)
+    view.consumed = true
+    return success(view,admitted)
 end
-
 local function op_grant_window(tx: sql.Transaction, actor: string, request: Object, now: integer, prepared: Object?): Result
     local extra = bounds.fields(request, {"operation", "workspace_id", "grant_id", "after_id"})
     if extra then return failure("INVALID_ARGUMENT", extra) end

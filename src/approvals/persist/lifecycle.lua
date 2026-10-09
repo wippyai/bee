@@ -8,6 +8,7 @@ local grants = require("grants")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local resources = require("resources")
+local clock = require("clock")
 local M = {}
 M.VERSION = 2
 M.EFFECT_STATES = {"waiting", "authorized", "reserved", "admitted", "started", "succeeded", "failed", "canceled", "uncertain"}
@@ -157,16 +158,23 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
         if err then return err end
         return execute(tx, "INSERT OR IGNORE INTO bee_approval_grant_history SELECT grant_id,revision,'grant.created',granted_by,provenance_json,created_at FROM bee_approval_grants WHERE grant_id = ?", {window_id})
     end
-    local adapters, adapter_error = registry.find({["meta.type"] = "bee.approvals.grant-adapter",["meta.operation_ref"] = bounds.object(row.proposal) and bounds.object(row.proposal).ref})
+    local proposal = assert(bounds.object(row.proposal))
+    local selector: Object = {["meta.type"] = "bee.approvals.grant-adapter"}
+    if proposal.grant_adapter ~= nil then selector["meta.adapter_id"] = proposal.grant_adapter
+    else selector["meta.operation_ref"] = proposal.ref end
+    local adapters, adapter_error = registry.find(selector)
     if not adapters or adapter_error or #adapters > 1 then return "grant adapter discovery failed" end
     if #adapters == 1 then
-        local seed, build_error = funcs.call(adapters[1].id,{approval_id = approval_id,decision_id = decision_id,owner_node = row.owner_node,workspace_id = row.workspace_id,requester_id = row.requester_id,actor_id = actor,definition_id = M.principal(actor).definition_id,policy_snapshot = contract.policy_snapshot,proposal = row.proposal,proposal_digest = row.proposal_digest,reviewed_digest = row.reviewed_digest,owner_incarnation = row.owner_incarnation,at = at,now = assert(bounds.integer(assert(tx:query("SELECT CAST((julianday(?) - 2440587.5)*86400000 AS INTEGER) AS ms",{at}))[1].ms))})
+        local seed, build_error = funcs.call(adapters[1].id,{approval_id = approval_id,decision_id = decision_id,owner_node = row.owner_node,workspace_id = row.workspace_id,requester_id = row.requester_id,actor_id = actor,definition_id = M.principal(actor).definition_id,policy_snapshot = contract.policy_snapshot,proposal = row.proposal,proposal_digest = row.proposal_digest,reviewed_digest = row.reviewed_digest,owner_incarnation = row.owner_incarnation,at = at,now = math.floor(assert(clock.parse(at)):unix_nano() / 1000000)})
         if build_error then return "grant adapter failed: " .. tostring(build_error) end
         local record = bounds.object(seed)
         if not record then return "grant adapter returned no record" end
         local encoded = {grant_id = record.grant_id,approval_id = record.approval_id,decision_id = record.decision_id,subject_json = canonical.encode(record.subject),scope_json = canonical.encode(record.scope),terms_json = canonical.encode(record.terms),state = record.state,revision = record.revision,used = record.used,reserved = record.reserved,until_ms = record.until_ms,max_uses = record.max_uses,created_at = record.created_at,domain = record.domain,owner_node = record.owner_node,workspace_id = record.workspace_id,requester_id = record.requester_id,granted_by = record.granted_by,granted_definition = record.granted_definition,provenance_json = canonical.encode(record.provenance),metadata_json = canonical.encode(record.metadata)}
         local grant, decode_error = grants.decode(encoded)
-        if not grant or grant.approval_id ~= approval_id or grant.owner_node ~= row.owner_node or grant.workspace_id ~= row.workspace_id or grant.granted_by ~= actor then return decode_error or "grant adapter authority differs" end
+        local adapter_meta = assert(bounds.object(adapters[1].meta))
+        if not grant or grant.domain ~= adapter_meta.domain or grant.decision_id ~= decision_id or grant.requester_id ~= row.requester_id or grant.provenance.kind ~= "decision" or grant.provenance.reviewed_digest ~= row.reviewed_digest or grant.granted_definition ~= M.principal(actor).definition_id or grant.approval_id ~= approval_id or grant.owner_node ~= row.owner_node or grant.workspace_id ~= row.workspace_id or grant.granted_by ~= actor then return decode_error or "grant adapter authority differs" end
+        local changed = execute(tx,"UPDATE bee_approval_decisions SET kind = 'allow_grant' WHERE decision_id = ?",{decision_id})
+        if changed then return changed end
         return grants.create(tx,grant)
     end
     local subject_json = canonical.encode(contract.subject)
@@ -200,8 +208,12 @@ function M.expire_effects(tx: sql.Transaction, now: integer, at: string): (integ
     for _, row in ipairs(rows) do
         local canceled = execute(tx, "UPDATE bee_approval_effects SET state = 'canceled', revision = revision + 1, updated_at = ? WHERE approval_id = ?", {at, row.approval_id})
         if canceled then return nil, canceled end
-        local expired = execute(tx, "UPDATE bee_approval_grants SET state = 'expired', revision = revision + 1 WHERE approval_id = ? AND domain = 'decision' AND state = 'active'", {row.approval_id})
-        if expired then return nil, expired end
+        local grant, read_error = grants.read(tx,tostring(row.approval_id) .. ":grant")
+        if read_error then return nil,read_error end
+        if grant and grant.domain == "decision" then
+            local expired = grants.expire(tx,grant,now)
+            if expired then return nil,expired end
+        end
         local body = canonical.encode({approval_id = row.approval_id, revision = row.revision, effect_id = row.effect_id,
             state = "canceled", reason = "effect admission deadline passed"})
         local destinations: {string} = {"requester:" .. tostring(row.requester_id)}
@@ -220,7 +232,7 @@ function M.consume(tx: sql.Transaction, approval_id: string, actor: string, effe
     if bound and effect.effect_id ~= effect_id then return "registered continuation effect identity differs" end
     local update_error = execute(tx, "UPDATE bee_approval_effects SET effect_id = ?, state = 'admitted', consumer_id = ?, owner_incarnation = ?, revision = revision + 1, updated_at = ? WHERE approval_id = ? AND state IN ('authorized','reserved')", {effect_id, actor, incarnation, at, approval_id})
     if update_error then return update_error end
-    return execute(tx, "UPDATE bee_approval_grants SET state = 'exhausted', used = 1, revision = revision + 1 WHERE approval_id = ? AND domain = 'decision' AND state = 'active'", {approval_id})
+    return execute(tx, "UPDATE bee_approval_grants SET state = 'exhausted' WHERE approval_id = ? AND domain = 'decision' AND state = 'active'", {approval_id})
 end
 function M.complete(tx: sql.Transaction, approval_id: string, state: string, result_json: string, at: string): string?
     return execute(tx, "UPDATE bee_approval_effects SET state = ?, receipt_json = ?, revision = revision + 1, updated_at = ? WHERE approval_id = ?", {state, result_json, at, approval_id})

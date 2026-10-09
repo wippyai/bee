@@ -3,6 +3,7 @@ local json = require("json")
 local hash = require("hash")
 local registry = require("registry")
 local security = require("security")
+local time = require("time")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local clock = require("clock")
@@ -50,6 +51,10 @@ function M.decode(raw: unknown): (Grant?, string?)
     local provenance = type(row.provenance_json) == "string" and bounds.object(json.decode(row.provenance_json)) or bounds.object(row.provenance)
     local metadata = type(row.metadata_json) == "string" and bounds.object(json.decode(row.metadata_json)) or bounds.object(row.metadata)
     local created = bounds.timestamp(row.created_at)
+    if not created and provenance and provenance.kind == "legacy" and type(row.created_at) == "string" then
+        local instant = time.parse("2006-01-02T15:04:05Z07:00",row.created_at)
+        if instant then created = clock.utc(instant) end
+    end
     if not id or not domain or not owner or not workspace or not requester or not issuer or not state or not revision
         or revision < 1 or not used or used < 0 or not reserved or reserved < 0 or not subject or not scope or not terms
         or not provenance or not metadata or not created then return nil,"grant record is corrupt" end
@@ -63,7 +68,42 @@ function M.read(tx: sql.Transaction | sql.DB, id: string): (Grant?, string?)
     local rows, err = tx:query("SELECT * FROM bee_approval_grants WHERE grant_id = ?",{id})
     if not rows or err then return nil,"read grant: " .. tostring(err) end
     if #rows == 0 then return nil,nil end
-    return M.decode(rows[1])
+    local grant, invalid = M.decode(rows[1])
+    if not grant then return nil,invalid end
+    local context_error = M.observe(tx,grant)
+    if context_error then return nil,context_error end
+    return grant,nil
+end
+function M.observe(tx: sql.Transaction | sql.DB, grant: Grant): string?
+    if grant.terms.kind ~= "binding" then return nil end
+    local entries, err = registry.find({["meta.type"] = "bee.approvals.grant-context",["meta.domain"] = grant.domain})
+    if not entries or err then return "grant context discovery: " .. tostring(err) end
+    if #entries ~= 1 then
+        local ids: {string} = {}
+        for _, entry in ipairs(entries) do ids[#ids + 1] = entry.id end
+        return "grant context is not uniquely registered for " .. grant.domain .. " (" .. tostring(#entries) .. ": " .. table.concat(ids,",") .. ")"
+    end
+    local meta = assert(bounds.object(entries[1].meta))
+    local fields: {[string]: string} = {}
+    for _, name in ipairs({"table_name","identity_field","expires_field","revoked_field","sealed_field"}) do
+        local field = bounds.text(meta[name],128)
+        if not field or not field:match("^[a-z][a-z0-9_]*$") then return "invalid grant context projection" end
+        fields[name] = field
+    end
+    local key = bounds.id(meta.metadata_key)
+    local identity = key and bounds.id(grant.metadata[key])
+    if not identity then return "grant context identity is missing" end
+    local rows, query_error = tx:query("SELECT " .. fields.expires_field .. " AS expires_at," .. fields.revoked_field .. " AS revoked_at," .. fields.sealed_field .. " AS sealed_at FROM " .. fields.table_name .. " WHERE " .. fields.identity_field .. " = ?",{identity})
+    if not rows or query_error then return "read grant context: " .. tostring(query_error) end
+    if #rows ~= 1 then grant.state = "revoked"; return nil end
+    local row = assert(bounds.object(rows[1]))
+    if row.revoked_at ~= nil or row.sealed_at ~= nil then grant.state = "revoked" end
+    local expires = bounds.text(row.expires_at,64)
+    local instant = expires and (clock.parse(expires) or time.parse("2006-01-02T15:04:05Z07:00",expires))
+    if not instant then return "grant context expiry is invalid" end
+    local deadline = math.floor(instant:unix_nano() / 1000000)
+    if not grant.until_ms or deadline < grant.until_ms then grant.until_ms = deadline end
+    return nil
 end
 function M.history(tx: sql.Transaction | sql.DB, grant: Grant, kind: string, actor: string, body: Object, at: string): string?
     return execute(tx,"INSERT INTO bee_approval_grant_history(grant_id,revision,kind,actor_id,body_json,at) VALUES (?,?,?,?,?,?)",
@@ -77,8 +117,13 @@ function M.create(tx: sql.Transaction | sql.DB, grant: Grant): string?
     return M.history(tx,grant,"grant.created",grant.granted_by,grant.provenance,grant.created_at)
 end
 function M.revoke(tx: sql.Transaction | sql.DB, grant: Grant, expected: integer, actor: string, now: integer): string?
-    if grant.state == "revoked" then return nil end
-    if grant.revision ~= expected then return "CONFLICT: grant revision differs" end
+    local rows, query_error = tx:query("SELECT * FROM bee_approval_grants WHERE grant_id = ?",{grant.grant_id})
+    if not rows or query_error then return "read grant revocation: " .. tostring(query_error) end
+    if #rows ~= 1 then return "NOT_FOUND: grant is missing" end
+    local live, read_error = M.decode(rows[1])
+    if not live then return read_error end
+    if live.state == "revoked" then grant.state,grant.revision = live.state,live.revision; return nil end
+    if live.revision ~= grant.revision or grant.revision ~= expected then return "CONFLICT: grant revision differs" end
     local at = clock.stamp(now)
     local err = execute(tx,"UPDATE bee_approval_grants SET state = 'revoked',revision = revision + 1,revoked_at = ?,revoked_by = ? WHERE grant_id = ? AND revision = ?",{at,actor,grant.grant_id,expected})
     if err then return err end
@@ -87,18 +132,29 @@ function M.revoke(tx: sql.Transaction | sql.DB, grant: Grant, expected: integer,
     grant.state,grant.revision,grant.revoked_at,grant.revoked_by = "revoked",grant.revision + 1,at,actor
     return M.history(tx,grant,"grant.revoked",actor,{},at)
 end
+function M.expire(tx: sql.Transaction | sql.DB, grant: Grant, now: integer): string?
+    if grant.state ~= "active" or not grant.until_ms or grant.until_ms > now then return nil end
+    local err = execute(tx,"UPDATE bee_approval_grants SET state = 'expired',revision = revision + 1 WHERE grant_id = ? AND revision = ?",{grant.grant_id,grant.revision})
+    if err then return err end
+    err = execute(tx,"UPDATE bee_approval_grant_uses SET state = 'fenced' WHERE grant_id = ? AND state = 'reserved'",{grant.grant_id})
+    if err then return err end
+    grant.state,grant.revision = "expired",grant.revision + 1
+    return M.history(tx,grant,"grant.expired",grant.owner_node,{},clock.stamp(now))
+end
 function M.use(tx: sql.Transaction | sql.DB, grant: Grant, operation: string, effect_key: string, digest: string, expected: integer, actor: string, now: integer): (boolean?, string?)
     local rows, query_error = tx:query("SELECT request_digest,state FROM bee_approval_grant_uses WHERE grant_id = ? AND effect_key = ?",{grant.grant_id,effect_key})
     if not rows or query_error then return nil,"read grant use" end
     local err: string? = nil
     local prior = #rows == 1 and rows[1] or nil
     if prior and prior.request_digest ~= digest then return nil,"CONFLICT: effect scope differs" end
-    if prior and prior.state == "admitted" and operation == "admit" then return true,nil end
+    if prior and prior.state == "admitted" and (operation == "admit" or operation == "consume") then return true,nil end
     if operation == "release" and prior and prior.state == "released" then return true,nil end
-    local state = M.state(grant,now)
+    local live, read_error = M.read(tx,grant.grant_id)
+    if not live then return nil,read_error or "NOT_FOUND: grant is missing" end
+    local state = M.state(live,now)
     if state == "revoked" or state == "expired" then return nil,"DENIED: grant is " .. state end
     if prior and prior.state == "reserved" and operation == "reserve" then return true,nil end
-    if expected ~= grant.revision then return nil,"CONFLICT: grant revision differs" end
+    if expected ~= grant.revision or live.revision ~= grant.revision then return nil,"CONFLICT: grant revision differs" end
     local at = clock.stamp(now)
     if operation == "reserve" then
         if state ~= "active" then return nil,"DENIED: grant is " .. state end
@@ -107,9 +163,15 @@ function M.use(tx: sql.Transaction | sql.DB, grant: Grant, operation: string, ef
         if err then return nil,err end
         err = execute(tx,"UPDATE bee_approval_grants SET reserved = reserved + 1,revision = revision + 1 WHERE grant_id = ?",{grant.grant_id})
         grant.reserved = grant.reserved + 1
+    elseif operation == "consume" then
+        if prior or state ~= "active" then return nil,"DENIED: grant cannot admit another effect" end
+        err = execute(tx,"INSERT INTO bee_approval_grant_uses(grant_id,effect_key,request_digest,state,created_at,admitted_at) VALUES (?,?,?,'admitted',?,?)",{grant.grant_id,effect_key,digest,at,at})
+        if err then return nil,err end
+        err = execute(tx,"UPDATE bee_approval_grants SET used = used + 1,revision = revision + 1 WHERE grant_id = ?",{grant.grant_id})
+        grant.used = grant.used + 1
     elseif operation == "admit" or operation == "release" then
         if not prior or prior.state ~= "reserved" then return nil,"CONFLICT: effect is not reserved" end
-        err = execute(tx,"UPDATE bee_approval_grant_uses SET state = ?,admitted_at = ? WHERE grant_id = ? AND effect_key = ?",{operation == "admit" and "admitted" or "released",operation == "admit" and at or nil,grant.grant_id,effect_key})
+        err = execute(tx,"UPDATE bee_approval_grant_uses SET state = ?,admitted_at = ? WHERE grant_id = ? AND effect_key = ?",{operation == "admit" and "admitted" or "released",operation == "admit" and at or sql.NULL,grant.grant_id,effect_key})
         if err then return nil,err end
         err = execute(tx,"UPDATE bee_approval_grants SET reserved = reserved - 1,used = used + ?,revision = revision + 1 WHERE grant_id = ?",{operation == "admit" and 1 or 0,grant.grant_id})
         grant.reserved = grant.reserved - 1

@@ -22,3 +22,15 @@ entries:
     scope_type: exact
     version: '1'
     digest: 4ece134858741867be6791a940b93288439e4966646402e382074f125a27c8bb
+- name: runtime_grant
+  kind: function.lua
+  source: file://runtime_grant.lua
+  method: build
+  meta:
+    type: bee.approvals.grant-adapter
+    operation_ref: bee.approvals:runtime-lease
+    domain: runtime_lease
+  imports:
+    bounds: bee.values:bounds
+    grants: bee.approvals.grants:store
+    runtime_lease: bee.approvals.types:runtime_lease

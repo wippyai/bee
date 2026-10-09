@@ -5,6 +5,8 @@ local hash = require("hash")
 local clock = require("clock")
 local service = require("service")
 local bounds = require("bounds")
+local canonical = require("canonical")
+local json = require("json")
 local DATABASE = "bee.approvals:migration_test_db"
 local function migrate(name: string)
     local id = "bee.approvals.migrations:" .. name
@@ -97,6 +99,9 @@ local function define_tests()
             test.eq(failed.state, "failed")
             local unused = assert(db:query("SELECT * FROM bee_approval_effects WHERE approval_id = 'legacy-unused'"))[1]
             test.eq(unused.effect_id, "legacy-unused")
+            assert(db:execute("INSERT INTO bee_approval_runtime_leases VALUES ('legacy-failed','node','requester','workspace','Bash',?, ?,2,'2026-10-01T00:00:01Z',?)",{string.rep("e",64),deadline,string.rep("b",64)}))
+            local use_digest = assert(hash.sha256(assert(canonical.encode({subject = "requester",workspace_id = "workspace",tool = "Bash",input_digest = string.rep("e",64)}))))
+            assert(db:execute("INSERT INTO bee_approval_runtime_lease_uses VALUES ('legacy-failed','old-use',?)",{use_digest}))
             migrate("grants")
             migrate("grants")
             local window = assert(db:query("SELECT * FROM bee_approval_grants WHERE grant_id = 'legacy-id'"))[1]
@@ -106,6 +111,15 @@ local function define_tests()
             test.eq(window.provenance_json,'{"kind":"legacy","source":"approval_window","approval_id":"legacy-id"}')
             test.eq(assert(db:query("SELECT COUNT(*) AS n FROM bee_approval_grants WHERE approval_id = 'legacy-id'"))[1].n,1)
             test.eq(#assert(db:query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bee_approval_window_grants'")),0)
+            migrate("runtime_grants")
+            migrate("runtime_grants")
+            local runtime = assert(db:query("SELECT * FROM bee_approval_grants WHERE grant_id = 'legacy-failed:grant'"))[1]
+            test.eq(runtime.domain,"runtime_lease")
+            test.eq(runtime.used,1); test.eq(runtime.max_uses,2); test.eq(runtime.until_ms,deadline)
+            test.eq(runtime.state,"revoked")
+            test.eq(assert(bounds.object(json.decode(runtime.provenance_json))).kind,"legacy")
+            test.eq(#assert(db:query("SELECT name FROM sqlite_master WHERE name IN ('bee_approval_runtime_leases','bee_approval_runtime_lease_uses')")),0)
+            test.eq(assert(db:query("SELECT request_digest FROM bee_approval_grant_uses WHERE grant_id = 'legacy-failed:grant'"))[1].request_digest,use_digest)
             local claim = {operation = "claim", approval_id = "legacy-unused", proposal_digest = assert(hash.sha256(proposal)),
                 effect_key = "existing-domain-effect", owner_incarnation = 1}
             local claimed = service.execute(db, "requester", "effect", claim, nil, nil)

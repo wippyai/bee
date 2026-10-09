@@ -62,3 +62,13 @@ entries:
   imports:
     migration: wippy.migration:migration
     grant_schema: bee.approvals.grants:schema
+- name: runtime_grants
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-13T00:01:00Z'
+  source: file://runtime_grants.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

@@ -734,6 +734,9 @@ local function define_tests()
                 expected_revision = 1, subject = contract.subject, scope = contract.scope, effect_key = "reserved-use"}
             local reserved = executed(service.execute(db, REQUESTER, "grant", grant, 1002, nil))
             test.eq(reserved.revision, 2)
+            local reservation = executed(service.execute(db,REQUESTER,"grant",{operation = "read",grant_id = grant.grant_id},1002,nil))
+            test.eq(assert(bounds.object(reservation.grant)).reserved,1)
+            test.eq(assert(bounds.object(reservation.grant)).used,0)
             test.eq(service.execute(db, REQUESTER, "effect", {operation = "claim", approval_id = approved.approval_id,
                 proposal_digest = approved.proposal_digest, effect_key = "different-use", owner_incarnation = approved.owner_incarnation}, 1003, nil).code, "CONFLICT")
             grant.operation, grant.expected_revision, grant.owner_incarnation = "admit", 1, approved.owner_incarnation

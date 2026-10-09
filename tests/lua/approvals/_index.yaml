@@ -144,11 +144,12 @@ entries:
   source: file://migration_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [sql, funcs, hash]
+  modules: [sql, funcs, hash, json]
   imports:
     test: wippy.test:test
     clock: bee.values:clock
     service: bee.approvals.binding:service
+    canonical: bee.values:canonical
     bounds: bee.values:bounds
   security:
     policies: [bee.approvals:migration_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_consume_policy]
@@ -184,3 +185,21 @@ entries:
     resources: bee.approvals.env:resources
     demand: bee.process:demand
     principals: bee.approvals:test_principals
+- name: grants_test
+  kind: function.lua
+  source: file://grants_test.lua
+  method: run
+  modules: [sql, uuid, hash]
+  meta: {type: test, suite: bee}
+  security:
+    policies:
+    - bee.approvals:store_test_policy
+    - bee.tests.support:schema_policy
+    - bee.approvals.inbox.security:grants_policy
+  imports:
+    test: wippy.test:test
+    grants: bee.approvals.grants:store
+    service: bee.approvals.binding:service
+    schema: bee.tests.support:schema
+    bounds: bee.values:bounds
+    clock: bee.values:clock

@@ -203,3 +203,21 @@ entries:
     schema: bee.tests.support:schema
     bounds: bee.values:bounds
     clock: bee.values:clock
+- name: confirmation_fixture
+  kind: library.lua
+  source: file://confirmation_fixture.lua
+  meta: {type: test_support}
+  imports:
+    caller: bee.app:caller
+    bounds: bee.values:bounds
+- name: confirmation_test
+  kind: function.lua
+  source: file://confirmation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    confirmation: bee.approvals.app:confirmation
+    dialog: bee.approvals.app:dialog
+    fixture: bee.approvals:confirmation_fixture
+    bounds: bee.values:bounds

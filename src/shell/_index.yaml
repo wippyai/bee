@@ -40,12 +40,6 @@ entries:
   imports:
     model: bee.shell:model
     appearance: bee.ui:appearance
-- name: dialog
-  kind: library.lua
-  source: file://dialog.lua
-  modules: [tty]
-  imports:
-    appearance: bee.ui:appearance
 - name: title_editor
   kind: library.lua
   source: file://title_editor.lua
@@ -70,7 +64,7 @@ entries:
     frame: bee.ui:frame
     title_editor: bee.shell:title_editor
     watch: bee.shell:watch
-    dialog: bee.shell:dialog
+    dialog: bee.approvals.app:dialog
     model: bee.shell:model
     layout: bee.shell:layout
     appearance: bee.ui:appearance
@@ -86,13 +80,14 @@ entries:
   method: main
   modules: [tty, channel, io, system, process, events]
   imports:
+    confirmation: bee.approvals.app:confirmation
     appearance: bee.ui:appearance
     client: bee.node:client
     chrome: bee.shell:chrome
     model: bee.shell:model
     layout: bee.shell:layout
     menu: bee.shell:menu
-    dialog: bee.shell:dialog
+    dialog: bee.approvals.app:dialog
     title_editor: bee.shell:title_editor
     watch: bee.shell:watch
     selection: bee.shell:selection
@@ -112,13 +107,14 @@ entries:
   method: client
   modules: [tty, channel, io, system, process, events]
   imports:
+    confirmation: bee.approvals.app:confirmation
     appearance: bee.ui:appearance
     client: bee.node:client
     chrome: bee.shell:chrome
     model: bee.shell:model
     layout: bee.shell:layout
     menu: bee.shell:menu
-    dialog: bee.shell:dialog
+    dialog: bee.approvals.app:dialog
     title_editor: bee.shell:title_editor
     watch: bee.shell:watch
     selection: bee.shell:selection

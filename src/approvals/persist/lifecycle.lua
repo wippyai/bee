@@ -159,6 +159,7 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
         return execute(tx, "INSERT OR IGNORE INTO bee_approval_grant_history SELECT grant_id,revision,'grant.created',granted_by,provenance_json,created_at FROM bee_approval_grants WHERE grant_id = ?", {window_id})
     end
     local proposal = assert(bounds.object(row.proposal))
+    if proposal.ref == "bee.approvals:confirmation" then return nil end
     local selector: Object = {["meta.type"] = "bee.approvals.grant-adapter"}
     if proposal.grant_adapter ~= nil then selector["meta.adapter_id"] = proposal.grant_adapter
     else selector["meta.operation_ref"] = proposal.ref end

@@ -66,6 +66,20 @@ entries:
     type: bee.approval_policies
     comment: Host-owned approver policies; a request names one, and only its approvers decide it
   policies:
+  - name: local-confirmation
+    approvers:
+    - bee.node
+    - bee.shell
+    - definition_id: bee.shell:shell
+    - definition_id: bee.apps.library:app
+    - definition_id: bee.apps.settings:app
+    - definition_id: bee.apps.processes:app
+    - definition_id: bee.harness.app:app
+    - definition_id: bee.gateway.app:app
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 60000
+    max_ttl_ms: 60000
   - name: workspace-application-delivery
     approvers:
     - definition_id: bee.approvals.inbox.app:app
@@ -217,4 +231,17 @@ entries:
     - bee.approvals.types:runtime_grant
     - bee.placement.docker.env:grant
     - bee.gateway.security:grant
+    effect: allow
+
+- name: confirmation_client
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:effect, bee.approvals.binding:revalidate]
+    effect: allow
+- name: confirmation_authority
+  kind: security.policy
+  policy:
+    actions: [bee.approvals.request, bee.approvals.decide, bee.approvals.consume]
+    resources: '*'
     effect: allow

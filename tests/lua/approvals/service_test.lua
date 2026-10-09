@@ -838,6 +838,43 @@ local function define_tests()
             end
             db:release()
         end)
+        test.it("records one explicit confirmation and no reusable grant", function()
+            local db = open_test_store()
+            local created = executed(service.execute(db, REQUESTER, "request", request_of("ws-confirm-" .. key(), {
+                contract_version = 2, ttl_ms = 60000, presentation = "inline",
+                proposal = {kind = "operation", ref = "bee.approvals:confirmation", revision = "1",
+                    payload = {action = "close", target = {instance_id = "exact-instance"}}},
+                scope = {type = "exact", parameters = {instance_id = "exact-instance"}}
+            }), 1000, nil))
+            local fence: {[string]: unknown} = {approval_id = created.approval_id, expected_revision = 1,
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest,
+                decision = "allow_once", assurance = {kind = "explicit_gesture", gesture = "enter", presentation = "inline"}}
+            executed(service.execute(db, ALICE, "decide", fence, 1001, nil))
+            executed(service.execute(db, ALICE, "decide", fence, 1002, nil))
+            local records = assert(db:query("SELECT * FROM bee_approval_decisions WHERE approval_id = ?", {created.approval_id}))
+            test.eq(#records, 1)
+            test.eq(assert(bounds.object(json.decode(records[1].assurance_json))).gesture, "enter")
+            test.eq(#assert(db:query("SELECT * FROM bee_approval_grants WHERE approval_id = ?", {created.approval_id})), 0)
+            fence.assurance = {kind = "explicit_gesture", gesture = "click", presentation = "inline"}
+            test.eq(service.execute(db, ALICE, "decide", fence, 1003, nil).code, "CONFLICT")
+            executed(service.execute(db, REQUESTER, "consume", {approval_id = created.approval_id, proposal_digest = created.proposal_digest,
+                owner_incarnation = created.owner_incarnation, effect_key = created.approval_id}, 1003, nil))
+            executed(service.execute(db, REQUESTER, "consume", {approval_id = created.approval_id, proposal_digest = created.proposal_digest,
+                owner_incarnation = created.owner_incarnation, effect_key = created.approval_id}, 1004, nil))
+            local listed = executed(service.execute(db, REQUESTER, "list", {workspace_id = created.workspace_id}, 1003, nil))
+            test.eq(#assert(bounds.array(listed.requests, 64)), 1)
+            db:release()
+        end)
+        test.it("withdraws a canceled confirmation without a decision", function()
+            local db = open_test_store()
+            local created = executed(service.execute(db, REQUESTER, "request", request_of("ws-confirm-cancel-" .. key(), {
+                presentation = "dialog", proposal = {kind = "operation", ref = "bee.approvals:confirmation", revision = "1", payload = {}}
+            }), 1000, nil))
+            executed(service.execute(db, REQUESTER, "withdraw", {approval_id = created.approval_id,
+                expected_revision = 1, proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest}, 1001, nil))
+            test.eq(#assert(db:query("SELECT * FROM bee_approval_decisions WHERE approval_id = ?", {created.approval_id})), 0)
+            db:release()
+        end)
         test.it("binds subject, scope and reviewed evidence to an immutable request", function()
             local db = open_test_store()
             local asked = request_of("ws-contract-" .. key(), {contract_version = 2, subject = {principal_id = "subject-test"},

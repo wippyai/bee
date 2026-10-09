@@ -227,6 +227,8 @@ local function announce(value: unknown, db: sql.DB, requested: boolean)
     local workspace_id = view and bounds.id(view.workspace_id) or nil
     local approval_id = view and bounds.id(view.approval_id) or nil
     if not view or not workspace_id or not approval_id then return end
+    local contract = bounds.object(view.contract)
+    if contract and contract.presentation ~= "inbox" then return end
     requested = requested and view.state == "pending"
     local counted = transaction.read(db, M.LABEL, function(tx: sql.Transaction): Result
         local at = now_ms()
@@ -728,6 +730,9 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
     if not policy_name then return failure("INVALID_ARGUMENT", "policy is not an identifier") end
     local proposal, proposal_digest, proposal_json, proposal_error = proposal_of(object.proposal)
     if not proposal or not proposal_digest or not proposal_json then return failure("INVALID_ARGUMENT", proposal_error or "proposal") end
+    if policy_name == "local-confirmation" and proposal.ref ~= "bee.approvals:confirmation" then
+        return failure("FORBIDDEN", "local confirmation policy only records instance-bound gestures")
+    end
     if proposal.ref == runtime_lease.REF then
         local ceiling, err = runtime_lease.decode(proposal.payload)
         if not ceiling or ceiling.subject ~= actor or ceiling.workspace_id ~= workspace_id or ceiling.expires_ms <= now
@@ -830,7 +835,7 @@ end
 -- decide: an eligible approver settles the pending revision for the exact
 -- proposal digest; an identical retry replays, anything else conflicts.
 local function op_decide(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
-    local unknown_field = bounds.fields(object, {"approval_id", "expected_revision", "decision", "proposal_digest", "response", "window_ttl_ms", "window_permanent", "reviewed_digest"})
+    local unknown_field = bounds.fields(object, {"approval_id", "expected_revision", "decision", "proposal_digest", "response", "window_ttl_ms", "window_permanent", "reviewed_digest", "assurance"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local approval_id = bounds.id(object.approval_id)
     if not approval_id then return failure("INVALID_ARGUMENT", "approval_id is not an identifier") end
@@ -852,6 +857,21 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     if not row then return failure("NOT_FOUND", "approval request does not exist") end
     if declared_decision == "answer" and row.request_kind ~= "question" then return failure("INVALID_ARGUMENT", "answer needs a question") end
     if declared_decision == "allow_once" and row.request_kind ~= "permission" then return failure("INVALID_ARGUMENT", "allow_once needs a permission") end
+    local confirmation = row.proposal.ref == "bee.approvals:confirmation"
+    if row.policy == "local-confirmation" and row.requester_id ~= actor then return failure("DENIED", "only the requesting instance confirms its local gesture") end
+    local assurance = bounds.object(object.assurance)
+    if object.assurance ~= nil then
+        if not assurance or bounds.fields(assurance, {"kind", "gesture", "presentation"})
+            or assurance.kind ~= "explicit_gesture"
+            or not bounds.member(assurance.gesture, {"enter", "space", "click", "shortcut"})
+            or assurance.presentation ~= row.contract.presentation then
+            return failure("INVALID_ARGUMENT", "assurance must identify the explicit gesture and reviewed presentation")
+        end
+    end
+    if confirmation and not assurance then return failure("INVALID_ARGUMENT", "confirmation requires an explicit gesture") end
+    if confirmation and (object.window_ttl_ms ~= nil or object.window_permanent == true) then
+        return failure("INVALID_ARGUMENT", "confirmations cannot create reusable grants")
+    end
     local adapter, adapter_error = resources.has_grant_adapter(row.proposal)
     if adapter_error then return storage(adapter_error) end
     if adapter and (object.window_ttl_ms ~= nil or object.window_permanent == true) then return failure("INVALID_ARGUMENT","this proposal already reviews its domain grant terms") end
@@ -902,7 +922,14 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
             or (window_ttl ~= nil and current.window_grant ~= nil and current.allowed_by_grant == nil
                 and (current.window_grant.until_ms - current.window_grant.granted_ms == window_ttl
                     or (object.window_permanent == true and current.window_grant.until_ms == windows.PERMANENT_UNTIL_MS)))
-        if current.decider_id == actor and current.decision == decision and same_response and same_window then return success(M.view(current), true) end
+        if current.decider_id == actor and current.decision == decision and same_response and same_window then
+            if assurance then
+                local records = assert(bounds.array(current.lifecycle_records.decisions, 64))
+                local record = records[1] and bounds.object(records[1])
+                if not record or record.assurance_json ~= canonical.encode(assurance) then return failure("CONFLICT", "decision assurance differs", M.view(current)) end
+            end
+            return success(M.view(current), true)
+        end
         return failure("CONFLICT", "request was decided " .. tostring(current.decision) .. " by " .. tostring(current.decider_id), M.view(current))
     end
     if expired_now then return refusal("INVALID_STATE", "request expired at its deadline", M.view(current)) end
@@ -938,6 +965,14 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     end
     local settled, settle_error = settle(tx, current, "decided", decision, actor, response, actor, "decided " .. decision, now)
     if not settled then return storage(settle_error or "settle decision") end
+    if assurance then
+        local _, assurance_error = tx:execute("UPDATE bee_approval_decisions SET assurance_json = ? WHERE approval_id = ? AND revision = ?",
+            {canonical.encode(assurance), settled.approval_id, settled.revision})
+        if assurance_error then return storage("record decision assurance") end
+        local refreshed, refresh_error = load(tx, settled.approval_id)
+        if not refreshed then return storage(refresh_error or "read confirmation decision") end
+        settled = refreshed
+    end
     return success(M.view(settled), false)
 end
 -- decide_batch: several pending requests of one requester in one workspace are
@@ -1079,7 +1114,7 @@ local function op_consume(tx: sql.Transaction, actor: string, object: Object, no
         return failure("CONFLICT", "approval was consumed by " .. tostring(row.consumer_id) .. " for effect " .. consumed, M.view(row))
     end
     local authority: grants.Grant? = nil
-    if row.request_kind == "permission" then
+    if row.request_kind == "permission" and row.proposal.ref ~= "bee.approvals:confirmation" then
         local records, grant_error = tx:query("SELECT * FROM bee_approval_grants WHERE approval_id = ? OR grant_id = ?",{row.approval_id,row.allowed_by_grant or (row.window_grant and row.window_grant.grant_id) or sql.NULL})
         if not records or grant_error then return storage("read effect grant") end
         if #records ~= 1 then return failure("INVALID_STATE","effect has no unique grant") end

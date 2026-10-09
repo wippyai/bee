@@ -163,19 +163,19 @@ function M.forget_grants(tx: sql.Transaction, horizon: integer): string?
         AND NOT EXISTS (SELECT 1 FROM bee_approval_requests r WHERE r.approval_id = bee_approval_grants.approval_id OR r.window_grant_id = bee_approval_grants.grant_id)]], {horizon}, "forget retained grants")
 end
 function M.attention_count(tx: sql.Transaction, workspace: string, now: integer): (integer?, string?)
-    local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ?", {workspace, now})
+    local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ? AND COALESCE(json_extract(contract_json, '$.presentation'), 'inbox') = 'inbox'", {workspace, now})
     if err or not rows or #rows ~= 1 then return nil, err or "count attention" end
     local row = rows[1]
     if type(row.count) ~= "number" or row.count < 0 or row.count ~= math.floor(row.count) then return nil, "attention count is corrupt" end
     return math.floor(row.count), nil
 end
 function M.attention_target(tx: sql.Transaction, workspace: string, now: integer): (unknown?, string?)
-    local rows, err = query(tx, "SELECT approval_id, prompt_json FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ? ORDER BY created_at DESC, approval_id DESC LIMIT 1", {workspace, now})
+    local rows, err = query(tx, "SELECT approval_id, prompt_json FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ? AND COALESCE(json_extract(contract_json, '$.presentation'), 'inbox') = 'inbox' ORDER BY created_at DESC, approval_id DESC LIMIT 1", {workspace, now})
     if err or not rows then return nil, err or "read attention target" end
     return rows[1], nil
 end
 function M.node_pending_count(tx: sql.Transaction, node: string, now: integer): (integer?, string?)
-    local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE owner_node = ? AND state = 'pending' AND expires_ms > ?", {node, now})
+    local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE owner_node = ? AND state = 'pending' AND expires_ms > ? AND COALESCE(json_extract(contract_json, '$.presentation'), 'inbox') = 'inbox'", {node, now})
     if err or not rows or #rows ~= 1 then return nil, err or "count node pending approvals" end
     local count = rows[1].count
     if type(count) ~= "number" or count < 0 or count ~= math.floor(count) then return nil, "node pending approval count is corrupt" end

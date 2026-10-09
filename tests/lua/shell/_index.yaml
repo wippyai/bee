@@ -26,7 +26,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    dialog: bee.shell:dialog
+    dialog: bee.approvals.app:dialog
     frame: bee.ui:frame
     appearance: bee.ui:appearance
 - name: title_editor_test

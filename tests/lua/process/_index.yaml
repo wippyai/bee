@@ -71,3 +71,14 @@ entries:
   imports:
     test: wippy.test:test
     task: bee.process:task
+- name: demand_model_test
+  kind: function.lua
+  source: file://demand_model_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: 60s}
+  imports:
+    test: wippy.test:test
+    owner: bee.tests.process:demand_owner
+    runtime: bee.tests.process:demand_runtime
+    state: bee.process:demand_state
+    demand: bee.process:demand

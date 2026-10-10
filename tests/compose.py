@@ -271,13 +271,28 @@ def stop_hive_delivery(src):
         end
         local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})''')
     replace_once(src / "process/demand_owner.lua",
-                 '        local current = system.supervisor.state(owner.id)',
-                 '''        local current = system.supervisor.state(owner.id)
+                 '    local current = system.supervisor.state(owner.id)',
+                 '''    local current = system.supervisor.state(owner.id)
         if stopped_delivery and owner.name == "bee.gateway.external" and current
             and (current.status == "stopped" or current.status == "exited")
             and process.registry.lookup("bee.test.hive.delivery_stop", process.registry.LOCAL) then
             current.status = "stopped"
         end''')
+
+
+def hold_access_readiness(src):
+    replace_once(src / "process/demand.lua", 'function M.ready(name: string): (boolean, string?)',
+                 '''function M.ready(name: string): (boolean, string?)
+    local controller = name == "bee.gateway.access"
+        and process.registry.lookup("bee.test.access.start", process.registry.LOCAL)
+    if controller then
+        local lifecycle = assert(process.events())
+        assert(process.send(tostring(controller), "bee.test.access.start", {}))
+        while true do
+            local event = assert((lifecycle:receive()))
+            if event.kind == process.event.CANCEL then return false, "controlled stop before readiness" end
+        end
+    end''')
 
 
 def hold_test_runner_quiet(src):
@@ -395,6 +410,7 @@ def main():
     hold_test_runner_quiet(src)
     order_hive_readiness(src)
     stop_hive_delivery(src)
+    hold_access_readiness(src)
     hold_docker_cleanup(src)
     advance_committed_transition(src)
     observe_preparer_cleanup(src)

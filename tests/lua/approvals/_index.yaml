@@ -221,3 +221,12 @@ entries:
     dialog: bee.approvals.app:dialog
     fixture: bee.approvals:confirmation_fixture
     bounds: bee.values:bounds
+- name: effect_lifecycle_test
+  kind: function.lua
+  source: file://effect_lifecycle_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, events, system, channel, time]
+  imports:
+    test: wippy.test:test
+    host: bee.tests.memory:host

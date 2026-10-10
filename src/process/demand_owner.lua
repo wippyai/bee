@@ -58,8 +58,17 @@ function M.discover(previous: Owners?): Owners
     end
     return owners
 end
-local function start(owner: Owner)
-    assert(events.send("supervisor", "service.start", owner.id))
+local function snapshot(owner: Owner): state.Snapshot?
+    local current = system.supervisor.state(owner.id)
+    if not current then return nil end
+    local holder = process.registry.lookup(owner.name, process.registry.LOCAL)
+    return {status = current.status, desired = current.desired, started = current.started_at,
+        holder = holder and tostring(holder) or nil}
+end
+local function command(owner: Owner, action: string)
+    if action == "start" or action == "stop" then
+        assert(events.send("supervisor", "service." .. action, owner.id))
+    end
 end
 local function deliver(owner: Owner)
     local pid = owner.state.pid
@@ -68,12 +77,11 @@ local function deliver(owner: Owner)
     repeat
         local requests: {Dispatch} = {}
         for index = 1, math.min(64, #owner.queue) do requests[index] = owner.queue[index] end
-        if not first then owner.state.generation = owner.state.generation + 1 end
+        if not first then state.transition(owner.state, "batch", nil, nil, nil) end
         first = false
         local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})
         if not sent then
-            owner.state.pid, owner.state.phase = nil, "recovering"
-            M.update({[owner.name] = owner})
+            command(owner, state.transition(owner.state, "failed", pid, nil, snapshot(owner)))
             return
         end
         for _, request in ipairs(requests) do
@@ -86,14 +94,18 @@ local function deliver(owner: Owner)
         for index = #requests + 1, #owner.queue do remaining[#remaining + 1] = owner.queue[index] end
         owner.queue = remaining
     until #owner.queue == 0
+    state.transition(owner.state, "delivered", pid, nil, nil)
+end
+local function transition(owner: Owner, event: string, pid: string?, generation: integer?)
+    local action = state.transition(owner.state, event, pid, generation, snapshot(owner))
+    if action == "deliver" then deliver(owner)
+    else command(owner, action) end
 end
 function M.wake(owners: Owners, name: string, request: Dispatch?): boolean
     local owner = owners[name]
     if not owner then return false end
     if request then owner.queue[#owner.queue + 1] = request end
-    local action = state.wake(owner.state)
-    if action == "start" then start(owner :: Owner)
-    elseif action == "deliver" then deliver(owner :: Owner) end
+    transition(owner :: Owner, "wake", nil, nil)
     return true
 end
 function M.ready(owners: Owners, name: string, pid: string)
@@ -101,10 +113,8 @@ function M.ready(owners: Owners, name: string, pid: string)
     if not owner then return end
     local holder = process.registry.lookup(name, process.registry.LOCAL)
     if not holder or tostring(holder) ~= pid then return end
-    if state.ready(owner.state, pid) then
-        process.monitor(pid)
-        deliver(owner :: Owner)
-    end
+    process.monitor(pid)
+    transition(owner :: Owner, "ready", pid, nil)
 end
 function M.receive(owners: Owners, from: string, raw: unknown)
     if type(raw) ~= "table" or type(raw.name) ~= "string" then return end
@@ -114,34 +124,14 @@ function M.receive(owners: Owners, from: string, raw: unknown)
     elseif raw.action == "dispatch" then M.wake(owners, raw.name, {caller = from, data = raw.value})
     elseif raw.action == "ready" then M.ready(owners, raw.name, from)
     elseif raw.action == "quiet" and type(raw.value) == "number" then
-        if state.quiet(owner.state, from, math.floor(raw.value)) then
-            assert(events.send("supervisor", "service.stop", owner.id))
-        elseif owner.state.phase == "ready" and owner.state.pid == from then deliver(owner :: Owner) end
+        transition(owner :: Owner, "quiet", from, math.floor(raw.value))
     end
 end
 function M.exit(owners: Owners, pid: string)
-    for _, owner in pairs(owners) do
-        if owner.state.pid == pid then
-            owner.state.pid = nil
-            if owner.state.phase ~= "stopping" then
-                owner.state.phase = "absent"
-            end
-        end
-    end
+    for _, owner in pairs(owners) do transition(owner, "exit", pid, nil) end
 end
 function M.update(owners: Owners)
-    for _, owner in pairs(owners) do
-        local current = system.supervisor.state(owner.id)
-        if current and (current.status == "exited" or current.status == "stopped")
-            and owner.state.phase == "recovering" then
-            owner.state.phase = "starting"
-            start(owner)
-        end
-        if current and current.desired == "stopped" and owner.state.phase == "stopping"
-            and (current.status == "stopped" or current.status == "exited") then
-            if state.stopped(owner.state) == "start" then start(owner :: Owner) end
-        end
-    end
+    for _, owner in pairs(owners) do transition(owner, "update", nil, nil) end
 end
 function M.tables(owners: Owners): {string}
     local seen: {[string]: boolean} = {}

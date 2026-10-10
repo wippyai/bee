@@ -1207,9 +1207,9 @@ function M.attach(value: unknown): Reply
     local result = transition(attempt.attempt_id, {fields = {attachment_generation = generation, recipient = recipient}, evidence = {kind = "attach", detail = "generation " .. tostring(generation)}})
     if not result.ok then return result end
     if type(runner) == "string" and runner ~= "" then
-        -- The runner installs the generation before attach returns, so a
-        -- caller holding the reply knows the previous recipient is fenced
-        -- at the execution channel, not only at the thread.
+        -- Success requires the runner's fence reply after its installation
+        -- evidence commits. A deadline records uncertainty and refuses attach;
+        -- it cannot acknowledge replacement of the execution-channel recipient.
         local fences = assert(process.listen(protocol.TOPIC_FENCED, {message = true}))
         process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", control_token = control_token, recipient = recipient, generation = generation})
         local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
@@ -1244,9 +1244,13 @@ function M.attach(value: unknown): Reply
                 transition(attempt.attempt_id, {evidence = {kind = "attach.unanswered", detail = "runner gone after exit; generation " .. tostring(generation) .. " has nothing to attach to"}})
                 return fail("CONFLICT", "the attempt has exited and its runner is gone")
             end
-            return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "attach.unfenced", detail = "runner did not install generation " .. tostring(generation) .. " within " .. tostring(protocol.FENCE_TIMEOUT_MS) .. " ms"}})
+            local uncertain = transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "attach.unfenced", detail = "runner did not acknowledge generation " .. tostring(generation) .. " within " .. tostring(protocol.FENCE_TIMEOUT_MS) .. " ms"}})
+            if not uncertain.ok then return uncertain end
+            return fail("UNAVAILABLE", "runner did not acknowledge attachment generation " .. tostring(generation))
         end
-        return transition(attempt.attempt_id, {evidence = {kind = "attach.fenced", detail = "runner installed generation " .. tostring(generation)}})
+        local attached, read_error = load(attempt.attempt_id)
+        if not attached then return assert(read_error) end
+        return succeed(attached)
     end
     return result
 end

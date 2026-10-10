@@ -130,8 +130,8 @@ local function request(thread_id: string, attempt_id: string, environment: {[str
         placement_binding_digest = placement.binding_digest}
 end
 type Outcome = {value: Object?, error: string?}
-local function spawn_carrier(request_value: Object, mode: string, crash_after: string?, pause_after: string?): string
-    local spawner = process.with_context({}):with_actor(principals.actor(ACTOR, request_value.workspace_id)):with_scope(scope())
+local function spawn_carrier(request_value: Object, mode: string, crash_after: string?, pause_after: string?, fence_controller: string?): string
+    local spawner = process.with_context({["bee.test.attach.controller"] = fence_controller}):with_actor(principals.actor(ACTOR, request_value.workspace_id)):with_scope(scope())
     local pid, err = spawner:spawn_monitored(CARRIER, "bee:workers", request_value, mode, process.pid(), crash_after, nil, pause_after)
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)
@@ -926,15 +926,90 @@ local function define_tests()
         end)
     end)
 end
-local cases = test.run_cases(define_tests)
-return {run = function(options)
-    local roots = assert(registry.get("bee.placement.native.env:placement_admitted_roots"))
-    local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
-    local ok, result = pcall(cases, options)
-    local changes = assert(registry.snapshot()):changes()
-    changes:update(roots)
-    changes:update(mode)
-    assert(changes:apply())
-    if not ok then error(tostring(result)) end
-    return result
-end}
+local function define_fencing_tests()
+    test.describe("Gateway attachment fencing", function()
+        install_policy(POLICY)
+        admit_root()
+        open_gateway()
+        for _, scenario in ipairs({{phase = "before", timeout = true}, {phase = "after", timeout = false}, {phase = "after", timeout = true}}) do
+            test.it("commits the fence before acknowledgement: " .. scenario.phase .. (scenario.timeout and " deadline" or " reply"), function()
+                local attempt_id = fresh("fence")
+                local launch = request(thread(), attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = "stop",
+                    BEE_TEST_FENCE_CONTROLLER = process.pid(), BEE_TEST_FENCE_PHASE = scenario.phase})
+                local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+                local held = assert(process.listen("bee.test.attach.held", {message = true}))
+                local old = spawn_carrier(launch, "open", nil, "attempt_started")
+                await_paused(paused, old, "attempt_started", false)
+                await_presented(attempt_id, 1, 3)
+                assert(process.terminate(old))
+                await_exit(old, "old carrier")
+                await_evidence(attempt_id, "carrier.lost")
+                local live = binding_of(attempt_id, 1)
+                call("bee.gateway.binding:revoke", {binding_id = live.binding_id})
+                local replacement = spawn_carrier(launch, "resume", nil, "reattached", process.pid())
+                local runner: string? = nil
+                local service: string? = nil
+                local events = assert(process.events())
+                local deadline = time.after("10s")
+                while not runner or not service do
+                    local selected = channel.select({held:case_receive(), events:case_receive(), deadline:case_receive()})
+                    assert(selected.ok and selected.channel ~= deadline, "attachment barriers missing: runner=" .. tostring(runner) .. "; service=" .. tostring(service))
+                    if selected.channel == events then
+                        record_exit(selected.value)
+                        assert(not exited[replacement], "replacement exited before barrier: " .. tostring(exited[replacement] and exited[replacement].error))
+                    else
+                        local message = selected.value
+                        local data = assert(bounds.object(message:payload():data()))
+                        if data.phase == "waiting" then service = tostring(message:from())
+                        elseif data.phase == scenario.phase then runner = tostring(message:from()) end
+                    end
+                end
+                local _, details = evidence_kinds(attempt_id)
+                local installed = detail_with(details, "runner installed generation 2") ~= nil
+                if scenario.timeout then
+                    assert(process.send(service, "bee.test.attach.timeout", {}))
+                else
+                    assert(process.send(runner, "bee.test.attach.release", {}))
+                end
+                await_paused(paused, replacement, "reattached", true)
+                local acknowledged = exited[replacement] == nil
+                local failure = exited[replacement] and exited[replacement].error or nil
+                if scenario.timeout then assert(process.send(runner, "bee.test.attach.release", {})) end
+                if scenario.timeout then
+                    if acknowledged then assert(process.terminate(replacement)) end
+                    assert(process.monitor(runner))
+                    assert(process.cancel(runner, "fence deadline fixture complete"))
+                    await_exit(runner, "fence fixture runner", 10000)
+                else
+                    if acknowledged then continue_carrier(replacement) end
+                    call("bee.placement.native.binding:reconcile", {attempt_id = attempt_id})
+                end
+                await_exit(replacement, "replacement carrier", 10000)
+                process.unlisten(held)
+                process.unlisten(paused)
+                test.eq(installed, scenario.phase == "after", "fence evidence must be committed by the runner before either acknowledgement")
+                test.eq(acknowledged, not scenario.timeout, "replacement attachment was acknowledged without a fence reply")
+                if scenario.timeout then
+                    assert(failure and failure:find("did not acknowledge", 1, true), tostring(failure))
+                else
+                    test.eq(report(assert(bounds.id(launch.thread_id))).after_hold, 401)
+                end
+            end)
+        end
+    end)
+end
+local function run_cases(define)
+    local cases = test.run_cases(define)
+    return function(options)
+        local roots = assert(registry.get("bee.placement.native.env:placement_admitted_roots"))
+        local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
+        local ok, result = pcall(cases, options)
+        local changes = assert(registry.snapshot()):changes()
+        changes:update(roots)
+        changes:update(mode)
+        assert(changes:apply())
+        if not ok then error(tostring(result)) end
+        return result
+    end
+end
+return {run = run_cases(define_tests), fencing = run_cases(define_fencing_tests)}

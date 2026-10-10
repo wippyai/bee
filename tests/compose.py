@@ -92,6 +92,36 @@ def gate_runner(src):
     local started, start_error = proc:start()''')
 
 
+def gate_attachment(src):
+    """Select a fence deadline while the runner is held before or after installation."""
+    service = src / "placement/native/service/service.lua"
+    replace_once(service, 'local process = require("process")',
+                 'local process = require("process")\nlocal ctx = require("ctx")')
+    replace_once(service, '        local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")', '''        local controller = ctx.get("bee.test.attach.controller")
+        local timer = type(controller) == "string" and assert(process.listen("bee.test.attach.timeout", {message = true}))
+            or time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
+        if type(controller) == "string" then
+            assert(process.send(controller, "bee.test.attach.held", {phase = "waiting"}))
+        end''')
+    replace_once(service, '        process.unlisten(fences)', '''        process.unlisten(fences)
+        if type(controller) == "string" then process.unlisten(timer) end''')
+    add_modules(src / "placement/native/service/_index.yaml", "service", ["ctx"])
+    runner = src / "placement/native/service/runner.lua"
+    for phase, anchor in [
+        ("before", '                    if next_generation > generation then'),
+        ("after", '                    process.send(tostring(message:from()), protocol.TOPIC_FENCED, {attempt_id = attempt_id, generation = next_generation,')
+    ]:
+        replace_once(runner, anchor, '''                    if request.environment.BEE_TEST_FENCE_PHASE == "''' + phase + '''" then
+                        local controller = assert(request.environment.BEE_TEST_FENCE_CONTROLLER)
+                        local release = assert(process.listen("bee.test.attach.release", {message = true}))
+                        assert(process.send(controller, "bee.test.attach.held", {phase = "''' + phase + '''"}))
+                        local released = assert((release:receive()))
+                        assert(tostring(released:from()) == controller, "attachment barrier sender")
+                        process.unlisten(release)
+                    end
+''' + anchor)
+
+
 def fixture_clock(src):
     """The gateway reads the time from a fixture instant a suite may pin."""
     shutil.copytree(TESTS / "fixtures/gateway_clock", src / "gateway_clock")
@@ -374,6 +404,7 @@ def main():
     observe_carrier(src)
     hold_attempt_snapshot(src)
     gate_runner(src)
+    gate_attachment(src)
     fixture_clock(src)
     shutil.copytree(TESTS / "fixtures/memory", src / "test_memory")
     yield_session_defaults(src)

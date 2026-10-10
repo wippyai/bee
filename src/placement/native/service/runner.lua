@@ -573,6 +573,8 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                             end
                             generation = next_generation
                             recipient = data.recipient
+                            -- Installation and its durable evidence precede both acknowledgements.
+                            assert(evidence(db, attempt_id, "attach.fenced", "runner installed generation " .. tostring(generation)))
                             installed = true
                             process.send(recipient, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
                             for _, item in ipairs(pending) do

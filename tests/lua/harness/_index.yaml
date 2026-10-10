@@ -627,6 +627,33 @@ entries:
     principals: bee.tests.principals:bound
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
+- name: gateway_fencing_test
+  kind: function.lua
+  source: file://gateway_carrier_test.lua
+  method: fencing
+  meta:
+    type: test
+    suite: bee
+    timeout: 240s
+  modules:
+  - funcs
+  - security
+  - process
+  - registry
+  - env
+  - time
+  - channel
+  - json
+  security:
+    policies:
+    - bee.harness.catalog:apply_test_policy
+    - bee.harness.catalog:carrier_spawn_policy
+  imports:
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+    principals: bee.tests.principals:bound
+    test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
 - name: project_fixture
   kind: fs.directory
   meta:

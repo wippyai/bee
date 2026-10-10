@@ -1102,6 +1102,7 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     -- drain.
     local attach_target = M.placement_target(plan, "attach")
     if not attach_target then return nil, "selected placement binds no attach" end
+    -- A live reattachment requires placement's acknowledged, durable runner fence.
     local attached_value, attach_error = must(io, attach_target, {attempt_id = request.attempt_id, recipient = io.self_pid(), generation = epoch})
     if attach_error then
         if attempt.execution_state ~= "exited" and attempt.execution_state ~= "uncertain" then return nil, attach_error end

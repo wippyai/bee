@@ -537,14 +537,20 @@ func reportSpecRegression(client *httpClient, url, authorization string, report 
 	delete(value, "tools")
 	delete(value, "traits")
 	report["parent_read"] = read
+	report["app_tools"] = call("app_tools", object{}, 109)
+	if mode == "saved" || mode == "legacy" {
+		return
+	}
 	profile := context["child_profile"].(string)
 	overrides := object{"name": "Child", "role": "Review changes", "context": object{"from_parent": true, "project": "caller-project"}, "input": "Read your session context"}
-	if mode == "cleared" {
+	if mode == "cleared" || mode == "delegated" {
 		got := call("profile_get", object{"profile_id": context["parent_profile"]}, 105)
 		copied := mustObject(mustObject(got["value"])["profile"])
-		copied["active_traits"], copied["requestable"] = []string{}, []string{}
+		if mode == "cleared" {
+			copied["active_traits"], copied["requestable"] = []string{}, []string{}
+		}
 		profile += "-cleared"
-		put := call("profile_put", object{"profile_id": profile, "expected_revision": 0, "idempotency_key": "clear-traits", "profile": copied}, 106)
+		put := call("profile_put", object{"profile_id": profile, "expected_revision": 0, "idempotency_key": "traits:" + profile, "profile": copied}, 106)
 		report["put_ok"] = put["ok"]
 		report["put_error"] = put["error"]
 		return

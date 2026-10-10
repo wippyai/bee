@@ -4,6 +4,7 @@
 -- start runs the carrier to settlement, and a retried start recovers the
 -- same attempt without a second action, attempt, turn or receipt.
 local test = require("test")
+local sql = require("sql")
 local tty = require("tty")
 local carrier_fixtures = require("carrier_fixtures")
 local principals = require("principals")
@@ -546,7 +547,7 @@ local function define_tests()
             end)
             end)
         end)
-        for _, scenario in ipairs({"cleared", "narrowed", "context", "input_open", "input_run"}) do
+        for _, scenario in ipairs({"saved", "delegated", "legacy", "cleared", "narrowed", "context", "input_open", "input_run"}) do
             test.it("preserves the agent spec boundary through real MCP: " .. scenario, function()
                 local parent_id, child_id = fresh("regression-parent"), fresh("regression-child")
                 local tools = {"thread_read", "profile_get", "profile_put", "session_open", "session_run", "session_get", "thread_message", "app_tools"}
@@ -584,7 +585,21 @@ local function define_tests()
                                 provider = {}, bee = {mcp = mcp}, active_traits = {"bee.app:tools"}, requestable = {},
                                 context = {project = "profile-project", parent_profile = parent_id, child_profile = child_id, child_definition = RETAINED_DEFINITION}}}))
                     end
+                    if scenario == "legacy" then
+                        local db = assert(sql.get("bee:db"))
+                        assert(db:execute("UPDATE bee_sync_projections SET value_json = json_remove(value_json, '$.active_traits', '$.requestable') WHERE projection_key = ?", {parent_id}))
+                        assert(db:execute("UPDATE bee_approval_grants SET scope_json = json_remove(scope_json, '$.parameters.configuration.active_traits', '$.parameters.configuration.requestable'), provenance_json = json_set(provenance_json, '$.kind', 'legacy') WHERE domain = 'profile_choices' AND json_extract(metadata_json, '$.profile_id') = ?", {parent_id}))
+                        assert(db:execute("DELETE FROM _migrations WHERE id = 'bee.harness.migrations:profile_consent_traits'"))
+                        db:release()
+                        local migration = "bee.harness.migrations:profile_consent_traits"
+                        local migrated, err = funcs.call(migration, {target_db = "bee:db", database_id = "bee:db", direction = "up", id = migration})
+                        assert(not err, tostring(err))
+                        assert(assert(bounds.object(migrated)).status ~= "error", json.encode(migrated))
+                        local stored = value(call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = parent_id}))
+                        test.eq(assert(bounds.ids(assert(bounds.object(stored.profile)).active_traits, true))[1], "bee.app:tools")
+                    end
                     open_gateway()
+                    for _ = 1, (scenario == "saved" or scenario == "legacy") and 2 or 1 do
                     local measured = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                         saved_profile_id = parent_id, saved_profile_revision = 1}))
                     local started = value(call("bee.harness.binding:start", {request_id = fresh("regression-start"), definition_ref = DEFINITION,
@@ -602,12 +617,18 @@ local function define_tests()
                         if text and at then report = bounds.object(json.decode(text:sub(at + 8))) end
                     end
                     assert(report, "real parent carrier did not record its MCP report")
-                    test.is_true(not bounds.member("app_tools", assert(bounds.ids(report.tools, true))), "parent awaiting consent must not offer app_tools")
-                    if scenario == "cleared" then test.eq(report.put_ok, true, tostring(json.encode(report.put_error))) end
+                    test.not_nil(bounds.member("app_tools", assert(bounds.ids(report.tools, true))), "person's saved consent must offer app_tools")
+                    test.eq(assert(bounds.object(report.app_tools)).ok, true, json.encode(report.app_tools))
+                    local db = assert(sql.get("bee:db"))
+                    local requests = assert(db:query("SELECT approval_id FROM bee_approval_requests WHERE thread_id = ?", {started.thread_id}))
+                    db:release()
+                    test.eq(#requests, 0, "person's saved choice must not ask again")
+                    if scenario ~= "saved" and scenario ~= "legacy" then
+                    if scenario == "cleared" or scenario == "delegated" then test.eq(report.put_ok, true, tostring(json.encode(report.put_error))) end
                     local snapshot: {[string]: unknown}? = nil
                     local child_thread: string
                     local child_actor: string
-                    if scenario == "cleared" then
+                    if scenario == "cleared" or scenario == "delegated" then
                         local overrides = {context = {from_parent = true}}
                         local measured = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                             saved_profile_id = child_id .. "-cleared", saved_profile_revision = 1, overrides = overrides}))
@@ -656,10 +677,14 @@ local function define_tests()
                         end
                     end
                     local observed = value(principals.reply(child_read))
-                    if scenario == "cleared" or scenario == "narrowed" then
+                    if scenario == "cleared" or scenario == "narrowed" or scenario == "delegated" then
                         test.is_true(not bounds.member("app_tools", assert(bounds.ids(observed.offered_tools, true))), "removed consent trait must remove app_tools")
                         test.eq(assert(bounds.object(observed.app_tools_denied)).ok, false)
                         test.eq(#assert(bounds.ids(observed.active_traits, true)), 0)
+                        local db = assert(sql.get("bee:db"))
+                        local requests = assert(db:query("SELECT approval_id FROM bee_approval_requests WHERE thread_id = ?", {child_thread}))
+                        db:release()
+                        test.eq(#requests, scenario == "delegated" and 1 or 0)
                     elseif scenario == "context" then
                         test.eq(assert(bounds.object(observed.context)).project, "host-project")
                         test.eq(assert(bounds.object(observed.context))["bee.fixture"], "host")
@@ -672,6 +697,8 @@ local function define_tests()
                         local items = principals.objects(history.items)
                         test.eq(#items, 1)
                         test.eq(items[1].input, string.rep("x", 16384))
+                    end
+                    end
                     end
                 end)
                 end)

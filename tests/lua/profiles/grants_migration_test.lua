@@ -39,6 +39,47 @@ local function define_tests()
             test.eq(#assert(db:query("SELECT * FROM bee_approval_grants")),3)
             db:release()
         end)
+        test.it("migrates legacy selections atomically without changing revisions, delegation or revocation", function()
+            local db = schema.open(DATABASE, "bee.approvals.migrations")
+            local feed = "harness.profiles:" .. assert(hash.sha256("consent-workspace"))
+            assert(db:execute("INSERT INTO bee_sync_feeds VALUES ('node',?,1,1,128,1024)", {feed}))
+            local parent = assert(grants.read(db, authority.id("node", "workspace", "old", 2)))
+            for _, name in ipairs({"absent", "empty", "delegated", "revoked", "requestable"}) do
+                local configuration: {[string]: unknown} = {schema_revision = "bee.agent-profile@3", name = name,
+                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding",
+                    provider = {}, bee = {mcp = {{tool = "app_tools", scope = {}}}}}
+                if name == "empty" then configuration.active_traits, configuration.requestable = {}, {} end
+                if name == "requestable" then configuration.requestable = {"bee.app:tools"} end
+                assert(db:execute("INSERT INTO bee_sync_projections VALUES ('node',?,?,2,?,0,1,'2026-10-01T00:00:00Z')", {feed, name, json.encode(configuration)}))
+                local record = assert(authority.save(db, "node", "consent-workspace", name, 2, configuration, "person", true,
+                    "2026-10-01T00:00:00.000Z", name == "delegated" and parent or nil))
+                if name == "revoked" then assert(db:execute("UPDATE bee_approval_grants SET state = 'revoked' WHERE grant_id = ?", {record.grant_id})) end
+            end
+            local id = "bee.harness.migrations:profile_consent_traits"
+            for _ = 1, 2 do
+                local result, err = funcs.call(id, {target_db = "bee:db", database_id = DATABASE, direction = "up", id = id})
+                assert(not err, tostring(err)); assert(assert(bounds.object(result)).status ~= "error", json.encode(result))
+                for _, row in ipairs(assert(db:query("SELECT * FROM bee_sync_projections WHERE feed = ?", {feed}))) do
+                    local record = assert(grants.read(db, authority.id("node", "consent-workspace", row.projection_key, 2)))
+                    local profile = assert(bounds.object(json.decode(row.value_json)))
+                    local configuration = assert(bounds.object(assert(bounds.object(record.scope.parameters)).configuration))
+                    test.eq(json.encode(profile), (json.encode(configuration)))
+                    test.eq(row.revision, 2)
+                    if row.projection_key == "requestable" then
+                        test.is_nil(profile.active_traits)
+                        test.eq(record.provenance.kind, "legacy")
+                    else
+                        test.eq(assert(bounds.ids(profile.active_traits, true))[1], "bee.app:tools")
+                        test.eq(record.provenance.kind, row.projection_key == "delegated" and "delegated" or "consent")
+                        test.eq(record.state, row.projection_key == "revoked" and "revoked" or "active")
+                    end
+                end
+                local heads = assert(db:query("SELECT head_sequence,earliest_sequence FROM bee_sync_feeds WHERE feed = ?", {feed}))
+                test.eq(heads[1].head_sequence, 2)
+                test.eq(heads[1].earliest_sequence, 3)
+            end
+            db:release()
+        end)
     end)
 end
 return test.run_cases(define_tests)

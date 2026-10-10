@@ -52,6 +52,27 @@ function M.profile_authority(tx: sql.Transaction, binding_id: string, workspace:
     if not expected or canonical.encode(expected) ~= canonical.encode(configuration) then return nil,fault("DENIED","surface exceeds legacy consent") end
     return grant,nil
 end
+function M.saved_consent(tx: sql.Transaction, binding_id: string, workspace: string?, declaration: {[string]: unknown}, now: integer?): ({string}?, Fault?)
+    if declaration.authority_grant_id == nil then return {}, nil end
+    local record, err = M.profile_authority(tx, binding_id, workspace, declaration, now)
+    if not record then return nil, err end
+    if record.domain ~= "profile_choices" or record.provenance.kind ~= "consent" then return {}, nil end
+    local parameters = bounds.object(record.scope.parameters)
+    local configuration = parameters and bounds.object(parameters.configuration)
+    local saved = configuration and bounds.ids(configuration.active_traits, true) or {}
+    local active = bounds.ids(declaration.active_traits, true) or {}
+    local access = bounds.object(declaration.access)
+    local offered = access and bounds.ids(access.traits, true) or {}
+    local selectable = bounds.ids(declaration.selectable_traits, true) or {}
+    local consent: {string} = {}
+    for _, trait in ipairs(mcp.CONSENT_TRAITS) do
+        if bounds.member(trait.id, saved or {}) and bounds.member(trait.id, active)
+            and bounds.member(trait.id, offered or {}) and bounds.member(trait.id, selectable) then
+            consent[#consent + 1] = trait.id
+        end
+    end
+    return consent, nil
+end
 function M.call_authority(tx: sql.Transaction, binding_id: string, workspace: string?, declaration: {[string]: unknown}, name: string, now: integer): (string?, Fault?)
     local id = bounds.id(declaration.authority_grant_id)
     if id then
@@ -96,6 +117,9 @@ function M.call_authority(tx: sql.Transaction, binding_id: string, workspace: st
                     if not contains then return nil, fault("DENIED", "tool is outside the person's trait consent") end
                     return selected.grant_id, nil
                 end
+                local saved, saved_error = M.saved_consent(tx, binding_id, workspace, declaration, now)
+                if not saved then return nil, saved_error end
+                if bounds.member(trait, saved) then return id, nil end
                 local receipt, err = M.runtime_grant(tx,binding_id,trait,now)
                 if not receipt then return nil,err or fault("DENIED","access grant no longer admits calls") end
                 return receipt.approval_id .. ":grant",nil

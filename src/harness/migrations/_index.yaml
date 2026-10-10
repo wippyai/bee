@@ -21,3 +21,14 @@ entries:
     migration: wippy.migration:migration
     authority: bee.harness.profiles.persist:grants
     bounds: bee.values:bounds
+- name: profile_consent_traits
+  kind: function.lua
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-16T00:00:00Z'}
+  source: file://profile_consent_traits.lua
+  method: run
+  modules: [hash, json]
+  imports:
+    migration: wippy.migration:migration
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    mcp: bee.gateway.api:mcp

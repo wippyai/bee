@@ -112,9 +112,6 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
         for _, id in ipairs(access.traits) do if id == mcp.APPLICATION_RUNTIME_TRAIT.id then declared = true end end
         if not declared then return nil, nil, "application_open requires bee.app:runtime access" end
     end
-    -- A consent tool reaches an agent only through a person: the profile the
-    -- person saved lists it as a base tool, or the person approves its
-    -- requestable trait during the session.
     for _, trait in ipairs(consents) do
         for _, name in ipairs(trait.tools) do
             local enabled = false

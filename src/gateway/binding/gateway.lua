@@ -479,10 +479,12 @@ local function admission_reply(binding: Binding, raw: unknown, replayed: boolean
         if not seed_db then return seed_failure end
         local seed_tx, seed_error = seed_db:begin()
         if not seed_tx then seed_db:release(); return fail("STORAGE", tostring(seed_error)) end
+        local saved, saved_error = surface_store.saved_consent(seed_tx, binding.binding_id, binding.workspace_id, declaration, now_ms())
+        if not saved then seed_tx:rollback(); seed_db:release(); return fail("DENIED", saved_error and saved_error.message or "read saved consent") end
         for _, id in ipairs(seeds) do
             local existing, err = session_traits.read(seed_tx, binding.action_id, id)
             if err then seed_tx:rollback(); seed_db:release(); return fail("STORAGE", err) end
-            if not existing then pending[#pending + 1] = id end
+            if not existing and not bounds.member(id, saved) then pending[#pending + 1] = id end
         end
         seed_tx:rollback()
         seed_db:release()
@@ -657,6 +659,9 @@ function M.admit(value: unknown): Reply
     local authorized_surface, authority_error = surface_store.bind_authority(tx,assert(system.node.id()),workspace_id,subject,binding_id,assert(bounds.object(selected_surface)),policy_ref)
     if not authorized_surface then tx:rollback(); db:release(); return fail("STORAGE",authority_error and authority_error.message or "record surface authority") end
     surface_json = authorized_surface
+    local saved, saved_error = surface_store.saved_consent(tx, binding_id, workspace_id, assert(bounds.object(selected_surface)), created)
+    if not saved then tx:rollback(); db:release(); return fail("DENIED", saved_error and saved_error.message or "read saved consent") end
+    for _, id in ipairs(saved) do if not bounds.member(id, initial.active) then initial.active[#initial.active + 1] = id end end
     local initialized, initialize_error = surface_store.initialize(tx, binding_id, surface_json, json.encode(initial.active) or "[]", "{}")
     if not initialized then tx:rollback(); db:release(); return fail("STORAGE", initialize_error and initialize_error.message or "record binding surface") end
     local _, commit_error = tx:commit()
@@ -1209,10 +1214,11 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
     local stored, read_error = surface_store.read(tx, binding.binding_id)
     local granted, grant_error = surface_store.grants(tx, binding.binding_id,now_ms())
     local declaration = stored and bounds.object(json.decode(stored.surface_json))
-    local profile_grant = declaration and bounds.id(declaration.authority_grant_id)
-    if profile_grant then
-        local record, err = surface_store.profile_authority(tx,binding.binding_id,binding.workspace_id,assert(declaration),now_ms())
-        if not record then tx:rollback(); db:release(); return nil,fail("DENIED",err and err.message or "saved profile consent is no longer active") end
+    local saved: {string} = {}
+    if declaration then
+        local consent, err = surface_store.saved_consent(tx, binding.binding_id, binding.workspace_id, declaration, now_ms())
+        if not consent then tx:rollback(); db:release(); return nil, fail("DENIED", err and err.message or "saved profile consent is no longer active") end
+        saved = consent
     end
     tx:rollback()
     db:release()
@@ -1235,7 +1241,8 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
         end
     end
     local binding_traits: {string} = {}
-    for _, id in ipairs(granted) do if not extensions[id] then binding_traits[#binding_traits + 1] = id end end
+    for _, id in ipairs(saved) do binding_traits[#binding_traits + 1] = id end
+    for _, id in ipairs(granted) do if not extensions[id] and not bounds.member(id, binding_traits) then binding_traits[#binding_traits + 1] = id end end
     if #binding_traits > 0 then
         local extended, extend_error = surface.grant(configured, binding_traits)
         if not extended then return nil, fail("STORAGE", extend_error or "invalid grant") end

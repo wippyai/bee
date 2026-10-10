@@ -23,7 +23,7 @@ type Field = {kind: string, name: string, label: string, option_kind: string?, m
 type ThreadRow = {thread_id: string?, title: string}
 type Threads = {items: {ThreadRow}, selected: integer, error: string?}
 type Driver = {definition_ref: string, title: string}
-type State = {drivers: {Driver}?, driver_choice: Driver?, settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
+type State = {role: string, context_rows: {{key: string, value: string}},drivers: {Driver}?, driver_choice: Driver?, settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
     credential_text: {[string]: string},
     status: string, confirmation: confirmation.State, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
     thread_titles: {[string]: string}, list_offset: integer, advanced: boolean}
@@ -37,9 +37,15 @@ function M.new(form: forms.Form, ask: Ask, drivers: {Driver}?, origin: {[string]
             option_text[option.name] = type(option.value) == "string" and option.value or ""
         end
     end
-    local state: State = {drivers = drivers, settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
+    local state: State = {role = form.draft.role or "", context_rows = {}, drivers = drivers, settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
         option_text = option_text, credential_text = {}, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirmation = confirmation.new({workspace_id = form.workspace_id, origin = origin or {app_id = "bee.harness.app:app", instance_id = form.profile_id}}, ask), ask = ask,
         browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
+    local keys: {string} = {}
+    for key in pairs(form.draft.context or {}) do keys[#keys + 1] = key end
+    table.sort(keys)
+    for _, key in ipairs(keys) do
+        state.context_rows[#state.context_rows + 1] = {key = key, value = canonical.encode((form.draft.context or {})[key]) or ""}
+    end
     state.confirmation.ask = function(target: string, request: {[string]: unknown}): caller.Reply return state.ask(target, request) end
     return state
 end
@@ -72,6 +78,17 @@ end
 local function fields(state: State): {Field}
     local result: {Field} = {{kind = "title", name = "", label = "Name"},
         {kind = "driver", name = "", label = "Driver: " .. (state.form.driver_name or state.form.draft.driver_binding_ref)}}
+    result[#result + 1] = {kind = "role", name = "", label = "Role"}
+    for _, trait in ipairs(state.form.traits or {}) do
+        local selection = bounds.member(trait.id, state.form.draft.active_traits or {}) and "active"
+            or bounds.member(trait.id, state.form.draft.requestable or {}) and "requestable" or "off"
+        result[#result + 1] = {kind = "trait", name = trait.id, label = "Traits: [" .. selection .. "] " .. trait.title .. (trait.gated and " · asks you" or "")}
+    end
+    for index, row in ipairs(state.context_rows) do
+        result[#result + 1] = {kind = "context_key", name = tostring(index), label = "Context key: " .. row.key}
+        result[#result + 1] = {kind = "context_value", name = tostring(index), label = "Context value: " .. row.value}
+    end
+    result[#result + 1] = {kind = "context_add", name = "", label = "Context: Add key/value"}
     result[#result + 1] = {kind = "answers", name = "", label = "Permission answers: " .. (state.form.draft.bee.permission_answers or "provider") ..
         (state.form.permission_transport and "" or " · host transport unavailable")}
     if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "System prompt"} end
@@ -189,6 +206,10 @@ function M.action(state: State, action: string, gesture: "enter" | "space" | "cl
         if state.form.pending then return state.form.pending end
         local named, name_error = editor.set_title(state.form.draft, state.title)
         if not named then state.status = name_error or "Invalid name"; return nil end
+        local assigned, role_error = editor.set_role(state.form.draft, state.role)
+        if not assigned then state.status = role_error or "Invalid role"; return nil end
+        local contextual, context_error = editor.set_context(state.form.draft, state.context_rows)
+        if not contextual then state.status = context_error or "Invalid context"; return nil end
         local guided, guidance_error = editor.set_guidance(state.form.draft, state.guidance)
         if not guided then state.status = guidance_error or "Invalid instructions"; return nil end
         for name, value in pairs(state.option_text) do
@@ -363,12 +384,16 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    if field.kind == "home" or field.kind == "answers" or field.kind == "placement" or field.kind == "credential" or field.kind == "lease" or field.kind == "refresh" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
+    if field.kind == "trait" or field.kind == "context_add" or field.kind == "home" or field.kind == "answers" or field.kind == "placement" or field.kind == "credential" or field.kind == "lease" or field.kind == "refresh" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
         if event.type == "key" and event.action == "press" and
             (event.key_type == "enter" or event.key_type == "space" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
             local ok: boolean = false
             local err: string? = nil
-            if field.kind == "home" then ok, err = editor.cycle_home(state.form.draft)
+            if field.kind == "trait" then ok, err = editor.cycle_trait(state.form.draft, field.name)
+            elseif field.kind == "context_add" then
+                if #state.context_rows >= 24 then err = "At most 24 context keys"
+                else state.context_rows[#state.context_rows + 1] = {key = "", value = ""}; ok = true end
+            elseif field.kind == "home" then ok, err = editor.cycle_home(state.form.draft)
             elseif field.kind == "answers" then
                 local current = state.form.draft.bee.permission_answers
                 if state.form.permission_transport then
@@ -402,14 +427,17 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    local value = field.kind == "credential_value" and (state.credential_text[field.name] or "") or (field.kind == "settings" or field.kind == "scope") and (state.settings[field.name] or "") or field.kind == "repair" and (state.form.repair_json or "") or field.kind == "title" and state.title
+    local context_index = math.floor(tonumber(field.name) or 0)
+    local context_row = state.context_rows[context_index]
+    local value = field.kind == "role" and state.role or field.kind == "context_key" and context_row.key
+        or field.kind == "context_value" and context_row.value or field.kind == "credential_value" and (state.credential_text[field.name] or "") or (field.kind == "settings" or field.kind == "scope") and (state.settings[field.name] or "") or field.kind == "repair" and (state.form.repair_json or "") or field.kind == "title" and state.title
         or (field.kind == "option" and (state.option_text[field.name] or "") or state.guidance)
     if field.kind == "scope" and state.settings[field.name] == nil then
         for _, item in ipairs(state.form.draft.bee.mcp or {}) do
             if "mcp." .. item.tool == field.name then value = canonical.encode(item.scope) or "{}" end
         end
     end
-    local limit = field.kind == "credential_value" and 65536 or field.kind == "scope" and 8192 or field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
+    local limit = field.kind == "role" and 256 or field.kind == "context_key" and 128 or field.kind == "context_value" and 8192 or field.kind == "credential_value" and 65536 or field.kind == "scope" and 8192 or field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
         or (field.kind == "option" and (field.max_bytes or editor.MAX_INSTRUCTIONS_BYTES) or editor.MAX_INSTRUCTIONS_BYTES)
     if event.type == "paste" then value = value .. event.text
     elseif event.type == "key" and event.action == "press" then
@@ -423,6 +451,9 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     if field.kind == "credential_value" then state.credential_text[field.name] = value
     elseif field.kind == "settings" or field.kind == "scope" then state.settings[field.name] = value
     elseif field.kind == "repair" then state.form.repair_json = value
+    elseif field.kind == "role" then state.role = value
+    elseif field.kind == "context_key" then context_row.key = value
+    elseif field.kind == "context_value" then context_row.value = value
     elseif field.kind == "title" then state.title = value
     elseif field.kind == "option" then state.option_text[field.name] = value
     else state.guidance = value end
@@ -479,7 +510,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local field = listed[index]
         if not field then break end
         local label = field.label
-        if field.kind == "title" then label = label .. ": " .. state.title
+        if field.kind == "role" then label = label .. ": " .. state.role
+        elseif field.kind == "title" then label = label .. ": " .. state.title
         elseif field.kind == "option" and field.option_kind == "text" then
             label = human(field.name) .. ": " .. (state.option_text[field.name] or "Default")
         elseif field.kind == "settings" then label = label .. ": " .. (state.settings[field.name] ~= "" and state.settings[field.name] or "Default")

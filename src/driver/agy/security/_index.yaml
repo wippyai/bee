@@ -24,6 +24,9 @@ entries:
     allow_host_home: false
     gateway_tools:
     - session_catalog
+    - profile_get
+    - profile_list
+    - profile_put
     - session_open
     - session_run
     - session_send
@@ -70,6 +73,9 @@ entries:
     allow_host_home: true
     gateway_tools:
     - session_catalog
+    - profile_get
+    - profile_list
+    - profile_put
     - session_open
     - session_run
     - session_send
@@ -93,12 +99,13 @@ entries:
     - tests
     - app_tools
     - publish
-    gateway_access:
-      policy: agent-access
-      traits:
-      - bee.app:share
-      - bee.app:tools
-      - bee.hub:library
+    gateway_surface:
+      access:
+        policy: agent-access
+        traits:
+        - bee.app:share
+        - bee.app:tools
+        - bee.hub:library
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

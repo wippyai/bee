@@ -48,6 +48,13 @@ local function define_tests()
             test.eq(result.work, "bw:n:w:ready")
         end)
 
+        test.it("refuses duplicate first input before opening a session", function()
+            local work, fault = client():run({definition = "research:ready", input = "first",
+                overrides = {input = "second"}, operation_key = "duplicate/run"})
+            test.is_nil(work)
+            test.eq(fault and fault.code, "INVALID")
+        end)
+
         test.it("keeps the work on pending, blocked and uncertain observations", function()
             local client = client()
             for _, tag in ipairs({"pending", "blocked", "uncertain"}) do

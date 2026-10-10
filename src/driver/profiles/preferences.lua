@@ -17,7 +17,7 @@ type Object = {[string]: unknown}
 type Scalar = string | number | boolean
 type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer} | {kind: "declared"}
 type Bee = profile_access.Bee
-type Value = {active_traits: {string}?, authority_grant_id: string?, docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
+type Value = {context: {[string]: unknown}?, requestable: {string}?, active_traits: {string}?, authority_grant_id: string?, docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
 
 local RESERVED_OPTIONS: {[string]: boolean} = {
     profile_id = true,
@@ -183,7 +183,7 @@ end
 function M.decode(value: unknown): (Value?, string?)
     local object = bounds.object(value)
     if not object then return nil, "saved preferences must be an object" end
-    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions", "bee", "home", "docker_overrides", "authority_grant_id", "active_traits"})
+    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions", "bee", "home", "docker_overrides", "authority_grant_id", "active_traits", "requestable", "context"})
     if unexpected then return nil, unexpected end
     local options, options_error = decode_options(object.options == nil and {} or object.options, "options")
     if not options then return nil, options_error end
@@ -207,7 +207,14 @@ function M.decode(value: unknown): (Value?, string?)
     if object.authority_grant_id ~= nil and not authority then return nil,"invalid profile authority grant" end
     local active_traits = object.active_traits == nil and nil or bounds.ids(object.active_traits, true)
     if object.active_traits ~= nil and not active_traits then return nil, "invalid active_traits" end
-    return {active_traits = active_traits, authority_grant_id = authority,docker_overrides = docker_overrides, home = home, bee = bee, options = options, mcp_tools = mcp_tools, instructions = text}, nil
+    local requestable: {string}? = nil
+    if object.requestable ~= nil then
+        requestable = bounds.ids(object.requestable, true)
+        if not requestable or #requestable > 16 then return nil, "invalid requestable traits" end
+    end
+    local context = bounds.object(object.context)
+    if object.context ~= nil and not context then return nil, "context must be an object" end
+    return {context = context, requestable = requestable, active_traits = active_traits, authority_grant_id = authority,docker_overrides = docker_overrides, home = home, bee = bee, options = options, mcp_tools = mcp_tools, instructions = text}, nil
 end
 
 local function allowed_value(values: {Scalar}, selected: Scalar): boolean

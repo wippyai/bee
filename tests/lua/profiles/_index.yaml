@@ -37,6 +37,8 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, uuid]
   imports:
+    editor: bee.harness.app:profile_editor
+    protocol: bee.harness.profiles:protocol
     test: wippy.test:test
     bounds: bee.values:bounds
     host: bee.tests.memory:host

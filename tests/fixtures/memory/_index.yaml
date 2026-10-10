@@ -86,3 +86,17 @@ entries:
     prompt: Read the session thread and remember completed turns.
     tools: [thread_read]
     listens: [turn.completed]
+
+- name: review
+  kind: registry.entry
+  meta: {type: agent.trait, title: Review}
+  data: {prompt: Review changes., tools: []}
+
+- name: outside
+  kind: registry.entry
+  meta:
+    type: agent.trait
+    title: Outside parent ceiling
+  data:
+    prompt: Outside parent ceiling.
+    tools: []

@@ -342,7 +342,7 @@ function M.list(raw: unknown, workspace: string): (locate.Page?, Fault?)
                 local profile = row.profile
                 local entry = harness_catalog.entry(pinned, profile.definition_ref)
                 if not entry then
-                    local candidate = unavailable_candidate(locate_cache, "profile", row.profile_id, profile.name,
+                    local candidate = unavailable_candidate(locate_cache, "profile", row.profile_id, profile.name .. (profile.role and (" · " .. profile.role) or ""),
                         row.revision, "missing", "The profile's launch definition is not installed.", generation)
                     if candidate then
                         if show_unavailable then candidates[#candidates + 1] = candidate end
@@ -350,7 +350,7 @@ function M.list(raw: unknown, workspace: string): (locate.Page?, Fault?)
                     end
                 else
                     local candidate, candidate_error = candidate_for_definition(pinned, profile.definition_ref, entry,
-                        "profile", profile.name, row.revision, row.profile_id, workspace, locate_cache,
+                        "profile", profile.name .. (profile.role and (" · " .. profile.role) or ""), row.revision, row.profile_id, workspace, locate_cache,
                         readiness_cache, generation)
                     if candidate then
                         if candidate.status == "ready" or show_unavailable then candidates[#candidates + 1] = candidate end

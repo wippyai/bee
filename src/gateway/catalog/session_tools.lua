@@ -59,6 +59,10 @@ local function dereference(value: unknown): unknown
     return result
 end
 
+function M.profile_schema(): Object
+    return assert(bounds.object(dereference(defs.AgentProfile)))
+end
+
 -- closure: the definitions a schema reaches, transitively.
 local function collect(value: unknown, into: Object)
     if type(value) ~= "table" then return end

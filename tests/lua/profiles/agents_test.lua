@@ -258,6 +258,18 @@ local function define_tests()
             test.eq(conv.activity, "idle")
             test.eq(conv.title, "Worker")
         end)
+        test.it("passes launch name, role, folder and workspace to Sessions", function()
+            local client = fixtures.fixture_client({open = function(options: sessions.OpenOptions): (sessions.Session?, sessions.Fault?)
+                test.eq(options.workspace, string.rep("a", 32))
+                test.eq(options.overrides and options.overrides.name, "Reviewer")
+                test.eq(options.overrides and options.overrides.role, "Inspect changes")
+                test.eq(options.overrides and options.overrides.workdir and options.overrides.workdir.path, "project")
+                return session("idle", 0, {}, {}), nil
+            end})
+            local opened = agents.open(client, "bee.driver.claude:default", nil, "launch-options", string.rep("a", 32),
+                {name = "Reviewer", role = "Inspect changes", workdir = {root_ref = "bee.node:machine", path = "project"}})
+            test.not_nil(opened)
+        end)
         test.it("keeps the send key across a failed attempt of the same text", function()
             local sent: {Object} = {}
             local conv = must_open(fixtures.fixture_client({open = function(): (sessions.Session?, sessions.Fault?) return session("idle", 0, sent, {}), nil end}), "d:x", nil, "k")

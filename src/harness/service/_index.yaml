@@ -5,6 +5,7 @@ entries:
   kind: library.lua
   source: file://presentation.lua
   modules:
+  - ctx
   - env
   - logger
   - process
@@ -27,6 +28,7 @@ entries:
   source: file://presentation.lua
   method: main
   modules:
+  - ctx
   - env
   - logger
   - process
@@ -56,6 +58,7 @@ entries:
   source: file://presentation.lua
   method: open
   modules:
+  - ctx
   - env
   - logger
   - process
@@ -101,6 +104,7 @@ entries:
   source: file://presentation.lua
   method: restore
   modules:
+  - ctx
   - env
   - logger
   - process
@@ -146,6 +150,7 @@ entries:
   source: file://presentation.lua
   method: type
   modules:
+  - ctx
   - env
   - logger
   - process
@@ -191,6 +196,7 @@ entries:
   source: file://presentation.lua
   method: activity
   modules:
+  - ctx
   - env
   - logger
   - process

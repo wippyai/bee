@@ -327,6 +327,11 @@ local function handle(): nil
     if not available then answer(response, http.STATUS.OK, mcp.result(call.id, refused("DENIED", available_error or "surface is unavailable"))); return nil end
     local values, values_error = context.compose(config.fixed_context, bound.selection.context, config.dynamic_keys)
     if not values then answer(response, http.STATUS.OK, mcp.result(call.id, refused("DENIED", values_error or "context is unavailable"))); return nil end
+    local trait_ceiling: {string} = {}
+    for _, id in ipairs(config.allowed_traits) do trait_ceiling[#trait_ceiling + 1] = id end
+    for _, id in ipairs(config.access and config.access.traits or {}) do
+        if not bounds.member(id, trait_ceiling) then trait_ceiling[#trait_ceiling + 1] = id end
+    end
     local described: {Object} = {}
     for _, item in ipairs(available) do described[#described + 1] = {name = item.name, description = item.description,
         inputSchema = item.schema, outputSchema = mcp.OUTPUT_SCHEMAS[item.name], annotations = item.annotations} end
@@ -381,7 +386,7 @@ local function handle(): nil
         end
         if request.operation == "read" then
             answer(response, http.STATUS.OK, mcp.result(call.id, reply_result({ok = true, value = {revision = bound.revision,
-                traits = config.catalog.traits, requestable_access = config.access, allowed_traits = config.allowed_traits, active_traits = bound.selection.active, context = bound.selection.context,
+                traits = config.catalog.traits, requestable_access = config.access, allowed_traits = config.allowed_traits, active_traits = bound.selection.active, context = values,
                 dynamic_keys = config.dynamic_keys, tools = described}}, nil))); return nil
         end
         local revision = bounds.count(request.expected_revision)
@@ -488,6 +493,8 @@ local function handle(): nil
         end
         runtime = granted
     end
+    binding.agent_traits = trait_ceiling
+    binding.agent_profile_write = tool.name == "profile_put"
     answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime, bound.configuration.resource_grants)))
     return nil
 end

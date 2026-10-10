@@ -200,16 +200,19 @@ entries:
       default session tools and may open any definition admitted in its workspace; owners authorize every operation against
       that subject again
   policy:
-    expression: (action == "contract.context" && resource == "context") || (action == "contract.security" && resource == "security")
-      || (action == "contract.open" && resource in ["bee.threads.sessions:contract", "bee.threads.sessions:catalog", "bee.threads.sessions.binding:owner_binding",
-      "bee.threads.sessions.binding:catalog_binding"]) || (action == "contract.call" && resource in ["open", "run", "send",
-      "get", "list", "history", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:open",
+    expression: (action == "contract.get" && resource == "bee.harness:profiles") || (action == "contract.context" && resource == "context") || (action == "contract.security" && resource == "security")
+      || (action == "contract.open" && resource in ["bee.harness:profiles", "bee.harness.binding:profiles_local", "bee.threads.sessions:contract", "bee.threads.sessions:catalog", "bee.threads.sessions.binding:owner_binding",
+      "bee.threads.sessions.binding:catalog_binding"]) || (action == "contract.call" && resource in ["call", "open", "run", "send",
+      "get", "list", "history", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource in ["bee.harness.binding:call", "bee.harness.binding:profile_get", "bee.harness.binding:profile_list", "bee.harness.binding:profile_put", "bee.threads.sessions.binding:open",
       "bee.threads.sessions.binding:run", "bee.threads.sessions.binding:send", "bee.threads.sessions.binding:get", "bee.threads.sessions.binding:list",
       "bee.threads.sessions.binding:history", "bee.threads.sessions.binding:await", "bee.threads.sessions.binding:join", "bee.threads.sessions.binding:cancel",
       "bee.threads.sessions.binding:close", "bee.threads.sessions.binding:catalog"]) || action == "bee.harness.launch" ||
-      action == "bee.sessions.remote" || (action == "funcs.call" && resource == "bee.hive.binding:call")
+      (action in ["bee.harness.profiles.read", "bee.harness.profiles.write"] && meta.workspace_id == resource) || action == "bee.sessions.remote" || (action == "funcs.call" && resource == "bee.hive.binding:call")
     actions:
+    - bee.harness.profiles.read
+    - bee.harness.profiles.write
     - bee.harness.launch
+    - contract.get
     - contract.context
     - contract.security
     - contract.open

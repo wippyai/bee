@@ -146,7 +146,7 @@ end
 -- consent tool the person's profile lists is a base tool the person already
 -- chose, one the profile leaves out is not offered, and without a saved
 -- profile each consent tool waits for the person's approval of its trait.
-local function access_surface(raw: unknown, tools: {string}, selected: boolean, seeds: {string}?): ({[string]: unknown}?, string?)
+local function access_surface(raw: unknown, tools: {string}, selected: boolean, seeds: {string}?, offered_traits: {string}?): ({[string]: unknown}?, string?)
     local declared = bounds.object(raw)
     if not declared or bounds.fields(declared, {"policy", "traits"}) then return nil, "must be {policy, traits}" end
     local approver = bounds.id(declared.policy)
@@ -154,7 +154,7 @@ local function access_surface(raw: unknown, tools: {string}, selected: boolean, 
     if not approver or not traits or #traits == 0 then return nil, traits_error or "names no approver policy or trait" end
     local seen: {[string]: boolean} = {}
     for _, id in ipairs(traits) do seen[id] = true end
-    for _, id in ipairs(seeds or {}) do if not seen[id] then traits[#traits + 1] = id; seen[id] = true end end
+    for _, id in ipairs(seeds or {}) do if not seen[id] then return nil, "trait outside launch ceiling: " .. id end end
     local consent: {[string]: boolean} = {}
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do consent[trait.id] = true end
     local extensions: {unknown} = {}
@@ -172,7 +172,7 @@ local function access_surface(raw: unknown, tools: {string}, selected: boolean, 
     local requested: {[string]: boolean} = {}
     for _, name in ipairs(tools) do
         local trait = gateway_protocol.CONSENT_TOOLS[name]
-        if trait and offered[trait] and not selected then
+        if trait and offered[trait] and (not selected or bounds.member(trait, seeds or {}) or bounds.member(trait, offered_traits or {})) then
             if not requested[trait] then requestable[#requestable + 1] = trait; requested[trait] = true end
         else base[#base + 1] = name end
     end
@@ -202,7 +202,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         revised.schema_revision = M.SCHEMA
         data = revised
     end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "profile_instructions", "gateway_tools", "gateway_surface", "gateway_access", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -366,34 +366,42 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not hook_command_ref or #gateway_hooks == 0 then return nil, ref .. ": hook_command_ref requires hooks and an env.variable identifier" end
     end
     local gateway_surface: {[string]: unknown}? = nil
-    if data.gateway_access ~= nil then
-        if data.gateway_surface ~= nil then return nil, ref .. ": gateway_access and gateway_surface cannot both declare access" end
-        local synthesized, access_error = access_surface(data.gateway_access, gateway_tools, selected ~= nil and selected.authority_grant_id ~= nil, selected and selected.active_traits or nil)
-        if not synthesized then return nil, ref .. ": gateway_access: " .. tostring(access_error) end
-        local configured, _, surface_error = surface.prepare(synthesized, mcp.TOOLS, gateway_tools)
-        if not configured then return nil, ref .. ": gateway_access: " .. tostring(surface_error) end
-        if selected then synthesized.authority_grant_id = selected.authority_grant_id end
-        gateway_surface = synthesized
-    elseif data.gateway_surface ~= nil then
-        gateway_surface = bounds.object(data.gateway_surface)
-        if not gateway_surface then return nil, ref .. ": gateway_surface must be an object" end
-        local configured, _, surface_error = surface.prepare(gateway_surface, mcp.TOOLS, admitted_tools)
-        if not configured then return nil, ref .. ": gateway_surface: " .. tostring(surface_error) end
-        local encoded_surface, encode_error = json.encode(gateway_surface)
-        if not encoded_surface or encode_error then return nil, ref .. ": cannot copy gateway_surface" end
-        local copied, copy_error = json.decode(encoded_surface)
-        gateway_surface = bounds.object(copied)
-        if not gateway_surface or copy_error then return nil, ref .. ": cannot copy gateway_surface" end
-        if selected and selected.active_traits then
-            gateway_surface.active_traits = selected.active_traits
-            local checked, _, err = surface.prepare(gateway_surface, mcp.TOOLS, admitted_tools)
-            if not checked then return nil, ref .. ": profile active_traits: " .. tostring(err) end
+    if data.gateway_surface ~= nil then
+        local declared = bounds.object(data.gateway_surface)
+        if not declared then return nil, ref .. ": gateway_surface must be an object" end
+        if declared.base_tools == nil then
+            local synthesized, err = access_surface(declared.access, gateway_tools, selected ~= nil and selected.authority_grant_id ~= nil, selected and selected.active_traits or nil, selected and selected.requestable or nil)
+            if not synthesized then return nil, ref .. ": gateway_surface: " .. tostring(err) end
+            gateway_surface = synthesized
+        else
+            local encoded = json.encode(declared)
+            local copied, err = json.decode(encoded or "")
+            gateway_surface = bounds.object(copied)
+            if not gateway_surface or err then return nil, ref .. ": cannot copy gateway_surface" end
+            if selected and selected.active_traits then gateway_surface.active_traits = selected.active_traits end
         end
+        if selected and (selected.active_traits or selected.requestable) then
+            local allowed: {string} = {}
+            for _, id in ipairs(selected.active_traits or {}) do allowed[#allowed + 1] = id end
+            for _, id in ipairs(selected.requestable or {}) do if not bounds.member(id, allowed) then allowed[#allowed + 1] = id end end
+            gateway_surface.selectable_traits = allowed
+        end
+        local configured, _, err = surface.prepare(gateway_surface, mcp.TOOLS, declared.base_tools == nil and gateway_tools or admitted_tools)
+        if not configured then return nil, ref .. ": gateway_surface: " .. tostring(err) end
+    elseif selected and (#(selected.active_traits or {}) > 0 or #(selected.requestable or {}) > 0) then
+        return nil, ref .. ": trait outside launch ceiling: " .. ((selected.active_traits or {})[1] or (selected.requestable or {})[1])
     end
     local allowed_overrides, overrides_error = bounds.ids(data.allowed_overrides == nil and {} or data.allowed_overrides, true)
     if not allowed_overrides then return nil, ref .. ": allowed_overrides: " .. tostring(overrides_error) end
     for _, override in ipairs(allowed_overrides) do
         if not bounds.member(override, M.OVERRIDES) then return nil, ref .. ": allowed_overrides names " .. override .. ", which a launch policy does not admit" end
+    end
+    if selected and selected.context then
+        gateway_surface = gateway_surface or {tools = {}, traits = {}, base_tools = gateway_tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
+        local fixed: {[string]: unknown} = {}
+        for key, value in pairs(selected.context) do fixed[key] = value end
+        for key, value in pairs(bounds.object(gateway_surface.fixed_context) or {}) do fixed[key] = value end
+        gateway_surface.fixed_context = fixed
     end
     if gateway_surface and selected then gateway_surface.authority_grant_id = selected.authority_grant_id end
     local gateway_ttl_ms = 3600000
@@ -412,7 +420,7 @@ type SurfaceValue = {[string]: unknown}
 -- data and no tool argument can replace a host key (context.compose refuses).
 function M.with_workspace(gateway_surface: SurfaceValue?, workspace_id: string): SurfaceValue?
     if not gateway_surface then return nil end
-    local fixed: SurfaceValue = {["bee.workspace_id"] = workspace_id}
+    local fixed: SurfaceValue = {}
     local declared = gateway_surface.fixed_context
     if declared ~= nil then
         if type(declared) ~= "table" then return nil end
@@ -420,6 +428,7 @@ function M.with_workspace(gateway_surface: SurfaceValue?, workspace_id: string):
     end
     local result: SurfaceValue = {}
     for key, value in pairs(gateway_surface) do result[key] = value end
+    fixed["bee.workspace_id"] = workspace_id
     result.fixed_context = fixed
     return result
 end

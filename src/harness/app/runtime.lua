@@ -425,7 +425,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             -- never a fresh conversation or an unbounded retry.
             return {request_id = id, definition_ref = restored.definition_ref, workspace_id = launch.workspace_id,
                 brief = "", mode = "window", saved_profile_id = restored.saved_profile_id,
-                saved_profile_revision = restored.saved_profile_revision, expected_plan_digest = digest,
+                saved_profile_revision = restored.saved_profile_revision, overrides = restored.overrides, expected_plan_digest = digest,
                 continuation = continuation, origin_view = {view_id = launch.view_id, instance_id = launch.instance_id}}
         end
 
@@ -495,7 +495,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 local refused: admission.Reply? = nil
                 local ok, unexpected = pcall(function()
                     plan, refused = admission.resolve(restored.definition_ref, "window", launch.workspace_id,
-                        restored.saved_profile_id, restored.saved_profile_revision)
+                        restored.saved_profile_id, restored.saved_profile_revision, nil, nil, nil, nil, restored.overrides)
                 end)
                 if not ok then refused = {ok = false, error = {code = "UNAVAILABLE", message = tostring(unexpected)}, value = nil} end
                 if cancelled or serial ~= operation then return end
@@ -646,7 +646,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     if not admitted then tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results); return end
     local origin_request_id: string
     if saved then origin_request_id = saved.origin_request_id else origin_request_id = admitted.request_id end
-    local application_saved: recovery.Saved = {definition_ref = admitted.plan.definition_ref,
+    local application_saved: recovery.Saved = {overrides = admitted.plan.spawn_overrides or (saved and saved.overrides), definition_ref = admitted.plan.definition_ref,
         saved_profile_id = admitted.plan.saved_profile_id, saved_profile_revision = admitted.plan.saved_profile_revision,
         plan_digest = admitted.plan.plan_digest, origin_request_id = origin_request_id,
         previous_attempt_id = admitted.attempt_id, thread_id = admitted.thread_id}

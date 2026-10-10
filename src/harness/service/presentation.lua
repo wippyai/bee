@@ -1,4 +1,5 @@
 -- MIT. Retained presentation uses the admitted window executor and hooks.
+local ctx = require("ctx")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -39,12 +40,12 @@ local function fail(message: string): Object return {ok = false, error = {code =
 -- A window runs as its own application principal, named by the request that
 -- first admitted it, so its session, thread membership and operation keys
 -- belong to the window: any viewer in the workspace can reopen it.
-type Window = {actor: security.Actor, workspace: string}
-local function window(workspace: string, request_id: string): Window?
+type Window = {actor: security.Actor, workspace: string, trait_ceiling: {string}?}
+local function window(workspace: string, request_id: string, trait_ceiling: {string}?): Window?
     local value = principal.value(workspace, request_id, "bee.harness.app:app", "1", 1)
     local actor = value and security.new_actor(value.id, value.metadata)
     if not actor then return nil end
-    return {actor = actor, workspace = workspace}
+    return {actor = actor, workspace = workspace, trait_ceiling = trait_ceiling}
 end
 local function rpc(target: string?, request: Object, startup: Object?, name: string?, operation_key: string?, owner: Window?): Object
     local token = CALLER .. assert(uuid.v7())
@@ -54,7 +55,7 @@ local function rpc(target: string?, request: Object, startup: Object?, name: str
     local sent: boolean? = nil
     local err: unknown = nil
     if startup and name and owner then
-        local spawned, spawn_error = process.with_options({}):with_context({["bee.workspace_id"] = owner.workspace})
+        local spawned, spawn_error = process.with_options({}):with_context({["bee.workspace_id"] = owner.workspace, ["bee.agent.trait_ceiling"] = owner.trait_ceiling})
             :with_actor(owner.actor):with_scope(assert(security.scope()))
             :spawn("bee.harness.service:presentation_owner", "bee:workers", startup, name, token, operation_key)
         if spawned then target = tostring(spawned); sent = true else err = spawn_error end
@@ -87,24 +88,24 @@ function M.open(value: unknown): Object
     local digest = assert(hash.sha256(actor:id() .. "\n" .. workspace .. "\n" .. operation_key))
     local profile = bounds.object(spec.profile)
     local plan, refused = admission.resolve(tostring(spec.definition), "window", workspace,
-        profile and bounds.id(profile.id), profile and bounds.integer(profile.revision))
+        profile and bounds.id(profile.id), profile and bounds.integer(profile.revision), nil, nil, nil, nil, spec.overrides)
     if not plan then return refused or fail("window plan unavailable") end
     local setup, setup_error = funcs.call("bee.harness.binding:setup", {workspace_id = workspace,
         definition_ref = plan.definition_ref, expected_plan_digest = plan.plan_digest,
-        saved_profile_id = plan.saved_profile_id, saved_profile_revision = plan.saved_profile_revision, workdir = spec.workdir})
+        saved_profile_id = plan.saved_profile_id, saved_profile_revision = plan.saved_profile_revision, workdir = spec.workdir, overrides = spec.overrides})
     local prepared = bounds.object(setup)
     if setup_error or not prepared or prepared.ok ~= true then return fail(tostring(setup_error or (prepared and prepared.error) or "window setup failed")) end
     local request, request_error = admission.decode_request({request_id = digest, definition_ref = plan.definition_ref,
         workspace_id = workspace, brief = "", mode = "window", workdir = prepared.workdir,
         saved_profile_id = plan.saved_profile_id, saved_profile_revision = plan.saved_profile_revision,
-        expected_plan_digest = plan.plan_digest})
+        expected_plan_digest = plan.plan_digest, overrides = spec.overrides})
     if not request then return fail(request_error or "window admission request invalid") end
     local name = OWNER .. digest
     local owner = process.registry.lookup(name)
     local reply: Object
     if owner then reply = rpc(tostring(owner), {op = "open", request = request, operation_key = operation_key})
     else
-        local owner_window = window(workspace, digest)
+        local owner_window = window(workspace, digest, bounds.ids(ctx.get("bee.agent.trait_ceiling"), true))
         if not owner_window then return fail("window principal could not be created") end
         reply = rpc(nil, {op = "open", request = request, operation_key = operation_key}, request, name, operation_key, owner_window)
     end
@@ -129,7 +130,7 @@ function M.restore(value: unknown): Object
     end
     local facts = bounds.object(reply.value)
     local saved, saved_error = recovery.decode(facts and {definition_ref = facts.definition_ref, plan_digest = facts.plan_digest,
-        origin_request_id = facts.origin_request_id, previous_attempt_id = facts.previous_attempt_id, thread_id = facts.thread_id,
+        origin_request_id = facts.origin_request_id, previous_attempt_id = facts.previous_attempt_id, thread_id = facts.thread_id, overrides = facts.overrides,
         saved_profile_id = facts.saved_profile_id, saved_profile_revision = facts.saved_profile_revision})
     if not saved then return fail(saved_error or "the window restore facts are malformed") end
     local actor = security.actor()
@@ -140,7 +141,7 @@ function M.restore(value: unknown): Object
     if not operation_key or operation_key == "" then return fail("the window restore facts omit the session key") end
     -- The window app admits the continuation under the key that created the
     -- session, so admission attaches the same session.
-    local owner_window = window(workspace, saved.origin_request_id)
+    local owner_window = window(workspace, saved.origin_request_id, bounds.ids(facts and facts.trait_ceiling, true))
     if not owner_window then return fail("window principal could not be created") end
     return rpc(nil, {op = "resume"}, {resume = saved, session = session, workspace_id = workspace}, OWNER .. session, operation_key, owner_window)
 end
@@ -203,7 +204,9 @@ end
 local function start(workspace_id: string, request_id: string, arguments: {string}, resume_state: string, operation_key: string): (tty.Viewport, string)
     local view = assert(tty.viewport({width = 80, height = 24}))
     local grant = assert(view:grant())
-    local pid = assert(process.with_options({terminal = grant}):spawn_monitored("bee.harness.service:presentation_executor", "bee:workers", {
+    local pid = assert(process.with_options({terminal = grant})
+        :with_context({["bee.workspace_id"] = workspace_id, ["bee.agent.trait_ceiling"] = ctx.get("bee.agent.trait_ceiling")})
+        :spawn_monitored("bee.harness.service:presentation_executor", "bee:workers", {
         version = 1, broker_pid = process.pid(), workspace_pid = process.pid(), workspace_id = workspace_id,
         instance_id = request_id, view_id = request_id, definition_id = "bee.harness.app:app",
         execution_generation = 1, definition_revision = "1", registry_revision = "1", launch_token = request_id,
@@ -261,7 +264,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         assert(process.registry.register(alias))
         aliases = {name, alias}
         local encoded = assert(json.encode({request_id = decoded.request_id, definition_ref = decoded.definition_ref,
-            brief = "", workdir = decoded.workdir, expected_plan_digest = decoded.expected_plan_digest,
+            brief = "", workdir = decoded.workdir, overrides = decoded.overrides, expected_plan_digest = decoded.expected_plan_digest,
             saved_profile_id = decoded.saved_profile_id, saved_profile_revision = decoded.saved_profile_revision,
             thread_id = admitted.thread_id}))
         launch = function() view, pid = start(decoded.workspace_id, decoded.request_id, {encoded}, "", operation_key) end

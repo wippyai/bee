@@ -28,6 +28,22 @@ end
 
 local function define_tests()
     test.describe("Saved profile editor", function()
+        test.it("round trips role, active and requestable traits and scalar context", function()
+            local raw: {[string]: unknown} = profile()
+            raw.role = "Review changes"
+            raw.active_traits = {"bee.tests:review"}
+            raw.requestable = {"bee.tests:remember"}
+            raw.context = {project = "Bee", readonly = false}
+            local decoded, err = protocol.profile(raw)
+            assert(decoded, tostring(err))
+            local value = assert(editor.new(decoded, allowed()))
+            local result = assert(editor.result(value))
+            local fields: {[string]: unknown} = result
+            test.eq(fields.role, "Review changes")
+            test.eq(fields.active_traits[1], "bee.tests:review")
+            test.eq(fields.requestable[1], "bee.tests:remember")
+            test.eq(fields.context.readonly, false)
+        end)
         test.it("requires host authority for machine home and preserves native selection", function()
             local host = allowed()
             host.placements = {"bee.placement.profiles:native"}

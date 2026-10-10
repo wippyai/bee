@@ -115,8 +115,8 @@ end
 -- The key identifies one open operation: retrying the same key returns the
 -- same session, never a second one.
 function M.open(client: sessions.Client, definition: string, profile: {id: string, revision: integer}?,
-    key: string, workspace: string?): (Conversation?, string?)
-    local session, fault = client:open({definition = definition, profile = profile, workspace = workspace, operation_key = key})
+    key: string, workspace: string?, overrides: {name: string?, role: string?, workdir: sessions_protocol.Workdir?}?): (Conversation?, string?)
+    local session, fault = client:open({definition = definition, profile = profile, workspace = workspace, overrides = overrides, operation_key = key})
     if not session then return nil, describe(fault) end
     return conversation(session), nil
 end

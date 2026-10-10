@@ -7,6 +7,7 @@ M.SCHEMA = "bee.agent-profile@3"
 M.PRIOR = "bee.agent-profile@2"
 M.RETIRED = {"presentation", "budgets", "supervision"}
 M.MAX_OPTIONS = 64
+type Context = {[string]: string | number | boolean}
 type Object = {[string]: unknown}
 type Workdir = {root_ref: string, path: string}
 type Thread = {thread_id: string}
@@ -20,7 +21,7 @@ type Workspace = access.Workspace
 type Bee = access.Bee
 type Placement = {kind: "native", home: "private" | "machine"} | {kind: "docker", profile_ref: string, overrides: Object?}
 type Profile = {schema_revision: string, definition_ref: string, driver_binding_ref: string, name: string,
-    provider: Provider, bee: Bee, placement: Placement?, active_traits: {string}?,
+    provider: Provider, bee: Bee, placement: Placement?, active_traits: {string}?, requestable: {string}?, role: string?, context: Context?,
     workdir: Workdir?, thread: Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?}
 type Request = {operation: string, workspace_id: string, profile_id: string, profile: Profile?, expected_revision: integer,
     idempotency_key: string, after_key: string, expected_cursor: integer?, limit: integer, definition_ref: string?, query: string?, sort: string?}
@@ -34,6 +35,23 @@ local function strings(value: unknown, label: string): ({string}?, string?)
         if not text or text == "" or seen[text] then return nil, label .. " must contain unique bounded strings" end
         seen[text] = true; result[#result + 1] = text
     end
+    return result, nil
+end
+function M.context(value: unknown): (Context?, string?)
+    local raw = bounds.object(value)
+    if not raw then return nil, "context must be a scalar map" end
+    local result: Context = {}
+    local count = 0
+    for key, item in pairs(raw) do
+        count = count + 1
+        if count > 24 then return nil, "context exceeds 24 keys" end
+        if not bounds.line(key, 128) or key == "" then return nil, "context key must contain 1 to 128 printable bytes" end
+        if key:sub(1, 4) == "bee." then return nil, "reserved context key " .. key end
+        if type(item) == "string" or type(item) == "boolean" then result[key] = item
+        elseif type(item) == "number" and item == item and item ~= math.huge and item ~= -math.huge then result[key] = item
+        else return nil, "context." .. key .. " must be a finite scalar" end
+    end
+    if not canonical.encode(result, 8192, 2) then return nil, "context exceeds 8192 encoded bytes" end
     return result, nil
 end
 function M.provider(value: unknown): (Provider?, string?)
@@ -107,6 +125,51 @@ function M.workdir(value: unknown): Workdir?
     if not item or not root or not path or bounds.fields(item, {"root_ref", "path"}) then return nil end
     return {root_ref = root, path = path}
 end
+type Overrides = {name: string?, role: string?, traits: {string}?, context: Context?, workdir: Workdir?, workspace: string?, input: unknown}
+function M.overrides(value: unknown): (Overrides?, string?)
+    if value == nil then return {}, nil end
+    local raw = bounds.object(value)
+    if not raw or bounds.fields(raw, {"name", "role", "traits", "context", "workdir", "workspace", "input"}) then return nil, "invalid spawn overrides" end
+    local result: Overrides = {}
+    if raw.name ~= nil then
+        local name = bounds.line(raw.name, 80)
+        if not name or name:match("^%s*$") then return nil, "name must contain 1 to 80 printable bytes" end
+        result.name = name
+    end
+    if raw.role ~= nil then
+        local role = bounds.text(raw.role, 256)
+        if not role or role:find("%c") then return nil, "role must contain at most 256 printable bytes" end
+        result.role = role
+    end
+    if raw.traits ~= nil then
+        local traits, err = bounds.ids(raw.traits, true)
+        if not traits or #traits > 16 then return nil, err or "traits exceeds 16 traits" end
+        result.traits = traits
+    end
+    if raw.context ~= nil then
+        local context, err = M.context(raw.context)
+        if not context then return nil, err end
+        result.context = context
+    end
+    if raw.workdir ~= nil then
+        result.workdir = M.workdir(raw.workdir)
+        if not result.workdir then return nil, "invalid overrides.workdir" end
+    end
+    if raw.workspace ~= nil then
+        local workspace = bounds.text(raw.workspace, 32)
+        if not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, "workspace must be a canonical workspace ID" end
+        result.workspace = workspace
+    end
+    if raw.input ~= nil then
+        if type(raw.input) == "string" and #raw.input <= 16384 then result.input = raw.input
+        else
+            local input = bounds.object(raw.input)
+            if not input or bounds.fields(input, {"schema", "value"}) or not bounds.id(input.schema) or not canonical.encode(input.value, 65536, 16) then return nil, "input must be bounded text or {schema, value}" end
+            result.input = input
+        end
+    end
+    return result, nil
+end
 function M.placement(value: unknown): (Placement?, string?)
     if value == nil then return nil, nil end
     local placement = bounds.object(value)
@@ -147,7 +210,7 @@ end
 function M.profile(value: unknown): (Profile?, string?)
     local raw = bounds.object(value)
     if not raw then return nil, "profile must be an object" end
-    local extra = bounds.fields(raw, {"schema_revision", "definition_ref", "driver_binding_ref", "name", "provider", "bee", "placement", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "active_traits"})
+    local extra = bounds.fields(raw, {"schema_revision", "definition_ref", "driver_binding_ref", "name", "provider", "bee", "placement", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "active_traits", "requestable", "role", "context"})
     if extra then return nil, extra end
     if raw.schema_revision ~= M.SCHEMA then return nil, "profile.schema_revision must be " .. M.SCHEMA end
     local definition, driver, name = bounds.id(raw.definition_ref), bounds.id(raw.driver_binding_ref), bounds.line(raw.name, 80)
@@ -157,10 +220,22 @@ function M.profile(value: unknown): (Profile?, string?)
     local bee, bee_error = M.bee(raw.bee)
     if not bee then return nil, bee_error end
     local result: Profile = {schema_revision = M.SCHEMA, definition_ref = definition, driver_binding_ref = driver, name = name, provider = provider, bee = bee}
-    if raw.active_traits ~= nil then
-        local selected, err = bounds.ids(raw.active_traits, true)
-        if not selected or #selected > 16 then return nil, err or "active_traits exceeds 16 traits" end
-        result.active_traits = selected
+    if raw.role ~= nil then
+        local role = bounds.text(raw.role, 256)
+        if not role or role:find("%c") then return nil, "role must contain at most 256 printable bytes" end
+        result.role = role
+    end
+    if raw.context ~= nil then
+        local context, err = M.context(raw.context)
+        if not context then return nil, err end
+        result.context = context
+    end
+    for _, field in ipairs({"active_traits", "requestable"}) do
+        if raw[field] ~= nil then
+            local selected, err = bounds.ids(raw[field], true)
+            if not selected or #selected > 16 then return nil, err or field .. " exceeds 16 traits" end
+            if field == "active_traits" then result.active_traits = selected else result.requestable = selected end
+        end
     end
     local placement, placement_error = M.placement(raw.placement)
     if placement_error then return nil, placement_error end
@@ -194,7 +269,7 @@ function M.profile(value: unknown): (Profile?, string?)
     return result, nil
 end
 
-type LaunchPreferences = {active_traits: {string}?, authority_grant_id: string?, docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
+type LaunchPreferences = {context: Context?, requestable: {string}?, active_traits: {string}?, authority_grant_id: string?, docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
 function M.preferences(profile: Profile): (LaunchPreferences?, string?)
     local provider = profile.provider
     local options: Object = {}
@@ -215,7 +290,7 @@ function M.preferences(profile: Profile): (LaunchPreferences?, string?)
     local home: "private" | "machine"? = nil
     if profile.placement and profile.placement.kind == "native" then home = profile.placement.home end
     local overrides = profile.placement and profile.placement.kind == "docker" and profile.placement.overrides or nil
-    return {active_traits = profile.active_traits, docker_overrides = overrides, home = home, bee = bee, options = options, mcp_tools = tools,
+    return {context = profile.context, requestable = profile.requestable, active_traits = profile.active_traits, docker_overrides = overrides, home = home, bee = bee, options = options, mcp_tools = tools,
         instructions = provider.system_prompt_append or ""}, nil
 end
 function M.agent_preferences(profile: Profile, tool_names: {string}): (LaunchPreferences?, string?)

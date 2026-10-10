@@ -14,7 +14,7 @@ local M = {}
 M.REQUEST_POLICY_REF = "bee.gateway.env:approval_request_policy_ref"
 M.CONSUME_POLICY_REF = "bee.gateway.env:approval_consume_policy_ref"
 type Object = {[string]: unknown}
-type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string,
+type Binding = {agent_traits: {string}?, agent_profile_write: boolean?, binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string,
     approving_grant_id: string?, policy_ref: string?, workspace_id: string?, origin_view: context.OriginView?}
 type Reply = {ok: boolean, value: unknown, error: {code: string, message: string}?}
 type Approvals = (string, Object) -> Reply
@@ -60,7 +60,7 @@ local function attribution(binding: Binding, values: Object, grant: RuntimeGrant
             access_proposal_digest = grant.access_proposal_digest, surface_revision = grant.surface_revision,
             surface_digest = grant.surface_digest}
     end
-    local attributed, attribution_error = context.bind(values, {binding_id = binding.binding_id,
+    local attributed, attribution_error = context.bind(values, {agent_traits = binding.agent_traits, agent_profile_write = binding.agent_profile_write, binding_id = binding.binding_id,
         thread_id = binding.thread_id, subject = binding.subject, action_id = binding.action_id,
         attempt_id = binding.attempt_id, approving_grant_id = binding.approving_grant_id, policy_ref = binding.policy_ref, workspace_id = binding.workspace_id,
         resource_grants = grants, origin_view = binding.origin_view, application_runtime = runtime})

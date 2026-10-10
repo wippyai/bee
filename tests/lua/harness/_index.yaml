@@ -1342,6 +1342,7 @@ entries:
     suite: bee
     timeout: 600s
   modules:
+  - tty
   - funcs
   - security
   - process

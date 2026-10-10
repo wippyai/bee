@@ -357,6 +357,18 @@ local function define_tests()
             test.is_false(reply.ok)
             test.eq(reply.error.code, "CONFLICT")
         end)
+        test.it("validates first-input overrides identically on open and run before admission", function()
+            for _, method in ipairs({"open", "run"}) do
+                local raw, err = owner_caller():call("bee.threads.sessions.binding:" .. method, {
+                    spec = {definition = "bee.driver.claude.profiles:default_window", overrides = {input = string.rep("x", 16385)}},
+                    operation_key = harness.key()})
+                assert(not err, tostring(err))
+                local reply = assert(bounds.object(raw))
+                test.eq(reply.ok, false)
+                test.eq(assert(bounds.object(reply.error)).code, "INVALID")
+                test.contains(tostring(assert(bounds.object(reply.error)).message), "input must be bounded")
+            end
+        end)
         test.it("refuses an open that names a presentation, budgets, supervision or placement before launch admission", function()
             for _, extra in ipairs({{presentation = "window"}, {budgets = {turn = {tokens = 10}}}, {supervision = {quiet_period_ms = 1000}},
                 {placement = {kind = "native", home = "private"}}}) do

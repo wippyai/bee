@@ -28,7 +28,7 @@ type Allowed = {
     placements: {string}?,
     host_home: boolean?,
 }
-type Draft = {schema_revision: string, definition_ref: string, driver_binding_ref: string, name: string,
+type Draft = {role: string?, context: protocol.Context?, active_traits: {string}?, requestable: {string}?, schema_revision: string, definition_ref: string, driver_binding_ref: string, name: string,
     provider: protocol.Provider, bee: protocol.Bee, placement: protocol.Placement?,
     workdir: protocol.Workdir?, thread: protocol.Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?,
     -- Kept out of the public result. It is copied at construction and is
@@ -98,7 +98,7 @@ local function decode_allowed(value: unknown): (Allowed?, string?)
 end
 
 local function raw_profile(draft: Profile): {[string]: unknown}
-    return {schema_revision = draft.schema_revision, name = draft.name, definition_ref = draft.definition_ref,
+    return {role = draft.role, context = draft.context, active_traits = draft.active_traits, requestable = draft.requestable, schema_revision = draft.schema_revision, name = draft.name, definition_ref = draft.definition_ref,
         driver_binding_ref = draft.driver_binding_ref, provider = draft.provider, bee = draft.bee, placement = draft.placement,
         workdir = draft.workdir, thread = draft.thread, agent_ref = draft.agent_ref,
         owner_component_revision = draft.owner_component_revision, spec_digest = draft.spec_digest}
@@ -152,6 +152,7 @@ local function current(draft: Draft): (Profile?, string?)
 end
 
 local function replace(draft: Draft, profile: Profile)
+    draft.role, draft.context, draft.active_traits, draft.requestable = profile.role, profile.context, profile.active_traits, profile.requestable
     draft.name, draft.definition_ref, draft.driver_binding_ref = profile.name, profile.definition_ref, profile.driver_binding_ref
     draft.provider, draft.bee, draft.placement = profile.provider, profile.bee, profile.placement
     draft.workdir, draft.thread = profile.workdir, profile.thread
@@ -162,7 +163,7 @@ function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
     if not allowed then return nil, allowed_error end
     local decoded, profile_error = protocol.profile(profile)
     if not decoded then return nil, profile_error end
-    local draft: Draft = {schema_revision = decoded.schema_revision, name = decoded.name,
+    local draft: Draft = {role = decoded.role, context = decoded.context, active_traits = decoded.active_traits, requestable = decoded.requestable, schema_revision = decoded.schema_revision, name = decoded.name,
         definition_ref = decoded.definition_ref, driver_binding_ref = decoded.driver_binding_ref,
         provider = decoded.provider, bee = decoded.bee, placement = decoded.placement,
         workdir = decoded.workdir, thread = decoded.thread, agent_ref = decoded.agent_ref,
@@ -203,6 +204,47 @@ function M.set_title(draft: Draft, value: unknown): (boolean, string?)
     return true, nil
 end
 
+function M.set_role(draft: Draft, value: unknown): (boolean, string?)
+    local role = bounds.text(value, 256)
+    if not role or role:find("%c") then return false, "Role must contain at most 256 printable bytes" end
+    draft.role = role ~= "" and role or nil
+    return true, nil
+end
+function M.set_context(draft: Draft, rows: {{key: string, value: string}}): (boolean, string?)
+    local values: {[string]: unknown} = {}
+    for _, row in ipairs(rows) do
+        if row.key ~= "" then
+            if values[row.key] ~= nil then return false, "Duplicate context key " .. row.key end
+            local decoded, err = json.decode(row.value)
+            if err or decoded == nil then decoded = row.value end
+            values[row.key] = decoded
+        elseif row.value ~= "" then return false, "Context value needs a key" end
+    end
+    local context, err = protocol.context(values)
+    if not context then return false, err end
+    draft.context = context
+    return true, nil
+end
+function M.cycle_trait(draft: Draft, id: string): (boolean, string?)
+    local active, requestable = draft.active_traits or {}, draft.requestable or {}
+    for index, selected in ipairs(active) do
+        if selected == id then
+            if not bounds.member(id, requestable) then
+                if #requestable >= 16 then return false, "At most 16 requestable traits" end
+                requestable[#requestable + 1] = id
+            end
+            table.remove(active, index)
+            draft.active_traits, draft.requestable = active, requestable
+            return true, nil
+        end
+    end
+    for index, selected in ipairs(requestable) do
+        if selected == id then table.remove(requestable, index); draft.requestable = requestable; return true, nil end
+    end
+    if #active >= 16 then return false, "At most 16 active traits" end
+    active[#active + 1] = id; draft.active_traits = active
+    return true, nil
+end
 function M.append_guidance(draft: Draft, value: unknown): (boolean, string?)
     local base, base_error = current(draft)
     if not base then return false, base_error end

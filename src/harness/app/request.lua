@@ -6,12 +6,13 @@
 -- caller-selected environment or transport: this actor only owns native
 -- window execution.
 local json = require("json")
+local profiles = require("profiles")
 local bounds = require("bounds")
 
 local M = {}
 M.MAX_ARGUMENT_BYTES = 16384
 
-type Request = {
+type Request = {overrides: profiles.Overrides?,
     request_id: string,
     definition_ref: string,
     workspace_id: string,
@@ -33,7 +34,7 @@ function M.decode(arguments: {string}, workspace_id: string, origin_view: {view_
     if decode_error then return nil, "managed window launch request is not JSON" end
     local object = bounds.object(value)
     if not object then return nil, "managed window launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "brief", "workdir", "thread_id", "expected_plan_digest", "saved_profile_id", "saved_profile_revision"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "brief", "workdir", "thread_id", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "overrides"})
     if unknown_field then return nil, unknown_field end
     local request_id = bounds.id(object.request_id)
     local definition_ref = bounds.id(object.definition_ref)
@@ -51,6 +52,8 @@ function M.decode(arguments: {string}, workspace_id: string, origin_view: {view_
         thread_id = bounds.id(object.thread_id)
         if not thread_id then return nil, "thread_id is not an identifier" end
     end
+    local overrides, override_error = profiles.overrides(object.overrides)
+    if not overrides then return nil, override_error end
     local saved_id, saved_revision = bounds.id(object.saved_profile_id), bounds.count(object.saved_profile_revision)
     if object.saved_profile_id ~= nil or object.saved_profile_revision ~= nil then
         if not saved_id or not saved_revision or saved_revision < 1 then return nil, "saved profile needs identity and positive revision" end
@@ -64,7 +67,7 @@ function M.decode(arguments: {string}, workspace_id: string, origin_view: {view_
         end
         expected_plan_digest = digest
     end
-    return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, expected_plan_digest = expected_plan_digest,
+    return {overrides = object.overrides ~= nil and overrides or nil, request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, expected_plan_digest = expected_plan_digest,
         saved_profile_id = saved_id, saved_profile_revision = saved_revision,
         brief = brief, mode = "window", workdir = workdir, thread_id = thread_id, origin_view = origin_view}, nil
 end

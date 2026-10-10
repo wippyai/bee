@@ -336,7 +336,7 @@ local function define_tests()
             local original = assert(bounds.object(entry.data))
             local changed: Object = {}
             for key, item in pairs(original) do changed[key] = item end
-            changed.gateway_access = {policy = "agent-access", traits = {"bee.tests.memory:trait"}}
+            changed.gateway_surface = {access = {policy = "agent-access", traits = {"bee.tests.memory:trait"}}}
             entry.data = changed
             local changes = registry.snapshot():changes(); changes:update(entry); assert(changes:apply())
             local ok, err = pcall(function()

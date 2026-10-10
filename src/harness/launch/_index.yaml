@@ -16,6 +16,7 @@ entries:
   kind: library.lua
   source: file://admission.lua
   modules:
+  - ctx
   - hash
   - registry
   - funcs

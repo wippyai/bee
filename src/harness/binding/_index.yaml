@@ -25,28 +25,6 @@ entries:
   method: handle
   imports:
     machine: bee.harness.carrier:machine
-- name: resolve
-  kind: function.lua
-  source: file://resolve_method.lua
-  method: handle
-  imports:
-    admission: bee.harness.launch:admission
-    bounds: bee.values:bounds
-- name: admit
-  kind: function.lua
-  source: file://admit_method.lua
-  method: handle
-  imports:
-    admission: bee.harness.launch:admission
-- name: start
-  kind: function.lua
-  source: file://start_method.lua
-  method: handle
-  imports:
-    admission: bee.harness.launch:admission
-  security:
-    policies:
-    - bee.harness.security:launch_spawn_policy
 - name: locate_probe
   kind: function.lua
   source: file://locate_probe.lua
@@ -184,3 +162,30 @@ entries:
     prestart: bee.harness.carrier:prestart
   security:
     policies: [bee.harness.security:permission_hook_policy]
+
+- name: profile_get
+  kind: function.lua
+  source: file://profile_tools.lua
+  method: get
+  modules: [contract, ctx]
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+
+- name: profile_list
+  kind: function.lua
+  source: file://profile_tools.lua
+  method: list
+  modules: [contract, ctx]
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+
+- name: profile_put
+  kind: function.lua
+  source: file://profile_tools.lua
+  method: put
+  modules: [contract, ctx]
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol

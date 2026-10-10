@@ -7,7 +7,7 @@ end
 local function handle(request: unknown): admission.Reply
     local object = bounds.object(request)
     if not object then return invalid("request must be an object") end
-    local extra = bounds.fields(object, {"definition_ref", "mode", "workspace_id", "saved_profile_id", "saved_profile_revision", "agent_ref", "owner_component_revision", "spec_digest"})
+    local extra = bounds.fields(object, {"definition_ref", "mode", "workspace_id", "saved_profile_id", "saved_profile_revision", "agent_ref", "owner_component_revision", "spec_digest", "overrides"})
     if extra then return invalid(extra) end
     local definition_ref = bounds.id(object.definition_ref)
     if not definition_ref then return invalid("definition_ref must be an identifier") end
@@ -39,7 +39,7 @@ local function handle(request: unknown): admission.Reply
         end
         spec_digest = digest
     end
-    local plan, refused = admission.resolve(definition_ref, mode, workspace, saved_id, revision, agent_ref, owner_component_revision, spec_digest)
+    local plan, refused = admission.resolve(definition_ref, mode, workspace, saved_id, revision, agent_ref, owner_component_revision, spec_digest, nil, object.overrides)
     if not plan then return refused or invalid("launch plan unavailable") end
     return {ok = true, error = nil, value = plan}
 end

@@ -187,7 +187,7 @@ local function define_tests()
             local raw = entry({claude = "/bin/claude"})
             local data = assert(bounds.object(raw.data))
             data.gateway_tools = {"thread_read", "app_tools", "publish"}
-            data.gateway_access = {policy = "agent-access", traits = {"bee.app:tools", "bee.app:share"}}
+            data.gateway_surface = {access = {policy = "agent-access", traits = {"bee.app:tools", "bee.app:share"}}}
             local stock = assert(policy.decode("test:policy", raw))
             test.eq(table.concat(stock.gateway_tools, ","), "app_tools,publish,thread_read")
             local surface = assert(stock.gateway_surface)
@@ -207,9 +207,14 @@ local function define_tests()
             local unreviewed = assert(policy.decode("test:policy",raw,nil,{options = {},mcp_tools = {"thread_read","app_tools"},instructions = ""}))
             test.eq(table.concat((assert(unreviewed.gateway_surface)).base_tools :: {string},","),"thread_read")
             test.eq(table.concat(((assert(unreviewed.gateway_surface)).access :: {traits: {string}}).traits,","),"bee.app:tools")
-            data.gateway_access = {policy = "agent-access", traits = {"research:notes"}}
+            local requested = assert(policy.decode("test:policy", raw, nil,
+                {authority_grant_id = "profile-grant", options = {}, mcp_tools = {"thread_read", "app_tools"}, instructions = "",
+                    requestable = {"bee.app:tools"}}))
+            test.eq(table.concat((assert(requested.gateway_surface)).base_tools :: {string}, ","), "thread_read")
+            test.eq(table.concat(((assert(requested.gateway_surface)).access :: {traits: {string}}).traits, ","), "bee.app:tools")
+            data.gateway_surface = {access = {policy = "agent-access", traits = {"research:notes"}}}
             local _, refused = policy.decode("test:policy", raw)
-            test.eq(refused, "test:policy: gateway_access: trait unavailable: research:notes")
+            test.eq(refused, "test:policy: gateway_surface: trait unavailable: research:notes")
         end)
         test.it("rejects legacy harness turn ceilings in host and profile preferences", function()
             local raw = entry({claude = "/bin/claude"})

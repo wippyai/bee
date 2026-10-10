@@ -34,7 +34,7 @@ end
 function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (Surface?, Selection?, string?)
     local value = bounds.object(raw)
     if not value then return nil, nil, "MCP surface must be an object" end
-    local extra = bounds.fields(value, {"tools", "traits", "base_tools", "active_traits", "fixed_context", "dynamic_keys", "access", "profile", "resource_grants", "authority_grant_id"})
+    local extra = bounds.fields(value, {"tools", "traits", "base_tools", "active_traits", "fixed_context", "dynamic_keys", "access", "profile", "resource_grants", "authority_grant_id", "selectable_traits"})
     if extra then return nil, nil, extra end
     local profile: profile_access.Bee? = nil
     if value.profile ~= nil then
@@ -150,10 +150,26 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
         end
         if not requestable[trait.id] then allowed[#allowed + 1] = trait.id end
     end
+    if value.selectable_traits ~= nil then
+        local selected, err = bounds.ids(value.selectable_traits, true)
+        if not selected then return nil, nil, err end
+        for _, id in ipairs(selected) do if not known_traits[id] then return nil, nil, "trait outside launch ceiling: " .. id end end
+        local narrowed: {string} = {}
+        for _, id in ipairs(allowed) do if bounds.member(id, selected) then narrowed[#narrowed + 1] = id end end
+        allowed = narrowed
+        if access then
+            local offered: {string} = {}
+            for _, id in ipairs(access.traits) do if bounds.member(id, selected) then offered[#offered + 1] = id end end
+            local narrowed_access: Access = {policy = access.policy, traits = offered}
+            access = narrowed_access
+        end
+    end
     local initial: {string} = {}
     for _, id in ipairs(active) do
         local declared = known_traits[id]
-        if not declared or not agent_trait.extension(declared) then initial[#initial + 1] = id end
+        if not declared or not requestable[id] or (not agent_trait.extension(declared) and value.selectable_traits == nil) then
+            initial[#initial + 1] = id
+        end
     end
     active = initial
     local selected, selection_error = catalog.select(complete, ceiling, base, allowed, active)

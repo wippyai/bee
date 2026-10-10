@@ -63,6 +63,15 @@ for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = 
 M.TOOL_POLICY_REFS = TOOL_POLICY_REFS
 function M.is_tool_policy_reference(value: string): boolean return BUILTIN_POLICY_REFS[value] == true end
 local TOOLS: {Tool} = {
+    {name = "profile_get", description = "Get a saved agent profile in the bound workspace. Writes use compare-and-swap revisions and never approve gated traits.", operation = "bee.harness.binding:profile_get",
+        policies = {TOOL_POLICY_REFS.session}, annotations = READ_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"profile_id"}, properties = {profile_id = {type = "string", minLength = 1, maxLength = 160}}}},
+    {name = "profile_list", description = "List saved agent profiles in the bound workspace. Writes use compare-and-swap revisions and never approve gated traits.", operation = "bee.harness.binding:profile_list",
+        policies = {TOOL_POLICY_REFS.session}, annotations = READ_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {}, properties = {after_key = {type = "string"}, expected_cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64}, definition_ref = {type = "string"}, query = {type = "string", maxLength = 80}, sort = {enum = {"name", "driver"}}}}},
+    {name = "profile_put", description = "Put a saved agent profile in the bound workspace. Writes use compare-and-swap revisions and never approve gated traits.", operation = "bee.harness.binding:profile_put",
+        policies = {TOOL_POLICY_REFS.session}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"profile_id", "expected_revision", "idempotency_key", "profile"}, properties = {profile_id = {type = "string", minLength = 1, maxLength = 160}, expected_revision = {type = "integer", minimum = 0}, idempotency_key = {type = "string", minLength = 1, maxLength = 160}, profile = session_tools.profile_schema()}}},
     {name = "question", description = "Ask the person a typed question in Needs you. Ask with an idempotency_key, prompt and response_schema (JSON Schema). Read the approval_id until terminal: decided responses contain the validated answer; expired, withdrawn or denied finishes without an answer. Withdraw an abandoned question with its observed revision and digests.", operation = "bee.approvals.binding:request",
         policies = {TOOL_POLICY_REFS.question}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
@@ -288,6 +297,9 @@ local DELIVERY_DIAGNOSTIC_SCHEMA: Object = {type = "object", additionalPropertie
     required = {"code", "target", "message", "remedy"},
     properties = {code = STRING_SCHEMA, target = STRING_SCHEMA, message = STRING_SCHEMA, remedy = STRING_SCHEMA}}
 local OUTPUT_SCHEMAS: {[string]: Object} = {
+    profile_get = output_schema({type = "object"}),
+    profile_list = output_schema({type = "object"}),
+    profile_put = output_schema({type = "object"}),
     session = output_schema({type = "object"}),
     call_tool = output_schema(JSON_VALUE_SCHEMA),
     question = output_schema({type = "object"}),

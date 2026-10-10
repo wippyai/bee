@@ -15,7 +15,7 @@ type OriginView = {view_id: string, instance_id: string}
 type Runtime = {thread_id: string, subject: string, initiating_owner: string, binding_id: string,
     access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
 type ResourceGrant = {workspace_id: string, name: string, subpath: string, access: "read" | "write", grant_ref: string, subject: string}
-type Attribution = {approving_grant_id: string?, resource_grants: {ResourceGrant}?, binding_id: string, thread_id: string, subject: string, action_id: string, attempt_id: string,
+type Attribution = {agent_traits: {string}?, agent_profile_write: boolean?, approving_grant_id: string?, resource_grants: {ResourceGrant}?, binding_id: string, thread_id: string, subject: string, action_id: string, attempt_id: string,
     policy_ref: string?, workspace_id: string?, origin_view: OriginView?, application_runtime: Runtime?}
 
 function M.resource_grants(value: unknown): ({ResourceGrant}?, string?)
@@ -223,6 +223,12 @@ function M.bind(values: unknown, identity: Attribution): (Context?, string?)
     end
     local grants, grant_error = M.resource_grants(identity.resource_grants)
     if grant_error then return nil, grant_error end
+    if identity.agent_traits ~= nil then
+        local traits, trait_error = bounds.ids(identity.agent_traits, true)
+        if not traits or #traits > 64 then return nil, trait_error or "invalid agent trait ceiling" end
+        copied["bee.agent.trait_ceiling"] = traits
+    end
+    copied["bee.agent.profile_write"] = identity.agent_profile_write
     copied[M.BINDING_KEY] = {resource_grants = grants, binding_id = binding_id, thread_id = thread_id, subject = subject,
         action_id = action_id, attempt_id = attempt_id, approving_grant_id = identity.approving_grant_id, policy_ref = policy_ref, workspace_id = workspace_id,
         origin_view = origin_view, application_runtime = runtime}

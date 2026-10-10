@@ -5,6 +5,8 @@ local security = require("security")
 local uuid = require("uuid")
 local bounds = require("bounds")
 local host = require("host")
+local editor = require("editor")
+local protocol = require("protocol")
 local WORKSPACE = "saved-profile-workspace"
 local function caller(id: string, grant: string?): funcs.Executor
     local policies: {security.Policy} = {}
@@ -39,6 +41,44 @@ local function put(id: string, revision: integer, key: string, title: string): {
 end
 local function define_tests()
     test.describe("Saved profile owner facade", function()
+        test.it("round trips editor traits, role and context through profile CAS", function()
+            local request = put(fresh(), 0, fresh(), "Edited")
+            local original = assert(protocol.profile(request.profile))
+            local settings = {options = {}, mcp_tools = {}, instructions = false}
+            local draft = assert(editor.new(original, settings))
+            test.is_true(editor.set_role(draft, "Inspect changes"))
+            test.is_true(editor.cycle_trait(draft, "bee.tests.memory:trait"))
+            test.is_true(editor.cycle_trait(draft, "bee.tests.memory:trait"))
+            test.is_true(editor.set_context(draft, {{key = "project", value = "Bee"}, {key = "readonly", value = "false"}}))
+            request.profile = assert(editor.result(draft))
+            local writer = caller("profile-authority", "bee.harness.profiles:test_write")
+            local saved = value(call(writer, request))
+            local loaded = value(call(caller("profile-reader", "bee.harness.profiles:test_read"),
+                {operation = "get", workspace_id = WORKSPACE, profile_id = saved.profile_id}))
+            local restored = assert(editor.new(assert(protocol.profile(loaded.profile)), settings))
+            test.eq(restored.role, "Inspect changes")
+            test.eq(assert(restored.requestable)[1], "bee.tests.memory:trait")
+            test.eq(assert(restored.context).readonly, false)
+        end)
+        test.it("persists role, requestable traits and bounded scalar context through the owner", function()
+            local writer = caller("profile-authority", "bee.harness.profiles:test_write")
+            local request = put(fresh(), 0, fresh(), "Researcher")
+            local profile = assert(bounds.object(request.profile))
+            profile.role = "Review changes"
+            profile.requestable = {"bee.tests.memory:trait"}
+            profile.context = {project = "Bee", iteration = 2, readonly = false}
+            local saved = value(call(writer, request))
+            local read = value(call(caller("profile-reader", "bee.harness.profiles:test_read"),
+                {operation = "get", workspace_id = WORKSPACE, profile_id = saved.profile_id}))
+            local restored = assert(bounds.object(read.profile))
+            test.eq(restored.role, "Review changes")
+            test.eq(assert(bounds.array(restored.requestable, 16))[1], "bee.tests.memory:trait")
+            test.eq(assert(bounds.object(restored.context)).readonly, false)
+            for _, context in ipairs({{["bee.workspace_id"] = "forged"}, {nested = {x = 1}}, {large = string.rep("x", 16385)}}) do
+                profile.context = context
+                test.eq(call(writer, request).ok, false)
+            end
+        end)
         test.it("retains every approving ancestor across successive delegated edits", function()
             local person = caller("profile-authority", "bee.harness.profiles:test_write")
             local id = fresh()

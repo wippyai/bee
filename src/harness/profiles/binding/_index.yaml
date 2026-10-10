@@ -7,6 +7,8 @@ entries:
   modules:
   - registry
   imports:
+    preferences: bee.driver.profiles:preferences
+    mcp: bee.gateway.api:mcp
     bounds: bee.values:bounds
     descriptors: bee.driver.descriptor:descriptor
     agent_trait: bee.values:agent_trait

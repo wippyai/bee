@@ -18,7 +18,7 @@ local function define_tests()
                     calls[#calls + 1] = options
                     return nil, protocol.fault("CONFLICT", "saved revision changed", "never")
                 end,
-                call = function() return nil, nil end, send = function() return nil, nil end,
+                run = function() return nil, nil end, call = function() return nil, nil end, send = function() return nil, nil end,
                 cancel = function() return nil, nil end, close = function() return nil, nil end,
                 await = function() return nil, nil end, join = function() return nil, nil end,
                 get = function() return nil, nil end, work = function() return nil, nil end,

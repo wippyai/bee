@@ -7,6 +7,7 @@ entries:
   modules:
   - json
   imports:
+    profiles: bee.harness.profiles:protocol
     bounds: bee.values:bounds
 - name: input
   kind: library.lua
@@ -19,6 +20,7 @@ entries:
   modules:
   - json
   imports:
+    profiles: bee.harness.profiles:protocol
     bounds: bee.values:bounds
 - name: restore_view
   kind: library.lua
@@ -157,6 +159,8 @@ entries:
   - uuid
   - funcs
   imports:
+    canonical: bee.values:canonical
+    spawn_form: bee.harness.app:spawn_form
     confirmation: bee.approvals.app:confirmation
     frame: bee.ui:frame
     bounds: bee.values:bounds
@@ -194,6 +198,7 @@ entries:
   - uuid
   - json
   imports:
+    mcp: bee.gateway.api:mcp
     canonical: bee.values:canonical
     descriptors: bee.driver.descriptor:descriptor
     readiness: bee.harness.launch:readiness
@@ -247,3 +252,12 @@ entries:
   imports:
     bounds: bee.values:bounds
     editor: bee.harness.app:profile_editor
+
+- name: spawn_form
+  kind: library.lua
+  source: file://spawn_form.lua
+  imports:
+    bounds: bee.values:bounds
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    profiles: bee.harness.profiles:protocol

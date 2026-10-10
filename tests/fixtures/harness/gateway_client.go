@@ -398,6 +398,76 @@ func runGatewayAt(url, authorization string) int {
 	if os.Getenv("BEE_FIXTURE_GATEWAY_APP_OPEN") != "" {
 		reportApplicationOpen(client, url, authorization, report)
 	}
+	if profile := os.Getenv("BEE_FIXTURE_AGENT_SPEC"); profile != "" {
+		call := func(name string, args object, id int) object {
+			result := outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
+			if name == "session" {
+				if value := mustObject(result["value"]); value != nil {
+					delete(value, "tools")
+					delete(value, "traits")
+					if args["operation"] == "request_access" {
+						result["value"] = object{"approval_id": value["approval_id"], "state": value["state"]}
+					}
+				}
+			}
+			return result
+		}
+		report["spec_read"] = call("session", object{"operation": "read"}, 80)
+		context := mustObject(mustObject(mustObject(report["spec_read"])["value"])["context"])
+		if context["from_parent"] == true {
+			encoded, _ := json.Marshal(report["spec_read"])
+			report["child_message"] = call("thread_message", object{"idempotency_key": "spec-child-read", "message_id": "spec-child-read", "message_kind": "notification", "content": object{"text": "spec-child:" + string(encoded)}}, 81)
+		} else {
+			request := object{"operation": "request_access", "idempotency_key": "profile-traits", "traits": []string{"bee.tests.memory:trait"}, "reason": "This session's profile selects these application traits."}
+			report["consent_first"] = call("session", request, 91)
+			report["consent_again"] = call("session", request, 92)
+			report["profile_list"] = call("profile_list", object{}, 81)
+			got := call("profile_get", object{"profile_id": profile}, 82)
+			report["profile_get"] = got
+			stored := mustObject(mustObject(got["value"])["profile"])
+			if stored != nil {
+				copied := object{}
+				for key, value := range stored {
+					copied[key] = value
+				}
+				copied["name"] = "Agent-created profile"
+				copied["active_traits"] = []string{"bee.tests.memory:trait"}
+				report["profile_put"] = call("profile_put", object{"profile_id": profile + "-copy", "expected_revision": 0, "idempotency_key": "spec-copy", "profile": copied}, 83)
+				copied["active_traits"] = []string{"bee.tests.memory:outside"}
+				report["profile_denied"] = call("profile_put", object{"profile_id": profile + "-denied", "expected_revision": 0, "idempotency_key": "spec-copy-denied", "profile": copied}, 89)
+				copied["active_traits"] = []string{"bee.app:tools"}
+				report["driver_denied"] = call("profile_put", object{"profile_id": profile + "-driver-denied", "expected_revision": 0, "idempotency_key": "spec-driver-denied", "profile": copied}, 93)
+			}
+			report["spec_after_put"] = call("session", object{"operation": "read"}, 84)
+			if child, ok := context["child_profile"].(string); ok {
+				spec := object{"definition": context["child_definition"], "profile": object{"id": child, "revision": 1}, "overrides": object{"name": "Child", "role": "Review changes", "traits": []string{"bee.tests.memory:review"}, "context": object{"from_parent": true}, "input": "Read your session context"}}
+				opened := call("session_run", object{"spec": spec, "operation_key": "spec-child"}, 85)
+				report["child_run"] = opened
+				if receipt := mustObject(opened["value"]); receipt != nil {
+					report["child_get"] = call("session_get", object{"session": receipt["session"]}, 86)
+				}
+				spec["overrides"] = object{"traits": []string{"outside:trait"}}
+				report["child_denied"] = call("session_open", object{"spec": spec, "operation_key": "spec-child-denied"}, 87)
+				spec["overrides"] = object{"context": object{"bee.workspace_id": "forged"}}
+				report["context_denied"] = call("session_open", object{"spec": spec, "operation_key": "spec-context-denied"}, 88)
+				spec["overrides"] = object{"traits": []string{"bee.tests.memory:outside"}}
+				report["parent_denied"] = call("session_open", object{"spec": spec, "operation_key": "spec-parent-denied"}, 90)
+			}
+		}
+		for _, key := range []string{"profile_get", "profile_put"} {
+			value := mustObject(mustObject(report[key])["value"])
+			if saved := mustObject(value["profile"]); saved != nil {
+				value["profile"] = object{"name": saved["name"], "role": saved["role"], "active_traits": saved["active_traits"], "requestable": saved["requestable"]}
+			}
+		}
+		if listing := mustObject(mustObject(report["profile_list"])["value"]); listing != nil {
+			if items, ok := listing["items"].([]any); ok {
+				for _, raw := range items {
+					delete(mustObject(raw), "profile")
+				}
+			}
+		}
+	}
 	if os.Getenv("BEE_FIXTURE_GATEWAY_SURFACE") == "1" {
 		reportSurface(client, url, authorization, report)
 	}

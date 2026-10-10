@@ -7,6 +7,7 @@
 local contract = require("contract")
 local bounds = require("bounds")
 local protocol = require("protocol")
+local profiles = require("profiles")
 local M = {}
 
 M.SESSIONS = "bee.threads.sessions:contract"
@@ -30,8 +31,8 @@ type AwaitOptions = {node: string?, timeout_ms: integer?}
 type CancelOptions = {node: string?, work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
 type CloseOptions = {node: string?, session: SessionArg?, incarnation: integer?, operation_key: string}
 type SendOptions = {node: string?, session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
-type OpenOptions = {node: string?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, operation_key: string}
-type CallOptions = {node: string?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, input: Input, output: string?,
+type OpenOptions = {overrides: profiles.Overrides?, node: string?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, operation_key: string}
+type CallOptions = {overrides: profiles.Overrides?, node: string?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, input: Input?, output: string?,
     timeout_ms: integer?, operation_key: string}
 type ClientAwaitOptions = {node: string?, subject: string | Observable, timeout_ms: integer?}
 type JoinOptions = {node: string?, works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
@@ -56,6 +57,7 @@ type Session = {receipt: protocol.OpenReceipt?, snapshot: protocol.SessionSnapsh
 type Call = {work: Work, observation: WorkAwait}
 
 type Client = {
+    run: (Client, CallOptions) -> (Work?, Fault?),
     open: (Client, OpenOptions) -> (Session?, Fault?),
     call: (Client, CallOptions) -> (Call?, Fault?),
     send: (Client, SendOptions) -> (Work?, Fault?),
@@ -168,7 +170,7 @@ local function output_of(value: unknown): (string?, Fault?)
     return output, nil
 end
 
-local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown): ({[string]: unknown}?, Fault?)
+local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown, overrides: unknown): ({[string]: unknown}?, Fault?)
     local ref = protocol.any_ref(definition)
     if not ref then return nil, invalid("definition must be a ref") end
     local spec: {[string]: unknown} = {definition = ref}
@@ -190,6 +192,9 @@ local function spec_of(definition: unknown, profile: unknown, workdir: unknown, 
         if type(workspace) ~= "string" or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, invalid("workspace must be a canonical workspace ID") end
         spec.workspace = workspace
     end
+    local selected, err = profiles.overrides(overrides)
+    if not selected then return nil, invalid(err or "invalid overrides") end
+    if overrides ~= nil then spec.overrides = selected end
     return spec, nil
 end
 
@@ -297,13 +302,16 @@ local function new_client(node: string?): Client
 
     -- Opens a session with its first work in one owner operation.
     local function run(options: CallOptions): (Work?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace, options.overrides)
         if not spec then return nil, spec_fault end
-        local input, input_fault = input_of(options.input)
+        if options.input ~= nil and options.overrides and options.overrides.input ~= nil then
+            return nil, invalid("input is specified twice")
+        end
+        local input, input_fault = input_of(options.input ~= nil and options.input or (options.overrides and options.overrides.input))
         if input == nil then return nil, input_fault end
         local output, output_fault = output_of(options.output)
         if output_fault then return nil, output_fault end
-        local request: {[string]: unknown} = {spec = spec, input = input, output = output}
+        local request: {[string]: unknown} = {spec = spec, input = options.input ~= nil and input or nil, output = output}
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
@@ -316,7 +324,7 @@ local function new_client(node: string?): Client
     end
 
     local client_open = function(_: Client, options: OpenOptions): (Session?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace, options.overrides)
         if not spec then return nil, spec_fault end
         local request: {[string]: unknown} = {spec = spec}
         local key, key_fault = operation_key(options.operation_key)
@@ -571,7 +579,7 @@ local function new_client(node: string?): Client
         return page, nil
     end
 
-    client = {open = client_open, call = client_call, send = client_send, cancel = client_cancel, close = client_close, await = client_await, join = client_join, get = client_get, work = client_work, history = client_history, list = client_list, catalog = client_catalog}
+    client = {run = function(_: Client, options: CallOptions): (Work?, Fault?) return run(options) end, open = client_open, call = client_call, send = client_send, cancel = client_cancel, close = client_close, await = client_await, join = client_join, get = client_get, work = client_work, history = client_history, list = client_list, catalog = client_catalog}
     return client
 end
 
@@ -579,6 +587,7 @@ function M.client(options: {node: string?}?): Client return new_client(options a
 local ambient_client = new_client()
 
 function M.open(options: OpenOptions): (Session?, Fault?) return ambient_client:open(options) end
+function M.run(options: CallOptions): (Work?, Fault?) return ambient_client:run(options) end
 function M.call(options: CallOptions): (Call?, Fault?) return ambient_client:call(options) end
 function M.send(options: SendOptions): (Work?, Fault?) return ambient_client:send(options) end
 function M.cancel(options: CancelOptions): (Operation?, Fault?) return ambient_client:cancel(options) end

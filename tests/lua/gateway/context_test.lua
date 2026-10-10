@@ -46,6 +46,14 @@ local function run()
             test.eq(invalid_origin_error, "invalid gateway binding attribution")
             test.is_nil(context.bind({}, {binding_id = "", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a"}))
         end)
+        test.it("keeps inherited trait authority outside the context value quota", function()
+            local values: Object = {}
+            for index = 1, 32 do values["key" .. tostring(index)] = index end
+            local bound = assert(context.bind(values, {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a",
+                action_id = "action-a", attempt_id = "attempt-a", agent_traits = {"trait:a", "trait:b"}, agent_profile_write = true}))
+            test.eq(assert(bounds.ids(bound["bee.agent.trait_ceiling"], true))[2], "trait:b")
+            test.eq(bound["bee.agent.profile_write"], true)
+        end)
         test.it("seals runtime approval provenance to the authenticated binding", function()
             local identity = {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a",
                 application_runtime = {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", initiating_owner = "subject-a",

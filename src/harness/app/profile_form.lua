@@ -12,11 +12,13 @@ local preferences = require("preferences")
 local json = require("json")
 local canonical = require("canonical")
 local readiness = require("readiness")
+local mcp_catalog = require("mcp")
 local M = {}
 -- What a profile form opens: a definition for a new profile, or a saved
 -- profile, whose own definition applies.
 type Subject = {definition_ref: string?, title: string, saved_profile_id: string?, saved_profile_revision: integer?}
-type Form = {permission_transport: boolean?, driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
+type TraitRow = {id: string, title: string, gated: boolean}
+type Form = {traits: {TraitRow}?,permission_transport: boolean?, driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
     credential_keys: {[string]: boolean}?, definition_digest: string?, credential_definition: definition.Definition?, default_private_home: boolean?,
     save_key: string, remove_key: string, pending: string?, submitted: protocol.Profile?,
     fields: {[string]: {label: string, section: string, order: integer}}?, unsupported: {string}?,
@@ -229,7 +231,36 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     end
     local credential_choices = definition.credential_names(decoded, base.placement and base.placement.kind or "native",
         base.placement and base.placement.kind == "native" and base.placement.home == "private" or base.placement == nil and default_private)
-    return {workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
+    local traits: {TraitRow} = {}
+    local surface = bounds.object(policy_data.gateway_surface) or {}
+    local access = bounds.object(surface.access) or {}
+    local offered: {[string]: boolean} = {}
+    for _, id in ipairs(bounds.ids(access.traits, true) or {}) do offered[id] = true end
+    for _, raw in ipairs(bounds.array(surface.traits, 64) or {}) do
+        local trait = bounds.object(raw)
+        if trait and type(trait.id) == "string" then offered[trait.id] = true end
+    end
+    local entries, trait_error = pinned:find({["meta.type"] = "agent.trait"})
+    if not entries or trait_error then return nil, "Trait catalog is unavailable" end
+    local listed_traits: {[string]: boolean} = {}
+    for _, entry in ipairs(entries) do
+        if offered[entry.id] then
+            local meta = bounds.object(entry.meta) or {}
+            local data = bounds.object(entry.data) or {}
+            traits[#traits + 1] = {id = entry.id, title = bounds.line(meta.title, 80) or entry.id,
+                gated = meta.application_ref ~= nil or data.listens ~= nil or data.hooks ~= nil}
+            listed_traits[entry.id] = true
+        end
+    end
+    local builtins = {mcp_catalog.APPLICATION_RUNTIME_TRAIT}
+    for _, trait in ipairs(mcp_catalog.CONSENT_TRAITS) do builtins[#builtins + 1] = trait end
+    for _, trait in ipairs(builtins) do
+        if offered[trait.id] and not listed_traits[trait.id] then
+            traits[#traits + 1] = {id = trait.id, title = trait.title, gated = true}
+        end
+    end
+    table.sort(traits, function(a: TraitRow, b: TraitRow): boolean return a.title < b.title end)
+    return {traits = traits, workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
         permission_transport = policy_data.permission_exchange ~= nil,
         driver_name = driver_name, placement_names = placement_names, leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
         save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported, credentials = credential_choices,

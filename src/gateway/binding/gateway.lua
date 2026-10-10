@@ -68,7 +68,7 @@ type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Row = {[string]: unknown}
 type Object = {[string]: unknown}
 type OriginView = {view_id: string, instance_id: string}
-type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, owner_incarnation: integer, carrier_epoch: integer,
+type Binding = {agent_traits: {string}?, agent_profile_write: boolean?, binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, owner_incarnation: integer, carrier_epoch: integer,
     approving_grant_id: string?, tools: {string}, hooks: {string}, epoch: integer, credential_generation: integer, expires_at: string, revoked: boolean, sealed: boolean, policy_ref: string?, workspace_id: string?, workspace_name: string, origin_view: OriginView?}
 type Generation = {epoch: integer, restarts: integer}
 type BoundSurface = {configuration: surface.Surface, selection: surface.Selection, revision: integer, digest: string}
@@ -466,7 +466,13 @@ end
 -- bee.gateway.admit on the action and names the subject the launch
 -- admission established; it cannot widen the tool set beyond the catalog.
 local function admission_reply(binding: Binding, raw: unknown, replayed: boolean): Reply
-    local seeds = bounds.ids(assert(bounds.object(raw)).active_traits, true) or {}
+    local declaration = assert(bounds.object(raw))
+    local access = bounds.object(declaration.access)
+    local gated = access and bounds.ids(access.traits, true) or {}
+    local seeds: {string} = {}
+    for _, id in ipairs(bounds.ids(declaration.active_traits, true) or {}) do
+        if bounds.member(id, gated or {}) then seeds[#seeds + 1] = id end
+    end
     local pending: {string} = {}
     if #seeds > 0 then
         local seed_db, seed_failure = open()

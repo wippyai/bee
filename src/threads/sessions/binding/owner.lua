@@ -150,8 +150,22 @@ function M.open(raw_request: unknown): Reply
     if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
-    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace"}) then
+    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "overrides"}) then
         return fail("INVALID", "open requires a definition, optional profile/workdir/workspace, and operation_key", operation_key)
+    end
+    local copied: Object = {}
+    for name, value in pairs(spec) do copied[name] = value end
+    spec = copied
+    local overrides, override_error = profile_values.overrides(spec.overrides)
+    if not overrides then return fail("INVALID", override_error or "invalid spawn overrides", operation_key) end
+    if overrides.workdir and spec.workdir ~= nil then return fail("INVALID", "workdir is specified twice", operation_key) end
+    if overrides.workspace and spec.workspace ~= nil then return fail("INVALID", "workspace is specified twice", operation_key) end
+    spec.workdir = overrides.workdir or spec.workdir
+    spec.workspace = overrides.workspace or spec.workspace
+    if spec.overrides ~= nil then
+        local normalized: {[string]: unknown} = {}
+        for key, value in pairs(overrides) do if key ~= "workspace" and key ~= "workdir" then normalized[key] = value end end
+        spec.overrides = normalized
     end
     local definition = ref(spec.definition)
     if not definition then return fail("INVALID", "definition is not a ref", operation_key) end
@@ -182,7 +196,7 @@ function M.open(raw_request: unknown): Reply
             if not actor then return unavailable(tostring(actor_error), operation_key) end
             local executor, executor_error = funcs.new():with_actor(actor)
             if not executor then return unavailable(tostring(executor_error), operation_key) end
-            local raw, call_error = executor:call("bee.threads.sessions.binding:open", {spec = {definition = definition, profile = profile, workdir = workdir}, operation_key = operation_key})
+            local raw, call_error = executor:call("bee.threads.sessions.binding:open", {spec = {definition = definition, profile = profile, workdir = workdir, overrides = spec.overrides}, operation_key = operation_key})
             if call_error then return unavailable(tostring(call_error), operation_key) end
             local reply = object(raw)
             if not reply or type(reply.ok) ~= "boolean" then return unavailable("cross-workspace owner returned a malformed reply", operation_key) end
@@ -193,7 +207,7 @@ function M.open(raw_request: unknown): Reply
     local prior = object(prior_raw)
     if prior_error or not prior then return unavailable(prior_error or "open operation lookup unavailable", operation_key) end
     if prior.found == true and prior.operation ~= "session_create" then return fail("CONFLICT", "open key belongs to another operation", operation_key) end
-    local raw, call_error = funcs.call("bee.harness.binding:present", {spec = {definition = definition, profile = profile, workdir = workdir}, operation_key = operation_key})
+    local raw, call_error = funcs.call("bee.harness.binding:present", {spec = {definition = definition, profile = profile, workdir = workdir, overrides = spec.overrides}, operation_key = operation_key})
     local reply = object(raw)
     if call_error or not reply or reply.ok ~= true then
         local fault = reply and object(reply.error)
@@ -204,6 +218,10 @@ function M.open(raw_request: unknown): Reply
     if not session or not receipt then return unavailable("the session's terminal omitted its session", operation_key) end
     local current, err = describe(session)
     if not current then return unavailable(err or "session snapshot unavailable", operation_key) end
+    if overrides.input ~= nil then
+        local sent = M.send({session = session, input = overrides.input, operation_key = "open-input:" .. assert(hash.sha256(operation_key))})
+        if not sent.ok then return sent end
+    end
     return succeed({session = session, operation = receipt.operation, snapshot = current})
 end
 
@@ -213,13 +231,13 @@ function M.attach(raw_request: unknown): Reply
     local operation_key = key(request.operation_key)
     local definition, thread = ref(request.definition), bounds.id(request.thread_id)
     local origin = bounds.id(request.origin_request_id)
-    if not operation_key or not definition or not thread or not origin or bounds.fields(request, {"operation_key", "definition", "thread_id", "plan_digest", "saved_profile_id", "saved_profile_revision", "attempt_id", "origin_request_id"}) then return fail("INVALID", "interactive attach identities are incomplete", operation_key) end
+    if not operation_key or not definition or not thread or not origin or bounds.fields(request, {"operation_key", "definition", "thread_id", "plan_digest", "saved_profile_id", "saved_profile_revision", "attempt_id", "origin_request_id", "overrides"}) then return fail("INVALID", "interactive attach identities are incomplete", operation_key) end
     if not security.can("bee.sessions.attach", definition) then return fail("DENIED", "interactive attach requires a host grant", operation_key) end
     local _, workspace = identity()
     if not workspace then return fail("DENIED", "interactive attach has no workspace", operation_key) end
     local profile_id = request.saved_profile_id == nil and nil or ref(request.saved_profile_id)
     local revision = request.saved_profile_revision == nil and nil or bounds.integer(request.saved_profile_revision)
-    local pinned, refused = admission.resolve(definition, "window", workspace, profile_id, revision)
+    local pinned, refused = admission.resolve(definition, "window", workspace, profile_id, revision, nil, nil, nil, nil, request.overrides)
     local plan = object(pinned)
     if not plan then return unavailable(tostring(refused and refused.error and refused.error.message or "interactive plan is unavailable"), operation_key) end
     if plan.plan_digest ~= request.plan_digest or plan.mode ~= "window" then return fail("CONFLICT", "interactive attach plan changed", operation_key) end
@@ -243,8 +261,8 @@ function M.attach(raw_request: unknown): Reply
         end
     else
         created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
-            title = plan.title or definition, route = {definition = definition, plan_digest = plan.plan_digest,
-                delivery = "hook", driver_binding_ref = driver, provider = bounds.id(plan.driver_id),
+            title = plan.title or definition, route = {trait_ceiling = plan.trait_ceiling, definition = definition, plan_digest = plan.plan_digest,
+                delivery = "hook", driver_binding_ref = driver, provider = bounds.id(plan.driver_id), effective_profile = plan.effective_profile, profile_digest = plan.effective_profile_digest, overrides = request.overrides,
                 saved_profile_id = profile_id, saved_profile_revision = revision, profile_id = plan.profile_id, placement_methods = plan.placement_methods,
                 origin_request_id = origin, operation_key = operation_key}})
         if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
@@ -295,7 +313,7 @@ function M.restore(raw_request: unknown): Reply
     if not origin or not attempt or not plan_digest or not thread or not operation_key then
         return unavailable("window session records no admitted continuation to restore", nil)
     end
-    local value: Object = {session = session, definition_ref = definition, plan_digest = plan_digest,
+    local value: Object = {trait_ceiling = route.trait_ceiling, overrides = route.overrides, session = session, definition_ref = definition, plan_digest = plan_digest,
         origin_request_id = origin, previous_attempt_id = attempt, thread_id = thread, operation_key = operation_key}
     if route.saved_profile_id ~= nil then
         value.saved_profile_id = ref(route.saved_profile_id)
@@ -1270,11 +1288,26 @@ function M.run(raw_request: unknown): Reply
     if not operation_key then return fail("INVALID", "run requires operation_key", nil) end
     local digest, hash_error = hash.sha256("bee.sessions.run.session\n" .. operation_key)
     if not digest then return unavailable("cannot derive the run session key: " .. tostring(hash_error), operation_key) end
-    local opened = M.open({spec = input.spec, operation_key = "run-session:" .. digest})
+    local spec = object(input.spec)
+    local overrides, override_error = profile_values.overrides(spec and spec.overrides)
+    if not overrides then return fail("INVALID", override_error or "invalid spawn overrides", operation_key) end
+    local first_input = input.input
+    if overrides and overrides.input ~= nil then
+        if first_input ~= nil then return fail("INVALID", "input is specified twice", operation_key) end
+        first_input = overrides.input
+        local normalized: Object = {}
+        for name, value in pairs(overrides) do if name ~= "input" then normalized[name] = value end end
+        local copied: Object = {}
+        for name, value in pairs(spec or {}) do copied[name] = value end
+        copied.overrides = normalized
+        spec = copied
+    end
+    if first_input == nil then return fail("INVALID", "run requires input", operation_key) end
+    local opened = M.open({spec = spec, operation_key = "run-session:" .. digest})
     if not opened.ok then return opened end
     local receipt = object(opened.value)
     if not receipt then return unavailable("open returned no session receipt", operation_key) end
-    return M.send({session = receipt.session, input = input.input, output = input.output,
+    return M.send({session = receipt.session, input = first_input, output = input.output,
         expected_incarnation = 1, operation_key = operation_key})
 end
 

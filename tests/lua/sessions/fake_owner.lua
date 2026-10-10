@@ -220,6 +220,7 @@ function M.fixture_client(script: ClientScript): sessions.Client
             if not script.open then error("unexpected fixture open") end
             return script.open(options)
         end,
+        run = function(_: sessions.Client, _: sessions.CallOptions): (sessions.Work?, sessions.Fault?) error("unexpected fixture run") end,
         call = function(_: sessions.Client, _: sessions.CallOptions): (sessions.Call?, sessions.Fault?) error("unexpected fixture call") end,
         send = function(_: sessions.Client, _: sessions.SendOptions): (sessions.Work?, sessions.Fault?) error("unexpected fixture send") end,
         cancel = function(_: sessions.Client, _: sessions.CancelOptions): (sessions.Operation?, sessions.Fault?) error("unexpected fixture cancel") end,

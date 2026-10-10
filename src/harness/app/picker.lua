@@ -7,6 +7,7 @@ local time = require("time")
 local uuid = require("uuid")
 local funcs = require("funcs")
 local bounds = require("bounds")
+local canonical = require("canonical")
 local client = require("client")
 local caller = require("caller")
 local appearance = require("appearance")
@@ -22,6 +23,7 @@ local sessions_protocol = require("sessions_protocol")
 local frame = require("frame")
 local forms = require("forms")
 local profile_view = require("profile_view")
+local spawn_form = require("spawn_form")
 local confirmation = require("confirmation")
 local terminal_view = require("terminal_view")
 local text = require("text")
@@ -75,6 +77,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local navigation = assert(process.listen("bee.app.navigate", {message = true}))
     local output = assert(tty.surface())
     local review = confirmation.new({workspace_id = launch.workspace_id, origin = {app_id = launch.definition_id, instance_id = launch.instance_id, attempt_id = launch.execution_id}})
+    local spawning: spawn_form.State? = nil
+    local launch_options: {name: string?, role: string?, workdir: sessions_protocol.Workdir?}? = nil
     local running = true
     local load_serial = 0
     local loads = channel.new(1)
@@ -330,7 +334,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     while true do
         if dirty then
             local rows: {string}
-            if allowances then
+            if spawning then
+                local shown = spawn_form.draw(width, height, preferences, spawning)
+                frame.render(shown, menu, preferences)
+                rows = shown.rows
+            elseif allowances then
                 allowance_frame = allowance_form.draw(width, height, preferences, allowances)
                 frame.render(allowance_frame, menu, preferences)
                 rows = allowance_frame.rows
@@ -476,7 +484,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         else
             local data = input_event.decode(event.value)
             if data then
-                local routed, handled = frame.route(menu, data, editing ~= nil or conversation ~= nil)
+                local routed, handled = frame.route(menu, data, spawning ~= nil or editing ~= nil or conversation ~= nil)
                 if handled then dirty = true end
                 data = routed
             end
@@ -484,6 +492,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if data.type == "close" then return finish(nil, nil)
                 elseif data.type == "start" or data.type == "resize" then
                     width, height = assert(data.width), assert(data.height); dirty = true
+                elseif spawning then
+                    local action = spawn_form.input(spawning, data)
+                    if action == "cancel" then spawning = nil
+                    elseif action == "open" then launch_options = spawn_form.value(spawning); spawning = nil; open = true end
+                    dirty = true
                 elseif allowances then
                     local opened_form = allowances
                     local action = allowance_form.input(opened_form, data, allowance_frame)
@@ -646,14 +659,19 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             elseif duplicate then status = "Choose an installed driver for a new profile"; dirty = true end
         end
         if setup_open then open = true; setup_open = false end
+        if open and not launch_options and catalog_open and not conversation then
+            spawning = spawn_form.new(); open = false; dirty = true
+        end
         if open and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
             local entry = listed.items[selected]
             if entry and entry.ready then
-                local target = entry.kind .. ":" .. entry.ref .. ":" .. tostring(entry.revision)
+                local target = entry.kind .. ":" .. entry.ref .. ":" .. tostring(entry.revision) .. ":" .. assert(canonical.encode(launch_options))
                 if open_target ~= target then open_key, open_target = assert(uuid.v7()), target end
                 open_serial = open_serial + 1
                 local serial = open_serial
                 local key = open_key
+                local options = launch_options
+                launch_options = nil
                 opening = true
                 status = "Opening session…"
                 dirty = true
@@ -672,7 +690,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         end
                         definition, profile = saved.definition_ref, {id = entry.ref, revision = revision}
                     end
-                    local opened, open_error = agents.open(sessions.client(), definition, profile, key)
+                    local opened, open_error = agents.open(sessions.client(), definition, profile, key, launch.workspace_id, options)
                     if running and serial == open_serial then
                         local reply: Opened = {serial = serial, conversation = opened, error = open_error}
                         opens:send(reply)

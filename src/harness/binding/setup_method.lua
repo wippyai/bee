@@ -15,7 +15,7 @@ end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return {ok = false, error = "request must be an object"} end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "workdir", "placement_override"}) then return {ok = false, error = "unknown field"} end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "workdir", "placement_override", "overrides"}) then return {ok = false, error = "unknown field"} end
     local workspace, definition_ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace then return {ok = false, error = "workspace_id is not an identifier"} end
     if not definition_ref then return {ok = false, error = "definition_ref is not an identifier"} end
@@ -27,7 +27,7 @@ local function handle(raw: unknown): {[string]: unknown}
     end
     local placement, placement_error = profiles.placement(request.placement_override)
     if placement_error then return {ok = false, error = placement_error} end
-    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, placement)
+    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, placement, request.overrides)
     if not plan then return {ok = false, error = tostring(plan_error and plan_error.error and plan_error.error.message or "launch plan unavailable")} end
     if plan.plan_digest ~= request.expected_plan_digest then return {ok = false, error = "selected launch plan changed"} end
     -- A folder under an admitted root becomes the working directory only

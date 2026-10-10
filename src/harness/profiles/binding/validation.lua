@@ -4,13 +4,22 @@ local bounds = require("bounds")
 local descriptors = require("descriptors")
 local agent_trait = require("agent_trait")
 local protocol = require("protocol")
+local preferences = require("preferences")
+local mcp = require("mcp")
 local M = {}
 function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
-    for _, ref in ipairs(profile.active_traits or {}) do
+    local requested: {string} = {}
+    for _, ref in ipairs(profile.active_traits or {}) do requested[#requested + 1] = ref end
+    for _, ref in ipairs(profile.requestable or {}) do requested[#requested + 1] = ref end
+    for _, ref in ipairs(requested) do
+        local builtin = ref == mcp.APPLICATION_RUNTIME_TRAIT.id
+        for _, trait in ipairs(mcp.CONSENT_TRAITS) do if trait.id == ref then builtin = true end end
         local entry = pinned:get(ref)
-        if not entry then return "Trait unavailable: " .. ref end
-        local trait, err = agent_trait.registry(ref, entry)
-        if not trait then return err end
+        if not builtin then
+            if not entry then return "Trait unavailable: " .. ref end
+            local trait, err = agent_trait.registry(ref, entry)
+            if not trait then return err end
+        end
     end
     local definition = pinned:get(profile.definition_ref)
     local definition_data = definition and bounds.object(definition.data)
@@ -41,6 +50,33 @@ function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
             if not field then return "Unsupported provider field " .. name end
             local _, invalid = descriptors.decode_option(name, field, value)
             if invalid then return invalid end
+        end
+    end
+    return nil
+end
+function M.ceiling(pinned: registry.Snapshot, profile: protocol.Profile, parent: {string}?): string?
+    local definition = pinned:get(profile.definition_ref)
+    local definition_data = definition and bounds.object(definition.data)
+    local ref = definition_data and bounds.id(definition_data.policy_ref)
+    local entry = ref and pinned:get(ref)
+    local policy = entry and bounds.object(entry.data)
+    if not policy then return "Driver launch ceiling is unavailable" end
+    local selected, selection_error = protocol.preferences(profile)
+    if not selected then return selection_error end
+    local _, err = preferences.apply(policy, selected)
+    if err then return err end
+    local surface = bounds.object(policy.gateway_surface) or {}
+    local access = bounds.object(surface.access) or {}
+    local allowed: {[string]: boolean} = {}
+    for _, id in ipairs(bounds.ids(access.traits, true) or {}) do allowed[id] = true end
+    for _, raw in ipairs(bounds.array(surface.traits, 64) or {}) do
+        local trait = bounds.object(raw)
+        if trait and type(trait.id) == "string" then allowed[trait.id] = true end
+    end
+    for _, list in ipairs({profile.active_traits or {}, profile.requestable or {}}) do
+        for _, id in ipairs(list) do
+            if not allowed[id] then return "trait outside launch ceiling: " .. id end
+            if parent and not bounds.member(id, parent) then return "trait outside parent ceiling: " .. id end
         end
     end
     return nil

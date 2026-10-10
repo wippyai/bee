@@ -314,7 +314,7 @@ entries:
   kind: function.lua
   source: file://demand_test.lua
   method: run
-  modules: [registry, system, events, channel, time]
+  modules: [registry, system, events, channel, time, process]
   meta: {type: test, suite: bee, timeout: 15s}
   imports:
     test: wippy.test:test

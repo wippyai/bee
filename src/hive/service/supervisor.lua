@@ -231,7 +231,12 @@ local function main()
             end
         elseif selected.channel == demands then
             local message = selected.value
-            demand_owner.receive(demanded, tostring(message:from()), message:payload():data())
+            local data: unknown = message:payload():data()
+            if type(data) == "table" and data.action == "ready" and type(data.name) == "string" and demanded[data.name] then
+                ready(tostring(message:from()), data)
+            else
+                demand_owner.receive(demanded, tostring(message:from()), data)
+            end
         elseif selected.channel == supervised then
             demand_owner.update(demanded)
         elseif selected.channel == registry_changes then

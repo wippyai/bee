@@ -208,6 +208,17 @@ def owner_scheduling(src):
     path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
+def order_hive_readiness(src):
+    replace_once(src / "hive/service/supervisor.lua",
+                 '        if retry then cases[#cases + 1] = retry:case_receive() end',
+                 '''        local owner = demanded["bee.gateway.external"]
+        if owner and owner.state.phase ~= "absent"
+            and process.registry.lookup("bee.test.hive.demand_ready", process.registry.LOCAL) then
+            table.remove(cases, 2)
+        end
+        if retry then cases[#cases + 1] = retry:case_receive() end''')
+
+
 def hold_test_runner_quiet(src):
     replace_once(src / "node/service/tests.lua",
                  "if #waiting == 0 then assert(demand.quiet(tests.NAME, generation)) else sweep() end",
@@ -321,6 +332,7 @@ def main():
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
     owner_scheduling(src)
     hold_test_runner_quiet(src)
+    order_hive_readiness(src)
     hold_docker_cleanup(src)
     advance_committed_transition(src)
     observe_preparer_cleanup(src)

@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
+local process = require("process")
 local registry = require("registry")
 local protocol = require("protocol")
 local system = require("system")
@@ -30,6 +31,13 @@ local function define_tests()
                 if selected.channel == deadline then error("gateway does not stop: " .. tostring(owner.status) .. "/" .. tostring(owner.desired)) end
             end
             updates:close()
+        end)
+        test.it("serves a parked call when demand readiness precedes Hive readiness", function()
+            assert(process.registry.register("bee.test.hive.demand_ready"))
+            local reply, problem = protocol.call(assert(system.node.id()), "mcp.connect", {name = "invalid", workspace_id = "absent"}, "5s")
+            process.registry.unregister("bee.test.hive.demand_ready")
+            test.eq(problem, nil)
+            test.is_true(reply ~= nil and reply.ok)
         end)
         test.it("keeps installation and publication scopes separate", function()
             local count = 0

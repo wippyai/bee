@@ -140,13 +140,7 @@ local function decode_gateway_tools(data: {[string]: unknown}, ref: string): ({s
     table.sort(declared)
     return declared, nil
 end
--- access_surface is the gateway surface of a policy that offers the built-in
--- consent traits as access a person approves during a session. It is composed
--- from the launch's effective tools, after a saved profile narrowed them: a
--- consent tool the person's profile lists is a base tool the person already
--- chose, one the profile leaves out is not offered, and without a saved
--- profile each consent tool waits for the person's approval of its trait.
-local function access_surface(raw: unknown, tools: {string}, selected: boolean, seeds: {string}?, offered_traits: {string}?): ({[string]: unknown}?, string?)
+local function access_surface(raw: unknown, tools: {string}, seeds: {string}?): ({[string]: unknown}?, string?)
     local declared = bounds.object(raw)
     if not declared or bounds.fields(declared, {"policy", "traits"}) then return nil, "must be {policy, traits}" end
     local approver = bounds.id(declared.policy)
@@ -172,7 +166,7 @@ local function access_surface(raw: unknown, tools: {string}, selected: boolean, 
     local requested: {[string]: boolean} = {}
     for _, name in ipairs(tools) do
         local trait = gateway_protocol.CONSENT_TOOLS[name]
-        if trait and offered[trait] and (not selected or bounds.member(trait, seeds or {}) or bounds.member(trait, offered_traits or {})) then
+        if trait and offered[trait] then
             if not requested[trait] then requestable[#requestable + 1] = trait; requested[trait] = true end
         else base[#base + 1] = name end
     end
@@ -369,17 +363,19 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if data.gateway_surface ~= nil then
         local declared = bounds.object(data.gateway_surface)
         if not declared then return nil, ref .. ": gateway_surface must be an object" end
+        local encoded = json.encode(declared)
+        local copied, copy_error = json.decode(encoded or "")
+        gateway_surface = bounds.object(copied)
+        if not gateway_surface or copy_error then return nil, ref .. ": cannot copy gateway_surface" end
         if declared.base_tools == nil then
-            local synthesized, err = access_surface(declared.access, gateway_tools, selected ~= nil and selected.authority_grant_id ~= nil, selected and selected.active_traits or nil, selected and selected.requestable or nil)
+            local synthesized, err = access_surface(declared.access, gateway_tools, selected and selected.active_traits or nil)
             if not synthesized then return nil, ref .. ": gateway_surface: " .. tostring(err) end
-            gateway_surface = synthesized
-        else
-            local encoded = json.encode(declared)
-            local copied, err = json.decode(encoded or "")
-            gateway_surface = bounds.object(copied)
-            if not gateway_surface or err then return nil, ref .. ": cannot copy gateway_surface" end
-            if selected and selected.active_traits then gateway_surface.active_traits = selected.active_traits end
+            for key, value in pairs(synthesized) do
+                if gateway_surface[key] == nil then gateway_surface[key] = value end
+            end
+            gateway_surface.access = synthesized.access
         end
+        if selected and selected.active_traits then gateway_surface.active_traits = selected.active_traits end
         if selected and (selected.active_traits or selected.requestable) then
             local allowed: {string} = {}
             for _, id in ipairs(selected.active_traits or {}) do allowed[#allowed + 1] = id end

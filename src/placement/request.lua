@@ -17,6 +17,7 @@ M.MAX_GATEWAY_TOOLS = 32
 M.MAX_ENVIRONMENT = 64
 M.MAX_ARGV = 128
 M.MAX_ARGUMENT_BYTES = 16384
+M.MAX_ARGV_ITEM_BYTES = 65536
 M.MAX_STDIN_BYTES = 65536
 M.MAX_REQUIRED_FILES = 8
 M.MAX_REQUIRED_PATH_BYTES = 512
@@ -218,7 +219,7 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     local argv: {string} = {}
     if #raw_argv > M.MAX_ARGV then return nil, "launch.argv exceeds " .. tostring(M.MAX_ARGV) .. " items" end
     for index, item in ipairs(raw_argv) do
-        local argument = bounds.text(item, M.MAX_ARGUMENT_BYTES)
+        local argument = bounds.text(item, M.MAX_ARGV_ITEM_BYTES)
         if not argument or argument:find("\0", 1, true) then return nil, "launch.argv[" .. tostring(index) .. "] must be bounded text" end
         argv[index] = argument
     end

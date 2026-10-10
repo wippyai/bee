@@ -198,11 +198,10 @@ local function define_tests()
                 {options = {}, mcp_tools = {"thread_read"}, instructions = ""}))
             test.eq(table.concat(narrowed.gateway_tools, ","), "thread_read")
             test.is_nil((assert(narrowed.gateway_surface)).access)
-            -- A profile that lists them is the person's choice: they are base tools.
             local chosen = assert(policy.decode("test:policy", raw, nil,
                 {authority_grant_id = "profile-grant", options = {}, mcp_tools = {"thread_read", "app_tools"}, instructions = ""}))
-            test.eq(table.concat((assert(chosen.gateway_surface)).base_tools :: {string}, ","), "app_tools,thread_read")
-            test.is_nil((assert(chosen.gateway_surface)).access)
+            test.eq(table.concat((assert(chosen.gateway_surface)).base_tools :: {string}, ","), "thread_read")
+            test.eq(table.concat(((assert(chosen.gateway_surface)).access :: {traits: {string}}).traits, ","), "bee.app:tools")
             test.eq((assert(chosen.gateway_surface)).authority_grant_id,"profile-grant")
             local unreviewed = assert(policy.decode("test:policy",raw,nil,{options = {},mcp_tools = {"thread_read","app_tools"},instructions = ""}))
             test.eq(table.concat((assert(unreviewed.gateway_surface)).base_tools :: {string},","),"thread_read")

@@ -398,6 +398,9 @@ func runGatewayAt(url, authorization string) int {
 	if os.Getenv("BEE_FIXTURE_GATEWAY_APP_OPEN") != "" {
 		reportApplicationOpen(client, url, authorization, report)
 	}
+	if mode := os.Getenv("BEE_FIXTURE_SPEC_REGRESSION"); mode != "" {
+		reportSpecRegression(client, url, authorization, report, mode)
+	}
 	if profile := os.Getenv("BEE_FIXTURE_AGENT_SPEC"); profile != "" {
 		call := func(name string, args object, id int) object {
 			result := outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
@@ -492,6 +495,74 @@ func runGatewayAt(url, authorization string) int {
 	}
 	writeReport("gateway", report)
 	return 0
+}
+
+func reportSpecRegression(client *httpClient, url, authorization string, report object, mode string) {
+	call := func(name string, args object, id int) object {
+		reply := rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id)
+		if value := outcome(reply); value != nil {
+			return value
+		}
+		return object{"ok": false, "error": reply.body["error"], "status": reply.status}
+	}
+	read := call("session", object{"operation": "read"}, 100)
+	value := mustObject(read["value"])
+	context := mustObject(value["context"])
+	if context["from_parent"] == true {
+		if mode == "input_open" || mode == "input_run" {
+			for index, arg := range os.Args[3:] {
+				if arg == "--" && index+4 < len(os.Args) {
+					prompt := os.Args[index+4]
+					_, body, _ := strings.Cut(prompt, "\n")
+					value["initial_input_bytes"] = len(body)
+					value["initial_input_matches"] = body == strings.Repeat("x", 16384)
+				}
+			}
+		}
+
+		report["app_tools_denied"] = call("app_tools", object{}, 101)
+		value["offered_tools"] = report["tools"]
+		value["app_tools_denied"] = report["app_tools_denied"]
+		delete(value, "tools")
+		delete(value, "traits")
+		if mode == "context" {
+			selected := call("session", object{"operation": "select", "expected_revision": value["revision"], "active_traits": []string{}, "context": object{"experiment": "child-value"}}, 102)
+			value["dynamic_selection"] = selected["ok"]
+			value["dynamic_context"] = mustObject(mustObject(call("session", object{"operation": "read"}, 103)["value"])["context"])
+		}
+		encoded, _ := json.Marshal(read)
+		call("thread_message", object{"idempotency_key": "regression-read", "message_id": "regression-read", "message_kind": "notification", "content": object{"text": "spec-child:" + string(encoded)}}, 104)
+		return
+	}
+	delete(value, "tools")
+	delete(value, "traits")
+	report["parent_read"] = read
+	profile := context["child_profile"].(string)
+	overrides := object{"name": "Child", "role": "Review changes", "context": object{"from_parent": true, "project": "caller-project"}, "input": "Read your session context"}
+	if mode == "cleared" {
+		got := call("profile_get", object{"profile_id": context["parent_profile"]}, 105)
+		copied := mustObject(mustObject(got["value"])["profile"])
+		copied["active_traits"], copied["requestable"] = []string{}, []string{}
+		profile += "-cleared"
+		put := call("profile_put", object{"profile_id": profile, "expected_revision": 0, "idempotency_key": "clear-traits", "profile": copied}, 106)
+		report["put_ok"] = put["ok"]
+		report["put_error"] = put["error"]
+		return
+	} else {
+		overrides["traits"] = []string{}
+	}
+	method := "session_open"
+	if mode == "input_open" || mode == "input_run" {
+		overrides["input"] = strings.Repeat("x", 16384)
+		if mode == "input_run" {
+			method = "session_run"
+		}
+	}
+	opened := call(method, object{"spec": object{"definition": context["child_definition"], "profile": object{"id": profile, "revision": 1}, "overrides": overrides}, "operation_key": "regression:" + profile}, 107)
+	report["opened"] = opened
+	if receipt := mustObject(opened["value"]); receipt != nil {
+		report["child_get"] = call("session_get", object{"session": receipt["session"]}, 108)
+	}
 }
 
 // The scripted application-opening agent uses only the MCP surface delivered
@@ -712,6 +783,7 @@ func reportSpecAuthoring(client *httpClient, url, authorization string, report o
 	put := call("overlay", object{"operation": "put", "overlay_id": source, "expected_revision": 1,
 		"idempotency_key": "put-entries-" + source, "path": "entries.json", "content": string(entries)}, 53)
 	report["put_ok"] = put["ok"]
+	report["put_error"] = put["error"]
 	frozen := mustObject(call("overlay", object{"operation": "freeze", "overlay_id": source,
 		"expected_revision": 2, "idempotency_key": "freeze-" + source}, 54)["value"])
 	snapshot := frozen["digest"]

@@ -142,6 +142,33 @@ function M.source_identity(raw: unknown): Reply
     return succeed({session = actor, thread_id = value.thread_ref, workspace_id = workspace})
 end
 
+local function normalize_spec(raw: unknown, input: unknown): (Object?, unknown, string?)
+    local spec = object(raw)
+    if not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "overrides"}) then
+        return nil, nil, "open requires a definition, optional profile/workdir/workspace, and operation_key"
+    end
+    local overrides, err = profile_values.overrides(spec.overrides)
+    if not overrides then return nil, nil, err or "invalid spawn overrides" end
+    if overrides.workdir and spec.workdir ~= nil then return nil, nil, "workdir is specified twice" end
+    if overrides.workspace and spec.workspace ~= nil then return nil, nil, "workspace is specified twice" end
+    if overrides.input ~= nil then
+        if input ~= nil then return nil, nil, "input is specified twice" end
+        input = overrides.input
+    end
+    local copied: Object = {}
+    for name, value in pairs(spec) do copied[name] = value end
+    copied.workdir = overrides.workdir or spec.workdir
+    copied.workspace = overrides.workspace or spec.workspace
+    if spec.overrides ~= nil then
+        local normalized: Object = {}
+        for name, value in pairs(overrides) do
+            if name ~= "workspace" and name ~= "workdir" and name ~= "input" then normalized[name] = value end
+        end
+        copied.overrides = normalized
+    end
+    return copied, input, nil
+end
+
 -- open starts a session: the agent's own program runs in a terminal that
 -- Bee keeps whether or not anyone watches it. Messages are typed into it;
 -- the person opens its terminal from Sessions.
@@ -149,24 +176,9 @@ function M.open(raw_request: unknown): Reply
     local request, refused = request_input(raw_request)
     if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
-    local spec = object(request.spec)
-    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "overrides"}) then
-        return fail("INVALID", "open requires a definition, optional profile/workdir/workspace, and operation_key", operation_key)
-    end
-    local copied: Object = {}
-    for name, value in pairs(spec) do copied[name] = value end
-    spec = copied
-    local overrides, override_error = profile_values.overrides(spec.overrides)
-    if not overrides then return fail("INVALID", override_error or "invalid spawn overrides", operation_key) end
-    if overrides.workdir and spec.workdir ~= nil then return fail("INVALID", "workdir is specified twice", operation_key) end
-    if overrides.workspace and spec.workspace ~= nil then return fail("INVALID", "workspace is specified twice", operation_key) end
-    spec.workdir = overrides.workdir or spec.workdir
-    spec.workspace = overrides.workspace or spec.workspace
-    if spec.overrides ~= nil then
-        local normalized: {[string]: unknown} = {}
-        for key, value in pairs(overrides) do if key ~= "workspace" and key ~= "workdir" then normalized[key] = value end end
-        spec.overrides = normalized
-    end
+    if not operation_key then return fail("INVALID", "open requires operation_key", nil) end
+    local spec, first_input, spec_error = normalize_spec(request.spec, nil)
+    if not spec then return fail("INVALID", spec_error or "invalid spawn specification", operation_key) end
     local definition = ref(spec.definition)
     if not definition then return fail("INVALID", "definition is not a ref", operation_key) end
     local profile = object(spec.profile)
@@ -196,7 +208,7 @@ function M.open(raw_request: unknown): Reply
             if not actor then return unavailable(tostring(actor_error), operation_key) end
             local executor, executor_error = funcs.new():with_actor(actor)
             if not executor then return unavailable(tostring(executor_error), operation_key) end
-            local raw, call_error = executor:call("bee.threads.sessions.binding:open", {spec = {definition = definition, profile = profile, workdir = workdir, overrides = spec.overrides}, operation_key = operation_key})
+            local raw, call_error = executor:call("bee.threads.sessions.binding:open", request)
             if call_error then return unavailable(tostring(call_error), operation_key) end
             local reply = object(raw)
             if not reply or type(reply.ok) ~= "boolean" then return unavailable("cross-workspace owner returned a malformed reply", operation_key) end
@@ -218,8 +230,8 @@ function M.open(raw_request: unknown): Reply
     if not session or not receipt then return unavailable("the session's terminal omitted its session", operation_key) end
     local current, err = describe(session)
     if not current then return unavailable(err or "session snapshot unavailable", operation_key) end
-    if overrides.input ~= nil then
-        local sent = M.send({session = session, input = overrides.input, operation_key = "open-input:" .. assert(hash.sha256(operation_key))})
+    if first_input ~= nil then
+        local sent = M.send({session = session, input = first_input, operation_key = "open-input:" .. assert(hash.sha256(operation_key))})
         if not sent.ok then return sent end
     end
     return succeed({session = session, operation = receipt.operation, snapshot = current})
@@ -1288,20 +1300,8 @@ function M.run(raw_request: unknown): Reply
     if not operation_key then return fail("INVALID", "run requires operation_key", nil) end
     local digest, hash_error = hash.sha256("bee.sessions.run.session\n" .. operation_key)
     if not digest then return unavailable("cannot derive the run session key: " .. tostring(hash_error), operation_key) end
-    local spec = object(input.spec)
-    local overrides, override_error = profile_values.overrides(spec and spec.overrides)
-    if not overrides then return fail("INVALID", override_error or "invalid spawn overrides", operation_key) end
-    local first_input = input.input
-    if overrides and overrides.input ~= nil then
-        if first_input ~= nil then return fail("INVALID", "input is specified twice", operation_key) end
-        first_input = overrides.input
-        local normalized: Object = {}
-        for name, value in pairs(overrides) do if name ~= "input" then normalized[name] = value end end
-        local copied: Object = {}
-        for name, value in pairs(spec or {}) do copied[name] = value end
-        copied.overrides = normalized
-        spec = copied
-    end
+    local spec, first_input, spec_error = normalize_spec(input.spec, input.input)
+    if not spec then return fail("INVALID", spec_error or "invalid spawn specification", operation_key) end
     if first_input == nil then return fail("INVALID", "run requires input", operation_key) end
     local opened = M.open({spec = spec, operation_key = "run-session:" .. digest})
     if not opened.ok then return opened end

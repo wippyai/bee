@@ -685,7 +685,7 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
         local sender_kind = origin and "session" or caller:match("^bs:") and "session" or "principal"
         local sender_id = origin and tostring(origin.session) or caller
         local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "work.queued", work_ref, 1,
-            {session = session_ref, input_digest = input_digest, output_schema = output_schema, input = input.input,
+            {session = session_ref, input_digest = input_digest, output_schema = output_schema,
                 sender = {kind = sender_kind, id = sender_id}})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append work event") end
         if origin and peer_context then
@@ -1069,6 +1069,15 @@ function M.feed_read(db: sql.DB, actor: string, request: unknown): Result
             if not event_id or not sequence or not encoded or not committed_at then return failure("INTERNAL", "session feed row is corrupt") end
             local payload, observed_at, payload_error = extension_payload(encoded)
             if not payload then return failure("INTERNAL", payload_error or "decode session event") end
+            if payload.kind == "work.queued" then
+                local work, work_error = journal.work(tx, tostring(payload.subject), session.workspace_id)
+                if not work then return transaction.storage_failure(work_error or "session event work is missing") end
+                local input_value, input_error = decode_json(work.input_json)
+                if input_error then return failure("INTERNAL", input_error) end
+                local detail = object(payload.data)
+                if not detail then return failure("INTERNAL", "session event data is corrupt") end
+                detail.input = input_value
+            end
             events[#events + 1] = {owner = "threads", id = event_id, schema = "bee.sessions.event@1", sequence = sequence,
                 recorded_at = committed_at, observed_at = observed_at,
                 session_ref = payload.session_ref, kind = payload.kind, subject = payload.subject, revision = payload.revision,

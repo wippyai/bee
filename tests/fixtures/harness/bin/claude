@@ -68,9 +68,9 @@ if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   trap 'gateway_stopping=1' TERM
   gateway_status=0
   if [ "${BEE_FIXTURE_REPORT_STREAM:-}" = "1" ]; then
-    "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" || gateway_status=$?
+    "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" "$@" || gateway_status=$?
   else
-    "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" >&2 || gateway_status=$?
+    "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" "$@" >&2 || gateway_status=$?
   fi
   trap - TERM
   if [ -n "$gateway_stopping" ] || [ "$gateway_status" -eq 143 ]; then exit 143; fi

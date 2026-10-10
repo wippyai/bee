@@ -97,7 +97,7 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
     if extra then return nil, (bounds.text(options.unknown_prefix, 64) or "") .. extra end
     local profile_id = bounds.member(object.profile_id, assert(bounds.ids(options.profiles, true)))
     if not profile_id then return nil, "profile_id is not one Bee admits" end
-    local brief = bounds.text(object.brief)
+    local brief = bounds.text(object.brief, profile_id == "window" and 65536 or bounds.MAX_TEXT_BYTES)
     if not brief or (brief == "" and profile_id ~= "window") then return nil, "brief must be nonempty bounded text" end
     local request: Request = {profile_id = profile_id, brief = brief}
     for name, raw_spec in pairs(declared_fields) do

@@ -19,8 +19,8 @@ type Client = {
     states: {[string]: sync.State}, refreshes: {[string]: integer}, call: Call,
     invoke: (Client, string, unknown) -> model.Reply?,
 }
-local function failure(code: string, message: string): model.Reply
-    return {kind = "failure", code = code, message = message, replayed = false}
+local function failure(code: string, message: string, purged: boolean?): model.Reply
+    return {kind = "failure", code = code, message = message, replayed = false, purged = purged}
 end
 local function view_for(self: Client, source: Source, raw: unknown, addresses: AddressBook?): (ApprovalView?, string?)
     local decoded, err = model.decode_view(raw)
@@ -59,8 +59,10 @@ local function fault_code(reply: model.Reply): string?
     return nil
 end
 local function reject_source(self: Client, source: Source, reply: model.Reply): model.Reply
-    local code = fault_code(reply)
-    if code == "RESET_REQUIRED" or code == "DENIED" then purge_source(self, source) end
+    if reply.kind ~= "success" and (reply.code == "RESET_REQUIRED" or reply.code == "DENIED") then
+        purge_source(self, source)
+        reply.purged = true
+    end
     return reply
 end
 local function decode_event_payload(value: unknown): (unknown?, string?)
@@ -90,27 +92,27 @@ local function snapshot(self: Client, source: Source): model.Reply
         local page, decode_error = sync.snapshot(reply.value, source.node_id, source.feed, model.decode_view)
         if not page then
             purge_source(self, source)
-            return failure("RESET_REQUIRED", decode_error or "invalid snapshot")
+            return failure("UNAVAILABLE", decode_error or "invalid snapshot", true)
         end
         for _, item in ipairs(page.items) do
             if item.tombstone then
                 if item.value ~= nil then
                     purge_source(self, source)
-                    return failure("RESET_REQUIRED", "approval tombstone has a value")
+                    return failure("UNAVAILABLE", "approval tombstone has a value", true)
                 end
             else
                 local body = model.decode_view(item.value)
                 if not body or body.owner_node ~= source.node_id or body.workspace_id ~= source.workspace_id
                 or body.approval_id ~= item.key or body.revision ~= item.revision then
                     purge_source(self, source)
-                    return failure("RESET_REQUIRED", "approval snapshot identity mismatch")
+                    return failure("UNAVAILABLE", "approval snapshot identity mismatch", true)
                 end
             end
         end
         local changed, fold_error = sync.apply_snapshot(next_state, page)
         if changed == nil then
             purge_source(self, source)
-            return failure("RESET_REQUIRED", fold_error or "snapshot changed")
+            return failure("UNAVAILABLE", fold_error or "snapshot changed", true)
         end
         if page.complete then
             local changes: {{seq: integer, request: ApprovalView}} = {}
@@ -191,11 +193,10 @@ local function catchup(self: Client, source: Source, state: sync.State): Catchup
 end
 local function reset_and_snapshot(self: Client, source: Source): model.Reply
     purge_source(self, source)
-    local rebuilt = snapshot(self, source)
-    if rebuilt.kind == "success" or fault_code(rebuilt) == "DENIED" then return rebuilt end
-    -- The old cache has already lost its scope. Tell the model to remove it
-    -- even when the fresh snapshot is temporarily unavailable.
-    return failure("RESET_REQUIRED", "approval feed reset; fresh snapshot is unavailable")
+    local rebuilt: model.Reply = snapshot(self, source)
+    if rebuilt.kind == "success" then return rebuilt end
+    rebuilt.purged = true
+    return rebuilt
 end
 local function refresh(self: Client, source: Source): model.Reply
     local state = self.states[source.id]

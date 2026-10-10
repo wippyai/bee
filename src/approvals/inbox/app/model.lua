@@ -41,10 +41,10 @@ type ApprovalView = {window_grant: windows.Grant?, allowed_by_grant: string?, wi
 }
 type Reply =
     {kind: "success", value: unknown, replayed: boolean?} |
-    {kind: "failure", code: string, message: string, retryable: boolean?, replayed: boolean?} |
-    {kind: "reset", code: "RESET_REQUIRED", message: string, oldest_seq: integer, retryable: boolean?, replayed: boolean?} |
-    {kind: "conflict", code: "CONFLICT", message: string, request: ApprovalView, retryable: boolean?, replayed: boolean?} |
-    {kind: "settled", code: "INVALID_STATE", message: string, request: ApprovalView, retryable: boolean?, replayed: boolean?}
+    {kind: "failure", code: string, message: string, retryable: boolean?, replayed: boolean?, purged: boolean?} |
+    {kind: "reset", code: "RESET_REQUIRED", message: string, oldest_seq: integer, retryable: boolean?, replayed: boolean?, purged: boolean?} |
+    {kind: "conflict", code: "CONFLICT", message: string, request: ApprovalView, retryable: boolean?, replayed: boolean?, purged: boolean?} |
+    {kind: "settled", code: "INVALID_STATE", message: string, request: ApprovalView, retryable: boolean?, replayed: boolean?, purged: boolean?}
 -- A row is the viewer's summary of one request at the revision last seen.
 type Row = {
     approval_id: string,
@@ -428,7 +428,7 @@ function M.apply_inbox(state: State, workspace: string, reply: Reply): boolean
     state.resyncing[workspace] = nil
     if reply.kind ~= "success" then
         local code, message = fault_details(reply)
-        if code == "DENIED" or code == "RESET_REQUIRED" then
+        if reply.purged or code == "DENIED" or code == "RESET_REQUIRED" then
             for key, row in pairs(state.rows) do
                 if row.workspace_id == workspace then
                     state.rows[key] = nil

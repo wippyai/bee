@@ -1473,6 +1473,8 @@ local function op_inbox(tx: sql.Transaction, actor: string, object: Object, now:
     local limit = bounds.integer(object.limit == nil and M.MAX_INBOX or object.limit)
     if not limit or limit < 1 or limit > M.MAX_INBOX then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(M.MAX_INBOX)) end
     if not security.can(M.DECIDE, workspace_id) then return failure("DENIED", "caller may not read the inbox of workspace " .. workspace_id) end
+    local owner, node_error = node()
+    if not owner then return failure("UNAVAILABLE", node_error or "native node identity is unavailable") end
     local raw_oldest, oldest_error = store.oldest_inbox(tx, workspace_id)
     if oldest_error then return storage("read inbox") end
     local oldest_seq = raw_oldest == nil and nil or integer(raw_oldest)
@@ -1494,7 +1496,7 @@ local function op_inbox(tx: sql.Transaction, actor: string, object: Object, now:
         next_seq = sequence
         local row, load_error = load(tx, approval_id)
         if load_error then return storage(load_error) end
-        if row then
+        if row and row.owner_node == owner then
             local visible, policy_error = eligible(actor, row)
             if policy_error then return storage(policy_error) end
             if visible then changes[#changes + 1] = {seq = sequence, approval_id = approval_id, revision = row.revision, at = at, request = M.view(row)} end
@@ -1553,7 +1555,7 @@ local function op_feed_snapshot(tx: sql.Transaction, actor: string, object: Obje
         (object.expected_scope_revision ~= nil and object.expected_scope_revision ~= scope) then
         return failure("RESET_REQUIRED", "snapshot changed; restart from its first page")
     end
-    local rows, err = store.snapshot(tx, workspace, after, fetch_limit)
+    local rows, err = store.snapshot(tx, owner, workspace, after, fetch_limit)
     if err or not rows then return storage("read approval snapshot") end
     local items: {Object} = {}
     local next_key: string? = nil

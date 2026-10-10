@@ -145,7 +145,29 @@ local function define_tests()
             end
             test.eq(previous, #ids)
         end)
-        test.it("purges an invalid initial identity and resynchronizes from a fresh snapshot", function()
+        test.it("stops rebuilding a permanently inconsistent snapshot and exposes its failure", function()
+            local configured = assert(source_config.configure("node-a", {"ws"}))
+            local snapshots = 0
+            local client = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
+                snapshots = snapshots + 1
+                local item = view(1)
+                item.owner_node = "previous-owner"
+                return snapshot(source, {projection(source, item, 1)}), nil
+            end)
+            local state = model.new({"ws"})
+            local more = true
+            for page_number = 1, 8 do
+                if not more then break end
+                more = model.apply_inbox(state, "ws", assert(client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})))
+            end
+            test.eq(snapshots, 1)
+            test.is_false(more)
+            test.is_nil(state.resyncing.ws)
+            test.is_true(tostring(state.unavailable.ws):find("approval snapshot identity mismatch", 1, true) ~= nil)
+            test.is_nil(client.states.ws)
+            test.is_nil(next(state.rows))
+        end)
+        test.it("exposes an invalid initial identity and accepts a later explicit refresh", function()
             local configured = assert(source_config.configure("node-a", {"ws"}))
             local snapshots = 0
             local client = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
@@ -158,15 +180,58 @@ local function define_tests()
             end)
             local state = model.new({"ws"})
             local first = assert(client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"}))
-            test.eq(reply_code(first), "RESET_REQUIRED")
+            test.eq(reply_code(first), "UNAVAILABLE")
+            test.is_true(first.kind ~= "success" and first.purged)
             test.is_nil(client.states.ws)
-            test.is_true(model.apply_inbox(state, "ws", first))
-            test.is_nil(state.unavailable.ws)
+            test.is_false(model.apply_inbox(state, "ws", first))
+            test.not_nil(state.unavailable.ws)
+            test.is_nil(state.resyncing.ws)
             local second = assert(client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"}))
             test.eq(second.kind, "success")
             test.is_false(model.apply_inbox(state, "ws", second))
             test.not_nil(state.rows["approval-a"])
             test.eq(snapshots, 2)
+        end)
+        test.it("rebuilds once after a reset and exposes the failure until the next normal refresh", function()
+            local snapshots, reads = 0, 0
+            local client = feeds.new(assert(source_config.configure("node-a", {"ws"})),
+                function(source: Source, target: string, request: unknown): (unknown, string?)
+                    if target == "bee.approvals.binding:feed_snapshot" then
+                        snapshots = snapshots + 1
+                        if snapshots == 1 then return snapshot(source, {projection(source, view(1), 1)}), nil end
+                        return {ok = false, error = {code = "STORAGE", message = "approval projection has no valid ledger position"}}, nil
+                    end
+                    reads = reads + 1
+                    return {ok = false, error = {code = "RESET_REQUIRED", message = "scope changed"}}, nil
+                end)
+            local state = model.new({"ws"})
+            model.apply_inbox(state, "ws", assert(client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})))
+            test.not_nil(state.rows["approval-a"])
+            model.select(state, "approval-a")
+            model.apply_read(state, "approval-a", {kind = "success", value = view(1)})
+            test.not_nil(state.detail)
+            local more = true
+            for page_number = 1, 8 do
+                if not more then break end
+                local failed = assert(client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"}))
+                test.is_true(failed.kind ~= "success" and failed.purged)
+                more = model.apply_inbox(state, "ws", failed)
+            end
+            test.eq(snapshots, 2)
+            test.eq(reads, 1)
+            test.is_false(more)
+            test.eq(state.unavailable.ws, "STORAGE: approval projection has no valid ledger position")
+            test.is_nil(state.rows["approval-a"])
+            test.is_nil(state.selected)
+            test.is_nil(state.detail)
+            test.is_nil(state.resyncing.ws)
+            test.is_nil(client.states.ws)
+            test.is_nil(next(client.addresses))
+            local next_refresh = assert(client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"}))
+            test.eq(reply_code(next_refresh), "STORAGE")
+            test.is_false(model.apply_inbox(state, "ws", next_refresh))
+            test.eq(snapshots, 3)
+            test.eq(reads, 1)
         end)
         test.it("rejects malformed approval projections and malformed feed pages", function()
             local configured = assert(source_config.configure("node-a", {"ws"}))
@@ -177,7 +242,7 @@ local function define_tests()
             end)
             local bad_snapshot = invalid_view:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             test.eq(bad_snapshot and bad_snapshot.kind, "failure")
-            test.eq(reply_code(bad_snapshot), "RESET_REQUIRED")
+            test.eq(reply_code(bad_snapshot), "UNAVAILABLE")
 
             local snapshot_count = 0
             local malformed_page = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)

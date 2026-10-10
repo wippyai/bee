@@ -126,10 +126,10 @@ function M.inbox_head(tx: sql.Transaction): (unknown?, boolean, string?)
     return values.seq, true, nil
 end
 
-function M.snapshot(tx: sql.Transaction, workspace_id: string, after_key: string, limit: integer): ({unknown}?, string?)
+function M.snapshot(tx: sql.Transaction, owner_node: string, workspace_id: string, after_key: string, limit: integer): ({unknown}?, string?)
     return query(tx, [[SELECT r.*, (SELECT MAX(i.seq) FROM bee_approval_inbox i WHERE i.approval_id = r.approval_id) AS last_sequence
-        FROM bee_approval_requests r WHERE r.workspace_id = ? AND r.approval_id > ? ORDER BY r.approval_id LIMIT ?]],
-        {workspace_id, after_key, limit})
+        FROM bee_approval_requests r WHERE r.owner_node = ? AND r.workspace_id = ? AND r.approval_id > ? ORDER BY r.approval_id LIMIT ?]],
+        {owner_node, workspace_id, after_key, limit})
 end
 
 function M.list(tx: sql.Transaction, requester_id: string, workspace_id: string?, limit: integer): ({unknown}?, string?)

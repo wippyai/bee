@@ -433,6 +433,38 @@ local function define_tests()
             local pid = process.registry.lookup(service.AUTHORITY_NAME)
             test.eq(pid ~= nil, true)
         end)
+        test.it("scopes restored approval snapshots and catch-up to their native owner with or without authority rows", function()
+            local db = open_test_store()
+            local workspace = "ws-restored-" .. key()
+            local old = executed(service.execute(db, REQUESTER, "request", request_of(workspace), nil, requester))
+            local current = executed(service.execute(db, REQUESTER, "request", request_of(workspace), nil, requester))
+            assert(db:execute("UPDATE bee_approval_requests SET owner_node = ? WHERE approval_id = ?", {"previous-owner", old.approval_id}))
+            local authorities = assert(db:query("SELECT owner_node, incarnation, established_at FROM bee_approval_authority"))
+            for _, omitted in ipairs({false, true}) do
+                if omitted then assert(db:execute("DELETE FROM bee_approval_authority")) end
+                local snapshot = executed(service.execute(db, ALICE, "feed_snapshot", {workspace_id = workspace}, nil, nil))
+                local page = executed(service.execute(db, ALICE, "feed_read_after", {workspace_id = workspace, cursor = 0,
+                    expected_scope_revision = snapshot.scope_revision}, nil, nil))
+                if omitted then
+                    for _, authority in ipairs(authorities) do
+                        assert(db:execute("INSERT INTO bee_approval_authority(owner_node, incarnation, established_at) VALUES (?, ?, ?)",
+                            {authority.owner_node, authority.incarnation, authority.established_at}))
+                    end
+                end
+                local items, events = principals.objects(snapshot.items), principals.objects(page.events)
+                test.eq(#items, 1)
+                test.eq(items[1].key, current.approval_id)
+                test.eq(#events, 1)
+                test.eq(events[1].projection_key, current.approval_id)
+                test.eq(snapshot.complete, true)
+                test.eq(page.more, false)
+            end
+            assert(db:execute("DELETE FROM bee_approval_inbox WHERE approval_id = ?", {current.approval_id}))
+            local missing = service.execute(db, ALICE, "feed_snapshot", {workspace_id = workspace}, nil, nil)
+            test.eq(missing.ok, false)
+            test.eq(missing.code, "STORAGE")
+            db:release()
+        end)
         test.it("fails closed on a corrupt authority incarnation for requests and restart", function()
             local store = open_test_store()
             local owner_node, node_error = service.node()

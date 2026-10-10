@@ -32,11 +32,18 @@ refuses another workspace).
 
 ## Operations
 
-- `open{spec = {definition, profile?, workdir?, workspace?}, operation_key}` admits a launch definition (and optional saved profile `{id, revision}`) and returns `{session, operation, snapshot}`. `workdir` is `{root_ref, path}` with the path inside the root.
-- `run` opens a session and queues its first work in one operation.
+- `open{spec = {definition, profile?, workdir?, workspace?, overrides?}, operation_key}` admits a launch definition (and optional saved profile `{id, revision}`) and returns `{session, operation, snapshot}`. `workdir` is `{root_ref, path}` with the path inside the root.
+- `run{spec, input?, output?, operation_key}` opens a session and queues its first work in one operation. Supply input either at the top level or in `spec.overrides`, never both.
 - `send{session, input, output?, operation_key}` queues work and returns its receipt. The agent replies in text, so `output` is `bee:Text@1` or absent. A session whose lifecycle is not `active` or `suspended` refuses work.
 - `await`, `join`, `get`, `list`, `history`, `cancel`, `close` as described under the client below.
 - A snapshot carries lifecycle (`opening`, `active`, `suspended`, `closing`, `closed`), activity (`idle`, `working`, `blocked`, `stalled`), `activity_evidence` for a quiet stall, the thread ref, workspace, driver, definition, the effective profile with its digest and the last result summary.
+
+`overrides = {name?, role?, traits?, context?, workdir?, workspace?, input?}` is
+shared by the owner, MCP `session_open` / `session_run`, and Lua client. It
+narrows the profile and launch trait ceilings and inherits the spawning parent's
+ceiling. Context is a bounded scalar map with `bee.*` keys reserved; profile and
+spawn context reach the agent through the gateway's fixed context and session
+read. Gated traits require the person's consent. See `docs/session_traits`.
 
 Refs are qualified strings: `bs:` session, `bw:` work, `bo:` operation, `bj:` join. They are the only addresses. Every mutation requires an explicit `operation_key`; reusing a key with different arguments conflicts. Handles send `expected_incarnation`; a mismatch fails `STALE`.
 
@@ -55,7 +62,7 @@ local closing = s:close{operation_key = "close/worker"}
 local c = sessions.call{definition = "research:quick", input = "Summarize the repository", operation_key = "call/summary"}
 ```
 
-- `open{definition, profile?, workdir?, workspace?, operation_key}` returns a Session; `call{... input, output?, timeout_ms?, operation_key}` opens one and sends its first work, then awaits it once, returning `{work, observation}`.
+- `open{definition, profile?, workdir?, workspace?, overrides?, operation_key}` returns a Session; `run{...}` returns the first Work; `call{... input, output?, timeout_ms?, operation_key}` opens one and sends its first work, then awaits it once, returning `{work, observation}`.
 - `send`, `cancel{work, reason?, operation_key}` and `close{session, operation_key}` also exist on the handles; cancel and close return an Operation whose `await` reports the stop, or an uncertain evidence branch.
 - `await{subject, timeout_ms?}`, `work:await` and `operation:await` wait up to `timeout_ms` (default 30000, at most 60000) and return the observation (`ready`, `pending`, `blocked` or `uncertain`). The timeout bounds observation, never execution.
 - `join{works, policy?, quorum?, timeout_ms?, operation_key}` takes 1 to 64 works; `policy` is `all_success` (default), `all_settled`, `first_success` or `quorum`. It returns every child's observation in input order.

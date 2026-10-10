@@ -1,4 +1,46 @@
-# Build an app that listens to a session
+# Agent profiles, traits and context
+
+A saved `bee.agent-profile@3` has `name`, optional `role` (256 bytes),
+`active_traits`, `requestable`, and `context`, alongside its driver, provider,
+Bee permissions and placement choices. Each trait list holds at most 16 IDs.
+Context holds at most 24 printable keys (128 bytes each), scalar string, finite
+number or boolean values, and 8192 encoded bytes. Keys beginning `bee.` belong
+to the host and are refused in profiles and spawn overrides.
+
+Sessions `open` and `run`, MCP `session_open` and `session_run`, and the Lua
+Sessions client accept the same optional
+`overrides = {name?, role?, traits?, context?, workdir?, workspace?, input?}`.
+The owner and MCP take it inside `spec`; the Lua client takes it beside
+`definition` and `profile`. A profile reference is `{id, revision}`.
+`traits` replaces the initial selection, including an empty list to select none.
+It must fit the saved profile's active plus requestable traits, the launch policy,
+and the spawning parent's admitted trait ceiling. Refusals name the trait.
+A person saving an active built-in consent trait approves it for that saved
+revision. Launches reuse that live grant without asking again. Agent writes
+carry delegated provenance and still ask through Needs you. Application
+extension traits still require approval of their exact revision, listens and
+hooks. `requestable` controls what an agent may ask for later.
+Legacy saved MCP consent-tool choices migrate to active consent traits in
+storage; launch uses those explicit selections.
+
+Profile context and override context compose into the session's fixed context;
+overrides replace matching profile keys and host values win. MCP
+`session {operation = "read"}` returns the composed context. Name and role
+appear in the Agents list, Sessions catalog and thread title.
+
+Agents use `profile_list {after_key?, expected_cursor?, limit?, definition_ref?, query?, sort?}`, `profile_get {profile_id}`, and
+`profile_put {profile_id, expected_revision, idempotency_key, profile}` in their
+bound workspace. Put uses the existing profiles contract's compare-and-swap
+owner and delegated profile grant. Driver and parent ceilings still apply;
+saving a gated trait cannot activate it. The editor offers Role, trait choices
+(active, requestable or off, with gated traits marked "asks you"), and scalar
+Context rows. Opening an agent also accepts a name, role and folder.
+
+Launch policies declare gateway tools, trait access and fixed context through
+`gateway_surface`. An access declaration inside that surface is normalized with
+the host's tools; the former `gateway_access` policy field is refused.
+
+## Build an app that listens to a session
 
 Ship an ordinary `agent.trait` registry entry with `meta.application_ref` naming
 your installed app. For example:

@@ -219,13 +219,10 @@ M.APPLICATION_SHARE_TRAIT_ID = "bee.app:share"
 M.CONSENT_TOOLS = {app_tools = M.APPLICATION_TOOLS_TRAIT_ID, publish = M.APPLICATION_SHARE_TRAIT_ID,
     components = M.HUB_LIBRARY_TRAIT_ID, install_request = M.HUB_LIBRARY_TRAIT_ID,
     uninstall_request = M.HUB_LIBRARY_TRAIT_ID, install_status = M.HUB_LIBRARY_TRAIT_ID}
--- access_traits names the traits a launch policy's data offers as requestable
--- access: its own gateway_access, or the access of the surface it declares.
 function M.access_traits(policy_data: unknown): {string}
     local data = bounds.object(policy_data)
     local declared_surface = data and bounds.object(data.gateway_surface) or nil
-    local access = data and bounds.object(data.gateway_access) or nil
-    if not access and declared_surface then access = bounds.object(declared_surface.access) end
+    local access = declared_surface and bounds.object(declared_surface.access) or nil
     return access and bounds.ids(access.traits, true) or {}
 end
 -- offered_tools is the gateway tool list a launch hands its child. With the

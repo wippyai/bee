@@ -44,8 +44,6 @@ entries:
     bounds: bee.values:bounds
 - name: configuration_policy
   kind: security.policy.expr
-  meta:
-    comment: Read only the descriptor that declares this configuration renderer
   policy:
     effect: allow
     actions:

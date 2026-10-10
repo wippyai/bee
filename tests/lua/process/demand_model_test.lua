@@ -30,15 +30,16 @@ local function run(trace: Trace, initially_running: boolean, deferred: boolean?)
     end
     local requests = 0
     local wake_generation = 0
+    local delivered: {[string]: boolean} = {}
+    local accepted: {[string]: boolean} = {}
+    local delivered_count, observed_messages = 0, 0
     local function request()
         requests = requests + 1
         owner.wake(owners, NAME, {caller = "caller", data = {request_id = tostring(requests)}})
     end
     local function check()
-        local delivered: {[string]: boolean} = {}
-        local count = 0
-        local accepted: {[string]: boolean} = {}
-        for _, message in ipairs(runtime.messages) do
+        for index = observed_messages + 1, #runtime.messages do
+            local message = runtime.messages[index]
             if message.topic == demand.ACCEPTED then
                 local receipt = message.data
                 assert(type(receipt) == "table" and type(receipt.request_id) == "string")
@@ -50,13 +51,14 @@ local function run(trace: Trace, initially_running: boolean, deferred: boolean?)
                 for _, entry in ipairs(payload.requests) do
                     local id = entry.data.request_id
                     assert(type(id) == "string" and not delivered[id], "duplicate delivery")
-                    delivered[id], count = true, count + 1
+                    delivered[id], delivered_count = true, delivered_count + 1
                 end
             end
         end
+        observed_messages = #runtime.messages
         for id in pairs(delivered) do assert(accepted[id], "delivery not acknowledged") end
         for id in pairs(accepted) do assert(delivered[id], "acknowledged without delivery") end
-        assert(count + #owners[NAME].queue == requests, "request disappeared")
+        assert(delivered_count + #owners[NAME].queue == requests, "request disappeared")
         assert(runtime.outstanding <= 1, "multiple starts outstanding")
     end
     for _, event in ipairs(trace) do

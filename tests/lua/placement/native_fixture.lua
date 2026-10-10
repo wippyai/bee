@@ -325,7 +325,7 @@ end
 local function provider_configuration_digest(policy_ref: string?): string
     local policy = assert(bounds.object(assert(registry.get(policy_ref or POLICY)).data))
     local descriptor = assert(profile_values.schema("bee.driver.codex.binding:binding"))
-    local effective = assert(preferences.apply(policy, {}, descriptor))
+    local effective = assert(preferences.apply(policy, nil, descriptor))
     local provider_ref = bounds.id(effective.provider_ref)
     local provider = provider_ref and assert(registry.get(provider_ref)) or nil
     local digest, digest_error = configuration_protocol.digest("bee.driver.codex.binding:binding", {

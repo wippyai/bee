@@ -316,8 +316,7 @@ local function measure(request: Request): (Measured?, string?)
             if invalid then return nil, invalid end
         end
     end
-    local configure_target = binding.methods.configure
-    if not configure_target then return nil, "binding " .. request.binding_ref .. " binds no configure" end
+    if not binding.methods.configure then return nil, "binding " .. request.binding_ref .. " binds no configure" end
     local provider_entry: Object? = nil
     if launch_policy.provider_ref then
         provider_entry = catalog.entry(pinned, launch_policy.provider_ref)

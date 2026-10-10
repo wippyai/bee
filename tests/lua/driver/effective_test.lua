@@ -42,7 +42,7 @@ local function define_tests()
                 local applied = assert(effective.apply({}, saved, cli))
                 local options = assert(bounds.object(applied.prepare_options))
                 options.profile_id, options.brief = "batch", "Fixture"
-            options.option_provenance = applied.option_provenance
+                options.option_provenance = applied.option_provenance
                 local reply = assert(bounds.object(universal.prepare(ref)(options)))
                 assert(reply.ok == true, driver .. ": " .. tostring(reply.error))
             end

@@ -118,24 +118,24 @@ function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profil
 end
 function M.registered(value: unknown, pinned: registry.Snapshot, validate: ((protocol.Profile) -> string?)?): Object
     return M.convert(value, function(ref: string): string?
-            local entry = pinned:get(ref)
-            local data = entry and bounds.object(entry.data)
-            return data and bounds.id(data.binding_ref) or nil
-        end, validate,
-        function(ref: string): NativeHome?
-            local entry = pinned:get(ref)
-            local definition = entry and bounds.object(entry.data)
-            local binding_ref = definition and bounds.id(definition.binding_ref)
-            local binding = binding_ref and pinned:get(binding_ref)
-            local meta = binding and bounds.object(binding.meta)
-            local profiles_ref = meta and bounds.id(meta.profiles_ref)
-            local declaration = profiles_ref and pinned:get(profiles_ref)
-            local data = declaration and bounds.object(declaration.data)
-            local driver = data and driver_profile.decode(data.driver)
-            local profile_id = definition and bounds.id(definition.profile_id)
-            local selected = driver and profile_id and driver_profile.find(driver, profile_id)
-            if not selected then return nil end
-            return selected.isolation_env.private_home and "private" or "machine"
-        end)
+        local entry = pinned:get(ref)
+        local data = entry and bounds.object(entry.data)
+        return data and bounds.id(data.binding_ref) or nil
+    end, validate,
+    function(ref: string): NativeHome?
+        local entry = pinned:get(ref)
+        local definition = entry and bounds.object(entry.data)
+        local binding_ref = definition and bounds.id(definition.binding_ref)
+        local binding = binding_ref and pinned:get(binding_ref)
+        local meta = binding and bounds.object(binding.meta)
+        local profiles_ref = meta and bounds.id(meta.profiles_ref)
+        local declaration = profiles_ref and pinned:get(profiles_ref)
+        local data = declaration and bounds.object(declaration.data)
+        local driver = data and driver_profile.decode(data.driver)
+        local profile_id = definition and bounds.id(definition.profile_id)
+        local selected = driver and profile_id and driver_profile.find(driver, profile_id)
+        if not selected then return nil end
+        return selected.isolation_env.private_home and "private" or "machine"
+    end)
 end
 return M

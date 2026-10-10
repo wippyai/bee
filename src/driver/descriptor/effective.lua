@@ -513,7 +513,6 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
         prepare_options[name] = selected
     end
 
-
     local value_provenance: Object = {}
     local tools: {string}? = nil
     local combined: string? = nil

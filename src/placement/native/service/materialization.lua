@@ -405,7 +405,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     -- Credential replies carry bytes only to their selected destination.
     -- File logins run before immutable driver configuration so their provider
     -- parent remains runner-owned for this materialization.
-    local descriptor = profile_values.schema(request.binding_ref)
+    local descriptor, _, descriptor_error = profile_values.schema(request.binding_ref)
     local policy_entry = registry.get(request.policy_ref)
     local policy_data = policy_entry and bounds.object(policy_entry.data)
     local file_projection = false
@@ -676,8 +676,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local trust_written = false
     local isolated = request.launch.provider_home and request.launch.provider_home.private
     if isolated then
-        local schema = profile_values.schema(request.binding_ref)
-        local fields = schema and bounds.object(schema.options.fields)
+        local fields = descriptor and bounds.object(descriptor.options.fields)
         local field = fields and bounds.object(fields.folder_trust)
         local mapping = field and bounds.object(field.trust)
         if mapping and mapping.file then trust_mapping = mapping end
@@ -695,8 +694,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local provider = approved and bounds.object(approved.provider)
         local values = provider and (provider.schema_ref and bounds.object(provider.values) or profile_values.flatten(provider))
         if not approved or approved.driver_binding_ref ~= request.binding_ref or not values or values.folder_trust ~= "approved-workdir" then return refused("Folder trust is outside recorded person consent") end
-        local descriptor, _, schema_error = profile_values.schema(request.binding_ref)
-        if not descriptor then return refused(schema_error or "Folder trust schema unavailable") end
+        if not descriptor then return refused(descriptor_error or "Folder trust schema unavailable") end
         local fields = bounds.object(descriptor.options.fields)
         local field = fields and bounds.object(fields.folder_trust)
         local mapping = field and bounds.object(field.trust)
@@ -789,9 +787,6 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             local privacy_error = homes.check_private_root()
             if privacy_error then return refused(privacy_error) end
         end
-        -- A session intent excludes other attempts; the runner's starting claim
-        -- excludes duplicate starts of this attempt. Recheck after asynchronous
-        -- credential/gateway calls and before each publication.
         if trust_mapping and trust_mapping.file == file.path then
             local trusted, trust_error = trust.render(trust_mapping, trusted_path, content)
             if not trusted then return refused(trust_error or "Trust configuration refused") end

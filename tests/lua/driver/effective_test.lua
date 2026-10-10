@@ -8,6 +8,48 @@ local profiles = require("profiles")
 local json = require("json")
 local function define_tests()
     test.describe("Effective driver option schema", function()
+        test.it("requires explicit person selection when policy excludes the safe bypass default", function()
+            local cli = assert(descriptors.load("bee.driver.codex.descriptor:cli"))
+            local compiled, err = effective.compile(cli, {profile_restrictions = {
+                ["provider.options.dangerously_bypass_approvals_and_sandbox"] = {true}}}, nil, {}, nil, nil, nil, "bee.placement.docker.profiles:coding")
+            test.is_nil(compiled)
+            test.is_true(tostring(err):find("person", 1, true) ~= nil)
+        end)
+        test.it("intersects imported config with placement and host ceilings", function()
+            local cli = assert(descriptors.load("bee.driver.codex.descriptor:cli"))
+            local policy = {profile_restrictions = {["provider.options.sandbox"] = {kind = "declared"}, ["provider.options.approval_policy"] = {kind = "declared"}}}
+            local content = 'sandbox_mode="danger-full-access"\napproval_policy="never"'
+            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", content, "bee.placement.docker.profiles:coding"))
+            test.is_nil(effective.check_config(cli, policy, ".codex/config.toml", content, "bee.placement.docker.profiles:coding",
+                {sandbox = "danger-full-access", approval_policy = "never"}))
+            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", content, "bee.placement.profiles:native"))
+            policy.option_constraints = {sandbox = {capabilities = {"read"}}}
+            local denied = effective.check_config(cli, policy, ".codex/config.toml", content, "bee.placement.docker.profiles:coding")
+            test.not_nil(denied)
+            test.is_true(assert(denied):find("sandbox", 1, true) ~= nil)
+            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", '[sandbox_workspace_write]\nnetwork_access=true', "bee.placement.docker.profiles:coding"))
+        end)
+        test.it("renders a person-selected Codex bypass inside the registry container placement", function()
+            for _, case in ipairs({
+                {profile = "batch", expected = 'exec --json --skip-git-repo-check --sandbox danger-full-access -c approval_policy="never" --dangerously-bypass-approvals-and-sandbox -'},
+                {profile = "window", expected = '--sandbox danger-full-access -c approval_policy="never" --dangerously-bypass-approvals-and-sandbox -- Fixture'},
+                {profile = "batch", resume = "fixture-thread", expected = '--sandbox danger-full-access -c approval_policy="never" --dangerously-bypass-approvals-and-sandbox exec resume fixture-thread --json --skip-git-repo-check -'},
+            }) do
+                local reply = assert(bounds.object(universal.prepare("bee.driver.codex.descriptor:cli")({profile_id = case.profile, brief = "Fixture", resume_ref = case.resume,
+                    placement_profile_ref = "bee.placement.docker.profiles:coding", sandbox = "danger-full-access", approval_policy = "never",
+                    dangerously_bypass_approvals_and_sandbox = true})))
+                assert(reply.ok == true, tostring(reply.error))
+                local argv = assert(bounds.ids(assert(bounds.object(reply.launch)).argv, true))
+                test.eq(table.concat(argv, " "), case.expected)
+            end
+        end)
+        test.it("refuses the same Codex bypass on native placement", function()
+            local reply = assert(bounds.object(universal.prepare("bee.driver.codex.descriptor:cli")({profile_id = "batch", brief = "Fixture",
+                placement_profile_ref = "bee.placement.profiles:native", sandbox = "danger-full-access", approval_policy = "never",
+                dangerously_bypass_approvals_and_sandbox = true})))
+            test.eq(reply.ok, false)
+            test.is_true(tostring(reply.error):find("ceiling", 1, true) ~= nil)
+        end)
         test.it("launches an omitted permission mode with the policy default", function()
             local cli = assert(descriptors.load("bee.driver.claude.descriptor:cli"))
             local applied = assert(effective.apply({profile_restrictions = {["provider.permission_mode"] = {"plan"}}}, {}, cli))

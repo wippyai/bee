@@ -255,6 +255,21 @@ function M.action(state: State, action: string, gesture: "enter" | "space" | "cl
         end
         local settings_error = settings.apply(state.form.draft, state.settings)
         if settings_error then state.status = settings_error; return nil end
+        local review, review_error = forms.review(state.form)
+        if review_error then state.status = review_error; return nil end
+        if review then
+            local target: {[string]: unknown} = {profile_id = state.form.profile_id, revision = state.form.revision,
+                configuration = assert(editor.result(state.form.draft)), reach = review}
+            if confirmation.matches(state.confirmation, "profile.consent") then
+                local accepted, err = confirmation.accept(state.confirmation, target, gesture or "shortcut")
+                if not accepted then state.status = err or "Confirmation is unavailable"; return nil end
+                state.status = ""
+            else
+                local opened, err = confirmation.open(state.confirmation, "profile.consent", target, "inline", "Approve container profile", review)
+                state.status = opened and (review .. "\nEnter confirms; Esc cancels.") or err or "Confirmation is unavailable"
+                return nil
+            end
+        end
         for _, name in ipairs(forms.credential_names(state.form)) do
             local value = state.credential_text[name]
             if value and value ~= "" then
@@ -379,6 +394,10 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
             end
             return nil
         end
+        if confirmation.matches(state.confirmation, "profile.consent") then
+            if event.key_type == "enter" then return M.action(state, "save", "enter") end
+            return nil
+        end
         if event.ctrl and event.key == "r" then return M.action(state, "revoke_docker") end
         if confirmation.matches(state.confirmation, "profile.remove") then
             if event.key_type == "enter" then return M.action(state, "remove", "enter") end
@@ -462,7 +481,12 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
                     state.form.draft.bee.permission_answers = current == "provider" and "ask" or current == "ask" and "deny" or "provider"
                 else state.form.draft.bee.permission_answers = "provider" end
                 ok = true
-            elseif field.kind == "placement" then ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
+            elseif field.kind == "placement" then
+                ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
+                if ok then
+                    local refreshed, refresh_error = forms.refresh(state.form)
+                    if refreshed then state.form = refreshed else ok, err = false, refresh_error end
+                end
             elseif field.kind == "refresh" then
                 local ready = M.action(state, "save") == "save"
                 if not ready then return nil end
@@ -563,6 +587,18 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if picker then return draw_folders(painter, state, picker) end
     local threads = state.threads
     if threads then return draw_threads(painter, state, threads) end
+    if confirmation.matches(state.confirmation, "profile.consent") then
+        frame.header(painter, "APPROVE CONTAINER PROFILE", "Person consent")
+        local row = 3
+        for line in state.status:gmatch("[^\n]+") do
+            frame.line(painter, row, line, painter.theme.text)
+            row = row + 1
+        end
+        frame.footer(painter, "", "Enter approve · Esc cancel", nil, {
+            {kind = "save", key = "Enter", label = "Approve and save", enabled = true, primary = true},
+            {kind = "cancel", key = "Esc", label = "Cancel", enabled = true}})
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
+    end
     frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "NEW AGENT PROFILE", state.advanced and "Advanced" or "Name · agent settings")
     local listed = fields(state)
     local capacity = math.floor(math.max(0, height - 7))

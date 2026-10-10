@@ -218,7 +218,9 @@ function M.profile(value: unknown): (Profile?, string?)
     if not definition or not driver or not name or name:match("^%s*$") then return nil, "profile requires definition_ref, driver_binding_ref and name" end
     local provider_input = bounds.object(raw.provider)
     if provider_input and provider_input.schema_ref then
-        local decoded, invalid = profile_values.decode(driver, provider_input)
+        local placement, placement_error = M.placement(raw.placement)
+        if placement_error then return nil, placement_error end
+        local decoded, invalid = profile_values.decode(driver, provider_input, placement and placement.kind == "docker" and placement.profile_ref or nil)
         if not decoded then return nil, invalid end
         provider_input = decoded
     end
@@ -277,7 +279,7 @@ function M.profile(value: unknown): (Profile?, string?)
 end
 
 function M.storage(profile: Profile): (Object?, string?)
-    local provider, err = profile_values.encode(profile.driver_binding_ref, profile.provider)
+    local provider, err = profile_values.encode(profile.driver_binding_ref, profile.provider, profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
     if not provider then return nil, err end
     local result: Object = {}
     for key, value in pairs(profile) do result[key] = value end

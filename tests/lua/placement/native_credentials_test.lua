@@ -43,7 +43,7 @@ local function credentials_tests()
             local request = native_fixture.launch({"sh", "-c", "exit 0"}, "direct_process")
             request.attempt_id, request.projections = attempt, {projection.projection_id}
             request.binding_ref, request.policy_ref = "bee.driver.codex.binding:binding", native_fixture.NO_PROVIDER_POLICY
-            request.configuration_digest = nil
+            request.configuration_digest = native_fixture.provider_configuration_digest(native_fixture.NO_PROVIDER_POLICY)
             local launch = assert(bounds.object(request.launch))
             launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {
                 {source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},

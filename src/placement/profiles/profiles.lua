@@ -3,6 +3,7 @@ local bounds = require("bounds")
 local hash = require("hash")
 local canonical = require("canonical")
 local registry = require("registry")
+local funcs = require("funcs")
 local M = {}
 -- HOST_USER runs a Docker profile's containers as the user the node runs as,
 -- so the container owns the files it shares with the host.
@@ -15,7 +16,8 @@ type Mount = {resource: string, target: string, access: "read" | "write"}
 type Limits = {memory: integer, cpu: integer, pids: integer}
 type Profile = {placement_binding: string, image_ref: string?, image_recipe_ref: string?, user: string?, network: string?, limits: Limits?,
     interactive_route_ref: string?, mounts: {Mount}}
-type Resolved = {ref: string, digest: string, profile: Profile}
+type Isolation = {kind: string, credentials: {string}, mounted_roots: {Mount}, network: string, option_ceilings: {[string]: unknown}}
+type Resolved = {ref: string, digest: string, profile: Profile, isolation: Isolation?}
 local function absolute(value: unknown): string?
     if type(value) ~= "string" or #value > 4096 or value:sub(1, 1) ~= "/" or value:find("[%z%c:]") then return nil end
     for segment in value:gmatch("[^/]+") do if segment == "." or segment == ".." then return nil end end
@@ -142,7 +144,9 @@ function M.tune(resolved: Resolved, value: unknown): (Resolved?, string?)
         image_recipe_ref = base.image_recipe_ref, user = base.user, network = base.network, limits = limits,
         interactive_route_ref = base.interactive_route_ref, mounts = mounts})
     if not profile then return nil, err end
-    return {ref = resolved.ref, digest = resolved.digest, profile = profile}, nil
+    return {ref = resolved.ref, digest = resolved.digest, profile = profile,
+        isolation = resolved.isolation and {kind = resolved.isolation.kind, credentials = resolved.isolation.credentials, mounted_roots = profile.mounts,
+            network = resolved.isolation.network, option_ceilings = resolved.isolation.option_ceilings}}, nil
 end
 function M.resolve(pinned: registry.Snapshot, requested: string?): (Resolved?, string?)
     local ref = requested or M.DEFAULT
@@ -153,10 +157,36 @@ function M.resolve(pinned: registry.Snapshot, requested: string?): (Resolved?, s
     if not meta or meta.type ~= M.TYPE then return nil, "entry is not a placement profile" end
     local profile, decode_error = M.decode(entry.data)
     if not profile then return nil, decode_error end
-    local encoded, encode_error = canonical.encode({ref = ref, profile = profile})
+    local declared = bounds.object(meta.isolation)
+    local kind = profile.placement_binding == "bee.placement.docker.binding:binding" and "container" or "native"
+    if declared and (bounds.fields(declared, {"kind", "credentials"}) or declared.kind ~= kind or not bounds.ids(declared.credentials, true)) then
+        return nil, "placement isolation disagrees with its binding or credential reach"
+    end
+    local ceilings = bounds.object(meta.option_ceilings) or {}
+    if meta.option_ceilings ~= nil and (not declared or kind ~= "container" or not bounds.object(meta.option_ceilings)) then
+        return nil, "placement option ceilings require declared container isolation"
+    end
+    for _, raw in pairs(ceilings) do
+        local options = bounds.object(raw)
+        if not options then return nil, "placement option ceilings must name driver options" end
+        for _, rights in pairs(options) do if not bounds.ids(rights, true) then return nil, "placement option ceilings must declare capabilities" end end
+    end
+    local isolation: Isolation = {kind = kind, credentials = declared and bounds.ids(declared.credentials, true) or {},
+        mounted_roots = profile.mounts, network = profile.network or "host", option_ceilings = ceilings}
+    local encoded, encode_error = canonical.encode({ref = ref, profile = profile, isolation = isolation})
     if not encoded then return nil, encode_error end
     local digest, digest_error = hash.sha256(encoded)
     if not digest then return nil, tostring(digest_error) end
-    return {ref = ref, digest = digest, profile = profile}, nil
+    return {ref = ref, digest = digest, profile = profile, isolation = isolation}, nil
+end
+function M.context(ref: string?): (Isolation?, string?)
+    if not ref then return nil, nil end
+    local raw, err = funcs.call("bee.placement.profiles:context", ref)
+    if err then return nil, tostring(err) end
+    local reply = bounds.object(raw)
+    if not reply then return nil, "Placement context returned no answer" end
+    local isolation = bounds.object(reply.isolation)
+    if not isolation then return nil, bounds.text(reply.error, 512) or "Placement isolation is unavailable" end
+    return isolation :: Isolation, nil
 end
 return M

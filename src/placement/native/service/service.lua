@@ -358,9 +358,9 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
     local data = policy_entry and bounds.object(policy_entry.data) or nil
     if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not data then return nil, nil, "policy_ref is not a host launch policy" end
-    if request.preferences then
-        local descriptor = profile_values.schema(request.binding_ref)
-        local effective, preference_error = preferences.apply(data, request.preferences, descriptor)
+    local descriptor = profile_values.schema(request.binding_ref)
+    if request.preferences or descriptor then
+        local effective, preference_error = preferences.apply(data, request.preferences or {}, descriptor, request.placement_profile_ref)
         if not effective then return nil, nil, preference_error end
         data = effective
     end
@@ -420,7 +420,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     -- maps: their raw allocation shape is not a host option selection.
     local option_values, options_error = preferences.decode_prepare_options(data.prepare_options)
     if not option_values then return nil, nil, options_error end
-    return {option_provenance = bounds.object(data.option_provenance), option_values = option_values, context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
+    return {placement_profile_ref = request.placement_profile_ref, option_provenance = bounds.object(data.option_provenance), option_values = option_values, context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
         selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)

@@ -181,7 +181,7 @@ local function access_surface(raw: unknown, tools: {string}, seeds: {string}?): 
     if #requestable > 0 then composed.access = {policy = approver, traits = requestable} end
     return composed, nil
 end
-function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?, descriptor: descriptors.Descriptor?): (Policy?, string?)
+function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?, descriptor: descriptors.Descriptor?, placement_ref: string?): (Policy?, string?)
     local meta = bounds.object(entry.meta) or {}
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
@@ -272,8 +272,8 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if not admitted_tools then return nil, admitted_error end
     -- Credentials bind the host policy; the launch separately measures the
     -- preferences and resulting configuration under that policy.
-    if selected then
-        local effective, preference_error = preferences.apply(data, selected, descriptor)
+    if selected or descriptor then
+        local effective, preference_error = preferences.apply(data, selected or {}, descriptor, placement_ref)
         if not effective then return nil, ref .. ": " .. tostring(preference_error) end
         data = effective
     end

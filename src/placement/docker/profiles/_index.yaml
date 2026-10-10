@@ -6,6 +6,14 @@ entries:
   meta:
     type: bee.placement_profile
     title: Docker coding agents
+    isolation:
+      kind: container
+      credentials: [admitted launch credentials, session gateway tokens]
+    option_ceilings:
+      codex:
+        sandbox: [read, write-admitted, write-anywhere, network]
+        approval_policy: [request-approval, no-approvals]
+        dangerously_bypass_approvals_and_sandbox: [bypass]
   data:
     schema_revision: bee.placement-profile@1
     placement_binding: bee.placement.docker.binding:binding

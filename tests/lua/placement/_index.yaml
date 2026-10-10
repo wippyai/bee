@@ -434,6 +434,8 @@ entries:
     muse_launch: bee.tests.driver.support:muse_launch
     opencode_launch: bee.tests.driver.support:opencode_launch
     configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.descriptor:effective
+    profile_values: bee.driver.descriptor:profile_values
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store

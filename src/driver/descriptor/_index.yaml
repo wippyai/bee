@@ -20,6 +20,7 @@ entries:
   kind: library.lua
   source: file://effective.lua
   imports:
+    placements: bee.placement.profiles:profiles
     descriptors: bee.driver.descriptor:descriptor
     profile_access: bee.driver.profiles:profile_access
     canonical: bee.values:canonical

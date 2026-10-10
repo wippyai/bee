@@ -508,7 +508,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local fields = descriptor and bounds.object(descriptor.options.fields) or {}
     local compiled_values = launch_policy.prepare_options
     if descriptor then
-        local compiled, compile_error = effective_schema.compile(descriptor, nil, nil, launch_policy.prepare_options)
+        local compiled, compile_error = effective_schema.compile(descriptor, bounds.object(policy_entry.data), nil, effective and effective.options or {}, nil, nil, nil, resolved_profile and resolved_profile.ref or nil)
         if not compiled then return nil, fail("INVALID", compile_error or "Driver option schema unavailable") end
         compiled_values = compiled.values
     end

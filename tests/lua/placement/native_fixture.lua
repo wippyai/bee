@@ -22,6 +22,8 @@ local agy_launch = require("agy_launch")
 local muse_launch = require("muse_launch")
 local opencode_launch = require("opencode_launch")
 local configuration_protocol = require("configuration_protocol")
+local preferences = require("preferences")
+local profile_values = require("profile_values")
 local json = require("json")
 local store = require("store")
 local resources = require("resources")
@@ -320,10 +322,14 @@ local function update_codex_provider(base_url: string, model: string)
     local applied, err = changes:apply()
     if not applied then error("update codex provider: " .. tostring(err)) end
 end
-local function provider_configuration_digest(): string
-    local provider = registry.get("bee.placement.native:codex_test_provider")
-    if not provider then error("provider entry") end
-    local digest, digest_error = configuration_protocol.digest("bee.driver.codex.binding:binding", {provider_ref = "bee.placement.native:codex_test_provider", provider = provider, fixture = true}, "bee.driver.codex.binding:configure")
+local function provider_configuration_digest(policy_ref: string?): string
+    local policy = assert(bounds.object(assert(registry.get(policy_ref or POLICY)).data))
+    local descriptor = assert(profile_values.schema("bee.driver.codex.binding:binding"))
+    local effective = assert(preferences.apply(policy, {}, descriptor))
+    local provider_ref = bounds.id(effective.provider_ref)
+    local provider = provider_ref and assert(registry.get(provider_ref)) or nil
+    local digest, digest_error = configuration_protocol.digest("bee.driver.codex.binding:binding", {
+        provider_ref = provider_ref, provider = provider, option_values = effective.prepare_options, fixture = true}, "bee.driver.codex.binding:configure")
     if not digest then error(tostring(digest_error)) end
     return digest
 end

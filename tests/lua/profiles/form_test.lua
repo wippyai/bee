@@ -3,6 +3,7 @@ local test = require("test")
 local form = require("form")
 local editor = require("editor")
 local funcs = require("funcs")
+local registry = require("registry")
 local bounds = require("bounds")
 local function read(workspace: string, id: string): {[string]: unknown}
     local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
@@ -15,6 +16,37 @@ local function read(workspace: string, id: string): {[string]: unknown}
 end
 local function define_tests()
     test.describe("Agent profile form persistence", function()
+        test.it("round trips a container Codex bypass and refuses changing it to native", function()
+            local entry = assert(registry.get("bee.driver.codex.security:launch_policy_codex_batch"))
+            local original = entry.data
+            local data: {[string]: unknown} = {}
+            for name, value in pairs(assert(bounds.object(original))) do data[name] = value end
+            data.fixture = true; entry.data = data
+            local changes = registry.snapshot():changes()
+            assert(changes:update(entry)); assert(changes:apply())
+            local ok, failure = pcall(function()
+            local opened = assert(form.load("profile-container-yolo", {definition_ref = "bee.driver.codex.profiles:research_batch", title = "Container Codex"}, true))
+            test.is_true(editor.cycle_placement(opened.draft, 1))
+            test.is_true(editor.cycle_placement(opened.draft, 1))
+            local refreshed, refresh_error = form.refresh(opened)
+            assert(refreshed, tostring(refresh_error))
+            opened = refreshed
+            test.is_nil(opened.repair_json)
+            opened.draft.provider.options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}
+            local saved, save_error = form.save(opened)
+            assert(saved, tostring(save_error))
+            local restored = assert(form.reload(opened))
+            test.eq(assert(restored.draft.provider.options).sandbox, "danger-full-access")
+            test.eq(assert(restored.draft.provider.options).dangerously_bypass_approvals_and_sandbox, true)
+            restored.draft.placement = {kind = "native", home = "private"}
+            local accepted, reason = form.save(restored)
+            test.is_false(accepted)
+            test.is_true(tostring(reason):find("ceiling", 1, true) ~= nil)
+            end)
+            entry.data = original
+            changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())
+            assert(ok, tostring(failure))
+        end)
         test.it("edits the CLI permission mode from its declared schema", function()
             local opened = assert(form.load("profile-cli-permission-edit", {definition_ref = "bee.driver.claude.profiles:default_window", title = "CLI permissions"}, true))
             test.is_true(editor.cycle_option(opened.draft, "permission_mode"))

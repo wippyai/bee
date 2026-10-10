@@ -467,11 +467,23 @@ function M.decode(value: unknown): (Descriptor?, string?)
         local declaration, spec_error = object(raw_spec, "CLI descriptor.options." .. tostring(name))
         if not declaration then return nil, spec_error end
         if declaration.path ~= nil then
-            if bounds.fields(declaration, {"path", "value_schema", "default", "label", "description", "section", "order", "contexts", "support", "render", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option", "id", "group", "security_class", "capabilities", "ceiling", "dependencies", "conflicts", "trust", "config_aliases"}) then return nil, "OptionSpec has unknown fields" end
+            if bounds.fields(declaration, {"path", "value_schema", "default", "label", "description", "section", "order", "contexts", "support", "render", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option", "id", "group", "security_class", "capabilities", "ceiling", "dependencies", "conflicts", "trust", "config_aliases", "person_values", "consent_message"}) then return nil, "OptionSpec has unknown fields" end
             if declaration.id ~= name or not bounds.member(declaration.group, {"model/provider", "behavior", "access/trust", "tools/integrations", "advanced"})
                 or not bounds.member(declaration.security_class, {"free", "person-only", "host-ceiling"}) then return nil, "OptionSpec identity and security classification are required" end
             for _, key in ipairs({"dependencies", "conflicts", "ceiling"}) do
                 if declaration[key] ~= nil and not bounds.ids(declaration[key], true) then return nil, "OptionSpec " .. key .. " must be identifiers" end
+            end
+            if declaration.consent_message ~= nil and (not bounds.text(declaration.consent_message, 512) or declaration.person_values == nil) then
+                return nil, "OptionSpec consent_message requires person_values and bounded text"
+            end
+            if declaration.person_values ~= nil then
+                local values = bounds.array(declaration.person_values, 64)
+                if not values or declaration.security_class ~= "host-ceiling" then return nil, "OptionSpec person_values requires a host ceiling and typed values" end
+                for _, value in ipairs(values) do
+                    if type(value) ~= "string" and type(value) ~= "boolean" and type(value) ~= "number" then return nil, "OptionSpec person_values must be scalars" end
+                    local _, invalid = M.decode_option(name, declaration, value)
+                    if invalid then return nil, invalid end
+                end
             end
             if declaration.capabilities ~= nil then
                 local modes = bounds.object(declaration.capabilities)
@@ -582,7 +594,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
             if default_error then return nil, "CLI descriptor.options." .. tostring(name) .. ".default: " .. default_error end
             if declaration.capabilities ~= nil then
                 local modes = bounds.object(declaration.capabilities) or {}
-                local rights = type(spec.default) == "string" and bounds.ids(modes[spec.default], true)
+                local rights = bounds.ids(modes[tostring(spec.default)], true)
                 local ceiling = bounds.ids(declaration.ceiling, true)
                 if not rights or not ceiling then return nil, "OptionSpec default capabilities are undeclared" end
                 for _, right in ipairs(rights) do if not bounds.member(right, ceiling) then return nil, "OptionSpec default exceeds its ceiling" end end

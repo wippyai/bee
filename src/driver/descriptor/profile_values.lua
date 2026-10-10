@@ -30,7 +30,7 @@ function M.flatten(provider: Object): (Object?, string?)
     end
     return result, nil
 end
-function M.encode(binding_ref: string, provider: Object): (Stored?, string?)
+function M.encode(binding_ref: string, provider: Object, placement_ref: string?): (Stored?, string?)
     local descriptor, ref, err = M.schema(binding_ref)
     if not descriptor or not ref then return nil, err end
     local values, invalid = M.flatten(provider)
@@ -40,11 +40,11 @@ function M.encode(binding_ref: string, provider: Object): (Stored?, string?)
         local field = bounds.object(fields[id])
         if not field or not field.path then return nil, "Undeclared profile option " .. id end
     end
-    local _, compile_error = effective.compile(descriptor, nil, nil, values)
+    local _, compile_error = effective.compile(descriptor, nil, nil, values, nil, nil, nil, placement_ref)
     if compile_error then return nil, compile_error end
     return {schema_ref = ref, schema_revision = descriptor.schema_revision, values = values}, nil
 end
-function M.decode(binding_ref: string, stored: Object): (Object?, string?)
+function M.decode(binding_ref: string, stored: Object, placement_ref: string?): (Object?, string?)
     if bounds.fields(stored, {"schema_ref", "schema_revision", "values"}) then return nil, "Invalid option schema selection" end
     local descriptor, ref, err = M.schema(binding_ref)
     if not descriptor then return nil, err end
@@ -60,7 +60,7 @@ function M.decode(binding_ref: string, stored: Object): (Object?, string?)
         if field.path == "provider." .. id then result[id] = value else options[id] = value end
     end
     if next(options) then result.options = options end
-    local _, invalid = effective.compile(descriptor, nil, nil, values)
+    local _, invalid = effective.compile(descriptor, nil, nil, values, nil, nil, nil, placement_ref)
     if invalid then return nil, invalid end
     return result, nil
 end
@@ -70,9 +70,12 @@ function M.person_only(binding_ref: string, provider: Object): string?
     local values = provider.schema_ref and bounds.object(provider.values) or M.flatten(provider)
     if not values then return "Invalid driver options" end
     local fields = bounds.object(descriptor.options.fields) or {}
-    for name in pairs(values) do
+    for name, value in pairs(values) do
         local field = bounds.object(fields[name])
         if field and field.security_class == "person-only" then return name .. " requires a person write with consent provenance" end
+        for _, selected in ipairs(field and bounds.array(field.person_values, 64) or {}) do
+            if value == selected then return name .. " requires a person write with consent provenance" end
+        end
     end
     return nil
 end

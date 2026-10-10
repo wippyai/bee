@@ -536,7 +536,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             if not login_file then return refused("file login format unavailable") end
             for _, item in ipairs(login_file.initialize) do
                 if descriptor then
-                    local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, item.content)
+                    local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, item.content, request.placement_profile_ref, request.preferences and request.preferences.options)
                     if invalid then return refused(invalid) end
                 end
                 protected[#protected + 1] = item.path
@@ -574,7 +574,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                     if replayed and descriptor then
                         local retained, read_error = homes.read_configuration(selected_home_path, item.path, expected)
                         if retained == nil then return refused(tostring(read_error or "Retained configuration unavailable") .. ". Open Agents and choose Setup to approve the current configuration file.") end
-                        local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, retained)
+                        local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, retained, request.placement_profile_ref, request.preferences and request.preferences.options)
                         if invalid then return refused(invalid) end
                     end
                     composition_bases[item.path] = expected
@@ -775,7 +775,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             end
         end
         if descriptor and base ~= nil and file.composition then
-            local invalid = effective_schema.check_config(descriptor, policy_data or {}, file.composition.base_path, base)
+            local invalid = effective_schema.check_config(descriptor, policy_data or {}, file.composition.base_path, base, request.placement_profile_ref, request.preferences and request.preferences.options)
             if invalid then return refused(invalid) end
         end
         local content, content_error = configuration.render(file, environment, request.gateway, base)

@@ -7,6 +7,7 @@ local canonical = require("canonical")
 local descriptors = require("descriptors")
 local json = require("json")
 local toml = require("toml")
+local placements = require("placements")
 local M = {}
 M.MAX_OPTIONS = 64
 M.MAX_OPTION_VALUES = 32
@@ -270,11 +271,12 @@ local function subset(selected: {string}, ceiling: {string}): boolean
     return true
 end
 
-local function ceiling_value(field: Object, value: unknown, constraint: Object): (unknown, string?)
+local function ceiling_value(field: Object, value: unknown, constraint: Object, placement_ceiling: unknown): (unknown, string?)
     local capabilities = bounds.object(field.capabilities)
-    local rights = capabilities and type(value) == "string" and bounds.ids(capabilities[value], true)
-    local ceiling = bounds.ids(constraint.capabilities or field.ceiling, true)
-    if capabilities and (not rights or not ceiling or not subset(rights, ceiling)) then return nil, "permission capabilities exceed the host ceiling" end
+    local rights = capabilities and bounds.ids(capabilities[tostring(value)], true)
+    local ceiling = bounds.ids(placement_ceiling or field.ceiling, true)
+    local host_ceiling = bounds.ids(constraint.capabilities, true)
+    if capabilities and (not rights or not ceiling or not subset(rights, ceiling) or (host_ceiling and not subset(rights, host_ceiling))) then return nil, "permission capabilities exceed the host ceiling" end
     if constraint.rights ~= nil then
         local selected, allowed = bounds.ids(value, true), bounds.ids(constraint.rights, true)
         if not selected or not allowed or not subset(selected, allowed) then return nil, "rights exceed the host ceiling" end
@@ -293,8 +295,17 @@ local function ceiling_value(field: Object, value: unknown, constraint: Object):
     return value, nil
 end
 
-function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabilities: {[string]: Capability}?, values: Object?, writer: string?, selection: Value?, provenance: Object?): (Effective?, string?)
+function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabilities: {[string]: Capability}?, values: Object?, writer: string?, selection: Value?, provenance: Object?, placement_ref: string?): (Effective?, string?)
+    local isolation, isolation_error = placements.context(placement_ref)
+    if isolation_error then return nil, isolation_error end
+    local placement_ceilings = isolation and bounds.object(isolation.option_ceilings[descriptor.provider]) or {}
     local declared = bounds.object(descriptor.options.fields) or {}
+    for name in pairs(placement_ceilings or {}) do
+        local field = bounds.object(declared[name])
+        if not field or field.security_class ~= "host-ceiling" or not bounds.object(field.capabilities) then
+            return nil, "Placement ceiling names an option without declared host capabilities: " .. name
+        end
+    end
     local restrictions, restriction_error = decode_profile_restrictions(policy and policy.profile_restrictions)
     if not restrictions then return nil, restriction_error end
     local constraints = policy and bounds.object(policy.option_constraints) or {}
@@ -319,6 +330,7 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
         local field = bounds.object(raw) or {}
         local path = bounds.id(field.path)
         local constraint = bounds.object((constraints or {})[name]) or {}
+        local placement_ceiling = placement_ceilings and placement_ceilings[name]
         local default: unknown = field.default
         local default_ceiling_error: string? = nil
         local source = default == nil and "CLI" or "driver schema"
@@ -326,7 +338,7 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
         if default ~= nil then
             local _, invalid = descriptors.decode_option(name, field, default)
             if invalid then return nil, invalid end
-            local constrained, ceiling_error = ceiling_value(field, default, constraint)
+            local constrained, ceiling_error = ceiling_value(field, default, constraint, placement_ceiling)
             default_ceiling_error = ceiling_error
             if not ceiling_error then
                 local _, constrained_error = descriptors.decode_option(name, field, constrained)
@@ -353,18 +365,18 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
             local admitted: {Scalar} = {}
             for _, candidate in ipairs(allowed.values) do
                 local valid, invalid = descriptors.decode_option(name, field, candidate)
-                local _, ceiling_error = ceiling_value(field, valid, constraint)
+                local _, ceiling_error = ceiling_value(field, valid, constraint, placement_ceiling)
                 if not invalid and not ceiling_error then admitted[#admitted + 1] = candidate end
             end
             row.allowed = {kind = "enum", values = admitted}
             if #admitted == 0 then row.locked_reason = "No values are admitted by the host ceiling" end
         elseif allowed and allowed.kind == "declared" then
             local spec = descriptors.runtime_spec(field)
-            local enums = bounds.array(spec.values, 64)
+            local enums = spec.type == "boolean" and {false, true} or bounds.array(spec.values, 64)
             if enums then
                 local admitted: {Scalar} = {}
                 for _, candidate in ipairs(enums) do
-                    local _, err = ceiling_value(field, candidate, constraint)
+                    local _, err = ceiling_value(field, candidate, constraint, placement_ceiling)
                     if not err and (type(candidate) == "string" or type(candidate) == "number" or type(candidate) == "boolean") then admitted[#admitted + 1] = candidate end
                 end
                 row.allowed = {kind = "enum", values = admitted}
@@ -397,11 +409,16 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
         if explicit and values then value = values[name] end
         if value ~= nil and not (trust_mapping and trust_mapping.unsupported == true and not explicit) then
             if explicit and reason then return nil, name .. ": " .. reason end
+            for _, consent_value in ipairs(bounds.array(field.person_values, 64) or {}) do
+                if value == consent_value and (not explicit or (writer and writer ~= "person")) then
+                    return nil, name .. ": Requires an explicit person write with consent provenance"
+                end
+            end
             local _, err = descriptors.decode_option(name, field, value)
             if err then return nil, err end
             if policy and path and allowed and not allowed_option(allowed, value) then return nil, "option " .. name .. " has a value that is not allowed by the host policy" end
-            local constrained, ceiling_error = ceiling_value(field, value, constraint)
-            if ceiling_error then return nil, name .. ": " .. ceiling_error end
+            local constrained, ceiling_error = ceiling_value(field, value, constraint, placement_ceiling)
+            if ceiling_error then return nil, name .. ": " .. ceiling_error .. (placement_ref and (" for placement " .. placement_ref) or "") end
             local compiled_value, constrained_error = descriptors.decode_option(name, field, constrained)
             if constrained_error then return nil, constrained_error end
             result.values[name] = compiled_value
@@ -430,7 +447,7 @@ local function authority_key(key: string): boolean
     return false
 end
 
-function M.check_config(descriptor: descriptors.Descriptor, policy: Object, filename: string, content: string): string?
+function M.check_config(descriptor: descriptors.Descriptor, policy: Object, filename: string, content: string, placement_ref: string?, consent_values: Object?): string?
     local format = filename:match("%.(json)$") or filename:match("%.(toml)$")
     if not format then return nil end
     local document: unknown = nil
@@ -438,7 +455,7 @@ function M.check_config(descriptor: descriptors.Descriptor, policy: Object, file
     local root = bounds.object(document)
     if format == "toml" and content:match("^%s*$") then root = {} end
     if not root then return "Configuration is not an object: " .. filename end
-    local compiled, invalid = M.compile(descriptor, policy)
+    local compiled, invalid = M.compile(descriptor, policy, nil, consent_values, nil, nil, nil, placement_ref)
     if not compiled then return invalid end
     local mappings: {[string]: string} = {}
     for name, row in pairs(compiled.fields) do
@@ -484,9 +501,17 @@ function M.check_config(descriptor: descriptors.Descriptor, policy: Object, file
     end
     local inspection_error = inspect(root, "", false)
     if inspection_error then return inspection_error end
-    local checked, check_error = M.compile(descriptor, policy, nil, selections)
+    local imported: Object = {}
+    for name, value in pairs(consent_values or {}) do imported[name] = value end
+    for name, value in pairs(selections) do imported[name] = value end
+    local checked, check_error = M.compile(descriptor, policy, nil, imported, nil, nil, nil, placement_ref)
     if not checked then return filename .. ": " .. tostring(check_error) end
     for name, value in pairs(selections) do
+        for _, selected in ipairs(bounds.array(compiled.fields[name].declaration.person_values, 64) or {}) do
+            if selected == value and (not consent_values or consent_values[name] ~= value) then
+                return filename .. ": " .. paths[name] .. " requires the same person-approved profile value"
+            end
+        end
         local decoded, decode_error = descriptors.decode_option(name, assert(compiled.fields[name].declaration), value)
         if decode_error then return filename .. ": " .. paths[name] .. ": " .. decode_error end
         if canonical.encode(checked.values[name]) ~= canonical.encode(decoded) then return filename .. ": " .. paths[name] .. " exceeds host limits or denies" end
@@ -494,7 +519,7 @@ function M.check_config(descriptor: descriptors.Descriptor, policy: Object, file
     return nil
 end
 
-function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Descriptor?): (Object?, string?)
+function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Descriptor?, placement_ref: string?): (Object?, string?)
     local policy = bounds.object(policy_data)
     if not policy then return nil, "policy data must be an object" end
     local saved, saved_error = M.decode(raw)
@@ -520,7 +545,7 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
         local values: Object = {}
         for name, value in pairs(saved.options) do values[name] = value end
         if saved.instructions ~= "" then values.system_prompt_append = saved.instructions end
-        local compiled, compile_error = M.compile(descriptor, policy, nil, values, nil, saved)
+        local compiled, compile_error = M.compile(descriptor, policy, nil, values, nil, saved, nil, placement_ref)
         if not compiled then return nil, compile_error end
         value_provenance = compiled.provenance
         tools, combined = compiled.gateway_tools, compiled.instructions
@@ -542,4 +567,27 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
     return result, nil
 end
 
+function M.review(descriptor: descriptors.Descriptor, values: Object, placement_ref: string?): (string?, string?)
+    local lines: {string} = {}
+    for name, raw in pairs(bounds.object(descriptor.options.fields) or {}) do
+        local field = bounds.object(raw) or {}
+        for _, value in ipairs(bounds.array(field.person_values, 64) or {}) do
+            if values[name] == value then lines[#lines + 1] = bounds.text(field.consent_message, 512) or (name .. ": " .. tostring(value)) end
+        end
+    end
+    if #lines == 0 then return nil, nil end
+    local compiled, invalid = M.compile(descriptor, nil, nil, values, "person", nil, nil, placement_ref)
+    if not compiled then return nil, invalid end
+    table.sort(lines)
+    local isolation, isolation_error = placements.context(placement_ref)
+    if not isolation then return nil, isolation_error or "Placement isolation is unavailable" end
+    lines[#lines + 1] = "Mounted roots:"
+    for _, mount in ipairs(isolation.mounted_roots) do
+        lines[#lines + 1] = mount.resource .. " → " .. mount.target .. " (" .. mount.access .. ")"
+    end
+    if #isolation.mounted_roots == 0 then lines[#lines + 1] = "none" end
+    lines[#lines + 1] = "Network: " .. isolation.network
+    lines[#lines + 1] = "Credentials: " .. (#isolation.credentials == 0 and "none" or table.concat(isolation.credentials, ", "))
+    return table.concat(lines, "\n"), nil
+end
 return M

@@ -105,6 +105,8 @@ entries:
             tokens:
             - --sandbox
             - field: sandbox
+          person_values: [danger-full-access]
+          consent_message: The CLI sandbox is disabled inside the container.
           id: sandbox
           group: access/trust
           security_class: host-ceiling
@@ -153,6 +155,12 @@ entries:
               then:
               - -c
               - format: approval_policy="{approval_policy}"
+          person_values: [never]
+          consent_message: Runs without approvals inside the container.
+          capabilities:
+            on-request: [request-approval]
+            never: [no-approvals]
+          ceiling: [request-approval]
           id: approval_policy
           group: access/trust
           security_class: host-ceiling
@@ -160,6 +168,30 @@ entries:
           - format: toml
             path:
             - approval_policy
+        dangerously_bypass_approvals_and_sandbox:
+          id: dangerously_bypass_approvals_and_sandbox
+          path: provider.options.dangerously_bypass_approvals_and_sandbox
+          value_schema: {type: boolean}
+          default: false
+          label: Bypass approvals and sandbox
+          description: Run without approvals or the CLI sandbox inside an admitted container
+          group: access/trust
+          security_class: host-ceiling
+          person_values: [true]
+          consent_message: Runs without approvals inside the container; the CLI sandbox is disabled.
+          capabilities: {"false": [], "true": [bypass]}
+          ceiling: []
+          section: advanced
+          order: 3
+          contexts: [window, first_turn, resume]
+          support:
+            help_probe: {argv: [--help], flag: --dangerously-bypass-approvals-and-sandbox}
+          render:
+          - kind: argv
+            contexts: [window, first_turn, resume]
+            tokens:
+            - if: dangerously_bypass_approvals_and_sandbox
+              then: [--dangerously-bypass-approvals-and-sandbox]
         resume_ref:
           type: id
           forbid_option: true
@@ -470,6 +502,10 @@ entries:
           context: window
         - render: sandbox
           context: window
+        - render: approval_policy
+          context: window
+        - render: dangerously_bypass_approvals_and_sandbox
+          context: window
         - if: resume_ref
           then:
           - resume
@@ -494,6 +530,10 @@ entries:
         - --skip-git-repo-check
         - render: sandbox
           context: first_turn
+        - render: approval_policy
+          context: first_turn
+        - render: dangerously_bypass_approvals_and_sandbox
+          context: first_turn
         - '-'
         stdin:
           field: brief
@@ -509,6 +549,10 @@ entries:
         - render: effort
           context: resume
         - render: sandbox
+          context: resume
+        - render: approval_policy
+          context: resume
+        - render: dangerously_bypass_approvals_and_sandbox
           context: resume
         - exec
         - resume

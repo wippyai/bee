@@ -238,7 +238,7 @@ local function measure(request: Request): (Measured?, string?)
     if not profile or not profile.supported then return nil, "profile " .. request.profile_id .. " is not supported by " .. request.binding_ref end
     local policy_entry = catalog.entry(pinned, request.policy_ref)
     if not policy_entry then return nil, "launch policy " .. request.policy_ref .. " is not in the registry" end
-    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, profile_values.schema(request.binding_ref))
+    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, profile_values.schema(request.binding_ref), request.placement_profile_ref)
     if not launch_policy then return nil, policy_error end
     -- The policy is host-owned and decoded from this pinned snapshot. It is
     -- the source of placement selection; request fields only prove that the
@@ -312,7 +312,7 @@ local function measure(request: Request): (Measured?, string?)
                 for name, value in pairs(request.preferences.options) do values[name] = value end
                 if request.preferences.instructions ~= "" then values.system_prompt_append = request.preferences.instructions end
             end
-            local _, invalid = effective_schema.compile(descriptor, bounds.object(policy_entry.data), capabilities, values)
+            local _, invalid = effective_schema.compile(descriptor, bounds.object(policy_entry.data), capabilities, values, nil, nil, nil, request.placement_profile_ref)
             if invalid then return nil, invalid end
         end
     end
@@ -324,7 +324,7 @@ local function measure(request: Request): (Measured?, string?)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
     local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, {provider_ref = launch_policy.provider_ref,
-        option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or "first_turn", provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
+        placement_profile_ref = request.placement_profile_ref, option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or "first_turn", provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
         gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
     if not configuration_digest then return nil, configuration_error end
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
@@ -387,6 +387,7 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
         return nil, "launch policy does not authorize host HOME"
     end
     local prepare_request: {[string]: unknown} = {}
+    prepare_request.placement_profile_ref = request.placement_profile_ref
     prepare_request.option_provenance = launch_policy.option_provenance
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id

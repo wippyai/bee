@@ -77,7 +77,7 @@ entries:
   source: file://form_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [funcs]
+  modules: [funcs, registry]
   imports:
     test: wippy.test:test
     form: bee.harness.app:profile_form

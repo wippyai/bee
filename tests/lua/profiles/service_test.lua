@@ -41,6 +41,21 @@ local function put(id: string, revision: integer, key: string, title: string): {
 end
 local function define_tests()
     test.describe("Saved profile owner facade", function()
+        test.it("refuses delegated Codex yolo values even under the exact person grant", function()
+            for _, options in ipairs({{sandbox = "danger-full-access"}, {approval_policy = "never"}, {dangerously_bypass_approvals_and_sandbox = true}}) do
+                local request = put(fresh(), 0, fresh(), "Container Codex")
+                local profile = assert(bounds.object(request.profile))
+                profile.provider = {options = options}
+                profile.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
+                local approved = value(call(caller("profile-authority", "bee.harness.profiles:test_write"), request))
+                local agent = caller("profile-agent", "bee.harness.profiles:test_delegated_write"):with_actor(security.new_actor("profile-agent", {definition_id = "fixture:agent"}))
+                agent = assert(agent:with_context({["bee.gateway.binding"] = {subject = "profile-agent", approving_grant_id = approved.grant_id}}))
+                request.expected_revision, request.idempotency_key = 1, fresh()
+                local denied = call(agent, request)
+                test.eq(denied.ok, false)
+                test.is_true(tostring(denied.message):find("person write", 1, true) ~= nil)
+            end
+        end)
         test.it("rejects delegated writes of person-only folder trust even under an exact grant", function()
             local id = fresh()
             local request = put(id, 0, fresh(), "Trusted folder")

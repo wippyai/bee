@@ -34,7 +34,7 @@ function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
     if not selected then return selection_error end
     local values = selected.options
     if selected.instructions ~= "" then values.system_prompt_append = selected.instructions end
-    local _, invalid = preferences.compile(descriptor, nil, nil, values)
+    local _, invalid = preferences.compile(descriptor, nil, nil, values, nil, nil, nil, profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
     if invalid then return invalid end
     return nil
 end
@@ -45,6 +45,9 @@ function M.ceiling(pinned: registry.Snapshot, profile: protocol.Profile, parent:
     local entry = ref and pinned:get(ref)
     local policy = entry and bounds.object(entry.data)
     if not policy then return "Driver launch ceiling is unavailable" end
+    if profile.placement and profile.placement.kind == "docker" and not bounds.member(profile.placement.profile_ref, bounds.ids(policy.placement_profiles, true) or {}) then
+        return "Driver launch ceiling does not admit this placement profile"
+    end
     local selected, selection_error = protocol.preferences(profile)
     if not selected then return selection_error end
     local binding = pinned:get(profile.driver_binding_ref)
@@ -52,7 +55,7 @@ function M.ceiling(pinned: registry.Snapshot, profile: protocol.Profile, parent:
     local schema_ref = meta and bounds.id(meta.descriptor_ref)
     local descriptor = schema_ref and descriptors.load_from(pinned, schema_ref)
     if not descriptor then return "Driver option schema is unavailable" end
-    local _, err = preferences.apply(policy, selected, descriptor)
+    local _, err = preferences.apply(policy, selected, descriptor, profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
     if err then return err end
     if person then return nil end
     local surface = bounds.object(policy.gateway_surface) or {}

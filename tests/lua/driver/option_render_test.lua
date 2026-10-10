@@ -17,6 +17,22 @@ local function field(format: string, path: {string}, merge: string): Object
 end
 local function define_tests()
     test.describe("Descriptor option delivery", function()
+        test.it("captures Codex container configuration and rejects the same options on native", function()
+            local options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true, model_provider = "openai"}
+            local request: configuration.Request = {fixture = true, private_home = true, context = "first_turn", option_values = options,
+                placement_profile_ref = "bee.placement.docker.profiles:coding"}
+            local delivery, err = configuration.call("bee.driver.codex.binding:binding", "bee.driver.codex.binding:configure", request)
+            assert(delivery, tostring(err))
+            local captured: Object? = nil
+            for _, file in ipairs(delivery.files) do
+                if file.path == ".codex/config.toml" then captured = bounds.object(toml.decode(file.content)) end
+            end
+            test.eq(assert(captured).model_provider, "openai")
+            request.placement_profile_ref = "bee.placement.profiles:native"
+            local refused, reason = configuration.call("bee.driver.codex.binding:binding", "bee.driver.codex.binding:configure", request)
+            test.is_nil(refused)
+            test.is_true(tostring(reason):find("ceiling", 1, true) ~= nil)
+        end)
         test.it("renders installed custom-provider schemas with environment references only", function()
             local endpoint = "https://models.example.test/v1"
             local opencode = assert(descriptor.load("bee.driver.opencode.descriptor:cli"))

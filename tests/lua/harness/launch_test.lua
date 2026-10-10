@@ -401,6 +401,32 @@ local function define_tests()
         if not added then error(tostring(add_error)) end
         local workspace = tostring(added.workspace)
         prepare_host(workspace)
+        test.it("refuses a saved container Codex bypass when launch selects native placement", function()
+            local definition_ref = "bee.driver.codex.profiles:research_batch"
+            local policy_ref = "bee.driver.codex.security:launch_policy_codex_batch"
+            with_entry(definition_ref, function(data) data.allowed_overrides = {"thread", "workdir", "placement"} end, function()
+                with_entry(policy_ref, function(data)
+                    data.allowed_overrides = {"thread", "workdir", "placement"}
+                    data.executables, data.executable_env = {codex = "/bin/true"}, {}
+                end, function()
+                    local id = fresh("container-yolo")
+                    local written = profile_call({operation = "put", workspace_id = workspace, profile_id = id, expected_revision = 0,
+                        idempotency_key = fresh("container-save"), profile = {schema_revision = "bee.agent-profile@3", name = "Container Codex",
+                            definition_ref = definition_ref, driver_binding_ref = "bee.driver.codex.binding:binding",
+                            placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}, bee = {},
+                            provider = {options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}}}})
+                    assert(written.ok == true, tostring(written.message))
+                    local planned = value(call("bee.harness.binding:resolve", {definition_ref = definition_ref, workspace_id = workspace,
+                        saved_profile_id = id, saved_profile_revision = 1}))
+                    test.eq(planned.placement_kind, "docker")
+                    local denied = call("bee.harness.binding:admit", {request_id = fresh("native-yolo"), definition_ref = definition_ref,
+                        workspace_id = workspace, saved_profile_id = id, saved_profile_revision = 1, brief = "Fixture", expected_plan_digest = planned.plan_digest,
+                        placement_override = {kind = "native", home = "private"}})
+                    test.is_false(denied.ok)
+                    test.is_true(tostring(denied.error and denied.error.message):find("ceiling", 1, true) ~= nil, tostring(denied.error and denied.error.message))
+                end)
+            end)
+        end)
         test.it("spawns a saved spec through the real carrier and MCP, including a narrowed child", function()
             local parent_id, child_id = fresh("spec-parent"), fresh("spec-child")
             local tools = {"thread_read", "capabilities", "profile_get", "profile_put", "profile_list", "session_open", "session_run", "session_get", "session_close", "thread_message"}

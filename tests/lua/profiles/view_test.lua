@@ -66,6 +66,29 @@ local function select_field(state: view.State, label: string)
 end
 local function define_tests()
     test.describe("Agent profile form input", function()
+        test.it("reviews container bypass and its reach before saving the profile", function()
+            local draft = assert(editor.new({schema_revision = "bee.agent-profile@3", name = "Container Codex",
+                definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding",
+                placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"},
+                provider = {options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}}, bee = {}},
+                {options = {sandbox = {"danger-full-access"}, approval_policy = {"never"}, dangerously_bypass_approvals_and_sandbox = {true}},
+                    placements = {"bee.placement.docker.profiles:coding"}, mcp_tools = {}, instructions = false}))
+            local prompt = ""
+            local s = view.new({workspace_id = "workspace", profile_id = "container", revision = 0, draft = draft, save_key = "save", remove_key = "remove"},
+                function(target: string, request: Object): caller.Reply
+                    local card = request.prompt
+                    if type(card) == "table" then prompt = tostring(card.text) end
+                    return ask(target, request)
+                end)
+            test.is_nil(view.action(s, "save"))
+            for _, phrase in ipairs({"without approvals inside the container", "project", "/workspace", "write", "bee-coding", "credentials", "gateway", "codex_login", "codex_api_key"}) do
+                test.is_true(prompt:find(phrase, 1, true) ~= nil, phrase .. " is absent from the approval card")
+            end
+            local rendered = table.concat(view.draw(120, 45, appearance.defaults(), s).rows, "\n")
+            test.is_true(rendered:find("without approvals inside the container", 1, true) ~= nil)
+            test.is_true(rendered:find("/workspace", 1, true) ~= nil)
+            test.eq(view.action(s, "save", "enter"), "save")
+        end)
         test.it("keeps provider answers when the host has no accepted transport", function()
             local s = state()
             select_field(s, "Permission answers")

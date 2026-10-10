@@ -25,6 +25,31 @@ type Form = {traits: {TraitRow}?,permission_transport: boolean?, driver_name: st
     fields: {[string]: {label: string, section: string, order: integer, group: string?, default: unknown, default_source: string?, value_schema: {[string]: unknown}?}}?, unsupported: {string}?,
     migration_diagnostic: {[string]: unknown}?, repair_json: string?}
 
+function M.review(form: Form): (string?, string?)
+    local profile, invalid = editor.result(form.draft)
+    if not profile then return nil, invalid end
+    local pinned, pin_error = catalog.pin()
+    if not pinned then return nil, pin_error end
+    local binding = catalog.entry(pinned, profile.driver_binding_ref)
+    local meta = binding and bounds.object(binding.meta)
+    local ref = meta and bounds.id(meta.descriptor_ref)
+    if not ref then return nil, "Driver descriptor is missing" end
+    local descriptor, schema_error = descriptors.load_from(pinned, ref)
+    if not descriptor then return nil, schema_error end
+    local selected, selection_error = protocol.preferences(profile)
+    if not selected then return nil, selection_error end
+    local review, review_error = preferences.review(descriptor, selected.options, editor.placement_ref(profile))
+    if not review then return nil, review_error end
+    local entry = catalog.entry(pinned, profile.definition_ref)
+    if not entry then return nil, "Agent definition is missing" end
+    local declared, definition_error = definition.decode(profile.definition_ref, entry)
+    if not declared then return nil, definition_error end
+    local credentials = profile.bee.credential_refs or definition.credential_names(declared, "docker", true)
+    review = review .. "\nSelected credentials: " .. (#credentials == 0 and "none" or table.concat(credentials, ", "))
+    if profile.workdir then review = review .. "\nLaunch folder: " .. profile.workdir.root_ref .. "/" .. profile.workdir.path end
+    return review, nil
+end
+
 function M.credential_names(form: Form): {string}
     if not form.credential_definition then return form.credentials or {} end
     local placement = form.draft.placement
@@ -142,7 +167,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     if not descriptor then return repair_only(descriptor_error) end
     local probed = readiness.probe(decoded.binding_ref, decoded.profile_id, readiness.new_cache(), editor.placement_ref(base))
     local capabilities = probed.result and probed.result.capabilities or {}
-    local compiled, compile_error = preferences.compile(descriptor, policy_data, policy_data.fixture == true and nil or capabilities)
+    local compiled, compile_error = preferences.compile(descriptor, policy_data, policy_data.fixture ~= true and capabilities or nil, nil, nil, nil, nil, editor.placement_ref(base))
     if not compiled then return repair_only(compile_error) end
     local metadata: {[string]: {label: string, section: string, order: integer, group: string?, default: unknown, default_source: string?, value_schema: {[string]: unknown}?}} = {}
     local unsupported: {string} = {}

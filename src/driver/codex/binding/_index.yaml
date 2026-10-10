@@ -45,9 +45,10 @@ entries:
     actions:
     - registry.get
     - registry.snapshot
+    - funcs.call
     resources:
     - '*'
-    expression: (action == "registry.get" && resource == "bee.driver.codex.descriptor:cli") || action == "registry.snapshot"
+    expression: (action == "registry.get" && resource == "bee.driver.codex.descriptor:cli") || action == "registry.snapshot" || (action == "funcs.call" && resource == "bee.placement.profiles:context")
 - name: configuration
   kind: library.lua
   source: file://configuration.lua

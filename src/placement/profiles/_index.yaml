@@ -14,6 +14,7 @@ entries:
   modules:
   - hash
   - registry
+  - funcs
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -22,6 +23,23 @@ entries:
   meta:
     type: bee.placement_profile
     title: Local
+    isolation: {kind: native, credentials: [admitted launch credentials]}
   data:
     schema_revision: bee.placement-profile@1
     placement_binding: bee.placement.native.binding:binding
+- name: context
+  kind: function.lua
+  source: file://context.lua
+  method: handle
+  modules: [registry]
+  imports:
+    profiles: bee.placement.profiles:profiles
+    bounds: bee.values:bounds
+  security:
+    policies: [bee.placement.profiles:context_policy]
+- name: context_policy
+  kind: security.policy
+  policy:
+    actions: [registry.snapshot, registry.get]
+    resources: '*'
+    effect: allow

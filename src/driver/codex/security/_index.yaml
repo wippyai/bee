@@ -53,6 +53,9 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.options.sandbox: {kind: declared}
+      provider.options.approval_policy: {kind: declared}
+      provider.options.dangerously_bypass_approvals_and_sandbox: {kind: declared}
       provider.model:
         kind: declared
       provider.options.model_provider:
@@ -120,6 +123,9 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.options.sandbox: {kind: declared}
+      provider.options.approval_policy: {kind: declared}
+      provider.options.dangerously_bypass_approvals_and_sandbox: {kind: declared}
       provider.model:
         kind: declared
       provider.options.model_provider:
@@ -206,11 +212,10 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.options.sandbox: {kind: declared}
+      provider.options.approval_policy: {kind: declared}
+      provider.options.dangerously_bypass_approvals_and_sandbox: {kind: declared}
       provider.model:
-        kind: declared
-      provider.options.sandbox:
-        kind: declared
-      provider.options.approval_policy:
         kind: declared
       provider.options.model_provider:
         kind: declared

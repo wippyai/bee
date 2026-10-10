@@ -2,6 +2,6 @@
 set -eu
 case "${1:-}" in
   --version) printf '%s\n' 'codex-cli 0.104.0' ;;
-  --help) printf '%s\n' '--model <name>' '--sandbox <mode>' '--config <key=value>' '--profile <name>' ;;
+  --help) printf '%s\n' '--model <name>' '--sandbox <mode>' '--dangerously-bypass-approvals-and-sandbox' '--config <key=value>' '--profile <name>' ;;
   *) exit 64 ;;
 esac

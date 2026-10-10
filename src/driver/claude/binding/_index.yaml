@@ -46,9 +46,10 @@ entries:
     actions:
     - registry.get
     - registry.snapshot
+    - funcs.call
     resources:
     - '*'
-    expression: (action == "registry.get" && resource == "bee.driver.claude.descriptor:cli") || action == "registry.snapshot"
+    expression: (action == "registry.get" && resource == "bee.driver.claude.descriptor:cli") || action == "registry.snapshot" || (action == "funcs.call" && resource == "bee.placement.profiles:context")
 - name: binding
   kind: contract.binding
   contracts:

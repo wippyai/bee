@@ -9,7 +9,7 @@ local descriptors = require("descriptors")
 local profiles = require("profiles")
 local preferences = require("preferences")
 local M = {}
-type Plan = {binding_ref: string, policy_ref: string, profile_id: string, mode: string, effective_profile: unknown}
+type Plan = {placement_profile_ref: string?, binding_ref: string, policy_ref: string, profile_id: string, mode: string, effective_profile: unknown}
 type Requirement = {provider: string, base_path: string}
 function M.requirements(plan: Plan): ({Requirement}?, string?)
     local pinned, pin_error = registry.snapshot()
@@ -33,13 +33,13 @@ function M.requirements(plan: Plan): ({Requirement}?, string?)
     if saved then
         local selected, selection_error = profiles.preferences(saved)
         if not selected then return nil, selection_error end
-        local merged, preference_error = preferences.apply(data, selected, descriptor)
+        local merged, preference_error = preferences.apply(data, selected, descriptor, plan.placement_profile_ref)
         if not merged then return nil, preference_error end
         data = merged
     end
     local options, option_error = preferences.decode_prepare_options(data.prepare_options)
     if not options then return nil, option_error end
-    local request: configuration.Request = {fixture = data.fixture == true, context = plan.mode == "window" and "window" or "first_turn",
+    local request: configuration.Request = {placement_profile_ref = plan.placement_profile_ref, fixture = data.fixture == true, context = plan.mode == "window" and "window" or "first_turn",
         option_values = options, private_home = private,
         instructions = type(data.instructions) == "string" and data.instructions or nil}
     local home, home_error = env.get("bee.env:machine_home")

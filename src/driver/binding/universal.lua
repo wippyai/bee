@@ -92,10 +92,11 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
     if not object then return nil, "launch request must be an object" end
     local options = bounds.object(selected.options) or {}
     local declared_fields = bounds.object(options.fields) or {}
-    local allowed: {string} = {"profile_id", "brief", "option_provenance"}
+    local allowed: {string} = {"profile_id", "brief", "option_provenance", "placement_profile_ref"}
     for name in pairs(declared_fields) do allowed[#allowed + 1] = tostring(name) end
     local extra = bounds.fields(object, allowed)
     if extra then return nil, (bounds.text(options.unknown_prefix, 64) or "") .. extra end
+    if object.placement_profile_ref ~= nil and not bounds.id(object.placement_profile_ref) then return nil, "placement_profile_ref is invalid" end
     local profile_id = bounds.member(object.profile_id, assert(bounds.ids(options.profiles, true)))
     if not profile_id then return nil, "profile_id is not one Bee admits" end
     local brief = bounds.text(object.brief, profile_id == "window" and 65536 or bounds.MAX_TEXT_BYTES)
@@ -103,7 +104,7 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
     local request: Request = {profile_id = profile_id, brief = brief}
     local values: Object = {}
     for name in pairs(declared_fields) do values[name] = object[name] end
-    local compiled, compile_error = effective.compile(selected, nil, nil, values, nil, nil, bounds.object(object.option_provenance))
+    local compiled, compile_error = effective.compile(selected, nil, nil, values, nil, nil, bounds.object(object.option_provenance), bounds.id(object.placement_profile_ref))
     if not compiled then return nil, compile_error end
     for name, value in pairs(compiled.values) do
         request[name] = value
@@ -535,7 +536,7 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
         if not delivery then return {ok = false, error = delivery_error} end
         local prompt_files = generic.system_prompt_files
         generic.system_prompt_files = nil
-        local compiled, compile_error = effective.compile(descriptor, nil, nil, generic, nil, nil, request.option_provenance)
+        local compiled, compile_error = effective.compile(descriptor, nil, nil, generic, nil, nil, request.option_provenance, request.placement_profile_ref)
         if not compiled then return {ok = false, error = compile_error} end
         generic = compiled.values
         generic.system_prompt_files = prompt_files

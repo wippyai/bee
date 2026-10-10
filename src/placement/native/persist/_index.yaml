@@ -10,6 +10,7 @@ entries:
   - time
   imports:
     bounds: bee.values:bounds
+    trust_lifetime: bee.placement.native.service:trust_lifetime
     node_database: bee.persist:database
     resources: bee.placement.native.env:resources
     types: bee.placement:types

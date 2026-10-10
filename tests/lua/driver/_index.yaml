@@ -193,7 +193,7 @@ entries:
     resources: [bee.driver.claude.env:config_home, bee.driver.claude.env:api_key, bee.driver.codex.env:config_home]
     effect: allow
 - name: effective_test
-  modules: [registry]
+  modules: [registry, json]
   kind: function.lua
   source: file://effective_test.lua
   method: run
@@ -202,4 +202,6 @@ entries:
     test: wippy.test:test
     descriptors: bee.driver.descriptor:descriptor
     effective: bee.driver.descriptor:effective
+    universal: bee.driver.binding:universal
+    profiles: bee.harness.profiles:protocol
     bounds: bee.values:bounds

@@ -6,6 +6,7 @@ local sql = require("sql")
 local json = require("json")
 local time = require("time")
 local node_database = require("node_database")
+local trust_lifetime = require("trust_lifetime")
 local types = require("types")
 local placement_decode = require("placement_decode")
 local transitions = require("transitions")
@@ -338,6 +339,10 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
             return {ok = false, code = "CONFLICT", message = "cleanup " .. cleanup .. " does not move to " .. update.cleanup}
         end
         cleanup = update.cleanup
+    end
+    if execution == "exited" or execution == "start_failed" or cleanup == "complete" then
+        local trust_error = trust_lifetime.finish(tx, attempt_id)
+        if trust_error then rollback(tx); return {ok = false, code = "STORAGE", message = trust_error} end
     end
     local at = M.now()
     local sequence, evidence_err = append(tx, attempt_id, count, update.evidence.kind, update.evidence.detail, at)

@@ -227,6 +227,7 @@ entries:
   policy:
     actions: [funcs.call]
     resources:
+    - bee.placement.native.service:revoke_trust
     - bee.gov.types:lease_grant
     - bee.approvals.types:runtime_grant
     - bee.placement.docker.env:grant

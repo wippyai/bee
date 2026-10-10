@@ -26,6 +26,7 @@ local interrupted = require("interrupted")
 local profiles = require("profiles")
 local profile_validation = require("profile_validation")
 local descriptors = require("descriptors")
+local effective_schema = require("effective_schema")
 local M = {}
 M.CARRIER = "bee.harness.service:carrier"
 M.CARRIER_HOST_REF = "bee.harness.env:carrier_host_ref"
@@ -505,11 +506,16 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
     local descriptor = descriptor_ref and descriptors.load_from(pinned, descriptor_ref)
     local fields = descriptor and bounds.object(descriptor.options.fields) or {}
+    local compiled_values = launch_policy.prepare_options
+    if descriptor then
+        local compiled, compile_error = effective_schema.compile(descriptor, nil, nil, launch_policy.prepare_options)
+        if not compiled then return nil, fail("INVALID", compile_error or "Driver option schema unavailable") end
+        compiled_values = compiled.values
+    end
     for name, raw in pairs(fields) do
         local field = bounds.object(raw)
         local path = field and bounds.id(field.path)
-        local value = launch_policy.prepare_options[name]
-        if value == nil and field then value = field.default end
+        local value = compiled_values[name]
         if path and value ~= nil then
             if path == "provider.model" and type(value) == "string" then effective_profile.provider.model = value
             elseif path == "provider.effort" and type(value) == "string" then effective_profile.provider.effort = value

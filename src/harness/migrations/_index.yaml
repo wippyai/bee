@@ -43,3 +43,14 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     protocol: bee.harness.profiles:protocol
+- name: driver_options_all
+  kind: function.lua
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-22T00:01:00Z'}
+  source: file://driver_options_all.lua
+  method: run
+  modules: [json, registry]
+  imports:
+    migration: wippy.migration:migration
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    profile_migration: bee.harness.profiles.persist:migration

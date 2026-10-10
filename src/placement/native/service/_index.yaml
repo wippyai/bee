@@ -140,6 +140,7 @@ entries:
   - process
   - hash
   imports:
+    trust_lifetime: bee.placement.native.service:trust_lifetime
     effective_schema: bee.driver.descriptor:effective
     profile_values: bee.driver.descriptor:profile_values
     trust: bee.driver.descriptor:trust
@@ -332,3 +333,27 @@ entries:
   method: pending
   imports:
     service: bee.placement.native.service:service
+- name: trust_lifetime
+  kind: library.lua
+  source: file://trust_lifetime.lua
+  modules: [sql, json, process]
+  imports:
+    protocol: bee.placement.native:protocol
+    clock: bee.values:clock
+    bounds: bee.values:bounds
+    homes: bee.placement.native.service:homes
+    trust: bee.driver.descriptor:trust
+- name: revoke_trust
+  kind: function.lua
+  source: file://trust_lifetime.lua
+  method: revoke
+  meta: {type: bee.approvals.grant-revocation-effect, domain: profile_choices, destination: placement.folder_trust}
+  modules: [sql, json, process]
+  security:
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_service_policy]
+  imports:
+    protocol: bee.placement.native:protocol
+    clock: bee.values:clock
+    bounds: bee.values:bounds
+    homes: bee.placement.native.service:homes
+    trust: bee.driver.descriptor:trust

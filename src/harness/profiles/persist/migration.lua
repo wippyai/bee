@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: MIT
 local bounds = require("bounds")
 local protocol = require("protocol")
+local driver_profile = require("driver_profile")
 local M = {}
 M.ID = "bee.agent-profile@3"
 M.DIAGNOSTIC = "bee.agent-profile-migration@1"
@@ -55,7 +56,9 @@ function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profil
         local validation_error = validate and validate(profile) or nil
         if validation_error then return diagnostic(validation_error) end
         if #reasons > 0 then return {schema_revision = M.DIAGNOSTIC, source = value, draft = draft, reasons = reasons} end
-        return current
+        local stored, storage_error = protocol.storage(profile)
+        if not stored then return diagnostic(storage_error or "Driver option schema unavailable") end
+        return stored
     end
     local extra = bounds.fields(source, {"schema_revision", "title", "definition_ref", "options", "config_profile", "mcp_tools", "instructions", "placement_profile_ref", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "bee", "budget", "progress_quiet_ms", "presentation"})
     if extra then reasons[#reasons + 1] = extra end
@@ -108,6 +111,31 @@ function M.convert(value: unknown, binding: Binding, validate: ((protocol.Profil
         if invalid then reasons[#reasons + 1] = invalid end
     end
     if #reasons > 0 then return {schema_revision = M.DIAGNOSTIC, source = value, draft = draft, reasons = reasons} end
-    return draft
+    if not checked then return diagnostic("Profile cannot be mapped") end
+    local stored, storage_error = protocol.storage(checked)
+    if not stored then return diagnostic(storage_error or "Driver option schema unavailable") end
+    return stored
+end
+function M.registered(value: unknown, pinned: registry.Snapshot, validate: ((protocol.Profile) -> string?)?): Object
+    return M.convert(value, function(ref: string): string?
+            local entry = pinned:get(ref)
+            local data = entry and bounds.object(entry.data)
+            return data and bounds.id(data.binding_ref) or nil
+        end, validate,
+        function(ref: string): NativeHome?
+            local entry = pinned:get(ref)
+            local definition = entry and bounds.object(entry.data)
+            local binding_ref = definition and bounds.id(definition.binding_ref)
+            local binding = binding_ref and pinned:get(binding_ref)
+            local meta = binding and bounds.object(binding.meta)
+            local profiles_ref = meta and bounds.id(meta.profiles_ref)
+            local declaration = profiles_ref and pinned:get(profiles_ref)
+            local data = declaration and bounds.object(declaration.data)
+            local driver = data and driver_profile.decode(data.driver)
+            local profile_id = definition and bounds.id(definition.profile_id)
+            local selected = driver and profile_id and driver_profile.find(driver, profile_id)
+            if not selected then return nil end
+            return selected.isolation_env.private_home and "private" or "machine"
+        end)
 end
 return M

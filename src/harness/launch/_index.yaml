@@ -37,6 +37,7 @@ entries:
     interrupted: bee.harness.carrier:interrupted
     profiles: bee.harness.profiles:protocol
     profile_validation: bee.harness.profiles.binding:validation
+    effective_schema: bee.driver.descriptor:effective
     descriptors: bee.driver.descriptor:descriptor
     placement_profiles: bee.placement.profiles:profiles
     record_bounds: bee.threads.records:bounds

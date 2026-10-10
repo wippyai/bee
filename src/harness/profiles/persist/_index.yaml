@@ -4,7 +4,9 @@ entries:
 - name: migration
   kind: library.lua
   source: file://migration.lua
+  modules: [registry]
   imports:
+    driver_profile: bee.driver.profiles:profile
     bounds: bee.values:bounds
     protocol: bee.harness.profiles:protocol
 - name: store
@@ -21,7 +23,6 @@ entries:
     transaction: bee.persist:transaction
     protocol: bee.harness.profiles:protocol
     migration: bee.harness.profiles.persist:migration
-    driver_profile: bee.driver.profiles:profile
     authority: bee.harness.profiles.persist:grants
     clock: bee.values:clock
 

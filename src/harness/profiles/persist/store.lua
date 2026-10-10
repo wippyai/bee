@@ -8,7 +8,6 @@ local sync = require("sync")
 local transaction = require("transaction")
 local protocol = require("protocol")
 local migration = require("migration")
-local driver_profile = require("driver_profile")
 
 local authority = require("authority")
 local clock = require("clock")
@@ -237,26 +236,7 @@ function M.call(input: Request, node: string, actor: string, pinned: registry.Sn
     local store, open_error = open(owner)
     if not store then return failure("UNAVAILABLE", open_error or "profile store unavailable") end
     local migrated = store:migrate(FEED_PREFIX, migration.ID, function(source: unknown): (unknown?, string?)
-        return migration.convert(source, function(ref: string): string?
-            local entry = pinned:get(ref)
-            local data = entry and bounds.object(entry.data)
-            return data and bounds.id(data.binding_ref) or nil
-        end, function(profile: Profile): string? return validate(pinned, profile) end,
-        function(ref: string): migration.NativeHome?
-            local entry = pinned:get(ref)
-            local definition = entry and bounds.object(entry.data)
-            local binding_ref = definition and bounds.id(definition.binding_ref)
-            local binding = binding_ref and pinned:get(binding_ref)
-            local meta = binding and bounds.object(binding.meta)
-            local profiles_ref = meta and bounds.id(meta.profiles_ref)
-            local declaration = profiles_ref and pinned:get(profiles_ref)
-            local data = declaration and bounds.object(declaration.data)
-            local driver = data and driver_profile.decode(data.driver)
-            local profile_id = definition and bounds.id(definition.profile_id)
-            local selected = driver and profile_id and driver_profile.find(driver, profile_id)
-            if not selected then return nil end
-            return selected.isolation_env.private_home and "private" or "machine"
-        end), nil
+        return migration.registered(source, pinned, function(profile: Profile): string? return validate(pinned, profile) end), nil
     end)
     if not migrated.ok then store:close(); return clean(migrated) end
     local request: Request = {operation = input.operation, workspace_id = input.workspace_id,

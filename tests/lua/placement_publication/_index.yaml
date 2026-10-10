@@ -14,6 +14,7 @@ entries:
   modules: [env, fs, funcs, sql, process, hash, registry]
   imports:
     profile_values: bee.driver.descriptor:profile_values
+    trust_lifetime: bee.placement.native.service:trust_lifetime
     effective_schema: bee.driver.descriptor:effective
     trust: bee.driver.descriptor:trust
     grants: bee.approvals.grants:store
@@ -121,3 +122,15 @@ entries:
   directory: ${env:bee.env:machine_home}/.config/opencode
   mode: '0700'
   auto_init: true
+- name: admitted_provider_policy
+  kind: registry.entry
+  meta: {type: bee.launch_policy, test_support: true}
+  data:
+    schema_revision: bee.launch-policy@3
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    fixture: true
+    executables: {}
+    environment: {}
+    profile_restrictions:
+      provider.options.providers: {kind: declared}

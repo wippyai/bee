@@ -26,6 +26,35 @@ local function credentials_tests()
         local measured = native_fixture.value(service.capabilities())
         local capability = tostring(measured.capability)
         local observation = tostring(measured.exit_observation)
+        test.it("refuses authority in a named Codex configuration copied by login initialization", function()
+            local source = "bee.credentials:codex_login_fixture"
+            native_fixture.admit_login_source(source, true)
+            local root = ".wippy/codex-login-fixture/.codex"
+            native_fixture.shell("mkdir -p " .. quote.posix(root))
+            native_fixture.shell("printf %s " .. quote.posix('{}') .. " > " .. quote.posix(root .. "/auth.json"))
+            native_fixture.shell("printf %s " .. quote.posix('[history]\npersistence="save-all"') .. " > " .. quote.posix(root .. "/config.toml"))
+            native_fixture.shell("printf %s " .. quote.posix('[sandbox_workspace_write]\nnetwork_access=true') .. " > " .. quote.posix(root .. "/ds-flash.config.toml"))
+            local workspace = native_fixture.fresh("named-config")
+            native_fixture.credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
+            local attempt = native_fixture.fresh("named-config-attempt")
+            local projection = native_fixture.credential_call("issue_projection", {workspace_id = workspace, name = "login", audience = native_fixture.OWNER,
+                attempt_id = attempt, profile_id = "batch", profile_digest = native_fixture.DIGEST, binding_digest = native_fixture.DIGEST,
+                launch_policy_digest = native_fixture.DIGEST, idempotency_key = native_fixture.fresh("projection")})
+            local request = native_fixture.launch({"sh", "-c", "exit 0"}, "direct_process")
+            request.attempt_id, request.projections = attempt, {projection.projection_id}
+            request.binding_ref, request.policy_ref = "bee.driver.codex.binding:binding", native_fixture.NO_PROVIDER_POLICY
+            request.configuration_digest = nil
+            local launch = assert(bounds.object(request.launch))
+            launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {
+                {source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
+                {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
+                {source_path = ".codex/ds-flash.config.toml", path = ".codex/ds-flash.config.toml", kind = "config", optional = false, write_back = false}}}
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
+            local started = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = attempt}))
+            test.not_nil(started.start_failure)
+            assert(tostring(started.start_failure):find("sandbox_workspace_write.network_access", 1, true), tostring(started.start_failure))
+            native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = attempt}))
+        end)
         test.it("injects a custom provider credential only into the child environment", function()
             local workspace, attempt = native_fixture.fresh("custom-key-workspace"), native_fixture.fresh("custom-key-attempt")
             local secret = "custom-child-fixture-value-42b9"
@@ -425,7 +454,8 @@ local function credentials_tests()
                     collision_projection.projection_id, grok_configuration.BASE_PATH)
                 local collision_prepared, collision_error, collision_db = prepare(collision_request)
                 if collision_prepared then error("colliding Grok MCP subtree was accepted") end
-                test.is_true(tostring(collision_error):find("compose TOML configuration", 1, true) ~= nil)
+                test.is_true(tostring(collision_error):find("mcp_servers.bee", 1, true) ~= nil)
+                test.is_true(tostring(collision_error):find("has no admitted mapping", 1, true) ~= nil)
                 evidence_has_no_start_or_publication(collision_db, collision_attempt)
                 local _, collision_home = session_path(collision_session)
                 test.eq(native_fixture.shell("test ! -e " .. quote.posix(collision_home .. "/.grok/config.toml") .. " && printf absent"), "absent")

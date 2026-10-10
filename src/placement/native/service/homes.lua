@@ -281,6 +281,18 @@ local function read_bounded(vol: fs.FS, path: string, bound: integer, label: str
     if found == nil then return nil, read_error end
     return found, nil
 end
+function M.read_isolated_configuration(home_path: string, relative: string): (string?, string?)
+    if not (home_path:match("^/sessions/[0-9a-f]+$") or home_path:match("^/attempts/[0-9a-f]+$")) or not formats.path(relative) then
+        return nil, "Trust configuration is outside an isolated home"
+    end
+    local vol, vol_error = volume()
+    if not vol then return nil, vol_error end
+    local privacy_error = private_root(vol)
+    if privacy_error then return nil, privacy_error end
+    local path = home_path .. "/home/" .. relative
+    if not vol:exists(path) then return nil, nil end
+    return read_bounded(vol, path, types.MAX_COMPOSED_CONFIGURATION_BYTES, "isolated trust configuration")
+end
 function M.read_provider_file(_: string, relative: string): (string?, string?)
     if not formats.path(relative) then return nil, "provider file path escapes the home" end
     return nil, "provider login write-back requires runtime no-follow fs"

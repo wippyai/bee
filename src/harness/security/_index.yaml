@@ -126,7 +126,7 @@ entries:
   meta:
     comment: Saved profile facade storage and read-only registry validation; callers separately require workspace read or write authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || action != "funcs.call"
+    expression: (action == "funcs.call" && (resource == "bee.gov.binding:driver_bindings" || resource == "bee.placement.native.service:revoke_trust")) || action != "funcs.call"
     actions:
     - funcs.call
     - db.get

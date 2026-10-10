@@ -220,6 +220,9 @@ entries:
               then:
               - --config
               - format: model_reasoning_effort="{effort}"
+          config_aliases:
+          - format: toml
+            path: [model_reasoning_effort]
           id: effort
           group: model/provider
           security_class: free
@@ -342,6 +345,9 @@ entries:
               then:
               - --model
               - field: model
+          config_aliases:
+          - format: toml
+            path: [model]
           id: model
           group: model/provider
           security_class: free

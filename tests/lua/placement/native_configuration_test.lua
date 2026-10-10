@@ -18,9 +18,67 @@ local native_fixture = require("native_fixture")
 local trust = require("trust")
 local descriptors = require("descriptors")
 local resources = require("resources")
+local grants = require("grants")
+local authority = require("authority")
 
 local function configuration_tests()
     test.describe("Native placement configuration", function()
+        for _, ending in ipairs({"attempt", "session", "retire", "delete", "revoke"}) do
+            test.it("clears retained folder trust on " .. ending, function()
+                local profile = native_fixture.fresh("trust-profile")
+                local db = assert(store.open())
+                local grant = assert(authority.save(db, native_fixture.OWNER, profile, profile, 1,
+                    {driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}},
+                    "person", false, "2026-10-01T00:00:00.000Z"))
+                db:release()
+                local request = native_fixture.retained_launch(native_fixture.OWNER, profile, "trust")
+                request.configuration_digest = nil
+                request.policy_ref = "bee.placement.native:trust_launch_policy"
+                request.preferences = {options = {folder_trust = "approved-workdir"}, authority_grant_id = grant.grant_id}
+                local workdir = native_fixture.fresh("approved")
+                native_fixture.shell(quote.line({"mkdir", "-p", assert(resources.directory(native_fixture.ROOT)) .. "/" .. workdir .. "/.git"}))
+                local grants_list = principals.objects(request.resources)
+                request.resources = grants_list
+                for _, resource in ipairs(grants_list) do if resource.name == "project" then resource.subpath = workdir end end
+                local launch = assert(bounds.object(request.launch))
+                launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {}}
+                launch.argv = {"-c", [[grep -q 'trust_level.*trusted' "$CODEX_HOME/config.toml" || exit 7; ]] ..
+                    ((ending == "attempt" or ending == "session") and "exit 0" or "exec sleep 30")}
+                local data = assert(bounds.object(assert(registry.get("bee.placement.native:trust_launch_policy")).data))
+                local effective = assert(preferences.apply(data, request.preferences, assert(descriptors.load("bee.driver.codex.descriptor:cli"))))
+                request.configuration_digest = assert(configuration_protocol.digest("bee.driver.codex.binding:binding",
+                    {fixture = true, provider_ref = "bee.placement.native:codex_test_provider", provider = assert(registry.get("bee.placement.native:codex_test_provider")),
+                        option_values = effective.prepare_options}, "bee.driver.codex.binding:configure"))
+                local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
+                local started = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))
+                assert(not started.start_failure, started.start_failure)
+                if ending == "revoke" or ending == "retire" or ending == "delete" then
+                    test.eq(started.execution_state, "running")
+                    db = assert(store.open())
+                    local tx = assert(db:begin())
+                    local err: string? = nil
+                    if ending == "revoke" then err = grants.revoke(tx, grant, grant.revision, "person", 1790000000000)
+                    else err = authority.retire(tx, native_fixture.OWNER, profile, profile, "person") end
+                    if err then tx:rollback() else assert(tx:commit()) end
+                    db:release()
+                    test.is_nil(err)
+                end
+                test.is_true(native_fixture.wait_for(function()
+                    local status = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id}))
+                    return assert(bounds.object(status.attempt)).execution_state == "exited"
+                end, 8000))
+                if ending == "attempt" or ending == "session" then
+                    local status = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id}))
+                    test.eq(assert(bounds.object(assert(bounds.object(status.attempt)).exit)).code, 0)
+                end
+                native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+                local home = assert(homes.ensure_session(assert(homes.session_key(native_fixture.OWNER, profile))))
+                local observed = native_fixture.shell(quote.line({"cat", assert(homes.os_path(home .. "/home/.codex/config.toml"))}))
+                local root = assert(bounds.object(toml.decode(observed)))
+                test.not_nil(root.model)
+                for _, project in pairs(assert(bounds.object(root.projects))) do test.is_nil(assert(bounds.object(project)).trust_level) end
+            end)
+        end
         test.it("resolves symlinks and refuses trust outside the approved workdir and repository scope", function()
             local root = assert(resources.directory(native_fixture.ROOT)) .. "/" .. native_fixture.fresh("trust")
             native_fixture.shell(quote.line({"mkdir", "-p", root .. "/approved/.git", root .. "/outside", root .. "/repo/.git", root .. "/repo/child"}))

@@ -80,6 +80,29 @@ local function define_tests()
             end
             db:release()
         end)
+        test.it("pins v1 v2 and v3 projection records in the all-version migration", function()
+            local db = schema.open(DATABASE, "bee.approvals.migrations")
+            local feed = "harness.profiles:all-versions"
+            assert(db:execute("INSERT INTO bee_sync_feeds VALUES ('node',?,1,1,128,1024)", {feed}))
+            for version = 1, 3 do
+                local profile: {[string]: unknown} = {schema_revision = "bee.agent-profile@" .. tostring(version),
+                    definition_ref = "bee.driver.codex.profiles:research_batch"}
+                if version == 1 then profile.title, profile.options = "Old", {model = "gpt-6"}
+                else profile.name, profile.driver_binding_ref, profile.provider, profile.bee = "Old", "bee.driver.codex.binding:binding", {model = "gpt-6"}, {} end
+                assert(db:execute("INSERT INTO bee_sync_projections VALUES ('node',?,?,1,?,0,1,'2026-10-01T00:00:00Z')", {feed, tostring(version), json.encode(profile)}))
+            end
+            local id = "bee.harness.migrations:driver_options_all"
+            local reply, err = funcs.call(id, {target_db = "bee:db", database_id = DATABASE, direction = "up", id = id})
+            assert(not err, tostring(err)); assert(assert(bounds.object(reply)).status ~= "error", json.encode(reply))
+            for _, row in ipairs(assert(db:query("SELECT value_json FROM bee_sync_projections WHERE feed = ?", {feed}))) do
+                local profile = assert(bounds.object(json.decode(row.value_json)))
+                local provider = assert(bounds.object(profile.provider), json.encode(profile))
+                test.eq(provider.schema_ref, "bee.driver.codex.descriptor:cli")
+                test.eq(provider.schema_revision, "bee.driver.cli-descriptor@4")
+                test.eq(assert(bounds.object(provider.values)).model, "gpt-6")
+            end
+            db:release()
+        end)
         test.it("pins declared options and quarantines unknown values without changing consent", function()
             local db = schema.open(DATABASE, "bee.approvals.migrations")
             local feed = "harness.profiles:" .. assert(hash.sha256("option-migration"))

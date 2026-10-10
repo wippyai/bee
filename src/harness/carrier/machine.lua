@@ -305,15 +305,15 @@ local function measure(request: Request): (Measured?, string?)
         local descriptor, _, schema_error = profile_values.schema(request.binding_ref)
         if request.preferences and not descriptor then return nil, schema_error or "Driver option schema is unavailable" end
         if descriptor then
-        local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref)
-        local capabilities = probed.result and probed.result.capabilities or {}
-        local values: Object = {}
-        if request.preferences then
-            for name, value in pairs(request.preferences.options) do values[name] = value end
-            if request.preferences.instructions ~= "" then values.system_prompt_append = request.preferences.instructions end
-        end
-        local _, invalid = effective_schema.compile(descriptor, bounds.object(policy_entry.data), capabilities, values)
-        if invalid then return nil, invalid end
+            local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref)
+            local capabilities = probed.result and probed.result.capabilities or {}
+            local values: Object = {}
+            if request.preferences then
+                for name, value in pairs(request.preferences.options) do values[name] = value end
+                if request.preferences.instructions ~= "" then values.system_prompt_append = request.preferences.instructions end
+            end
+            local _, invalid = effective_schema.compile(descriptor, bounds.object(policy_entry.data), capabilities, values)
+            if invalid then return nil, invalid end
         end
     end
     local configure_target = binding.methods.configure
@@ -324,7 +324,7 @@ local function measure(request: Request): (Measured?, string?)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
     local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, {provider_ref = launch_policy.provider_ref,
-        option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or "first_turn", provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
+        option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or "first_turn", provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
         gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
     if not configuration_digest then return nil, configuration_error end
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
@@ -387,6 +387,7 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
         return nil, "launch policy does not authorize host HOME"
     end
     local prepare_request: {[string]: unknown} = {}
+    prepare_request.option_provenance = launch_policy.option_provenance
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id
     prepare_request.brief = request.brief

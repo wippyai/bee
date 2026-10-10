@@ -36,10 +36,12 @@ function M.admit(workdir: string, roots: {string}, executor_ref: string, reposit
         local output = proc:stdout_stream()
         local started, start_error = proc:start()
         if not started then executor:release(); return nil, tostring(start_error) end
-        local found = output:read(8194)
+        local found, read_error = output:read(8194)
         output:close()
         local code, wait_error = proc:wait()
         executor:release()
+        if read_error and tostring(read_error) ~= "EOF" then return nil, "Cannot inspect project configuration trust" end
+        if found == nil then found = "" end
         if code ~= 0 or wait_error or type(found) ~= "string" then return nil, "Cannot inspect project configuration trust" end
         if found ~= "" then return nil, "Folder trust would activate project configuration outside the host ceiling: " .. found end
     end

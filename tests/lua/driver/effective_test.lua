@@ -3,8 +3,65 @@ local descriptors = require("descriptors")
 local effective = require("effective")
 local registry = require("registry")
 local bounds = require("bounds")
+local universal = require("universal")
+local profiles = require("profiles")
+local json = require("json")
 local function define_tests()
     test.describe("Effective driver option schema", function()
+        test.it("launches an omitted permission mode with the policy default", function()
+            local cli = assert(descriptors.load("bee.driver.claude.descriptor:cli"))
+            local applied = assert(effective.apply({profile_restrictions = {["provider.permission_mode"] = {"plan"}}}, {}, cli))
+            local options = assert(bounds.object(applied.prepare_options))
+            options.profile_id, options.brief = "batch", "Fixture"
+            options.option_provenance = applied.option_provenance
+            local reply = assert(bounds.object(universal.prepare("bee.driver.claude.descriptor:cli")(options)))
+            test.eq(reply.ok, true)
+            local argv = assert(bounds.ids(assert(bounds.object(reply.launch)).argv, true))
+            test.eq(assert(bounds.object(applied.option_provenance)).permission_mode, "host policy")
+            test.not_nil(bounds.member("plan", argv))
+            test.is_nil(bounds.member("manual", argv))
+        end)
+        test.it("refuses an excluded default without a declared least-capability replacement", function()
+            local cli = assert(descriptors.load("bee.driver.claude.descriptor:cli"))
+            local compiled, err = effective.compile(cli, {profile_restrictions = {["provider.permission_mode"] = {"auto", "dontAsk"}}})
+            test.is_nil(compiled)
+            test.is_true(assert(err):find("no least-capability allowed value", 1, true) ~= nil)
+            compiled = assert(effective.compile(cli, {profile_restrictions = {["provider.permission_mode"] = {"plan"}},
+                option_constraints = {permission_mode = {capabilities = {"read"}}}}))
+            test.eq(compiled.values.permission_mode, "plan")
+        end)
+        test.it("launches empty saved selections for every driver", function()
+            for _, driver in ipairs({"agy", "grok", "opencode", "claude", "codex", "muse"}) do
+                local ref = "bee.driver." .. driver .. ".descriptor:cli"
+                local cli = assert(descriptors.load(ref))
+                local stored = assert(profiles.storage(assert(profiles.profile({schema_revision = profiles.SCHEMA,
+                    name = "Empty", definition_ref = "bee.driver." .. driver .. ".profiles:default_window",
+                    driver_binding_ref = "bee.driver." .. driver .. ".binding:binding", provider = {}, bee = {}}))))
+                local profile = assert(profiles.profile(json.decode(assert(json.encode(stored)))))
+                local saved = assert(profiles.preferences(profile))
+                local applied = assert(effective.apply({}, saved, cli))
+                local options = assert(bounds.object(applied.prepare_options))
+                options.profile_id, options.brief = "batch", "Fixture"
+            options.option_provenance = applied.option_provenance
+                local reply = assert(bounds.object(universal.prepare(ref)(options)))
+                assert(reply.ok == true, driver .. ": " .. tostring(reply.error))
+            end
+        end)
+        test.it("refuses unmapped authority in every imported config namespace", function()
+            local cli = assert(descriptors.load("bee.driver.codex.descriptor:cli"))
+            for _, item in ipairs({
+                {key = "sandbox_workspace_write.network_access", content = '[sandbox_workspace_write]\nnetwork_access=true'},
+                {key = "mcp_servers.extra", content = '[mcp_servers.extra]\ncommand="outside"'},
+                {key = "model_providers", content = '[model_providers.extra]\nbase_url="https://outside.test"'},
+                {key = "profiles.work.approval_policy", content = '[profiles.work]\napproval_policy="never"'},
+                {key = "base_url", content = 'base_url="https://outside.test"'},
+                {key = "hooks", content = 'hooks=["outside"]'},
+                {key = "env", content = '[env]\nHOME="/outside"'},
+            }) do
+                local err = effective.check_config(cli, {}, ".codex/work.config.toml", item.content)
+                assert(err and err:find(item.key, 1, true), item.key .. " must be refused by name")
+            end
+        end)
         test.it("declares typed security metadata on every editable option", function()
             for _, entry in ipairs(assert(registry.find({["meta.type"] = descriptors.TYPE}))) do
                 local descriptor = assert(descriptors.decode(entry.data))
@@ -107,6 +164,8 @@ local function define_tests()
             test.is_nil(effective.check_config(claude, policy, ".claude/settings.json", '{"permissions":{"defaultMode":"manual"}}'))
             local codex = assert(descriptors.load("bee.driver.codex.descriptor:cli"))
             test.not_nil(effective.check_config(codex, {}, ".codex/config.toml", 'sandbox_mode = "danger-full-access"'))
+            test.not_nil(effective.check_config(codex, {profile_restrictions = {["provider.model"] = {"approved"}}}, ".codex/work.config.toml", 'model="other"'))
+            test.is_nil(effective.check_config(codex, {profile_restrictions = {["provider.model"] = {"approved"}}}, ".codex/work.config.toml", 'model="approved"'))
             test.is_nil(effective.check_config(codex, {}, ".codex/config.toml", 'sandbox_mode = "read-only"'))
             local invalid = effective.compile(codex, nil, nil, {sandbox = "danger-full-access", resume_ref = "existing-session"})
             test.is_nil(invalid)

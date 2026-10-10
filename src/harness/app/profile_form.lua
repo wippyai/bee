@@ -142,7 +142,6 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     if not descriptor then return repair_only(descriptor_error) end
     local probed = readiness.probe(decoded.binding_ref, decoded.profile_id, readiness.new_cache(), editor.placement_ref(base))
     local capabilities = probed.result and probed.result.capabilities or {}
-    local declared = bounds.object((bounds.object(descriptor.options) or {}).fields) or {}
     local compiled, compile_error = preferences.compile(descriptor, policy_data, policy_data.fixture == true and nil or capabilities)
     if not compiled then return repair_only(compile_error) end
     local metadata: {[string]: {label: string, section: string, order: integer, group: string?, default: unknown, default_source: string?, value_schema: {[string]: unknown}?}} = {}

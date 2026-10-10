@@ -33,7 +33,7 @@ type Configuration = {secret_fields: {SecretField}?, composition: Composition?, 
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
 type Delivery = {environment: {[string]: string}?,arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
-type Request = {configure_renderer: string?, option_values: Object?, context: string?,instructions_path: string?, instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, private_home: boolean?, attempt_id: string?, fixture: boolean}
+type Request = {option_provenance: Object?, configure_renderer: string?, option_values: Object?, context: string?,instructions_path: string?, instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, private_home: boolean?, attempt_id: string?, fixture: boolean}
 
 -- Profile guidance is separate from a turn brief and grants no authority.
 M.instructions = instructions.decode
@@ -120,7 +120,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local request = bounds.object(value)
     if not request then return nil, "configuration request must be an object" end
-    local unexpected = bounds.fields(request, {"configure_renderer", "provider_ref", "provider", "gateway", "home_directory", "private_home", "attempt_id", "fixture", "instructions", "instruction_builder", "option_values", "context"})
+    local unexpected = bounds.fields(request, {"option_provenance", "configure_renderer", "provider_ref", "provider", "gateway", "home_directory", "private_home", "attempt_id", "fixture", "instructions", "instruction_builder", "option_values", "context"})
     if unexpected then return nil, "configuration request: " .. unexpected end
     local configure_renderer: string? = nil
     if request.configure_renderer ~= nil then
@@ -167,7 +167,7 @@ function M.decode_request(value: unknown): (Request?, string?)
     if request.option_values ~= nil and not option_values then return nil, "configuration option_values must be an object" end
     local context = request.context == nil and nil or bounds.member(request.context, {"window", "first_turn", "resume"})
     if request.context ~= nil and not context then return nil, "configuration context is invalid" end
-    return {configure_renderer = configure_renderer, option_values = option_values or {}, context = context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = private_home, attempt_id = attempt_id, fixture = request.fixture}, nil
+    return {option_provenance = bounds.object(request.option_provenance), configure_renderer = configure_renderer, option_values = option_values or {}, context = context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = private_home, attempt_id = attempt_id, fixture = request.fixture}, nil
 end
 local function sequence(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
@@ -586,7 +586,7 @@ function M.execute(binding_ref: string?, target: string, request_value: unknown)
         end
     end
     local driver_request = {
-        option_values = request.option_values, context = request.context,
+        option_provenance = request.option_provenance, option_values = request.option_values, context = request.context,
         configure_renderer = configure_renderer,
         instructions = final_instructions,
         provider_ref = request.provider_ref,

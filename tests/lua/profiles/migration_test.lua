@@ -28,6 +28,18 @@ local function has(reasons: unknown, reason: string): boolean
 end
 local function define_tests()
     test.describe("Persisted profile migration", function()
+        test.it("pins every legacy storage version through the canonical protocol", function()
+            for _, source in ipairs({
+                {schema_revision = "bee.agent-profile@1", title = "Coding", definition_ref = "bee:codex", options = {model = "small"}},
+                v2({}), v2({schema_revision = "bee.agent-profile@3"}),
+            }) do
+                local converted = migration.convert(source, binding)
+                local provider = assert(bounds.object(converted.provider))
+                test.eq(provider.schema_ref, "bee.driver.codex.descriptor:cli")
+                test.eq(provider.schema_revision, "bee.driver.cli-descriptor@4")
+                test.eq(assert(bounds.object(provider.values)).model, "small")
+            end
+        end)
         test.it("moves provider fields, instructions and Docker without putting revisions in the profile", function()
             local converted = migration.convert({title = "Coding", definition_ref = "bee:codex", options = {model = "small", sandbox = "workspace-write"},
                 config_profile = "work", instructions = "End with BEE-PROFILE-OK", mcp_tools = {"thread_read"},

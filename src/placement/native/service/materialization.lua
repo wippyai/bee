@@ -27,6 +27,7 @@ local profile_values = require("profile_values")
 local effective_schema = require("effective_schema")
 local registry = require("registry")
 local trust = require("trust")
+local trust_lifetime = require("trust_lifetime")
 local grants = require("grants")
 local profile_grants = require("profile_grants")
 local M = {}
@@ -269,24 +270,22 @@ local function resolve_work_dir(request: types.LaunchRequest, home: string): (st
     end
     return nil, "working directory grant is missing"
 end
--- Each write grant admits its granted subpath, physically contained in the
--- resource root the host resolved for the grant.
 local function admitted_roots(request: types.LaunchRequest, executor: string, write_only: boolean): ({string}?, string?)
-    local write_roots: {string} = {}
+    local roots: {string} = {}
     for _, grant in ipairs(request.resources) do
         if not write_only or grant.access == "write" then
             local root, root_error = resources.directory(grant.root_ref)
             if not root then return nil, root_error or "write-granted root unavailable" end
             if grant.subpath == "" then
-                write_roots[#write_roots + 1] = root
+                roots[#roots + 1] = root
             else
                 local granted, granted_error = paths.admit(root .. "/" .. grant.subpath, {root}, executor)
                 if not granted then return nil, "write grant " .. grant.name .. ": " .. tostring(granted_error) end
-                write_roots[#write_roots + 1] = granted
+                roots[#roots + 1] = granted
             end
         end
     end
-    return write_roots, nil
+    return roots, nil
 end
 function M.write_roots(request: types.LaunchRequest, executor: string): ({string}?, string?)
     return admitted_roots(request, executor, true)
@@ -406,6 +405,9 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     -- Credential replies carry bytes only to their selected destination.
     -- File logins run before immutable driver configuration so their provider
     -- parent remains runner-owned for this materialization.
+    local descriptor = profile_values.schema(request.binding_ref)
+    local policy_entry = registry.get(request.policy_ref)
+    local policy_data = policy_entry and bounds.object(policy_entry.data)
     local file_projection = false
     local composition_bases: {[string]: string} = {}
     for index, projection_id in ipairs(request.projections) do
@@ -533,6 +535,10 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             local login_file = source.format.file
             if not login_file then return refused("file login format unavailable") end
             for _, item in ipairs(login_file.initialize) do
+                if descriptor then
+                    local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, item.content)
+                    if invalid then return refused(invalid) end
+                end
                 protected[#protected + 1] = item.path
             end
             if configuration.overlaps(delivery.files, protected) then
@@ -564,6 +570,12 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                     if not expected or binding_error then
                         evidence(db, attempt_id, "configuration.refused", binding_error or "retained configuration binding")
                         return refused(binding_error or "retained configuration binding")
+                    end
+                    if replayed and descriptor then
+                        local retained, read_error = homes.read_configuration(selected_home_path, item.path, expected)
+                        if retained == nil then return refused(tostring(read_error or "Retained configuration unavailable") .. ". Open Agents and choose Setup to approve the current configuration file.") end
+                        local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, retained)
+                        if invalid then return refused(invalid) end
                     end
                     composition_bases[item.path] = expected
                 end
@@ -659,9 +671,6 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "workdir.failed", prepare_error or "workdir preparation failed")
         return refused(prepare_error or "workdir preparation failed")
     end
-    local descriptor = profile_values.schema(request.binding_ref)
-    local policy_entry = registry.get(request.policy_ref)
-    local policy_data = policy_entry and bounds.object(policy_entry.data)
     local trust_mapping: {[string]: unknown}? = nil
     local trusted_path: string? = nil
     local trust_written = false
@@ -699,6 +708,8 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local physical, trust_error = trust.admit(work_dir, roots, executor, mapping.repository_root == true, bounds.ids(mapping.project_config, true))
         if not physical then return refused(trust_error or "Folder trust scope refused") end
         trust_mapping, trusted_path, work_dir = mapping, physical, physical
+        local lifetime_error = trust_lifetime.bind(db, attempt_id, assert(grant_id), selected_home_path, mapping)
+        if lifetime_error then return refused(lifetime_error) end
         local flag = bounds.line(mapping.flag, 128)
         if flag then arguments[#arguments + 1] = flag; trust_written = true end
     end
@@ -765,6 +776,10 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 end
             end
         end
+        if descriptor and base ~= nil and file.composition then
+            local invalid = effective_schema.check_config(descriptor, policy_data or {}, file.composition.base_path, base)
+            if invalid then return refused(invalid) end
+        end
         local content, content_error = configuration.render(file, environment, request.gateway, base)
         if not content then
             evidence(db, attempt_id, "configuration.refused", content_error or "configuration")
@@ -777,10 +792,6 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         -- A session intent excludes other attempts; the runner's starting claim
         -- excludes duplicate starts of this attempt. Recheck after asynchronous
         -- credential/gateway calls and before each publication.
-        if descriptor and policy_data then
-            local config_error = effective_schema.check_config(descriptor, policy_data, file.path, content)
-            if config_error then return refused(config_error) end
-        end
         if trust_mapping and trust_mapping.file == file.path then
             local trusted, trust_error = trust.render(trust_mapping, trusted_path, content)
             if not trusted then return refused(trust_error or "Trust configuration refused") end
@@ -793,7 +804,9 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local written: string? = nil
         local write_error: string? = nil
         local published_uncertain: boolean? = nil
-        if retained_home then
+        if trusted_path and trust_mapping and trust_mapping.file == file.path then
+            written, write_error, published_uncertain = trust_lifetime.publish(db, attempt_id, content, created_parents)
+        elseif retained_home then
             written, write_error, published_uncertain = homes.publish_configuration(selected_home_path, file.path, content, created_parents, file.composition ~= nil)
         else
             written, write_error = homes.write_protected(selected_home_path, file.path, content, created_parents)
@@ -809,8 +822,18 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local content, trust_error = trust.render(trust_mapping, trusted_path, nil)
         if not path or not content then return refused(trust_error or "Trust configuration path unavailable") end
         if not owns_attempt() then return refused("attempt no longer owns configuration materialization") end
-        local written, write_error = homes.publish_configuration(selected_home_path, path, content, created_parents, true)
+        local written: string? = nil
+        local write_error: string? = nil
+        if trusted_path then written, write_error = trust_lifetime.publish(db, attempt_id, content, created_parents)
+        else written, write_error = homes.publish_configuration(selected_home_path, path, content, created_parents, true) end
         if not written then return refused(write_error or "Trust configuration publication refused") end
+    end
+    if trusted_path and selected and selected.authority_grant_id then
+        local consent = grants.read(db, selected.authority_grant_id)
+        if not owns_attempt() or not consent or profile_grants.live(db, consent) then
+            local clear_error = trust_lifetime.finish(db, attempt_id)
+            return refused(clear_error or "Folder trust consent ended during materialization")
+        end
     end
     for _, argument in ipairs(sandbox_arguments) do arguments[#arguments + 1] = argument end
     for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end

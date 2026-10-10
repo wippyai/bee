@@ -377,6 +377,23 @@ entries:
     prepare_options: {}
     executables: {}
     environment: {}
+- name: trust_launch_policy
+  kind: registry.entry
+  meta: {type: bee.launch_policy, test_support: true}
+  data:
+    schema_revision: bee.launch-policy@3
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    stop_grace_ms: 100
+    drain_ms: 1000
+    runner_drain_ms: 1000
+    fixture: true
+    provider_ref: bee.placement.native:codex_test_provider
+    prepare_options: {}
+    profile_restrictions:
+      provider.options.folder_trust: {kind: declared}
+    executables: {}
+    environment: {}
 - name: test_non_native_launch_policy
   kind: registry.entry
   meta:
@@ -546,6 +563,7 @@ entries:
   - toml
   security:
     policies:
+    - bee.security.approvals:approval_decide_policy
     - bee.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
     - bee.placement.native.security:placement_exec_policy
@@ -555,6 +573,8 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
   imports:
+    grants: bee.approvals.grants:store
+    authority: bee.harness.profiles.persist:grants
     trust: bee.driver.descriptor:trust
     descriptors: bee.driver.descriptor:descriptor
     resources: bee.placement.native.env:resources

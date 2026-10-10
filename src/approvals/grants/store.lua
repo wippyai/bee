@@ -1,4 +1,5 @@
 local sql = require("sql")
+local funcs = require("funcs")
 local json = require("json")
 local hash = require("hash")
 local registry = require("registry")
@@ -131,18 +132,33 @@ local function fence_traits(tx: sql.Transaction | sql.DB, grant: Grant, at: stri
     end
     return execute(tx, [[UPDATE bee_thread_subscriptions SET closed_at=? WHERE subscription_id IN (SELECT s.subscription_id FROM bee_thread_subscriptions s JOIN bee_session_traits t ON json_extract(s.filter_json,'$.session_ref')=t.session_ref AND json_extract(s.filter_json,'$.trait_id')=t.trait_id WHERE t.grant_id=?)]], {at,grant.grant_id})
 end
+local function revoke_effects(tx: sql.Transaction | sql.DB, grant: Grant): string?
+    local bindings, binding_error = tx:query("SELECT destination,effect_id,context_json FROM bee_approval_grant_effects WHERE grant_id = ?", {grant.grant_id})
+    if not bindings or binding_error then return "Read grant revocation effects: " .. tostring(binding_error) end
+    for _, binding in ipairs(bindings) do
+        local effects, discovery_error = registry.find({["meta.type"] = "bee.approvals.grant-revocation-effect",
+            ["meta.domain"] = grant.domain, ["meta.destination"] = binding.destination})
+        if not effects or discovery_error or #effects ~= 1 then return "Grant revocation effect destination is unavailable: " .. tostring(binding.destination) end
+        local problem, call_error = funcs.call(effects[1].id, {grant_id = grant.grant_id, effect_id = binding.effect_id, context = json.decode(binding.context_json)})
+        if problem ~= nil or call_error then return "Revoke grant effect: " .. tostring(call_error or problem) end
+    end
+    return nil
+end
+
 function M.revoke(tx: sql.Transaction | sql.DB, grant: Grant, expected: integer, actor: string, now: integer): string?
     local rows, query_error = tx:query("SELECT * FROM bee_approval_grants WHERE grant_id = ?",{grant.grant_id})
     if not rows or query_error then return "read grant revocation: " .. tostring(query_error) end
     if #rows ~= 1 then return "NOT_FOUND: grant is missing" end
     local live, read_error = M.decode(rows[1])
     if not live then return read_error end
-    if live.state == "revoked" then grant.state,grant.revision = live.state,live.revision; return nil end
+    if live.state == "revoked" then grant.state,grant.revision = live.state,live.revision; return revoke_effects(tx, grant) end
     if live.revision ~= grant.revision or grant.revision ~= expected then return "CONFLICT: grant revision differs" end
     local at = clock.stamp(now)
     local err = execute(tx,"UPDATE bee_approval_grants SET state = 'revoked',revision = revision + 1,revoked_at = ?,revoked_by = ? WHERE grant_id = ? AND revision = ?",{at,actor,grant.grant_id,expected})
     if err then return err end
     err = execute(tx,"UPDATE bee_approval_grant_uses SET state = 'fenced' WHERE grant_id = ? AND state = 'reserved'",{grant.grant_id})
+    if err then return err end
+    err = revoke_effects(tx, grant)
     if err then return err end
     err = fence_traits(tx, grant, at)
     if err then return err end

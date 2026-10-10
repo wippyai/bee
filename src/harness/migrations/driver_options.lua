@@ -19,17 +19,17 @@ return require("migration").define(function()
                         end
                         local encoded = assert(canonical.encode(stored))
                         if encoded ~= canonical.encode(source) then
-                        assert(db:execute("UPDATE bee_sync_projections SET value_json = ? WHERE owner_id = ? AND feed = ? AND projection_key = ?",
-                            {encoded, row.owner_id, row.feed, row.projection_key}))
-                        for _, grant in ipairs(assert(db:query("SELECT grant_id,scope_json FROM bee_approval_grants WHERE domain = 'profile_choices' AND owner_node = ? AND json_extract(metadata_json,'$.profile_id') = ?", {row.owner_id, row.projection_key}))) do
-                            local scope = assert(bounds.object(json.decode(grant.scope_json)))
-                            local parameters = bounds.object(scope.parameters)
-                            if parameters and canonical.encode(parameters.configuration) == canonical.encode(source) then
-                                parameters.configuration = stored
-                                assert(db:execute("UPDATE bee_approval_grants SET scope_json = ? WHERE grant_id = ?", {assert(canonical.encode(scope)), grant.grant_id}))
+                            assert(db:execute("UPDATE bee_sync_projections SET value_json = ? WHERE owner_id = ? AND feed = ? AND projection_key = ?",
+                                {encoded, row.owner_id, row.feed, row.projection_key}))
+                            for _, grant in ipairs(assert(db:query("SELECT grant_id,scope_json FROM bee_approval_grants WHERE domain = 'profile_choices' AND owner_node = ? AND json_extract(metadata_json,'$.profile_id') = ?", {row.owner_id, row.projection_key}))) do
+                                local scope = assert(bounds.object(json.decode(grant.scope_json)))
+                                local parameters = bounds.object(scope.parameters)
+                                if parameters and canonical.encode(parameters.configuration) == canonical.encode(source) then
+                                    parameters.configuration = stored
+                                    assert(db:execute("UPDATE bee_approval_grants SET scope_json = ? WHERE grant_id = ?", {assert(canonical.encode(scope)), grant.grant_id}))
+                                end
                             end
-                        end
-                        feeds[row.owner_id .. ":" .. row.feed] = {owner = row.owner_id, feed = row.feed}
+                            feeds[row.owner_id .. ":" .. row.feed] = {owner = row.owner_id, feed = row.feed}
                         end
                     end
                 end

@@ -13,11 +13,14 @@ local fs = require("fs")
 local funcs = require("funcs")
 local function cases()
     test.describe("Composed launch without a login projection", function()
-        for _, decision in ipairs({"approved", "denied"}) do
-        test.it("asks once in Needs you and handles " .. decision .. " without a login projection", function()
+        for _, selected in ipairs({{decision = "approved", admitted = false}, {decision = "denied", admitted = false}, {decision = "approved", admitted = true}}) do
+        local decision = selected.decision
+        test.it("asks once in Needs you and handles " .. decision .. " without a login projection, admitted mapping " .. tostring(selected.admitted), function()
             local id = "composition-" .. principals.key()
             local volume = assert(fs.get("bee.placement.publication.test:configuration_source"))
-            assert(volume:writefile("opencode.json", '{"provider":{"synthetic":{"options":{"apiKey":"{file:/synthetic/provider.key}"}}}}'))
+            local source = selected.admitted and '{"provider":{"synthetic":{"npm":"@ai-sdk/openai-compatible","options":{"baseURL":"https://synthetic.test/v1","apiKey":"{env:OPENAI_API_KEY}"},"models":{"fixture":{"name":"Fixture"}}}}}'
+                or '{"provider":{"synthetic":{"options":{"apiKey":"{file:/synthetic/provider.key}"}}}}'
+            assert(volume:writefile("opencode.json", source))
             local content = '{"lane":true}'
             local path: {string} = {"lane"}
             local operation: types.JsonOperation = {kind = "insert", path = path}
@@ -29,7 +32,7 @@ local function cases()
                 provider_ref = "bee.test:provider", composition = composition}}}
             local value: types.LaunchRequest = {workspace_id = id, idempotency_key = id, attempt_id = id,
                 owner_id = "bee.test.configuration", owner_incarnation = 1, action_id = id,
-                binding_ref = "bee.driver.opencode.binding:binding", policy_ref = "bee.test:policy", profile_id = "window",
+                binding_ref = "bee.driver.opencode.binding:binding", policy_ref = selected.admitted and "bee.placement.publication.test:admitted_provider_policy" or "bee.test:policy", profile_id = "window",
                 binding_digest = string.rep("b", 64), profile_digest = string.rep("c", 64),
                 launch = {executable = "sh", argv = {}, environment = {}, readiness = "none", home_ref = "session",
                     provider_home = {provider = "opencode", private = false, files = {}}},
@@ -83,13 +86,16 @@ local function cases()
             end
             ticker:stop()
             runner_fixture.release(runner)
-            if decision == "approved" then
+            if decision == "approved" and selected.admitted then
                 test.eq(outcome.error, "configuration published; durability requires inspection")
                 test.eq(outcome.observed.publications, 1)
                 local rendered = assert(bounds.object(assert(json.decode(tostring(outcome.observed.configuration)))))
                 local providers = assert(bounds.object(rendered.provider))
                 local provider = assert(bounds.object(providers.synthetic))
-                test.eq(assert(bounds.object(provider.options)).apiKey, "{file:/synthetic/provider.key}")
+                test.eq(assert(bounds.object(provider.options)).apiKey, "{env:OPENAI_API_KEY}")
+            elseif decision == "approved" then
+                test.is_true(assert(outcome.error):find("provider has no admitted mapping", 1, true) ~= nil)
+                test.eq(outcome.observed.publications, 0)
             else
                 test.is_true(assert(outcome.error):find("was denied", 1, true) ~= nil)
                 test.eq(outcome.observed.publications, 0)

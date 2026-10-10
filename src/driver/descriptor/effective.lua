@@ -1,6 +1,4 @@
--- MIT. Apply already-authorized saved profile values to a host launch policy.
--- This helper is pure: it does not resolve profiles, registry entries or
--- permissions, and it never expands the host-selected authority.
+-- SPDX-License-Identifier: MIT
 local bounds = require("bounds")
 local instructions = require("instructions")
 
@@ -265,7 +263,7 @@ end
 
 type Capability = {supported: boolean, reason: string?}
 type EffectiveOption = {declaration: Object, default: unknown, default_source: string, locked_reason: string?, allowed: Option?}
-type Effective = {fields: {[string]: EffectiveOption}, values: Object, gateway_tools: {string}, instructions: string?}
+type Effective = {fields: {[string]: EffectiveOption}, values: Object, provenance: {[string]: string}, gateway_tools: {string}, instructions: string?}
 
 local function subset(selected: {string}, ceiling: {string}): boolean
     for _, right in ipairs(selected) do if not bounds.member(right, ceiling) then return false end end
@@ -295,7 +293,7 @@ local function ceiling_value(field: Object, value: unknown, constraint: Object):
     return value, nil
 end
 
-function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabilities: {[string]: Capability}?, values: Object?, writer: string?, selection: Value?): (Effective?, string?)
+function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabilities: {[string]: Capability}?, values: Object?, writer: string?, selection: Value?, provenance: Object?): (Effective?, string?)
     local declared = bounds.object(descriptor.options.fields) or {}
     local restrictions, restriction_error = decode_profile_restrictions(policy and policy.profile_restrictions)
     if not restrictions then return nil, restriction_error end
@@ -316,23 +314,26 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
     for name in pairs(prepared or {}) do if declared[name] == nil then return nil, "Host default names undeclared option " .. name end end
     local tools, text, scope_error = compile_scope(policy or {}, selection)
     if not tools then return nil, scope_error end
-    local result: Effective = {fields = {}, values = {}, gateway_tools = tools, instructions = text}
+    local result: Effective = {fields = {}, values = {}, provenance = {}, gateway_tools = tools, instructions = text}
     for name, raw in pairs(declared) do
         local field = bounds.object(raw) or {}
         local path = bounds.id(field.path)
         local constraint = bounds.object((constraints or {})[name]) or {}
         local default: unknown = field.default
+        local default_ceiling_error: string? = nil
         local source = default == nil and "CLI" or "driver schema"
         if prepared and prepared[name] ~= nil then default = prepared[name]; source = "host policy" end
         if default ~= nil then
-            local decoded, invalid = descriptors.decode_option(name, field, default)
+            local _, invalid = descriptors.decode_option(name, field, default)
             if invalid then return nil, invalid end
             local constrained, ceiling_error = ceiling_value(field, default, constraint)
-            if ceiling_error then return nil, name .. ": " .. ceiling_error end
-            local _, constrained_error = descriptors.decode_option(name, field, constrained)
-            if constrained_error then return nil, constrained_error end
-            if canonical.encode(constrained) ~= canonical.encode(default) then source = "host ceiling" end
-            default = constrained
+            default_ceiling_error = ceiling_error
+            if not ceiling_error then
+                local _, constrained_error = descriptors.decode_option(name, field, constrained)
+                if constrained_error then return nil, constrained_error end
+                if canonical.encode(constrained) ~= canonical.encode(default) then source = "host ceiling" end
+                default = constrained
+            end
         end
         local allowed = path and restrictions[path] or nil
         local reason: string? = nil
@@ -369,20 +370,42 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
                 row.allowed = {kind = "enum", values = admitted}
             end
         end
+        if default ~= nil and (default_ceiling_error or (row.allowed and not allowed_option(row.allowed, default))) then
+            local replacement: unknown = nil
+            if row.allowed and row.allowed.kind == "enum" then
+                local rights = bounds.object(field.capabilities)
+                for _, candidate in ipairs(row.allowed.values) do
+                    local least = #row.allowed.values == 1
+                    if rights and type(candidate) == "string" then
+                        local candidate_rights = bounds.ids(rights[candidate], true)
+                        least = candidate_rights ~= nil
+                        for _, other in ipairs(row.allowed.values) do
+                            local other_rights = type(other) == "string" and bounds.ids(rights[other], true)
+                            if not candidate_rights or not other_rights or not subset(candidate_rights, other_rights) then least = false end
+                        end
+                    end
+                    if least then replacement = candidate; break end
+                end
+            end
+            if replacement == nil then return nil, name .. ": policy excludes the default and declares no least-capability allowed value" end
+            default, source = replacement, "host policy"
+            row.default, row.default_source = default, source
+        end
         result.fields[name] = row
         local explicit = values and values[name] ~= nil
         local value: unknown = explicit and values and values[name] or default
         if explicit and values then value = values[name] end
-        if value ~= nil then
+        if value ~= nil and not (trust_mapping and trust_mapping.unsupported == true and not explicit) then
             if explicit and reason then return nil, name .. ": " .. reason end
-            local decoded, err = descriptors.decode_option(name, field, value)
+            local _, err = descriptors.decode_option(name, field, value)
             if err then return nil, err end
-            if policy and explicit and path and allowed and not allowed_option(allowed, value) then return nil, "option " .. name .. " has a value that is not allowed by the host policy" end
+            if policy and path and allowed and not allowed_option(allowed, value) then return nil, "option " .. name .. " has a value that is not allowed by the host policy" end
             local constrained, ceiling_error = ceiling_value(field, value, constraint)
             if ceiling_error then return nil, name .. ": " .. ceiling_error end
             local compiled_value, constrained_error = descriptors.decode_option(name, field, constrained)
             if constrained_error then return nil, constrained_error end
             result.values[name] = compiled_value
+            result.provenance[name] = provenance and bounds.member(provenance[name], {"explicit", "driver schema", "host policy", "host ceiling", "CLI"}) or (explicit and "explicit" or source)
         end
     end
     for name in pairs(values or {}) do if not result.fields[name] then return nil, "Undeclared option " .. name end end
@@ -399,44 +422,74 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
     return result, nil
 end
 
+local function authority_key(key: string): boolean
+    local normalized = key:lower():gsub("[^a-z]", "")
+    for _, namespace in ipairs({"network", "mcp", "provider", "sandbox", "approval", "permission", "env", "hook", "trust", "plugin", "tool", "project", "profile", "baseurl", "endpoint", "apikey", "auth", "token", "command", "socket", "proxy"}) do
+        if normalized:find(namespace, 1, true) then return true end
+    end
+    return false
+end
+
 function M.check_config(descriptor: descriptors.Descriptor, policy: Object, filename: string, content: string): string?
     local format = filename:match("%.(json)$") or filename:match("%.(toml)$")
     if not format then return nil end
     local document: unknown = nil
     if format == "json" then document = json.decode(content) else document = toml.decode(content) end
     local root = bounds.object(document)
+    if format == "toml" and content:match("^%s*$") then root = {} end
     if not root then return "Configuration is not an object: " .. filename end
-    local constraints = bounds.object(policy.option_constraints) or {}
-    local restrictions, invalid = decode_profile_restrictions(policy.profile_restrictions)
-    if not restrictions then return invalid end
-    local defaults = bounds.object(policy.prepare_options) or {}
-    for name, raw in pairs(bounds.object(descriptor.options.fields) or {}) do
-        local field = bounds.object(raw) or {}
-        for _, raw_alias in ipairs(bounds.array(field.config_aliases, 8) or {}) do
+    local compiled, invalid = M.compile(descriptor, policy)
+    if not compiled then return invalid end
+    local mappings: {[string]: string} = {}
+    for name, row in pairs(compiled.fields) do
+        for _, raw_alias in ipairs(bounds.array(row.declaration.config_aliases, 8) or {}) do
             local alias = bounds.object(raw_alias) or {}
-            if alias.format == format then
-                local value: unknown = root
-                for _, key in ipairs(bounds.ids(alias.path, true) or {}) do
-                    local object = bounds.object(value)
-                    value = object and object[key]
+            local path = bounds.ids(alias.path, true)
+            if alias.format == format and path then mappings[table.concat(path, ".")] = name end
+        end
+        for _, raw_render in ipairs(bounds.array(row.declaration.render, 32) or {}) do
+            local render = bounds.object(raw_render) or {}
+            local path = bounds.ids(render.path, true)
+            if render.kind == "config" and render.format == format and path then mappings[table.concat(path, ".")] = name end
+        end
+    end
+    local selections: Object = {}
+    local paths: {[string]: string} = {}
+    local function inspect(object: Object, prefix: string, authority: boolean): string?
+        for key, value in pairs(object) do
+            local path = prefix == "" and key or prefix .. "." .. key
+            local name = mappings[path]
+            if name then
+                local row = compiled.fields[name]
+                if row.locked_reason then
+                    if canonical.encode(value) ~= canonical.encode(row.default) then return filename .. ": " .. path .. " has no admitted mapping: " .. row.locked_reason end
+                else
+                    if selections[name] ~= nil and canonical.encode(selections[name]) ~= canonical.encode(value) then
+                        return filename .. ": conflicting configuration mapping " .. path
+                    end
+                    selections[name], paths[name] = value, path
                 end
-                if value ~= nil then
-                    local decoded, err = descriptors.decode_option(name, field, value)
+            else
+                local restricted = authority or authority_key(key)
+                local child = bounds.object(value)
+                if child and next(child) ~= nil then
+                    local err = inspect(child, path, restricted)
                     if err then return err end
-                    local constraint = bounds.object(constraints[name]) or {}
-                    local constrained, ceiling_error = ceiling_value(field, decoded, constraint)
-                    if ceiling_error then return filename .. ": " .. name .. ": " .. ceiling_error end
-                    if canonical.encode(constrained) ~= canonical.encode(decoded) then return filename .. ": " .. name .. " exceeds host limits or denies" end
-                    local path = bounds.id(field.path)
-                    local allowed = path and restrictions[path]
-                    local default = defaults[name]
-                    if default == nil then default = field.default end
-                    if allowed then
-                        if not allowed_option(allowed, value) then return filename .. ": " .. name .. " is outside the host policy" end
-                    elseif canonical.encode(value) ~= canonical.encode(default) then return filename .. ": " .. name .. " is locked by the host policy" end
+                elseif restricted then
+                    return filename .. ": authority-bearing key " .. path .. " has no admitted mapping"
                 end
             end
         end
+        return nil
+    end
+    local inspection_error = inspect(root, "", false)
+    if inspection_error then return inspection_error end
+    local checked, check_error = M.compile(descriptor, policy, nil, selections)
+    if not checked then return filename .. ": " .. tostring(check_error) end
+    for name, value in pairs(selections) do
+        local decoded, decode_error = descriptors.decode_option(name, assert(compiled.fields[name].declaration), value)
+        if decode_error then return filename .. ": " .. paths[name] .. ": " .. decode_error end
+        if canonical.encode(checked.values[name]) ~= canonical.encode(decoded) then return filename .. ": " .. paths[name] .. " exceeds host limits or denies" end
     end
     return nil
 end
@@ -461,6 +514,7 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
     end
 
 
+    local value_provenance: Object = {}
     local tools: {string}? = nil
     local combined: string? = nil
     if descriptor then
@@ -469,6 +523,7 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
         if saved.instructions ~= "" then values.system_prompt_append = saved.instructions end
         local compiled, compile_error = M.compile(descriptor, policy, nil, values, nil, saved)
         if not compiled then return nil, compile_error end
+        value_provenance = compiled.provenance
         tools, combined = compiled.gateway_tools, compiled.instructions
         for name, value in pairs(compiled.values) do
             local row = compiled.fields[name]
@@ -481,6 +536,7 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
     end
     local result: Object = {}
     for key, value in pairs(policy) do result[key] = value end
+    result.option_provenance = value_provenance
     result.prepare_options = prepare_options
     result.instructions = combined
     if policy.gateway_tools ~= nil then result.gateway_tools = tools end

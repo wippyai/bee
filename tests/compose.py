@@ -224,6 +224,32 @@ def order_hive_readiness(src):
         if retry then cases[#cases + 1] = retry:case_receive() end''')
 
 
+def stop_hive_delivery(src):
+    replace_once(src / "process/demand_owner.lua", 'local M = {}',
+                 'local M = {}\nlocal stopped_delivery = false')
+    replace_once(src / "process/demand_owner.lua",
+                 '        local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})',
+                 '''        local controller = not stopped_delivery and owner.name == "bee.gateway.external"
+            and process.registry.lookup("bee.test.hive.delivery_stop", process.registry.LOCAL)
+        if controller then
+            local release = assert(process.listen("bee.test.hive.delivery_release", {message = true}))
+            assert(process.send(tostring(controller), "bee.test.hive.delivery_stop", {pid = pid}))
+            local message = assert((release:receive()))
+            assert(tostring(message:from()) == tostring(controller))
+            process.unlisten(release)
+            stopped_delivery = true
+        end
+        local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})''')
+    replace_once(src / "process/demand_owner.lua",
+                 '        local current = system.supervisor.state(owner.id)',
+                 '''        local current = system.supervisor.state(owner.id)
+        if stopped_delivery and owner.name == "bee.gateway.external" and current
+            and (current.status == "stopped" or current.status == "exited")
+            and process.registry.lookup("bee.test.hive.delivery_stop", process.registry.LOCAL) then
+            current.status = "stopped"
+        end''')
+
+
 def hold_test_runner_quiet(src):
     replace_once(src / "node/service/tests.lua",
                  "if #waiting == 0 then assert(demand.quiet(tests.NAME, generation)) else sweep() end",
@@ -338,6 +364,7 @@ def main():
     owner_scheduling(src)
     hold_test_runner_quiet(src)
     order_hive_readiness(src)
+    stop_hive_delivery(src)
     hold_docker_cleanup(src)
     advance_committed_transition(src)
     observe_preparer_cleanup(src)

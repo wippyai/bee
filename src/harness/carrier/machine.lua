@@ -186,7 +186,7 @@ local function digest_of(value: unknown): (string?, string?)
 end
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration_digest: string, gateway: placement_types.Gateway?}
+type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_protocol.Request, gateway: placement_types.Gateway?}
 -- verify_acceptance: the acceptance record a host declaration names,
 -- decoded and matched against this snapshot's binding, profile, adapter
 -- and proof fixture. The permission exchange stands on this record type;
@@ -323,12 +323,11 @@ local function measure(request: Request): (Measured?, string?)
         provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
-    local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, {provider_ref = launch_policy.provider_ref,
-        placement_profile_ref = request.placement_profile_ref, option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or "first_turn", provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
-        gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
-    if not configuration_digest then return nil, configuration_error end
+    local configuration: configuration_protocol.Request = {provider_ref = launch_policy.provider_ref,
+        placement_profile_ref = request.placement_profile_ref, option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
+        gateway = gateway_input, fixture = launch_policy.fixture}
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
-        configuration_digest = configuration_digest, gateway = gateway}
+        configuration = configuration, gateway = gateway}
 end
 -- A launch may declare a host file it needs before it starts. Bee never
 -- copies the owner's configuration or credentials into a private home, so a
@@ -349,7 +348,7 @@ end
 function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
     local measured, measure_error = measure(request)
     if not measured then return nil, measure_error end
-    local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
+    local binding, profile, launch_policy, placement_binding, exchange, configuration, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration, measured.gateway
     if launch_policy.provider_ref and not profile.private_home then
         return nil, "selected provider configuration requires a private-home profile"
     end
@@ -379,6 +378,10 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
             prepare_target = dispatch
         end
     end
+    local configuration_context = profile.mode == "window" and "window" or (resume_ref and "resume" or "first_turn")
+    configuration.context = configuration_context
+    local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, configuration, assert(binding.methods.configure))
+    if not configuration_digest then return nil, configuration_error end
     local private_home = previous_private_home
     if private_home == nil then private_home = profile.private_home end
     if request.preferences and request.preferences.home and previous_private_home == nil then private_home = request.preferences.home == "private" end
@@ -536,7 +539,7 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
         preferences = request.preferences,
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
-        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_profile_ref = request.placement_profile_ref, placement_profile_digest = request.placement_profile_digest, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_context = profile.mode == "window" and "window" or (resume_ref and "resume" or "first_turn"), configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
+        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_profile_ref = request.placement_profile_ref, placement_profile_digest = request.placement_profile_digest, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_context = configuration_context, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
         options = request.options,

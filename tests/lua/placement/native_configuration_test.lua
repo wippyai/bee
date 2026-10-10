@@ -49,9 +49,25 @@ local function configuration_tests()
                 request.configuration_digest = assert(configuration_protocol.digest("bee.driver.codex.binding:binding",
                     {fixture = true, provider_ref = "bee.placement.native:codex_test_provider", provider = assert(registry.get("bee.placement.native:codex_test_provider")),
                         option_values = effective.prepare_options}, "bee.driver.codex.binding:configure"))
+                local independent = native_fixture.retained_launch(native_fixture.OWNER, native_fixture.fresh("independent"), "independent")
+                local independent_after = native_fixture.retained_launch(native_fixture.OWNER, native_fixture.fresh("independent-after"), "independent-after")
+                local planned_digest = independent.configuration_digest
                 local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
                 local started = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))
                 assert(not started.start_failure, started.start_failure)
+                local other = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", independent))
+                local other_started = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = other.attempt_id}))
+                assert(not other_started.start_failure, other_started.start_failure)
+                test.is_true(native_fixture.wait_for(function()
+                    local status = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = other.attempt_id}))
+                    return assert(bounds.object(status.attempt)).execution_state == "exited"
+                end, 8000))
+                test.eq(native_fixture.provider_configuration_digest(), planned_digest)
+                local other_home = assert(homes.ensure_session(assert(homes.session_key(native_fixture.OWNER, assert(bounds.id(independent.session_ref))))))
+                test.neq(other_home, assert(homes.ensure_session(assert(homes.session_key(native_fixture.OWNER, profile)))))
+                local other_path = assert(homes.os_path(other_home .. "/home/.codex/config.toml"))
+                local other_config = native_fixture.shell(quote.line({"cat", other_path}))
+                test.is_nil((other_config:find("trust_level", 1, true)))
                 if ending == "revoke" or ending == "retire" or ending == "delete" then
                     test.eq(started.execution_state, "running")
                     db = assert(store.open())
@@ -76,6 +92,11 @@ local function configuration_tests()
                 local observed = native_fixture.shell(quote.line({"cat", assert(homes.os_path(home .. "/home/.codex/config.toml"))}))
                 local root = assert(bounds.object(toml.decode(observed)))
                 test.not_nil(root.model)
+                local after = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", independent_after))
+                test.eq(independent_after.configuration_digest, planned_digest)
+                test.eq(native_fixture.shell(quote.line({"cat", other_path})), other_config)
+                native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = other.attempt_id}))
+                native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = after.attempt_id}))
                 for _, project in pairs(assert(bounds.object(root.projects))) do test.is_nil(assert(bounds.object(project)).trust_level) end
             end)
         end

@@ -2231,6 +2231,7 @@ entries:
   - time
   - uuid
   imports:
+    configuration: bee.driver.binding:configuration
     bounds: bee.values:bounds
     test: wippy.test:test
     continuation: bee.harness.carrier:continuation

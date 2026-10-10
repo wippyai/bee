@@ -1,5 +1,6 @@
 -- MIT. Continuation comes from a successful owner receipt and native session.
 local test = require("test")
+local configuration = require("configuration")
 local bounds = require("bounds")
 local continuation = require("continuation")
 local checkpoint = require("checkpoint")
@@ -382,6 +383,46 @@ local function define_tests()
             test.eq(captured.plan_digest, "historical-plan")
             test.eq(captured.gateway_binding, "historical-gateway")
             test.eq(receipt and (assert(bounds.object(receipt))).attempt_id, "previous")
+        end)
+        test.it("pins the resolved resume context in the configuration sent to placement", function()
+            local snapshot = assert(catalog.snapshot())
+            local binding_digest, profile_digest = "", ""
+            for _, binding in ipairs(snapshot.bindings) do
+                if binding.binding_id == "bee.driver.claude.binding:binding" then
+                    binding_digest, profile_digest = binding.binding_digest.entry, binding.profile_digest.entry
+                end
+            end
+            local point = checkpoint.new({binding_ref = "bee.driver.claude.binding:binding", binding_digest = binding_digest,
+                profile_id = "batch", profile_digest = profile_digest}, 1)
+            point.retained_session_ref = "session"
+            point.terminal = {outcome = "succeeded", resume_ref = "provider-session"}
+            local io: machine.IO = {
+                call = function(target: string, input: unknown): (unknown, string?)
+                    if target == "bee.threads.binding:checkpoint" then
+                        return {ok = true, value = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "succeeded",
+                            placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}}, nil
+                    elseif target == PLACEMENT_METHODS.status then
+                        return {ok = true, value = {private_home = true, attempt = {attempt_id = "previous", action_id = "action", owner_id = "alice",
+                            session_ref = "session", execution_state = "exited", cleanup_state = "complete"}}}, nil
+                    elseif target == PLACEMENT_METHODS.measure_executable then
+                        return {ok = false, error = {code = "UNAVAILABLE", message = "fixture"}}, nil
+                    end
+                    test.eq(target, "bee.driver.claude.binding:dispatch")
+                    return {ok = true, launch = claude.specification(assert(claude.decode(input)))}, nil
+                end,
+                send = function(_: string, _: string, _: unknown) error("unexpected send") end,
+                self_pid = function(): string return "test" end,
+                now_ms = function(): integer return 0 end,
+                key = function(): string return "key" end,
+            }
+            local planned = assert(machine.plan(io, {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice", owner_incarnation = 1,
+                binding_ref = "bee.driver.claude.binding:binding", profile_id = "batch", brief = "Next turn", policy_ref = "bee.harness.catalog:fixture_policy",
+                placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest,
+                resources = {{name = "session", grant_ref = "session", root_ref = "fixture:session", subpath = "", access = "write", purpose = "session"}},
+                environment = {}, previous_attempt_id = "previous", session_ref = "session"}))
+            test.eq(planned.placement_request.configuration_context, "resume")
+            test.eq(planned.placement_request.configuration_digest, assert(configuration.digest(planned.binding.binding_id,
+                {option_values = planned.policy.prepare_options, context = "resume", fixture = true}, assert(planned.binding.methods.configure))))
         end)
         test.it("forms native resume argv with no prompt or stdin replay", function()
             local codex_request, codex_error = codex.decode({profile_id = "window", brief = "", resume_ref = "provider-session"})

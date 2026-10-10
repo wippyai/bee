@@ -522,8 +522,9 @@ end
 function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Descriptor?, placement_ref: string?): (Object?, string?)
     local policy = bounds.object(policy_data)
     if not policy then return nil, "policy data must be an object" end
-    local saved, saved_error = M.decode(raw)
+    local saved, saved_error = M.decode(raw == nil and {} or raw)
     if not saved then return nil, saved_error end
+    local selection = raw ~= nil and saved or nil
     local profile_restrictions, profile_restrictions_error = decode_profile_restrictions(policy.profile_restrictions)
     if not profile_restrictions then return nil, profile_restrictions_error end
 
@@ -545,7 +546,7 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
         local values: Object = {}
         for name, value in pairs(saved.options) do values[name] = value end
         if saved.instructions ~= "" then values.system_prompt_append = saved.instructions end
-        local compiled, compile_error = M.compile(descriptor, policy, nil, values, nil, saved, nil, placement_ref)
+        local compiled, compile_error = M.compile(descriptor, policy, nil, values, nil, selection, nil, placement_ref)
         if not compiled then return nil, compile_error end
         value_provenance = compiled.provenance
         tools, combined = compiled.gateway_tools, compiled.instructions
@@ -555,7 +556,7 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
         end
     else
         local scope_error: string? = nil
-        tools, combined, scope_error = compile_scope(policy, saved)
+        tools, combined, scope_error = compile_scope(policy, selection)
         if not tools then return nil, scope_error end
     end
     local result: Object = {}

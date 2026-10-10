@@ -360,7 +360,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not data then return nil, nil, "policy_ref is not a host launch policy" end
     local descriptor = profile_values.schema(request.binding_ref)
     if request.preferences or descriptor then
-        local effective, preference_error = preferences.apply(data, request.preferences or {}, descriptor, request.placement_profile_ref)
+        local effective, preference_error = preferences.apply(data, request.preferences, descriptor, request.placement_profile_ref)
         if not effective then return nil, nil, preference_error end
         data = effective
     end

@@ -273,7 +273,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     -- Credentials bind the host policy; the launch separately measures the
     -- preferences and resulting configuration under that policy.
     if selected or descriptor then
-        local effective, preference_error = preferences.apply(data, selected or {}, descriptor, placement_ref)
+        local effective, preference_error = preferences.apply(data, selected, descriptor, placement_ref)
         if not effective then return nil, ref .. ": " .. tostring(preference_error) end
         data = effective
     end
@@ -311,17 +311,9 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     end
     local options: {[string]: unknown} = {}
     for name, item in pairs(prepare_options) do options[name] = item end
-    -- A preference replaces the declaration with the profile's selection, which
-    -- is what actually reaches the child; without one the declaration above is
-    -- already the effective list.
-    local gateway_tools: {string} = admitted_tools
-    if selected then
-        local effective, effective_error = decode_gateway_tools(data, ref)
-        if not effective then return nil, effective_error end
-        gateway_tools = effective
-    else
-        gateway_tools = gateway_protocol.offered_tools(admitted_tools, data, false)
-    end
+    local effective_tools, effective_tools_error = decode_gateway_tools(data, ref)
+    if not effective_tools then return nil, effective_tools_error end
+    local gateway_tools = gateway_protocol.offered_tools(effective_tools, data, selected ~= nil)
     local agent_model_map: {[string]: string} = {}
     if data.agent_model_map ~= nil then
         local declared = bounds.object(data.agent_model_map)

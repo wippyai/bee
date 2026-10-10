@@ -8,11 +8,11 @@ local editor = require("editor")
 local caller = require("caller")
 local agents = require("agents")
 local function state(): view.State
-    local draft = assert(editor.new({schema_revision = "bee.agent-profile@3", name = "Small worker", definition_ref = "host:worker",
-        driver_binding_ref = "driver:binding", provider = {options = {temperature = "cool"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
-        {options = {temperature = {"cool", "warm"}}, mcp_tools = {"thread_read"}, instructions = true}))
+    local draft = assert(editor.new({schema_revision = "bee.agent-profile@3", name = "Small worker", definition_ref = "bee.harness.catalog:fixture_definition",
+        driver_binding_ref = "bee.driver.claude.binding:binding", provider = {effort = "low"}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
+        {options = {effort = {"low", "high"}}, mcp_tools = {"thread_read"}, instructions = true}))
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft,
-        fields = {temperature = {label = "Temperature", section = "basic", order = 1}}, save_key = "save", remove_key = "remove"},
+        fields = {effort = {label = "Effort", section = "basic", order = 1}}, save_key = "save", remove_key = "remove"},
         function(target, _request): caller.Reply return {ok = false, value = nil, replayed = false, error = {code = "NOT_FOUND", message = target}} end)
 end
 local function define_tests()
@@ -38,12 +38,12 @@ local function define_tests()
         test.it("shows driver identity, declared options, permissions and prompt in basic fields", function()
             local s = state()
             local shown = table.concat(view.draw(160, 45, appearance.defaults(), s).rows, "\n")
-            for _, value in ipairs({"Driver:", "Temperature: cool", "Permission answers:", "System prompt:"}) do test.contains(shown, value) end
+            for _, value in ipairs({"Driver:", "Effort: low", "Permission answers:", "System prompt:"}) do test.contains(shown, value) end
         end)
         test.it("saves validated MCP scopes and traits without replacing unrelated grants", function()
             local s = state()
             s.settings["mcp.thread_read"] = '{"workspace_id":"workspace","traits":["docs"]}'
-            test.eq(view.action(s, "save"), "save")
+            test.eq(view.action(s, "save"), "save", s.status)
             test.eq(s.form.draft.bee.mcp[1].scope.workspace_id, "workspace")
             test.eq(s.form.draft.bee.mcp[1].scope.traits[1], "docs")
             s.settings["mcp.thread_read"] = '{"access":"root"}'

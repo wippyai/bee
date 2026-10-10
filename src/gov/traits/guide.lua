@@ -448,7 +448,7 @@ function M.driver_delivery(): string
         .. " A custom external CLI binding uses bee.driver:driver prepare, dispatch, normalize and configure"
         .. " functions in .binding, and bee.driver:locate_facet locate. Its meta.type is harness.driver with"
         .. " driver_id, descriptor_ref and profiles_ref. Declare a harness.profile record whose driver_ref"
-        .. " matches. A CLI descriptor uses bee.driver.cli-descriptor@3 and a supported codec."
+        .. " matches. A CLI descriptor uses bee.driver.cli-descriptor@4 and a supported codec."
         .. " Select the shared implementation with universal.prepare/dispatch/normalize/locate(descriptor_ref)"
         .. " and universal.protocol(descriptor_ref), importing bee.driver.binding:universal."
         .. " For a CLI requiring no gateway/provider configuration, configure uses"

@@ -39,6 +39,7 @@ local system = require("system")
 type LocalPreparation = {binding: string, kind: string, spec_json: string, home_directory: string, capability: types.Capability, exit_observation: types.ExitObservation, stdin_close: boolean}
 local supervision = require("supervision")
 local demand = require("demand")
+local profile_values = require("profile_values")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -358,7 +359,8 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     local data = policy_entry and bounds.object(policy_entry.data) or nil
     if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not data then return nil, nil, "policy_ref is not a host launch policy" end
     if request.preferences then
-        local effective, preference_error = preferences.apply(data, request.preferences)
+        local descriptor = profile_values.schema(request.binding_ref)
+        local effective, preference_error = preferences.apply(data, request.preferences, descriptor)
         if not effective then return nil, nil, preference_error end
         data = effective
     end

@@ -153,12 +153,12 @@ local function define_tests()
             local original = assert(json.encode(entry.data))
             local data = assert(bounds.object(entry.data))
             local fields = assert(bounds.object(assert(bounds.object(data.options)).fields))
-            fields.extra_mode = {path = "provider.options.extra_mode", value_schema = {type = "string", enum = {"careful"}},
+            fields.extra_mode = {id = "extra_mode", group = "advanced", security_class = "free", path = "provider.options.extra_mode", value_schema = {type = "string", enum = {"careful"}},
                 label = "Mode", description = "Fixture mode", section = "advanced", order = 999,
                 contexts = {"first_turn"}, support = {help_probe = {argv = {"--help"}, flag = "--extra-mode"}},
                 render = {{kind = "argv", contexts = {"first_turn"}, tokens = {"--extra-mode", {field = "provider.options.extra_mode"}}},
                     {kind = "env", contexts = {"first_turn"}, name = "PROVIDER_EXTRA_MODE", value = {field = "provider.options.extra_mode"}}}}
-            fields.settings = {path = "provider.options.settings", value_schema = {type = "object", additionalProperties = false, properties = {enabled = {type = "boolean"}}, required = {"enabled"}},
+            fields.settings = {id = "settings", group = "advanced", security_class = "free", path = "provider.options.settings", value_schema = {type = "object", additionalProperties = false, properties = {enabled = {type = "boolean"}}, required = {"enabled"}},
                 label = "Settings", description = "Fixture settings", section = "advanced", order = 1000,
                 contexts = {"first_turn"}, support = {config_schema_ref = "fixture:settings"},
                 render = {{kind = "config", contexts = {"first_turn"}, file = "provider/config.json", format = "json", path = {"settings"}, merge = "set", value = {field = "provider.options.settings"}}}}

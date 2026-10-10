@@ -44,7 +44,7 @@ entries:
     type: bee.driver.cli_descriptor
     comment: OpenCode CLI command, JSON event codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@3
+    schema_revision: bee.driver.cli-descriptor@4
     provider: opencode
     executable: opencode
     version_probe:
@@ -167,6 +167,9 @@ entries:
             merge: append
             value:
               field: provider.system_prompt_files
+          id: system_prompt_append
+          group: behavior
+          security_class: free
         model:
           path: provider.model
           value_schema:
@@ -198,13 +201,18 @@ entries:
               - --model
               - field: model
           - kind: config
-            contexts: [window]
+            contexts:
+            - window
             file: .config/opencode/opencode.json
             format: json
-            path: [model]
+            path:
+            - model
             merge: set
             value:
               field: provider.model
+          id: model
+          group: model/provider
+          security_class: free
         variant:
           path: provider.options.variant
           value_schema:
@@ -234,6 +242,9 @@ entries:
               then:
               - --variant
               - field: variant
+          id: variant
+          group: model/provider
+          security_class: free
         providers:
           path: provider.options.providers
           value_schema:
@@ -325,6 +336,9 @@ entries:
             merge: set
             value:
               field: provider.options.providers
+          id: providers
+          group: model/provider
+          security_class: host-ceiling
         enabled_providers:
           path: provider.options.enabled_providers
           value_schema:
@@ -350,14 +364,50 @@ entries:
             merge: set
             value:
               field: provider.options.enabled_providers
+          id: enabled_providers
+          group: model/provider
+          security_class: host-ceiling
+        folder_trust:
+          id: folder_trust
+          path: provider.options.folder_trust
+          value_schema:
+            type: string
+            enum:
+            - ask
+          default: ask
+          label: Folder trust
+          description: Folder trust is unsupported by this driver
+          group: access/trust
+          security_class: person-only
+          section: advanced
+          order: 90
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.opencode.descriptor:cli
+          render: []
+          trust:
+            unsupported: true
       rules:
       - kind: values
         field: gateway_hooks
-        values: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop, StopFailure, SessionEnd]
+        values:
+        - SessionStart
+        - UserPromptSubmit
+        - PreToolUse
+        - PostToolUse
+        - PostToolUseFailure
+        - PermissionRequest
+        - Stop
+        - StopFailure
+        - SessionEnd
         message: unsupported gateway hook
       - kind: profile_fields
         profile: batch
-        fields: [gateway_hooks]
+        fields:
+        - gateway_hooks
         message: gateway hooks require the window profile
     flags: {}
     argv_templates:

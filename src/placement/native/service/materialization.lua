@@ -23,6 +23,12 @@ local configuration = require("configuration")
 local workdir_preparers = require("workdir_preparers")
 local writable_roots_adapter = require("writable_roots_adapter")
 local provider_projection = require("provider_projection")
+local profile_values = require("profile_values")
+local effective_schema = require("effective_schema")
+local registry = require("registry")
+local trust = require("trust")
+local grants = require("grants")
+local profile_grants = require("profile_grants")
 local M = {}
 function M.fail_start(db: sql.DB, attempt_id: string, reason: string, docker: boolean, stopped_during_materialization: boolean?): store.Result
     local fields: {[string]: unknown} = {}
@@ -265,10 +271,10 @@ local function resolve_work_dir(request: types.LaunchRequest, home: string): (st
 end
 -- Each write grant admits its granted subpath, physically contained in the
 -- resource root the host resolved for the grant.
-function M.write_roots(request: types.LaunchRequest, executor: string): ({string}?, string?)
+local function admitted_roots(request: types.LaunchRequest, executor: string, write_only: boolean): ({string}?, string?)
     local write_roots: {string} = {}
     for _, grant in ipairs(request.resources) do
-        if grant.access == "write" then
+        if not write_only or grant.access == "write" then
             local root, root_error = resources.directory(grant.root_ref)
             if not root then return nil, root_error or "write-granted root unavailable" end
             if grant.subpath == "" then
@@ -281,6 +287,9 @@ function M.write_roots(request: types.LaunchRequest, executor: string): ({string
         end
     end
     return write_roots, nil
+end
+function M.write_roots(request: types.LaunchRequest, executor: string): ({string}?, string?)
+    return admitted_roots(request, executor, true)
 end
 local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRequest, attempt_id: string, initial_work_dir: string): (string?, {string}?, string?)
     local executor, executor_error = resources.executor()
@@ -640,6 +649,59 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         gateway_binding = materialized.binding.binding_id
         evidence(db, attempt_id, "gateway.materialized", "binding " .. materialized.binding.binding_id .. " credential generation " .. tostring(materialized.generation) .. " under carrier epoch " .. tostring(generation) .. " into " .. gateway.destination .. "; driver configuration frozen at admission")
     end
+    local initial_work_dir, initial_work_dir_error = resolve_work_dir(request, home_os)
+    if not initial_work_dir then
+        evidence(db, attempt_id, "workdir.failed", initial_work_dir_error or "working directory")
+        return refused(initial_work_dir_error or "working directory")
+    end
+    local work_dir, sandbox_arguments, prepare_error = prepare_workdir_and_arguments(db, request, attempt_id, initial_work_dir)
+    if not work_dir or not sandbox_arguments then
+        evidence(db, attempt_id, "workdir.failed", prepare_error or "workdir preparation failed")
+        return refused(prepare_error or "workdir preparation failed")
+    end
+    local descriptor = profile_values.schema(request.binding_ref)
+    local policy_entry = registry.get(request.policy_ref)
+    local policy_data = policy_entry and bounds.object(policy_entry.data)
+    local trust_mapping: {[string]: unknown}? = nil
+    local trusted_path: string? = nil
+    local trust_written = false
+    local isolated = request.launch.provider_home and request.launch.provider_home.private
+    if isolated then
+        local schema = profile_values.schema(request.binding_ref)
+        local fields = schema and bounds.object(schema.options.fields)
+        local field = fields and bounds.object(fields.folder_trust)
+        local mapping = field and bounds.object(field.trust)
+        if mapping and mapping.file then trust_mapping = mapping end
+    end
+    local selected = request.preferences
+    if selected and selected.options.folder_trust == "approved-workdir" then
+        if guest_home then return refused("Folder trust requires a canonical native launch workdir") end
+        local provider_home = request.launch.provider_home
+        if not provider_home or not provider_home.private then return refused("Folder trust requires an isolated provider home") end
+        local grant_id = selected.authority_grant_id
+        local consent = grant_id and grants.read(db, grant_id)
+        if not consent or consent.provenance.kind ~= "consent" or profile_grants.live(db, consent) then return refused("Folder trust requires active person consent") end
+        local parameters = bounds.object(consent.scope.parameters)
+        local approved = parameters and bounds.object(parameters.configuration)
+        local provider = approved and bounds.object(approved.provider)
+        local values = provider and (provider.schema_ref and bounds.object(provider.values) or profile_values.flatten(provider))
+        if not approved or approved.driver_binding_ref ~= request.binding_ref or not values or values.folder_trust ~= "approved-workdir" then return refused("Folder trust is outside recorded person consent") end
+        local descriptor, _, schema_error = profile_values.schema(request.binding_ref)
+        if not descriptor then return refused(schema_error or "Folder trust schema unavailable") end
+        local fields = bounds.object(descriptor.options.fields)
+        local field = fields and bounds.object(fields.folder_trust)
+        local mapping = field and bounds.object(field.trust)
+        if not mapping or mapping.unsupported == true then return refused("Folder trust is unsupported by this driver") end
+        local executor, executor_error = resources.executor()
+        if not executor then return refused(executor_error or "Folder trust executor unavailable") end
+        local roots, roots_error = admitted_roots(request, executor, false)
+        if not roots then return refused(roots_error or "Folder trust roots unavailable") end
+        local physical, trust_error = trust.admit(work_dir, roots, executor, mapping.repository_root == true, bounds.ids(mapping.project_config, true))
+        if not physical then return refused(trust_error or "Folder trust scope refused") end
+        trust_mapping, trusted_path, work_dir = mapping, physical, physical
+        local flag = bounds.line(mapping.flag, 128)
+        if flag then arguments[#arguments + 1] = flag; trust_written = true end
+    end
     for _, file in ipairs(delivery.files) do
         local base: string? = nil
         if file.composition then
@@ -715,6 +777,16 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         -- A session intent excludes other attempts; the runner's starting claim
         -- excludes duplicate starts of this attempt. Recheck after asynchronous
         -- credential/gateway calls and before each publication.
+        if descriptor and policy_data then
+            local config_error = effective_schema.check_config(descriptor, policy_data, file.path, content)
+            if config_error then return refused(config_error) end
+        end
+        if trust_mapping and trust_mapping.file == file.path then
+            local trusted, trust_error = trust.render(trust_mapping, trusted_path, content)
+            if not trusted then return refused(trust_error or "Trust configuration refused") end
+            content = trusted
+            trust_written = true
+        end
         if not owns_attempt() then
             return refused("attempt no longer owns configuration materialization")
         end
@@ -732,15 +804,13 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         end
         evidence(db, attempt_id, "configuration.materialized", file.revision .. " " .. file.path .. " digest " .. file.digest .. (retained_home and " published" or " created"))
     end
-    local initial_work_dir, initial_work_dir_error = resolve_work_dir(request, home_os)
-    if not initial_work_dir then
-        evidence(db, attempt_id, "workdir.failed", initial_work_dir_error or "working directory")
-        return refused(initial_work_dir_error or "working directory")
-    end
-    local work_dir, sandbox_arguments, prepare_error = prepare_workdir_and_arguments(db, request, attempt_id, initial_work_dir)
-    if not work_dir or not sandbox_arguments then
-        evidence(db, attempt_id, "workdir.failed", prepare_error or "workdir preparation failed")
-        return refused(prepare_error or "workdir preparation failed")
+    if trust_mapping and trust_mapping.file and not trust_written then
+        local path = bounds.subpath(trust_mapping.file)
+        local content, trust_error = trust.render(trust_mapping, trusted_path, nil)
+        if not path or not content then return refused(trust_error or "Trust configuration path unavailable") end
+        if not owns_attempt() then return refused("attempt no longer owns configuration materialization") end
+        local written, write_error = homes.publish_configuration(selected_home_path, path, content, created_parents, true)
+        if not written then return refused(write_error or "Trust configuration publication refused") end
     end
     for _, argument in ipairs(sandbox_arguments) do arguments[#arguments + 1] = argument end
     for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end

@@ -188,7 +188,7 @@ entries:
   imports:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
     protocol: bee.harness.profiles:protocol
 - name: profile_form
   kind: library.lua
@@ -198,11 +198,12 @@ entries:
   - uuid
   - json
   imports:
+    validation: bee.harness.profiles.binding:validation
     mcp: bee.gateway.api:mcp
     canonical: bee.values:canonical
     descriptors: bee.driver.descriptor:descriptor
     readiness: bee.harness.launch:readiness
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
     bounds: bee.values:bounds
     catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
@@ -214,6 +215,7 @@ entries:
   modules:
   - tty
   imports:
+    option_controls: bee.harness.app:option_controls
     confirmation: bee.approvals.app:confirmation
     canonical: bee.values:canonical
     settings: bee.harness.app:profile_settings
@@ -261,3 +263,8 @@ entries:
     frame: bee.ui:frame
     appearance: bee.ui:appearance
     profiles: bee.harness.profiles:protocol
+- name: option_controls
+  kind: library.lua
+  source: file://option_controls.lua
+  imports:
+    bounds: bee.values:bounds

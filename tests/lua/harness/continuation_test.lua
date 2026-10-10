@@ -392,7 +392,7 @@ local function define_tests()
             local claude_request, claude_error = claude.decode({profile_id = "window", brief = "", resume_ref = "provider-session"})
             if not claude_request then error(tostring(claude_error)) end
             local claude_launch = claude.specification(claude_request)
-            test.eq(table.concat(claude_launch.argv, " "), "--permission-mode default -r provider-session")
+            test.eq(table.concat(claude_launch.argv, " "), "--permission-mode manual -r provider-session")
             test.is_nil(claude_launch.stdin)
             -- A recorded reference is one argument, never an extra CLI flag.
             for _, reference in ipairs({"--dangerously-bypass-approvals-and-sandbox", "--dangerously-skip-permissions", "--", "-p"}) do

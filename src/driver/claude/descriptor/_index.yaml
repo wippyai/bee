@@ -7,7 +7,7 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Claude Code command, stream-json codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@3
+    schema_revision: bee.driver.cli-descriptor@4
     provider: claude
     executable: claude
     version_probe:
@@ -70,16 +70,18 @@ entries:
       - window
       fields:
         permission_mode:
-          default: default
+          default: manual
           invalid: permission_mode is not one Bee admits
           path: provider.permission_mode
           value_schema:
             type: string
             enum:
-            - default
+            - manual
             - acceptEdits
-            - plan
+            - auto
             - dontAsk
+            - plan
+            - bypassPermissions
           label: Permission mode
           description: CLI permission mode
           section: advanced
@@ -93,6 +95,7 @@ entries:
               argv:
               - --help
               flag: --permission-mode
+            version_range: '>=2.1.296'
           render:
           - kind: argv
             contexts:
@@ -112,6 +115,34 @@ entries:
             tokens:
             - --permission-mode
             - field: permission_mode
+          id: permission_mode
+          group: access/trust
+          security_class: host-ceiling
+          capabilities:
+            manual:
+            - prompt
+            acceptEdits:
+            - prompt
+            - edit
+            auto:
+            - automatic
+            dontAsk:
+            - deny-unapproved
+            plan:
+            - read
+            bypassPermissions:
+            - bypass
+          ceiling:
+          - prompt
+          - edit
+          - automatic
+          - deny-unapproved
+          - read
+          config_aliases:
+          - format: json
+            path:
+            - permissions
+            - defaultMode
         model:
           invalid: model is not one bounded model identifier
           path: provider.model
@@ -156,6 +187,9 @@ entries:
               then:
               - --model
               - field: model
+          id: model
+          group: model/provider
+          security_class: free
         effort:
           invalid: effort is not one Bee admits
           path: provider.effort
@@ -205,6 +239,9 @@ entries:
               then:
               - --effort
               - field: effort
+          id: effort
+          group: model/provider
+          security_class: free
         permission_exchange:
           type: boolean
           default: false
@@ -264,6 +301,41 @@ entries:
             tokens:
             - --append-system-prompt-file
             - field: system_prompt_file
+          id: system_prompt_append
+          group: behavior
+          security_class: free
+        folder_trust:
+          id: folder_trust
+          path: provider.options.folder_trust
+          value_schema:
+            type: string
+            enum:
+            - ask
+            - approved-workdir
+          default: ask
+          label: Folder trust
+          description: Trust only the canonical launch workdir in the isolated agent home
+          group: access/trust
+          security_class: person-only
+          section: advanced
+          order: 90
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.claude.descriptor:cli
+          render: []
+          trust:
+            file: .claude/.claude.json
+            format: json
+            key: hasTrustDialogAccepted
+            value: true
+            repository_root: true
+            project_config:
+            - .claude/settings.json
+            - .claude/settings.local.json
+            - .mcp.json
       rules:
       - kind: profile_fields
         profile: window

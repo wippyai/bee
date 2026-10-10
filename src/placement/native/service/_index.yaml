@@ -100,9 +100,10 @@ entries:
   - system
   - sql
   imports:
+    profile_values: bee.driver.descriptor:profile_values
     gateway_configuration: bee.gateway.env:configuration
     configuration: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
     resolver: bee.driver.binding:resolver
     driver_types: bee.driver:types
     placement_resolver: bee.placement.binding:resolver
@@ -131,6 +132,7 @@ entries:
   kind: library.lua
   source: file://materialization.lua
   modules:
+  - registry
   - env
   - fs
   - funcs
@@ -138,6 +140,11 @@ entries:
   - process
   - hash
   imports:
+    effective_schema: bee.driver.descriptor:effective
+    profile_values: bee.driver.descriptor:profile_values
+    trust: bee.driver.descriptor:trust
+    grants: bee.approvals.grants:store
+    profile_grants: bee.harness.profiles.persist:grants
     store: bee.placement.native.persist:store
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes

@@ -2,6 +2,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local json = require("json")
 local access = require("access")
+local profile_values = require("profile_values")
 local M = {}
 M.SCHEMA = "bee.agent-profile@3"
 M.PRIOR = "bee.agent-profile@2"
@@ -215,7 +216,13 @@ function M.profile(value: unknown): (Profile?, string?)
     if raw.schema_revision ~= M.SCHEMA then return nil, "profile.schema_revision must be " .. M.SCHEMA end
     local definition, driver, name = bounds.id(raw.definition_ref), bounds.id(raw.driver_binding_ref), bounds.line(raw.name, 80)
     if not definition or not driver or not name or name:match("^%s*$") then return nil, "profile requires definition_ref, driver_binding_ref and name" end
-    local provider, provider_error = M.provider(raw.provider)
+    local provider_input = bounds.object(raw.provider)
+    if provider_input and provider_input.schema_ref then
+        local decoded, invalid = profile_values.decode(driver, provider_input)
+        if not decoded then return nil, invalid end
+        provider_input = decoded
+    end
+    local provider, provider_error = M.provider(provider_input)
     if not provider then return nil, provider_error end
     local bee, bee_error = M.bee(raw.bee)
     if not bee then return nil, bee_error end
@@ -266,6 +273,15 @@ function M.profile(value: unknown): (Profile?, string?)
         if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "spec_digest must be a lowercase SHA-256 hex digest" end
         result.spec_digest = digest
     end
+    return result, nil
+end
+
+function M.storage(profile: Profile): (Object?, string?)
+    local provider, err = profile_values.encode(profile.driver_binding_ref, profile.provider)
+    if not provider then return nil, err end
+    local result: Object = {}
+    for key, value in pairs(profile) do result[key] = value end
+    result.provider = provider
     return result, nil
 end
 

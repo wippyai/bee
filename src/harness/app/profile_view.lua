@@ -14,16 +14,17 @@ local canonical = require("canonical")
 local settings = require("settings")
 local bounds = require("bounds")
 local confirmation = require("confirmation")
+local option_controls = require("option_controls")
 local M = {}
 M.THREADS = "bee.threads.binding:list"
 M.THREAD_PAGE = 64
 type Ask = (string, {[string]: unknown}) -> caller.Reply
-type Field = {kind: string, name: string, label: string, option_kind: string?, max_bytes: integer?}
+type Field = {control: option_controls.Row?, kind: string, name: string, label: string, option_kind: string?, max_bytes: integer?}
 -- A thread row; thread_id nil is the new thread the launch opens.
 type ThreadRow = {thread_id: string?, title: string}
 type Threads = {items: {ThreadRow}, selected: integer, error: string?}
 type Driver = {definition_ref: string, title: string}
-type State = {role: string, context_rows: {{key: string, value: string}},drivers: {Driver}?, driver_choice: Driver?, settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
+type State = {structured: {[string]: unknown}, structured_text: {[string]: string}, structured_errors: {[string]: string}, role: string, context_rows: {{key: string, value: string}},drivers: {Driver}?, driver_choice: Driver?, settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
     credential_text: {[string]: string},
     status: string, confirmation: confirmation.State, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
     thread_titles: {[string]: string}, list_offset: integer, advanced: boolean}
@@ -37,7 +38,19 @@ function M.new(form: forms.Form, ask: Ask, drivers: {Driver}?, origin: {[string]
             option_text[option.name] = type(option.value) == "string" and option.value or ""
         end
     end
-    local state: State = {role = form.draft.role or "", context_rows = {}, drivers = drivers, settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
+    local structured: {[string]: unknown} = {}
+    for name, field in pairs(form.fields or {}) do
+        local allowed = form.draft._allowed.options[name]
+        if allowed and allowed.kind == "declared" then
+            local provider = form.draft.provider
+            if name == "env" then structured[name] = provider.env
+            elseif name == "tool_allow" then structured[name] = provider.tool_allow
+            elseif name == "tool_deny" then structured[name] = provider.tool_deny
+            else structured[name] = (provider.options or {})[name] end
+            option_text[name] = nil
+        end
+    end
+    local state: State = {structured = structured, structured_text = {}, structured_errors = {}, role = form.draft.role or "", context_rows = {}, drivers = drivers, settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
         option_text = option_text, credential_text = {}, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirmation = confirmation.new({workspace_id = form.workspace_id, origin = origin or {app_id = "bee.harness.app:app", instance_id = form.profile_id}}, ask), ask = ask,
         browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
     local keys: {string} = {}
@@ -102,12 +115,27 @@ local function fields(state: State): {Field}
         if first ~= second then return first < second end
         return a.name < b.name
     end)
-    for _, option in ipairs(options or {}) do
-        if metadata[option.name] and metadata[option.name].section == "basic" then
-            result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
-                max_bytes = option.max_bytes, label = (metadata[option.name] and metadata[option.name].label or human(option.name)) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
+    for _, group in ipairs({"model/provider", "behavior", "access/trust", "tools/integrations", "advanced"}) do
+        local shown = false
+        for _, option in ipairs(options or {}) do
+            local field = metadata[option.name]
+            if field and (field.group or "advanced") == group then
+                if not shown then result[#result + 1] = {kind = "info", name = "", label = group}; shown = true end
+                local allowed = state.form.draft._allowed.options[option.name]
+                if allowed and allowed.kind == "declared" and field.value_schema then
+                    for index, control in ipairs(option_controls.rows(option.name, field.value_schema, state.structured[option.name])) do
+                        result[#result + 1] = {kind = "structured", name = option.name .. ":" .. tostring(index), control = control,
+                            label = control.label .. ((control.kind == "text" or control.kind == "choice") and control.value ~= nil and ": " .. tostring(control.value) or "")}
+                    end
+                else
+                local value = option.value == nil and (field.default == nil and "CLI default" or tostring(field.default)) .. " (" .. (field.default_source or "driver schema") .. ")" or tostring(option.value)
+                result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
+                    max_bytes = option.max_bytes, label = field.label .. ": " .. value}
+                end
+            end
         end
     end
+    for index, reason in ipairs(state.form.unsupported or {}) do result[#result + 1] = {kind = "unsupported", name = tostring(index), label = reason} end
     if state.form.repair_json then result[#result + 1] = {kind = "repair", name = "", label = "Migration repair"} end
     if state.advanced then
         local placement = state.form.draft.placement
@@ -118,13 +146,6 @@ local function fields(state: State): {Field}
             result[#result + 1] = {kind = "info", name = "", label = "Original: " .. (canonical.encode(state.form.migration_diagnostic.source) or "Unavailable")}
         end
         if state.form.draft._allowed.thread then result[#result + 1] = {kind = "thread", name = "", label = thread_label(state)} end
-        for _, option in ipairs(options or {}) do
-            if not metadata[option.name] or metadata[option.name].section == "advanced" then
-                result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
-                    max_bytes = option.max_bytes, label = (metadata[option.name] and metadata[option.name].label or human(option.name)) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
-            end
-        end
-        for index, reason in ipairs(state.form.unsupported or {}) do result[#result + 1] = {kind = "unsupported", name = tostring(index), label = reason} end
         for _, tool in ipairs(editor.tools(state.form.draft) or {}) do
             result[#result + 1] = {kind = "tool", name = tool.name,
                 label = (tool.selected and "[x] " or "[ ] ") .. (TOOL_NAMES[tool.name] or human(tool.name))}
@@ -204,6 +225,7 @@ function M.action(state: State, action: string, gesture: "enter" | "space" | "cl
     if action == "save" then
         if confirmation.matches(state.confirmation, "profile.remove") then return nil end
         if state.form.pending then return state.form.pending end
+        for _, err in pairs(state.structured_errors) do state.status = err; return nil end
         local named, name_error = editor.set_title(state.form.draft, state.title)
         if not named then state.status = name_error or "Invalid name"; return nil end
         local assigned, role_error = editor.set_role(state.form.draft, state.role)
@@ -215,6 +237,14 @@ function M.action(state: State, action: string, gesture: "enter" | "space" | "cl
         for name, value in pairs(state.option_text) do
             local changed, option_error = editor.set_text_option(state.form.draft, name, value)
             if not changed then state.status = option_error or "Invalid option"; return nil end
+        end
+        for name, field in pairs(state.form.fields or {}) do
+            local allowed = state.form.draft._allowed.options[name]
+            if allowed and allowed.kind == "declared" then
+                local encoded = state.structured[name] ~= nil and canonical.encode(state.structured[name]) or ""
+                local changed, option_error = editor.set_text_option(state.form.draft, name, encoded)
+                if not changed then state.status = option_error or "Invalid option"; return nil end
+            end
         end
         for name, value in pairs(state.settings) do
             local tool = name:match("^mcp%.(.+)$")
@@ -366,6 +396,38 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     if state.form.pending or confirmation.matches(state.confirmation, "profile.remove") then return nil end
     local field = listed[state.selected]
     if not field or field.kind == "unsupported" or field.kind == "info" then return nil end
+    if field.kind == "structured" and field.control then
+        local control = field.control
+        if control.kind == "text" or control.kind == "key" then
+            local current = state.structured_text[field.name]
+            if current == nil then current = control.value == nil and "" or tostring(control.value) end
+            local value = current
+            if event.type == "paste" then value = value .. event.text
+            elseif event.type == "key" and event.action == "press" then
+                if event.ctrl and event.key == "u" then value = ""
+                elseif event.key_type == "backspace" or event.key_type == "backspace2" then value = erase(value)
+                elseif event.key_type == "space" and not event.ctrl and not event.alt then value = value .. " "
+                elseif not event.ctrl and not event.alt and event.key ~= "" and not event.key:find("%c") then value = value .. event.key end
+            end
+            if #value > 4096 then state.status = "Text exceeds 4096 bytes"; return nil end
+            if value ~= current then
+                state.structured_text[field.name] = value
+                if control.kind == "text" then
+                    local err = option_controls.change(state.structured, control, value)
+                    state.structured_errors[field.name] = err
+                    state.status = err or ""
+                end
+            end
+            if control.kind == "key" and event.type == "key" and event.action == "press" and event.key_type == "enter" then
+                state.status = option_controls.change(state.structured, control, current) or ""
+                state.structured_text, state.structured_errors = {}, {}
+            end
+        elseif event.type == "key" and event.action == "press" and (event.key_type == "enter" or event.key_type == "left" or event.key_type == "right" or event.key_type == "space") then
+            state.status = option_controls.change(state.structured, control, nil, event.key_type == "left" and -1 or 1) or ""
+            state.structured_text, state.structured_errors = {}, {}
+        end
+        return nil
+    end
     if field.kind == "driver" then
         if event.type == "key" and event.action == "press" and (event.key_type == "enter" or event.key_type == "left" or event.key_type == "right") then
             local drivers = state.drivers or {}
@@ -512,8 +574,14 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local label = field.label
         if field.kind == "role" then label = label .. ": " .. state.role
         elseif field.kind == "title" then label = label .. ": " .. state.title
+        elseif field.kind == "structured" and field.control and (field.control.kind == "text" or field.control.kind == "key") then
+            label = field.control.label .. ": " .. (state.structured_text[field.name] or (field.control.value == nil and "" or tostring(field.control.value)))
         elseif field.kind == "option" and field.option_kind == "text" then
-            label = human(field.name) .. ": " .. (state.option_text[field.name] or "Default")
+            local edited = state.option_text[field.name]
+            if edited and edited ~= "" then
+                local metadata = (state.form.fields or {})[field.name]
+                label = (metadata and metadata.label or human(field.name)) .. ": " .. edited
+            end
         elseif field.kind == "settings" then label = label .. ": " .. (state.settings[field.name] ~= "" and state.settings[field.name] or "Default")
         elseif field.kind == "repair" then label = label .. ": " .. (state.form.repair_json or "")
         elseif field.kind == "guidance" then label = label .. ": " .. state.guidance:gsub("\r?\n", " ↵ ") end

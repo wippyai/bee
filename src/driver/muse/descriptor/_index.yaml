@@ -7,7 +7,7 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Muse headless CLI command, record JSONL codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@3
+    schema_revision: bee.driver.cli-descriptor@4
     provider: muse
     executable: muse
     version_probe:
@@ -100,6 +100,9 @@ entries:
             tokens:
             - --approval-mode
             - field: approval_mode
+          id: approval_mode
+          group: access/trust
+          security_class: host-ceiling
         model:
           invalid: model is not one bounded model identifier
           path: provider.model
@@ -137,17 +140,23 @@ entries:
               then:
               - --model
               - field: model
+          id: model
+          group: model/provider
+          security_class: free
         effort:
           invalid: effort is not one Bee admits
           path: provider.effort
           value_schema:
             type: string
             enum:
+            - none
+            - minimal
             - low
             - medium
             - high
             - xhigh
             - max
+            - ultra
           label: Effort
           description: CLI effort
           section: basic
@@ -179,6 +188,9 @@ entries:
               then:
               - --reasoning-effort
               - field: effort
+          id: effort
+          group: model/provider
+          security_class: free
         resume_ref:
           type: id
           forbid_option: true
@@ -217,6 +229,39 @@ entries:
             merge: append
             value:
               field: provider.system_prompt_append
+          id: system_prompt_append
+          group: behavior
+          security_class: free
+        folder_trust:
+          id: folder_trust
+          path: provider.options.folder_trust
+          value_schema:
+            type: string
+            enum:
+            - ask
+            - approved-workdir
+          default: ask
+          label: Folder trust
+          description: Trust only the canonical launch workdir in the isolated agent home
+          group: access/trust
+          security_class: person-only
+          section: advanced
+          order: 90
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --trust-workspace
+          render: []
+          trust:
+            flag: --trust-workspace
+            repository_root: false
+            project_config:
+            - .codex/settings.json
       rules:
       - kind: requires_empty
         field: brief

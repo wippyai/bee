@@ -33,7 +33,7 @@ function M.requirements(plan: Plan): ({Requirement}?, string?)
     if saved then
         local selected, selection_error = profiles.preferences(saved)
         if not selected then return nil, selection_error end
-        local merged, preference_error = preferences.apply(data, selected)
+        local merged, preference_error = preferences.apply(data, selected, descriptor)
         if not merged then return nil, preference_error end
         data = merged
     end

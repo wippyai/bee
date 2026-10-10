@@ -543,6 +543,7 @@ entries:
   - registry
   - hash
   - json
+  - toml
   security:
     policies:
     - bee.placement.native:apply_test_policy
@@ -554,11 +555,14 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
   imports:
+    trust: bee.driver.descriptor:trust
+    descriptors: bee.driver.descriptor:descriptor
+    resources: bee.placement.native.env:resources
     bounds: bee.values:bounds
     principals: bee.tests.principals:bound
     configuration: bee.driver.codex.binding:configuration
     configuration_protocol: bee.driver.binding:configuration
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store

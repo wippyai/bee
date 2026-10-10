@@ -51,16 +51,19 @@ Saved profiles use `bee.agent-profile@3`, stored in the Sync feed
 `harness.profiles:<workspace digest>` with `harness.profile.changed` events.
 
 - Identity: `schema_revision`, `definition_ref`, `driver_binding_ref`, `name`; optional `agent_ref`, `owner_component_revision`, `spec_digest`. Revisions stay in the CAS store envelope.
-- `provider`: `model`, `effort`, `permission_mode`, `tool_allow`, `tool_deny`, `system_prompt_append`, `env`, `options`. Driver-specific values use descriptor-declared `options` keys; `env` values are literals or credential references.
+- `provider`: `{schema_ref, schema_revision, values}`. Values use descriptor option IDs. Legacy named fields and `options` flatten into that map; unknown or invalid values retain their source in a repair diagnostic. Role, context and traits remain profile fields.
 - `bee`: scoped `mcp`, `files`, `workspaces`, `credential_refs`, `approval_leases`, `permission_answers`. References describe requested authority and never grant it.
 - `placement`: `{kind="native", home="private"|"machine"}` or `{kind="docker", profile_ref, overrides?}`; optional `workdir` and `thread`. Every session runs in an interactive window, so a profile names no presentation, budgets or supervision.
 
 Copying a profile transfers no authority; machine home requires host
 permission. The gateway checks saved MCP scopes against every decoded call.
-`bee.driver.cli-descriptor@3` declares each configurable field's canonical path,
-value schema, label, section, order, contexts, support evidence and renders; the
-profile form intersects these with the host's `profile_restrictions`, and launch
-checks explicit saved values again. The catalog accepts `definition_ref`, `query`
+`bee.driver.cli-descriptor@4` declares each configurable field's canonical path,
+ID, value schema, label, description, group, security class, defaults, contexts,
+support evidence and mappings. `bee.driver.descriptor:effective` compiles these
+with installed capabilities and host constraints for the editor, admission and
+rendering. Rights narrow by subsets, denies combine by union, limits take minima,
+and permission modes compare declared capabilities. Person-only values require
+a person write; consent never raises host ceilings. The catalog accepts `definition_ref`, `query`
 and `sort` (`name` or `driver`). A saved profile that no longer validates keeps
 its source and CAS revision in a JSON repair form (`bee.agent-profile-migration@1`
 diagnostic) and blocks launch until repaired. Docker overrides narrow memory,

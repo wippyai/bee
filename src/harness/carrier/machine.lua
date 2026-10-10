@@ -45,6 +45,8 @@ local permission_exchange = require("permission_exchange")
 local hook_exchange = require("hook_exchange")
 local descriptor = require("descriptor")
 local readiness = require("readiness")
+local profile_values = require("profile_values")
+local effective_schema = require("effective_schema")
 local M = {}
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
 M.CARRIER_REGISTRY_PREFIX = prestart.CARRIER_REGISTRY_PREFIX
@@ -236,7 +238,7 @@ local function measure(request: Request): (Measured?, string?)
     if not profile or not profile.supported then return nil, "profile " .. request.profile_id .. " is not supported by " .. request.binding_ref end
     local policy_entry = catalog.entry(pinned, request.policy_ref)
     if not policy_entry then return nil, "launch policy " .. request.policy_ref .. " is not in the registry" end
-    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences)
+    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, profile_values.schema(request.binding_ref))
     if not launch_policy then return nil, policy_error end
     -- The policy is host-owned and decoded from this pinned snapshot. It is
     -- the source of placement selection; request fields only prove that the
@@ -299,17 +301,19 @@ local function measure(request: Request): (Measured?, string?)
         gateway_input = {hook_command = hook_command, endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
             token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
     end
-    if request.preferences and not launch_policy.fixture then
+    if not launch_policy.fixture then
+        local descriptor, _, schema_error = profile_values.schema(request.binding_ref)
+        if request.preferences and not descriptor then return nil, schema_error or "Driver option schema is unavailable" end
+        if descriptor then
         local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref)
         local capabilities = probed.result and probed.result.capabilities or {}
-        for name in pairs(request.preferences.options) do
-            local path = (name == "model" or name == "effort" or name == "permission_mode" or name == "tool_allow" or name == "tool_deny" or name == "env") and ("provider." .. name) or ("provider.options." .. name)
-            local evidence = capabilities[path]
-            if not evidence or not evidence.supported then return nil, path .. ": " .. (evidence and evidence.reason or "Installed CLI support is not established") end
+        local values: Object = {}
+        if request.preferences then
+            for name, value in pairs(request.preferences.options) do values[name] = value end
+            if request.preferences.instructions ~= "" then values.system_prompt_append = request.preferences.instructions end
         end
-        if request.preferences.instructions ~= "" then
-            local evidence = capabilities["provider.system_prompt_append"]
-            if not evidence or not evidence.supported then return nil, "provider.system_prompt_append: " .. (evidence and evidence.reason or "Installed CLI support is not established") end
+        local _, invalid = effective_schema.compile(descriptor, bounds.object(policy_entry.data), capabilities, values)
+        if invalid then return nil, invalid end
         end
     end
     local configure_target = binding.methods.configure

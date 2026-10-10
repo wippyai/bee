@@ -30,6 +30,8 @@ entries:
   source: file://grants.lua
   modules: [sql, security, ctx]
   imports:
+    protocol: bee.harness.profiles:protocol
+    profile_values: bee.driver.descriptor:profile_values
     grants: bee.approvals.grants:store
     bounds: bee.values:bounds
     canonical: bee.values:canonical

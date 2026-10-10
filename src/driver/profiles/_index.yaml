@@ -17,11 +17,3 @@ entries:
   imports:
     bounds: bee.values:bounds
     types: bee.driver:types
-- name: preferences
-  kind: library.lua
-  source: file://preferences.lua
-  imports:
-    profile_access: bee.driver.profiles:profile_access
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
-    instructions: bee.driver.profiles:instructions

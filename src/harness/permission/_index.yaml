@@ -25,7 +25,7 @@ entries:
   modules:
   - json
   imports:
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     permission: bee.harness.permission:adapter

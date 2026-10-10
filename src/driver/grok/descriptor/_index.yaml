@@ -7,7 +7,7 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Grok CLI command, streaming-json codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@3
+    schema_revision: bee.driver.cli-descriptor@4
     provider: grok
     executable: grok
     version_probe:
@@ -49,15 +49,19 @@ entries:
       permission_answers:
         window:
           transport: provider
-          reason: Grok 1.0.30 window hooks expose PreToolUse vetoes, not permission answers. Allow does not bypass provider checks; the native window retains provider prompts. Duplex ACP session/request_permission is available in headless contexts.
+          reason: Grok 1.0.30 window hooks expose PreToolUse vetoes, not permission answers. Allow does not bypass provider
+            checks; the native window retains provider prompts. Duplex ACP session/request_permission is available in headless
+            contexts.
         first_turn:
           transport: stdio
           adapter_ref: bee.driver.grok.permission:permission_adapter
-          reason: A host-accepted exchange selects duplex ACP with default permission mode. Explicit models use session/set_model; effort selection remains on the print route.
+          reason: A host-accepted exchange selects duplex ACP with default permission mode. Explicit models use session/set_model;
+            effort selection remains on the print route.
         resume:
           transport: stdio
           adapter_ref: bee.driver.grok.permission:permission_adapter
-          reason: A host-accepted exchange selects duplex ACP with default permission mode. Explicit models use session/set_model; effort selection remains on the print route.
+          reason: A host-accepted exchange selects duplex ACP with default permission mode. Explicit models use session/set_model;
+            effort selection remains on the print route.
     options:
       profiles:
       - window
@@ -113,6 +117,9 @@ entries:
             tokens:
             - --permission-mode
             - field: permission_mode
+          id: permission_mode
+          group: access/trust
+          security_class: host-ceiling
         model:
           invalid: model is not one bounded model identifier
           path: provider.model
@@ -157,6 +164,9 @@ entries:
               then:
               - --model
               - field: model
+          id: model
+          group: model/provider
+          security_class: free
         effort:
           invalid: effort is not one Bee admits
           path: provider.effort
@@ -208,10 +218,15 @@ entries:
               then:
               - --reasoning-effort
               - field: effort
+          id: effort
+          group: model/provider
+          security_class: free
         permission_exchange:
           type: boolean
           default: false
-          profiles: [session, batch]
+          profiles:
+          - session
+          - batch
           unsupported: ACP permission exchange requires a structured turn
         resume_ref:
           type: id
@@ -253,6 +268,32 @@ entries:
             merge: append
             value:
               field: provider.system_prompt_append
+          id: system_prompt_append
+          group: behavior
+          security_class: free
+        folder_trust:
+          id: folder_trust
+          path: provider.options.folder_trust
+          value_schema:
+            type: string
+            enum:
+            - ask
+          default: ask
+          label: Folder trust
+          description: Folder trust is unsupported by this driver
+          group: access/trust
+          security_class: person-only
+          section: advanced
+          order: 90
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.grok.descriptor:cli
+          render: []
+          trust:
+            unsupported: true
       rules:
       - kind: values
         field: gateway_hooks

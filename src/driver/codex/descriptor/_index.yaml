@@ -7,7 +7,7 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Codex CLI command, JSONL codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@3
+    schema_revision: bee.driver.cli-descriptor@4
     provider: codex
     executable: codex
     version_probe:
@@ -61,12 +61,12 @@ entries:
           adapter_ref: bee.driver.permission:permission_request_hook
         first_turn:
           transport: provider
-          reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel. The window uses PermissionRequest hooks. App-server
-            JSON-RPC approvals require a different driver mode.
+          reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel. The window
+            uses PermissionRequest hooks. App-server JSON-RPC approvals require a different driver mode.
         resume:
           transport: provider
-          reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel. The window uses PermissionRequest hooks. App-server
-            JSON-RPC approvals require a different driver mode.
+          reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel. The window
+            uses PermissionRequest hooks. App-server JSON-RPC approvals require a different driver mode.
     options:
       profiles:
       - window
@@ -105,6 +105,26 @@ entries:
             tokens:
             - --sandbox
             - field: sandbox
+          id: sandbox
+          group: access/trust
+          security_class: host-ceiling
+          config_aliases:
+          - format: toml
+            path:
+            - sandbox_mode
+          capabilities:
+            read-only:
+            - read
+            workspace-write:
+            - read
+            - write-admitted
+            danger-full-access:
+            - read
+            - write-anywhere
+            - network
+          ceiling:
+          - read
+          - write-admitted
         approval_policy:
           path: provider.options.approval_policy
           value_schema:
@@ -133,6 +153,13 @@ entries:
               then:
               - -c
               - format: approval_policy="{approval_policy}"
+          id: approval_policy
+          group: access/trust
+          security_class: host-ceiling
+          config_aliases:
+          - format: toml
+            path:
+            - approval_policy
         resume_ref:
           type: id
           forbid_option: true
@@ -193,6 +220,9 @@ entries:
               then:
               - --config
               - format: model_reasoning_effort="{effort}"
+          id: effort
+          group: model/provider
+          security_class: free
         config_profile:
           invalid: config_profile must be a plain Codex profile name
           path: provider.options.config_profile
@@ -237,6 +267,9 @@ entries:
               then:
               - --profile
               - field: config_profile
+          id: config_profile
+          group: advanced
+          security_class: host-ceiling
         system_prompt_append:
           path: provider.system_prompt_append
           value_schema:
@@ -276,6 +309,9 @@ entries:
             merge: append
             value:
               field: provider.system_prompt_append
+          id: system_prompt_append
+          group: behavior
+          security_class: free
         model:
           path: provider.model
           value_schema:
@@ -306,6 +342,9 @@ entries:
               then:
               - --model
               - field: model
+          id: model
+          group: model/provider
+          security_class: free
         model_provider:
           path: provider.options.model_provider
           value_schema:
@@ -331,6 +370,9 @@ entries:
             merge: set
             value:
               field: provider.options.model_provider
+          id: model_provider
+          group: model/provider
+          security_class: host-ceiling
         model_providers:
           path: provider.options.model_providers
           value_schema:
@@ -376,6 +418,39 @@ entries:
             merge: set
             value:
               field: provider.options.model_providers
+          id: model_providers
+          group: model/provider
+          security_class: host-ceiling
+        folder_trust:
+          id: folder_trust
+          path: provider.options.folder_trust
+          value_schema:
+            type: string
+            enum:
+            - ask
+            - approved-workdir
+          default: ask
+          label: Folder trust
+          description: Trust only the canonical launch workdir in the isolated agent home
+          group: access/trust
+          security_class: person-only
+          section: advanced
+          order: 90
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.codex.descriptor:cli
+          render: []
+          trust:
+            file: .codex/config.toml
+            format: toml
+            key: trust_level
+            value: trusted
+            repository_root: true
+            project_config:
+            - .codex/config.toml
       rules: []
     flags: {}
     argv_templates:

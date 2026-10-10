@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
 - name: test_call
   kind: security.policy
   meta: {type: test_support}
@@ -225,3 +225,12 @@ entries:
     actions: [bee.harness.profiles.write]
     resources: [saved-profile-workspace]
     effect: allow
+- name: option_controls_test
+  kind: function.lua
+  source: file://option_controls_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    controls: bee.harness.app:option_controls
+    bounds: bee.values:bounds

@@ -4,6 +4,8 @@ local canonical = require("canonical")
 local clock = require("clock")
 local security = require("security")
 local ctx = require("ctx")
+local profile_values = require("profile_values")
+local protocol = require("protocol")
 local M = {}
 function M.id(owner: string, workspace: string, profile: string, revision: integer): string
     return grants.identity("profile_choices",owner,workspace,profile .. ":" .. tostring(revision))
@@ -11,6 +13,13 @@ end
 function M.authorize(tx: sql.Transaction | sql.DB, workspace: string, configuration: unknown): (grants.Grant?, string?)
     local bound = bounds.object(ctx.get("bee.gateway.binding"))
     if not bound and security.can("bee.approvals.decide", workspace) then return nil, nil end
+    local requested_profile = bounds.object(configuration)
+    local binding_ref = requested_profile and bounds.id(requested_profile.driver_binding_ref)
+    local provider = requested_profile and bounds.object(requested_profile.provider)
+    if binding_ref and provider then
+        local person_only = profile_values.person_only(binding_ref, provider)
+        if person_only then return nil, "DENIED: " .. person_only end
+    end
     local id = bound and bounds.id(bound.approving_grant_id)
     if not id then return nil, "DENIED: delegated profile writes require the approving grant" end
     local parent, err = grants.read(tx, id)
@@ -20,6 +29,14 @@ function M.authorize(tx: sql.Transaction | sql.DB, workspace: string, configurat
     local parameters = bounds.object(parent.scope.parameters)
     local approved = parameters and bounds.object(parameters.configuration)
     local requested = bounds.object(configuration)
+    if approved then
+        local decoded = protocol.profile(approved)
+        if decoded then approved = decoded end
+    end
+    if requested then
+        local decoded = protocol.profile(requested)
+        if decoded then requested = decoded end
+    end
     if parent.domain ~= "profile_choices" or M.live(tx, parent) or not approved or not requested then return nil, "DENIED: grant does not approve profile choices" end
     for _, field in ipairs({"definition_ref", "driver_binding_ref", "provider", "bee", "placement", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"}) do
         if canonical.encode(approved[field]) ~= canonical.encode(requested[field]) then return nil, "DENIED: delegated profile exceeds approved " .. field end

@@ -2,7 +2,7 @@
 # Claude protocol fixture: replays a captured stream-json-2 file in place of
 # the Claude executable. This is protocol evidence, not the real harness.
 if [[ "${1:-}" == "--version" ]]; then
-  printf '%s\n' 'Claude Code 2.1.265'
+  printf '%s\n' 'Claude Code 2.1.296'
   exit 0
 fi
 if [[ "${1:-}" == "--help" ]]; then

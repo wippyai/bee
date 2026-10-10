@@ -66,7 +66,11 @@ local function projection(value: unknown): (Stored?, Result?)
         return {profile_id = profile_id, revision = revision, profile = nil, tombstone = false, migration_diagnostic = stored}, nil
     end
     local profile, profile_error = protocol.profile(object.value)
-    if not profile then return nil, failure("INTERNAL", profile_error or "stored profile is malformed") end
+    if not profile then
+        return {profile_id = profile_id, revision = revision, tombstone = false,
+            migration_diagnostic = {schema_revision = migration.DIAGNOSTIC, source = object.value, draft = object.value,
+                reasons = {profile_error or "Stored profile requires repair"}}}, nil
+    end
     return {profile_id = profile_id, revision = revision, profile = profile, tombstone = false}, nil
 end
 
@@ -80,11 +84,17 @@ local function append(store: sync.Store, tx: sql.Transaction, input: Request, no
     profile_id: string, profile: Profile?, tombstone: boolean): Result
     local event_id, identity_error = identity(node, actor, input.workspace_id, input.idempotency_key)
     if not event_id then return failure("INTERNAL", identity_error or "profile event identity failed") end
+    local stored: {[string]: unknown}? = nil
+    if profile then
+        local encoded, err = protocol.storage(profile)
+        if not encoded then return failure("INVALID_ARGUMENT", err or "Invalid driver options") end
+        stored = encoded
+    end
     return store:append_in(tx, {
         feed = feed_name, event_id = event_id, idempotency_key = event_id, event_type = EVENT_TYPE,
-        projection_key = profile_id, projection_value = profile,
+        projection_key = profile_id, projection_value = stored,
         payload = {schema_revision = protocol.SCHEMA, workspace_id = input.workspace_id,
-            profile_id = profile_id, actor_id = actor, operation = input.operation, profile = profile,
+            profile_id = profile_id, actor_id = actor, operation = input.operation, profile = stored,
             tombstone = tombstone}, tombstone = tombstone, expected_revision = input.expected_revision,
     })
 end
@@ -183,7 +193,8 @@ local function put(store: sync.Store, tx: sql.Transaction, input: Request, node:
     if not result.replayed then
         local retired = authority.retire(tx,node,input.workspace_id,input.profile_id,actor,approving and approving.grant_id or nil)
         if retired then return failure("STORAGE",retired) end
-        local record, err = authority.save(tx,node,input.workspace_id,input.profile_id,revision,profile,actor,false,clock.now(),approving)
+        local stored = assert(protocol.storage(profile))
+        local record, err = authority.save(tx,node,input.workspace_id,input.profile_id,revision,stored,actor,false,clock.now(),approving)
         if not record then return failure("STORAGE",err or "save profile grant") end
     end
     local saved = reply(input,input.profile_id,revision,profile,false)

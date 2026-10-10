@@ -48,6 +48,7 @@ entries:
   - env
   - json
   imports:
+    descriptors: bee.driver.descriptor:descriptor
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     placement_types: bee.placement:types
@@ -58,7 +59,7 @@ entries:
     surface: bee.gateway.catalog:surface
     trait_access: bee.gateway.security:traits
     gateway_hooks_catalog: bee.gateway.hooks:hooks
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
 - name: continuation
   kind: library.lua
   source: file://continuation.lua
@@ -89,6 +90,8 @@ entries:
   - funcs
   - security
   imports:
+    profile_values: bee.driver.descriptor:profile_values
+    effective_schema: bee.driver.descriptor:effective
     permission: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
     gateway_configuration: bee.gateway.env:configuration

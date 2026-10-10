@@ -8,6 +8,7 @@ local types = require("types")
 local locate = require("locate")
 local codec_registry = require("codec_registry")
 local option_render = require("option_render")
+local effective = require("effective")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -100,25 +101,17 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
     local brief = bounds.text(object.brief, profile_id == "window" and 65536 or bounds.MAX_TEXT_BYTES)
     if not brief or (brief == "" and profile_id ~= "window") then return nil, "brief must be nonempty bounded text" end
     local request: Request = {profile_id = profile_id, brief = brief}
-    for name, raw_spec in pairs(declared_fields) do
-        local field = tostring(name)
-        local spec = descriptor_reader.runtime_spec(bounds.object(raw_spec) or {})
-        if object[field] ~= nil then
-            local decoded, decode_error = descriptor_reader.decode_option(field, spec, object[field])
-            if decode_error then return nil, decode_error end
-            request[field] = decoded
-        elseif spec.default ~= nil then
-            local decoded, decode_error = descriptor_reader.decode_option(field, spec, spec.default)
-            if decode_error then return nil, decode_error end
-            request[field] = decoded
-        end
-        local value = request[field]
-        local supplied = value ~= nil
-        if type(value) == "boolean" then supplied = value end
-        if type(value) == "string" then supplied = value ~= "" end
+    local values: Object = {}
+    for name in pairs(declared_fields) do values[name] = object[name] end
+    local compiled, compile_error = effective.compile(selected, nil, nil, values)
+    if not compiled then return nil, compile_error end
+    for name, value in pairs(compiled.values) do
+        request[name] = value
+        local spec = descriptor_reader.runtime_spec(bounds.object(declared_fields[name]) or {})
+        local supplied = value ~= nil and value ~= false and value ~= ""
         if type(value) == "table" then supplied = next(value) ~= nil end
         if supplied and type(spec.profiles) == "table" and not bounds.member(profile_id, spec.profiles) then
-            return nil, bounds.text(spec.unsupported, 256) or (field .. " is not supported for this profile")
+            return nil, bounds.text(spec.unsupported, 256) or (name .. " is not supported for this profile")
         end
     end
     local rule_error_text = apply_rules(options, request)
@@ -540,19 +533,12 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
         if reply.ok ~= true then return reply end
         local delivery, delivery_error = configuration.decode_delivery(reply.delivery)
         if not delivery then return {ok = false, error = delivery_error} end
-        for name, raw in pairs(fields) do
-            local field = bounds.object(raw)
-            if field and field.path ~= nil and generic[name] == nil and field.default ~= nil then generic[name] = field.default end
-        end
-        for name, value in pairs(generic) do
-            if name ~= "system_prompt_files" then
-                local field = bounds.object(fields[name])
-                if not field then return {ok = false, error = "Configuration option is undeclared: " .. name} end
-                local selected_value, err = descriptor_reader.decode_option(name, field, value)
-                if selected_value == nil then return {ok = false, error = err} end
-                generic[name] = selected_value
-            end
-        end
+        local prompt_files = generic.system_prompt_files
+        generic.system_prompt_files = nil
+        local compiled, compile_error = effective.compile(descriptor, nil, nil, generic)
+        if not compiled then return {ok = false, error = compile_error} end
+        generic = compiled.values
+        generic.system_prompt_files = prompt_files
         local generated, render_error = option_render.files(fields, generic, request.context or "first_turn", delivery.files)
         if not generated then return {ok = false, error = render_error} end
         delivery.files = generated

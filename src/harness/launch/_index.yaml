@@ -252,6 +252,6 @@ entries:
     configuration: bee.driver.binding:configuration
     resolver: bee.driver.binding:resolver
     profiles: bee.harness.profiles:protocol
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
     gateway_configuration: bee.gateway.env:configuration
     descriptors: bee.driver.descriptor:descriptor

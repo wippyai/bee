@@ -41,6 +41,21 @@ local function put(id: string, revision: integer, key: string, title: string): {
 end
 local function define_tests()
     test.describe("Saved profile owner facade", function()
+        test.it("rejects delegated writes of person-only folder trust even under an exact grant", function()
+            local id = fresh()
+            local request = put(id, 0, fresh(), "Trusted folder")
+            local profile = assert(bounds.object(request.profile))
+            profile.provider = {options = {folder_trust = "approved-workdir"}}
+            local writer = caller("profile-authority", "bee.harness.profiles:test_write")
+            local approved = value(call(writer, request))
+            local agent = caller("profile-agent", "bee.harness.profiles:test_delegated_write"):with_actor(security.new_actor("profile-agent", {definition_id = "fixture:agent"}))
+            agent = assert(agent:with_context({["bee.gateway.binding"] = {subject = "profile-agent", approving_grant_id = approved.grant_id}}))
+            request.expected_revision, request.idempotency_key = 1, fresh()
+            local denied = call(agent, request)
+            test.eq(denied.ok, false)
+            test.is_true(tostring(denied.message):find("person write", 1, true) ~= nil)
+        end)
+
         test.it("round trips editor traits, role and context through profile CAS", function()
             local request = put(fresh(), 0, fresh(), "Edited")
             local original = assert(protocol.profile(request.profile))

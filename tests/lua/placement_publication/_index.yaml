@@ -11,8 +11,13 @@ entries:
   kind: library.lua
   source: file://materialization.lua
   meta: {type: test_support}
-  modules: [env, fs, funcs, sql, process, hash]
+  modules: [env, fs, funcs, sql, process, hash, registry]
   imports:
+    profile_values: bee.driver.descriptor:profile_values
+    effective_schema: bee.driver.descriptor:effective
+    trust: bee.driver.descriptor:trust
+    grants: bee.approvals.grants:store
+    profile_grants: bee.harness.profiles.persist:grants
     store: bee.placement.native.persist:store
     resources: bee.placement.native.env:resources
     homes: bee.placement.publication.test:homes

@@ -14,7 +14,6 @@ entries:
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
@@ -67,6 +66,8 @@ entries:
       provider.options.config_profile:
         kind: text
         max_bytes: 64
+      provider.options.folder_trust:
+        kind: declared
 - name: launch_policy_codex_named_batch
   kind: registry.entry
   meta:
@@ -80,7 +81,6 @@ entries:
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
@@ -133,6 +133,8 @@ entries:
       provider.options.config_profile:
         kind: text
         max_bytes: 64
+      provider.options.folder_trust:
+        kind: declared
 - name: launch_policy_codex_window
   kind: registry.entry
   meta:
@@ -146,7 +148,6 @@ entries:
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
@@ -222,3 +223,5 @@ entries:
       provider.options.config_profile:
         kind: text
         max_bytes: 64
+      provider.options.folder_trust:
+        kind: declared

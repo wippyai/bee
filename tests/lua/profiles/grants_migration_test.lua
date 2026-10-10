@@ -80,6 +80,41 @@ local function define_tests()
             end
             db:release()
         end)
+        test.it("pins declared options and quarantines unknown values without changing consent", function()
+            local db = schema.open(DATABASE, "bee.approvals.migrations")
+            local feed = "harness.profiles:" .. assert(hash.sha256("option-migration"))
+            assert(db:execute("INSERT INTO bee_sync_feeds VALUES ('node',?,1,1,128,1024)", {feed}))
+            for _, name in ipairs({"declared", "unknown"}) do
+                local provider: {[string]: unknown} = {model = "gpt-6", options = {sandbox = "read-only"}}
+                if name == "unknown" then provider.options = {retired_option = false} end
+                local profile = {schema_revision = "bee.agent-profile@3", name = name,
+                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding", provider = provider, bee = {}}
+                assert(db:execute("INSERT INTO bee_sync_projections VALUES ('node',?,?,2,?,0,1,'2026-10-01T00:00:00Z')", {feed, name, json.encode(profile)}))
+                assert(authority.save(db, "node", "option-migration", name, 2, profile, "person", true, "2026-10-01T00:00:00.000Z"))
+            end
+            local id = "bee.harness.migrations:driver_options"
+            local reply, err = funcs.call(id, {target_db = "bee:db", database_id = DATABASE, direction = "up", id = id})
+            assert(not err, tostring(err)); assert(assert(bounds.object(reply)).status ~= "error", json.encode(reply))
+            for _, row in ipairs(assert(db:query("SELECT * FROM bee_sync_projections WHERE feed = ?", {feed}))) do
+                local profile = assert(bounds.object(json.decode(row.value_json)))
+                test.eq(row.revision, 2)
+                local grant = assert(grants.read(db, authority.id("node", "option-migration", row.projection_key, 2)))
+                test.eq(grant.provenance.kind, "legacy")
+                if row.projection_key == "declared" then
+                    local provider = assert(bounds.object(profile.provider))
+                    test.eq(provider.schema_ref, "bee.driver.codex.descriptor:cli")
+                    test.eq(provider.schema_revision, "bee.driver.cli-descriptor@4")
+                    test.eq(assert(bounds.object(provider.values)).model, "gpt-6")
+                    test.is_nil(provider.options)
+                else
+                    test.eq(profile.schema_revision, "bee.agent-profile-migration@1")
+                    local source = assert(bounds.object(profile.source))
+                    test.eq(assert(bounds.object(assert(bounds.object(source.provider)).options)).retired_option, false)
+                end
+                test.eq(json.encode(assert(bounds.object(grant.scope.parameters)).configuration), (json.encode(profile)))
+            end
+            db:release()
+        end)
     end)
 end
 return test.run_cases(define_tests)

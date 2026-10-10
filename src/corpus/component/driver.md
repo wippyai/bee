@@ -33,10 +33,24 @@ file or config existence and environment presence are setup evidence, not proof 
 
 The six external CLI packages (`bee.driver.<claude|codex|agy|grok|muse|opencode>`) use the shared `bee.driver.binding:universal`
 implementation. Each contributes a strict `bee.driver.cli_descriptor` registry
-entry (`bee.driver.cli-descriptor@3`) with executable and version probe, an any-of login evidence declaration, launch templates,
+entry (`bee.driver.cli-descriptor@4`) with executable and version probe, an any-of login evidence declaration, launch templates,
 OptionSpec value schemas, form labels, contexts, capability evidence and renders, JSON paths, and a codec ID. The same declaration supplies form choices, argv, structured configuration and environment delivery; there is no separate profile-options map. Locate reports capabilities established by version/help probes. The host validates the
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
+
+The effective compiler lives at `bee.driver.descriptor:effective`. Editable options
+carry `id`, `group`, `security_class`, `value_schema`, `default`, `support`, and
+`render` mappings; omitted defaults inherit the installed CLI. Optional
+`dependencies`, `conflicts`, `capabilities`, `ceiling`, and `config_aliases` describe
+constraints and imported configuration. The editor shows the effective default
+source, locks and typed structured controls.
+
+`folder_trust` defaults to `ask` and requires person consent. Claude and Codex
+materialize trust only in an isolated home; Muse adds `--trust-workspace` for the
+admitted run. Native placement resolves symlinks and rejects repository-root
+widening and project configuration outside the host ceiling. Agy, Grok and
+OpenCode declare trust unsupported. Docker trust is unavailable until its guest
+workdir can be bound to the approved canonical scope.
 
 The Harness catalog discovers `contract.binding` entries with `meta.type: harness.driver`.
 Each declares `driver_id`, `profiles_ref` and the four `bee.driver:driver`

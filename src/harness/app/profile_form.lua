@@ -9,6 +9,7 @@ local protocol = require("protocol")
 local editor = require("editor")
 local descriptors = require("descriptors")
 local preferences = require("preferences")
+local validation = require("validation")
 local json = require("json")
 local canonical = require("canonical")
 local readiness = require("readiness")
@@ -21,7 +22,7 @@ type TraitRow = {id: string, title: string, gated: boolean}
 type Form = {traits: {TraitRow}?,permission_transport: boolean?, driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
     credential_keys: {[string]: boolean}?, definition_digest: string?, credential_definition: definition.Definition?, default_private_home: boolean?,
     save_key: string, remove_key: string, pending: string?, submitted: protocol.Profile?,
-    fields: {[string]: {label: string, section: string, order: integer}}?, unsupported: {string}?,
+    fields: {[string]: {label: string, section: string, order: integer, group: string?, default: unknown, default_source: string?, value_schema: {[string]: unknown}?}}?, unsupported: {string}?,
     migration_diagnostic: {[string]: unknown}?, repair_json: string?}
 
 function M.credential_names(form: Form): {string}
@@ -142,49 +143,33 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     local probed = readiness.probe(decoded.binding_ref, decoded.profile_id, readiness.new_cache(), editor.placement_ref(base))
     local capabilities = probed.result and probed.result.capabilities or {}
     local declared = bounds.object((bounds.object(descriptor.options) or {}).fields) or {}
-    local restrictions, restriction_error = preferences.decode_profile_restrictions(policy_data.profile_restrictions)
-    if not restrictions then return repair_only(restriction_error) end
-    local metadata: {[string]: {label: string, section: string, order: integer}} = {}
+    local compiled, compile_error = preferences.compile(descriptor, policy_data, policy_data.fixture == true and nil or capabilities)
+    if not compiled then return repair_only(compile_error) end
+    local metadata: {[string]: {label: string, section: string, order: integer, group: string?, default: unknown, default_source: string?, value_schema: {[string]: unknown}?}} = {}
     local unsupported: {string} = {}
     local form_options: {[string]: unknown} = {}
-    for name, raw_field in pairs(declared) do
-        local field = bounds.object(raw_field)
-        local path = field and bounds.id(field.path)
-        if field and path then
+    for name, row in pairs(compiled.fields) do
+        local field = row.declaration
+        if field.path then
             local label = bounds.line(field.label, 80) or name
-            metadata[name] = {label = label, section = bounds.member(field.section, {"basic", "advanced"}) or "advanced", order = bounds.count(field.order) or 0}
-            local restriction = restrictions[path]
-            local capability = capabilities[path]
-            local available = policy_data.fixture == true or (capability and capability.supported == true)
-            if not available then
-                unsupported[#unsupported + 1] = label .. ": " .. (capability and capability.reason or probed.error or "Installed CLI support is not established")
-            end
-            if available and restriction and name ~= "system_prompt_append" then
+            metadata[name] = {label = label, section = bounds.member(field.section, {"basic", "advanced"}) or "advanced", order = bounds.count(field.order) or 0,
+                group = bounds.line(field.group, 80), default = row.default, default_source = row.default_source, value_schema = bounds.object(field.value_schema)}
+            if row.locked_reason then unsupported[#unsupported + 1] = label .. ": " .. row.locked_reason
+            elseif row.allowed and name ~= "system_prompt_append" then
                 local spec = descriptors.runtime_spec(field)
-                if restriction.kind == "enum" then
-                    local values: {preferences.Scalar} = {}
-                    for _, candidate in ipairs(restriction.values) do
-                        local checked = descriptors.decode_option(name, field, candidate)
-                        if checked ~= nil then values[#values + 1] = candidate end
-                    end
-                    if #values > 0 then form_options[name] = values else unsupported[#unsupported + 1] = label .. ": no admitted values" end
-                elseif restriction.kind == "declared" then
-                    if spec.type == "enum" then form_options[name] = spec.values
-                    elseif spec.type == "boolean" then form_options[name] = {false, true}
-                    elseif spec.type == "json" or spec.type == "ids" then form_options[name] = {kind = "declared"}
-                    else form_options[name] = {kind = "text", max_bytes = bounds.count(spec.max) or 512} end
-                elseif spec.type ~= "ids" then
-                    form_options[name] = {kind = "text", max_bytes = math.floor(math.min(restriction.max_bytes, bounds.count(spec.max) or restriction.max_bytes))}
-                end
-            elseif name ~= "system_prompt_append" or policy_data.profile_instructions ~= true then
-                unsupported[#unsupported + 1] = label .. ": disabled by host policy"
+                local restriction = row.allowed
+                if restriction.kind == "enum" then form_options[name] = restriction.values
+                elseif restriction.kind == "text" then form_options[name] = restriction
+                elseif spec.type == "boolean" then form_options[name] = {false, true}
+                elseif spec.type == "json" or spec.type == "ids" then form_options[name] = {kind = "declared"}
+                else form_options[name] = {kind = "text", max_bytes = bounds.count(spec.max) or 512} end
             end
         end
     end
-    local prompt_capability = capabilities["provider.system_prompt_append"]
-    local prompt_available = policy_data.fixture == true or (prompt_capability and prompt_capability.supported == true)
+    local prompt = compiled.fields.system_prompt_append
+    local prompt_available = prompt ~= nil and prompt.locked_reason == nil
     local draft, draft_error = editor.new(base, {options = form_options,
-        host_home = policy_data.allow_host_home == true, placements = policy_data.placement_profiles or {"bee.placement.profiles:native"}, mcp_tools = tools, instructions = policy_data.profile_instructions == true and prompt_available == true, workdir = allows("workdir"), thread = allows("thread")})
+        host_home = policy_data.allow_host_home == true, placements = policy_data.placement_profiles or {"bee.placement.profiles:native"}, mcp_tools = tools, instructions = prompt_available, workdir = allows("workdir"), thread = allows("thread")})
     if not draft then
         if profile then
             migration_draft = profile
@@ -292,6 +277,12 @@ function M.save(form: Form): (boolean, string?)
     if profile.bee.permission_answers and profile.bee.permission_answers ~= "provider" and not form.permission_transport then
         return false, "This host has no accepted permission transport. Use provider answers."
     end
+    local stored, invalid = protocol.storage(profile)
+    if not stored then return false, invalid end
+    local pinned = catalog.pin()
+    if not pinned then return false, "Profile schema registry is unavailable" end
+    local profile_error = validation.check(pinned, profile) or validation.ceiling(pinned, profile, nil, true)
+    if profile_error then return false, profile_error end
     form.pending, form.submitted = "save", profile
     local saved, save_error = call({operation = "put", workspace_id = form.workspace_id,
         profile_id = form.profile_id, expected_revision = form.revision, idempotency_key = form.save_key, profile = profile})

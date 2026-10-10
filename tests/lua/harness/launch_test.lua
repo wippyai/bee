@@ -78,6 +78,11 @@ local function call(target: string, request: unknown): admission.Reply
     if err then error(target .. ": " .. tostring(err)) end
     return principals.reply(result)
 end
+local function profile_call(request: unknown): {[string]: unknown}
+    local result, err = funcs.new():with_actor(principals.actor(REQUESTER, principals.workspace(request))):with_scope(scope()):call("bee.harness.binding:call", request)
+    assert(not err, tostring(err))
+    return assert(bounds.object(result))
+end
 local function call_setup(request: unknown): {[string]: unknown}
     local raw, err = funcs.new():with_actor(principals.actor(REQUESTER, principals.workspace(request)))
         :with_scope(scope()):call("bee.harness.binding:setup", request)
@@ -863,10 +868,14 @@ local function define_tests()
             local updated = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 2}))
             test.neq(original.plan_digest, updated.plan_digest)
-            save(2, "Forbidden option", {permission_mode = "dontAsk"})
-            local unsafe = call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
-                saved_profile_id = saved_id, saved_profile_revision = 3})
-            test.is_false(unsafe.ok)
+            local unsafe = profile_call({operation = "put", workspace_id = workspace_id, profile_id = saved_id,
+                expected_revision = 2, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Forbidden option",
+                    definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = "dontAsk"}, bee = {mcp = {}}}})
+            test.eq(unsafe.ok, false)
+            test.eq(unsafe.code, "DENIED")
+            local unchanged = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+                saved_profile_id = saved_id, saved_profile_revision = 2}))
+            test.eq(unchanged.plan_digest, updated.plan_digest)
         end)
         test.it("applies credential selectors and independent narrowed gateway file grants", function()
             for _, refs in ipairs({{}, {"anthropic"}}) do
@@ -909,7 +918,7 @@ local function define_tests()
             local value_schema = {type = "object", additionalProperties = false, required = {"kind"}, properties = {
                 kind = {type = "string", enum = {"credential", "literal"}}, credential_ref = {type = "string", maxLength = 128}, value = {type = "string", maxLength = 128}}}
             properties[destination], properties.OTHER_PROVIDER_TOKEN = value_schema, value_schema
-            fields.env = {path = "provider.env", value_schema = {type = "object", additionalProperties = false, properties = properties},
+            fields.env = {id = "env", group = "advanced", security_class = "host-ceiling", path = "provider.env", value_schema = {type = "object", additionalProperties = false, properties = properties},
                 label = "Environment", description = "Fixture environment", section = "advanced", order = 999, contexts = {"first_turn"},
                 support = {config_schema_ref = "fixture:environment"}, render = {{kind = "env", contexts = {"first_turn"}, name = destination, value = {field = "provider.env." .. destination}}}}
             assert(bounds.object(policy_entry.data)).profile_restrictions = {["provider.env"] = {kind = "declared"}}
@@ -1258,7 +1267,7 @@ local function define_tests()
                     config = "bee.driver.codex.env:config_home", option = "sandbox", expected = "workspace-write"},
                 {definition = "bee.driver.claude.profiles:research_batch", policy = "bee.driver.claude.security:launch_policy_claude_batch",
                     binding = "bee.driver.claude.binding:binding", credential = "claude_api_key", executable = "bee.driver.claude.env:executable",
-                    config = "bee.driver.claude.env:config_home", option = "permission_mode", expected = "default"},
+                    config = "bee.driver.claude.env:config_home", option = "permission_mode", expected = "manual"},
                 {definition = "bee.driver.agy.profiles:research_batch", policy = "bee.driver.agy.security:launch_policy_agy_batch",
                     binding = "bee.driver.agy.binding:binding", credential = "agy_login", executable = "bee.driver.agy.env:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
@@ -2466,7 +2475,7 @@ local function define_tests()
             local original_policy = policy_entry.data
             local window_policy: {[string]: unknown} = {}
             for key, item in pairs(assert(bounds.object(original_policy))) do window_policy[key] = item end
-            window_policy.prepare_options = {permission_mode = "default"}
+            window_policy.prepare_options = {permission_mode = "manual"}
             window_policy.allow_host_home = true
             policy_entry.data = window_policy
             apply(policy_entry)
@@ -2667,20 +2676,17 @@ local function define_tests()
                 test.is_true(refusal_message(refused):find("agent_helper", 1, true) ~= nil)
             end)
         end)
-        test.it("refuses saved profile tools outside the agent and options claiming its model", function()
-            local workspace_id, saved_id = workspace, fresh("agent-profile")
-            value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
-                expected_revision = 0, idempotency_key = fresh("save"),
-                profile = {schema_revision = "bee.agent-profile@3", name = "Outside tools", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
-            local outside = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
-                saved_profile_id = saved_id, saved_profile_revision = 1})
-            test.eq(code(outside), "FORBIDDEN")
-            value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
-                expected_revision = 1, idempotency_key = fresh("save"),
-                profile = {schema_revision = "bee.agent-profile@3", name = "Claimed model", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {model = "sneaky"}, bee = {mcp = {}}}}))
-            local claimed = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
-                saved_profile_id = saved_id, saved_profile_revision = 2})
-            test.eq(code(claimed), "FORBIDDEN")
+        test.it("refuses profile writes with tools or models outside the agent host policy", function()
+            for _, profile in ipairs({
+                {provider = {}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
+                {provider = {model = "sneaky"}, bee = {mcp = {}}},
+            }) do
+                local refused = profile_call({operation = "put", workspace_id = workspace, profile_id = fresh("agent-profile"),
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Outside ceiling",
+                        definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = profile.provider, bee = profile.bee}})
+                test.eq(refused.ok, false)
+                test.eq(refused.code, "DENIED")
+            end
         end)
         restore_host()
     end)

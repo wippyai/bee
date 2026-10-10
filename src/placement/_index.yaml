@@ -6,7 +6,7 @@ entries:
   source: file://types.lua
   imports:
     driver_types: bee.driver:types
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
 - name: request
   kind: library.lua
   source: file://request.lua
@@ -19,7 +19,7 @@ entries:
     driver_types: bee.driver:types
     login_evidence: bee.driver.locate:login_evidence
     hook_catalog: bee.gateway.hooks:hooks
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
 - name: transitions
   kind: library.lua
   source: file://transitions.lua

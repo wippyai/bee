@@ -15,6 +15,7 @@ local gateway_protocol = require("gateway_protocol")
 local surface = require("surface")
 local trait_access = require("trait_access")
 local gateway_hooks_catalog = require("gateway_hooks_catalog")
+local descriptors = require("descriptors")
 local M = {}
 M.MAX_AGENT_DELEGATES = 16
 M.MAX_AGENT_MODELS = 16
@@ -179,7 +180,7 @@ local function access_surface(raw: unknown, tools: {string}, seeds: {string}?): 
     if #requestable > 0 then composed.access = {policy = approver, traits = requestable} end
     return composed, nil
 end
-function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?): (Policy?, string?)
+function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?, descriptor: descriptors.Descriptor?): (Policy?, string?)
     local meta = bounds.object(entry.meta) or {}
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
@@ -196,7 +197,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         revised.schema_revision = M.SCHEMA
         data = revised
     end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "option_constraints", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -271,7 +272,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     -- Credentials bind the host policy; the launch separately measures the
     -- preferences and resulting configuration under that policy.
     if selected then
-        local effective, preference_error = preferences.apply(data, selected)
+        local effective, preference_error = preferences.apply(data, selected, descriptor)
         if not effective then return nil, ref .. ": " .. tostring(preference_error) end
         data = effective
     end

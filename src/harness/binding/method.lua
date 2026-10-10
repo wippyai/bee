@@ -46,10 +46,8 @@ local function handle(raw: unknown): Result
     if input.profile then
         local invalid_profile = validation.check(pinned, input.profile)
         if invalid_profile then return failure("INVALID_ARGUMENT", invalid_profile) end
-        if ctx.get("bee.agent.profile_write") == true then
-            local ceiling_error = validation.ceiling(pinned, input.profile, bounds.ids(ctx.get("bee.agent.trait_ceiling"), true))
-            if ceiling_error then return failure("DENIED", ceiling_error) end
-        end
+        local ceiling_error = validation.ceiling(pinned, input.profile, bounds.ids(ctx.get("bee.agent.trait_ceiling"), true), ctx.get("bee.agent.profile_write") ~= true)
+        if ceiling_error then return failure("DENIED", ceiling_error) end
     end
     return store.call(input, node, actor, pinned, validation.check)
 end

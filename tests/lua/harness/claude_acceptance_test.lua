@@ -87,7 +87,7 @@ type Session = {proc: exec.Process, executor: exec.Executor, chunks: channel.Cha
 -- open runs the executable exactly as the driver launches it for an
 -- exchange: the brief as the first stdin line, stdin kept open.
 local function open(pinned: adapter.Adapter, claude: string, port: string, work: string, home: string): Session
-    local decoded, decode_error = launch.decode({profile_id = "batch", brief = "leave a marker", permission_mode = "default", permission_exchange = true})
+    local decoded, decode_error = launch.decode({profile_id = "batch", brief = "leave a marker", permission_mode = "manual", permission_exchange = true})
     if not decoded then error(tostring(decode_error)) end
     local specification = launch.specification(decoded)
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))

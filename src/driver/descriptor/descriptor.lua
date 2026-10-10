@@ -26,7 +26,7 @@ local function capabilities(value: unknown): (Capabilities?, string?)
     return {permission_answers = result}, nil
 end
 M.TYPE = "bee.driver.cli_descriptor"
-M.SCHEMA = "bee.driver.cli-descriptor@3"
+M.SCHEMA = "bee.driver.cli-descriptor@4"
 M.MAX_TEMPLATE_ITEMS = 128
 M.MAX_TEMPLATE_DEPTH = 8
 M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl"}
@@ -467,7 +467,44 @@ function M.decode(value: unknown): (Descriptor?, string?)
         local declaration, spec_error = object(raw_spec, "CLI descriptor.options." .. tostring(name))
         if not declaration then return nil, spec_error end
         if declaration.path ~= nil then
-            if bounds.fields(declaration, {"path", "value_schema", "default", "label", "description", "section", "order", "contexts", "support", "render", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) then return nil, "OptionSpec has unknown fields" end
+            if bounds.fields(declaration, {"path", "value_schema", "default", "label", "description", "section", "order", "contexts", "support", "render", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option", "id", "group", "security_class", "capabilities", "ceiling", "dependencies", "conflicts", "trust", "config_aliases"}) then return nil, "OptionSpec has unknown fields" end
+            if declaration.id ~= name or not bounds.member(declaration.group, {"model/provider", "behavior", "access/trust", "tools/integrations", "advanced"})
+                or not bounds.member(declaration.security_class, {"free", "person-only", "host-ceiling"}) then return nil, "OptionSpec identity and security classification are required" end
+            for _, key in ipairs({"dependencies", "conflicts", "ceiling"}) do
+                if declaration[key] ~= nil and not bounds.ids(declaration[key], true) then return nil, "OptionSpec " .. key .. " must be identifiers" end
+            end
+            if declaration.capabilities ~= nil then
+                local modes = bounds.object(declaration.capabilities)
+                if not modes then return nil, "OptionSpec capabilities must be a map" end
+                for _, rights in pairs(modes) do if not bounds.ids(rights, true) then return nil, "OptionSpec capabilities must contain rights" end end
+            end
+            if declaration.config_aliases ~= nil then
+                local aliases = bounds.array(declaration.config_aliases, 8)
+                if not aliases then return nil, "OptionSpec config aliases must be an array" end
+                for _, raw in ipairs(aliases) do
+                    local alias = bounds.object(raw)
+                    if not alias or bounds.fields(alias, {"format", "path"}) or not bounds.member(alias.format, {"json", "toml"}) or not bounds.ids(alias.path, true) then return nil, "OptionSpec config alias is invalid" end
+                end
+            end
+            if declaration.trust ~= nil then
+                local trust = bounds.object(declaration.trust)
+                if not trust or bounds.fields(trust, {"file", "format", "key", "value", "flag", "repository_root", "unsupported", "project_config"}) then return nil, "OptionSpec trust mapping is malformed" end
+                if trust.project_config ~= nil then
+                    local paths = bounds.ids(trust.project_config, true)
+                    if not paths then return nil, "Trust project configuration paths are invalid" end
+                    for _, path in ipairs(paths) do if not safe_relative(path) then return nil, "Trust project configuration path escapes workdir" end end
+                end
+                if declaration.security_class ~= "person-only" or declaration.default ~= "ask" then return nil, "Folder trust requires person consent and defaults to ask" end
+                if trust.unsupported ~= true then
+                    if trust.flag ~= nil then
+                        if not bounds.line(trust.flag, 128) or trust.file ~= nil then return nil, "Trust flag mapping is invalid" end
+                    else
+                        local file = bounds.text(trust.file, 256)
+                        if not file or not safe_relative(file) or not bounds.member(trust.format, {"json", "toml"}) or not bounds.id(trust.key)
+                            or (type(trust.value) ~= "string" and type(trust.value) ~= "boolean") then return nil, "Trust configuration mapping is invalid" end
+                    end
+                end
+            end
             local path = bounds.line(declaration.path, 128)
             if not path or (path ~= "provider." .. name and path ~= "provider.options." .. name) then return nil, "OptionSpec path must name its canonical provider field" end
             local schema = bounds.object(declaration.value_schema)
@@ -543,6 +580,21 @@ function M.decode(value: unknown): (Descriptor?, string?)
         if spec.default ~= nil then
             local _, default_error = M.decode_option(tostring(name), spec, spec.default)
             if default_error then return nil, "CLI descriptor.options." .. tostring(name) .. ".default: " .. default_error end
+            if declaration.capabilities ~= nil then
+                local modes = bounds.object(declaration.capabilities) or {}
+                local rights = type(spec.default) == "string" and bounds.ids(modes[spec.default], true)
+                local ceiling = bounds.ids(declaration.ceiling, true)
+                if not rights or not ceiling then return nil, "OptionSpec default capabilities are undeclared" end
+                for _, right in ipairs(rights) do if not bounds.member(right, ceiling) then return nil, "OptionSpec default exceeds its ceiling" end end
+            end
+        end
+    end
+    for name, raw in pairs(fields) do
+        local field = bounds.object(raw) or {}
+        for _, kind in ipairs({"dependencies", "conflicts"}) do
+            for _, target in ipairs(bounds.ids(field[kind], true) or {}) do
+                if target == name or fields[target] == nil then return nil, "OptionSpec " .. kind .. " must name another declared option" end
+            end
         end
     end
     local rules, rules_error = sequence(options.rules or {}, "CLI descriptor.options.rules", 32)

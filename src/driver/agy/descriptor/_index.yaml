@@ -7,7 +7,7 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Agy CLI command, stream-json codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@3
+    schema_revision: bee.driver.cli-descriptor@4
     provider: agy
     executable: agy
     version_probe:
@@ -48,15 +48,18 @@ entries:
         window:
           transport: hook_http
           adapter_ref: bee.driver.permission:permission_request_hook
-          reason: Agy 1.3.1 PreToolUse gates accept Bee allow/deny decisions. Independent command permission checks remain provider-owned; an allow hook does not grant command permission in the isolated headless capture.
+          reason: Agy 1.3.1 PreToolUse gates accept Bee allow/deny decisions. Independent command permission checks remain
+            provider-owned; an allow hook does not grant command permission in the isolated headless capture.
         first_turn:
           transport: hook_http
           adapter_ref: bee.driver.permission:permission_request_hook
-          reason: Agy 1.3.1 PreToolUse gates accept Bee allow/deny decisions. Independent command permission checks remain provider-owned; an allow hook does not grant command permission in the isolated headless capture.
+          reason: Agy 1.3.1 PreToolUse gates accept Bee allow/deny decisions. Independent command permission checks remain
+            provider-owned; an allow hook does not grant command permission in the isolated headless capture.
         resume:
           transport: hook_http
           adapter_ref: bee.driver.permission:permission_request_hook
-          reason: Agy 1.3.1 PreToolUse gates accept Bee allow/deny decisions. Independent command permission checks remain provider-owned; an allow hook does not grant command permission in the isolated headless capture.
+          reason: Agy 1.3.1 PreToolUse gates accept Bee allow/deny decisions. Independent command permission checks remain
+            provider-owned; an allow hook does not grant command permission in the isolated headless capture.
     options:
       profiles:
       - window
@@ -115,6 +118,9 @@ entries:
               then:
               - --mode
               - field: mode
+          id: mode
+          group: access/trust
+          security_class: host-ceiling
         model:
           invalid: model is not one bounded model identifier
           path: provider.model
@@ -159,6 +165,9 @@ entries:
               then:
               - --model
               - field: model
+          id: model
+          group: model/provider
+          security_class: free
         effort:
           invalid: effort is not one Bee admits
           path: provider.effort
@@ -207,6 +216,9 @@ entries:
               then:
               - --effort
               - field: effort
+          id: effort
+          group: model/provider
+          security_class: free
         sandbox:
           default: false
           path: provider.options.sandbox
@@ -247,6 +259,9 @@ entries:
             - if: sandbox
               then:
               - --sandbox
+          id: sandbox
+          group: access/trust
+          security_class: host-ceiling
         dangerously_skip_permissions:
           default: false
           path: provider.options.dangerously_skip_permissions
@@ -287,6 +302,9 @@ entries:
             - if: dangerously_skip_permissions
               then:
               - --dangerously-skip-permissions
+          id: dangerously_skip_permissions
+          group: access/trust
+          security_class: host-ceiling
         agent:
           forbid_option: true
           invalid: agent must not be a command-line option
@@ -332,6 +350,9 @@ entries:
               then:
               - --agent
               - field: agent
+          id: agent
+          group: behavior
+          security_class: host-ceiling
         resume_ref:
           type: id
           forbid_option: true
@@ -367,6 +388,32 @@ entries:
             merge: append
             value:
               field: provider.system_prompt_append
+          id: system_prompt_append
+          group: behavior
+          security_class: free
+        folder_trust:
+          id: folder_trust
+          path: provider.options.folder_trust
+          value_schema:
+            type: string
+            enum:
+            - ask
+          default: ask
+          label: Folder trust
+          description: Folder trust is unsupported by this driver
+          group: access/trust
+          security_class: person-only
+          section: advanced
+          order: 90
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.agy.descriptor:cli
+          render: []
+          trust:
+            unsupported: true
       rules: []
     flags: {}
     argv_templates:

@@ -7,6 +7,7 @@ entries:
   modules:
   - json
   imports:
+    profile_values: bee.driver.descriptor:profile_values
     access: bee.driver.profiles:profile_access
     bounds: bee.values:bounds
     canonical: bee.values:canonical

@@ -13,7 +13,6 @@ entries:
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
@@ -49,7 +48,7 @@ entries:
     hook_command_ref: bee.gateway.env:hook_executable
     profile_instructions: true
     prepare_options:
-      permission_mode: default
+      permission_mode: manual
     placement_profiles:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
@@ -58,6 +57,8 @@ entries:
       - low
       - medium
       - high
+      provider.options.folder_trust:
+        kind: declared
 - name: launch_policy_claude_window
   kind: registry.entry
   meta:
@@ -74,7 +75,6 @@ entries:
     - workdir
     required_cleanup: process_group
     required_exit_observation: independent
-
     stop_grace_ms: 5000
     drain_ms: 5000
     fixture: false
@@ -142,3 +142,5 @@ entries:
       - low
       - medium
       - high
+      provider.options.folder_trust:
+        kind: declared

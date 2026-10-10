@@ -143,7 +143,7 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     policy: bee.harness.carrier:policy
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
 - name: authoring_policy_test
   kind: function.lua
   source: file://authoring_policy_test.lua
@@ -806,7 +806,7 @@ entries:
     principals: bee.tests.principals:bound
     placement_types: bee.placement:types
     placement_request: bee.placement:request
-    preferences_codec: bee.driver.profiles:preferences
+    preferences_codec: bee.driver.descriptor:effective
     carrier_process: bee.harness.service:carrier
     machine: bee.harness.carrier:machine
   security:
@@ -1457,7 +1457,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     policy: bee.harness.carrier:policy
-    preferences: bee.driver.profiles:preferences
+    preferences: bee.driver.descriptor:effective
     launch: bee.tests.driver.support:codex_launch
     claude_launch: bee.tests.driver.support:claude_launch
     machine: bee.harness.carrier:machine
@@ -2479,7 +2479,7 @@ entries:
   source: file://carrier_faulted.lua
   meta: {type: test_support}
   modules: [process, time]
-  imports: {carrier_types: bee.harness:types, bounds: bee.values:bounds, principals: bee.tests.principals:bound, placement_types: bee.placement:types, placement_request: bee.placement:request, preferences_codec: bee.driver.profiles:preferences, machine: bee.harness.carrier:machine, carrier_process: bee.harness.service:carrier}
+  imports: {carrier_types: bee.harness:types, bounds: bee.values:bounds, principals: bee.tests.principals:bound, placement_types: bee.placement:types, placement_request: bee.placement:request, preferences_codec: bee.driver.descriptor:effective, machine: bee.harness.carrier:machine, carrier_process: bee.harness.service:carrier}
 - name: exits
   kind: library.lua
   source: file://exits.lua

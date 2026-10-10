@@ -5,6 +5,7 @@ entries:
   kind: library.lua
   source: file://universal.lua
   imports:
+    effective: bee.driver.descriptor:effective
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     descriptor: bee.driver.descriptor:descriptor

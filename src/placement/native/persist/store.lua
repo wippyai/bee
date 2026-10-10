@@ -107,7 +107,7 @@ function M.runner_authority(db: sql.DB, attempt_id: string, issued: string?): (s
     if not token then return nil, "runner authority is corrupt" end
     return token, nil
 end
-function M.attempt(db: sql.DB, attempt_id: string): (types.Attempt?, string?)
+function M.attempt(db: sql.DB | sql.Transaction, attempt_id: string): (types.Attempt?, string?)
     local rows, err = db:query([[SELECT attempt.*,
         (SELECT detail FROM bee_placement_evidence failed
             WHERE failed.attempt_id = attempt.attempt_id AND failed.kind = 'child.start_failed'
@@ -361,14 +361,15 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
         rollback(tx)
         return {ok = false, code = "STORAGE", message = "update attempt"}
     end
+    local attempt, attempt_error = M.attempt(tx, attempt_id)
+    if attempt_error or not attempt then
+        rollback(tx)
+        return {ok = false, code = "STORAGE", message = attempt_error or "read transitioned attempt"}
+    end
     local committed, commit_err = tx:commit()
     if commit_err or committed ~= true then
         rollback(tx)
         return {ok = false, code = "STORAGE", message = "commit transition"}
-    end
-    local attempt, attempt_error = M.attempt(db, attempt_id)
-    if attempt_error or not attempt then
-        return {ok = false, code = "STORAGE", message = attempt_error or "read transitioned attempt"}
     end
     return {ok = true, attempt = attempt}
 end

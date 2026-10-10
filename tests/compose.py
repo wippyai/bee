@@ -262,6 +262,16 @@ def hold_docker_cleanup(src):
     end""")
 
 
+def advance_committed_transition(src):
+    boundary = '''        return {ok = false, code = "STORAGE", message = "commit transition"}
+    end'''
+    replace_once(src / "placement/native/persist/store.lua", boundary, boundary + '''
+    if update.evidence.kind == "test.transition_snapshot" then
+        assert(M.transition(db, attempt_id, {cleanup = "complete",
+            evidence = {kind = "test.transition_advanced", detail = "subsequent committed transition"}}).ok)
+    end''')
+
+
 def pause_effect_dispatch(src):
     path = src / "approvals/persist/dispatch.lua"
     replace_once(path, 'local sql = require("sql")', 'local sql = require("sql")\nlocal process = require("process")')
@@ -312,6 +322,7 @@ def main():
     owner_scheduling(src)
     hold_test_runner_quiet(src)
     hold_docker_cleanup(src)
+    advance_committed_transition(src)
     observe_preparer_cleanup(src)
     pause_effect_dispatch(src)
     observe_effect_delivery(src)

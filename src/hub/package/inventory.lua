@@ -5,7 +5,7 @@ local requirements = require("requirements")
 local operations = require("operations")
 local M = {}
 type Module = {component: string, version: string, locked_version: string, digest: string, source: string, direct: boolean,
-    roots: {string}, used_by: {string}, entries: integer}
+    roots: {string}, used_by: {string}, entries: integer, update_reason: string?}
 type Root = {id: string, owner: string, component: string, version: string, parameters: {requirements.Parameter}, managed: boolean, meta: {[string]: unknown}}
 type Selection = {id: string, component: string}
 type Conversion = {version: integer, roots: {Selection}}
@@ -76,6 +76,36 @@ end
 
 function M.host_component(root: Root): boolean
     return root.meta.type == "bee.component_selection" and (root.owner == "" or root.owner == "bee/bee")
+end
+
+function M.protection(installed: Result, entries: {unknown}): {[string]: string}
+    local protected: {[string]: string} = {["bee/hub"] = "bee/hub"}
+    for _, root in ipairs(installed.roots) do
+        if not root.managed and root.component ~= "bee/bee" then protected[root.component] = root.id end
+    end
+    local changed = true
+    while changed do
+        changed = false
+        for _, item in ipairs(installed.modules) do
+            if not protected[item.component] then
+                for _, owner in ipairs(item.used_by) do
+                    if protected[owner] then
+                        local dependent = owner
+                        for _, raw in ipairs(entries) do
+                            local entry = bounds.object(raw)
+                            local ownership = entry and bounds.object(entry.registry)
+                            local data = entry and bounds.object(entry.data)
+                            local id = entry and bounds.id(entry.id) or nil
+                            if entry and id and ownership and data and entry.kind == "ns.dependency"
+                                and ownership.owner == owner and data.component == item.component then dependent = id; break end
+                        end
+                        protected[item.component] = dependent; changed = true; break
+                    end
+                end
+            end
+        end
+    end
+    return protected
 end
 
 function M.decode(raw: unknown, revision: unknown): (Result?, string?)
@@ -198,7 +228,16 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     end
     table.sort(modules, function(a: Module, b: Module): boolean return a.component < b.component end)
     table.sort(roots, function(a: Root, b: Root): boolean return a.id < b.id end)
-    return {version = version, modules = modules, roots = roots, deployment = deployment, conversion = #conversion > 0 and {version = 1, roots = conversion} or nil, selected = selected}, nil
+    local result: Result = {version = version, modules = modules, roots = roots, deployment = deployment,
+        conversion = #conversion > 0 and {version = 1, roots = conversion} or nil, selected = selected}
+    local protected = M.protection(result, entries)
+    for _, item in ipairs(modules) do
+        if protected[item.component] then
+            item.update_reason = "protected boot/installer component cannot be updated independently: " .. item.component
+                .. "; required by " .. protected[item.component]
+        end
+    end
+    return result, nil
 end
 
 -- Explicit host selections and Hub-authored roots enter planning. Other

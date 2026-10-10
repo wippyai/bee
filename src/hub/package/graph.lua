@@ -311,8 +311,10 @@ function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?
         local selected = item.requirements
         local projected, projection_error = requirements.migration_targets(item.entries, selected)
         if not projected then return nil, projection_error end
-        projected, projection_error = requirements.configuration_targets(projected, selected)
-        if not projected then return nil, projection_error end
+        if #selected.missing == 0 then
+            projected, projection_error = requirements.configuration_targets(projected, selected)
+            if not projected then return nil, projection_error end
+        end
         for _, id in ipairs(selected.missing) do missing[#missing + 1] = id end
         for _, entry in ipairs(projected) do
             if ids[entry.id] then return nil, "packages collide at " .. entry.id end

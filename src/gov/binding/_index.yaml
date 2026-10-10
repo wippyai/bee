@@ -665,6 +665,7 @@ entries:
   source: file://hub_package.lua
   modules: [registry, hash]
   imports:
+    requirements: bee.hub.package:requirements
     inspection: bee.hub.package:inspection
     bounds: bee.values:bounds
     graph: bee.hub.package:graph

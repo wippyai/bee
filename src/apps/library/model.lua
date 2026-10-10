@@ -231,7 +231,7 @@ function M.platform(state: State): {Row}
     for _, module in ipairs(platform_modules(state)) do
         rows[#rows + 1] = make({key = "h:" .. module.component, origin = "hub", kind = "package", name = module.component,
             version = module.version, status = M.STATUS_INSTALLED, component = module.component,
-            source = module.component == "bee/bee" and "Bee" or "built in"})
+            source = module.update_reason and "updates with Bee" or (module.component == "bee/bee" and "Bee" or "built in")})
     end
     return rows
 end
@@ -285,9 +285,9 @@ local function installed_rows(state: State): {Row}
     for _, module in ipairs(direct) do
         local row = make({key = "h:" .. module.component, origin = "hub", kind = "package",
             name = titles[module.component] or module.component, version = module.version, status = M.STATUS_INSTALLED,
-            source = "from Hub", component = module.component, removable = #module.used_by == 0})
+            source = module.update_reason and "updates with Bee" or "from Hub", component = module.component, removable = not module.update_reason and #module.used_by == 0})
         local candidate = updates[module.component]
-        if candidate and candidate.update_available and candidate.available_version ~= "" then
+        if candidate and candidate.update_available and candidate.available_version ~= "" and not module.update_reason then
             row.status, row.update = M.STATUS_UPDATE, candidate.available_version
         end
         rows[#rows + 1] = row

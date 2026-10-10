@@ -1,6 +1,22 @@
 version: '1.0'
 namespace: bee.tests.hub
 entries:
+- name: catalog_decodes
+  kind: store.memory
+  max_size: 100
+  lifecycle: {auto_start: true}
+- name: catalog_fixture
+  kind: library.lua
+  source: file://catalog_fixture.lua
+  modules: [hub, store]
+- name: catalog_refresh
+  kind: function.lua
+  source: file://catalog_refresh.lua
+  method: run
+  imports:
+    catalog: bee.hub.binding:catalog
+    model: bee.apps.library:hub
+    fixture: bee.tests.hub:catalog_fixture
 - name: root_pack_fixture
   kind: library.lua
   source: file://root_pack_fixture.lua
@@ -145,7 +161,9 @@ entries:
   source: file://catalog_test.lua
   method: run
   meta: {type: test, suite: bee}
+  modules: [funcs]
   imports:
+    fixture: bee.tests.hub:catalog_fixture
     test: wippy.test:test
     catalog: bee.hub.binding:catalog
     root_pack: bee.tests.hub:root_pack_fixture

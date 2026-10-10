@@ -76,8 +76,9 @@ local function handle(raw: unknown): Result
         local request, invalid = plan.decode(value.request)
         if not request then return hub_result.failure("INVALID", invalid or "invalid package request") end
         if request.action ~= "uninstall" and request.component ~= "bee/bee" then
-            local expanded, problem = hub_package.read({component = request.component, version = request.version,
+            local expanded, problem, configuration = hub_package.read({component = request.component, version = request.version,
                 parameters = request.parameters})
+            if configuration then return hub_result.success(configuration, false) end
             if not expanded then return hub_result.failure("BLOCKED", problem or "package unavailable") end
             if expanded.governed then
                 return hub_result.success({route = "governed", component = request.component, version = request.version,
@@ -86,7 +87,9 @@ local function handle(raw: unknown): Result
         end
         local result, problem = publication.prepare(value.request)
         if not result then return hub_result.failure("INVALID", problem or "package plan unavailable") end
-        return hub_result.success(result.plan, false)
+        local configuration = hub_package.configuration({component = request.component, version = request.version,
+            parameters = request.parameters}, result.resolved)
+        return hub_result.success(configuration or result.plan, false)
     elseif value.operation == "apply" then
         local request, invalid = plan.decode(value.request)
         if not request then return hub_result.failure("INVALID", invalid or "invalid package request") end

@@ -1,6 +1,7 @@
 -- MIT. A small, caller-scoped view of the native Hub catalog.
 local hub = require("hub")
 local registry = require("registry")
+local store = require("store")
 local bounds = require("bounds")
 local limits = require("limits")
 local M = {}
@@ -195,11 +196,31 @@ local function application_package(item: Item): (boolean?, string?)
     if item.latest_version == "" then return false, nil end
     local package, problem = hub.versions.open(item.component, item.latest_version, {timeout = M.TIMEOUT_SECONDS})
     if not package then return nil, tostring(problem) end
+    local digest = package.digest:gsub("^sha256:", "")
+    if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then package:close(); return nil, "invalid artifact digest" end
+    local cache, cache_error = store.get("bee.hub.service:classifications")
+    if not cache then package:close(); return nil, tostring(cache_error) end
+    local function finish(value: boolean?, problem: string?): (boolean?, string?)
+        cache:release()
+        local closed, close_error = package:close()
+        if not closed then return nil, problem or tostring(close_error) end
+        return value, problem
+    end
+    local key = "application_v1:" .. digest
+    local cached, read_error = cache:get(key)
+    if read_error and not errors.is(read_error, errors.NOT_FOUND) then return finish(nil, tostring(read_error)) end
+    if type(cached) == "boolean" then return finish(cached, nil) end
     local metadata, metadata_error = package:metadata()
-    local entries, entries_error = package:entries({include_data = false})
-    local closed, close_error = package:close()
-    if not metadata or not entries or not closed then return nil, tostring(metadata_error or entries_error or close_error) end
-    return M.application(metadata, entries), nil
+    if not metadata then return finish(nil, tostring(metadata_error)) end
+    local application = M.application(metadata, {})
+    if not application then
+        local entries, entries_error = package:entries({kind = "process.lua", include_data = false})
+        if not entries then return finish(nil, tostring(entries_error)) end
+        application = M.application(metadata, entries)
+    end
+    local saved, save_error = cache:set(key, application)
+    if not saved then return finish(nil, tostring(save_error)) end
+    return finish(application, nil)
 end
 
 function M.browse(raw: unknown): (Browse?, string?)

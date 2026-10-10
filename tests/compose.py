@@ -164,7 +164,12 @@ def runner_fixture_type(src):
     anchor = text.index("- name: inspect\n")
     index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_catalog: bee.tests.gov:hub_fixture_catalog\n", 1))
     catalog = src / "hub/binding/catalog.lua"
+    replace_once(catalog, 'local hub = require("hub")', 'local hub = require("fixture_hub")')
+    text = index.read_text()
+    anchor = text.index("- name: catalog\n")
+    index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_hub: bee.tests.hub:catalog_fixture\n", 1))
     replace_once(catalog, '    local response, response_error', '''    if request.query == "fixture-unavailable" then return nil, "fixture catalog unavailable" end
+    if request.query == "fixture-long-failure" then return nil, string.rep("dependency unavailable; ", 300) .. "\\nreason-end" end
     if request.query == nil or request.query == "progress" then
         return {items = {{component = "bee/progress", title = "Progress", description = "Task tracking",
             latest_version = "1.0.0", application = true}}, total = 1, page = request.page, page_size = M.PAGE_SIZE}, nil
@@ -173,7 +178,7 @@ def runner_fixture_type(src):
     replace_once(catalog, '    local module, module_error = hub.modules.get(request.component, {timeout = M.TIMEOUT_SECONDS})', '''    if request.component == "bee/progress" then
         return {component = request.component, latest_version = "1.0.0", title = "Progress", description = "Task tracking",
             readme = "", readme_error = "fixture README unavailable", versions = {{version = "1.0.0", yanked = false},
-                {version = "9.0.0", yanked = false}}, total_versions = 2, page = request.page, page_size = M.MAX_VERSIONS}, nil
+                {version = "9.0.0", yanked = false}, {version = "2.0.0", yanked = false}}, total_versions = 3, page = request.page, page_size = M.MAX_VERSIONS}, nil
     end
     local module, module_error = hub.modules.get(request.component, {timeout = M.TIMEOUT_SECONDS})''')
     replace_once(src / "node/application_tests.lua", 'meta.type == "test"', 'meta.type == "app_test"')

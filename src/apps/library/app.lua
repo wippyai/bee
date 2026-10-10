@@ -22,7 +22,7 @@ local view = require("view")
 local contents = require("contents")
 
 type Object = {[string]: unknown}
-type Reply = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
+type Reply = {ok: boolean, code: string?, message: string?, full_message: string?, value: unknown, replayed: boolean}
 type Pending = {future: funcs.Future, response: channel.Channel, operation: string, generation: integer, apply: boolean}
 type ReadPending = {future: funcs.Future, response: channel.Channel, operation: string, generation: integer, retired: boolean}
 
@@ -50,7 +50,8 @@ local function reply(value: unknown): Reply
         local failed = state == "failed" or state == "recovery_required"
         return {ok = raw.ok == true and not failed, replayed = raw.replayed == true,
             code = failed and (type(raw.code) == "string" and raw.code ~= "OK" and raw.code or state:upper()) or (type(raw.code) == "string" and raw.code or nil),
-            message = type(raw.message) == "string" and raw.message or nil, value = raw.value}
+            message = type(raw.message) == "string" and raw.message or nil,
+            full_message = type(raw.full_message) == "string" and raw.full_message or nil, value = raw.value}
     end
     return {ok = false, replayed = false, code = "UNCERTAIN", message = "Hub reply was unavailable", value = nil}
 end
@@ -473,12 +474,19 @@ local function main(options: unknown)
             elseif problem then hubs.notice, gov.fault = problem, problem
             else
                 hub.apply_plan(hubs, value)
+                if hubs.requirements_open and hubs.phase == "details" then
+                    ui.content.open, ui.reading, ui.offset = false, false, 0
+                    if not hubs.detail then
+                        local detail = hub.details_intent(hubs)
+                        if detail then table.insert(reads, 1, detail) end
+                    end
+                end
                 gov.fault = hubs.notice
             end
         elseif operation == "status" then hub.apply_result(hubs, value)
         elseif operation == "history" then hub.apply_history(hubs, value) end
         if not value.ok then
-            failure((value.code or "UNAVAILABLE") .. ": " .. (value.message or "Hub read failed"))
+            failure((value.code or "UNAVAILABLE") .. ": " .. (value.full_message or value.message or "Hub read failed"))
         elseif operation == "state" or operation == "files" or operation == "read_file" then
             if ui.content.fault ~= "" then failure(ui.content.fault) end
         elseif operation == "details" and hubs.detail and hubs.detail.readme_error ~= "" then
@@ -585,9 +593,11 @@ local function main(options: unknown)
     end
     local function requirements()
         ui.content.open = false
+        hub.show(hubs, "details")
         hub.show_requirements(hubs, true)
         ui.reading, ui.offset = false, 0
         local intent = hub.inspect_intent(hubs)
+        if hubs.requirements_digest then changed(); return end
         if intent then begin({intent})
         elseif hubs.action == "update" then ui.status = "Read installed settings before inspecting this update"
         else ui.status = "Choose a version first" end
@@ -955,16 +965,9 @@ local function main(options: unknown)
         elseif kind == "save_editor" then finish_editor()
         elseif kind == "cancel_editor" then ui.editor = nil; ui.status = "Cancelled"; changed()
         elseif kind == "missing" then
-            local measured = hubs.plan
-            if hubs.phase == "plan" and measured then
-                for _, id in ipairs(measured.missing) do
-                    if key == "" or key == id then
-                        ui.editor = {field = "parameter_value", buffer = "", name = id}
-                        ui.status = "Enter a JSON value for " .. id
-                        changed()
-                        break
-                    end
-                end
+            requirements()
+            for index, row in ipairs(hubs.requirements) do
+                if row.id == key or (key == "" and row.origin == "Missing") then hub.select_requirement(hubs, index); break end
             end
         elseif kind == "back" then leave_package()
         elseif kind == "recover" then
@@ -1109,7 +1112,7 @@ local function main(options: unknown)
                         apply_pending = false
                         ui.status = ""
                         hub.apply_result(hubs, value)
-                        if not value.ok then failure((value.code or "FAILED") .. ": " .. (value.message or "Hub apply failed")) end
+                        if not value.ok then failure((value.code or "FAILED") .. ": " .. (value.full_message or value.message or "Hub apply failed")) end
                     end
                     changed()
                 else
@@ -1123,6 +1126,7 @@ local function main(options: unknown)
                         elseif data.type == "key" and data.action ~= "release" then
                             local key, letter = data.key_type, tostring(data.key or "")
                             if key == "space" then letter = " " end
+                            local diagnostic = gov.technical and (gov.fault ~= "" and gov.fault or hub.update_reason(hubs, hubs.selected))
                             local editor = ui.editor
                             local removal = state.removal
                             if removal then
@@ -1133,6 +1137,10 @@ local function main(options: unknown)
                                 elseif key == "enter" then finish_editor()
                                 elseif key == "backspace" then editor.buffer = previous(editor.buffer); ui.status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed()
                                 elseif (key == "runes" or #letter == 1) and #letter > 0 and not data.ctrl and not data.alt and not letter:find("%c") then editor.buffer = editable(editor.buffer .. letter); ui.status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed() end
+                            elseif diagnostic and (key == "up" or key == "down" or key == "pgup" or key == "pgdown") then
+                                local delta = (key == "up" or key == "pgup") and -1 or 1
+                                ui.offset = math.floor(math.max(0, ui.offset + delta * ((key == "pgup" or key == "pgdown") and 8 or 1)))
+                                changed()
                             elseif screen == "package" then
                                 ui.status = ""
                                 local phase = hubs.phase
@@ -1257,7 +1265,9 @@ local function main(options: unknown)
                             if hit then handle_hit(hit.kind, hit.key) end
                         elseif data.type == "mouse" and data.action == "wheel" then
                             local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
-                            if screen == "package" then
+                            if gov.technical and (gov.fault ~= "" or hub.update_reason(hubs, hubs.selected)) then
+                                ui.offset = math.floor(math.max(0, ui.offset + delta * 3)); changed()
+                            elseif screen == "package" then
                                 local phase = hubs.phase
                                 if phase == "details" and ui.content.open then
                                     if #ui.content.rows > 0 then contents.move(ui.content, delta) else ui.offset = math.floor(math.max(0, ui.offset + delta * 3)) end

@@ -4,6 +4,33 @@ local model = require("model")
 local function ok(value: unknown): model.Reply return {ok = true, code = nil, message = nil, value = value, replayed = false} end
 local function define_tests()
     test.describe("Library Hub model", function()
+        test.it("opens the typed requirements form from planning and replans with defaults and edits", function()
+            local state = model.new()
+            model.apply_installed(state, ok({modules = {}, roots = {}}))
+            model.select(state, "custom/loader")
+            model.select_version(state, "2.0.0")
+            model.set_action(state, "update")
+            model.begin_plan(state)
+            model.apply_plan(state, ok({route = "requirements", component = "custom/loader", version = "2.0.0",
+                digest = string.rep("a", 64), requirements = {missing = {"custom.loader:host"}, requirements = {
+                    {id = "custom.loader:host", has_default = false, has_selected = false, schema = {type = "string"}, targets = {}},
+                    {id = "custom.loader:enabled", has_default = true, default = false, has_selected = false, schema = {type = "boolean"}, targets = {}},
+                    {id = "custom.child:port", has_default = false, has_selected = true, selected = 8080, schema = {type = "integer"}, targets = {}},
+                }}}))
+            test.eq(state.phase, "details")
+            test.is_true(state.requirements_open)
+            test.is_nil(state.plan)
+            test.eq(state.requirements[2].json, "false")
+            test.eq(state.requirements[1].origin, "Missing")
+            test.eq(state.requirements[3].json, "8080")
+            test.eq(state.requirements[3].origin, "Selected")
+            test.is_nil(model.plan_intent(state))
+            test.is_nil(model.set_field(state, "custom.loader:host", "bee:services"))
+            local intent = assert(model.plan_intent(state))
+            test.eq(assert(intent.request).action, "update")
+            test.eq(state.parameters[1].value, "bee:services")
+            test.eq(#state.parameters, 1)
+        end)
         test.it("blocks Review with the missing field name and validates configured typed values", function()
             local state = model.new()
             model.select(state, "acme/app")

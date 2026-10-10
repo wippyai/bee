@@ -362,10 +362,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     elseif screen == "version" then base = draw_version(width, height, preferences, state, ui)
     elseif screen == "platform" then base = draw_platform(width, height, preferences, state, ui)
     else base = draw_list(width, height, preferences, state, ui) end
-    if screen ~= "package" and state.governed.technical and state.governed.fault ~= "" and height >= 8 then
-        local result = frame.new(width, height, preferences)
-        frame.line(result, height - 2, "Last result: " .. state.governed.fault, preferences.theme.text)
-        base.rows[height - 2] = frame.rows(result)[height - 2]
+    if screen ~= "package" and state.governed.technical then
+        base = hub_view.diagnostic(base, width, height, preferences, state.governed.fault, ui.offset, height - 2)
     end
     local editor = ui.editor
     if editor then return hub_view.overlay(base, width, height, preferences, ui.status, editor) end

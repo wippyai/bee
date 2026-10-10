@@ -103,8 +103,11 @@ function M.source(): graph.Source
         if component ~= "bee/progress" then return nil, nil, "fixture catalog has no module " .. component end
         return {"1.0.0"}, false, nil
     end, artifact = function(component: string, version: string): (inspection.Inspection?, string?)
-        if component ~= "bee/progress" or version ~= "1.0.0" then return nil, "fixture catalog has no version" end
+        if component ~= "bee/progress" or (version ~= "1.0.0" and version ~= "2.0.0") then return nil, "fixture catalog has no version" end
         local entries = M.entries()
+        if version == "2.0.0" then
+            entries[#entries + 1] = {id = NS .. ":label", kind = "ns.requirement", meta = {schema = {type = "string"}}, data = {targets = {{entry = NS .. ":app", path = ".meta.description"}}}}
+        end
         local measured = assert(artifact.create(entries))
         return {component = component, version = version, digest = measured.digest, entries = entries,
             requirements = assert(requirements.read(entries, {})), next_offset = nil, eof = true,

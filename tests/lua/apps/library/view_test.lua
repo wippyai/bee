@@ -98,6 +98,14 @@ end
 
 local function define_tests()
     test.describe("Library frame", function()
+        test.it("scrolls the entire catalog failure in Technical", function()
+            local state = fresh()
+            state.governed.technical = true
+            state.governed.fault = string.rep("unavailable ", 100) .. "\nreason-end"
+            local shown = view.draw(40, 18, appearance.defaults(), state, ui(999))
+            test.is_true(table.concat(shown.rows, "\n"):find("reason-end", 1, true) ~= nil)
+            test.is_true(shown.offset > 0)
+        end)
         test.it("shows an empty list's failure in Technical with available actions", function()
             local state = fresh()
             state.governed.technical, state.governed.fault = true, "UNAVAILABLE: owner call failed"

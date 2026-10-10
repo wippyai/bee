@@ -4,7 +4,7 @@ entries:
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
-  modules: [hub, registry]
+  modules: [hub, registry, store]
   imports:
     bounds: bee.values:bounds
     limits: bee.hub.package:limits

@@ -1,7 +1,7 @@
 -- MIT. Typed replies and bounded diagnostics at the Hub boundary.
 local bounds = require("bounds")
 local M = {}
-type Result = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}
+type Result = {ok: boolean, code: string?, message: string?, full_message: string?, value: unknown, replayed: boolean}
 function M.failure(code: string, message: string, value: unknown?): Result
     return {ok = false, code = code, message = message, value = value, replayed = false}
 end
@@ -36,6 +36,7 @@ function M.decode(raw: unknown): Result
         message = M.message(reply.message)
         if not message then message = "invalid Hub result message" end
     end
-    return {ok = reply.ok, replayed = reply.replayed, code = code, message = message, value = reply.value}
+    return {ok = reply.ok, replayed = reply.replayed, code = code, message = message, full_message = type(reply.full_message) == "string" and reply.full_message
+        or (type(reply.message) == "string" and reply.message or nil), value = reply.value}
 end
 return M

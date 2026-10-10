@@ -3,6 +3,19 @@ local test = require("test")
 local inventory = require("inventory")
 local function define_tests()
     test.describe("Hub installed inventory", function()
+        test.it("projects planner protection through registry dependency ownership", function()
+            local result = assert(inventory.decode({entries = {
+                {id = "custom.boot:root", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "custom/boot", version = "1.0.0"}},
+                {id = "custom.boot:runtime", kind = "ns.dependency", registry = {owner = "custom/boot"},
+                    data = {component = "custom/runtime", version = "1.0.0"}},
+                {id = "custom:independent", kind = "ns.dependency", meta = {type = "bee.hub_dependency"}, registry = {owner = "", root = true},
+                    data = {component = "custom/app", version = "1.0.0"}},
+            }}, 1))
+            test.is_nil(result.modules[1].update_reason)
+            test.eq(result.modules[3].update_reason,
+                "protected boot/installer component cannot be updated independently: custom/runtime; required by custom.boot:runtime")
+        end)
         test.it("derives independent selection from the host dependency without a second record", function()
             local result = assert(inventory.decode({entries = {
                 {id = "bee.deps:files", kind = "ns.dependency", meta = {type = "bee.component_selection", independent = true}, registry = {owner = "bee/bee", root = true},

@@ -1,6 +1,10 @@
 version: '1.0'
 namespace: bee.hub.service
 entries:
+- name: classifications
+  kind: store.memory
+  max_size: 10000
+  lifecycle: {auto_start: true}
 - name: worker
   kind: process.lua
   source: file://worker.lua

@@ -17,6 +17,38 @@ end
 
 local function define_tests()
     test.describe("Library package screens", function()
+        test.it("shows registry-protected packages as updates with Bee without update controls", function()
+            local state = model.new()
+            model.apply_installed(state, {ok = true, replayed = false, value = {roots = {}, modules = {
+                {component = "custom/runtime", version = "1.0.0", source = "hub", direct = true, used_by = {},
+                    update_reason = "protected boot/installer component cannot be updated independently: custom/runtime; required by custom.boot:runtime"},
+            }}})
+            model.select(state, "custom/runtime")
+            model.apply_details(state, {ok = true, replayed = false, value = {component = "custom/runtime", title = "Runtime",
+                description = "", readme = "", versions = {{version = "2.0.0", yanked = false}}, page = 1, total_versions = 1}})
+            for _, reading in ipairs({false, true}) do
+                local shown = draw(160, 24, state, 0, "", reading)
+                test.is_true(table.concat(shown.rows, "\n"):find("updates with Bee", 1, true) ~= nil)
+                for _, button in ipairs(assert(shown.controls).buttons) do
+                    test.is_false(button.kind == "update" or button.kind == "plan" or button.kind == "uninstall")
+                end
+            end
+            model.set_action(state, "update")
+            local intent, problem = model.plan_intent(state)
+            test.is_nil(intent)
+            test.is_true(tostring(problem):find("required by custom.boot:runtime", 1, true) ~= nil)
+        end)
+        test.it("makes the complete long failure scrollable in Technical", function()
+            local state = model.new()
+            state.phase = "plan"
+            local reason = "INVALID: " .. string.rep("dependency ", 100) .. "\nreason-end"
+            model.apply_plan(state, {ok = false, replayed = false, code = "INVALID", message = reason, value = nil})
+            test.is_true(state.notice:find("reason-end", 1, true) ~= nil)
+            local shown = view.draw(40, 18, appearance.defaults(), state, 999, state.notice, false, nil, nil,
+                {tabs = CHROME.tabs, active = CHROME.active, technical = true, fault = state.notice})
+            test.is_true(table.concat(shown.rows, "\n"):find("reason-end", 1, true) ~= nil)
+            test.is_true(shown.offset > 0)
+        end)
         test.it("uses shared footer controls for configuration at every size", function()
             for _, width in ipairs({12, 27, 40, 80, 160}) do
                 local shown = draw(width, 18, model.new(), 0, "Invalid value", false,

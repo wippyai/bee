@@ -10,6 +10,7 @@ local function define_tests()
             test.eq(decoded.ok, false)
             test.eq(decoded.code, "FAILED")
             test.eq(decoded.value, receipt)
+            test.eq(decoded.full_message, message)
             local shown = decoded.message or ""
             test.eq(#shown, 4096)
             test.is_true(shown:find("dependency resolution failed", 1, true) == 1)

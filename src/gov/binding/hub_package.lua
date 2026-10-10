@@ -6,6 +6,7 @@ local inventory = require("inventory")
 local artifact_source = require("artifact_source")
 local artifact = require("artifact")
 local inspection = require("inspection")
+local requirements = require("requirements")
 local canonical = require("canonical")
 local hash = require("hash")
 local M = {}
@@ -13,7 +14,20 @@ type Object = {[string]: unknown}
 type Change = {entry: Object, op: string}
 type Expanded = {digest: string, changes: {Change}, resolution: Object, retained: {[string]: boolean},
     artifact: artifact.Artifact, governed: boolean}
-function M.expand(state: unknown, revision: integer, root: graph.Edge): (Expanded?, string?)
+type Configuration = {route: string, component: string, version: string, digest: string, requirements: requirements.Result}
+function M.configuration(root: graph.Edge, resolved: graph.Result): Configuration?
+    if #resolved.missing == 0 then return nil end
+    local declared: {requirements.Requirement} = {}
+    local digest = ""
+    for _, package in ipairs(resolved.packages) do
+        if package.component == root.component then digest = package.digest end
+        for _, hole in ipairs(package.requirements.requirements) do declared[#declared + 1] = hole end
+    end
+    return {route = "requirements", component = root.component, version = root.version, digest = digest,
+        requirements = {requirements = declared, missing = resolved.missing}}
+end
+
+function M.expand(state: unknown, revision: integer, root: graph.Edge): (Expanded?, string?, Configuration?)
     local installed, problem = inventory.decode(state, revision)
     if not installed then return nil, problem end
     local versions: {[string]: string} = {}
@@ -32,7 +46,10 @@ function M.expand(state: unknown, revision: integer, root: graph.Edge): (Expande
     end
     local resolved, resolve_error = graph.resolve({root}, source, versions)
     if not resolved then return nil, resolve_error end
-    if #resolved.missing > 0 then return nil, "package has missing dependency parameters: " .. table.concat(resolved.missing, ", ") end
+    local configuration = M.configuration(root, resolved)
+    if configuration then
+        return nil, "package has missing dependency parameters: " .. table.concat(resolved.missing, ", "), configuration
+    end
     local captured = bounds.object(state)
     local existing: {[string]: Object} = {}
     for _, raw in ipairs(bounds.array(captured and captured.entries, 16384) or {}) do
@@ -68,7 +85,7 @@ function M.expand(state: unknown, revision: integer, root: graph.Edge): (Expande
     return {digest = measured, changes = changes, resolution = {modules = modules}, retained = retained,
         artifact = made, governed = governed}, nil
 end
-function M.read(root: graph.Edge): (Expanded?, string?)
+function M.read(root: graph.Edge): (Expanded?, string?, Configuration?)
     local checked, invalid = inspection.decode({component = root.component, version = root.version, parameters = root.parameters})
     if not checked then return nil, invalid end
     local snapshot, problem = registry.snapshot()

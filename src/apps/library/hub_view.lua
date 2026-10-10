@@ -99,9 +99,10 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     frame.header(painter, "LIBRARY  " .. (TITLES[state.phase] or "PACKAGE"), state.selected or "")
     if height >= 6 then frame.tabs(painter, 2, chrome.tabs, chrome.active) end
     local detail = state.detail
+    local protected = model.update_reason(state, state.selected)
     if state.phase == "details" then
         local detail_status = detail and model.component_status(state, detail.component)
-        local status_suffix = detail_status and ("  ·  " .. (detail_status == "built-in" and "Built-in" or "Installed")) or ""
+        local status_suffix = protected and "  ·  updates with Bee" or detail_status and ("  ·  " .. (detail_status == "built-in" and "Built-in" or "Installed")) or ""
         if detail then
             -- The package's title stands out; its name and state follow dimmed.
             frame.fill(painter, 3)
@@ -173,7 +174,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                     frame.line(painter, y + 2, fallback .. (#choices > 0 and " · Choose: " .. table.concat(choices, " / ") or ""), theme.muted)
                     frame.line(painter, y + 3, field and field.description ~= "" and field.description or table.concat(row.targets, " · "), theme.muted)
                 end
-                button("plan", " Review ", state.requirements_digest ~= nil)
+                if not protected then button("plan", " Review ", state.requirements_digest ~= nil) end
                 local requirement = state.requirements[state.selected_requirement]
                 button("reset_requirement", " Clear override ", requirement ~= nil and requirement.origin == "Selected")
                 frame.line(painter, height - 1, "Defaults are used unless you choose a value.", theme.muted)
@@ -249,7 +250,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 end
                 button("versions", " Choose version ", true)
                 button("requirements", " Configure ", true)
-                button("plan", " Review installation ", state.selected_version ~= nil)
+                if not protected then button("plan", " Review installation ", state.selected_version ~= nil) end
                 frame.footer(painter, status, "↑↓ scroll · V versions · C contents · Esc back", nil, footer_buttons)
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
@@ -264,10 +265,13 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 frame.row(painter, y, label, selected, "version", 0, item.version, item.yanked and theme.muted or nil)
             end
 
+            if not protected then
             button("install", " Install ", true)
             button("update", " Update ", true)
             button("uninstall", " Remove ", true)
             button("plan", " Prepare ", state.selected_version ~= nil or state.action == "uninstall")
+
+            end
 
             button("parameter", " Configure ", state.action ~= "uninstall")
             if state.action == "uninstall" then
@@ -279,9 +283,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 button("policy_up", " Run migrations ", true)
             end
             local parameters = #state.parameters == 0 and "no parameters" or (tostring(#state.parameters) .. " typed parameters")
-            if width >= 74 then frame.line(painter, height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
+            if width >= 74 then frame.line(painter, height - 3, protected and "updates with Bee · T technical for the full reason" or ("Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters), theme.muted) end
         end
-        frame.footer(painter, status, "↑↓ version · I install · U update · X remove · P review · T technical", nil, footer_buttons)
+        frame.footer(painter, status, protected and "updates with Bee · T full reason · Esc back" or "↑↓ version · I install · U update · X remove · P review · T technical", nil, footer_buttons)
         if chrome.technical and chrome.fault and chrome.fault ~= "" then frame.line(painter, height - 3, "Last result: " .. chrome.fault, theme.text) end
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = detail and maximum(0, height - 9) or 0, offset = offset, operation_detail_offset = 0}
     end
@@ -510,12 +514,47 @@ function M.overlay(base: Frame, width: integer, height: integer, preferences: ap
         offset = base.offset, operation_detail_offset = base.operation_detail_offset}
 end
 
+function M.diagnostic(base: Frame, width: integer, height: integer, preferences: appearance.Preferences,
+    reason: string?, offset: integer, single_line_y: integer): Frame
+    if not reason or reason == "" or height < 8 then return base end
+    local result = frame.new(width, height, preferences)
+    local lines: {string} = {}
+    for line in ("Last result: " .. reason .. "\n"):gmatch("([^\n]*)\n") do
+        local remaining = line
+        while tty.text.width(remaining) > maximum(1, width - 2) do
+            local part = tty.text.truncate(remaining, maximum(1, width - 2), "")
+            lines[#lines + 1] = part
+            remaining = remaining:sub(#part + 1)
+        end
+        lines[#lines + 1] = remaining
+    end
+    local capacity = maximum(1, height - 8)
+    local next_offset = math.floor(math.max(0, math.min(maximum(0, #lines - capacity), offset)))
+    if #lines == 1 then
+        frame.line(result, single_line_y, lines[1], preferences.theme.text)
+        base.rows[single_line_y] = frame.rows(result)[single_line_y]
+    else
+        for slot = 1, capacity do
+            frame.line(result, 4 + slot, lines[next_offset + slot] or "", preferences.theme.text)
+            base.rows[4 + slot] = frame.rows(result)[4 + slot]
+        end
+        frame.line(result, height - 2, "↑↓ scroll reason · T return", preferences.theme.muted)
+        base.rows[height - 2] = frame.rows(result)[height - 2]
+        base.offset, base.capacity = next_offset, capacity
+        local hits: {frame.Hit} = {}
+        for _, hit in ipairs(base.hits) do
+            if hit.y < 5 or hit.y >= height - 1 then hits[#hits + 1] = hit end
+        end
+        base.hits = hits
+    end
+    return base
+end
+
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string, reading: boolean?, editor: Editor?, content: contents.State?, chrome: Chrome): Frame
     local base = draw_base(width, height, preferences, state, offset, editor and "" or status, reading, content, chrome)
-    if chrome.technical and chrome.fault and chrome.fault ~= "" and height >= 8 then
-        local result = frame.new(width, height, preferences)
-        frame.line(result, height - 3, "Last result: " .. chrome.fault, preferences.theme.text)
-        base.rows[height - 3] = frame.rows(result)[height - 3]
+    if chrome.technical then
+        local reason = chrome.fault and chrome.fault ~= "" and chrome.fault or model.update_reason(state, state.selected)
+        base = M.diagnostic(base, width, height, preferences, reason, offset, height - 3)
     end
     if not editor then return base end
     return M.overlay(base, width, height, preferences, status, editor)

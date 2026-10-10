@@ -2,6 +2,8 @@
 local test = require("test")
 local root_pack = require("root_pack")
 local catalog = require("catalog")
+local fixture = require("fixture")
+local funcs = require("funcs")
 
 local function module(name: string): {[string]: unknown}
     return {
@@ -23,6 +25,31 @@ end
 
 local function define_tests()
     test.describe("Hub catalog", function()
+        test.it("decodes once per artifact digest across Library catalog refresh calls", function()
+            fixture.select(string.rep("a", 64))
+            for _ = 1, 3 do
+                local reply, problem = funcs.call("bee.tests.hub:catalog_refresh")
+                test.is_nil(problem)
+                test.eq(reply.application, true)
+                test.eq(reply.decodes, 1)
+            end
+            fixture.select(string.rep("b", 64))
+            local changed = assert(funcs.call("bee.tests.hub:catalog_refresh"))
+            test.eq(changed.decodes, 2)
+            fixture.select(string.rep("a", 64))
+            local original = assert(funcs.call("bee.tests.hub:catalog_refresh"))
+            test.eq(original.decodes, 2)
+            fixture.select(string.rep("c", 64), "metadata")
+            local metadata = assert(funcs.call("bee.tests.hub:catalog_refresh"))
+            test.eq(metadata.application, true)
+            test.eq(metadata.decodes, 2)
+            fixture.select(string.rep("d", 64), "library")
+            for _ = 1, 2 do
+                local library = assert(funcs.call("bee.tests.hub:catalog_refresh"))
+                test.eq(library.application, false)
+                test.eq(library.decodes, 3)
+            end
+        end)
         test.it("finds application declarations in the whole published Bee pack", function()
             test.is_true(catalog.application({}, root_pack.entries()))
         end)

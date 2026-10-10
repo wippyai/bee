@@ -1,6 +1,13 @@
 version: '1.0'
 namespace: bee.hub.security
 entries:
+- name: classification_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [store.get, store.key.get, store.key.set]
+    resources: [bee.hub.service:classifications]
+    effect: allow
 - name: facade_policy
   kind: security.policy.expr
   meta:

@@ -1,3 +1,4 @@
+-- MIT.
 local catalog = require("catalog")
 local model = require("model")
 local fixture = require("fixture")

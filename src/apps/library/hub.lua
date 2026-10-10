@@ -1016,7 +1016,11 @@ function M.apply_plan(state: State, reply: Reply)
         end
         return
     end
-    if not reply.ok or type(reply.value) ~= "table" then state.plan = nil; state.phase = "plan"; state.notice = (reply.code or "INVALID") .. ": " .. (reply.full_message or reply.message or "cannot review these changes"); return end
+    if not reply.ok or type(reply.value) ~= "table" then
+        state.plan, state.phase = nil, "plan"
+        state.notice = (reply.code or "INVALID") .. ": " .. (reply.full_message or reply.message or "cannot review these changes")
+        return
+    end
     local value = object(reply.value)
     if not value then state.notice = "The Hub answered something unreadable; try Refresh"; return end
     local measured_digest = digest(value.digest)

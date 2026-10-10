@@ -1,3 +1,4 @@
+-- MIT.
 local hub = require("hub")
 local store = require("store")
 local M = {}

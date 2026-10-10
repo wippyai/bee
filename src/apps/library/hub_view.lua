@@ -266,10 +266,10 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             end
 
             if not protected then
-            button("install", " Install ", true)
-            button("update", " Update ", true)
-            button("uninstall", " Remove ", true)
-            button("plan", " Prepare ", state.selected_version ~= nil or state.action == "uninstall")
+                button("install", " Install ", true)
+                button("update", " Update ", true)
+                button("uninstall", " Remove ", true)
+                button("plan", " Prepare ", state.selected_version ~= nil or state.action == "uninstall")
 
             end
 
@@ -520,13 +520,9 @@ function M.diagnostic(base: Frame, width: integer, height: integer, preferences:
     local result = frame.new(width, height, preferences)
     local lines: {string} = {}
     for line in ("Last result: " .. reason .. "\n"):gmatch("([^\n]*)\n") do
-        local remaining = line
-        while tty.text.width(remaining) > maximum(1, width - 2) do
-            local part = tty.text.truncate(remaining, maximum(1, width - 2), "")
-            lines[#lines + 1] = part
-            remaining = remaining:sub(#part + 1)
+        for _, part in ipairs(frame.flow({{value = line}}, width, 0)) do
+            lines[#lines + 1] = part.value or ""
         end
-        lines[#lines + 1] = remaining
     end
     local capacity = maximum(1, height - 8)
     local next_offset = math.floor(math.max(0, math.min(maximum(0, #lines - capacity), offset)))

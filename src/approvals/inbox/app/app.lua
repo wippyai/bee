@@ -33,7 +33,7 @@ local source_config = require("source_config")
 local protocol = require("protocol")
 local system = require("system")
 local WORKSPACES = "bee.approvals.inbox.app:workspaces"
-local POLL = "2s"
+local REMOTE_POLL = "2s"
 type FeedSource = {id: string, node_id: string, workspace_id: string, local_owner: boolean, feed: string}
 local function unknown_answer(): model.Reply
     return model.unknown_reply()
@@ -132,7 +132,7 @@ local function main(value: unknown)
     local committed = assert(committed_stream:channel())
     local remote = false
     for _, source in pairs(configured.sources) do if not source.local_owner then remote = true end end
-    local ticker = remote and assert(time.ticker(POLL)) or nil
+    local ticker = remote and assert(time.ticker(REMOTE_POLL)) or nil
     local ticks = ticker and ticker:channel() or nil
     local refresh_pending = false
     local function refresh()

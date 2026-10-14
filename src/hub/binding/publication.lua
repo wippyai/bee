@@ -33,15 +33,21 @@ local function digest(raw: unknown): string?
     return raw
 end
 
+local function captured_state(): (unknown?, integer?, string?)
+    local snapshot, snapshot_error = registry.snapshot()
+    if not snapshot then return nil, nil, tostring(snapshot_error) end
+    local state, state_error = snapshot:state()
+    if not state then return nil, nil, tostring(state_error) end
+    local revision = bounds.count(snapshot:version():id())
+    if revision == nil then return nil, nil, "invalid registry revision" end
+    return state, revision, nil
+end
+
 function M.prepare(raw: unknown): (plan.Prepared?, string?)
     local request, request_error = plan.decode(raw)
     if not request then return nil, request_error end
-    local snapshot, snapshot_error = registry.snapshot()
-    if not snapshot then return nil, tostring(snapshot_error) end
-    local state, state_error = snapshot:state()
-    if not state then return nil, tostring(state_error) end
-    local revision = bounds.count(snapshot:version():id())
-    if revision == nil then return nil, "invalid registry revision" end
+    local state, revision, state_error = captured_state()
+    if not state or revision == nil then return nil, state_error end
     local installed, inventory_error = inventory.decode(state, revision)
     if not installed then return nil, inventory_error end
     return plan.prepare(state, revision, request, artifact_source.new(state, installed, request.component),
@@ -58,12 +64,8 @@ function M.review(prepared: plan.Prepared): (review.Summary?, string?)
 end
 
 local function rebase(prepared: plan.Prepared): (plan.Prepared?, string?)
-    local snapshot, snapshot_error = registry.snapshot()
-    if not snapshot then return nil, tostring(snapshot_error) end
-    local state, state_error = snapshot:state()
-    if not state then return nil, tostring(state_error) end
-    local revision = bounds.count(snapshot:version():id())
-    if revision == nil then return nil, "invalid registry revision" end
+    local state, revision, state_error = captured_state()
+    if not state or revision == nil then return nil, state_error end
     return plan.rebase(prepared, state, revision, (binary_identity.read_baked()))
 end
 

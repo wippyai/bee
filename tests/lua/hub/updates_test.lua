@@ -18,7 +18,7 @@ local function caller(mode: string): funcs.Executor
 end
 local function define_tests()
     test.describe("Hub update selection through About, Library and MCP", function()
-        test.it("decodes a complete planning artifact once across entry pages", function()
+        test.it("reads all planning entries with one pack decode", function()
             local before_open = fixture.count("decode_once:opens")
             local before_decode = fixture.count("decode_once:decodes")
             local before_close = fixture.count("decode_once:closes")

@@ -127,7 +127,9 @@ local function define_tests()
             test.eq(reads, 1)
             test.eq(rebased.plan.base_revision, 2)
             test.eq(rebased.resolved.packages[1].digest, prepared.resolved.packages[1].digest)
-            test.eq(assert(type(rebased.resolved.packages[1].entries[1].data) == "table" and rebased.resolved.packages[1].entries[1].data).value, "approved")
+            local data = rebased.resolved.packages[1].entries[1].data
+            assert(type(data) == "table")
+            test.eq(data.value, "approved")
             test.is_true(rebased.plan.digest ~= prepared.plan.digest)
             local unavailable = plan.rebase(prepared, state({root("vendor/other", "1.0.0")}, {
                 {name = "vendor/other", version = "1.0.0", digest = string.rep("b", 64)},

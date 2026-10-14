@@ -686,12 +686,10 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     close_streams()
     if not backend then proc:close(true) end
     if exited and #materialized.writebacks > 0 then
-        local scope_absent = false
-        local scope_error = "write-back requires a proven-empty process group"
-        if backend then scope_absent, scope_error = backend.absent(request)
-        else scope_absent = true
-        end
-        if scope_absent then
+        local writeback_ready = true
+        local scope_error = "backend cleanup is incomplete"
+        if backend then writeback_ready, scope_error = backend.absent(request) end
+        if writeback_ready then
             for _, result in ipairs(materialization.write_back(materialized.home_path, materialized.writebacks, request.owner_id, attempt_id)) do
                 if result.ok then
                     evidence(db, attempt_id, "credential.write_back", "projection " .. result.projection_id .. (result.written and " refreshed token persisted" or " token unchanged"))

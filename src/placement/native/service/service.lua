@@ -1035,8 +1035,7 @@ function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Re
     if not row then return fail("STORAGE", "attempt is not recorded") end
     local proven, why = completion_observed(attempt)
     -- Materialization can acknowledge a stop before creating any child. Its
-    -- completion and this proof commit together in the existing evidence ledger.
-    -- Missing identity alone is never proof; contradictory identity refuses it.
+    -- completion and child.not_started record authorize cleanup together.
     if not proven and (attempt.start_cancelled or attempt.exit_source == "runner" or attempt.execution_state == "start_failed")
         and row.pid == nil and row.pgid == nil then
         local db, open_error = store.open()

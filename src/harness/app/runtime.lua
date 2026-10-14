@@ -19,6 +19,7 @@ local input_event = require("input_event")
 local admission = require("admission")
 local machine = require("machine")
 local picker = require("picker")
+local direct_launch = require("direct")
 local recovery = require("recovery")
 local hooks = require("hooks")
 local text = require("text")
@@ -633,7 +634,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         end
         admitted = supplied
     elseif direct then
-        local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1], launch.thread_id,
+        local choice, direct_error = direct_launch.run(launch.workspace_id, launch.arguments[1], launch.thread_id,
             {view_id = launch.view_id, instance_id = launch.instance_id}, phase, launch.arguments[2])
         if not choice then
             show_failure("Managed window admission: " .. tostring(direct_error))

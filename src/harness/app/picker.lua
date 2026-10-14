@@ -13,7 +13,6 @@ local caller = require("caller")
 local appearance = require("appearance")
 local input_event = require("input_event")
 local sessions = require("sessions")
-local admission = require("admission")
 local agents = require("agents")
 local directory_reader = require("directory")
 local view = require("view")
@@ -39,38 +38,9 @@ end
 type Loaded = {drivers: {profile_view.Driver}?, serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
 type Opened = {serial: integer, conversation: agents.Conversation?, error: string?}
 type Progress = {conversation: agents.Conversation, error: string?}
-local function fault(reply: admission.Reply?): string
-    local value = reply and reply.error
-    if not value then return "Agent launch was not admitted" end
-    return value.code .. ": " .. value.message
-end
-
-function M.direct(workspace_id: string, definition_ref: string, thread_id: string?,
-    origin_view: {view_id: string, instance_id: string}?, phase: ((string) -> ())?, brief: string?): (admission.Admitted?, string?)
-    if phase then phase("Checking installed driver") end
-    local plan, refused = admission.resolve(definition_ref, nil, workspace_id)
-    if not plan then return nil, fault(refused) end
-    if phase then phase("Preparing agent resources") end
-    local setup, setup_error = funcs.call("bee.harness.binding:setup", {
-        workspace_id = workspace_id, definition_ref = definition_ref,
-        expected_plan_digest = plan.plan_digest})
-    local prepared = bounds.object(setup)
-    if setup_error or not prepared or prepared.ok ~= true then
-        return nil, setup_error and tostring(setup_error) or
-            (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")
-    end
-    local request_id, request_error = uuid.v7()
-    if not request_id then return nil, "Agent request identity: " .. tostring(request_error) end
-    if phase then phase("Creating session and thread") end
-    local admitted, admission_error = admission.admit_request({request_id = request_id,
-        definition_ref = definition_ref, expected_plan_digest = plan.plan_digest,
-        workspace_id = workspace_id, thread_id = thread_id, brief = brief or "", mode = plan.mode, workdir = prepared.workdir, origin_view = origin_view})
-    if not admitted then return nil, fault(admission_error) end
-    return admitted, nil
-end
 
 function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channel<process.Event>,
-    closes: Channel<process.Message>): (admission.Admitted?, string?)
+    closes: Channel<process.Message>): (nil, string?)
     local states = assert(process.listen(appearance.TOPIC, {message = true}))
     local navigation = assert(process.listen("bee.app.navigate", {message = true}))
     local output = assert(tty.surface())
@@ -87,7 +57,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         loads:send(value.serial)
     end
     local ticker: time.Ticker? = time.ticker("1s")
-    local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?)
+    local function finish(admitted: nil, err: string?): (nil, string?)
         confirmation.cancel(review)
         running = false
         load_serial = load_serial + 1
@@ -672,20 +642,14 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         definition, profile = saved.definition_ref, {id = entry.ref, revision = revision}
                     end
                     if profile then
-                        local plan, plan_error = admission.resolve(definition, "window", launch.workspace_id, profile.id, profile.revision,
-                            nil, nil, nil, nil, options)
-                        local prepared: {[string]: unknown}? = nil
-                        local prepare_error: unknown = nil
-                        if plan then
-                            local raw, err = funcs.call("bee.harness.binding:setup", {workspace_id = launch.workspace_id,
-                                definition_ref = definition, expected_plan_digest = plan.plan_digest, saved_profile_id = profile.id,
-                                saved_profile_revision = profile.revision, workdir = options and options.workdir, overrides = options})
-                            prepared, prepare_error = bounds.object(raw), err
-                        end
-                        if not plan or prepare_error or not prepared or prepared.ok ~= true then
+                        local raw, prepare_error = funcs.call("bee.harness.app:prepare_profile", {
+                            definition_ref = definition, workspace_id = launch.workspace_id,
+                            profile_id = profile.id, profile_revision = profile.revision, overrides = options})
+                        local prepared = bounds.object(raw)
+                        if prepare_error or not prepared or prepared.ok ~= true then
                             if running and serial == open_serial then
                                 opens:send({serial = serial, error = tostring(prepare_error or (prepared and prepared.error)
-                                    or (plan_error and plan_error.error and plan_error.error.message) or "Folder approval is unavailable")})
+                                    or "Folder approval is unavailable")})
                             end
                             return
                         end

@@ -59,6 +59,7 @@ entries:
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
     picker: bee.harness.app:picker
+    direct: bee.harness.app:direct
     recovery: bee.harness.app:recovery
     hooks: bee.harness.carrier:hooks
     delivery: bee.harness.carrier:delivery
@@ -184,7 +185,6 @@ entries:
     session_view: bee.harness.app:session_view
     directory_view: bee.harness.app:directory_view
     sessions_protocol: bee.threads.sessions.types:protocol
-    admission: bee.harness.launch:admission
     view: bee.harness.app:picker_view
     text: bee.ui:text
     forms: bee.harness.app:profile_form
@@ -259,7 +259,7 @@ entries:
   - logger
   imports:
     waiting: bee.harness.app:waiting
-    presentation: bee.harness.service:presentation
+    presentation: bee.harness.service:viewer
     bounds: bee.values:bounds
     client: bee.app:client
     input_event: bee.harness.app:input
@@ -322,3 +322,20 @@ entries:
     windows: bee.harness.binding:windows
   security:
     policies: *app_policies
+
+- name: direct
+  kind: library.lua
+  source: file://direct.lua
+  modules: [funcs, uuid]
+  imports:
+    admission: bee.harness.launch:admission
+    bounds: bee.values:bounds
+- name: prepare_profile
+  kind: function.lua
+  source: file://prepare_profile.lua
+  method: handle
+  modules: [funcs]
+  imports:
+    admission: bee.harness.launch:admission
+    bounds: bee.values:bounds
+    profiles: bee.harness.profiles:protocol

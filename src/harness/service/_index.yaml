@@ -19,6 +19,7 @@ entries:
   - tty
   imports:
     bounds: bee.values:bounds
+    viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
@@ -42,6 +43,7 @@ entries:
   - tty
   imports:
     bounds: bee.values:bounds
+    viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
@@ -73,6 +75,7 @@ entries:
   - tty
   imports:
     bounds: bee.values:bounds
+    viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
@@ -119,6 +122,7 @@ entries:
   - tty
   imports:
     bounds: bee.values:bounds
+    viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
@@ -165,6 +169,7 @@ entries:
   - tty
   imports:
     bounds: bee.values:bounds
+    viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
@@ -211,6 +216,7 @@ entries:
   - tty
   imports:
     bounds: bee.values:bounds
+    viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
@@ -268,3 +274,10 @@ entries:
   variable: BEE_SESSION_IDLE_STOP
   default: 24h
   readonly: true
+
+- name: viewer
+  kind: library.lua
+  source: file://viewer.lua
+  modules: [process, channel, time, uuid, security, funcs]
+  imports:
+    bounds: bee.values:bounds

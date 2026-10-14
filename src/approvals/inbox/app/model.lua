@@ -29,7 +29,7 @@ type Prompt = {text: string, artifact_ref: nil} | {text: nil, artifact_ref: stri
 type OperationProposal = {grant_adapter: string?, kind: "operation", ref: string, revision: string, action_id: nil, input_digest: string?, payload: Object}
 type AttemptProposal = {grant_adapter: string?, kind: "attempt", ref: string, revision: string, action_id: string?, input_digest: string?, payload: Object}
 type Proposal = OperationProposal | AttemptProposal
-type ApprovalView = {contract: Object?, window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer?, reallow: boolean?, requesting_session: string?,
+type ApprovalView = {contract: Object?, effect: Object?, window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer?, reallow: boolean?, requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     lifecycle_records: Object?, requester_id: string, request_kind: RequestKind, policy: string, proposal: Proposal,
     proposal_digest: string, reviewed_digest: string?, prompt: Prompt, revision: integer, state: ApprovalState,
@@ -274,7 +274,11 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     if cap == nil or (view.reallow ~= nil and type(view.reallow) ~= "boolean")
         or (view.allowed_by_grant ~= nil and (not automatic or not grant or automatic ~= grant.grant_id)) then return nil, "approval window metadata is invalid" end
     local contract = bounds.object(view.contract)
-    local decoded_view: ApprovalView = {contract = contract and {presentation = bounds.member(contract.presentation, {"inbox", "inline", "dialog"})}, window_grant = grant, allowed_by_grant = automatic, window_max_ttl_ms = cap, reallow = view.reallow == true, requesting_session = requesting_session, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
+    local effect = bounds.object(view.effect)
+    if view.effect ~= nil and (not effect or not bounds.member(effect.state, {"waiting", "authorized", "reserved", "admitted", "started", "succeeded", "failed", "canceled", "uncertain"})) then
+        return nil, "approval effect state is invalid"
+    end
+    local decoded_view: ApprovalView = {effect = effect and {state = effect.state, receipt = bounds.object(effect.receipt)}, contract = contract and {presentation = bounds.member(contract.presentation, {"inbox", "inline", "dialog"})}, window_grant = grant, allowed_by_grant = automatic, window_max_ttl_ms = cap, reallow = view.reallow == true, requesting_session = requesting_session, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
         requester_id = requester_id, request_kind = request_kind_value, policy = policy, proposal = proposal, proposal_digest = proposal_digest, reviewed_digest = bounds.id(view.reviewed_digest),
         prompt = prompt, revision = revision, state = state, decision = approval_decision, decider_id = decider_id,
         expires_at = expires_at, created_at = created_at, response_schema = response_schema, thread_id = thread_id, binding = binding,
@@ -689,6 +693,10 @@ function M.assurance(view: ApprovalView): string?
     return M.text(assurance.gesture, 32) .. " · " .. M.text(assurance.presentation, 32)
 end
 function M.decision_line(view: ApprovalView): string
+    local effect = bounds.object(view.effect)
+    local label = view.proposal.ref == "bee.gov:establish-overlay" and "Installation" or "Action"
+    if effect and effect.state == "failed" then return label .. " failed" end
+    if effect and effect.state == "uncertain" then return label .. " outcome uncertain" end
     if view.state == "decided" and view.decision then
         local confirmed = view.proposal.ref == "bee.approvals:confirmation"
         return (view.decision == "approved" and (confirmed and "Confirmed" or "Approved") or "Denied") .. " by " .. M.decider(view.decider_id)

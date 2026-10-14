@@ -246,16 +246,21 @@ local function announce(value: unknown, db: sql.DB, requested: boolean)
     local count = counts and bounds.count(counts.count)
     if count == nil then logger:warn("Approval count not announced", {approval_id = approval_id}); return end
     local prompt = bounds.object(view.prompt)
+    local effect = bounds.object(view.effect)
+    local receipt = effect and bounds.object(effect.receipt)
+    local proposal = bounds.object(view.proposal)
+    local failed = proposal and proposal.ref == "bee.gov:establish-overlay" and effect and effect.state == "failed" and receipt and type(receipt.error) == "string"
     local target = counts and bounds.object(counts.target)
-    if target then
+    if target and not failed then
         approval_id = bounds.id(target.approval_id)
         prompt = type(target.prompt_json) == "string" and bounds.object(json.decode(target.prompt_json)) or nil
         if not approval_id or not prompt then logger:warn("Approval target not announced"); return end
     end
     local title = prompt and bounds.line(prompt.text, 160) or nil
     if not title and prompt and type(prompt.text) == "string" then title = prompt.text:gsub("%c", " "):sub(1, 160) end
-    local sent, send_error = events.send(M.ATTENTION, requested and "approval.requested" or "approval.changed", workspace_id,
-        {approval_id = approval_id, title = title or "Review request", count = count})
+    if failed then title = "Installation failed: " .. tostring(receipt and receipt.error):gsub("%c", " "):sub(1, 138) end
+    local sent, send_error = events.send(M.ATTENTION, failed and "approval.failed" or (requested and "approval.requested" or "approval.changed"), workspace_id,
+        {approval_id = approval_id, title = title or "Review request", count = count, failed = failed == true})
     if not sent then logger:warn("Approval not announced", {approval_id = approval_id, error = tostring(send_error)}) end
 end
 -- Every method authenticates the caller, opens the linked owner store and
@@ -286,7 +291,8 @@ local function run(request: unknown, name: string): Reply
 end
 function M.view(row: Row): ApprovalView
     return {request_digest = row.request_digest, lifecycle_records = row.lifecycle_records, contract_version = row.contract_version, contract = row.contract, reviewed_digest = row.reviewed_digest, effect_admission_ms = row.effect_admission_ms, effect = row.effect, window_grant = row.window_grant, allowed_by_grant = row.allowed_by_grant, window_max_ttl_ms = row.window_max_ttl_ms, reallow = row.reallow, approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,
-        requesting_session = row.requester_id:match("^bs:") and row.requester_id or nil,
+        requesting_session = row.requester_id:match("^bs:") and row.requester_id
+            or (row.requester_id == "bee.gov.activation" and bounds.id((bounds.object(row.contract.origin) or {}).session_id) or nil),
         requester_id = row.requester_id, request_kind = row.request_kind, policy = row.policy, proposal = row.proposal, proposal_digest = row.proposal_digest,
         prompt = row.prompt, response_schema = row.response_schema, thread_id = row.thread_id, binding = row.binding, revision = row.revision, state = row.state,
         decision = row.decision, decider_id = row.decider_id, decided_at = row.decided_at, response = row.response, validated_incarnation = row.validated_incarnation,
@@ -1230,8 +1236,18 @@ local function op_effect(tx: sql.Transaction, actor: string, object: Object, now
         if not ended and (row.consumer_id ~= actor or row.consumed_effect ~= object.effect_key) then return failure("CONFLICT", "effect was not admitted by this receiver", M.view(row)) end
         if state == "uncertain" and effect.state == "uncertain" and canonical.encode(effect.receipt, 8192) == encoded then return success(M.view(row), true) end
         local completion_error: string? = nil
-        if state == "uncertain" then completion_error = lifecycle.complete(tx, approval_id, state, encoded, stamp(now))
-        else completion_error = store.complete_effect(tx, approval_id, stamp(now), encoded, stamp(now), state) end
+        if state == "uncertain" then
+            completion_error = lifecycle.complete(tx, approval_id, state, encoded, stamp(now))
+            if not completion_error then completion_error = lifecycle.ack_effect(tx, approval_id, stamp(now)) end
+        else
+            completion_error = store.complete_effect(tx, approval_id, stamp(now), encoded, stamp(now), state)
+        end
+        if not completion_error then
+            completion_error = store.project_effect(tx, approval_id, row.workspace_id, row.revision, row.state,
+                row.decision, actor, state, stamp(now))
+            row.revision = row.revision + 1
+        end
+        if not completion_error and state ~= "uncertain" then completion_error = lifecycle.completed(tx, row, state, receipt, stamp(now)) end
         if completion_error then return storage(completion_error) end
     elseif object.operation == "start" or object.operation == "reconcile" then
         local current, refused = incarnation(tx, row.owner_node)
@@ -1428,7 +1444,7 @@ local function op_effect_queue(tx: sql.Transaction, actor: string, object: Objec
     local rows, err = tx:query([[SELECT r.* FROM bee_approval_requests r JOIN bee_approval_effects e ON e.approval_id = r.approval_id
         WHERE e.destination = ? AND r.state <> 'pending' AND r.effect_completed_at IS NULL
         AND (r.consumer_id IS NULL OR r.consumer_id = r.requester_id OR r.consumer_id = ?)
-        AND (? = 'all' OR (? = 'ready' AND e.state <> 'canceled') OR (? = 'ended' AND e.state = 'canceled'))
+        AND (? = 'all' OR (? = 'ready' AND e.state NOT IN ('canceled','uncertain')) OR (? = 'ended' AND e.state = 'canceled'))
         ORDER BY r.approval_id LIMIT ?]], {destination, actor, phase, phase, phase, limit})
     if not rows or err then return storage("read effect destination queue") end
     local effects: {Object} = {}

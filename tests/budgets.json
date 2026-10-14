@@ -15,7 +15,7 @@
   "bee.approvals:lease_flow_test": 1.011,
   "bee.approvals:migration_test": 0.93,
   "bee.approvals:runtime_lease_test": 0.938,
-  "bee.approvals:service_test": 3.898,
+  "bee.approvals:service_test": 6.146,
   "bee.approvals:trait_revocation_test": 0.998,
   "bee.approvals:window_test": 1.783,
   "bee.credentials:broker_test": 2.5620000000000003,

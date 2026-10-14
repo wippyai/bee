@@ -18,6 +18,7 @@ local hub_package = require("hub_package")
 local graph = require("graph")
 
 local M = {}
+local source_check = require("source_check")
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
 type RegistryChange = {entry: Entry, op: string}
@@ -160,7 +161,7 @@ local function closure(root: string, edges: {[string]: {[string]: boolean}}, mod
 end
 
 
-local function measured_entry(entry: Entry, package: string): (preflight.Entry?, string?)
+local function measured_entry(entry: Entry, package: string, installed: boolean?): (preflight.Entry?, string?)
     local clean: Entry = {}
     for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
     local id, kind = bounds.id(clean.id), bounds.id(clean.kind)
@@ -180,6 +181,7 @@ local function measured_entry(entry: Entry, package: string): (preflight.Entry?,
     if not grants then return nil, grants_error end
     local lifecycle = object(clean.lifecycle)
     return {id = id, kind = kind, package = package, digest = digest,
+        load_error = not installed and source_check.check(clean) or nil,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
         application_checkpoint_invalid = artifact.application_checkpoint_invalid(clean),
         application_unplaced = artifact.application_unplaced(clean),

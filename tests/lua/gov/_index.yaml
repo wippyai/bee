@@ -239,11 +239,13 @@ entries:
     type: test_support
   policy:
     actions:
+    - funcs.call
     - db.get
     - security.actor.create
     - security.scope.create
     - security.policy.get
     resources:
+    - bee.gov.binding:source_load
     - bee:db
     - security
     effect: allow
@@ -1499,6 +1501,10 @@ entries:
   method: run
   modules:
   - funcs
+  - events
+  - channel
+  - sql
+  - fs
   - security
   - registry
   - json
@@ -1511,6 +1517,7 @@ entries:
   security:
     policies:
     - bee.tests.gov:app_expiry_test_policy
+    - bee.tests.gov:bundle_files_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -1521,6 +1528,18 @@ entries:
     principals: bee.tests.principals:bound
     mcp: bee.gateway.api:mcp
     json_schema: bee.gateway.catalog:json_schema
+
+- name: bundle_files
+  kind: fs.directory
+  directory: /tmp
+  meta: {type: test_support}
+- name: bundle_files_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [fs.get]
+    resources: [bee.tests.gov:bundle_files]
+    effect: allow
 
 
 - name: starter_delivery_test

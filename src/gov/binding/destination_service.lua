@@ -638,9 +638,9 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     local owner_configuration: owner.Config = {plans = plan_store, activations = activation_store, resolver = resolved,
         approvals = executor, actor_id = ACTOR, consumer_id = ACTOR, leases = lease_handle,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
-        apply = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): ({[string]: unknown}?, string?)
+        apply = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): ({[string]: unknown}?, string?, boolean?)
             local generated, generated_error = generated_install(profile_value, intent)
-            if generated_error then return nil, generated_error end
+            if generated_error then return nil, generated_error, true end
             return materializer.reconcile_composed(overlay_owner, entries, admission, generated)
         end, matches = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): (boolean?, string?)
             local generated, generated_error = generated_install(profile_value, intent)
@@ -1266,6 +1266,7 @@ function M.call(raw: unknown): Result
             if not config or not chosen or not composed then
                 result = failure("BLOCKED", config_error or profile_error or compose_error or "activation configuration is unavailable")
             elseif operation == "prepare" then
+                composed.requesting_session = actor_id:match("^bs:") and actor_id or nil
                 if request.follow_source ~= nil and type(request.follow_source) ~= "boolean" then
                     close(plan_store, activation_store, lease_handle); return failure("INVALID", "follow_source is a destination-local consent flag")
                 end
@@ -1414,7 +1415,7 @@ function M.apply_approved(raw: unknown): Result
             end
         end
     end
-    local settled = result.ok and bounds.object(result.value) or nil
+    local settled = bounds.object(result.value)
     if settled and settled.phase == "settled" then
         local executor, executor_error = approval_executor()
         if not executor then result = failure("UNAVAILABLE", executor_error or "approval executor is unavailable")
@@ -1422,9 +1423,13 @@ function M.apply_approved(raw: unknown): Result
             local raw_complete, complete_error = executor:call("bee.approvals.binding:effect", {operation = "complete",
                 approval_id = approval_id, proposal_digest = effect.proposal_digest,
                 effect_key = settled.consumed_effect_key, result = {ok = settled.outcome == "applied", outcome = settled.outcome,
-                    intent_id = settled.intent_id}, state = settled.outcome == "uncertain" and "uncertain" or (settled.outcome == "applied" and "succeeded" or "failed")})
+                    intent_id = settled.intent_id, error = settled.outcome ~= "applied" and settled.diagnostics or nil},
+                state = settled.outcome == "uncertain" and "uncertain" or (settled.outcome == "applied" and "succeeded" or "failed")})
             local completed = bounds.object(raw_complete)
             if complete_error or not completed or completed.ok ~= true then result = failure("UNAVAILABLE", "complete activation effect receipt") end
+            if completed and completed.ok == true and completed.replayed ~= true and settled.outcome ~= "uncertain" then
+                follow_wake.signal()
+            end
         end
     end
     close(plan_store, activation_store, lease_handle)

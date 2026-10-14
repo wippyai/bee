@@ -17,6 +17,7 @@ local application_capabilities = require("application_capabilities")
 local workspace_applications = require("workspace_applications")
 
 local M = {}
+local source_check = require("source_check")
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
 type Captured = {revision: integer, entries: {Entry}, overlay_ids: {[string]: boolean}?,
@@ -74,6 +75,7 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
     if not grants then return nil, grants_error end
     local lifecycle = object(data.lifecycle)
     return {id = id, kind = kind, package = package, digest = digest,
+        load_error = not registry_default_metadata and source_check.check(clean) or nil,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
         application_checkpoint_invalid = artifact.application_checkpoint_invalid(clean),
         application_unplaced = artifact.application_unplaced(clean),

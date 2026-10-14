@@ -5,6 +5,13 @@ local render = require("render")
 local appearance = require("appearance")
 local function define_tests()
     test.describe("Request alerts", function()
+        test.it("shows an installation failure without inventing a pending decision", function()
+            local shown = render.draw(model.new(120, 40), {}, {}, nil, nil, "", "Workspace", appearance.defaults(),
+                {alert = {id = "inbox", count = 0, failed = true, title = "app.fixtures:status:5:19: syntax error", approval_id = "failed"}})
+            test.contains(shown.rows[1], "Install failed")
+            test.contains(table.concat(shown.rows, "\n"), "app.fixtures:status:5:19")
+            test.is_nil((table.concat(shown.rows):find("pending", 1, true)))
+        end)
         test.it("keeps the counted badge after the brief arrival highlight ends", function()
             local scene = model.new(120, 40)
             local alert = {id = "inbox", count = 2, title = "Review access to Hub?", approval_id = "pending"}

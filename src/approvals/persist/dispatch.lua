@@ -14,14 +14,14 @@ function M.notify_sessions(db: sql.DB): string?
     local rows, query_error = db:query([[SELECT e.event_id, e.destination, e.body_json, r.prompt_json, r.requester_id, r.workspace_id
         FROM bee_approval_events e JOIN bee_approval_requests r ON r.approval_id = e.approval_id
         WHERE e.acknowledged_at IS NULL AND e.destination LIKE 'requester:bs:%'
-        AND e.kind IN ('approval.decided','approval.denied','approval.expired','approval.withdrawn','approval.superseded','approval.invalidated')
+        AND e.kind IN ('approval.decided','approval.denied','approval.expired','approval.withdrawn','approval.superseded','approval.invalidated','effect.completed')
         ORDER BY e.seq LIMIT 64]])
     if not rows or query_error then return "read requesting-session events" end
     local failure: string? = nil
     for _, row in ipairs(rows) do
         local event = type(row.body_json) == "string" and bounds.object(json.decode(row.body_json)) or nil
         local destination, event_id = bounds.id(row.destination), bounds.id(row.event_id)
-        local session, workspace = bounds.id(row.requester_id), bounds.id(row.workspace_id)
+        local session, workspace = destination and bounds.id(destination:sub(#"requester:" + 1)), bounds.id(row.workspace_id)
         if not event or not event_id or not destination or not session or not workspace then return "invalid requesting-session event" end
         local actor = security.actor()
         if not actor then return "approval delivery identity is unavailable" end
@@ -33,6 +33,8 @@ function M.notify_sessions(db: sql.DB): string?
         local summary = prompt and type(prompt.text) == "string" and prompt.text or "Your request"
         local outcome = tostring(event.decision or event.state)
         local message = "Your request " .. tostring(event.approval_id) .. " was " .. outcome .. ": " .. summary
+        local result = bounds.object(event.result)
+        if result and type(result.error) == "string" then message = message .. "\nError: " .. result.error end
         if event.response ~= nil then message = message .. "\nAnswer: " .. tostring(json.encode(event.response)) end
         local key, key_error = hash.sha256(event_id)
         if not key then return tostring(key_error) end

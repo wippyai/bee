@@ -27,7 +27,7 @@ type Desktop = {id: string, title: string, workspace: string, shown: boolean}
 -- whose dialog is gone, problem on "catalog" and in a snapshot the reason the
 -- app list could not be refreshed and is out of date, and "attention" the id of an app that needs the
 -- person, which a display brings forward.
-type Alert = {id: string, count: integer, title: string, approval_id: string, app: string?, desktop: string?, workspace: string?}
+type Alert = {id: string, count: integer, title: string, approval_id: string, failed: boolean?, app: string?, desktop: string?, workspace: string?}
 type Event = {review: Review?, changed: boolean?, alert: Alert?, kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
     workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?, attention: boolean?, problem: string?}
 -- What a node reports to list and watch; owner is the PID of the node's
@@ -155,7 +155,7 @@ function M.alert(value: unknown): Alert?
         if field ~= nil and (type(field) ~= "string" or #field == 0 or #field > 256 or field:find("%c")) then return nil end
     end
     return {id = value.id, count = math.floor(value.count), title = value.title:gsub("%c", " "), approval_id = value.approval_id,
-        app = type(value.app) == "string" and value.app or nil,
+        failed = value.failed == true, app = type(value.app) == "string" and value.app or nil,
         desktop = type(value.desktop) == "string" and value.desktop or nil,
         workspace = type(value.workspace) == "string" and value.workspace or nil}
 end

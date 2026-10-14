@@ -158,7 +158,7 @@ local function define_tests()
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): (boolean?, string?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): ({[string]: unknown}?, string?)
+                    _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     applied = true
                     return {changed = true}, nil
                 end}

@@ -14,6 +14,7 @@ local artifact = require("artifact")
 local application_admission = require("application_admission")
 local lease_store = require("lease_store")
 local resolution = require("resolution")
+local source_check = require("source_check")
 
 local M = {}
 local LEASE_CONSUMER = "bee.gov.lease_apply"
@@ -21,7 +22,7 @@ type Object = {[string]: unknown}
 type Result = transaction.Result
 type Resolver = resolution.Resolver
 type Executor = approval.Executor
-type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?)
+type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?, boolean?)
 type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?)
 -- Migration effects receive the intent so the destination can stage what
 -- the intent's grants provision for the migrations: the application database
@@ -35,7 +36,7 @@ type MigrationEffects = {
 type Config = {plans: plans.Store, activations: activations.Store, resolver: Resolver,
     approvals: Executor, actor_id: string, consumer_id: string, overlay_owner: string,
     approval_policy: string, apply: Apply, matches: Observe, migrations: MigrationEffects,
-    leases: lease_store.Store?, measurement: measure.Preparation?}
+    leases: lease_store.Store?, measurement: measure.Preparation?, requesting_session: string?}
 
 local function failure(code: string, message: string, value: unknown?): Result
     return transaction.failure(code, message, value)
@@ -47,6 +48,14 @@ end
 
 local function key(prefix: string, operation: string): string?
     return bounds.id(prefix .. ":" .. operation)
+end
+
+local function failed_apply(config: Config, intent: Object, prefix: string, diagnostics: string): Result
+    local failed_key = key(prefix, "outcome-failed-" .. tostring(intent.revision))
+    if not failed_key then return failure("INVALID", "activation receipt key is too long") end
+    return activations.call(config.activations, config.actor_id, {operation = "record_outcome",
+        intent_id = intent.intent_id, expected_revision = intent.revision, idempotency_key = failed_key,
+        outcome = "failed", diagnostics = diagnostics})
 end
 
 local function configuration(raw: Config): (Config?, string?)
@@ -221,6 +230,7 @@ local function presentation(config: Config, intent: Object, plan: Object): appro
     local made = author and author ~= "" and ("made by " .. author) or nil
     local place = source and source ~= config.activations.node and ("from bee " .. source) or "this bee"
     shown.maker = made and (made .. " · " .. place) or place
+    shown.requesting_session = config.requesting_session
     return shown
 end
 
@@ -506,6 +516,13 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     if intent.phase == "applying" or (intent.phase == "settled" and intent.outcome == "uncertain") then
         local superseded = require_desired(config, intent)
         if superseded then return superseded end
+        local desired_entries, desired_admission, desired_error = desired_intent(config, intent)
+        if not desired_entries then return assert(desired_error) end
+        for _, raw in ipairs(desired_entries) do
+            local entry = object(raw)
+            local problem = entry and source_check.check(entry) or nil
+            if problem then return failed_apply(config, intent, prefix, problem) end
+        end
         local work, work_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
         if not work then return failure("INTERNAL", tostring(work_error or "decode activation migration work")) end
         if intent.migrations_completed ~= true then
@@ -556,8 +573,6 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
         end
         local spec, measurement_error = remeasure_progress(config, intent)
         if not spec then return measurement_error end
-        local desired_entries, desired_admission, desired_error = desired_intent(config, intent)
-        if not desired_entries then return assert(desired_error) end
         local function uncertain(diagnostics: string): Result
             local outcome_key = key(prefix, "outcome-uncertain-" .. tostring(intent.revision))
             if not outcome_key then return failure("INVALID", "activation receipt key is too long") end
@@ -570,8 +585,13 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
         local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
         if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
         if not matches then
-            local applied, apply_error = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
-            if not applied then return uncertain(tostring(apply_error)) end
+            local applied, apply_error, definite = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
+            if not applied then
+                if definite then
+                    return failed_apply(config, intent, prefix, tostring(apply_error))
+                end
+                return uncertain(tostring(apply_error))
+            end
             local observed, applied_observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
             if observed ~= true then
                 return uncertain(observed == nil and tostring(applied_observe_error)

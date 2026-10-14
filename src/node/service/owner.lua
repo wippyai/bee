@@ -1085,7 +1085,7 @@ local function main(saved: unknown)
 
     -- present opens app with arguments on every desktop a display shows that
     -- works in workspace_id and asks those displays to bring it forward.
-    local function present(workspace_id: string, app: string, arguments: {string}, pending: {count: integer, title: string, approval_id: string}?)
+    local function present(workspace_id: string, app: string, arguments: {string}, pending: {count: integer, title: string, approval_id: string, failed: boolean?}?)
         local seen: {[string]: boolean} = {}
         for _, desktop_id in pairs(watchers) do
             if desktop_id ~= "" and not seen[desktop_id] then
@@ -1097,7 +1097,7 @@ local function main(saved: unknown)
                     if opened.ok and value then
                         assert(type(value.id) == "string", "Presented app has no instance identity")
                         local alert: client.Alert? = pending and {id = value.id, count = pending.count, title = pending.title,
-                            approval_id = pending.approval_id, app = app, desktop = desktop_id, workspace = workspace_id}
+                            approval_id = pending.approval_id, failed = pending.failed, app = app, desktop = desktop_id, workspace = workspace_id}
                         for id, previous in pairs(alerts) do
                             if previous.desktop == desktop_id and previous.app == app and id ~= value.id then alerts[id] = nil end
                         end
@@ -1115,7 +1115,7 @@ local function main(saved: unknown)
         local data = event.data
         if type(event.path) ~= "string" or type(data) ~= "table" then return end
         local workspace_id: string = event.path
-        if event.kind == "approval.requested" then
+        if event.kind == "approval.requested" or event.kind == "approval.failed" then
             local inbox, inbox_error = role_app(APPROVALS_ROLE)
             if inbox_error then
                 logger:error("Approvals app not resolved", {error = inbox_error})
@@ -1126,13 +1126,14 @@ local function main(saved: unknown)
             elseif approval_id then
                 local count = type(data.count) == "number" and math.floor(data.count) or nil
                 local title = type(data.title) == "string" and data.title or "Review request"
-                present(workspace_id, inbox, {"--approval", approval_id}, count and {count = count, title = title, approval_id = approval_id} or nil)
+                present(workspace_id, inbox, {"--approval", approval_id}, count and {count = count, title = title, approval_id = approval_id, failed = data.failed == true} or nil)
             else present(workspace_id, inbox, {}) end
         elseif event.kind == "approval.changed" and type(data.count) == "number" then
             for id, alert in pairs(alerts) do
                 local instance = instances[id]
                 if alert.workspace == workspace_id or (instance and instance.workspace == workspace_id) then
                     alert.count = math.floor(data.count)
+                    alert.failed = false
                     if type(data.approval_id) == "string" then alert.approval_id = data.approval_id end
                     if type(data.title) == "string" then alert.title = data.title end
                     broadcast({kind = "attention", id = id, alert = alert, changed = true})

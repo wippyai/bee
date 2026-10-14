@@ -11,6 +11,7 @@ local capability_grants = require("capability_grants")
 local capability_files = require("capability_files")
 
 local M = {}
+local source_check = require("source_check")
 
 type Entry = {[string]: unknown}
 type Changes = {
@@ -25,6 +26,19 @@ type Snapshot = {
 }
 type Open = (string) -> (Snapshot?, unknown?)
 type Conflict = (unknown) -> boolean
+
+function M.definite_error(problem: unknown): boolean
+    if type(problem) == "userdata" or (type(problem) == "table" and type(problem.kind) == "function") then
+        local value = problem
+        if value:kind() == errors.INVALID or value:kind() == errors.PERMISSION_DENIED
+            or value:kind() == errors.NOT_FOUND then return true end
+    end
+    local message = tostring(problem)
+    return message:find("syntax error", 1, true) ~= nil
+        or message:find("operation failed for entry ", 1, true) ~= nil
+        or message:find("failed to add library node:", 1, true) ~= nil
+        or message:find("failed to add function node:", 1, true) ~= nil
+end
 
 local function encoded(value: unknown): (string?, string?)
     if type(value) ~= "table" then return nil, "registry entry is not an object" end
@@ -355,14 +369,18 @@ end
 -- The injectable form keeps generation behavior testable without granting a
 -- unit test registry authority. Production uses reconcile(), below.
 local function reconcile_wanted_with(open: Open, conflict: Conflict, owner_raw: unknown,
-    wanted: {Entry}, artifact_digest: string, portable_count: integer): ({[string]: unknown}?, string?)
+    wanted: {Entry}, artifact_digest: string, portable_count: integer): ({[string]: unknown}?, string?, boolean?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "governance overlay owner is invalid" end
+    for _, entry in ipairs(wanted) do
+        local problem = source_check.check(entry)
+        if problem then return nil, problem, true end
+    end
     local raw_snapshot, open_error = open(owner)
     if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
     local snapshot = raw_snapshot
     local changes, changed, stage_error = stage(snapshot, wanted)
-    if not changes or changed == nil then return nil, stage_error end
+    if not changes or changed == nil then return nil, stage_error, true end
     if not changed then
         return {owner = owner, artifact_digest = artifact_digest, entries = portable_count,
             overlay_entries = #wanted,
@@ -374,8 +392,8 @@ local function reconcile_wanted_with(open: Open, conflict: Conflict, owner_raw: 
             overlay_entries = #wanted,
             changed = true, attempts = 1}, nil
     end
-    if conflict(apply_error) then return nil, "governance overlay changed during apply; preflight again" end
-    return nil, tostring(apply_error or "apply governance overlay")
+    if conflict(apply_error) then return nil, "governance overlay changed during apply; preflight again", true end
+    return nil, tostring(apply_error or "apply governance overlay"), M.definite_error(apply_error)
 end
 
 local function matches_wanted_with(open: Open, owner_raw: unknown, wanted: {Entry}): (boolean?, string?)
@@ -386,7 +404,7 @@ local function matches_wanted_with(open: Open, owner_raw: unknown, wanted: {Entr
     return matches_snapshot(raw_snapshot, wanted)
 end
 
-function M.reconcile_with(open: Open, conflict: Conflict, owner_raw: unknown, entries_raw: unknown): ({[string]: unknown}?, string?)
+function M.reconcile_with(open: Open, conflict: Conflict, owner_raw: unknown, entries_raw: unknown): ({[string]: unknown}?, string?, boolean?)
     local wanted, artifact_digest, artifact_error = desired(entries_raw)
     if not wanted or not artifact_digest then return nil, artifact_error end
     return reconcile_wanted_with(open, conflict, owner_raw, wanted, artifact_digest, #wanted)
@@ -399,9 +417,9 @@ function M.matches_with(open: Open, owner_raw: unknown, entries_raw: unknown): (
 end
 
 function M.reconcile_composed_with(open: Open, conflict: Conflict, owner_raw: unknown,
-    entries_raw: unknown, admission_raw: unknown, generated_raw: unknown?): ({[string]: unknown}?, string?)
+    entries_raw: unknown, admission_raw: unknown, generated_raw: unknown?): ({[string]: unknown}?, string?, boolean?)
     local portable, complete, artifact_digest, compose_error = composed(entries_raw, admission_raw, generated_raw)
-    if not portable or not complete or not artifact_digest then return nil, compose_error end
+    if not portable or not complete or not artifact_digest then return nil, compose_error, true end
     return reconcile_wanted_with(open, conflict, owner_raw, complete, artifact_digest, #portable)
 end
 
@@ -428,7 +446,7 @@ local function provided(provisioned_raw: unknown): ({Entry}?, string?)
     return entries, nil
 end
 
-function M.provide_with(open: Open, conflict: Conflict, owner_raw: unknown, provisioned_raw: unknown): ({[string]: unknown}?, string?)
+function M.provide_with(open: Open, conflict: Conflict, owner_raw: unknown, provisioned_raw: unknown): ({[string]: unknown}?, string?, boolean?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "governance overlay owner is invalid" end
     local entries, provided_error = provided(provisioned_raw)
@@ -481,7 +499,7 @@ local function data_entries(open: Open, owner: string): ({Entry}?, string?)
     return kept, nil
 end
 
-function M.retain_data_with(open: Open, conflict: Conflict, owner_raw: unknown): ({[string]: unknown}?, string?)
+function M.retain_data_with(open: Open, conflict: Conflict, owner_raw: unknown): ({[string]: unknown}?, string?, boolean?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "governance overlay owner is invalid" end
     local kept, kept_error = data_entries(open, owner)
@@ -532,7 +550,7 @@ local function conflict(err: unknown): boolean
     return value:kind() == errors.CONFLICT
 end
 
-function M.reconcile(owner: unknown, entries: unknown): ({[string]: unknown}?, string?)
+function M.reconcile(owner: unknown, entries: unknown): ({[string]: unknown}?, string?, boolean?)
     return M.reconcile_with(open, conflict, owner, entries)
 end
 
@@ -542,7 +560,7 @@ function M.matches(owner: unknown, entries: unknown): (boolean?, string?)
 end
 
 function M.reconcile_composed(owner: unknown, entries: unknown,
-    admission_raw: unknown, generated_raw: unknown?): ({[string]: unknown}?, string?)
+    admission_raw: unknown, generated_raw: unknown?): ({[string]: unknown}?, string?, boolean?)
     return M.reconcile_composed_with(open, conflict, owner, entries, admission_raw, generated_raw)
 end
 
@@ -551,7 +569,7 @@ function M.matches_composed(owner: unknown, entries: unknown,
     return M.matches_composed_with(open, owner, entries, admission_raw, generated_raw)
 end
 
-function M.provide(owner: unknown, provisioned: unknown): ({[string]: unknown}?, string?)
+function M.provide(owner: unknown, provisioned: unknown): ({[string]: unknown}?, string?, boolean?)
     return M.provide_with(open, conflict, owner, provisioned)
 end
 
@@ -559,7 +577,7 @@ function M.provides(owner: unknown, provisioned: unknown): (boolean?, string?)
     return M.provided_with(open, owner, provisioned)
 end
 
-function M.retain_data(owner: unknown): ({[string]: unknown}?, string?)
+function M.retain_data(owner: unknown): ({[string]: unknown}?, string?, boolean?)
     return M.retain_data_with(open, conflict, owner)
 end
 

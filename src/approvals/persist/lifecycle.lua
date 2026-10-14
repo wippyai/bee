@@ -132,6 +132,11 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
     local body, body_error = canonical.encode(event, 16384)
     if not body then return body_error end
     local destinations: {string} = {"requester:" .. tostring(row.requester_id)}
+    local origin = bounds.object(contract.origin)
+    local session = origin and bounds.id(origin.session_id)
+    if row.requester_id == "bee.gov.activation" and session and session:match("^bs:") then
+        destinations[#destinations + 1] = "requester:" .. session
+    end
     if state ~= "pending" and type(effect.destination) == "string" then destinations[#destinations + 1] = effect.destination end
     for _, destination in ipairs(destinations) do
         local event_id = approval_id .. ":" .. tostring(revision) .. ":" .. destination
@@ -237,6 +242,25 @@ function M.consume(tx: sql.Transaction, approval_id: string, actor: string, effe
 end
 function M.complete(tx: sql.Transaction, approval_id: string, state: string, result_json: string, at: string): string?
     return execute(tx, "UPDATE bee_approval_effects SET state = ?, receipt_json = ?, revision = revision + 1, updated_at = ? WHERE approval_id = ?", {state, result_json, at, approval_id})
+end
+function M.completed(tx: sql.Transaction, row: Object, state: string, result: Object, at: string): string?
+    local approval_id = assert(bounds.id(row.approval_id))
+    local contract = bounds.object(row.contract)
+    local origin = contract and bounds.object(contract.origin)
+    local session = origin and bounds.id(origin.session_id)
+    local destinations: {string} = {"requester:" .. tostring(row.requester_id)}
+    if row.requester_id == "bee.gov.activation" and session and session:match("^bs:") then
+        destinations[#destinations + 1] = "requester:" .. session
+    end
+    local body, problem = canonical.encode({approval_id = approval_id, state = state, result = result,
+        workspace_id = row.workspace_id, revision = row.revision}, 16384)
+    if not body then return problem end
+    for _, destination in ipairs(destinations) do
+        local err = execute(tx, "INSERT INTO bee_approval_events(event_id, approval_id, revision, kind, destination, body_json, created_at) VALUES (?, ?, ?, 'effect.completed', ?, ?, ?)",
+            {approval_id .. ":completed:" .. destination, approval_id, row.revision, destination, body, at})
+        if err then return err end
+    end
+    return nil
 end
 function M.ack_effect(tx: sql.Transaction, approval_id: string, at: string): string?
     return execute(tx, "UPDATE bee_approval_events SET acknowledged_at = COALESCE(acknowledged_at, ?) WHERE approval_id = ? AND destination IN (SELECT destination FROM bee_approval_effects WHERE approval_id = ?)", {at, approval_id, approval_id})

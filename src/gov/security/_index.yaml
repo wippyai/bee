@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.gov.security
 entries:
+- name: source_compile_policy
+  kind: security.policy
+  policy:
+    actions: [eval.compile]
+    resources: '*'
+    effect: allow
 - name: destination_facade_policy
   kind: security.policy.expr
   meta:

@@ -78,6 +78,12 @@ local function is_conflict(err: unknown): boolean
 end
 
 local function define_tests()
+    test.describe("Apply failure disposition", function()
+        test.it("distinguishes a registry loader refusal from a lost reply", function()
+            test.is_true(materializer.definite_error("failed to apply changes: operation failed for entry volume: failed to create filesystem: no such file or directory"))
+            test.is_false(materializer.definite_error("overlay reply was lost"))
+        end)
+    end)
     test.describe("Governance overlay materializer", function()
         test.it("installs exposure policy defaults without attaching the host policy to app functions", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
@@ -350,7 +356,7 @@ local function define_tests()
         test.it("measures and reconciles an overlay entry near the 256 KiB artifact limit", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local desired = {{id = "app:large", kind = "function.lua",
-                data = {source = string.rep("x", artifact.MAX_BYTES - 2048)}}}
+                data = {source = "return '" .. string.rep("x", artifact.MAX_BYTES - 2048) .. "'"}}}
             local result, err = materializer.reconcile_with(api(state), is_conflict, "bee.gov:overlay", desired)
             if not result then error(tostring(err)) end
             test.is_true(result.changed == true)

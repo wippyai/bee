@@ -1059,10 +1059,62 @@ local function define_tests()
                 if assert(bounds.object(raw)).approval_id == created.approval_id then found = true end
             end
             test.eq(found, true)
+            local ready = executed(service.execute(db, OUTBOX, "effect_queue", {destination = "fixture.effect", phase = "ready"}, 1004, nil))
+            for _, raw in ipairs(assert(bounds.array(ready.effects, 64))) do
+                test.is_true(assert(bounds.object(raw)).approval_id ~= created.approval_id)
+            end
+            local wakes = assert(db:query("SELECT event_id FROM bee_approval_events WHERE approval_id = ? AND destination = 'fixture.effect' AND acknowledged_at IS NULL", {created.approval_id}))
+            test.eq(#wakes, 0)
             receipt.state, receipt.result = "succeeded", {ok = true}
             executed(service.execute(db, REQUESTER, "effect", receipt, 1005, nil))
             test.eq(service.execute(db, REQUESTER, "effect", receipt, 1006, nil).replayed, true)
             db:release()
+        end)
+        test.it("records the failed effect and its error for the originating agent session once", function()
+            local db = open_test_store()
+            local created = executed(service.execute(db, "bee.gov.activation", "request", request_of("ws-result-" .. key(),
+                {proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "1", payload = {}},
+                    origin = {session_id = "bs:requesting-agent"},
+                    continuation = {destination = "gov.activation", effect_id = "result-" .. key(), context = {}}}), 1000, nil))
+            executed(service.execute(db, ALICE, "decide", {approval_id = created.approval_id, expected_revision = 1,
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "allow_once"}, 1001, nil))
+            local effect_id = assert(bounds.object(created.effect)).effect_id
+            executed(service.execute(db, "bee.gov.activation", "effect", {operation = "claim", approval_id = created.approval_id,
+                proposal_digest = created.proposal_digest, effect_key = effect_id, owner_incarnation = created.owner_incarnation}, 1002, nil))
+            local receipt = {operation = "complete", approval_id = created.approval_id, proposal_digest = created.proposal_digest,
+                effect_key = effect_id, state = "failed", result = {ok = false, error = "app.fixtures:status:5:19: syntax error"}}
+            local completed = executed(service.execute(db, "bee.gov.activation", "effect", receipt, 1003, nil))
+            test.eq(completed.revision, 3)
+            local changes = assert(db:query("SELECT revision FROM bee_approval_inbox WHERE approval_id = ? ORDER BY seq DESC LIMIT 1", {created.approval_id}))
+            test.eq(changes[1].revision, completed.revision)
+            test.eq(service.execute(db, "bee.gov.activation", "effect", receipt, 1004, nil).replayed, true)
+            local notifications = assert(db:query("SELECT body_json FROM bee_approval_events WHERE approval_id = ? AND destination = 'requester:bs:requesting-agent' AND kind = 'effect.completed'", {created.approval_id}))
+            test.eq(#notifications, 1)
+            test.contains(tostring(notifications[1].body_json), "app.fixtures:status:5:19")
+            db:release()
+        end)
+        test.it("announces a failed installation receipt through the shell attention path", function()
+            local workspace = "ws-failed-attention-" .. key()
+            local created = value(call(requester, "request", request_of(workspace,
+                {proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "1", payload = {}},
+                    continuation = {destination = "gov.activation", effect_id = "failed-attention-" .. key(), context = {}}})))
+            value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = 1,
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "allow_once"}))
+            local effect_id = assert(bounds.object(created.effect)).effect_id
+            value(call(requester, "effect", {operation = "claim", approval_id = created.approval_id,
+                proposal_digest = created.proposal_digest, effect_key = effect_id, owner_incarnation = created.owner_incarnation}))
+            local subscription = assert(events.subscribe(service.ATTENTION, "approval.failed"))
+            value(call(requester, "effect", {operation = "complete", approval_id = created.approval_id,
+                proposal_digest = created.proposal_digest, effect_key = effect_id, state = "failed",
+                result = {ok = false, error = "app.fixtures:status:5:19: syntax error"}}))
+            local selected = channel.select({subscription:channel():case_receive(), time.after("1s"):case_receive()})
+            subscription:close()
+            test.eq(selected.channel, subscription:channel())
+            local body = assert(bounds.object(selected.value.data))
+            test.eq(body.approval_id, created.approval_id)
+            test.eq(body.count, 0)
+            test.eq(body.failed, true)
+            test.contains(tostring(body.title), "app.fixtures:status:5:19")
         end)
         test.it("withdraws a transport origin and fences late requests without touching another transport", function()
             local db = open_test_store()

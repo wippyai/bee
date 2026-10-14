@@ -104,6 +104,16 @@ function M.complete_effect(tx: sql.Transaction, approval_id: string, completed_a
         {completed_at, result_json, updated_at, approval_id}, "complete approval effect")
 end
 
+function M.project_effect(tx: sql.Transaction, approval_id: string, workspace: string, revision: integer,
+    state: string, decision: string?, actor: string, outcome: string, at: string): string?
+    local problem = execute(tx, "UPDATE bee_approval_requests SET revision = ?, updated_at = ? WHERE approval_id = ? AND revision = ?",
+        {revision + 1, at, approval_id, revision}, "advance effect projection")
+    if problem then return problem end
+    problem = M.insert_history(tx, approval_id, revision + 1, state, decision, actor, "effect " .. outcome, at)
+    if problem then return problem end
+    return M.insert_inbox(tx, workspace, approval_id, revision + 1, at)
+end
+
 function M.oldest_inbox(tx: sql.Transaction, workspace_id: string): (unknown?, string?)
     local found, err = query(tx, "SELECT MIN(seq) AS seq FROM bee_approval_inbox WHERE workspace_id = ?", {workspace_id})
     if err then return nil, err end

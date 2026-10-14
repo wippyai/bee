@@ -1,6 +1,22 @@
 version: '1.0'
 namespace: bee.gov.binding
 entries:
+- name: source_check
+  kind: library.lua
+  source: file://source_check.lua
+  modules: [funcs]
+  imports:
+    bounds: bee.values:bounds
+- name: source_load
+  kind: function.lua
+  source: file://source_load.lua
+  method: check
+  modules: [eval_runner]
+  imports:
+    bounds: bee.values:bounds
+  security:
+    policies: [bee.gov.security:source_compile_policy]
+  meta: {type: internal}
 - name: delivery_call
   kind: function.lua
   source: file://delivery_method.lua
@@ -262,6 +278,7 @@ entries:
   modules:
   - json
   imports:
+    source_check: bee.gov.binding:source_check
     resolution: bee.gov.types:resolver
     bounds: bee.values:bounds
     transaction: bee.persist:transaction
@@ -545,6 +562,7 @@ entries:
   - registry
   - hash
   imports:
+    source_check: bee.gov.binding:source_check
     artifact: bee.gov.types:artifact
     application_admission: bee.gov.types:governed_application_admission
     capability_grants: bee.gov.types:capability_grants
@@ -570,6 +588,7 @@ entries:
   - registry
   - hash
   imports:
+    source_check: bee.gov.binding:source_check
     hub_package: bee.gov.binding:hub_package
     graph: bee.hub.package:graph
     application_capabilities: bee.gov.binding:application_capabilities
@@ -590,6 +609,7 @@ entries:
   - registry
   - hash
   imports:
+    source_check: bee.gov.binding:source_check
     workspace_applications: bee.gov.types:workspace_applications
     application_capabilities: bee.gov.binding:application_capabilities
     requirement: bee.gov.binding:requirement

@@ -100,13 +100,13 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
         canvas:put(1, 1, strip.text, width)
     end
     local alert = overlays.alert
-    if alert and alert.count > 0 and overlays.alert_popup ~= false and width >= 24 and height >= 8 then
+    if alert and (alert.count > 0 or alert.failed) and overlays.alert_popup ~= false and width >= 24 and height >= 8 then
         local card_width = math.floor(math.min(54, width - 2))
         local rect: frame.Rect = {x = width - card_width, y = 3, width = card_width, height = 5}
         for y = rect.y, rect.y + rect.height - 1 do
             canvas:put(rect.x, y, styled(FRAME, string.rep(" ", rect.width)), rect.width)
         end
-        local inner = frame.panel(painter, rect, "Needs you", tostring(alert.count) .. " pending")
+        local inner = frame.panel(painter, rect, alert.failed and "Installation failed" or "Needs you", alert.failed and "" or (tostring(alert.count) .. " pending"))
         frame.put(painter, inner.x, inner.y, alert.title, inner.width, theme.text)
         frame.put(painter, inner.x, inner.y + 2, "F4 Open request", inner.width, theme.accent)
         hits[#hits + 1] = {id = alert.id, x = rect.x, y = rect.y, width = rect.width, height = rect.height, action = "attention"}

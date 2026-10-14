@@ -11,7 +11,7 @@ local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
     config_empty: {string}?, security_actor: boolean?, security_groups: boolean?, application_checkpoint_invalid: boolean?,
-    application_unplaced: boolean?}
+    application_unplaced: boolean?, load_error: string?}
 -- Retained state needs identity and edges for collision, removal and kernel
 -- checks. Only definitions used as content evidence carry a digest.
 type StateEntry = {id: string, kind: string, package: string, references: {string}, digest: string?}
@@ -246,7 +246,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
         references = true, auto_start = true, grants = true, modules = true,
         config_objects = true, config_lists = true, config_empty = true,
         security_actor = true, security_groups = true, application_checkpoint_invalid = true,
-        application_unplaced = true}
+        application_unplaced = true, load_error = true}
     local result: {Entry} = {}
     for index = 1, count do
         local row = (raw)[index]
@@ -274,7 +274,8 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
             or (item.security_actor ~= nil and type(item.security_actor) ~= "boolean")
             or (item.security_groups ~= nil and type(item.security_groups) ~= "boolean")
             or (item.application_checkpoint_invalid ~= nil and type(item.application_checkpoint_invalid) ~= "boolean")
-            or (item.application_unplaced ~= nil and type(item.application_unplaced) ~= "boolean") then
+            or (item.application_unplaced ~= nil and type(item.application_unplaced) ~= "boolean")
+            or (item.load_error ~= nil and (type(item.load_error) ~= "string" or #item.load_error > 2048)) then
             return nil, "candidate entry is malformed"
         end
         local entry: Entry = {id = item.id, kind = item.kind, package = item.package,
@@ -282,6 +283,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
             grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
             config_empty = config_empty}
         local measured = entry
+        if item.load_error ~= nil then measured.load_error = item.load_error end
         if item.security_actor ~= nil then measured.security_actor = item.security_actor end
         if item.security_groups ~= nil then measured.security_groups = item.security_groups end
         if item.application_checkpoint_invalid ~= nil then measured.application_checkpoint_invalid = item.application_checkpoint_invalid end
@@ -540,6 +542,9 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if not artifacts[item.package] then issue("UNKNOWN_OWNER", item.id, "entry is not owned by the measured package closure", "repair the ownership manifest") end
         if not context.kinds[item.kind] then issue("KIND_DENIED", item.id, "entry kind is outside host policy", "use the starter app entry kinds; remove this entry or ask the person for host policy review") end
         local selectors = item
+        if item.load_error then
+            issue("LUA_LOAD_FAILED", item.id, item.load_error, "fix the Lua source at the reported location and freeze a new version")
+        end
         if item.application_checkpoint_invalid == true then
             issue("APPLICATION_CHECKPOINT", item.id, "application checkpoint metadata cannot be opened by the desktop",
                 "use restart_policy never for an app without checkpoints; automatic or manual requires a nonempty resume_schema of at most 80 characters without control characters")

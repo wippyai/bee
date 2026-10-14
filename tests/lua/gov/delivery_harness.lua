@@ -18,11 +18,11 @@ local M = {}
 type Object = {[string]: unknown}
 
 -- Each suite uses a separate folder beneath the fixture home.
-function M.isolated(label: string): string
-    local path = assert(env.get("bee.env:machine_home")) .. "/" .. label .. "-" .. assert(uuid.v7())
+function M.isolated(label: string, base: string?): (string, string)
+    local path = (base or assert(env.get("bee.env:machine_home"))) .. "/" .. label .. "-" .. assert(uuid.v7())
     local added, err = client.call(assert(system.node.id()), "workspace_add", {path = path, label = label})
     if not added then error("workspace_add: " .. tostring(err)) end
-    return tostring(added.workspace)
+    return tostring(added.workspace), path
 end
 
 -- The node presents Needs you for an installation waiting for the person and

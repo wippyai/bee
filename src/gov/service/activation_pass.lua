@@ -36,7 +36,7 @@ local function carry(items: {unknown}, kind: "approved" | "ended", outcomes: {Ou
                 local intent = bounds.object(result.value)
                 outcomes[#outcomes + 1] = {approval_id = approval_id, kind = kind, ok = result.ok == true,
                     phase = intent and intent.phase, outcome = intent and intent.outcome,
-                    code = result.code, message = result.message}
+                    code = result.code, message = result.message or (intent and intent.diagnostics)}
             end
         end
     end
@@ -51,11 +51,17 @@ function M.pending(): boolean
 end
 
 -- run carries both queues once; nil with the cause when a queue is unreadable.
-function M.run(): ({Outcome}?, string?)
+function M.run(reconcile: boolean?): ({Outcome}?, string?)
     local outcomes: {Outcome} = {}
-    local approved, approved_error = queue("ready")
+    local approved, approved_error = queue(reconcile == false and "ready" or "all")
     if not approved then return nil, "approved activations are unreadable: " .. tostring(approved_error) end
-    carry(approved, "approved", outcomes)
+    local ready: {unknown} = {}
+    for _, item in ipairs(approved) do
+        local request = bounds.object(item)
+        local effect = request and bounds.object(request.effect) or nil
+        if not effect or effect.state ~= "canceled" then ready[#ready + 1] = item end
+    end
+    carry(ready, "approved", outcomes)
     local ended, ended_error = queue("ended")
     if not ended then return nil, "ended activations are unreadable: " .. tostring(ended_error) end
     carry(ended, "ended", outcomes)

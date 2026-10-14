@@ -19,7 +19,7 @@ type Fault = {code: string, message: string, value: Object?}
 type Migration = {id: string, target_db: string}
 -- How the person knows what they install: the application's own title, who
 -- made it and where it came from, and the names its tools go by for agents.
-type Presentation = {title: string?, maker: string?, tools: {[string]: string}?}
+type Presentation = {title: string?, maker: string?, tools: {[string]: string}?, requesting_session: string?}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -218,6 +218,7 @@ function M.request_activation(executor: Executor, value: unknown, policy_raw: un
     local raw, call_error = executor:call(REQUEST, {workspace_id = item.workspace_id,
         idempotency_key = key, request_kind = "permission", policy = policy, proposal = proposal,
         contract_version = 2, continuation = {destination = "gov.activation", effect_id = item.effect_key, context = {}},
+        origin = presentation and presentation.requesting_session and {session_id = presentation.requesting_session} or nil,
         prompt = {text = activation_prompt(item, built.changes, built.migrations, presentation)}})
     local approved, approved_error = reply(raw, call_error)
     if not approved then return nil, approved_error end

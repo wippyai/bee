@@ -167,6 +167,8 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
                 or (item.proposal.ref == "bee.gateway:access" and "Other requests still need your approval. You can remove access at any time."
                 or "Approval lets this action proceed. Its changes may remain after access ends.")
         end
+        local result = type(item.effect_result) == "table" and item.effect_result or (item.effect and item.effect.receipt)
+        if type(result) == "table" and type(result.error) == "string" then source[#source + 1] = model.decision_line(item) .. ": " .. model.text(result.error, 2048) end
         for _, line in ipairs(source) do
             for _, wrapped in ipairs(prompt_lines(line, width, "")) do
                 if tty.text.width(wrapped) > width - 2 then readable = false end

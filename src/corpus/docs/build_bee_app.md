@@ -15,7 +15,8 @@ private to your workspace until you request delivery and the person approves.
    components instead.
 2. **Write tests.** Keep behaviour in a library and test it through the starter's
    `function.lua` test. Include the test in the same complete `entries.json`.
-   Bee's tests tool runs installed apps: author tests now, run them after approval.
+   Bee's tests tool runs installed apps: author tests before delivery and run
+   them after approval.
 3. **Freeze and preflight.** Call `overlay` with `operation: create`,
    `overlay_id`, `expected_revision: 0` and a stable `idempotency_key`. Put the
    complete JSON array at `entries.json` with `operation: put` and the returned

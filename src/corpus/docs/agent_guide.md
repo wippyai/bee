@@ -61,14 +61,12 @@ unknown result and must not cause a blind retry.
 ```sh
 make tools        # install the pinned builder and build the matching wippy toolchain
 make lint         # corpus check, then lint of src and of the tests workspace
-make test         # run every Lua suite in tests/ against the composed source
-make test TESTS=bee.docs:corpus_test    # run selected test entries by id
+make check        # lint, Python runner tests, boot checks and every Lua suite
+make test TESTS=corpus_test  # run selected test entries by id
 make build        # pack the application and build dist/bee
 make install      # install dist/bee as ~/.local/bin/bee, keeping the previous as bee.prev
 ```
 
-`make e2e` drives two hive nodes and a display through the built binary and
-`make footprint` checks a headless node's resident memory and live heap.
 `make runtime-pin RUNTIME_VERSION=<commit>` and
 `make native-pin NATIVE_VERSION=<commit>` move the release build's pins in
 `wippy.build.json`. `RUNTIME_SOURCE=<path>` builds against a local runtime
@@ -79,10 +77,16 @@ Suites are `function.lua` entries with `meta: {type: test, suite: bee}` in
 `src` with test-only seams (`tests/compose.py`), starts from fresh run state
 and runs under a clean environment: fixture executables from
 `tests/fixtures/harness/bin` stand in for the agent CLIs, and the suites never
-reach the person's home, PATH or provider credentials. Heavy gates (`e2e`,
-`footprint`, binary builds) run on release tags; pushes and pull requests run
-lint and the Lua suites. Documentation changes run `make lint`, which checks
-the corpus manifest; regenerate its byte counts and digests with
+reach the person's home, PATH or provider credentials. `make check` runs lint,
+fixture lint, Python runner tests, boot checks and the Lua suites. Linux CI runs
+lint and release-build contract checks, boot checks and eight Lua shards for
+pushes to main, pull requests and manual dispatches. Releases require CI on the
+same commit and compile and verify Linux and macOS targets. Install the Python
+dependencies from `tests/requirements.txt` before using the build scripts;
+`python3 -m unittest discover -s build -p '*_test.py'` and the same command with
+`-s tests` run the Python unit tests directly. Documentation changes run
+`make lint`, which checks the corpus manifest; regenerate its byte counts and
+digests with
 `python3 tools/corpus.py`.
 
 Keep binaries, registry stores, credentials, fixture data and temporary

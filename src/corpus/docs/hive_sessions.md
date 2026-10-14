@@ -29,7 +29,7 @@ rechecks its live allowance and exact exposed operation at dispatch.
 
 ## Agent tools
 
-Existing names stay the same. Omit `node` for local sessions, or choose a peer:
+Omit `node` for local sessions, or choose a peer:
 
 ```json
 {"node":"bee-peer"}
@@ -76,7 +76,7 @@ its authenticated bee. Each source agent has a separate destination operation
 identity. Arbitrary installed applications continue to use their own bounded
 `hive.call` capability and exact exposure grants, as in `docs/hive_test_sdk`.
 
-## Durable replies and proof
+## Durable replies
 
 Threads commits a peer request and its WorkRef together. Its canonical inbox
 records keep the source node/thread/action, request record and correlated
@@ -85,10 +85,3 @@ mutation key returns the same work. Await reads the original bee's durable
 work result through Hive. Its `pending`, `blocked`, `uncertain` and `ready`
 branches keep their existing meaning. A transport timeout is outcome unknown
 for a mutation, and permits only identical-key recovery.
-
-`tests/e2e/hive.sh` retains the existing two-node SDK and display proof and
-adds a Sessions proof. A fixture agent on alpha first receives denial when it
-lists beta. After beta grants message consent, alpha lists beta's agent, sends
-work, replays its receipt, and awaits the deterministic fixture driver's
-reply. The nodes use an isolated fixture home and explicit fixture paths;
-the proof uses no real model.

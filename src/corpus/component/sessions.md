@@ -125,4 +125,4 @@ receiving bee may still commit the mutation. Hive bounds a remote dispatch to
 failure and be observed again on the same bee.
 
 Read `docs/hive_sessions` and the overlay guide section `hive_sessions` for the
-application facade, MCP examples and the two-node proof.
+application facade and MCP examples.

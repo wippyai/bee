@@ -54,8 +54,14 @@ Linux and macOS, amd64 and arm64:
 curl -fsSL https://bee.wippy.ai/install.sh | sh
 ```
 
-The installer takes the latest release, or the one `--version VERSION` names,
-verifies its SHA-256 checksum and puts `bee` in `~/.local/bin`.
+The installer requires `curl`, `tar`, and `sha256sum` or `shasum`. It takes the
+latest stable release, verifies its SHA-256 checksum and puts `bee` in
+`~/.local/bin`. Add that directory to your shell's command search path if needed.
+To select a release, including an alpha version:
+
+```sh
+curl -fsSL https://bee.wippy.ai/install.sh | sh -s -- --version VERSION
+```
 
 ## Use
 
@@ -124,7 +130,7 @@ and applies the update. Compatible Lua updates keep the running executable;
 a different runtime or a newer required native module reports **needs a newer
 Bee binary**. Install a newer binary with the installer when that happens.
 
-Release packs use `0.2.0-alpha.N`, above the older Hub self-update versions.
+Release packs use `0.2.0-alpha.N`.
 Each GitHub release includes `bee-<version>.wapp` and its SHA-256 checksum,
 containing the same pack the release binaries embed. On a publishing machine
 with the pinned Wippy toolchain and an existing `wippy auth` login, run
@@ -156,59 +162,85 @@ read [application contracts](src/corpus/docs/application_contracts.md),
 
 ## Build
 
-Building a new toolchain requires Go and a C compiler. Cached tools also work
-from a source archive.
+Build on Linux or macOS with Git, Make, Python 3.10 or newer, Go, and a C/C++
+compiler. The Go toolchain version is pinned in `wippy.build.json`; Go can
+fetch that version automatically. Install the Python dependencies, then build:
 
 ```sh
+python3 -m venv .wippy/venv
+. .wippy/venv/bin/activate
+python3 -m pip install -r tests/requirements.txt
 make tools
-make check
 make build
 ./dist/bee
 ```
 
-`make tools` builds once per runtime, native, Go and builder pin, platform,
-and runtime build tags. Worktrees link to the same completed toolchain in
-`~/.cache/bee-tools/<key>/`; `make tools-key` prints the key for CI caches.
-File timestamps and copied `.wippy/bin` files do not select the toolchain.
-CI restores that same content-keyed directory and runs `make tools` to link
-it into the job workspace. Tool binaries run on the host; release output
-can target another architecture. Locks use Python's `fcntl`, including on macOS.
+`make tools` builds the pinned runtime, native modules and builder once per
+platform and build configuration, then links the verified tools from
+`~/.cache/bee-tools/<key>/` into `.wippy/bin`. `make tools-key` prints that key.
+Cached tools also work from a source archive. `make build` lints and packs the
+application, records its checksum and compiles `dist/bee`. Build identity
+records Git HEAD, or `unknown` in a source archive. `make install` builds and
+installs the binary in `~/.local/bin`, keeping the previous binary as `bee.prev`.
 
-The tool marker records pins and artifact hashes. Bee's build identity records
-the source tree's Git HEAD, or `unknown` when the tree has no `.git` metadata.
+`make runtime-pin RUNTIME_VERSION=<commit>` changes the runtime pin and its
+native Go requirement. `make native-pin NATIVE_VERSION=<commit>` selects a
+published commit containing Bee's native packages. For a local runtime
+checkout, use `make tools RUNTIME_SOURCE=<path>` and pass the same Make
+variable to subsequent build commands.
 
-`make check` runs application lint, fixture lint, boot checks and all Lua
-suites, then prints one status line with wall time and load. The default is
-four shards (fewer on small machines). `make test TESTS=<substring>` runs a
-focused selection; `SHARDS=<count>` controls suite concurrency. CI can also
-call `make lint`, `make fixture-lint`, `make boot-check` and `make test`.
-`make lint` includes fixture lint. CI runs boot checks and suites on Linux;
-the suite's owned-process guard requires Linux `/proc` and subreaper support.
-macOS release jobs run tools, compilation, target verification and packaging,
-without the suite guard. `make test-shard SHARDS=8 SHARD=<1..8>` keeps the
-same global partition and shard number used by the CI matrix.
-Before starting a shard that needs Docker, the harness inspects and pulls its
-digest-pinned fixture images. This setup runs outside entry and suite deadlines;
-the results record its duration separately. Docker readiness and lifecycle
-entries use installed fixture images even on a cold runner.
-Each entry checks its shard baseline for extra actors and owned OS children,
-registry entries, durable pending work and subscriptions, and demand owners.
-Registered-name checks look up declared demand names, recorded carriers and
-session windows. Generic runtime listener counts and unrecorded names are
-outside this check; it uses the existing pushed runtime API.
+## Test
 
-`tests/run.py --update-durations` records body and hygiene cost for each entry.
-Refresh measured budgets with `python3 tests/budgets.py <passing results.json>`.
-Entry budgets use twice the observed cost plus five seconds, capped by the
-existing entry deadline; unmeasured entries keep the 30-second fallback.
-Each shard gives entries in a named suite one consistent budget based on
-that shard's selected costs. `make install` installs the built binary and
-keeps the previous one.
+The complete verification gate runs on Linux and requires Docker for the
+container-placement suites. The process guard uses Linux `/proc` and subreaper
+support. Fixture agents use isolated homes and fake provider values.
 
-Releases build from the runtime commit pinned in `wippy.build.json`;
-`make runtime-pin RUNTIME_VERSION=<commit>` moves the pin and
-`make native-pin NATIVE_VERSION=<commit>` pins Bee's native module to the
-pushed commit that holds it.
+```sh
+make lint
+python3 -m unittest discover -s build -p '*_test.py'
+python3 -m unittest discover -s tests -p '*_test.py'
+make check SHARDS=8
+```
+
+`make lint` checks the documentation corpus, application source and fixture
+composition. After documentation edits, regenerate with `make agent-corpus-local`.
+`make check` runs lint, fixture lint, Python runner tests, boot checks and all
+Lua suites, then prints one status line with timing and load. Without an
+explicit `SHARDS` value it uses up to four shards, depending on available CPUs.
+`make test TESTS=<substring>` selects Lua entries by ID; `make test-shard
+SHARDS=8 SHARD=<1..8>` runs one partition of the eight-shard plan.
+
+The public suites and runner live in `tests/`. `tests/compose.py` creates a
+copy of the application with test-only seams. Each shard has its own state,
+fixture executables, databases, home and gateway port. The harness pulls
+required digest-pinned Docker images before starting suite deadlines and
+records that preparation time separately. Each entry checks for leaked actors,
+owned OS children, registry entries, durable work, subscriptions and demand
+owners. Run `go test ./...` in `native/` when changing Go code.
+
+GitHub CI checks pushes to `main`, pull requests and manual dispatches. It
+prepares the application once, runs lint and release-build contract checks,
+boot checks and eight Lua shards on Linux, and combines their results in the
+Check gate. Platform jobs warm native build caches when required. macOS jobs
+compile and verify release targets; they do not run the Linux process guard.
+
+`python3 tests/run.py --update-durations` records entry body and hygiene costs.
+`python3 tests/budgets.py <passing results.json>` refreshes measured budgets
+within the existing deadline limits.
+
+## Release
+
+The release workflow runs for `v*` tags and requires successful main-branch CI
+on the exact tagged commit. It uses CI's prepared application and pinned
+platform caches, stamps the version, and builds Linux and macOS binaries for
+amd64 and arm64. A manual dispatch with `dry_run` enabled validates the same
+build and packaging path without publishing.
+
+Each release includes binary tarballs and SHA-256 checksums, plus
+`bee-<version>.wapp` and its checksum. The workflow verifies that every binary
+embeds the same release pack before publishing. To publish that release pack
+to Hub, use `make hub-publish VERSION=<version>` with the pinned toolchain and
+an existing `wippy auth` login; it verifies and publishes the downloaded asset.
 
 ## License
 

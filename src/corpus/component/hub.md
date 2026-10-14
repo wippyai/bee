@@ -201,9 +201,8 @@ a rollback as another root update. About uses those same executable facts
 for compatibility checks and shows current and available pack versions from
 Hub inventory.
 
-Releases use `0.2.0-alpha.N`, above the legacy `0.1.0-selfupdate.18` Hub line;
-the source version is `0.2.0-dev`. Each platform binary embeds the pack built
-in its release job. The workflow checks that every platform pack matches the
+Releases use `0.2.0-alpha.N`; the source version is `0.2.0-dev`. Each platform
+binary embeds the pack built in its release job. The workflow checks that every platform pack matches the
 published `bee-<version>.wapp` and attaches it and its SHA-256 checksum beside
 the binary tarballs. On an authenticated publishing machine,
 `make hub-publish VERSION=<version>` downloads that release asset, checks the

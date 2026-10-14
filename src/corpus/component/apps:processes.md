@@ -1,6 +1,6 @@
 # bee.apps.processes
 
-`bee.apps.processes.app:app` (Process Manager) observes this node's runtime and the
+`bee.apps.processes.app:app` (Processes) observes this node's runtime and the
 hive. While open it samples processes, services and memory each second, and on
 its Hive pane each node's numbers from its owner over `bee.hive:protocol`
 (`component/hive`); nothing is sampled while it is closed. Service titles come from

@@ -22,7 +22,7 @@ entries:
       lifetime: view
       revision: '1'
       instance_policy: singleton
-      menus: [bee.shell:system_menu]
+      menus: [bee.shell:desktop_menu]
   source: file://app.lua
   method: main
   modules:

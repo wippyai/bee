@@ -17,7 +17,7 @@ entries:
       revision: '1'
       instance_policy: singleton
       terminal: true
-      menus: [bee.shell:apps_menu]
+      menus: [bee.apps.terminal.app:start_menu]
   source: file://app.lua
   method: main
   modules:
@@ -31,3 +31,10 @@ entries:
     policies:
     - bee.apps.terminal:acquire
     - bee.apps.terminal:run
+- name: start_menu
+  kind: registry.entry
+  meta: {type: bee.menu}
+  data:
+    title: Terminal
+    location: start
+    order: 40

@@ -118,3 +118,13 @@ entries:
     actions: [fs.get]
     resources: [bee.tests.apps:captures]
     effect: allow
+- name: agent_picker_test
+  kind: function.lua
+  source: file://agent_picker_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [tty, system, time, channel, registry]
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    client: bee.node:client

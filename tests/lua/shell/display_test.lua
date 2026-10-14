@@ -170,23 +170,19 @@ local function open_probe(view: tty.Viewport)
     for _, app in ipairs(assert(client.state(assert(client.call(assert(system.node.id()), "list", {})))).apps) do
         descriptors[#descriptors + 1] = {definition_id = app.id, title = app.title, menus = app.menus}
     end
-    local group, selected = 0, 0
+    local selected = 0
+    local labels: {string} = {}
     for index, item in ipairs(menu.items(descriptors)) do
-        if item.action == "group:bee.shell:apps_menu" then
-            group = index
-            for position, app in ipairs(item.children or {}) do
-                if app.action == "open:bee.tests.node:probe_app" then selected = position end
-            end
-        end
+        labels[#labels + 1] = item.label
+        assert(not item.children, "Start contains a submenu")
+        if item.action == "open:bee.tests.node:probe_app" then selected = index end
     end
-    assert(group > 0 and selected > 0, "Probe is not in the installed Apps menu")
+    test.eq(table.concat(labels, ",", 1, 6), "Agents,Needs you,Library,Terminal,Settings,Processes")
+    assert(selected > 0, "Probe is not in Start")
     expect(view, "an empty desktop opens the Start panel", "Bees", true)
-    key(view, "home")
-    for _ = 2, group do key(view, "down") end
-    key(view, "enter")
-    expect(view, "Apps lists the probe", "Probe", true)
-    expect(view, "Apps lists the Inbox", "Needs you", true)
-    expect(view, "Apps lists Agents", "Agents", true)
+    expect(view, "Start lists the probe", "Probe", true)
+    expect(view, "Start lists Needs you", "Needs you", true)
+    expect(view, "Start lists Agents", "Agents", true)
     key(view, "home")
     for _ = 2, selected do key(view, "down") end
     key(view, "enter")

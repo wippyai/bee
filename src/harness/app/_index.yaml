@@ -71,7 +71,7 @@ entries:
     type: bee.app
     application:
       menus:
-      - bee.shell:apps_menu
+      - bee.harness.app:start_menu
       api_version: 1
       title: Agents
       icon: A
@@ -272,3 +272,10 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
+- name: start_menu
+  kind: registry.entry
+  meta: {type: bee.menu}
+  data:
+    title: Agents
+    location: start
+    order: 10

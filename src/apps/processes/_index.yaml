@@ -4,7 +4,7 @@ entries:
 - name: service_titles
   kind: security.policy
   meta:
-    comment: Process Manager reads registry ownership and service titles
+    comment: Processes reads registry ownership and service titles
   policy:
     actions:
     - registry.snapshot
@@ -13,7 +13,7 @@ entries:
 - name: observe
   kind: security.policy
   meta:
-    comment: Process Manager reads the runtime's hosts, processes, services and memory
+    comment: Processes reads the runtime's hosts, processes, services and memory
   policy:
     actions:
     - system.read

@@ -1,5 +1,5 @@
 -- MIT. Keyboard help shows each tab's bindings at both supported frame sizes,
--- scrolls within its table and lists under System in the Start menu.
+-- scrolls within its table and opens from the desktop context menu.
 local test = require("test")
 local view = require("view")
 local menu = require("menu")
@@ -40,19 +40,14 @@ local function define_tests()
             test.contains(shown, view.bindings("workspaces")[2].action)
         end)
 
-        test.it("lists under the System menu its catalog entry names", function()
-            local system: menu.Placement = {id = "bee.shell:system_menu", title = "System", location = "start", order = 20}
-            local items = menu.items({
-                {definition_id = "bee.apps.help.app:app", title = "Keyboard help", menus = {system}},
-                {definition_id = "bee.apps.settings.app:app", title = "Settings", menus = {system}},
-            })
-            local labels: {string} = {}
-            for _, item in ipairs(items) do
-                if item.action == "group:bee.shell:system_menu" then
-                    for _, child in ipairs(item.children or {}) do labels[#labels + 1] = child.label end
-                end
-            end
-            test.eq(table.concat(labels, ","), "Keyboard help,Settings")
+        test.it("offers Keyboard help on the desktop context menu", function()
+            local desktop: menu.Placement = {id = "bee.shell:desktop_menu", title = "Desktop", location = "desktop", order = 10}
+            local catalog: {menu.Descriptor} = {{definition_id = "bee.apps.help.app:app", title = "Keyboard help", menus = {desktop}}}
+            test.eq(#menu.items(catalog), 2)
+            local items = menu.entries({selected = 1, offset = 0, kind = "desktop"},
+                {width = 80, height = 24, windows = {}, focus = "", revision = 0}, catalog)
+            test.eq(items[1].label, "Keyboard help")
+            test.eq(items[1].action, "open:bee.apps.help.app:app")
         end)
     end)
 end

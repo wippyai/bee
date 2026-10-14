@@ -36,7 +36,7 @@ as windows. Each window is a mount of its app's viewport.
 
 | Key | Action |
 |---|---|
-| F1 | Start panel: apps grouped by the menus they name (Apps, System) |
+| F1 | Start panel: one list: Agents, Needs you, Library, Terminal, Settings, Processes, Bees, Exit |
 | F3 | Workspaces: switch the shown desktop or workspace, add a workspace, rename or close a desktop |
 | Alt+Tab | Next window (Shift reverses) |
 | Ctrl+W | Close the focused app |
@@ -60,7 +60,7 @@ version, which reattaches their viewports and redraws.
 A display calls the node through `bee.node:client` over the Hive and watches
 its events: opened and moved instances, closed instances, appearance,
 workspaces and desktops, the installed app catalog, title changes, app
-dialogs and attention requests. Apps ask the person confirm or text questions
+dialogs and attention requests. Keyboard help and MCP clients open from the desktop context menu (right-click the background). Agents also opens MCP clients with M. Apps ask the person confirm or text questions
 through `client.query`; the node shows the dialog on the displays watching the
 desktop and returns the answer to the app. A display that starts watching
 receives the pending dialogs. An app that needs the person raises an

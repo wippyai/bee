@@ -148,20 +148,20 @@ entries:
   kind: registry.entry
   meta:
     type: bee.menu
-    comment: The Start panel's Apps menu; an app lists bee.shell:apps_menu in data.menus to appear in it
+    comment: Apps in the flat Start list after stock applications
   data:
     title: Apps
     location: start
-    order: 10
+    order: 70
 - name: system_menu
   kind: registry.entry
   meta:
     type: bee.menu
-    comment: The Start panel's System menu, for the apps that inspect and manage this node
+    comment: Management apps in the flat Start list after other applications
   data:
     title: System
     location: start
-    order: 20
+    order: 80
 - name: desktop_menu
   kind: registry.entry
   meta:

@@ -26,14 +26,14 @@ local function await(view: tty.Viewport, ready: (string) -> boolean): string
         local shown = screen(view)
         if ready(shown) then return shown end
         local changed = channel.select({updates:case_receive()})
-        assert(changed.ok, "Process Manager viewport closed before the expected screen:\n" .. shown)
+        assert(changed.ok, "Processes viewport closed before the expected screen:\n" .. shown)
     end
 end
 local function selected(shown: string): string
     return shown:match("\n%s*PID%s+([^%s]+)") or ""
 end
 local function define_tests()
-    test.describe("Process Manager confirmation", function()
+    test.describe("Processes confirmation", function()
         test.it("withdraws Escape and records one Enter decision for the exact stopped execution", function()
             local events = assert(process.listen(client.EVENTS, {message = true}))
             local state = assert(client.state(call("watch", {})))

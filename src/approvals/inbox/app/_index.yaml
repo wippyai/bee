@@ -39,7 +39,7 @@ entries:
     type: bee.app
     application:
       menus:
-      - bee.shell:apps_menu
+      - bee.approvals.inbox.app:start_menu
       api_version: 1
       title: Needs you
       icon: '!'
@@ -157,3 +157,10 @@ entries:
     typed_form: bee.apps.library.app:form
     model: bee.approvals.inbox.app:model
     lease_form: bee.approvals.inbox.app:lease_form
+- name: start_menu
+  kind: registry.entry
+  meta: {type: bee.menu}
+  data:
+    title: Needs you
+    location: start
+    order: 20

@@ -44,7 +44,7 @@ entries:
       lifetime: view
       revision: '1'
       instance_policy: singleton
-      menus: [bee.shell:system_menu, bee.shell:desktop_menu]
+      menus: [bee.apps.settings.app:start_menu, bee.shell:desktop_menu]
   source: file://app.lua
   method: main
   modules:
@@ -74,3 +74,10 @@ entries:
     - bee.apps.settings:hub_client
     - bee.apps.settings:hub_updates
     - bee.apps.settings:registry_commits
+- name: start_menu
+  kind: registry.entry
+  meta: {type: bee.menu}
+  data:
+    title: Settings
+    location: start
+    order: 50

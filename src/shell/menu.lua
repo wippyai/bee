@@ -38,12 +38,16 @@ local function placed(catalog: {Descriptor}?, location: string): {{menu: Placeme
     return groups
 end
 
--- items is the Start menu: the Start menus the installed apps are placed in,
--- then the workspace menu and then exit, each in its own group.
 function M.items(catalog: {Descriptor}?): {Item}
     local items: {Item} = {}
+    local seen: {[string]: boolean} = {}
     for _, group in ipairs(placed(catalog, "start")) do
-        items[#items + 1] = {label = group.menu.title, action = "group:" .. group.menu.id, enabled = true, children = group.items}
+        for _, item in ipairs(group.items) do
+            if not seen[item.action] then
+                items[#items + 1] = item
+                seen[item.action] = true
+            end
+        end
     end
     items[#items + 1] = {label = "Bees", shortcut = "F3", action = "workspaces", enabled = true, group = true}
     items[#items + 1] = {label = "Exit", shortcut = "Ctrl+Q", action = "quit", enabled = true, group = true}

@@ -71,7 +71,7 @@ CPU, pids and admitted mounts, or keep the pinned image and non-root user.
 
 ## Agents application
 
-Open **Apps > Agents**. The window title is **Agents**; its views are
+Open **Start > Agents**. The window title is **Agents**; its views are
 **Sessions** and **Profiles** (agent profiles). **Start agent** opens Profiles
 to choose a profile and launch its agent.
 

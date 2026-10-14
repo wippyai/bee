@@ -57,44 +57,43 @@ local function define_tests()
             test.contains(rows[1], "Terminal")
         end)
 
-        test.it("opens the Start panel under the bar with the declared menus, workspaces and exit", function()
+        test.it("shows apps directly in Start with Bees and Exit", function()
             local rows = draw(model.new(100, 30), {}, {start = {selected = 1, offset = 0}, catalog = catalog})
             local panel = table.concat(rows, "\n", 2, 12)
             test.contains(rows[1], " BEE ▴ ")
-            test.contains(panel, "Apps")
-            test.contains(panel, "Bees")
-            test.contains(panel, "Exit")
-            test.contains(panel, "System")
-            test.is_nil((panel:find("Open application", 1, true)))
+            for _, label in ipairs({"Settings", "Terminal", "Bees", "Exit"}) do test.contains(panel, label) end
+            test.is_nil((panel:find("Apps", 1, true)))
+            test.is_nil((panel:find("System", 1, true)))
         end)
 
-        test.it("separates the Start panel's app menus, the workspace menu and exit with rules", function()
-            local rows = draw(model.new(100, 30), {}, {start = {selected = 1, offset = 0}, catalog = catalog})
-            local plain: {string} = {}
-            for index, row in ipairs(rows) do plain[index] = row:gsub("\27%[[0-9;]*m", "") end
-            local function at(label: string): integer
-                for index, row in ipairs(plain) do if row:find("│ " .. label, 1, true) then return index end end
-                return 0
-            end
-            local system, bees, exit = at("System"), at("Bees"), at("Exit")
-            test.is_true(system > 0 and bees == system + 2 and exit == bees + 2)
-            test.contains(plain[system + 1], "├")
-            test.contains(plain[bees + 1], "├")
-        end)
-
-        test.it("places each app in the menus its catalog entry names, menus in their declared order", function()
+        test.it("orders flat app placements and offers each app once", function()
+            local first: menu.Placement = {id = "sample:first", title = "First", location = "start", order = 1}
             local items = menu.items({
                 {definition_id = "sample:settings", title = "Settings", menus = {system_menu}},
-                {definition_id = "sample:terminal", title = "Terminal", menus = {apps_menu}},
+                {definition_id = "sample:terminal", title = "Terminal", menus = {apps_menu, first}},
                 {definition_id = "sample:hidden", title = "Hidden", menus = {}},
             })
             local shown: {string} = {}
             for _, item in ipairs(items) do
-                local children: {string} = {}
-                for _, child in ipairs(item.children or {}) do children[#children + 1] = child.label end
-                shown[#shown + 1] = item.label .. (#children > 0 and "(" .. table.concat(children, ",") .. ")" or "")
+                test.is_nil(item.children)
+                shown[#shown + 1] = item.label
             end
-            test.eq(table.concat(shown, " "), "Apps(Terminal) System(Settings) Bees Exit")
+            test.eq(table.concat(shown, ","), "Terminal,Settings,Bees,Exit")
+            local panel = menu.panel(100, 30, items)
+            local opened = menu.respond({selected = 1, offset = 0}, panel, items,
+                {type = "key", action = "press", key_type = "enter"})
+            test.eq(opened.action, "open:sample:terminal")
+        end)
+
+        test.it("separates applications, Bees and Exit", function()
+            local items = menu.items(catalog)
+            test.is_nil(items[1].group)
+            test.is_nil(items[2].group)
+            test.is_true(items[3].group)
+            test.is_true(items[4].group)
+            local rows = draw(model.new(100, 30), {}, {start = {selected = 1, offset = 0}, catalog = catalog})
+            test.contains(rows[5], "─")
+            test.contains(rows[7], "─")
         end)
 
         test.it("offers the apps placed in the desktop menu, a new desktop and the workspace menu on the desktop's context menu", function()

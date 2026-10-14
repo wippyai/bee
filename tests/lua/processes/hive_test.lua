@@ -1,4 +1,4 @@
--- MIT. The Process Manager's hive pane: each node's samples become a bounded
+-- MIT. The Processes's hive pane: each node's samples become a bounded
 -- history, a node that stops answering shows as away with gaps, and the pane
 -- charts every node and lists its latest numbers.
 local test = require("test")
@@ -15,7 +15,7 @@ local function stats(heap: number, goroutines: number, apps: number, name: strin
 end
 
 local function define_tests()
-    test.describe("Process Manager hive", function()
+    test.describe("Processes hive", function()
         test.it("keeps this node first and records each node's numbers", function()
             local state = hive.new("node-a")
             hive.record(state, {hive.decode("node-b", stats(30 * MIB, 40, 1, "beta"), nil),

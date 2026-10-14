@@ -601,7 +601,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     if searching then
                         if data.key_type == "escape" or data.key_type == "esc" or data.key_type == "enter" then searching = false; dirty = true
                         elseif data.key_type == "backspace" then query = query:gsub("[%z\1-\127\194-\244][\128-\191]*$", ""); refresh = true
-                        elseif not data.ctrl and not data.alt and (data.key_type == "char" or data.key_type == "rune") and #query + #data.key <= 256 then query = query .. data.key; refresh = true end
+                        elseif not data.ctrl and not data.alt and (data.key_type == "char" or data.key_type == "rune" or data.key_type == "runes") and #query + #data.key <= 256 then query = query .. data.key; refresh = true end
                     elseif data.ctrl and data.key:lower() == "s" then sort = sort == "name" and "driver" or "name"; refresh = true
                     elseif data.key == "/" then searching = true; dirty = true
                     elseif data.key_type == "escape" or data.key_type == "esc" then catalog_open = false; client.title(launch, "Agents"); refresh = true

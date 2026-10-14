@@ -1,4 +1,4 @@
--- MIT. Process Manager: an on-demand observer of this node's runtime and of
+-- MIT. Processes: an on-demand observer of this node's runtime and of
 -- the hive. It samples processes, services and memory each second while
 -- live, and on the Hive pane each node's numbers from its owner; nothing is
 -- sampled while it is closed. Stopping an app asks the node, which owns the

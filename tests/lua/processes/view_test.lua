@@ -17,7 +17,7 @@ local function snapshot(): probe.Snapshot
 end
 
 local function define_tests()
-    test.describe("Process Manager frame", function()
+    test.describe("Processes frame", function()
         test.it("lists Bee services by title, folds the runtime into one row, and shows a finished service as done", function()
             local listed: probe.Snapshot = {processes = {}, heap = 1048576, heap_objects = 1, reserved = 2097152, gc_cycles = 1, goroutines = 2, error = "",
                 queue = 0, executed = 0, host_executed = {},
@@ -105,7 +105,7 @@ local function define_tests()
             local plain: {string} = {}
             for index, row in ipairs(drawn.rows) do plain[index] = row:gsub("\27%[[0-9;]*m", "") end
             local text = table.concat(plain, "\n")
-            test.is_true(plain[1]:find("PROCESS MANAGER", 1, true) ~= nil)
+            test.is_true(plain[1]:find("PROCESSES", 1, true) ~= nil)
             test.is_true(plain[1]:find("Live · 1s · 3 processes", 1, true) ~= nil)
             test.is_true(text:find("bee.apps.settings.app:app · 0x00017 ", 1, true) ~= nil)
             test.is_true(text:find("bee.apps.settings.app:app · 0x00018 ", 1, true) ~= nil)

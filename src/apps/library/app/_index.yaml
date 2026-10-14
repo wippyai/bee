@@ -71,7 +71,7 @@ entries:
       lifetime: view
       revision: '1'
       instance_policy: singleton
-      menus: [bee.shell:system_menu]
+      menus: [bee.apps.library.app:start_menu]
   source: file://app.lua
   method: main
   modules:
@@ -104,3 +104,10 @@ entries:
     - bee.apps.library:names_client
     - bee.apps.library:names_read
     - bee.apps.library:self_update
+- name: start_menu
+  kind: registry.entry
+  meta: {type: bee.menu}
+  data:
+    title: Library
+    location: start
+    order: 30

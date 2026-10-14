@@ -79,7 +79,7 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
     local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     local noun = services and (#rows == 1 and " service" or " services") or (#rows == 1 and " process" or " processes")
-    frame.header(painter, "PROCESS MANAGER", (paused and "Paused" or "Live · 1s") .. " · " .. tostring(#rows) .. noun)
+    frame.header(painter, "PROCESSES", (paused and "Paused" or "Live · 1s") .. " · " .. tostring(#rows) .. noun)
     frame.tabs(painter, 2, TABS, services and "services" or "processes")
     local first = 4
     if width >= 48 and height >= 14 then
@@ -161,7 +161,7 @@ function M.draw_hive(width: integer, height: integer, nodes: {hive.Node}, prefer
     local theme = painter.theme
     local online = 0
     for _, item in ipairs(nodes) do if item.online then online = online + 1 end end
-    frame.header(painter, "PROCESS MANAGER", (paused and "Paused" or "Live · 1s") .. " · " .. tostring(online) .. " of "
+    frame.header(painter, "PROCESSES", (paused and "Paused" or "Live · 1s") .. " · " .. tostring(online) .. " of "
         .. tostring(#nodes) .. (#nodes == 1 and " node" or " nodes"))
     frame.tabs(painter, 2, TABS, "hive")
     local first = 4

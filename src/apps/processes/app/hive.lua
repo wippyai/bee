@@ -1,4 +1,4 @@
--- MIT. The Process Manager's hive view: each node's runtime numbers, sampled
+-- MIT. The Processes's hive view: each node's runtime numbers, sampled
 -- from its owner while the view is open, with a bounded history per node.
 -- A node that does not answer keeps its last numbers and shows as away; its
 -- series take a gap, never a zero.

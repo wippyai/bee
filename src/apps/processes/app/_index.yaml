@@ -7,11 +7,11 @@ entries:
     type: bee.app
     application:
       api_version: 1
-      title: Process Manager
+      title: Processes
       lifetime: view
       revision: '1'
       instance_policy: singleton
-      menus: [bee.shell:system_menu, bee.shell:desktop_menu]
+      menus: [bee.apps.processes.app:start_menu, bee.shell:desktop_menu]
   source: file://app.lua
   method: main
   modules:
@@ -70,3 +70,10 @@ entries:
   imports:
     viz: bee.ui.viz:viz
     bounds: bee.values:bounds
+- name: start_menu
+  kind: registry.entry
+  meta: {type: bee.menu}
+  data:
+    title: Processes
+    location: start
+    order: 60

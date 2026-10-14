@@ -116,7 +116,7 @@ Lua tests it runs inside Bee. An application asks for exactly what it needs,
 such as a database, agent tools, one HTTP origin or one exact command in a
 folder. **Needs you** shows one install question that names who made it, what
 it can do and what data it changes; approve it and the application opens from
-Start → Apps. Agents can also write drivers for other CLI agents the same way.
+Start. Agents can also write drivers for other CLI agents the same way.
 
 **Library** lists everything you can install: applications and drivers your
 agents made, versions other bees in your hive share, and Hub packages. It shows

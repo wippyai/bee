@@ -25,13 +25,13 @@ local function define_tests()
             local target = assert(bounds.id(methods.list))
             test.eq(assert(registry.get(target)).kind, "function.lua")
         end)
-        test.it("explains how an approved driver becomes selectable in Sessions", function()
+        test.it("explains how an approved driver becomes selectable in Agents", function()
             local text = guide.driver_delivery()
-            for _, needle in ipairs({"presentation.start_menu = true", "session_resource = session", "Sessions", "N", "E", "default_mode window", "docker_credentials"}) do
+            for _, needle in ipairs({"presentation.start_menu = true", "session_resource = session", "Agents", "N", "E", "default_mode window", "docker_credentials"}) do
                 test.not_nil((string.find(text, needle, 1, true)))
             end
             local steps, next_app = guide.delivery_steps("driver.stubagent")
-            test.eq(next_app, "Sessions")
+            test.eq(next_app, "Agents")
             test.not_nil((string.find(steps[#steps], "N", 1, true)))
         end)
         test.it("names the artifact file and one process.lua application entry", function()

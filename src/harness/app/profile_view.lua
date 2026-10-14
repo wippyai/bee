@@ -471,7 +471,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     if field.kind == "driver" then
         if event.type == "key" and event.action == "press" and (event.key_type == "enter" or event.key_type == "left" or event.key_type == "right") then
             local drivers = state.drivers or {}
-            if #drivers == 0 then state.status = "Choose an installed driver from Agent profiles"; return nil end
+            if #drivers == 0 then state.status = "Choose an installed driver from Profiles"; return nil end
             local current = 0
             for index, item in ipairs(drivers) do if item.definition_ref == state.form.draft.definition_ref then current = index end end
             local delta = event.key_type == "left" and -1 or 1

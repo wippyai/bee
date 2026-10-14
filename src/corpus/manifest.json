@@ -131,33 +131,33 @@
       "topic": "ui"
     },
     {
-      "bytes": 10658,
+      "bytes": 10654,
       "id": "docs/application_contracts",
-      "sha256": "b0178a11f5015c375474a4e54c72f89879423790c72a4d1dbaeaea6b3c77a5a9",
+      "sha256": "1ba038345ae25e1402185bcf9f5280373b9230a10844f60fe91f961ae0fdb1f9",
       "source": "generated: src/corpus/docs/application_contracts.md",
       "title": "Application contracts",
       "topic": "application"
     },
     {
-      "bytes": 31263,
+      "bytes": 31261,
       "id": "docs/approvals",
-      "sha256": "fa842388aa75912aa26875fc5b85a7f9f9099edb62ca957b11c5edd3ca2e835e",
+      "sha256": "6b3ea99624c5256ca407c92cde0a75d233f8d6201b7425908818828ca2919e91",
       "source": "generated: src/corpus/docs/approvals.md",
       "title": "Durable approval requests",
       "topic": "approvals"
     },
     {
-      "bytes": 15200,
+      "bytes": 15196,
       "id": "docs/carrier",
-      "sha256": "bd3c1f368e312c9179b011d313851c69854900636f607469896744666ded3c3c",
+      "sha256": "4ffe05064dad3853e3769ba7b55d54a52a5ef15c777b1071cbc65ccf441fc5cf",
       "source": "generated: src/corpus/docs/carrier.md",
       "title": "Carrier contract",
       "topic": "application"
     },
     {
-      "bytes": 4657,
+      "bytes": 4655,
       "id": "docs/desktop",
-      "sha256": "6f7491fb4c4bd4e4ad3bcc96b09f4578168f602a73452ec812b4b52f221aa840",
+      "sha256": "8085ce65f0b56d83b41d81a7e0c4f0176b8e7ba12d0863b39227141802d32909",
       "source": "generated: src/corpus/docs/desktop.md",
       "title": "Desktop",
       "topic": "ui"
@@ -235,9 +235,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 6909,
+      "bytes": 6907,
       "id": "docs/system_map",
-      "sha256": "3b7df280eff848602ae38138233605bc2860074abeb7bf12f775c9e088f24c24",
+      "sha256": "c1ffe66a5e367f2049213938ff42079e5a1ab8fcb5710f6457b75959cb9fb924",
       "source": "generated: src/corpus/docs/system_map.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
@@ -267,9 +267,9 @@
       "topic": "storage"
     },
     {
-      "bytes": 2598,
+      "bytes": 2596,
       "id": "docs/workspace_state",
-      "sha256": "5c00d043d99c8c4db501156dc1c5c6505a225386c6805aefebec8a02a1df65d1",
+      "sha256": "67f04f0c532d8f598dbf86aa96f1168e0e7cf214f8e46c64bfaa885cd42371fa",
       "source": "generated: src/corpus/docs/workspace_state.md",
       "title": "Workspace state and application restoration",
       "topic": "storage"
@@ -291,9 +291,9 @@
       "topic": "component"
     },
     {
-      "bytes": 12472,
+      "bytes": 12470,
       "id": "component/approvals",
-      "sha256": "608ef52c58537ef9a9ffe49aed10c249f8adfa6781475870f5468a7e65ffb6f7",
+      "sha256": "49def5e62164ea15805b0523a674414a109c22fdeeb2e12a13e43e290c3bc1db",
       "source": "generated: src/approvals",
       "title": "Bee approvals",
       "topic": "component"
@@ -363,9 +363,9 @@
       "topic": "component"
     },
     {
-      "bytes": 12380,
+      "bytes": 12382,
       "id": "component/driver",
-      "sha256": "1f12025625476e3eb3a1040cb4525a81d1b14abdae80c24e4774eb5b81e1f08b",
+      "sha256": "f1c1671aeb976c9a06884285b55f069545cb29feba0927d9bbcc79a02a67191e",
       "source": "generated: src/driver",
       "title": "Bee driver",
       "topic": "component"
@@ -467,17 +467,17 @@
       "topic": "component"
     },
     {
-      "bytes": 7354,
+      "bytes": 7558,
       "id": "component/harness",
-      "sha256": "3d8004a6301a6bc17e9c6ee69601647c407d848ead11a9ff9b28347d1b4c8efb",
+      "sha256": "f3e383733007f700d87e8cc4536331d4c0493f3e3d1c346355a006cad37fa6ba",
       "source": "generated: src/harness",
       "title": "bee.harness",
       "topic": "component"
     },
     {
-      "bytes": 7602,
+      "bytes": 7615,
       "id": "component/hive",
-      "sha256": "fb305888778c8a19712b0285501cc1103223d41823371df0dd42c8547c9e9c37",
+      "sha256": "f4f573535299fe60af801dfc10d2408d1d63203d6e0b2c633741b3e94c608001",
       "source": "generated: src/hive",
       "title": "bee.hive",
       "topic": "component"
@@ -539,9 +539,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9958,
+      "bytes": 9971,
       "id": "component/sessions",
-      "sha256": "e6f647331109176f73229b7f7adb993d6aa9589b82eec2aa0168c355c261e176",
+      "sha256": "236bf44eb8b91786b3c24ee5f04034d5cc764414345021befa582c70f7348837",
       "source": "generated: src/threads/sessions",
       "title": "bee.threads.sessions",
       "topic": "component"
@@ -707,25 +707,25 @@
       "topic": "system"
     },
     {
-      "bytes": 4053,
+      "bytes": 4047,
       "id": "docs/hive_sessions",
-      "sha256": "3dbff57f01aba0eb7669156b7068c25b439bdb18f41387499f9bf6b327b6b696",
+      "sha256": "db8299fd1ddbfcc11a5ff5c2751f326d9757f32813cccc07994040bd6f384ca2",
       "source": "generated: src/corpus/docs/hive_sessions.md",
       "title": "Agents and applications across bees",
       "topic": "cluster"
     },
     {
-      "bytes": 9899,
+      "bytes": 9911,
       "id": "docs/session_traits",
-      "sha256": "96ba905c5c2651869bc82c7c5bfae401560de62ab820ac2ba63b7929a69b2e28",
+      "sha256": "14342cfc82afd7da603dd285743ce67e95954bcd081e4ddecaaf48519e494184",
       "source": "docs/session_traits.md",
       "title": "Build an app that listens to a session",
       "topic": "threads"
     },
     {
-      "bytes": 2685,
+      "bytes": 2683,
       "id": "docs/external_mcp",
-      "sha256": "38f6328588823325c790c4fb927cf0cc14a5adb84d1809f0e793805c2a793347",
+      "sha256": "0727e93e83ae7890b5c42d710214e06041267af29e03cf265502e7d458e355ae",
       "source": "docs/external_mcp.md",
       "title": "External MCP clients",
       "topic": "docs"
@@ -758,7 +758,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, errors, funcs, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL, exec and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform). Component: one page per Bee component, written from the entries under src/<component>. Reference applications: one page per application source plus an index. Terminal toolkit: one page covering the tty module, bee.ui frame, viz, diagram and forms, and the bee.app client, checked against src/ui, src/app and tests/lua/ui. Reference drivers: generated by tools/corpus.py from src/driver. The corpus is digest-checked with make lint.",
   "totals": {
-    "bytes": 846008,
+    "bytes": 846226,
     "documents": 94
   }
 }

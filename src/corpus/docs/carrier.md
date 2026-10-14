@@ -246,5 +246,5 @@ reading the authenticated placement owner. `running` records the thread start;
 `start_failed` settles with the exact cause. Explicit cancellation before child
 creation settles from placement's `start_cancelled` evidence without inventing
 a process exit. The executor quiet period begins after startup acknowledgement. The external executor publishes
-the same placement observations to Sessions. The Sessions app shows `starting`
+the same placement observations to Agents. The Agents app shows `starting`
 until acknowledgement and displays a refusal cause when startup fails.

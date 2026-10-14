@@ -186,7 +186,7 @@ local function open_probe(view: tty.Viewport)
     key(view, "enter")
     expect(view, "Apps lists the probe", "Probe", true)
     expect(view, "Apps lists the Inbox", "Needs you", true)
-    expect(view, "Apps lists Sessions", "Sessions", true)
+    expect(view, "Apps lists Agents", "Agents", true)
     key(view, "home")
     for _ = 2, selected do key(view, "down") end
     key(view, "enter")

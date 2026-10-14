@@ -46,7 +46,7 @@ Aggregates and caches are projections an owner can rebuild.
 | `capability` | `bee.capability` | The capability catalog and the model that compares grants |
 | `resources` | `bee.resources` | Named resource roots, associations and grants |
 | `credentials` | `bee.credentials` | Credential sources and projections |
-| `harness` | `bee.harness` | Agent profiles, launch admission, hooks, the carrier of a running attempt and the Sessions app (`bee.harness.app`) |
+| `harness` | `bee.harness` | Agent profiles, launch admission, hooks, the carrier of a running attempt and the Agents app (`bee.harness.app`) |
 | `driver` | `bee.driver` | Agent drivers: `claude`, `codex`, `agy`, `grok`, `muse`, `opencode` and the native `wippy` driver, over shared descriptors, profiles, codec, permission and transport |
 | `placement` | `bee.placement` | Launch plans and attempts; `native` and `docker` place them |
 | `executor/external` | `bee.executor.external` | Running a driver's external process under a placement |

@@ -79,7 +79,7 @@ variables from the environment of the node owner, which inherits the
 environment of the `bee` invocation that started it. A later `bee` invocation
 joins the running node and does not change them. Sign in with the provider's
 own CLI in that home before opening the window (for example `codex login`).
-When Bee finds no login evidence in the home selected for a window, Sessions
+When Bee finds no login evidence in the home selected for a window, Agents
 shows a `LOGIN_REQUIRED` view with the provider's sign-in command. Bee checks
 for files without opening them, so the view does not prove whether a provider
 account is valid.

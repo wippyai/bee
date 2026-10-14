@@ -372,7 +372,7 @@ the end of the UTC day, and 24 hours; choices exceeding the opened request
 policy ceiling are absent. The bundled host policies cap windows
 at one day and retain the default ten-minute request lifetime. Permanent
 "until revoked" windows require explicit host-policy `allow_permanent` opt-in.
-Sessions stores its peer consent in common approval-window Grants. Questions
+Agents stores its peer consent in common approval-window Grants. Questions
 still require their explicit response and cannot create an automatic window.
 Governance lease reviews retain their full terms and scroll-before-allow check.
 

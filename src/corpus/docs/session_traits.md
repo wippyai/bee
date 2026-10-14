@@ -26,7 +26,7 @@ storage; launch uses those explicit selections.
 Profile context and override context compose into the session's fixed context;
 overrides replace matching profile keys and host values win. MCP
 `session {operation = "read"}` returns the composed context. Name and role
-appear in the Agents list, Sessions catalog and thread title.
+appear in the Sessions view in Agents, Sessions catalog and thread title.
 
 Agents use `profile_list {after_key?, expected_cursor?, limit?, definition_ref?, query?, sort?}`, `profile_get {profile_id}`, and
 `profile_put {profile_id, expected_revision, idempotency_key, profile}` in their

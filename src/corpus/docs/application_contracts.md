@@ -59,7 +59,7 @@ optional `arguments` and `fullscreen`. Names are lowercase `[a-z][a-z0-9_-]*`
 up to 40 bytes; `run`, `runtime`, `update`, `client` and `node` are reserved.
 A name matching more than one installed app is refused. `bee claude`,
 `bee codex`, `bee agy`, `bee grok`, `bee muse` and `bee opencode` open the
-Sessions app on the matching driver and accept no trailing arguments.
+Agents app on the matching driver and accept no trailing arguments.
 
 ## Admission and authority
 
@@ -76,7 +76,7 @@ composes. A binding has `definition_id`, `policies`, `thread_access`
 `scope_management` and `close_grace_ms`. An app without a binding runs in the
 base group. `scope_management: true` selects
 `bee.node.security:scope_managing_application`, which lets the app build call
-scopes; the Sessions app (`bee.harness.app:app`) holds it. Native execution has
+scopes; the Agents app (`bee.harness.app:app`) holds it. Native execution has
 the operating system user's authority; no binding makes it a sandbox.
 
 An agent-authored app declares capabilities with `ns.requirement` entries

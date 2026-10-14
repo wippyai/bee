@@ -43,12 +43,12 @@ function M.input(state: State, event: {[string]: unknown}, drawn: frame.View?): 
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: State): frame.View
     local painter = frame.new(width, height, preferences)
-    frame.header(painter, "OPEN AGENT")
+    frame.header(painter, "START AGENT")
     for index, label in ipairs(labels) do
         frame.line(painter, index + 2, (state.selected == index and "› " or "  ") .. label .. ": " .. state.fields[index].value, painter.theme.text)
     end
     frame.footer(painter, state.status, frame.hints({{key = "Tab", verb = "field"}}), nil, {
-        {kind = "open", key = "Enter", label = "Open", enabled = true, primary = true},
+        {kind = "open", key = "Enter", label = "Start agent", enabled = true, primary = true},
         {kind = "cancel", key = "Esc", label = "Cancel", enabled = true},
     })
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}

@@ -10,7 +10,7 @@ type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capa
 -- The footer names only keys the buttons above it do not show; help lists
 -- them all.
 local HINTS = frame.hints({{key = "Esc", verb = "back"}})
-local MORE = frame.hints({{key = "Enter", verb = "open"}, {key = "N", verb = "new"}, {key = "X", verb = "close"}, {key = "↑↓", verb = "select"},
+local MORE = frame.hints({{key = "Enter", verb = "open"}, {key = "N", verb = "start agent"}, {key = "X", verb = "close"}, {key = "↑↓", verb = "select"},
     {key = "W", verb = "this workspace or all"}, {key = "C", verb = "closed sessions"}, {key = "R", verb = "refresh"}, {key = "A", verb = "agent allowances"}})
 
 -- state names what the session is doing in a word a person reads at a glance.
@@ -54,7 +54,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.line(painter, y + 1, text.bound(detail, 512), painter.theme.muted)
         y = y + 2
     end
-    if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "N start agent · P agent profiles") end
+    if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "N start agent · P profiles") end
     if height >= 6 and status ~= "" then frame.line(painter, height - 2, text.bound(status, 512), painter.theme.text) end
     if height >= 6 then
         local chosen = rows[selected]
@@ -62,7 +62,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if #rows > 0 then buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = chosen ~= nil, primary = true} end
         buttons[#buttons + 1] = {kind = "new_session", key = "N", label = "Start agent", enabled = true, primary = #rows == 0}
         if #rows > 0 then buttons[#buttons + 1] = {kind = "close_listed", key = "X", label = "Close", enabled = chosen ~= nil and (not chosen.node or chosen.peer_scope == "open") and chosen.lifecycle ~= "closed" and chosen.lifecycle ~= "closing"} end
-        buttons[#buttons + 1] = {kind = "profiles", key = "P", label = "Agent profiles", enabled = true}
+        buttons[#buttons + 1] = {kind = "profiles", key = "P", label = "Profiles", enabled = true}
         buttons[#buttons + 1] = {kind = "allowances", key = "A", label = "Allowances", enabled = true}
         buttons[#buttons + 1] = {kind = "mcp_clients", key = "M", label = "MCP clients", enabled = true}
         footer_buttons = buttons

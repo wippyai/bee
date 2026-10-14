@@ -175,7 +175,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         load_serial = load_serial + 1
         local serial = load_serial
         loading = true
-        status = catalog_open and "Loading agents…" or "Loading sessions…"
+        status = catalog_open and "Loading profiles…" or "Loading sessions…"
         dirty = true
         local include = show_unavailable
         local catalog_requested = catalog_open
@@ -233,7 +233,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         conversation, draft, status, session_busy = nil, "", "", false
         queued_tasks, queued_text = {}, nil
         catalog_open = false
-        client.title(launch, "Sessions")
+        client.title(launch, "Agents")
         load()
         dirty = true
     end
@@ -436,7 +436,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         client.title(launch, text.bound(result.conversation.title, 76))
                         local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes)
                         if closing then return finish(nil, view_error) end
-                        client.title(launch, "Sessions")
+                        client.title(launch, "Agents")
                         output = assert(tty.surface())
                         leave_session()
                         attachment_error = view_error
@@ -590,7 +590,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "open" then open = true
                         elseif kind == "refresh" then refresh = true end
                     end
-                    if kind == "new_session" or kind == "profiles" then catalog_open = true; client.title(launch, "Agent profiles"); selected = 0; refresh = true
+                    if kind == "new_session" or kind == "profiles" then catalog_open = true; client.title(launch, "Agents"); selected = 0; refresh = true
                     elseif kind == "close_listed" and directory[selected] and directory[selected].lifecycle ~= "closed" and directory[selected].lifecycle ~= "closing" then
                         ask_control("close_listed", "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it")
                     elseif kind == "allowances" then allowances = allowance_form.new(launch.workspace_id); dirty = true
@@ -604,7 +604,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif not data.ctrl and not data.alt and (data.key_type == "char" or data.key_type == "rune") and #query + #data.key <= 256 then query = query .. data.key; refresh = true end
                     elseif data.ctrl and data.key:lower() == "s" then sort = sort == "name" and "driver" or "name"; refresh = true
                     elseif data.key == "/" then searching = true; dirty = true
-                    elseif data.key_type == "escape" or data.key_type == "esc" then catalog_open = false; client.title(launch, "Sessions"); refresh = true
+                    elseif data.key_type == "escape" or data.key_type == "esc" then catalog_open = false; client.title(launch, "Agents"); refresh = true
                     elseif data.key_type == "up" and selected > 0 and idle() then selected = math.floor(math.max(1, selected - 1)); dirty = true
                     elseif data.key_type == "down" and selected > 0 and idle() then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
                     elseif data.key_type == "enter" and idle() then
@@ -625,7 +625,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.action == "press" and data.button == "left" then
                         local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         local kind = hit and hit.kind or ""
-                        if kind == "close" then catalog_open = false; client.title(launch, "Sessions"); refresh = true
+                        if kind == "close" then catalog_open = false; client.title(launch, "Agents"); refresh = true
                         elseif kind == "search" then searching = true; dirty = true
                         elseif kind == "sort" then sort = sort == "name" and "driver" or "name"; refresh = true
                         elseif kind == "setup" then setup_agent()

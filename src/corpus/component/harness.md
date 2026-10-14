@@ -17,15 +17,15 @@ Driver packages own provider arguments, codecs and readiness descriptors.
 | `bee.harness.binding` | Functions `call` (the profiles facade), `capabilities`, `resolve`, `admit`, `start`, `locate_probe`, `setup`, `present`, `present_restore`, `present_type`, `present_activity`; the `profiles_local` binding of `bee.harness:profiles`; `windows`, the window constructor for each admitted placement binding |
 | `bee.harness.profiles` | The typed saved-profile protocol (`bee.agent-profile@3`) |
 | `bee.harness.profiles.binding`, `.persist` | Profile validation against pinned driver definitions and descriptors, and the Sync profile feed with CAS revisions, tombstones and receipt replay |
-| `bee.harness.service` | `presentation` and its owner and executor processes, and the `open`, `restore`, `type`, `activity` functions through which Sessions drives a window; `carrier` process; `session_idle_stop` |
+| `bee.harness.service` | `presentation` and its owner and executor processes, and the `open`, `restore`, `type`, `activity` functions through which Agents drives a window; `carrier` process; `session_idle_stop` |
 | `bee.harness.api` | HTTP endpoints for gateway hooks: `POST /hook/:action`, `GET /hook/:action/:event`, `POST /hook/:action/mcp` |
-| `bee.harness.app` | The Sessions application (`bee.harness.app:app`, command `agent`) |
+| `bee.harness.app` | The Agents application (`bee.harness.app:app`, command `agent`) |
 | `bee.harness.migrations` | Probe output cache table |
 
 Driver metadata and registry entries never select an executable path, login
 source, placement grant or permission policy. Launch admission pins the
 definition, driver binding, driver profile, policy and placement plan. The
-Sessions app and the `bee claude`, `bee codex`, `bee agy`, `bee grok`,
+Agents app and the `bee claude`, `bee codex`, `bee agy`, `bee grok`,
 `bee muse` and `bee opencode` commands (`bee.app_command` entries naming
 `bee.harness.app:app` with the driver's `default_window` profile) pass the selected
 definition back through admission before execution.
@@ -69,15 +69,19 @@ its source and CAS revision in a JSON repair form (`bee.agent-profile-migration@
 diagnostic) and blocks launch until repaired. Docker overrides narrow memory,
 CPU, pids and admitted mounts, or keep the pinned image and non-root user.
 
-## Sessions application
+## Agents application
+
+Open **Apps > Agents**. The window title is **Agents**; its views are
+**Sessions** and **Profiles** (agent profiles). **Start agent** opens Profiles
+to choose a profile and launch its agent.
 
 The Sessions list shows each session's title, state (idle, working, stalled,
 needs you, stopped, closing, closed) and last reply. Enter opens a session's live
-terminal, N opens the new-session picker, X closes a session, W toggles current
+terminal, N starts an agent through Profiles, P opens Profiles, X closes a session, W toggles current
 workspace or all, C shows closed sessions, R refreshes. The picker has search (`/`),
 unavailable entries (U), setup (S), sort (Ctrl+S), edit or customize copy (E) and
 new profile (N). Esc goes back. Closing the window leaves its sessions running
-and addressable; each Sessions window is a separate application instance.
+and addressable; each Agents window is a separate application instance.
 
 The profile editor has Basic and Advanced fields (Ctrl+P), saves with Ctrl+S under
 the existing profile revision and operation keys, and shows Revoke Docker access

@@ -110,7 +110,7 @@ function M.open(value: unknown): Object
         reply = rpc(nil, {op = "open", request = request, operation_key = operation_key}, request, name, operation_key, owner_window)
     end
     -- The session runs whether or not anyone watches it; the person opens its
-    -- terminal from Sessions.
+    -- terminal from Agents.
     return reply
 end
 -- resume starts an owner for a window session whose terminal is gone. Sessions

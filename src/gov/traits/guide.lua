@@ -349,8 +349,8 @@ function M.delivery_steps(source_overlay_id: string?): ({string}, string)
     local copied: {string} = {}
     for index, step in ipairs(DELIVERY_STEPS) do copied[index] = step end
     if drivers.name(source_overlay_id) then
-        copied[#copied] = "open Sessions, press N and select the new driver; E customizes a saved copy"
-        return copied, "Sessions"
+        copied[#copied] = "open Agents, press N and select the new driver; E customizes a saved copy"
+        return copied, "Agents"
     end
     return copied, "Start, Apps"
 end
@@ -461,17 +461,17 @@ function M.driver_delivery(): string
         .. " harness binding ID and one data.targets entry {entry = bee.harness.launch:harness_activation,"
         .. " path = .bindings +=}. This append is the only allowed host target; all targets must exist."
         .. " In .profiles declare a bee.launch_definition with binding_ref and profile_id naming the window profile."
-        .. " Set presentation.start_menu = true so the person can select it in Sessions (N opens the agent picker)."
+        .. " Set presentation.start_menu = true so the person can select it in Agents (N opens the agent picker)."
         .. " A false value keeps the definition programmatic and hides it from this picker, including saved copies."
         .. " Use default_mode window and list in docker_credentials the login a Docker placement needs."
         .. " Set session_resource = session in the launch definition: the host's existing retained session"
-        .. " resource is required to open Sessions. This name selects an existing host resource;"
+        .. " resource is required to open Agents. This name selects an existing host resource;"
         .. " do not create a resource entry, database or alternative session store."
         .. " Select an owned bee.launch_policy in policy_ref with the reviewed executable mapping,"
         .. " private HOME, no credentials for an account-free CLI and native placement."
         .. " Inspect built-in definitions and policies for their required schema fields."
         .. " Keep credentials, gateway tools and host HOME absent unless separately admitted by the host."
-        .. " After approval settles, open Sessions, press N and select the new driver to open an idle session."
+        .. " After approval settles, open Agents, press N and select the new driver to open an idle session."
         .. " The CLI opens in its window. E customizes a saved copy of the selected definition."
         .. " Existing sessions retain their pinned routes; new sessions use the new binding."
 end
@@ -581,7 +581,7 @@ function M.hive_sdk(): string
 end
 
 function M.hive_sessions(): string
-    return "The person allows cross-bee agents at the receiving bee in Sessions (A: Allowances), or answers the first"
+    return "The person allows cross-bee agents at the receiving bee in Agents (A: Allowances), or answers the first"
         .. " Needs you request there. Scopes are list only; message and await; or open new sessions. Consent has a"
         .. " duration or is permanent, is workspace-bound and is revocable. Hive membership grants no agent access."
         .. " Every Sessions contract operation and catalog list accepts optional node; omission keeps local behavior."

@@ -146,7 +146,7 @@ response, mutually exclusive with `window_ttl_ms`. The host approver policy
 must explicitly set `allow_permanent: true`; omission denies it. This uses the
 common Grant ledger and compatibility `grant_window` list/revoke API, with a
 non-expiring horizon (`windows.PERMANENT_UNTIL_MS`, 9999-12-31T23:59:59Z).
-Sessions uses these common approval-window Grants for exact peer/workspace/scope consent.
+Agents uses these common approval-window Grants for exact peer/workspace/scope consent.
 Its protected consent adapter records the person's approval evidence; the
 receiving Hive dispatcher reads central active windows for every dispatch.
 

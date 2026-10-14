@@ -44,7 +44,7 @@ the instance's `args` and answers with `bee.app.checkpoint_result`, whose
 `storage` when the write fails. Only a successful result means the state is
 stored. The state is opaque to the node; the app owns its interpretation.
 
-The Sessions app (`bee.harness.app`, `bee.agent.window@1`, `automatic`) and the
+The Agents app (`bee.harness.app`, `bee.agent.window@1`, `automatic`) and the
 Inbox app (`inbox.v1`, `manual`) declare recovery. Process ids, launch tokens,
 terminal viewports and capabilities are recreated at every start and are never
 stored.

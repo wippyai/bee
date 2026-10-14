@@ -184,7 +184,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if height >= 5 then
         frame.line(painter, input_row, conv.read_only and "Read-only · messaging is not allowed by this bee" or conv.lifecycle == "closed" and "Closed · history remains available" or "> " .. text.bound(draft, 512) .. "▏", theme.text)
         footer_buttons = {
-            {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start new session from this" or "Send", enabled = not conv.read_only and (conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active"), primary = true},
+            {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start agent" or "Send", enabled = not conv.read_only and (conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active"), primary = true},
             {kind = "back", key = "Esc", label = "Sessions", enabled = true},
             {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true, more = true},
             {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = (not conv.node or conv.peer_scope == "open") and agents.pending(conv)},
@@ -196,7 +196,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         message = "No progress for " .. tostring(conv.activity_evidence.quiet_for_ms) .. " ms · " .. conv.activity_evidence.turn
     end
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
-    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start new"}, {key = "Esc", verb = "sessions"}}) or MORE, footer_buttons) end
+    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start agent"}, {key = "Esc", verb = "sessions"}}) or MORE, footer_buttons) end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

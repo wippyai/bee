@@ -39,7 +39,7 @@ and a `meta.hive_operation` name, revision, input/output schemas and effect.
 owner's overlay. It requires live admission, an exact destination-approved
 `hive.expose` grant and an audience admitting the authenticated sending node.
 Queued calls repeat authorization. Four execution slots and a 64-call queue
-bound the installed-scope executor. Sessions supplies a trusted host-owned policy mapping: the receiver binds the
+bound the installed-scope executor. The Sessions contract supplies a trusted host-owned policy mapping: the receiver binds the
 authenticated peer to its workspace and the person's live session allowance.
 Other policy operations require their own trusted mapping; package operations
 without an installed overlay remain fail-closed. See `docs/hive_sessions`.

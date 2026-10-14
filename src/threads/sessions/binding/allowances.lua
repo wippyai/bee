@@ -37,7 +37,7 @@ local function ask(peer: string, workspace: string): (Object?, string?)
     return approval("request", {workspace_id = workspace, idempotency_key = id(peer, workspace),
         request_kind = "question", policy = "hive-session-agents",
         proposal = {kind = "operation", ref = "bee.threads.sessions:allowance", revision = "1", payload = {peer = peer, workspace_id = workspace}},
-        prompt = {text = "Allow agents from bee " .. peer .. " to see / message agents here. Choose list only, message and await, or open new sessions and control sessions; choose a duration or permanent. You can revoke in Needs you > Grants or Sessions."},
+        prompt = {text = "Allow agents from bee " .. peer .. " to see / message agents here. Choose list only, message and await, or open new sessions and control sessions; choose a duration or permanent. You can revoke in Needs you > Grants or Agents."},
         response_schema = {type = "object", required = {"text"}, properties = {text = {type = "string"}}}}, workspace)
 end
 local function payload(view: Object): Object?

@@ -171,7 +171,7 @@ end
 
 -- open starts a session: the agent's own program runs in a terminal that
 -- Bee keeps whether or not anyone watches it. Messages are typed into it;
--- the person opens its terminal from Sessions.
+-- the person opens its terminal from Agents.
 function M.open(raw_request: unknown): Reply
     local request, refused = request_input(raw_request)
     if not request then return assert(refused) end

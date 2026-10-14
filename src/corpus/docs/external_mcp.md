@@ -50,7 +50,7 @@ thread. Additional access requires approval in Needs you.
 Connections last at most 24 hours. A listener restart also ends access.
 Run the connect command again for a new connection.
 
-To revoke access, open Sessions > MCP clients (also in Start), select the client
+To revoke access, open Agents > MCP clients (also in Start), select the client
 and choose X Revoke, then confirm. Revoke closes access immediately; its token
 stops working. Revoking a pending client also withdraws its request from Needs you.
 Enter Tool calls shows the client's tool-call history.

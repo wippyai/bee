@@ -25,7 +25,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     local count = #listing.items
-    frame.header(painter, "AGENT PROFILES", count > 0 and (tostring(count) .. " agents") or nil)
+    frame.header(painter, "PROFILES", count > 0 and (tostring(count) .. " profiles") or nil)
     local filtering = searching or (query ~= nil and query ~= "")
     local first = filtering and 3 or 2
     if filtering and height >= 5 then frame.line(painter, 2, "Search: " .. (query or ""), searching and theme.text or theme.muted) end
@@ -39,8 +39,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.row(painter, first + slot - 1, frame.tagged(width, text.bound(item.title, 512), tag(item)), index == selected, "choice", index, "", not item.ready and theme.muted or nil)
     end
     if count == 0 and status == "" and height >= 5 then
-        frame.empty(painter, first, "No agents are ready on this node",
-            height >= 7 and "Install a harness and log in, then R refresh, or U to see unavailable agents" or nil)
+        frame.empty(painter, first, "No profiles are ready on this node",
+            height >= 7 and "Install a harness and log in, then R refresh, or U to see unavailable profiles" or nil)
     elseif count == 0 and height >= 5 then
         frame.empty(painter, first, text.bound(status, 512))
     end

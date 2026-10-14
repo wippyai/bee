@@ -68,7 +68,7 @@ An operation has explicit `application_ref`, `hive_service` and
 It is callable only while both admission and its exposure grant remain live,
 its audience admits the authenticated peer node, and the exposure scope grants
 `hive.expose.<mode>` on the exact operation. `open` still requires these checks.
-`policy` requires a trusted host subject mapping. Sessions provides a receiver-local
+`policy` requires a trusted host subject mapping. The Sessions contract provides a receiver-local
 allowance mapping for its host contracts; see `docs/hive_sessions`. Other policy
 operations remain fail-closed without their own trusted mapping. Package
 operations without an installed overlay remain fail-closed; the runtime rejects

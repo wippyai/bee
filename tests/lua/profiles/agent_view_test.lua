@@ -79,12 +79,12 @@ local function define_tests()
             for _, hit in ipairs(picker_view.draw(80, 12, appearance.defaults(), empty, 0, "", false, false).hits) do
                 test.is_true(hit.kind ~= "open" and hit.kind ~= "headless" and hit.kind ~= "setup" and hit.kind ~= "edit")
             end
-            local loading_rows = picker_view.draw(80, 12, appearance.defaults(), empty, 0, "Loading agents…", false, false).rows
+            local loading_rows = picker_view.draw(80, 12, appearance.defaults(), empty, 0, "Loading profiles…", false, false).rows
             local loading = table.concat(loading_rows)
-            test.is_true(loading:find("Loading agents", 1, true) ~= nil)
-            test.is_true(loading:find("No agents are ready", 1, true) == nil)
+            test.is_true(loading:find("Loading profiles", 1, true) ~= nil)
+            test.is_true(loading:find("No profiles are ready", 1, true) == nil)
             -- An empty list says it is loading where its agents will appear.
-            test.is_true(loading_rows[2]:find("Loading agents", 1, true) ~= nil)
+            test.is_true(loading_rows[2]:find("Loading profiles", 1, true) ~= nil)
             local busy = picker_view.draw(80, 12, appearance.defaults(), hostile, 1, "Opening session…", true, false)
             test.is_true(table.concat(busy.rows):find("Opening session", 1, true) ~= nil)
             for _, hit in ipairs(busy.hits) do
@@ -98,7 +98,7 @@ local function define_tests()
             local drawn = picker_view.draw(120, 24, appearance.defaults(), two, 2, "", false, false)
             local rows: {string} = {}
             for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
-            test.is_true(rows[1]:find("AGENT PROFILES", 1, true) ~= nil and rows[1]:find("2 agents", 1, true) ~= nil)
+            test.is_true(rows[1]:find("PROFILES", 1, true) ~= nil and rows[1]:find("2 profiles", 1, true) ~= nil)
             test.eq(rows[2]:sub(1, 7), " Alpha ")
             test.eq(rows[3]:sub(1, #"›"), "›")
 
@@ -116,7 +116,7 @@ local function define_tests()
         test.it("explains an empty catalog", function()
             local empty: agents.Listing = {items = {}, unavailable = 0, notes = {}}
             local text = screen(picker_view.draw(120, 20, appearance.defaults(), empty, 0, "", false, false).rows)
-            test.is_true(text:find("No agents are ready on this node", 1, true) ~= nil)
+            test.is_true(text:find("No profiles are ready on this node", 1, true) ~= nil)
         end)
     end)
     test.describe("Sessions list", function()
@@ -180,7 +180,7 @@ local function define_tests()
             conv.lifecycle = "closed"
             for _, size in ipairs({{120, 36}, {80, 24}}) do
                 local shown = session_view.draw(size[1], size[2], appearance.defaults(), conv, "", "")
-                test.is_true(screen(shown.rows):find("Start new session from this", 1, true) ~= nil)
+                test.is_true(screen(shown.rows):find("Start agent", 1, true) ~= nil)
                 test.is_true(screen(shown.rows):find("Closed · history remains available", 1, true) ~= nil)
                 test.is_true(screen(shown.rows):find("done", 1, true) ~= nil)
             end

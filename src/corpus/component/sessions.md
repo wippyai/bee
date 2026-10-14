@@ -9,7 +9,7 @@ The Threads journal is the host-selected binding named by
 
 Every session runs the agent's own program in a terminal: admission pins the
 definition's window plan and `open` presents it through `bee.harness.binding:present`.
-A person opens the terminal from Sessions. A message sent to the session is
+A person opens the terminal from Agents. A message sent to the session is
 queued as Work in Threads and delivered into the terminal at the agent's next
 turn boundary (UserPromptSubmit and Stop hooks, `hook_boundary`); the Stop hook
 settles the turn with the agent's final message. A process exit proved by
@@ -82,12 +82,12 @@ options. Returned Session, Work and Operation handles keep their selected bee.
 The ten existing MCP `session_*` tools accept the same optional field.
 
 The receiving bee requires the person's allowance for the authenticated Hive
-peer in its receiving workspace. Sessions → Allowances grants list only,
+peer in its receiving workspace. Agents → Allowances grants list only,
 message and await, or open new sessions, for a chosen duration or permanently.
 Revocation takes effect at receiver authorization. A first refused operation
 creates one Needs you question there; background discovery creates no question.
 Approvals owns these permissions as central windows, including permanent
-consent, expiry and revocation. Sessions keeps no independent grant store.
+consent, expiry and revocation. Agents keeps no independent grant store.
 An agent cannot manage these allowances. Hive membership alone grants no access.
 
 | Scope | Allowed operations |
@@ -96,7 +96,7 @@ An agent cannot manage these allowances. Hive membership alone grants no access.
 | Message and await | List operations plus `send`, `await`, `join` |
 | Open new sessions | Message operations plus `open`, `run`, `cancel`, `close` |
 
-Sessions groups allowed peers by bee. Opening a peer's agent shows its history
+The Sessions view in Agents groups allowed peers by bee. Opening a peer's agent shows its history
 and state. The composer stays read-only under list-only consent. The receiving
 workspace's session permissions, current allowance and operation exposure are
 checked again when a queued Hive call dispatches.

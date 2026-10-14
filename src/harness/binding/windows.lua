@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
--- The window constructor for each admitted placement binding. The Sessions
+-- The window constructor for each admitted placement binding. The Agents
 -- app and the retained presentation executor open windows through this table.
 local native = require("window")
 local docker = require("docker_window")

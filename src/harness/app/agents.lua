@@ -408,7 +408,7 @@ function M.stop(conv: Conversation, new_key: () -> string, expected_work: string
     if expected_work and (not chosen or chosen.work:ref() ~= expected_work) then conv.notice = "Current work changed; review it again"; return false end
     if not chosen then conv.notice = "No current work to stop"; return false end
     chosen.cancel_key = chosen.cancel_key or new_key()
-    local operation, fault = chosen.work:cancel({operation_key = chosen.cancel_key, reason = "Stopped from Sessions"})
+    local operation, fault = chosen.work:cancel({operation_key = chosen.cancel_key, reason = "Stopped from Agents"})
     if not operation then conv.notice = describe(fault); return false end
     conv.notice = "Stop requested; waiting for the recorded outcome"
     return true

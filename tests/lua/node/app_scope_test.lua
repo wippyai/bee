@@ -1,6 +1,6 @@
 -- MIT. The functions an app calls run in the app's scope, so the boundary
 -- every app runs in leaves the node's stores to the functions that own them:
--- Sessions lists its sessions from inside its own scope.
+-- Agents lists its sessions from inside its own scope.
 local test = require("test")
 local funcs = require("funcs")
 local security = require("security")
@@ -26,7 +26,7 @@ local function define_tests()
             test.eq(scope:evaluate(actor, "system.read", "cluster"), "allow")
         end)
 
-        test.it("lets Sessions list sessions through the store functions from inside its scope", function()
+        test.it("lets Agents list sessions through the store functions from inside its scope", function()
             local workspace = home()
             local actor = assert(security.new_actor("bee.application:" .. workspace .. ":sessions-scope-test",
                 {workspace_id = workspace, definition_id = "bee.harness.app:app", definition_revision = "1", execution_generation = 1}))

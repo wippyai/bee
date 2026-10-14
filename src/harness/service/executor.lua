@@ -1,5 +1,5 @@
 -- MIT. The session owner supplies the terminal grant; the admitted placement
--- binding selects the window constructor, as in the Sessions app.
+-- binding selects the window constructor, as in the Agents app.
 local runtime = require("runtime")
 local windows = require("windows")
 return {main = function(value: unknown, operation_key: string)

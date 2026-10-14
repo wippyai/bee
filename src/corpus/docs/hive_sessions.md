@@ -4,12 +4,12 @@ The person chooses when agents on one bee may see or message agents on another.
 Allowances belong to the receiving bee and workspace. Each bee approves its
 peers independently; joining a hive creates no agent allowance.
 
-In Sessions, press A for Allowances. Select a bee identity, a scope and a
+In Agents, press A for Allowances. Select a bee identity, a scope and a
 duration (one hour, 24 hours, seven days or permanent), then apply. The same
 form answers a first request in Needs you. The question binds the bee and
 workspace; its decision checks the recorded revision and proposal digest.
-Sessions displays active grants and their expiration, and provides Revoke.
-Every allowance is a central Approvals window on the receiving bee. Sessions
+Agents displays active grants and their expiration, and provides Revoke.
+Every allowance is a central Approvals window on the receiving bee. Agents
 stores no grant rows or expiry rules. The receiver reads the central active
 windows; expiry and revocation in Approvals remove access immediately.
 Permanent consent is an explicitly permitted central window until revoked.

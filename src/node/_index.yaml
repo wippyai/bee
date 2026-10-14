@@ -92,7 +92,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.node.application_admission
-    comment: The node's admissions for its own apps; Sessions builds call scopes for the agents it runs and takes a minute to close them
+    comment: The node's admissions for its own apps; Agents builds call scopes for the agents it runs and takes a minute to close them
   data:
     bindings:
     - definition_id: bee.harness.app:app

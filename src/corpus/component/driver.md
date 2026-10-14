@@ -182,7 +182,7 @@ Workspace-authored drivers use the governed `driver.<name>` overlay rule. Read
 the overlay guide's `drivers` section for ownership, descriptor-based method
 factories, the exact host activation append and delivery approval. The driver's
 `.profiles` launch definition sets `presentation.start_menu: true` to appear in
-the Sessions agent picker (N); false keeps it programmatic. A window definition
+the Profiles view in Agents (N); false keeps it programmatic. A window definition
 also sets `session_resource: session`, selecting the host's existing retained
 session resource.
 

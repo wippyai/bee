@@ -12,7 +12,7 @@ local function handle(raw: unknown): Reply
     local workspace = actor and bounds.id(actor:meta().workspace_id)
     local definition = actor and actor:meta().definition_id
     if not workspace or definition ~= "bee.gateway.app:app" or not security.can("bee.gateway.external.view", workspace) then
-        return failure("DENIED", "External clients are managed through Sessions")
+        return failure("DENIED", "External clients are managed through Agents")
     end
     if not request or bounds.fields(request, {"operation", "client_id"}) then
         return failure("INVALID", "Invalid client operation")

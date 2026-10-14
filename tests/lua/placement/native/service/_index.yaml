@@ -1,12 +1,12 @@
 version: '1.0'
 namespace: bee.tests.placement.native.service
 entries:
-- name: identity_executor
+- name: capability_executor
   kind: exec.native
-  default_env: {PATH: '.wippy/speed-probe-bin:/usr/bin:/bin'}
-- name: identity_probe_test
+  default_env: {PATH: '/bee-no-probe-executables'}
+- name: capability_test
   kind: function.lua
-  source: file://identity_probe_test.lua
+  source: file://capability_test.lua
   method: run
   meta: {type: test, suite: bee}
   modules: [exec, registry]
@@ -14,6 +14,26 @@ entries:
     policies: [bee.tests.threads.sessions:probe_policy]
   imports:
     test: wippy.test:test
-    identity: bee.placement.native.service:identity
     capability: bee.placement.native.service:capability
     bounds: bee.values:bounds
+- name: runtime_supervision_test
+  kind: function.lua
+  source: file://runtime_supervision_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time]
+  security:
+    policies:
+    - bee.tests.placement.native:apply_test_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_store_policy
+    - bee.credentials.security:credential_store_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+  imports:
+    test: wippy.test:test
+    native_fixture: bee.tests.placement.native:native_fixture
+    protocol: bee.placement.native:protocol
+    store: bee.placement.native.persist:store

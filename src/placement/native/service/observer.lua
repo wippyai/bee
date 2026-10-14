@@ -97,13 +97,9 @@ function M.start(request: Request, executor: exec.Executor, argv: {string}, work
     local replies = assert(process.listen(topic, {message = true}))
     local child: string? = nil
     local closed = false
-    local receiving = false
+    local ended = false
     local stopped_signal = channel.new(1)
-    local function receive(timeout: string): {[string]: unknown}?
-        local selected = channel.select({replies:case_receive(), time.after(timeout):case_receive()})
-        if selected.ok and selected.channel == replies and child and tostring(selected.value:from()) == child then return bounds.object(selected.value:payload():data()) end
-        return nil
-    end
+    local events = assert(process.events())
     local io: IO = {
         record = record,
         server = function(arguments: {string}): (string?, (() -> ())?)
@@ -114,6 +110,7 @@ function M.start(request: Request, executor: exec.Executor, argv: {string}, work
             local stdout = server:stdout_stream()
             local stderr = server:stderr_stream()
             if not server:start() then server:close(); return nil, nil end
+            local server_done = assert(server:done())
             local discovered = channel.new(1)
             coroutine.spawn(function()
                 local content = ""
@@ -129,22 +126,40 @@ function M.start(request: Request, executor: exec.Executor, argv: {string}, work
             coroutine.spawn(function() while true do local chunk = stderr:read(4096); if not chunk or chunk == "" then return end end end)
             local selected = channel.select({discovered:case_receive(), time.after("20s"):case_receive()})
             local endpoint = selected.ok and selected.channel == discovered and bounds.text(selected.value, 128) or nil
-            local function close() server:close(); stdout:close(); stderr:close() end
+            local function close()
+                server:close(true)
+                local result = assert((server_done:receive()))
+                assert(not result.error, tostring(result.error))
+                stdout:close(); stderr:close()
+            end
             if not endpoint then close(); return nil, nil end
             return endpoint, close
         end,
         spawn = function(endpoint: string): boolean
             local host = resources.runner_host()
             if not host then return false end
-            local pid = process.spawn(declaration.process, host, {endpoint = endpoint, hook_endpoint = "http://" .. gateway.endpoint .. "/hook/" .. request.action_id,
+            local pid = process.spawn_monitored(declaration.process, host, {endpoint = endpoint, hook_endpoint = "http://" .. gateway.endpoint .. "/hook/" .. request.action_id,
                 hook_token = token, hooks = gateway.hooks, working_directory = working_directory, argv = argv, owner = process.pid(), topic = topic})
             child = pid and tostring(pid) or nil
+            if child then
+                coroutine.spawn(function()
+                    while true do
+                        local event, ok = events:receive()
+                        if not ok then return end
+                        if event.kind == process.event.EXIT and tostring(event.from) == child then
+                            ended = true
+                            stopped_signal:send(true)
+                            return
+                        end
+                    end
+                end)
+            end
             return child ~= nil
         end,
         ready = function(): {string}?
             local deadline = assert(time.after("20s"))
             return M.readiness(function(): {[string]: unknown}?
-                local selected = channel.select({replies:case_receive(), deadline:case_receive()})
+                local selected = channel.select({replies:case_receive(), stopped_signal:case_receive(), deadline:case_receive()})
                 if not selected.ok or selected.channel ~= replies then return nil end
                 if child and tostring(selected.value:from()) == child then return bounds.object(selected.value:payload():data()) end
                 return {kind = "ignored", detail = "unrecognized observer sender"}
@@ -152,14 +167,13 @@ function M.start(request: Request, executor: exec.Executor, argv: {string}, work
         end,
         release = function()
             if child then process.send(child, topic .. ".control", {command = "release"}) end
-            receiving = true
             coroutine.spawn(function()
                 while not closed do
                     local message, ok = replies:receive()
                     if not ok or closed then return end
                     if child and tostring(message:from()) == child then
                         local data = bounds.object(message:payload():data())
-                        if data and data.kind == "stopped" then stopped_signal:send(true); return end
+                        if data and data.kind == "stopped" then return end
                         if data then record("observer." .. tostring(data.kind), bounds.text(data.detail, 512) or "observer event") end
                     end
                 end
@@ -168,15 +182,8 @@ function M.start(request: Request, executor: exec.Executor, argv: {string}, work
         stop = function()
             if child then
                 process.send(child, topic .. ".control", {command = "stop"})
-                local stopped = false
-                if receiving then
-                    local selected = channel.select({stopped_signal:case_receive(), time.after("3s"):case_receive()})
-                    stopped = selected.ok and selected.channel == stopped_signal
-                else
-                    local reply = receive("3s")
-                    stopped = reply ~= nil and reply.kind == "stopped"
-                end
-                if not stopped then process.cancel(child, "window observer shutdown deadline"); record("observer.stop_failed", "observer did not acknowledge shutdown") end
+                if not ended then assert((stopped_signal:receive())) end
+                process.unmonitor(child)
             end
             closed = true
             process.unlisten(replies)

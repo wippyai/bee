@@ -13,7 +13,6 @@ local funcs = require("funcs")
 local store = require("store")
 local resources = require("resources")
 local executable = require("executable")
-local identity = require("identity")
 local protocol = require("protocol")
 local quote = require("quote")
 local types = require("types")
@@ -221,23 +220,14 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         if not identified then proc:signal(9); executor:release(); return refuse(identify_error or "Docker identity unavailable") end
         fields = identified
     end
-    local recorded: identity.Identity? = nil
     local handle = proc
-    if type(handle.pid) == "function" then
-        local pid: unknown = proc:pid()
-        if type(pid) == "number" then
-            local found = identity.read(executor, math.floor(pid))
-            if found then
-                recorded = found
-                fields.pid = found.pid
-                fields.pgid = found.pgid
-                fields.start_ticks = found.start_ticks
-                fields.boot_id = found.boot_id
-            end
-        end
+    local pid = proc:pid()
+    if not backend and pid then
+        fields.pid = pid
+        if group then fields.pgid = pid end
     end
-    assert(evidence(db, attempt_id, "child.identity_returned", "execution identity resolution returned"))
-    local detail = recorded and ("pid " .. tostring(recorded.pid) .. " group " .. tostring(recorded.pgid)) or "no pid available from this runtime"
+    assert(evidence(db, attempt_id, "child.identity_returned", "runtime process handle acquired"))
+    local detail = "runtime process handle pid " .. tostring(pid)
     local running = store.transition(db, attempt_id, {expected_execution = "starting", execution = "running", fields = fields, evidence = {kind = "child.started", detail = detail}})
     if not running.ok then
         local current = store.row(db, attempt_id)
@@ -724,10 +714,8 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         local scope_absent = false
         local scope_error = "write-back requires a proven-empty process group"
         if backend then scope_absent, scope_error = backend.absent(request)
-        elseif request.required_cleanup == "process_group" and recorded and recorded.pgid then
-            local absent, absent_error = identity.group_absent(recorded.pgid)
-            scope_absent = absent == true
-            if absent ~= true then scope_error = absent_error or "provider worker processes remain" end
+        elseif request.required_cleanup == "direct_process" then scope_absent = true
+        else scope_error = "runtime exposes leader exit, not process-group completion"
         end
         if scope_absent then
             for _, result in ipairs(materialization.write_back(materialized.home_path, materialized.writebacks, request.owner_id, attempt_id)) do

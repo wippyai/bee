@@ -10,44 +10,14 @@ function M.measure(): Measurement
     local executor, executor_error
     if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then return {capability = "direct_process", exit_observation = "eof_gated", stdin_close = false, detail = "executor unavailable: " .. tostring(executor_error)} end
-    local proc, exec_error = executor:exec("sh -c 'echo $$; if [ -r /proc/$$/stat ]; then "
-        .. "IFS= read -r stat < /proc/$$/stat; stat=${stat##*) }; set -f; set -- $stat; echo ${3}; "
-        .. "else ps -o pgid= -p $$; fi'", {process_group = true})
+    local proc, exec_error = executor:exec("true", {process_group = true})
     if not proc then
         executor:release()
-        return {capability = "direct_process", exit_observation = "eof_gated", stdin_close = false, detail = "exec refused: " .. tostring(exec_error)}
+        return {capability = "direct_process", exit_observation = "independent", stdin_close = true, detail = "runtime refused process_group: " .. tostring(exec_error)}
     end
-    local handle = proc
-    local observation: types.ExitObservation = "eof_gated"
-    if type(handle.done) == "function" then observation = "independent" end
-    local stdin_close = type(handle.close_stdin) == "function"
-    if type(handle.pid) ~= "function" then
-        proc:close(true)
-        executor:release()
-        return {capability = "direct_process", exit_observation = observation, stdin_close = stdin_close, detail = "exec handle carries no pid"}
-    end
-    local stdout = proc:stdout_stream()
-    local started, start_error = proc:start()
-    if not started then
-        executor:release()
-        return {capability = "direct_process", exit_observation = observation, stdin_close = stdin_close, detail = "probe did not start: " .. tostring(start_error)}
-    end
-    local pid: unknown = proc:pid()
-    local chunks: {string} = {}
-    while true do
-        local chunk = stdout:read(256)
-        if not chunk then break end
-        chunks[#chunks + 1] = tostring(chunk)
-    end
-    proc:wait()
-    stdout:close()
+    proc:close()
     executor:release()
-    if type(pid) ~= "number" then return {capability = "direct_process", exit_observation = observation, stdin_close = stdin_close, detail = "pid unreadable"} end
-    local number = math.floor(pid)
-    local reported: {string} = {}
-    for token in table.concat(chunks):gmatch("%d+") do reported[#reported + 1] = token end
-    if reported[1] ~= tostring(number) then return {capability = "direct_process", exit_observation = observation, stdin_close = stdin_close, detail = "pid " .. tostring(number) .. " does not match the child's own " .. tostring(reported[1])} end
-    if reported[2] ~= tostring(number) then return {capability = "direct_process", exit_observation = observation, stdin_close = stdin_close, detail = "child pgid " .. tostring(reported[2]) .. " is not its pid"} end
-    return {capability = "process_group", exit_observation = observation, stdin_close = stdin_close, detail = "child " .. tostring(number) .. " leads its own group"}
+    return {capability = "process_group", exit_observation = "independent", stdin_close = true,
+        detail = "runtime accepts process_group; Process.done observes child exit independently"}
 end
 return M

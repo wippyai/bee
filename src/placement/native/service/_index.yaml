@@ -48,13 +48,6 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     resources: bee.placement.native.env:resources
-- name: identity
-  kind: library.lua
-  source: file://identity.lua
-  modules:
-  - exec
-  imports:
-    resources: bee.placement.native.env:resources
 - name: writable_roots_adapter
   kind: library.lua
   source: file://writable_roots_adapter.lua
@@ -118,7 +111,6 @@ entries:
     resources: bee.placement.native.env:resources
     capability: bee.placement.native.service:capability
     homes: bee.placement.native.service:homes
-    identity: bee.placement.native.service:identity
     protocol: bee.placement.native:protocol
     materialization: bee.placement.native.service:materialization
     gateway_protocol: bee.gateway:protocol
@@ -179,7 +171,6 @@ entries:
     store: bee.placement.native.persist:store
     executable: bee.placement.native.service:executable
     resources: bee.placement.native.env:resources
-    identity: bee.placement.native.service:identity
     output_buffer: bee.placement.native.service:output_buffer
     protocol: bee.placement.native:protocol
     quote: bee.driver.binding:quote
@@ -212,7 +203,6 @@ entries:
     quote: bee.driver.binding:quote
     service: bee.placement.native.service:service
     bounds: bee.values:bounds
-    identity: bee.placement.native.service:identity
     process_backend: bee.placement.native.binding:process_backend
     observer: bee.placement.native.service:observer
 - name: sweeper
@@ -283,7 +273,6 @@ entries:
     store: bee.placement.native.persist:store
     executable: bee.placement.native.service:executable
     resources: bee.placement.native.env:resources
-    identity: bee.placement.native.service:identity
     output_buffer: bee.placement.native.service:output_buffer
     protocol: bee.placement.native:protocol
     quote: bee.driver.binding:quote

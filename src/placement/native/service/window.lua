@@ -19,7 +19,6 @@ local quote = require("quote")
 local funcs = require("funcs")
 local service = require("service")
 local protocol = require("protocol")
-local identity = require("identity")
 local process_backend = require("process_backend")
 local observer = require("observer")
 
@@ -319,17 +318,9 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     end
     local pid, pid_error = started:pid()
     if pid and not backend then
-        local found, read_error = identity.read(executor, pid)
-        if found then
-            fields.pid = found.pid
-            if found.pgid then fields.pgid = found.pgid end
-            if found.start_ticks then fields.start_ticks = found.start_ticks end
-            if found.boot_id then fields.boot_id = found.boot_id end
-            identity_detail = "pid " .. tostring(found.pid) .. " pgid " .. tostring(found.pgid)
-                .. " start_ticks " .. tostring(found.start_ticks) .. " boot_id " .. tostring(found.boot_id)
-        else
-            identity_detail = "execution identity unavailable: " .. tostring(read_error or "identity read failed")
-        end
+        fields.pid = pid
+        if execution_options.process_group then fields.pgid = pid end
+        identity_detail = "runtime terminal handle pid " .. tostring(pid)
     elseif pid_error then
         identity_detail = "execution identity unavailable: " .. tostring(pid_error)
     end
@@ -414,11 +405,11 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
         executor:release()
         local attempt = store.attempt(db, attempt_id)
         local cleanup_error: string? = nil
-        if attempt then
-            if backend then
-                local cleaned, backend_error = backend.cleanup(attempt, false)
-                if not cleaned then cleanup_error = backend_error or "cleanup failed" end
-            end
+        if attempt and backend then
+            local cleaned, backend_error = backend.cleanup(attempt, false)
+            if not cleaned then cleanup_error = backend_error or "cleanup failed" end
+        elseif attempt then
+            service.cleanup_attempt(attempt, true)
         end
         service.wake_supervision(row.placement_kind)
         db:release()

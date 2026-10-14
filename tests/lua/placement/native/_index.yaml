@@ -479,7 +479,6 @@ entries:
     claude_launch: bee.tests.support.driver:claude_launch
     test: wippy.test:test
     service: bee.placement.native.service:service
-    identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
     materialization: bee.placement.native.service:materialization
     resources: bee.placement.native.env:resources

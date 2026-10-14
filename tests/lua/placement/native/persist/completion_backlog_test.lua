@@ -4,7 +4,7 @@ local supervision = require("supervision")
 local native_fixture = require("native_fixture")
 local function cases()
     test.describe("Terminal completion backlog", function()
-        test.it("retains group proof work after exit without any workdir preparers", function()
+        test.it("does not poll for a process-group completion event the runtime cannot supply", function()
             local attempt = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", native_fixture.launch({"sh", "-c", "true"}, "process_group")))
             local db = assert(store.open())
             local ok, problem = pcall(function()
@@ -12,7 +12,7 @@ local function cases()
                 local rows = assert(supervision.rows(db, "native", 10000))
                 local found = false
                 for _, row in ipairs(rows) do if row.attempt_id == attempt.attempt_id then found = true end end
-                test.is_true(found, "terminal exit lost its pending scope proof")
+                test.is_false(found, "terminal exit must not schedule process-group scans")
                 assert(store.transition(db, attempt.attempt_id, {evidence = {kind = "workdir_preparers.settled", detail = "test proof"}}).ok)
                 for _, row in ipairs(assert(supervision.rows(db, "native", 10000))) do
                     test.is_false(row.attempt_id == attempt.attempt_id, "settled attempt is still pending")

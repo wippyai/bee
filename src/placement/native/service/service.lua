@@ -20,7 +20,6 @@ local executable = require("executable")
 local resources = require("resources")
 local capability = require("capability")
 local homes = require("homes")
-local identity = require("identity")
 local protocol = require("protocol")
 local registry = require("registry")
 local gateway_configuration = require("gateway_configuration")
@@ -103,26 +102,14 @@ local function transition(attempt_id: string, update: store.Update): Reply
     if not result.ok then return fail(result.code or "STORAGE", result.message or "transition failed") end
     return succeed(result.attempt)
 end
-local function recorded_identity(attempt_id: string): (identity.Identity?, string?, store.Row?)
+local function recorded_row(attempt_id: string): (store.Row?, string?)
     local db, open_error = store.open()
-    if not db then return nil, open_error, nil end
+    if not db then return nil, open_error end
     local row, row_error = store.row(db, attempt_id)
     db:release()
-    if not row then return nil, row_error or "attempt is not recorded", nil end
-    if row.pid == nil then return nil, nil, row end
-    local pid = bounds.integer(row.pid)
-    local ticks: integer? = nil
-    if row.start_ticks ~= nil then ticks = bounds.integer(row.start_ticks) end
-    local pgid: integer? = nil
-    if row.pgid ~= nil then pgid = bounds.integer(row.pgid) end
-    local boot: string? = nil
-    if row.boot_id ~= nil then boot = bounds.id(row.boot_id) end
-    if not pid or pid < 1 or (row.start_ticks ~= nil and (not ticks or ticks < 0))
-        or (row.pgid ~= nil and (not pgid or pgid < 1)) or (row.boot_id ~= nil and not boot) then
-        return nil, "recorded process identity is corrupt", row
-    end
-    return {pid = pid, pgid = pgid, start_ticks = ticks, boot_id = boot}, nil, row
+    return row, row_error
 end
+local runner_status: (store.Row?, types.Attempt) -> (string?, string?)
 local function runner_authority(attempt_id: string): (string?, string?)
     local db, open_error = store.open()
     if not db then return nil, open_error or "open placement store" end
@@ -684,11 +671,11 @@ function M.status(value: unknown): Reply
     if not id then return invalid end
     local attempt, denied, row = load(id)
     if not attempt then return assert(denied) end
-    local liveness: types.Liveness = {observed = false, alive = nil, at = store.now(), detail = "no execution identity recorded"}
-    local recorded = recorded_identity(attempt.attempt_id)
-    if recorded then
-        local observation = identity.observe(recorded)
-        liveness = {observed = observation.observed, alive = observation.alive, at = store.now(), detail = observation.detail}
+    local liveness: types.Liveness = {observed = false, at = store.now(), detail = "runtime owner unavailable"}
+    if attempt.execution_state == "exited" then
+        liveness = {observed = true, alive = false, at = store.now(), detail = "recorded runtime exit"}
+    elseif (attempt.execution_state == "running" or attempt.execution_state == "stopping") and row and row.runner_pid then
+        liveness = {observed = true, alive = true, at = tostring(row.updated_at), detail = "last published runtime child state"}
     end
     local private_home: boolean? = nil
     if attempt.session_ref then
@@ -699,24 +686,13 @@ function M.status(value: unknown): Reply
     end
     return succeed({attempt = attempt, liveness = liveness, private_home = private_home})
 end
--- activity reports whether a live attempt's process still runs work of its
--- own: the processes descending from it. An attempt that is not proven alive
--- reports no count.
 function M.activity(value: unknown): Reply
     local id, invalid = named(value)
     if not id then return invalid end
     local attempt, denied = load(id)
     if not attempt then return assert(denied) end
-    local recorded = recorded_identity(attempt.attempt_id)
-    if not recorded then return succeed({attempt_id = attempt.attempt_id, alive = false}) end
-    local observation = identity.observe(recorded)
-    if not observation.observed or not observation.alive then return succeed({attempt_id = attempt.attempt_id, alive = false}) end
-    local count, count_error = identity.descendants(recorded.pid)
-    if count == nil then return fail("UNAVAILABLE", count_error or "process table unavailable") end
-    return succeed({attempt_id = attempt.attempt_id, alive = true, descendants = count})
+    return fail("UNSUPPORTED_CAPABILITY", "runtime exposes no native descendant activity measurement")
 end
--- stop: the runner signals when it lives; otherwise the identified leader's
--- group is signalled, and an unidentified attempt becomes uncertain.
 function M.stop(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "stop request must be an object") end
@@ -745,7 +721,7 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
         attempt = current
     end
     if not transitions.live(attempt.execution_state) then return succeed(attempt) end
-    local recorded, _, row = recorded_identity(attempt.attempt_id)
+    local row = recorded_row(attempt.attempt_id)
     local runner = row and row.runner_pid or nil
     local db = store.open()
     local request = row and store.request(row) or nil
@@ -753,7 +729,7 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
     if db then control_token = store.runner_authority(db, attempt.attempt_id, nil) end
     if db then db:release() end
     local grace = request and request.timeouts.stop_grace_ms or request_codec.DEFAULT_STOP_GRACE_MS
-    if attempt.execution_state == "starting" and not recorded and (runner == nil or runner == "") then
+    if attempt.execution_state == "starting" and (not row or row.pid == nil) and (runner == nil or runner == "") then
         -- The supervisor may still be installing its child monitor. Record
         -- stop intent; the runner checks it before materialization is released.
         return transition(attempt.attempt_id, {expected_execution = "starting", execution = "stopping",
@@ -771,20 +747,14 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
         end
         local sent, send_error = process.send(runner, protocol.TOPIC_CONTROL, {command = "stop", control_token = control_token, mode = mode, grace_ms = grace})
         if sent then return requested end
-        if attempt.execution_state == "starting" and not recorded then
+        if attempt.execution_state == "starting" and (not row or row.pid == nil) then
             -- The durable stop is also checked by the runner before launch.
             return transition(attempt.attempt_id, {evidence = {kind = "stop.delivery_failed", detail = tostring(send_error) .. "; durable stop remains requested during startup"}})
         end
     end
-    if recorded then
-        local signal = mode == "forced" and 9 or 15
-        local signalled, signal_error = identity.signal_group(recorded, signal)
-        if signalled then
-            return transition(attempt.attempt_id, {execution = "stopping", evidence = {kind = "signal.group", detail = "signal " .. tostring(signal) .. " to group " .. tostring(recorded.pgid) .. " without a runner"}})
-        end
-        return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "stop.unproven", detail = "no runner and the group cannot be signalled safely: " .. tostring(signal_error)}})
-    end
-    return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "stop.unproven", detail = "no runner and no execution identity"}})
+    return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "stop.unproven",
+        detail = "runtime process owner unavailable; no recoverable native handle"}})
+
 end
 -- measure_executable: a read-only measurement of one host path, for the
 -- plan and the acceptance record; the runner repeats it before exec.
@@ -813,7 +783,7 @@ function M.close_stdin(value: unknown): Reply
         return succeed({attempt = attempt, closed = false, reason = "the child has exited"})
     end
     if not transitions.live(attempt.execution_state) then return fail("CONFLICT", "the attempt is not live") end
-    local _, _, row = recorded_identity(attempt.attempt_id)
+    local row = recorded_row(attempt.attempt_id)
     local runner = row and row.runner_pid or nil
     if type(runner) ~= "string" or runner == "" then return fail("CONFLICT", "no runner supervises the attempt") end
     local control_token, authority_error = runner_authority(attempt.attempt_id)
@@ -861,12 +831,10 @@ function M.close_stdin(value: unknown): Reply
     if not current then return assert(current_error) end
     return succeed({attempt = current, closed = answer.closed, reason = answer.reason})
 end
--- reconcile: prove alive or gone from identity; keep uncertainty otherwise.
--- reconcile_attempt is the owner-independent core the supervision sweep
 -- A runner that answers a typed status request for this attempt is
 -- supervising it: that proves supervision and reports what the runner
 -- observes, never that the child runs or that its scope is gone.
-local function runner_status(row: store.Row?, attempt: types.Attempt): (string?, string?)
+runner_status = function(row: store.Row?, attempt: types.Attempt): (string?, string?)
     local runner = row and row.runner_pid or nil
     if type(runner) ~= "string" or runner == "" then return nil, nil end
     local control_token = runner_authority(attempt.attempt_id)
@@ -875,13 +843,21 @@ local function runner_status(row: store.Row?, attempt: types.Attempt): (string?,
     if probe_error or not probe then return nil, nil end
     local expected: protocol.StatusProbe = {runner = runner, attempt_id = attempt.attempt_id, generation = attempt.attachment_generation, probe = probe}
     local replies = assert(process.listen(protocol.TOPIC_STATUS, {message = true}))
-    process.send(runner, protocol.TOPIC_CONTROL, {command = "status", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
-    local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
+    local events = assert(process.events())
+    local monitored = process.monitor(runner)
+    if not monitored then process.unlisten(replies); return nil, "runtime owner is absent" end
+    local sent = process.send(runner, protocol.TOPIC_CONTROL, {command = "status", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
+    if not sent then process.unmonitor(runner); process.unlisten(replies); return nil, "runtime owner is absent" end
     local detail: string? = nil
     local execution: string? = nil
     while true do
-        local selected = channel.select({replies:case_receive(), timer:case_receive()})
-        if not selected.ok or selected.channel == timer then break end
+        local selected = channel.select({replies:case_receive(), events:case_receive()})
+        if not selected.ok then break end
+        if selected.channel == events then
+            if selected.value.kind == process.event.CANCEL
+                or (selected.value.kind == process.event.EXIT and tostring(selected.value.from) == runner) then break end
+            goto next_status
+        end
         local message = selected.value
         local status = protocol.status_reply_accepted(tostring(message:from()), message:payload():data(), expected)
         if status then
@@ -889,7 +865,9 @@ local function runner_status(row: store.Row?, attempt: types.Attempt): (string?,
             detail = "runner reports " .. status.execution .. ", generation " .. tostring(status.generation) .. ", eof " .. tostring(status.eof_seen) .. ", pending outputs " .. tostring(status.pending_outputs) .. ", remembered writes " .. tostring(status.remembered_writes)
             break
         end
+        ::next_status::
     end
+    process.unmonitor(runner)
     process.unlisten(replies)
     return execution, detail
 end
@@ -915,91 +893,31 @@ function M.runner_present(row: store.Row): (boolean?, string?)
     end
     return false, nil
 end
-local function preparer_runner_absent(row: store.Row?, attempt_id: string): boolean
-    local runner = row and bounds.id(row.runner_pid)
-    if not runner then return false end
-    local db = store.open()
-    if not db then return false end
-    local intents, err = db:query("SELECT kind FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('workdir_preparer.state', 'child.creating')", {attempt_id})
-    db:release()
-    if err or not intents or #intents == 0 then return false end
-    for _, item in ipairs(intents) do if item.kind == "child.creating" then return false end end
-    local raw_hosts, hosts_error = system.hosts.list()
-    local hosts = bounds.array(raw_hosts, 1024)
-    if hosts_error or not hosts or #hosts == 0 then return false end
-    for _, raw in ipairs(hosts) do
-        local host = bounds.object(raw)
-        local id = host and bounds.id(host.id)
-        if not id then return false end
-        local raw_processes, processes_error = system.hosts.processes(id)
-        local processes = bounds.array(raw_processes, 65536)
-        if processes_error or not processes then return false end
-        for _, item in ipairs(processes) do
-            local proc = bounds.object(item)
-            local pid = proc and bounds.id(proc.pid)
-            if not pid or pid == runner then return false end
-        end
-    end
-    return true
-end
 function M.reconcile_attempt(attempt: types.Attempt): Reply
-    if attempt.execution_state == "start_failed" or attempt.execution_state == "exited" or attempt.execution_state == "intended" then return succeed(attempt) end
-    local recorded, _, row = recorded_identity(attempt.attempt_id)
+    if not transitions.live(attempt.execution_state) then return succeed(attempt) end
+    local row = recorded_row(attempt.attempt_id)
     if attempt.execution_state == "starting" and row then
-        local db, open_error = store.open()
-        if not db then return fail("STORAGE", open_error or "open placement store") end
-        local monitors, monitor_error = db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('runner.start_accepted', 'runner.monitored') LIMIT 1", {attempt.attempt_id})
+        local db = assert(store.open())
+        local monitors = assert(db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('runner.start_accepted', 'runner.monitored') LIMIT 1", {attempt.attempt_id}))
         db:release()
-        if not monitors or monitor_error then return fail("STORAGE", "read startup supervision: " .. tostring(monitor_error)) end
-        if #monitors > 0 then
+        local runner = bounds.id(row.runner_pid)
+        local present = runner and process.monitor(runner)
+        if present then process.unmonitor(runner) end
+        if #monitors > 0 or present then
             local enforcement = M.supervise_grants(attempt)
             if enforcement then return enforcement end
-            -- Only the acknowledgement or monitor decides supervised startup.
-            return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "startup outcome belongs to the installed runner monitor"}})
+            return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "startup outcome belongs to the runtime runner monitor"}})
         end
     end
-    if not recorded then
-        if preparer_runner_absent(row, attempt.attempt_id) then
-            M.retire_gateway(attempt, "runner ended before child creation")
-            return transition(attempt.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
-                evidence = {kind = "child.not_started", detail = "preparer intent persisted; runner absent; no child creation intent"}})
-        end
-        if attempt.execution_state == "uncertain" then return succeed(attempt) end
-        local supervised, supervised_detail = runner_status(row, attempt)
-        if supervised then
-            local enforcement = M.supervise_grants(attempt)
-            if enforcement then return enforcement end
-            return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; no execution identity recorded"}})
-        end
-        if attempt.execution_state == "starting" and row then
-            local present, presence_error = M.runner_present(row)
-            if present == nil then return fail("UNAVAILABLE", presence_error or "runner presence is unknown") end
-            if present then
-                return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "legacy runner is present before child creation"}})
-            end
-        end
-        M.retire_gateway(attempt, "attempt uncertain: no execution identity")
-        return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unidentified", detail = "no execution identity to prove presence or absence"}})
-    end
-    local observation = identity.observe(recorded)
-    if not observation.observed then
-        if attempt.execution_state == "uncertain" then return succeed(attempt) end
-        local supervised, supervised_detail = runner_status(row, attempt)
-        if supervised then
-            local enforcement = M.supervise_grants(attempt)
-            if enforcement then return enforcement end
-            return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; " .. observation.detail}})
-        end
-        M.retire_gateway(attempt, "attempt uncertain: " .. observation.detail)
-        return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unobserved", detail = observation.detail}})
-    end
-    if observation.alive then
+    local execution, detail = runner_status(row, attempt)
+    if execution then
         local enforcement = M.supervise_grants(attempt)
         if enforcement then return enforcement end
-        return transition(attempt.attempt_id, {evidence = {kind = "reconcile.alive", detail = observation.detail}})
+        return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = detail or "runtime owner responds"}})
     end
-    M.retire_gateway(attempt, "leader absent")
-    return transition(attempt.attempt_id, {execution = "exited", fields = {exit_source = "reconcile"}, evidence = {kind = "reconcile.absent", detail = observation.detail .. "; exit code unknown; leader absence only"}})
+    M.retire_gateway(attempt, "runtime owner unavailable")
+    return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unobserved",
+        detail = "runtime owner unavailable; native handle recovery is unsupported"}})
 end
 function M.reconcile(value: unknown): Reply
     local id, invalid = named(value)
@@ -1017,15 +935,7 @@ function M.pending(): boolean
     local db, problem = store.open()
     if not db then error(problem or "open placement backlog") end
     local called, pending = pcall(function(): boolean
-        if supervision.pending(db, "native") then return true end
-        local rows = assert(db:query("SELECT attempt_id FROM bee_placement_attempts WHERE COALESCE(placement_kind, 'native') = 'native' AND execution_state = 'exited' AND runner_pid IS NOT NULL"))
-        for _, row in ipairs(rows) do
-            local current = assert(store.row(db, tostring(row.attempt_id)))
-            local present, failure = M.runner_present(current)
-            if present == nil then error(failure or "native runner presence is unknown") end
-            if present then return true end
-        end
-        return false
+        return supervision.pending(db, "native")
     end)
     db:release()
     if not called then error(tostring(pending)) end
@@ -1061,22 +971,14 @@ function M.sweep(): Reply
     end
     return succeed({reconciled = #live, outcomes = outcomes})
 end
--- The required cleanup scope must be proven gone before a home is removed:
--- the direct process by an observed exit or proven leader absence; a group
--- by no member answering; a contained tree by nothing this runtime offers.
-local function scope_proven(attempt: types.Attempt, recorded: identity.Identity?): (boolean, string)
-    if attempt.required_cleanup == "contained_tree" then return false, "no runtime here proves a contained tree" end
-    if attempt.required_cleanup == "direct_process" then
-        if attempt.exit_source == "runner" then return true, "exit observed by the runner" end
-        if attempt.exit_source == "terminal" then return true, "exit observed by the terminal owner" end
-        if attempt.exit_source == "reconcile" then return true, "leader absence proven by identity" end
-        return false, "exit not observed"
+local function scope_proven(attempt: types.Attempt): (boolean, string)
+    if attempt.required_cleanup ~= "direct_process" then
+        return false, "runtime exposes leader exit, not process-group completion"
     end
-    if not recorded or not recorded.pgid then return false, "no process group recorded" end
-    local absent, probe_error = identity.group_absent(recorded.pgid)
-    if absent == nil then return false, "group probe failed: " .. tostring(probe_error) end
-    if not absent then return false, "processes remain in group " .. tostring(recorded.pgid) end
-    return true, "no process remains in group " .. tostring(recorded.pgid)
+    if attempt.exit_source == "runner" or attempt.exit_source == "terminal" then
+        return true, "exit observed by the runtime handle"
+    end
+    return false, "runtime exit not observed"
 end
 -- A live attempt keeps the authority it still holds: its leases are renewed.
 -- One whose grant no longer resolves is stopped; enforcement stays pending
@@ -1129,14 +1031,14 @@ end
 function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Reply
     if attempt.cleanup_state == "complete" then return succeed(attempt) end
     if attempt.execution_state ~= "start_failed" and not transitions.may_clean(attempt.execution_state) then return fail("CONFLICT", "cleanup needs a proven exit; execution is " .. attempt.execution_state) end
-    local recorded, identity_error, row = recorded_identity(attempt.attempt_id)
-    if identity_error then return fail("STORAGE", identity_error) end
+    local row, row_error = recorded_row(attempt.attempt_id)
+    if row_error then return fail("STORAGE", row_error) end
     if not row then return fail("STORAGE", "attempt is not recorded") end
-    local proven, why = scope_proven(attempt, recorded)
+    local proven, why = scope_proven(attempt)
     -- Materialization can acknowledge a stop before creating any child. Its
     -- completion and this proof commit together in the existing evidence ledger.
     -- Missing identity alone is never proof; contradictory identity refuses it.
-    if not proven and (attempt.start_cancelled or attempt.exit_source == "runner" or attempt.execution_state == "start_failed") and not recorded
+    if not proven and (attempt.start_cancelled or attempt.exit_source == "runner" or attempt.execution_state == "start_failed")
         and row.pid == nil and row.pgid == nil and row.start_ticks == nil and row.boot_id == nil then
         local db, open_error = store.open()
         if not db then return fail("STORAGE", open_error or "open placement store") end
@@ -1210,7 +1112,7 @@ function M.attach(value: unknown): Reply
     local exited = attempt.execution_state == "exited"
     if not transitions.live(attempt.execution_state) and attempt.execution_state ~= "intended" and not exited then return fail("CONFLICT", "the attempt is not live") end
     if generation <= attempt.attachment_generation then return fail("CONFLICT", "generation " .. tostring(generation) .. " is not newer than " .. tostring(attempt.attachment_generation)) end
-    local _, _, row = recorded_identity(attempt.attempt_id)
+    local row = recorded_row(attempt.attempt_id)
     local runner = row and row.runner_pid or nil
     local previous_recipient: unknown = sql.NULL
     if row and type(row.recipient) == "string" then previous_recipient = row.recipient end

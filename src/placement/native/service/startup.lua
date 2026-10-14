@@ -106,8 +106,9 @@ local function main(attempt_id: string, caller: string, reply_topic: string, run
                     local reason = "runner exited before acknowledging startup: " .. tostring(result and result.error or event.kind)
                     assert(store.transition(db, attempt_id, {expected_execution = "starting", execution = "start_failed",
                         fields = {runner_pid = sql.NULL}, evidence = {kind = "child.start_failed", detail = reason}}).ok)
-                elseif current.execution_state == "stopping" then
-                    assert(store.transition(db, attempt_id, {evidence = {kind = "runner.exited", detail = "runner exit after explicit stop: " .. tostring(event.result)}}).ok)
+                elseif current.execution_state == "running" or current.execution_state == "stopping" then
+                    assert(store.transition(db, attempt_id, {execution = "uncertain", fields = {runner_pid = sql.NULL},
+                        evidence = {kind = "runner.exited", detail = "runtime owner exited without publishing its native child result"}}).ok)
                 end
                 notify()
                 break

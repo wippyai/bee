@@ -96,7 +96,7 @@ jobs:
           tests/.wippy/runs/**/output.log
           tests/.wippy/runs/**/plan.json
           tests/.wippy/runs/**/results.json
-          tests/.wippy/boot/**/output.log
+          tests/.wippy/boot/**/*.log
         if-no-files-found: ignore
     env:
       CI_TESTS: '1'
@@ -124,7 +124,7 @@ jobs:
           tests/.wippy/runs/**/output.log
           tests/.wippy/runs/**/plan.json
           tests/.wippy/runs/**/results.json
-          tests/.wippy/boot/**/output.log
+          tests/.wippy/boot/**/*.log
         if-no-files-found: ignore
     strategy:
       fail-fast: false

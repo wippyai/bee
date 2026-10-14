@@ -95,7 +95,7 @@ def check_app_namespaces(toolchain, root, workspace, application, environment):
             row = connection.execute(
                 "SELECT app, args, desktop_id, workspace_id, created_at FROM bee_node_instances WHERE id = ?",
                 ("namespace-" + name,)).fetchone()
-            assert row is not None, name
+            assert row is not None, (name, output)
             assert row[0] == "bee.apps." + name + ".app:app", row
             assert json.loads(row[1]) == {"retained": name}, row
             assert row[2:] == (desktop, workspace_id, "2026-10-01T00:00:00Z"), row

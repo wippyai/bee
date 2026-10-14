@@ -1,9 +1,9 @@
 -- SPDX-License-Identifier: MIT
--- Constructors stay in the app actor that owns the broker terminal grant.
--- The admitted placement binding selects one; the picker uses the same path.
-local runtime = require("runtime")
-local windows = require("windows")
-
+local process = require("process")
+local client = require("client")
 return {main = function(value: unknown)
-    return runtime.main(value, windows.constructors())
+    local launch = client.launch(value)
+    if not launch then error("Invalid application launch") end
+    local selected = launch.resume_state == "" and (#launch.arguments == 0 or launch.arguments[1] == "--session")
+    assert(process.upgrade(selected and "bee.harness.app:selection" or "bee.harness.app:execution", value))
 end}

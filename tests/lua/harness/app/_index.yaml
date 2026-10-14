@@ -28,3 +28,37 @@ entries:
   imports:
     test: wippy.test:test
     directory: bee.harness.app:directory
+- name: entry_dependencies_test
+  kind: function.lua
+  source: file://entry_dependencies_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test
+- name: selection_probe
+  kind: process.lua
+  source: file://route_probe.lua
+  method: selection
+  meta: {type: test_support}
+  modules: [process, tty]
+  imports:
+    client: bee.app:client
+- name: execution_probe
+  kind: process.lua
+  source: file://route_probe.lua
+  method: execution
+  meta: {type: test_support}
+  modules: [process, tty]
+  imports:
+    client: bee.app:client
+- name: entry_route_test
+  kind: function.lua
+  source: file://entry_route_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, process, tty]
+  security:
+    policies: [bee.tests.harness:apply_test_policy]
+  imports:
+    test: wippy.test:test

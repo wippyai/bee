@@ -70,10 +70,9 @@ entries:
   kind: process.lua
   source: file://app.lua
   method: main
-  modules: []
+  modules: [process]
   imports:
-    runtime: bee.harness.app:runtime
-    windows: bee.harness.binding:windows
+    client: bee.app:client
   meta:
     type: bee.app
     application:
@@ -93,7 +92,7 @@ entries:
       - name: agent
         fullscreen: false
   security:
-    policies:
+    policies: &app_policies
     - bee.security.approvals:confirmation_client
     - bee.security.approvals:confirmation_authority
     - bee.harness.security:waiting_policy
@@ -302,3 +301,24 @@ entries:
     bounds: bee.values:bounds
     agents: bee.harness.app:agents
     sessions_protocol: bee.threads.sessions.types:protocol
+
+- name: selection
+  kind: process.lua
+  source: file://selection.lua
+  method: main
+  modules: [tty, process]
+  imports:
+    client: bee.app:client
+    picker: bee.harness.app:picker
+    recovery: bee.harness.app:recovery
+  security:
+    policies: *app_policies
+- name: execution
+  kind: process.lua
+  source: file://execution.lua
+  method: main
+  imports:
+    runtime: bee.harness.app:runtime
+    windows: bee.harness.binding:windows
+  security:
+    policies: *app_policies

@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.harness.catalog
+namespace: bee.tests.harness
 entries:
 - name: configuration_probe
   kind: function.lua
@@ -28,7 +28,7 @@ entries:
     type: harness.driver
     driver_id: fake
     test_support: true
-    profiles_ref: bee.harness.catalog:fake_profiles
+    profiles_ref: bee.tests.harness:fake_profiles
   contracts:
   - contract: bee.driver:driver
     methods:
@@ -40,7 +40,7 @@ entries:
   kind: registry.entry
   meta:
     type: harness.profile
-    driver_ref: bee.harness.catalog:fake_binding
+    driver_ref: bee.tests.harness:fake_binding
     test_support: true
   data:
     driver:
@@ -56,7 +56,7 @@ entries:
         protocol_revision: fake-1
         answer_path:
           strategy: terminal_field
-          adapter_ref: bee.tests.driver.support:claude_protocol
+          adapter_ref: bee.tests.support.driver:claude_protocol
 - name: orphan_binding
   kind: contract.binding
   meta:
@@ -89,7 +89,7 @@ entries:
     type: test
     suite: bee
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     classify: bee.harness.catalog:classify
@@ -105,9 +105,9 @@ entries:
   - registry
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
+    - bee.tests.harness:apply_test_policy
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
@@ -163,7 +163,7 @@ entries:
     type: test
     suite: bee
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     hooks: bee.harness.carrier:hooks
@@ -204,7 +204,7 @@ entries:
     command_names: []
     binding_ref: bee.driver.claude.binding:binding
     profile_id: window
-    policy_ref: bee.harness.catalog:window_ready_policy
+    policy_ref: bee.tests.harness:window_ready_policy
     default_mode: window
     allowed_overrides: []
     thread_policy:
@@ -247,8 +247,8 @@ entries:
   - sql
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.tests.principals:application_scope_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.support.principals:application_scope_policy
     - bee.security.approvals:approval_store_policy
   imports:
     bounds: bee.values:bounds
@@ -375,7 +375,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
-    hook_command_ref: bee.harness.catalog:fixture_hook_command
+    hook_command_ref: bee.tests.harness:fixture_hook_command
 - name: gateway_surface_policy
   kind: registry.entry
   meta:
@@ -405,7 +405,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
-    hook_command_ref: bee.harness.catalog:fixture_hook_command
+    hook_command_ref: bee.tests.harness:fixture_hook_command
     gateway_surface:
       tools: []
       traits:
@@ -506,7 +506,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
-    hook_command_ref: bee.harness.catalog:fixture_hook_command
+    hook_command_ref: bee.tests.harness:fixture_hook_command
 - name: codex_gateway_policy
   kind: registry.entry
   meta:
@@ -527,7 +527,7 @@ entries:
     environment: {}
     prepare_options:
       sandbox: read-only
-    provider_ref: bee.harness.catalog:codex_fixture_provider
+    provider_ref: bee.tests.harness:codex_fixture_provider
     gateway_tools:
     - thread_read
     - capabilities
@@ -537,7 +537,7 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
-    hook_command_ref: bee.harness.catalog:fixture_hook_command
+    hook_command_ref: bee.tests.harness:fixture_hook_command
 - name: gateway_harness_test
   kind: function.lua
   source: file://gateway_harness_test.lua
@@ -559,21 +559,21 @@ entries:
   - base64
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
     - bee.credentials.security:credential_store_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
-    claude_launch: bee.tests.driver.support:claude_launch
-    codex_launch: bee.tests.driver.support:codex_launch
+    claude_launch: bee.tests.support.driver:claude_launch
+    codex_launch: bee.tests.support.driver:codex_launch
     codex_configuration: bee.driver.codex.binding:configuration
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
     configuration: bee.driver.binding:configuration
     quote: bee.driver.binding:quote
 - name: gateway_client_policy
@@ -620,15 +620,15 @@ entries:
   - sql
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
   imports:
     memory_host: bee.tests.memory:host
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
 - name: gateway_fencing_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -649,15 +649,15 @@ entries:
   - sql
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
   imports:
     memory_host: bee.tests.memory:host
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
 - name: extension_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -680,15 +680,15 @@ entries:
     policies:
     - bee.tests.memory:host_policy
     - bee.tests.memory:read_policy
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
   imports:
     memory_host: bee.tests.memory:host
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
 - name: project_fixture
   kind: fs.directory
   meta:
@@ -797,7 +797,7 @@ entries:
     - bee.driver.claude.binding:normalize
     - bee.driver.claude.binding:configure
     - bee.driver.codex.binding:configure
-    - bee.harness.catalog:configuration_probe
+    - bee.tests.harness:configuration_probe
     - bee.harness.binding:capabilities
     - security
     effect: allow
@@ -838,7 +838,7 @@ entries:
   imports:
     carrier_types: bee.harness:types
     bounds: bee.values:bounds
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     placement_types: bee.placement:types
     placement_request: bee.placement:request
     preferences_codec: bee.driver.descriptor:effective
@@ -869,17 +869,17 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_exec_policy
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
   imports:
     processes: bee.tests.support:processes
     quote: bee.driver.binding:quote
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
-    exits: bee.harness.catalog:exits
-    orphan_gate: bee.harness.catalog:orphan_gate
+    placement_fixture: bee.tests.harness:placement_fixture
+    exits: bee.tests.harness:exits
+    orphan_gate: bee.tests.harness:orphan_gate
 - name: orphan_gate
   kind: library.lua
   source: file://orphan_gate.lua
@@ -906,19 +906,19 @@ entries:
   - json
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
     - bee.placement.native.security:placement_exec_policy
   imports:
     processes: bee.tests.support:processes
     quote: bee.driver.binding:quote
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
-    exits: bee.harness.catalog:exits
-    orphan_gate: bee.harness.catalog:orphan_gate
+    placement_fixture: bee.tests.harness:placement_fixture
+    exits: bee.tests.harness:exits
+    orphan_gate: bee.tests.harness:orphan_gate
 - name: carrier_stream_test
   kind: function.lua
   source: file://carrier_test.lua
@@ -940,17 +940,17 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_exec_policy
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
   imports:
     processes: bee.tests.support:processes
     quote: bee.driver.binding:quote
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
-    exits: bee.harness.catalog:exits
-    orphan_gate: bee.harness.catalog:orphan_gate
+    placement_fixture: bee.tests.harness:placement_fixture
+    exits: bee.tests.harness:exits
+    orphan_gate: bee.tests.harness:orphan_gate
 - name: launch_sentinel_storage
   kind: env.storage.memory
   meta:
@@ -961,7 +961,7 @@ entries:
   kind: env.variable
   meta:
     type: test_support
-  storage: bee.harness.catalog:launch_sentinel_storage
+  storage: bee.tests.harness:launch_sentinel_storage
   variable: BEE_LAUNCH_SENTINEL_KEY
   default: launch-sentinel-2b3c4d
   readonly: true
@@ -969,7 +969,7 @@ entries:
   kind: env.variable
   meta:
     type: test_support
-  storage: bee.harness.catalog:launch_sentinel_storage
+  storage: bee.tests.harness:launch_sentinel_storage
   variable: BEE_ALTERNATE_SETUP_KEY
   default: alternate-setup-sentinel
   readonly: true
@@ -987,7 +987,7 @@ entries:
     - claude-fixture
     binding_ref: bee.driver.claude.binding:binding
     profile_id: batch
-    policy_ref: bee.harness.catalog:fixture_policy
+    policy_ref: bee.tests.harness:fixture_policy
     default_mode: batch
     allowed_overrides:
     - brief
@@ -1046,7 +1046,7 @@ entries:
     - claude-retained-fixture
     binding_ref: bee.driver.claude.binding:binding
     profile_id: batch
-    policy_ref: bee.harness.catalog:fixture_policy
+    policy_ref: bee.tests.harness:fixture_policy
     default_mode: batch
     allowed_overrides:
     - brief
@@ -1100,7 +1100,7 @@ entries:
   data:
     prompt: Use the approved repository tools.
     tools:
-    - bee.harness.catalog:agent_read_tool
+    - bee.tests.harness:agent_read_tool
     context:
       repo: workspace
 - name: agent_helper
@@ -1128,11 +1128,11 @@ entries:
   data:
     prompt: Review the supplied change.
     traits:
-    - bee.harness.catalog:agent_repository_trait
+    - bee.tests.harness:agent_repository_trait
     tools:
-    - bee.harness.catalog:agent_report_tool
+    - bee.tests.harness:agent_report_tool
     delegates:
-    - bee.harness.catalog:agent_helper
+    - bee.tests.harness:agent_helper
     memory: []
     context:
       repo: workspace
@@ -1172,7 +1172,7 @@ entries:
     agent_model_map:
       review-model: claude-mapped
     agent_delegates:
-    - bee.harness.catalog:agent_helper
+    - bee.tests.harness:agent_helper
 - name: agent_fixture_definition
   kind: registry.entry
   meta:
@@ -1187,7 +1187,7 @@ entries:
     - agent-fixture
     binding_ref: bee.driver.claude.binding:binding
     profile_id: batch
-    policy_ref: bee.harness.catalog:agent_fixture_policy
+    policy_ref: bee.tests.harness:agent_fixture_policy
     default_mode: batch
     allowed_overrides:
     - brief
@@ -1202,7 +1202,7 @@ entries:
       start_menu: false
       fullscreen: false
       reuse: never
-    agent_ref: bee.harness.catalog:agent_reviewer
+    agent_ref: bee.tests.harness:agent_reviewer
 - name: setup_empty_definition
   kind: registry.entry
   meta:
@@ -1217,7 +1217,7 @@ entries:
     - setup-empty-fixture
     binding_ref: bee.driver.claude.binding:binding
     profile_id: batch
-    policy_ref: bee.harness.catalog:fixture_policy
+    policy_ref: bee.tests.harness:fixture_policy
     default_mode: batch
     allowed_overrides:
     - brief
@@ -1288,7 +1288,7 @@ entries:
     - profile-alpha-fixture
     binding_ref: bee.driver.claude.binding:binding
     profile_id: batch
-    policy_ref: bee.harness.catalog:profile_alpha_policy
+    policy_ref: bee.tests.harness:profile_alpha_policy
     default_mode: batch
     allowed_overrides:
     - brief
@@ -1318,7 +1318,7 @@ entries:
     - profile-beta-fixture
     binding_ref: bee.driver.claude.binding:binding
     profile_id: batch
-    policy_ref: bee.harness.catalog:profile_beta_policy
+    policy_ref: bee.tests.harness:profile_beta_policy
     default_mode: batch
     allowed_overrides:
     - brief
@@ -1341,9 +1341,9 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.harness.binding:resolve
-    - bee.harness.binding:admit
-    - bee.harness.binding:start
+    - bee.tests.harness.admission:resolve
+    - bee.tests.harness.admission:admit
+    - bee.tests.harness.admission:start
     - bee.resources.binding:associate
     - bee.resources.binding:grant
     - bee.credentials.binding:define
@@ -1362,7 +1362,7 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.harness.catalog:managed_run_probe
+    - bee.tests.harness:managed_run_probe
     effect: allow
 - name: launch_recovery_runtime_policy
   kind: security.policy.expr
@@ -1424,14 +1424,14 @@ entries:
   security:
     policies:
     - bee.tests.support:schema_policy
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
   imports:
-    orphan_gate: bee.harness.catalog:orphan_gate
+    orphan_gate: bee.tests.harness:orphan_gate
     node_client: bee.node:client
-    carrier_fixtures: bee.harness.catalog:carrier_fixtures
-    principals: bee.tests.principals:bound
+    carrier_fixtures: bee.tests.harness:carrier_fixtures
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
     bounds: bee.values:bounds
     trait_access: bee.gateway.security:traits
@@ -1445,7 +1445,7 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     capability_catalog: bee.capability:model
     sends: bee.threads.service:sends
-    completion: bee.placement.native:completion
+    completion: bee.tests.placement.native:completion
 - name: steer_permission_probe_test
   kind: function.lua
   source: file://steer_permission_probe_test.lua
@@ -1463,11 +1463,11 @@ entries:
   - time
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
   imports:
     bounds: bee.values:bounds
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
     capability_grants: bee.gov.types:capability_grants
     capability_catalog: bee.capability:model
@@ -1495,13 +1495,13 @@ entries:
     policies:
     - bee.placement.native.security:placement_store_policy
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     policy: bee.harness.carrier:policy
     preferences: bee.driver.descriptor:effective
-    launch: bee.tests.driver.support:codex_launch
-    claude_launch: bee.tests.driver.support:claude_launch
+    launch: bee.tests.support.driver:codex_launch
+    claude_launch: bee.tests.support.driver:claude_launch
     machine: bee.harness.carrier:machine
     types: bee.placement:types
     driver_types: bee.driver:types
@@ -1517,7 +1517,7 @@ entries:
   - registry
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
+    - bee.tests.harness:apply_test_policy
   imports:
     test: wippy.test:test
     selection: bee.harness.launch:selection
@@ -1560,11 +1560,11 @@ entries:
   - json
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
   imports:
     bounds: bee.values:bounds
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
     admission: bee.harness.launch:admission
 - name: permission_test
@@ -1638,7 +1638,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
-    protocol: bee.tests.driver.support:claude_protocol
+    protocol: bee.tests.support.driver:claude_protocol
     adapter: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
 - name: permission_fixture_policy
@@ -1739,7 +1739,7 @@ entries:
   modules:
   - hash
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
     capability: bee.gov.types:capability_request
     bounds: bee.values:bounds
@@ -1808,7 +1808,7 @@ entries:
   - time
   security:
     policies:
-    - bee.harness.catalog:installation_client_policy
+    - bee.tests.harness:installation_client_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
     - bee.gateway.security:installation_queue_policy
@@ -1820,7 +1820,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     installation: bee.gateway.security:installation
 - name: publication_client_policy
   kind: security.policy
@@ -1853,7 +1853,7 @@ entries:
   - time
   security:
     policies:
-    - bee.harness.catalog:publication_client_policy
+    - bee.tests.harness:publication_client_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:publication_policy
     - bee.gateway.security:publication_queue_policy
@@ -1865,7 +1865,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     publish: bee.gateway.security:publish
     publishing: bee.hub.publication:publishing
 - name: capability_elevation_test
@@ -1886,13 +1886,13 @@ entries:
   - env
   security:
     policies:
-    - bee.harness.catalog:elevation_client_policy
-    - bee.harness.catalog:elevation_home_policy
+    - bee.tests.harness:elevation_client_policy
+    - bee.tests.harness:elevation_home_policy
     - bee.tests.node:catalog_test_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     client: bee.node:client
 - name: permission_carrier_test
   kind: function.lua
@@ -1915,24 +1915,24 @@ entries:
   - hash
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
     - bee.security.approvals:approval_store_policy
     - bee.placement.native.security:placement_exec_policy
   imports:
     processes: bee.tests.support:processes
-    exits: bee.harness.catalog:exits
+    exits: bee.tests.harness:exits
     placement_protocol: bee.placement.native:protocol
     placement_decode: bee.placement:decode
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
     machine: bee.harness.carrier:machine
-    carrier_fixtures: bee.harness.catalog:carrier_fixtures
+    carrier_fixtures: bee.tests.harness:carrier_fixtures
     approvals: bee.approvals.binding:service
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
 - name: codex_auth_test
   kind: function.lua
   source: file://codex_auth_test.lua
@@ -1951,7 +1951,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    launch: bee.tests.driver.support:codex_launch
+    launch: bee.tests.support.driver:codex_launch
     driver_types: bee.driver:types
     quote: bee.driver.binding:quote
 - name: codex_sentinel_storage
@@ -1964,7 +1964,7 @@ entries:
   kind: env.variable
   meta:
     type: test_support
-  storage: bee.harness.catalog:codex_sentinel_storage
+  storage: bee.tests.harness:codex_sentinel_storage
   variable: BEE_TEST_CODEX_SENTINEL
   default: sk-sentinel-bee-000
   readonly: true
@@ -2001,7 +2001,7 @@ entries:
     environment: {}
     prepare_options:
       sandbox: read-only
-    provider_ref: bee.harness.catalog:codex_fixture_provider
+    provider_ref: bee.tests.harness:codex_fixture_provider
 - name: codex_fixture_policy_bare
   kind: registry.entry
   meta:
@@ -2038,7 +2038,7 @@ entries:
   kind: env.variable
   meta:
     type: test_support
-  storage: bee.harness.catalog:codex_sentinel_storage
+  storage: bee.tests.harness:codex_sentinel_storage
   variable: BEE_TEST_CLAUDE_SENTINEL
   default: sk-ant-sentinel-bee-000
   readonly: true
@@ -2082,20 +2082,20 @@ entries:
   - exec
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
     - bee.credentials.security:credential_store_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
-    launch: bee.tests.driver.support:claude_launch
+    launch: bee.tests.support.driver:claude_launch
     driver_types: bee.driver:types
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
 - name: claude_adapter_test
   kind: function.lua
   source: file://claude_adapter_test.lua
@@ -2118,7 +2118,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
     stream_json: bee.driver.transport:stream_json
-    protocol: bee.tests.driver.support:claude_protocol
+    protocol: bee.tests.support.driver:claude_protocol
     events: bee.driver.codec:events
 - name: claude_control_fixture_policy
   kind: registry.entry
@@ -2171,22 +2171,22 @@ entries:
   - hash
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
     - bee.security.approvals:approval_store_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
     approvals: bee.approvals.binding:service
     policy: bee.harness.carrier:policy
-    launch: bee.tests.driver.support:claude_launch
+    launch: bee.tests.support.driver:claude_launch
     driver_types: bee.driver:types
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
 - name: claude_acceptance_test
   kind: function.lua
   source: file://claude_acceptance_test.lua
@@ -2209,9 +2209,9 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
-    protocol: bee.tests.driver.support:claude_protocol
+    protocol: bee.tests.support.driver:claude_protocol
     adapter: bee.harness.permission:adapter
-    launch: bee.tests.driver.support:claude_launch
+    launch: bee.tests.support.driver:claude_launch
     driver_types: bee.driver:types
 - name: codex_credential_client_policy
   kind: security.policy
@@ -2244,21 +2244,21 @@ entries:
   - exec
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
+    - bee.tests.harness:apply_test_policy
+    - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
     - bee.credentials.security:credential_store_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
-    launch: bee.tests.driver.support:codex_launch
+    launch: bee.tests.support.driver:codex_launch
     driver_types: bee.driver:types
     placement: bee.placement.native.service:service
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
 - name: continuation_test
   kind: function.lua
   source: file://continuation_test.lua
@@ -2279,10 +2279,10 @@ entries:
     test: wippy.test:test
     continuation: bee.harness.carrier:continuation
     checkpoint: bee.harness.carrier:checkpoint
-    placement_fixture: bee.harness.catalog:placement_fixture
+    placement_fixture: bee.tests.harness:placement_fixture
     hook_records: bee.harness.carrier:hook_records
-    codex: bee.tests.driver.support:codex_launch
-    claude: bee.tests.driver.support:claude_launch
+    codex: bee.tests.support.driver:codex_launch
+    claude: bee.tests.support.driver:claude_launch
     machine: bee.harness.carrier:machine
     catalog: bee.harness.catalog:catalog
     hooks: bee.harness.carrier:hooks
@@ -2317,7 +2317,7 @@ entries:
     driver_id: fixture_open_cli
     accepts_model: true
     test_support: true
-    profiles_ref: bee.harness.catalog:fixture_open_cli_profiles
+    profiles_ref: bee.tests.harness:fixture_open_cli_profiles
   contracts:
   - contract: bee.driver:driver
     methods:
@@ -2329,7 +2329,7 @@ entries:
   kind: registry.entry
   meta:
     type: harness.profile
-    driver_ref: bee.harness.catalog:fixture_open_cli_binding
+    driver_ref: bee.tests.harness:fixture_open_cli_binding
     test_support: true
   data:
     driver:
@@ -2345,7 +2345,7 @@ entries:
         protocol_revision: fake-1
         answer_path:
           strategy: terminal_field
-          adapter_ref: bee.tests.driver.support:claude_protocol
+          adapter_ref: bee.tests.support.driver:claude_protocol
 - name: fixture_open_cli_no_model_binding
   kind: contract.binding
   meta:
@@ -2353,7 +2353,7 @@ entries:
     driver_id: fixture_open_cli_no_model
     accepts_model: false
     test_support: true
-    profiles_ref: bee.harness.catalog:fixture_open_cli_no_model_profiles
+    profiles_ref: bee.tests.harness:fixture_open_cli_no_model_profiles
   contracts:
   - contract: bee.driver:driver
     methods:
@@ -2365,7 +2365,7 @@ entries:
   kind: registry.entry
   meta:
     type: harness.profile
-    driver_ref: bee.harness.catalog:fixture_open_cli_no_model_binding
+    driver_ref: bee.tests.harness:fixture_open_cli_no_model_binding
     test_support: true
   data:
     driver:
@@ -2381,7 +2381,7 @@ entries:
         protocol_revision: fake-1
         answer_path:
           strategy: terminal_field
-          adapter_ref: bee.tests.driver.support:claude_protocol
+          adapter_ref: bee.tests.support.driver:claude_protocol
 - name: agent_resolver_test
   kind: function.lua
   source: file://agent_resolver_test.lua
@@ -2393,9 +2393,9 @@ entries:
   - registry
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
+    - bee.tests.harness:apply_test_policy
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     agent_resolver: bee.harness.launch:agent_resolver
@@ -2455,7 +2455,7 @@ entries:
   - channel
   security:
     policies:
-    - bee.harness.catalog:apply_test_policy
+    - bee.tests.harness:apply_test_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -2536,7 +2536,7 @@ entries:
   source: file://carrier_faulted.lua
   meta: {type: test_support}
   modules: [process, time]
-  imports: {carrier_types: bee.harness:types, bounds: bee.values:bounds, principals: bee.tests.principals:bound, placement_types: bee.placement:types, placement_request: bee.placement:request, preferences_codec: bee.driver.descriptor:effective, machine: bee.harness.carrier:machine, carrier_process: bee.harness.service:carrier}
+  imports: {carrier_types: bee.harness:types, bounds: bee.values:bounds, principals: bee.tests.support.principals:bound, placement_types: bee.placement:types, placement_request: bee.placement:request, preferences_codec: bee.driver.descriptor:effective, machine: bee.harness.carrier:machine, carrier_process: bee.harness.service:carrier}
 - name: exits
   kind: library.lua
   source: file://exits.lua
@@ -2549,7 +2549,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [process]
-  imports: {test: 'wippy.test:test', exits: 'bee.harness.catalog:exits'}
+  imports: {test: 'wippy.test:test', exits: 'bee.tests.harness:exits'}
 - name: startup_view_test
   kind: function.lua
   source: file://startup_view_test.lua
@@ -2589,7 +2589,7 @@ entries:
     probe_cache: bee.harness.launch:probe_cache
   security:
     policies:
-    - bee.harness.catalog:probe_cache_test_policy
+    - bee.tests.harness:probe_cache_test_policy
 - name: hook_transport_test_policy
   kind: security.policy
   meta: {type: test_support, comment: The hook transport suite posts hooks to the loopback gateway listener as a harness does}
@@ -2614,12 +2614,12 @@ entries:
   - http_client
   security:
     policies:
-    - bee.harness.catalog:hook_transport_test_policy
+    - bee.tests.harness:hook_transport_test_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
     hooks: bee.gateway.hooks:hooks
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
 - name: permission_hook_test
   kind: function.lua
   source: file://permission_hook_test.lua

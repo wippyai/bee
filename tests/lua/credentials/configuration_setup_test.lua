@@ -53,7 +53,7 @@ function run()
     test.describe("configuration base admission", function()
         test.it("marks the stock OpenCode profile as needing setup before launch", function()
             local workspace = "0123456789abcdef0123456789abcdef"
-            local requester = principals.caller("configuration-catalog-" .. principals.key(), {"bee.credentials:configuration_catalog_client"}, {workspace_id = workspace})
+            local requester = principals.caller("configuration-catalog-" .. principals.key(), {"bee.tests.credentials:configuration_catalog_client"}, {workspace_id = workspace})
             local raw, err = requester:call("bee.threads.sessions.binding:catalog", {kind = "definition", include_unavailable = true,
                 definition_ref = "bee.driver.opencode.profiles:default_window"})
             test.is_nil(err)
@@ -72,7 +72,7 @@ function run()
         end)
         test.it("uses the public approval decision to persist admission and resume", function()
             local workspace = "configuration-" .. principals.key()
-            local requester = principals.caller("configuration-requester-" .. principals.key(), {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.credentials:configuration_effect_client"})
+            local requester = principals.caller("configuration-requester-" .. principals.key(), {"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.tests.credentials:configuration_effect_client"})
             local approver = principals.caller("configuration-approver-" .. principals.key(), {"bee.security.approvals:approval_decide_policy"}, {definition_id = "bee.approvals.inbox.app:app"})
             local db = assert(store.open())
             local content = "synthetic configuration"

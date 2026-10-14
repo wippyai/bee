@@ -41,7 +41,7 @@ local function define_tests()
                 test.is_true(guide:find(expected, 1, true) ~= nil, expected)
             end
             local starter = call({operation = "read", id = "reference_apps/starter"})
-            for _, expected in ipairs({"app.hello.app:app", "process.lua", "restart_policy", "greeting_test", "wippy.test:test"}) do
+            for _, expected in ipairs({"bee.tests.support.starter.app:app", "process.lua", "restart_policy", "greeting_test", "wippy.test:test"}) do
                 test.is_true(tostring(starter.content):find(expected, 1, true) ~= nil, expected)
             end
             local agent_guide = call({operation = "read", id = "docs/agent_guide"})

@@ -20,17 +20,17 @@ local MANAGER = "bee.test.elevation_manager"
 local APPROVER = "bee.test.elevation_approver"
 local PLACEMENT = "bee.test.elevation_placement"
 local APPROVER_POLICY = "elevation-fixture"
-local ROOT = "bee.harness.catalog:project_fixture"
+local ROOT = "bee.tests.harness:project_fixture"
 type Object = {[string]: unknown}
 local counter = 0
 local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:elevation_client_policy", "bee.tests.support:gateway_manage_policy",
+local scope_names = {"bee.tests.harness:elevation_client_policy", "bee.tests.support:gateway_manage_policy",
     "bee.tests.support:gateway_admit_policy", "bee.threads.security:create",
     "bee.threads.security:lifecycle", "bee.threads.security:observe",
-    "bee.harness.catalog:approver_client_policy",
+    "bee.tests.harness:approver_client_policy",
     "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy",
     "bee.resources.security:resource_resolve_policy", "bee.security.approvals:approval_decide_policy"}
 local function scope(): security.Scope

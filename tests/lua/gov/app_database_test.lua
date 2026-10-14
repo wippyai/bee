@@ -129,7 +129,7 @@ end
 -- admitted with that policy's own surface, and an MCP client over the
 -- gateway listener with the binding's token.
 local STOCK_POLICY = "bee.driver.claude.security:launch_policy_claude_window"
-local GATEWAY_SCOPE = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy",
+local GATEWAY_SCOPE = {"bee.tests.harness:carrier_client_policy", "bee.tests.harness:gateway_client_policy",
     "bee.harness.security:carrier_policy", "bee.threads.security:create", "bee.threads.security:observe",
     "bee.threads.security:lifecycle", "bee.threads.security:carrier",
     "bee.tests.support:gateway_manage_policy", "bee.tests.support:gateway_admit_policy", "bee.security.gateway:gateway_materialize_policy"}

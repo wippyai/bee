@@ -31,12 +31,12 @@ local placement_fixture = require("placement_fixture")
 local quote = require("quote")
 local principals = require("principals")
 local ACTOR = "bee.test.gateway_harness"
-local CLAUDE_POLICY = "bee.harness.catalog:claude_gateway_policy"
-local CODEX_POLICY = "bee.harness.catalog:codex_gateway_policy"
-local PROVIDER = "bee.harness.catalog:codex_fixture_provider"
-local CLAUDE_SOURCE = "bee.harness.catalog:claude_sentinel_key"
-local CODEX_SOURCE = "bee.harness.catalog:codex_sentinel_key"
-local ROOT = "bee.harness.catalog:project_fixture"
+local CLAUDE_POLICY = "bee.tests.harness:claude_gateway_policy"
+local CODEX_POLICY = "bee.tests.harness:codex_gateway_policy"
+local PROVIDER = "bee.tests.harness:codex_fixture_provider"
+local CLAUDE_SOURCE = "bee.tests.harness:claude_sentinel_key"
+local CODEX_SOURCE = "bee.tests.harness:codex_sentinel_key"
+local ROOT = "bee.tests.harness:project_fixture"
 local CLAUDE_BINDING = "bee.driver.claude.binding:binding"
 local CODEX_BINDING = "bee.driver.codex.binding:binding"
 local CLAUDE_SENTINEL = "sk-ant-sentinel-bee-000"
@@ -50,8 +50,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
-    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.harness.catalog:codex_credential_client_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy",
+local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.tests.harness:gateway_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
+    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.tests.harness:codex_credential_client_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy",
     "bee.tests.support:gateway_manage_policy", "bee.tests.support:gateway_admit_policy", "bee.security.gateway:gateway_materialize_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
@@ -128,7 +128,7 @@ local function binary(name: string): string?
     return bin
 end
 local function fixture_bin(): string
-    local bin, err = env.get("bee.harness.catalog:fixture_bin")
+    local bin, err = env.get("bee.tests.harness:fixture_bin")
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end

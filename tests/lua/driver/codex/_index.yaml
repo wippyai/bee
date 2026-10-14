@@ -20,5 +20,5 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    launch: bee.tests.driver.support:codex_launch
+    launch: bee.tests.support.driver:codex_launch
     quote: bee.driver.binding:quote

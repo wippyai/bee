@@ -23,7 +23,7 @@ local function define_tests()
             test.is_nil(capture.error)
             for _, payload in ipairs(harness.objects(capture.rows, 16)) do
                 local raw, err = funcs.new():with_scope(security.new_scope({})):with_actor(assert(security.new_actor("gateway"))):call(
-                    "bee.tests.sessions:hook_boundary_probe", {binding = {binding_id = "binding-1", subject = opened.session,
+                    "bee.tests.threads.sessions:hook_boundary_probe", {binding = {binding_id = "binding-1", subject = opened.session,
                         action_id = "action:" .. string.rep("b", 64), attempt_id = attempt, thread_id = "thread:" .. string.rep("b", 64), workspace_id = WORKSPACE},
                         outcome = {event = payload.hook_event_name, event_id = harness.key()}, payload = payload})
                 if err then error(tostring(err)) end

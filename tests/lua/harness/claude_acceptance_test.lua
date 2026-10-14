@@ -29,12 +29,12 @@ local function fresh(prefix: string): string
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
 local function claude_bin(): string?
-    local bin, err = env.get("bee.harness.catalog:claude_bin")
+    local bin, err = env.get("bee.tests.harness:claude_bin")
     if err or type(bin) ~= "string" or bin == "" then return nil end
     return bin
 end
 local function fixture_bin(): string
-    local bin, err = env.get("bee.harness.catalog:fixture_bin")
+    local bin, err = env.get("bee.tests.harness:fixture_bin")
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end

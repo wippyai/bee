@@ -6,7 +6,7 @@ local selection = require("selection")
 
 type Entry = {[string]: unknown}
 local PREFIX = "bee.harness.catalog:selection_"
-local POLICY = "bee.harness.catalog:selection_policy"
+local POLICY = "bee.tests.harness:selection_policy"
 
 
 type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}

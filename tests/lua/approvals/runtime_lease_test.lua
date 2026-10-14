@@ -12,7 +12,7 @@ type Object = {[string]: unknown}
 local ACTOR, APPROVER, POLICY = "bee.test.runtime", "bee.test.runtime_approver", "runtime-test"
 local function client(subject: string): funcs.Executor
     local policies: {security.Policy} = {}
-    for _, ref in ipairs({"bee.approvals:client_test_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.security.approvals:approval_decide_policy"}) do
+    for _, ref in ipairs({"bee.tests.approvals:client_test_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy", "bee.security.approvals:approval_decide_policy"}) do
         policies[#policies + 1] = assert(security.policy(ref))
     end
     return assert(funcs.new():with_actor(assert(security.new_actor(subject))):with_scope(security.new_scope(policies)))

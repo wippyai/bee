@@ -18,7 +18,7 @@ local committed = require("committed")
 
 local WORKSPACE = string.rep("c", 32)
 local OVERLAY = "runner_fixture"
-local APPLICATION = "app.runner_fixture:app"
+local APPLICATION = "bee.tests.node.runner.fixture:app"
 
 type Object = {[string]: unknown}
 
@@ -98,7 +98,7 @@ local function define_tests()
 
     test.describe("application test runs", function()
         test.it("runs tests associated with an admitted package application across namespaces", function()
-            local app = "bee.tests.node.hub_tests_fixture:application"
+            local app = "bee.tests.node.hub.fixture:application"
             local listed = value_of(tests_call(author, {operation = "list", application = app}))
             test.eq(listed.application, app)
             local entries = listed.tests :: {Object}
@@ -122,7 +122,7 @@ local function define_tests()
             test.eq(value.application, APPLICATION)
             local ids: {string} = {}
             for _, raw in ipairs(value.tests :: {unknown}) do ids[#ids + 1] = tostring((assert(bounds.object(raw))).id) end
-            test.eq(table.concat(ids, " "), "app.runner_fixture:authority_test app.runner_fixture:failing_test app.runner_fixture:slow_test", association_facts(APPLICATION))
+            test.eq(table.concat(ids, " "), "bee.tests.node.runner.fixture:authority_test bee.tests.node.runner.fixture:failing_test bee.tests.node.runner.fixture:slow_test", association_facts(APPLICATION))
             local named = value_of(tests_call(author, {operation = "list", application = APPLICATION, filter = "failing"}))
             test.eq(#(named.tests :: {unknown}), 1)
         end)
@@ -134,7 +134,7 @@ local function define_tests()
             local value = completed(author, run_id)
             test.eq(value.application, APPLICATION)
 
-            local authority = entry_of(value, "app.runner_fixture:authority_test")
+            local authority = entry_of(value, "bee.tests.node.runner.fixture:authority_test")
             test.eq(authority.suite, "fixture")
             for _, name in ipairs({"runs as an instance actor of the application", "holds what the admission grants",
                 "is denied what the application boundary leaves out"}) do
@@ -142,7 +142,7 @@ local function define_tests()
                 test.eq(case.status, "pass", name .. ": " .. tostring(case.error))
             end
 
-            local failing = entry_of(value, "app.runner_fixture:failing_test")
+            local failing = entry_of(value, "bee.tests.node.runner.fixture:failing_test")
             test.eq(case_of(failing, "passes").status, "pass")
             local failed = case_of(failing, "fails with its message")
             test.eq(failed.status, "fail")
@@ -150,7 +150,7 @@ local function define_tests()
             test.eq(case_of(failing, "is skipped").status, "skip")
             test.is_true(type(failed.duration_ms) == "number")
 
-            local slow = entry_of(value, "app.runner_fixture:slow_test")
+            local slow = entry_of(value, "bee.tests.node.runner.fixture:slow_test")
             test.is_true(tostring(slow.error):find("timed out", 1, true) ~= nil, tostring(slow.error))
 
             local totals = assert(bounds.object(value.totals))

@@ -17,7 +17,7 @@ local function define_tests()
     test.describe("Presentation execution boundary", function()
         test.it("preserves the caller while leaving application spawn denials at the facade", function()
             local original = assert(registry.get("bee.harness.service:open"))
-            local probe = assert(registry.get("bee.harness.catalog:presentation_scope_probe"))
+            local probe = assert(registry.get("bee.tests.harness:presentation_scope_probe"))
             probe.id = "bee.harness.service:open"
             apply(probe)
             local ok, failure = pcall(function()
@@ -40,11 +40,11 @@ local function define_tests()
         end)
         test.it("waits for the first frame and reattaches after the viewer closes", function()
             local original = assert(registry.get("bee.threads.sessions.binding:get"))
-            local fixture = assert(registry.get("bee.harness.catalog:presentation_view_get"))
+            local fixture = assert(registry.get("bee.tests.harness:presentation_view_get"))
             fixture.id = "bee.threads.sessions.binding:get"
             apply(fixture)
             local original_waiting = assert(registry.get("bee.approvals.binding:waiting"))
-            local waiting = assert(registry.get("bee.harness.catalog:presentation_waiting"))
+            local waiting = assert(registry.get("bee.tests.harness:presentation_waiting"))
             waiting.id = "bee.approvals.binding:waiting"
             apply(waiting)
             local reviews = assert(process.listen("bee.app.review", {message = true}))
@@ -52,7 +52,7 @@ local function define_tests()
             assert(process.registry.register("bee.session.window/fixture-session"))
             local content = assert(tty.viewport({width = 80, height = 24}))
             local producer = assert(process.with_options({terminal = assert(content:grant())}):spawn_monitored(
-                "bee.harness.catalog:presentation_producer", "bee:workers", tostring(process.pid())))
+                "bee.tests.harness:presentation_producer", "bee:workers", tostring(process.pid())))
             local ok, failure = pcall(function()
                 local ready = assert(process.listen("bee.test.viewer_ready", {message = true}))
                 local finished = assert(process.listen("bee.test.viewer_finished", {message = true}))
@@ -66,7 +66,7 @@ local function define_tests()
                     local self = tostring(process.pid())
                     local identity = "presentation-view-" .. tostring(index)
                     local viewer = assert(process.with_options({terminal = assert(output:grant())}):with_scope(scope):with_actor(assert(security.new_actor("viewer-person", {workspace_id = string.rep("a", 32)}))):spawn_monitored(
-                        "bee.harness.catalog:presentation_viewer", "bee:workers", {version = 1,
+                        "bee.tests.harness:presentation_viewer", "bee:workers", {version = 1,
                             broker_pid = self, workspace_pid = self, workspace_id = string.rep("a", 32),
                             instance_id = identity, view_id = identity, definition_id = "bee.harness.app:app",
                             execution_generation = 1, definition_revision = "1", registry_revision = "1",

@@ -26,7 +26,7 @@ local demand = require("demand")
 local schema = require("schema")
 local thread_harness = require("thread_harness")
 type Object = {[string]: unknown}
-local TEST_STORE = "bee.approvals:test_db"
+local TEST_STORE = "bee.tests.approvals:test_db"
 local REQUESTER, OTHER_REQUESTER, ALICE, BOB, OUTSIDER, MANAGER = "bee.test.launcher", "bee.test.other_launcher", "bee.test.alice", "bee.test.bob", "bee.test.outsider", "bee.test.manager"
 local OUTBOX = "bee.test.outbox"
 local POLICY = "test-owner"
@@ -39,7 +39,7 @@ local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
 local bob = caller(BOB, {"bee.security.approvals:approval_decide_policy"})
 local carol = caller("bee.test.carol", {"bee.security.approvals:approval_decide_policy"})
 local outsider = caller(OUTSIDER, {})
-local manager = caller(MANAGER, {"bee.approvals:manage_test_policy"})
+local manager = caller(MANAGER, {"bee.tests.approvals:manage_test_policy"})
 local INBOX_ACTOR = "bee.application:0123456789abcdef0123456789abcdef:inbox-instance"
 local inbox_app = caller(INBOX_ACTOR, {"bee.security.approvals:approval_decide_policy"},
     {definition_id = "bee.approvals.inbox.app:app", workspace_id = "0123456789abcdef0123456789abcdef"})
@@ -112,7 +112,7 @@ local function replace_approvers(value: {unknown})
     if not applied then error("replace test approvers: " .. tostring(apply_error)) end
 end
 local function proposal(payload: {[string]: unknown}?): {[string]: unknown}
-    return {kind = "operation", ref = "bee.harness.binding:start", revision = "r1", payload = payload or {profile = "claude", argv = {"--print"}}}
+    return {kind = "operation", ref = "bee.tests.harness.admission:start", revision = "r1", payload = payload or {profile = "claude", argv = {"--print"}}}
 end
 local function attempt_proposal(action_id: string?, attempt_id: string): {[string]: unknown}
     return {kind = "attempt", ref = attempt_id, revision = "r1", action_id = action_id, payload = {tool = "Bash", correlation_id = "c-1"}}
@@ -305,7 +305,7 @@ local function define_tests()
                     test.eq(#assert(bounds.array(history.items, 64)), queued)
                     local _, reset_error = db:execute("UPDATE bee_approval_events SET acknowledged_at = NULL WHERE approval_id = ? AND destination = ? AND kind <> 'approval.requested'", {id, "requester:" .. session})
                     test.is_nil(reset_error)
-                    local replay, replay_error = replay_worker:call("bee.approvals:notice_probe", {})
+                    local replay, replay_error = replay_worker:call("bee.tests.approvals:notice_probe", {})
                     test.is_nil(replay_error)
                     local answer = assert(bounds.object(replay))
                     test.is_true(answer.ok == true, tostring(answer.error))
@@ -1322,7 +1322,7 @@ local function define_tests()
             test.eq((assert(bounds.object(later[1].request))).decision, "denied")
         end)
         test.it("counts node pending approvals through the public binding without granting request access", function()
-            local reader = caller("node-summary-reader", {"bee.approvals:summary_test_policy"})
+            local reader = caller("node-summary-reader", {"bee.tests.approvals:summary_test_policy"})
             test.eq(code(call(outsider, "node_summary", {})), "DENIED")
             local before = value(call(reader, "node_summary", {}))
             local baseline = before.pending_approvals

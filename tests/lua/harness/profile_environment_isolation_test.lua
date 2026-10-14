@@ -16,12 +16,12 @@ local json = require("json")
 local admission = require("admission")
 
 local ACTOR = "bee.test.profile_environment"
-local ROOT = "bee.harness.catalog:project_fixture"
-local SOURCE = "bee.harness.catalog:launch_sentinel_key"
-local ALPHA = "bee.harness.catalog:profile_alpha_definition"
-local BETA = "bee.harness.catalog:profile_beta_definition"
-local ALPHA_POLICY = "bee.harness.catalog:profile_alpha_policy"
-local BETA_POLICY = "bee.harness.catalog:profile_beta_policy"
+local ROOT = "bee.tests.harness:project_fixture"
+local SOURCE = "bee.tests.harness:launch_sentinel_key"
+local ALPHA = "bee.tests.harness:profile_alpha_definition"
+local BETA = "bee.tests.harness:profile_beta_definition"
+local ALPHA_POLICY = "bee.tests.harness:profile_alpha_policy"
+local BETA_POLICY = "bee.tests.harness:profile_beta_policy"
 local counter = 0
 
 
@@ -43,8 +43,8 @@ local function fresh(prefix: string): string
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
 
-local scope_names = {"bee.harness.catalog:launch_client_policy", "bee.harness.catalog:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe",
-    "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
+local scope_names = {"bee.tests.harness:launch_client_policy", "bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe",
+    "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
     "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
@@ -73,8 +73,8 @@ end
 
 type FixturePaths = {bin: string, streams: string}
 local function fixture_paths(): FixturePaths
-    local bin, bin_error = env.get("bee.harness.catalog:fixture_bin")
-    local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
+    local bin, bin_error = env.get("bee.tests.harness:fixture_bin")
+    local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
     if bin_error or type(bin) ~= "string" or bin == "" or streams_error or type(streams) ~= "string" or streams == "" then
         error("fixture paths are not set for the test runtime")
     end
@@ -220,8 +220,8 @@ local function define_tests()
                 local applied, apply_error = changes:apply()
                 if not applied then error("configure profile fixtures: " .. tostring(apply_error)) end
 
-                local alpha_plan = call("bee.harness.binding:resolve", {definition_ref = ALPHA})
-                local beta_plan = call("bee.harness.binding:resolve", {definition_ref = BETA})
+                local alpha_plan = call("bee.tests.harness.admission:resolve", {definition_ref = ALPHA})
+                local beta_plan = call("bee.tests.harness.admission:resolve", {definition_ref = BETA})
                 test.eq(alpha_plan.binding_ref, beta_plan.binding_ref)
                 test.eq(alpha_plan.profile_id, "batch")
                 test.eq(beta_plan.profile_id, "batch")
@@ -233,9 +233,9 @@ local function define_tests()
                 call("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})
                 call("bee.credentials.binding:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})
                 local events = assert(process.events())
-                local alpha = call("bee.harness.binding:start", {request_id = fresh("profile-alpha"), definition_ref = ALPHA, workspace_id = workspace, brief = "ping"})
+                local alpha = call("bee.tests.harness.admission:start", {request_id = fresh("profile-alpha"), definition_ref = ALPHA, workspace_id = workspace, brief = "ping"})
                 attempts[#attempts + 1] = tostring(alpha.attempt_id)
-                local beta = call("bee.harness.binding:start", {request_id = fresh("profile-beta"), definition_ref = BETA, workspace_id = workspace, brief = "ping"})
+                local beta = call("bee.tests.harness.admission:start", {request_id = fresh("profile-beta"), definition_ref = BETA, workspace_id = workspace, brief = "ping"})
                 attempts[#attempts + 1] = tostring(beta.attempt_id)
                 for _, started in ipairs({alpha, beta}) do
                     local status = await_receipt(tostring(started.thread_id), tostring(started.attempt_id))

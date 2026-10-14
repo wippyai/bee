@@ -1,9 +1,0 @@
-version: '1.0'
-namespace: bee.host
-entries:
-- name: idle_process
-  kind: process.lua
-  source: file://idle_process.lua
-  method: main
-  meta: {type: test_support}
-  modules: [process]

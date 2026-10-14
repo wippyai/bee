@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.docs
+namespace: bee.tests.docs
 entries:
 - name: protocol_test
   kind: function.lua
@@ -21,5 +21,5 @@ entries:
   method: run
   modules: [security]
   meta: {type: test, suite: bee}
-  security: {policies: [bee.tests.principals:application_scope_policy]}
+  security: {policies: [bee.tests.support.principals:application_scope_policy]}
   imports: {test: wippy.test:test, web: bee.docs.binding:web}

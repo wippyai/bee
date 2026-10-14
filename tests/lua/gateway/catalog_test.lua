@@ -261,33 +261,33 @@ local function define_tests()
         end)
         test.it("projects framework tools and traits with exact tool authority", function()
             local framework = {tools = {
-                {alias = "FileRead", operation = "bee.harness.catalog:agent_read_tool", description = "Read a file through the review contract",
+                {alias = "FileRead", operation = "bee.tests.harness:agent_read_tool", description = "Read a file through the review contract",
                     schema = {type = "object", properties = {path = {type = "string"}}, required = {"path"}}, annotations = {readOnlyHint = true}},
-                {alias = "FileReport", operation = "bee.harness.catalog:agent_report_tool", description = "Return a review through the review contract",
+                {alias = "FileReport", operation = "bee.tests.harness:agent_report_tool", description = "Return a review through the review contract",
                     schema = {type = "object"}, annotations = {readOnlyHint = false}}},
-                traits = {{id = "bee.harness.catalog:agent_repository_trait", title = "Repository",
+                traits = {{id = "bee.tests.harness:agent_repository_trait", title = "Repository",
                     prompt = "Use the approved repository tools.", tools = {"FileRead"}}}}
-            local policies = {["bee.harness.catalog:agent_read_tool"] = {"research:measure_policy"},
-                ["bee.harness.catalog:agent_report_tool"] = {"research:export_policy"}}
+            local policies = {["bee.tests.harness:agent_read_tool"] = {"research:measure_policy"},
+                ["bee.tests.harness:agent_report_tool"] = {"research:export_policy"}}
             local projected = catalog.from_framework(framework, policies)
             if not projected then error("framework projection refused") end
             test.eq(#projected.tools, 2)
             test.eq(projected.tools[1].name, "FileRead")
-            test.eq(projected.tools[1].operation, "bee.harness.catalog:agent_read_tool")
+            test.eq(projected.tools[1].operation, "bee.tests.harness:agent_read_tool")
             test.eq(#projected.traits, 1)
-            local selected = catalog.select(projected, {"FileRead", "FileReport"}, {}, {"bee.harness.catalog:agent_repository_trait"},
-                {"bee.harness.catalog:agent_repository_trait"})
+            local selected = catalog.select(projected, {"FileRead", "FileReport"}, {}, {"bee.tests.harness:agent_repository_trait"},
+                {"bee.tests.harness:agent_repository_trait"})
             if not selected then error("admitted trait refused") end
             test.eq(#selected, 1)
             test.eq(selected[1].name, "FileRead")
             -- The MCP alias carries no authority: the function id alone is not
             -- selectable, and a ceiling that leaves the trait's tool out
             -- refuses the trait instead of narrowing it.
-            test.is_nil(catalog.select(projected, {"bee.harness.catalog:agent_read_tool"}, {}, {"bee.harness.catalog:agent_repository_trait"},
-                {"bee.harness.catalog:agent_repository_trait"}))
-            test.is_nil(catalog.select(projected, {"FileReport"}, {}, {"bee.harness.catalog:agent_repository_trait"},
-                {"bee.harness.catalog:agent_repository_trait"}))
-            local idle = catalog.select(projected, {"FileRead", "FileReport"}, {}, {"bee.harness.catalog:agent_repository_trait"}, {})
+            test.is_nil(catalog.select(projected, {"bee.tests.harness:agent_read_tool"}, {}, {"bee.tests.harness:agent_repository_trait"},
+                {"bee.tests.harness:agent_repository_trait"}))
+            test.is_nil(catalog.select(projected, {"FileReport"}, {}, {"bee.tests.harness:agent_repository_trait"},
+                {"bee.tests.harness:agent_repository_trait"}))
+            local idle = catalog.select(projected, {"FileRead", "FileReport"}, {}, {"bee.tests.harness:agent_repository_trait"}, {})
             if not idle then error("deselection refused") end
             test.eq(#idle, 0)
         end)

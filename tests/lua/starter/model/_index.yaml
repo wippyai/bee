@@ -1,6 +1,0 @@
-version: '1.0'
-namespace: app.hello.model
-entries:
-- name: greeting
-  kind: library.lua
-  source: file://greeting.lua

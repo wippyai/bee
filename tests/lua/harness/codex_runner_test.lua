@@ -24,11 +24,11 @@ local placement = require("placement")
 local placement_fixture = require("placement_fixture")
 local principals = require("principals")
 local ACTOR = "bee.test.codex_carrier"
-local POLICY = "bee.harness.catalog:codex_fixture_policy"
-local BARE_POLICY = "bee.harness.catalog:codex_fixture_policy_bare"
-local PROVIDER = "bee.harness.catalog:codex_fixture_provider"
-local SOURCE = "bee.harness.catalog:codex_sentinel_key"
-local ROOT = "bee.harness.catalog:project_fixture"
+local POLICY = "bee.tests.harness:codex_fixture_policy"
+local BARE_POLICY = "bee.tests.harness:codex_fixture_policy_bare"
+local PROVIDER = "bee.tests.harness:codex_fixture_provider"
+local SOURCE = "bee.tests.harness:codex_sentinel_key"
+local ROOT = "bee.tests.harness:project_fixture"
 local BINDING = "bee.driver.codex.binding:binding"
 local SENTINEL = "sk-sentinel-bee-000"
 type Object = {[string]: unknown}
@@ -38,8 +38,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
-    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.harness.catalog:codex_credential_client_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}
+local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
+    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.tests.harness:codex_credential_client_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -96,12 +96,12 @@ local function admit(entry_id: string, list_key: string, item: Object, matches: 
     apply(entry)
 end
 local function codex_bin(): string?
-    local bin, err = env.get("bee.harness.catalog:codex_bin")
+    local bin, err = env.get("bee.tests.harness:codex_bin")
     if err or type(bin) ~= "string" or bin == "" then return nil end
     return bin
 end
 local function fixture_bin(): string
-    local bin, err = env.get("bee.harness.catalog:fixture_bin")
+    local bin, err = env.get("bee.tests.harness:fixture_bin")
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end
@@ -390,7 +390,7 @@ local function define_tests()
             -- longer digests once the provider changes, so a resume refuses.
             local changed_thread, changed_attempt = thread(), fresh("attempt")
             local changed_request = request(changed_thread, changed_attempt, POLICY, {projection_for(workspace, changed_attempt)})
-            local crashed = await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", changed_request, "open", "attached"), "attach crash")
+            local crashed = await_carrier(spawn_carrier("bee.tests.harness:carrier_faulted", changed_request, "open", "attached"), "attach crash")
 
             local provider = registry.get(PROVIDER)
             if not provider then error("provider entry") end
@@ -398,7 +398,7 @@ local function define_tests()
             local previous_model = provider_data.model
             provider_data.model = "gpt-5-codex"
             apply(provider)
-            local resumed = await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", changed_request, "resume", nil), "changed provider")
+            local resumed = await_carrier(spawn_carrier("bee.tests.harness:carrier_faulted", changed_request, "resume", nil), "changed provider")
             if resumed.value then
                 local stored = call("bee.threads.binding:checkpoint", {thread_id = changed_thread, attempt_id = changed_attempt})
                 error("changed provider resumed: " .. json.encode(resumed.value):sub(1, 700)

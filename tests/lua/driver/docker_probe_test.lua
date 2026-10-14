@@ -38,7 +38,7 @@ local function define_tests()
             local changes = registry.snapshot():changes()
             assert(changes:update(binding)); assert(changes:update(declaration)); assert(changes:apply())
             local cache = locate.new_cache()
-            local profile = "bee.placement.docker.tests:profile"
+            local profile = "bee.tests.placement.docker:profile"
             local function check(): unknown return locate.locate(registry.snapshot(), "bee.driver.claude.binding:binding", "batch", cache, profile) end
             local first = check()
             local second = check()

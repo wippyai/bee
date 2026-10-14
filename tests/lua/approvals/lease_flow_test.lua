@@ -27,7 +27,7 @@ end
 local activation = funcs.new():with_actor(security.new_actor(ACTOR))
     :with_scope(scope({"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}))
 local alice = funcs.new():with_actor(security.new_actor(ALICE))
-    :with_scope(scope({"bee.security.approvals:approval_decide_policy", "bee.approvals:client_test_policy"}))
+    :with_scope(scope({"bee.security.approvals:approval_decide_policy", "bee.tests.approvals:client_test_policy"}))
 local executor: lease_grants.Executor = {call = function(_self: lease_grants.Executor, target: string, input: unknown): (unknown?, unknown?)
     local reply, problem = activation:call(target, input)
     local result = bounds.object(reply)

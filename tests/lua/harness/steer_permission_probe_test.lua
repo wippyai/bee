@@ -83,7 +83,7 @@ local function define_tests()
             local payload_digest, digest_error = sends.payload_digest(message)
             if not payload_digest then error("message digest: " .. tostring(digest_error)) end
             local spawner = process.with_context({}):with_actor(actor):with_scope(security.new_scope({message_policy}))
-            local pid, spawn_error = spawner:spawn_monitored("bee.harness.catalog:steer_grant_actor_probe", "bee:workers",
+            local pid, spawn_error = spawner:spawn_monitored("bee.tests.harness:steer_grant_actor_probe", "bee:workers",
                 thread_id, message, payload_digest, fresh("send"), fresh("record"), "node-steer-probe")
             if not pid then error("spawn app actor probe: " .. tostring(spawn_error)) end
             local events = assert(process.events())

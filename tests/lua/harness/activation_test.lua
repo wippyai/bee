@@ -23,7 +23,7 @@ local function define_tests()
             if not decoded then error(tostring(err)) end
             test.is_true(decoded.bindings["bee.driver.claude.binding:binding"])
             test.is_true(decoded.bindings["bee.driver.codex.binding:binding"])
-            test.is_nil(decoded.bindings["bee.harness.catalog:fake_binding"])
+            test.is_nil(decoded.bindings["bee.tests.harness:fake_binding"])
         end)
         test.it("accepts only a typed host-selected admission reader", function()
             local decoded = assert(activation.decode_activation("test:activation", entry({schema_revision = "bee.harness-activation@1", bindings = {}, admission = "bee.gov.binding:driver_bindings"})))

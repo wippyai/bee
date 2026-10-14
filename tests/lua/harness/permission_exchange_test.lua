@@ -29,7 +29,7 @@ local function run()
                 input_digest = pulled.input_digest, checkpoint = {attempt_id = reserved.turn}, operation_key = harness.key()}))
             local grants: {security.Policy} = {}
             for _, name in ipairs(harness.ALL) do grants[#grants + 1] = assert(security.policy(name)) end
-            for _, name in ipairs({"bee.approvals:client_test_policy", "bee.security.approvals:approval_request_policy"}) do
+            for _, name in ipairs({"bee.tests.approvals:client_test_policy", "bee.security.approvals:approval_request_policy"}) do
                 grants[#grants + 1] = assert(security.policy(name))
             end
             local caller = funcs.new():with_actor(assert(security.new_actor(owner.id, {workspace_id = workspace}))):with_scope(security.new_scope(grants))

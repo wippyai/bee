@@ -38,7 +38,7 @@ end
 local function launch_request(required: {driver_types.RequiredFile}?, environment: {[string]: string}?, refs: {[string]: string}?): types.LaunchRequest
     local value: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
     if required then value.required_files = required end
-    local request: types.LaunchRequest = {idempotency_key = "k", attempt_id = "a", owner_id = "bee.harness.catalog:codex_profile_test", owner_incarnation = 1, action_id = "a",
+    local request: types.LaunchRequest = {idempotency_key = "k", attempt_id = "a", owner_id = "bee.tests.harness:codex_profile_test", owner_incarnation = 1, action_id = "a",
         binding_ref = "bee.driver.codex.binding:binding", policy_ref = CODEX_NAMED_BATCH, profile_id = "named_batch", binding_digest = string.rep("b", 64),
         profile_digest = string.rep("c", 64), launch = value, resources = {}, environment = environment or {}, environment_refs = refs or {}, projections = {},
         required_cleanup = "process_group", required_exit_observation = "independent",

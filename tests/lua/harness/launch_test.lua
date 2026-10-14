@@ -36,20 +36,20 @@ local json = require("json")
 local system = require("system")
 local node_client = require("node_client")
 local REQUESTER = "bee.test.launcher"
-local DEFINITION = "bee.harness.catalog:fixture_definition"
-local SHIPPED_SHAPE_DEFINITION = "bee.harness.catalog:shipped_shape_definition"
+local DEFINITION = "bee.tests.harness:fixture_definition"
+local SHIPPED_SHAPE_DEFINITION = "bee.tests.harness:shipped_shape_definition"
 local SHIPPED_BATCH_POLICY = "bee.driver.claude.security:launch_policy_claude_batch"
-local AGENT_DEFINITION = "bee.harness.catalog:agent_fixture_definition"
-local AGENT_POLICY = "bee.harness.catalog:agent_fixture_policy"
-local AGENT_REVIEWER = "bee.harness.catalog:agent_reviewer"
-local AGENT_TRAIT = "bee.harness.catalog:agent_repository_trait"
-local RETAINED_DEFINITION = "bee.harness.catalog:retained_fixture_definition"
-local EMPTY_DEFINITION = "bee.harness.catalog:setup_empty_definition"
-local POLICY = "bee.harness.catalog:fixture_policy"
-local ROOT = "bee.harness.catalog:project_fixture"
-local SECOND_ROOT = "bee.harness.catalog:git_project_fixture"
-local SOURCE = "bee.harness.catalog:launch_sentinel_key"
-local ALTERNATE_SOURCE = "bee.harness.catalog:alternate_setup_key"
+local AGENT_DEFINITION = "bee.tests.harness:agent_fixture_definition"
+local AGENT_POLICY = "bee.tests.harness:agent_fixture_policy"
+local AGENT_REVIEWER = "bee.tests.harness:agent_reviewer"
+local AGENT_TRAIT = "bee.tests.harness:agent_repository_trait"
+local RETAINED_DEFINITION = "bee.tests.harness:retained_fixture_definition"
+local EMPTY_DEFINITION = "bee.tests.harness:setup_empty_definition"
+local POLICY = "bee.tests.harness:fixture_policy"
+local ROOT = "bee.tests.harness:project_fixture"
+local SECOND_ROOT = "bee.tests.harness:git_project_fixture"
+local SOURCE = "bee.tests.harness:launch_sentinel_key"
+local ALTERNATE_SOURCE = "bee.tests.harness:alternate_setup_key"
 local counter = 0
 local function fresh(prefix: string): string
     counter = counter + 1
@@ -58,9 +58,9 @@ end
 local function workspace_id(prefix: string): string
     return assert(hash.sha256(fresh(prefix))):sub(1, 32)
 end
-local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe",
-    "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
-    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.security:interactive_session_policy", "bee.harness.catalog:setup_client_policy"}
+local scope_names = {"bee.tests.harness:saved_profile_test_policy", "bee.tests.harness:launch_client_policy", "bee.tests.harness:launch_recovery_client_policy", "bee.tests.harness:launch_recovery_runtime_policy", "bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe",
+    "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
+    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.security:interactive_session_policy", "bee.tests.harness:setup_client_policy"}
 local function scope(extra: {string}?): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -118,7 +118,7 @@ local function open_gateway()
     local endpoint = registry.get("bee.gateway.api:gateway_endpoint")
     if not endpoint then error("gateway endpoint entry") end
     local policies: {security.Policy} = {}
-    for index, name in ipairs({"bee.harness.catalog:gateway_client_policy", "bee.tests.support:gateway_manage_policy"}) do
+    for index, name in ipairs({"bee.tests.harness:gateway_client_policy", "bee.tests.support:gateway_manage_policy"}) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
@@ -219,8 +219,8 @@ local function shell(command: string): string
     return output
 end
 local function fixture_paths(): (string, string)
-    local bin, bin_error = env.get("bee.harness.catalog:fixture_bin")
-    local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
+    local bin, bin_error = env.get("bee.tests.harness:fixture_bin")
+    local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
     if bin_error or type(bin) ~= "string" or streams_error or type(streams) ~= "string" then error("fixture paths are not set for the test runtime") end
     return bin, streams
 end
@@ -273,7 +273,7 @@ local function prepare_host(workspace: string)
     local sources = principals.objects(sources_data.sources)
     sources_data.sources = sources
     sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"environment"}}
-    sources[#sources + 1] = {ref = "bee.credentials:claude_login_fixture", workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"file"}}
+    sources[#sources + 1] = {ref = "bee.tests.credentials:claude_login_fixture", workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"file"}}
     sources[#sources + 1] = {ref = ALTERNATE_SOURCE, workspace_id = "*", audience = REQUESTER, provider = "claude", projection_kinds = {"environment"}}
     apply(sources_entry)
     value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"}))
@@ -281,7 +281,7 @@ local function prepare_host(workspace: string)
     value(call("bee.credentials.binding:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}}))
 end
 local function setup(workspace: string, definition_ref: string): {[string]: unknown}
-    local plan = value(call("bee.harness.binding:resolve", {definition_ref = definition_ref}))
+    local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = definition_ref}))
     local reply = call_setup({workspace_id = workspace, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
     return reply
 end
@@ -432,10 +432,10 @@ local function define_tests()
                             placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}, bee = {},
                             provider = {options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}}}})
                     assert(written.ok == true, tostring(written.message))
-                    local planned = value(call("bee.harness.binding:resolve", {definition_ref = definition_ref, workspace_id = workspace,
+                    local planned = value(call("bee.tests.harness.admission:resolve", {definition_ref = definition_ref, workspace_id = workspace,
                         saved_profile_id = id, saved_profile_revision = 1}))
                     test.eq(planned.placement_kind, "docker")
-                    local denied = call("bee.harness.binding:admit", {request_id = fresh("native-yolo"), definition_ref = definition_ref,
+                    local denied = call("bee.tests.harness.admission:admit", {request_id = fresh("native-yolo"), definition_ref = definition_ref,
                         workspace_id = workspace, saved_profile_id = id, saved_profile_revision = 1, brief = "Fixture", expected_plan_digest = planned.plan_digest,
                         placement_override = {kind = "native", home = "private"}})
                     test.is_false(denied.ok)
@@ -446,7 +446,7 @@ local function define_tests()
         test.it("spawns a saved spec through the real carrier and MCP, including a narrowed child", function()
             local parent_id, child_id = fresh("spec-parent"), fresh("spec-child")
             local tools = {"thread_read", "capabilities", "profile_get", "profile_put", "profile_list", "session_open", "session_run", "session_get", "session_close", "thread_message"}
-            with_entry("bee.tests.sessions:fake_owner", function(data)
+            with_entry("bee.tests.threads.sessions:fake_owner", function(data)
                 local contracts: {{[string]: unknown}} = {}
                 for _, item in ipairs(principals.objects(data.contracts)) do
                     local copied: {[string]: unknown} = {}
@@ -494,9 +494,9 @@ local function define_tests()
                             requestable = selected.id == child_id and {"bee.tests.memory:trait", "bee.tests.memory:outside"} or {"bee.tests.memory:trait"}, context = {project = "Bee", child_profile = child_id, child_definition = RETAINED_DEFINITION}}}))
                 end
                 open_gateway()
-                local measured = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                local measured = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = parent_id, saved_profile_revision = 1, overrides = {name = "Parent", role = "Inspect", traits = {"bee.tests.memory:review", "bee.tests.memory:trait"}, context = {task = "Review", readonly = false}}}))
-                local started = value(call("bee.harness.binding:start", {request_id = fresh("spec-start"), definition_ref = DEFINITION,
+                local started = value(call("bee.tests.harness.admission:start", {request_id = fresh("spec-start"), definition_ref = DEFINITION,
                     workspace_id = workspace, saved_profile_id = parent_id, saved_profile_revision = 1, expected_plan_digest = measured.plan_digest,
                     brief = "Read the supplied context", overrides = {name = "Parent", role = "Inspect", traits = {"bee.tests.memory:review", "bee.tests.memory:trait"}, context = {task = "Review", readonly = false}}}))
                 await_settled(tostring(started.thread_id), tostring(started.attempt_id))
@@ -598,7 +598,7 @@ local function define_tests()
             test.it("preserves the agent spec boundary through real MCP: " .. scenario, function()
                 local parent_id, child_id = fresh("regression-parent"), fresh("regression-child")
                 local tools = {"thread_read", "profile_get", "profile_put", "session_open", "session_run", "session_get", "thread_message", "app_tools"}
-                with_entry("bee.tests.sessions:fake_owner", function(data)
+                with_entry("bee.tests.threads.sessions:fake_owner", function(data)
                     local contracts = principals.objects((json.decode(assert(json.encode(data.contracts)))))
                     for _, contract in ipairs(contracts) do contract.default = false end
                     data.contracts = contracts
@@ -647,9 +647,9 @@ local function define_tests()
                     end
                     open_gateway()
                     for _ = 1, (scenario == "saved" or scenario == "legacy") and 2 or 1 do
-                    local measured = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                    local measured = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                         saved_profile_id = parent_id, saved_profile_revision = 1}))
-                    local started = value(call("bee.harness.binding:start", {request_id = fresh("regression-start"), definition_ref = DEFINITION,
+                    local started = value(call("bee.tests.harness.admission:start", {request_id = fresh("regression-start"), definition_ref = DEFINITION,
                         workspace_id = workspace, saved_profile_id = parent_id, saved_profile_revision = 1,
                         expected_plan_digest = measured.plan_digest, brief = "Spawn the child"}))
                     await_settled(tostring(started.thread_id), tostring(started.attempt_id))
@@ -677,9 +677,9 @@ local function define_tests()
                     local child_actor: string
                     if scenario == "cleared" or scenario == "delegated" then
                         local overrides = {context = {from_parent = true}}
-                        local measured = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                        local measured = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                             saved_profile_id = child_id .. "-cleared", saved_profile_revision = 1, overrides = overrides}))
-                        local launched = value(call("bee.harness.binding:start", {request_id = fresh("cleared-start"), definition_ref = DEFINITION,
+                        local launched = value(call("bee.tests.harness.admission:start", {request_id = fresh("cleared-start"), definition_ref = DEFINITION,
                             workspace_id = workspace, saved_profile_id = child_id .. "-cleared", saved_profile_revision = 1,
                             expected_plan_digest = measured.plan_digest, brief = "Read your session", overrides = overrides}))
                         child_thread, child_actor = assert(bounds.id(launched.thread_id)), REQUESTER
@@ -789,13 +789,13 @@ local function define_tests()
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
                         name = "Custom provider", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding",
                         provider = {}, bee = {mcp = {}}, placement = {kind = "native", home = "private"}}}))
-                local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = target,
+                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = target,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local prepared = call_setup({workspace_id = target, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest,
                     saved_profile_id = saved_id, saved_profile_revision = 1})
                 test.is_true(prepared.ok, tostring(prepared.error))
                 test.eq(assert(bounds.array(prepared.credentials, 64))[1], "anthropic")
-                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("private-provider-admit"),
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("private-provider-admit"),
                     definition_ref = DEFINITION, workspace_id = target, brief = "Fixture", expected_plan_digest = plan.plan_digest,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 test.eq(#assert(bounds.array(assert(bounds.object(admitted.request)).projections, 64)), 1)
@@ -824,12 +824,12 @@ local function define_tests()
                 bee = {mcp = {}}, placement = {kind = "native", home = "private"}}
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = target, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"), profile = profile}))
-            local plan = value(call("bee.harness.binding:resolve", {workspace_id = target, definition_ref = ref,
+            local plan = value(call("bee.tests.harness.admission:resolve", {workspace_id = target, definition_ref = ref,
                 saved_profile_id = saved_id, saved_profile_revision = 1}))
             local setup_reply = call_setup({workspace_id = target, definition_ref = ref, expected_plan_digest = plan.plan_digest,
                 saved_profile_id = saved_id, saved_profile_revision = 1})
             assert(setup_reply.ok == true, tostring(setup_reply.error))
-            local admitted = value(call("bee.harness.binding:admit", {workspace_id = target, definition_ref = ref, request_id = fresh("custom-admit"),
+            local admitted = value(call("bee.tests.harness.admission:admit", {workspace_id = target, definition_ref = ref, request_id = fresh("custom-admit"),
                 expected_plan_digest = plan.plan_digest, saved_profile_id = saved_id, saved_profile_revision = 1, brief = "Fixture"}))
             test.eq(#assert(bounds.array(assert(bounds.object(admitted.request)).projections, 64)), 2)
             local saved = value(call("bee.harness.binding:call", {operation = "get", workspace_id = target, profile_id = saved_id}))
@@ -848,10 +848,10 @@ local function define_tests()
                 changed.gateway_surface = {access = {policy = "agent-access", traits = {"bee.tests.memory:trait"}}}
                 if route.definition == AGENT_DEFINITION then
                     local tools: {{[string]: unknown}} = {}
-                    for _, id in ipairs({"bee.harness.catalog:agent_read_tool", "bee.harness.catalog:agent_report_tool"}) do
+                    for _, id in ipairs({"bee.tests.harness:agent_read_tool", "bee.tests.harness:agent_report_tool"}) do
                         local meta = assert(bounds.object(assert(registry.get(id)).meta))
                         tools[#tools + 1] = {name = meta.llm_alias, operation = id, description = meta.llm_description,
-                            policies = {"bee.harness.catalog:launch_client_policy"}, schema = json.decode(tostring(meta.input_schema)), annotations = {}}
+                            policies = {"bee.tests.harness:launch_client_policy"}, schema = json.decode(tostring(meta.input_schema)), annotations = {}}
                     end
                                         changed.gateway_surface = {tools = tools, traits = {assert(trait_access.load("bee.tests.memory:trait"))},
                         base_tools = {"FileRead", "FileReport"}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
@@ -865,9 +865,9 @@ local function define_tests()
                             name = "Remember", definition_ref = route.definition, driver_binding_ref = "bee.driver.claude.binding:binding",
                             provider = {}, bee = {mcp = {}}, active_traits = {"bee.tests.memory:trait"},
                             role = "Remember facts", context = {project = "Bee", readonly = false}}}))
-                    local measured = value(call("bee.harness.binding:resolve", {definition_ref = route.definition, workspace_id = workspace,
+                    local measured = value(call("bee.tests.harness.admission:resolve", {definition_ref = route.definition, workspace_id = workspace,
                         saved_profile_id = saved_id, saved_profile_revision = 1}))
-                    local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("trait-admission"), definition_ref = route.definition, expected_plan_digest = measured.plan_digest,
+                    local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("trait-admission"), definition_ref = route.definition, expected_plan_digest = measured.plan_digest,
                         workspace_id = workspace, brief = "remember", saved_profile_id = saved_id, saved_profile_revision = 1}))
                     local requested = assert(bounds.object(admitted.request))
                     local preferences = assert(bounds.object(requested.preferences))
@@ -890,12 +890,12 @@ local function define_tests()
                     expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
             end
             save(0, "First profile", {})
-            local original = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+            local original = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 1}))
             test.eq(original.saved_profile_id, saved_id)
             test.eq(original.saved_profile_revision, 1)
             test.is_nil(original.preferences)
-            local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("saved-profile-admit"), definition_ref = DEFINITION,
+            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("saved-profile-admit"), definition_ref = DEFINITION,
                 workspace_id = workspace_id, brief = "profile fixture", saved_profile_id = saved_id, saved_profile_revision = 1,
                 expected_plan_digest = original.plan_digest}))
             local carrier_request = assert(bounds.object(admitted.request))
@@ -903,11 +903,11 @@ local function define_tests()
             test.eq(preferences.instructions, "")
             test.eq(#(principals.items(preferences.mcp_tools)), 0)
             save(1, "Revised profile", {})
-            local refused = call("bee.harness.binding:admit", {request_id = fresh("stale-profile"), definition_ref = DEFINITION,
+            local refused = call("bee.tests.harness.admission:admit", {request_id = fresh("stale-profile"), definition_ref = DEFINITION,
                 workspace_id = workspace_id, brief = "never launch", saved_profile_id = saved_id, saved_profile_revision = 1,
                 expected_plan_digest = original.plan_digest})
             test.eq(code(refused), "CONFLICT")
-            local updated = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+            local updated = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 2}))
             test.neq(original.plan_digest, updated.plan_digest)
             local unsafe = profile_call({operation = "put", workspace_id = workspace_id, profile_id = saved_id,
@@ -915,7 +915,7 @@ local function define_tests()
                     definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = "dontAsk"}, bee = {mcp = {}}}})
             test.eq(unsafe.ok, false)
             test.eq(unsafe.code, "DENIED")
-            local unchanged = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+            local unchanged = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 2}))
             test.eq(unchanged.plan_digest, updated.plan_digest)
         end)
@@ -926,9 +926,9 @@ local function define_tests()
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Selected credentials",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {},
                         bee = {mcp = {}, credential_refs = refs, files = {{workspace_id = workspace, resource = "project", subpath = "", access = "read"}}}}}))
-                local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
-                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("credential-admit"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("credential-admit"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest}))
                 local request = assert(bounds.object(admitted.request))
                 test.eq(#assert(bounds.array(request.projections, 64)), #refs)
@@ -944,7 +944,7 @@ local function define_tests()
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Undeclared",
                     definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
-            local refused = call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
+            local refused = call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
             test.eq(code(refused), "DENIED")
         end)
         test.it("honors credential environment destinations and rejects retargeting or literal conflicts", function()
@@ -973,8 +973,8 @@ local function define_tests()
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Environment",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
-                local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
-                replies[index] = call("bee.harness.binding:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
+                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
+                replies[index] = call("bee.tests.harness.admission:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})
             end
             declaration.data = assert(json.decode(saved_descriptor)); policy_entry.data = assert(json.decode(saved_policy))
@@ -1025,7 +1025,7 @@ local function define_tests()
             test.eq(definitions[1].name, "anthropic")
             test.eq(definitions[1].revision, 1)
             test.eq(#(principals.items(first.credentials)), 1)
-            local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("setup-admit"), definition_ref = RETAINED_DEFINITION,
+            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("setup-admit"), definition_ref = RETAINED_DEFINITION,
                 workspace_id = first_workspace, brief = "ping"}))
             local request = assert(bounds.object(admitted.request))
             local resources = principals.objects(request.resources)
@@ -1051,7 +1051,7 @@ local function define_tests()
                 local after = associations(target)
                 test.eq(after[1].revision, prior_revision + 1)
                 test.neq(after[1].association_id, before[1].association_id)
-                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("setup-root-refresh-admit"),
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("setup-root-refresh-admit"),
                     definition_ref = RETAINED_DEFINITION, workspace_id = target, brief = "ping"}))
                 test.eq(#(principals.items((assert(bounds.object(admitted.request))).resources)), 2)
             end)
@@ -1135,7 +1135,7 @@ local function define_tests()
             local original = entry.data
             local changed: {[string]: unknown} = {}
             for key, item in pairs(assert(bounds.object(original))) do changed[key] = item end
-            local source = {kind = "fs_directory", ref = "bee.credentials:claude_login_fixture"}
+            local source = {kind = "fs_directory", ref = "bee.tests.credentials:claude_login_fixture"}
             changed.credentials = {anthropic = {provider = "claude", source = source, optional = true}}
             local ok, failure = pcall(function()
                 entry.data = changed
@@ -1203,7 +1203,7 @@ local function define_tests()
             local conflict = setup(conflicting_workspace, DEFINITION)
             test.is_false(conflict.ok == true)
             test.eq(#associations(conflicting_workspace), 1)
-            local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+            local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
             local changed_workspace = fresh("setup-changed")
             local entry = assert(registry.get(DEFINITION))
             local original = entry.data
@@ -1222,11 +1222,11 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("rejects an unauthorized caller, private backend calls and unknown definitions", function()
-            local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+            local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
             local no_setup, no_setup_error = funcs.new():with_actor(security.new_actor("bee.test.setup.denied")):with_scope(security.new_scope({})):call("bee.harness.binding:setup",
                 {workspace_id = fresh("setup-denied"), definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
             test.is_true(no_setup_error ~= nil or (type(no_setup) == "table" and no_setup.ok == false))
-            local call_only = assert(security.policy("bee.harness.catalog:setup_call_only_policy"))
+            local call_only = assert(security.policy("bee.tests.harness:setup_call_only_policy"))
             local denied_workspace = fresh("setup-operation-denied")
             local denied, denied_error = funcs.new():with_actor(principals.actor(REQUESTER, denied_workspace)):with_scope(security.new_scope({call_only})):call("bee.harness.binding:setup",
                 {workspace_id = denied_workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
@@ -1236,7 +1236,7 @@ local function define_tests()
             test.eq(denied.ok, false)
             test.eq(denied.error, "setup is not authorized")
             test.eq(#associations(denied_workspace), 0)
-            local policy, policy_error = security.policy("bee.harness.catalog:setup_client_policy")
+            local policy, policy_error = security.policy("bee.tests.harness:setup_client_policy")
             if policy_error or not policy then error(tostring(policy_error)) end
             local private_workspace = fresh("setup-private")
             local private_reply, private_error = funcs.new():with_actor(principals.actor(REQUESTER, private_workspace)):with_scope(security.new_scope({policy})):call("bee.harness.binding:setup_backend",
@@ -1254,7 +1254,7 @@ local function define_tests()
             local decoded, decode_error = admission.decode_request(request)
             if not decoded then error(tostring(decode_error)) end
             test.eq(decoded.brief, "")
-            local reply = call("bee.harness.binding:admit", request)
+            local reply = call("bee.tests.harness.admission:admit", request)
             test.eq(code(reply), "INVALID")
             test.eq(reply.error and reply.error.message, "a structured launch needs a nonempty brief")
         end)
@@ -1436,7 +1436,7 @@ local function define_tests()
                 apply(entry)
                 local shared = fresh("research-thread")
                 value(call("bee.threads.binding:create", {thread_id = shared, idempotency_key = fresh("create"), title = "Research"}))
-                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("shared-agent"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("shared-agent"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "independent finding", thread_id = shared}))
                 test.eq(admitted.thread_id, shared)
                 test.eq((assert(bounds.object(admitted.request))).thread_id, shared)
@@ -1448,7 +1448,7 @@ local function define_tests()
                 local before = value(call_as(foreign_owner, "bee.threads.binding:read_after", {thread_id = foreign_thread, cursor = 0}))
                 local resources_before = value(call("bee.resources.binding:list", {workspace_id = workspace}))
                 local credentials_before = value(call("bee.credentials.binding:list", {workspace_id = workspace}))
-                local refused = call("bee.harness.binding:admit", {request_id = fresh("foreign-agent"), definition_ref = DEFINITION,
+                local refused = call("bee.tests.harness.admission:admit", {request_id = fresh("foreign-agent"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "must not start", thread_id = foreign_thread})
                 test.eq(code(refused), "DENIED")
                 local after = value(call_as(foreign_owner, "bee.threads.binding:read_after", {thread_id = foreign_thread, cursor = 0}))
@@ -1524,7 +1524,7 @@ local function define_tests()
                     test.eq(membership.member_id, old_app)
                     test.eq(membership.active, true)
 
-                    local admitted = value(call_as(reopened_app, "bee.harness.binding:admit", {
+                    local admitted = value(call_as(reopened_app, "bee.tests.harness.admission:admit", {
                         request_id = fresh("reopened-app-launch"), definition_ref = DEFINITION,
                         workspace_id = alias_workspace, brief = "continue research", thread_id = shared,
                     }))
@@ -1534,14 +1534,14 @@ local function define_tests()
                     local reopened_thread = fresh("reopened-app-owned-thread")
                     value(call_as_bound(reopened_app, "bee.threads.binding:create", {thread_id = reopened_thread,
                         idempotency_key = fresh("create"), title = "Reopened app work"}, alias_workspace, {}))
-                    test.eq(code(call_as(old_app, "bee.harness.binding:admit", {
+                    test.eq(code(call_as(old_app, "bee.tests.harness.admission:admit", {
                         request_id = fresh("retired-app-launch"), definition_ref = DEFINITION,
                         workspace_id = alias_workspace, brief = "retired callers cannot launch", thread_id = reopened_thread,
                     })), "DENIED")
 
                     test.eq(code(call_as_bound(unattested_app, "bee.threads.binding:get", {thread_id = shared},
                         alias_workspace, {})), "DENIED")
-                    test.eq(code(call_as(unattested_app, "bee.harness.binding:admit", {
+                    test.eq(code(call_as(unattested_app, "bee.tests.harness.admission:admit", {
                         request_id = fresh("unattested-app-launch"), definition_ref = DEFINITION,
                         workspace_id = alias_workspace, brief = "must remain denied", thread_id = shared,
                     })), "DENIED")
@@ -1554,7 +1554,7 @@ local function define_tests()
         test.it("refuses caller environment before admitting a thread", function()
             for _, environment in ipairs({{}, {BEE_PROFILE_VALUE = "caller-value"}}) do
                 local request_id = fresh("environment")
-                local reply = call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local reply = call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", environment = environment})
                 test.eq(code(reply), "INVALID")
                 test.is_true(reply.error ~= nil and tostring(reply.error.message):find("environment", 1, true) ~= nil)
@@ -1569,7 +1569,7 @@ local function define_tests()
             entry.data = {}
             apply(entry)
             local request_id = fresh("unlinked")
-            local reply = call("bee.harness.binding:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
+            local reply = call("bee.tests.harness.admission:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
             entry.data = original
             apply(entry)
             test.eq(code(reply), "UNAVAILABLE")
@@ -1626,27 +1626,27 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("resolves a definition to one measured plan without effects", function()
-            local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+            local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
             test.eq(plan.launch_id, "claude-fixture")
             test.eq(plan.mode, "batch")
             test.eq(#(plan.plan_digest), 64)
-            local again = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+            local again = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
             test.eq(again.plan_digest, plan.plan_digest)
-            test.eq(code(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, mode = "window"})), "FORBIDDEN")
-            test.eq(code(call("bee.harness.binding:resolve", {definition_ref = "bee.harness.catalog:nothing"})), "NOT_FOUND")
+            test.eq(code(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, mode = "window"})), "FORBIDDEN")
+            test.eq(code(call("bee.tests.harness.admission:resolve", {definition_ref = "bee.harness.catalog:nothing"})), "NOT_FOUND")
             local entry = registry.get(DEFINITION)
             if not entry then error("definition") end
             local data = assert(bounds.object(entry.data))
             local original = data.title
             data.title = "Retitled fixture"
             apply(entry)
-            local moved = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+            local moved = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
             test.neq(moved.plan_digest, plan.plan_digest)
             data.title = original
             apply(entry)
         end)
         test.it("fences admission to the selected plan before creating a thread", function()
-            local selected = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+            local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
             local policy_entry = registry.get(POLICY)
             if not policy_entry then error("launch policy") end
             local original_policy = policy_entry.data
@@ -1658,10 +1658,10 @@ local function define_tests()
             local ok, failure = pcall(function()
                 policy_entry.data = changed_policy
                 apply(policy_entry)
-                local changed = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+                local changed = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
                 test.neq(changed.plan_digest, selected.plan_digest)
 
-                local refused = call("bee.harness.binding:admit", {request_id = mismatch_request, definition_ref = DEFINITION,
+                local refused = call("bee.tests.harness.admission:admit", {request_id = mismatch_request, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", expected_plan_digest = selected.plan_digest})
                 test.eq(code(refused), "CONFLICT")
                 test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. mismatch_request})), "NOT_FOUND")
@@ -1674,10 +1674,10 @@ local function define_tests()
             if not restored then error("restore launch policy: " .. tostring(restore_error)) end
             if not ok then error(tostring(failure)) end
 
-            local restored_plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+            local restored_plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
             test.eq(restored_plan.plan_digest, selected.plan_digest)
             local matching_request = fresh("plan-matched")
-            local matching = value(call("bee.harness.binding:admit", {request_id = matching_request, definition_ref = DEFINITION,
+            local matching = value(call("bee.tests.harness.admission:admit", {request_id = matching_request, definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", expected_plan_digest = selected.plan_digest}))
             local matching_plan = assert(bounds.object(matching.plan))
             test.eq(matching_plan.plan_digest, selected.plan_digest)
@@ -1685,7 +1685,7 @@ local function define_tests()
         end)
         test.it("rejects a malformed expected plan digest", function()
             local request_id = fresh("plan-malformed")
-            local refused = call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION,
+            local refused = call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", expected_plan_digest = string.rep("A", 64)})
             test.eq(code(refused), "INVALID")
             test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
@@ -1696,15 +1696,15 @@ local function define_tests()
             binding.data = {contracts = {
                 {contract = "bee.driver:driver", methods = {
                     prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch",
-                    normalize = "bee.driver.claude.binding:normalize", configure = "bee.harness.catalog:configuration_probe",
+                    normalize = "bee.driver.claude.binding:normalize", configure = "bee.tests.harness:configuration_probe",
                 }},
                 {contract = "bee.driver:locate_facet", methods = {locate = "bee.driver.claude.binding:locate"}},
             }}
             local ok, failure = pcall(function()
                 apply(binding)
-                local selected = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+                local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
                 local request_id = fresh("complete-config-inputs")
-                local admitted = value(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", expected_plan_digest = selected.plan_digest}))
                 local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
@@ -1785,8 +1785,8 @@ local function define_tests()
             local ok, failure = pcall(function()
                 local workspace_id = fresh("claude-host-home")
                 setup(workspace_id, SHIPPED_SHAPE_DEFINITION)
-                local selected = value(call("bee.harness.binding:resolve", {definition_ref = SHIPPED_SHAPE_DEFINITION}))
-                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("claude-host-home-admit"),
+                local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = SHIPPED_SHAPE_DEFINITION}))
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("claude-host-home-admit"),
                     definition_ref = SHIPPED_SHAPE_DEFINITION, workspace_id = workspace_id, brief = "host config fixture",
                     expected_plan_digest = selected.plan_digest}))
                 local planned, plan_error = machine.plan(carrier_io(workspace), carrier_fixtures.request(admitted.request))
@@ -1834,7 +1834,7 @@ local function define_tests()
                 changes:update(policy_entry)
                 local applied, apply_error = changes:apply()
                 if not applied then error("configure missing provider: " .. tostring(apply_error)) end
-                local unapproved = value(call("bee.harness.binding:admit", {request_id = fresh("unapproved-host-home"), definition_ref = DEFINITION,
+                local unapproved = value(call("bee.tests.harness.admission:admit", {request_id = fresh("unapproved-host-home"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""}))
                 local refused_plan, refusal = machine.plan(carrier_io(workspace), carrier_fixtures.request(unapproved.request))
                 test.is_nil(refused_plan)
@@ -1845,7 +1845,7 @@ local function define_tests()
                 changed_policy.allow_host_home = true
                 policy_entry.data = changed_policy
                 apply(policy_entry)
-                local admitted = value(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""}))
                 local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
@@ -1862,10 +1862,10 @@ local function define_tests()
                 if not stored then error(tostring(stored_error)) end
                 if not stored.delivery then error("configuration delivery missing") end
                 test.eq(#stored.delivery.files, 0)
-                changed_policy.provider_ref = "bee.harness.catalog:codex_fixture_provider"
+                changed_policy.provider_ref = "bee.tests.harness:codex_fixture_provider"
                 policy_entry.data = changed_policy
                 apply(policy_entry)
-                local conflicted = value(call("bee.harness.binding:admit", {request_id = fresh("provider-home-conflict"), definition_ref = DEFINITION,
+                local conflicted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("provider-home-conflict"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""}))
                 local refused, refusal = machine.plan(io, carrier_fixtures.request(conflicted.request))
                 test.is_nil(refused)
@@ -1879,9 +1879,9 @@ local function define_tests()
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
                         name = "Private provider", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding",
                         provider = {}, bee = {mcp = {}}, placement = {kind = "native", home = "private"}}}))
-                local private_selected = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION,
+                local private_selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION,
                     workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
-                local private = value(call("bee.harness.binding:admit", {request_id = fresh("provider-private-home-admit"),
+                local private = value(call("bee.tests.harness.admission:admit", {request_id = fresh("provider-private-home-admit"),
                     definition_ref = DEFINITION, workspace_id = workspace, brief = "",
                     saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = private_selected.plan_digest}))
                 local private_plan, private_error = machine.plan(io, carrier_fixtures.request(private.request))
@@ -1899,7 +1899,7 @@ local function define_tests()
         end)
         test.it("launches a saved profile that names a Codex config profile and still delivers Bee MCP and hooks", function()
             local definition_entry = assert(registry.get(DEFINITION))
-            local codex_policy = assert(registry.get("bee.harness.catalog:codex_fixture_policy"))
+            local codex_policy = assert(registry.get("bee.tests.harness:codex_fixture_policy"))
             local original_definition, original_policy = definition_entry.data, codex_policy.data
             local changed_definition: {[string]: unknown} = {}
             local changed_policy: {[string]: unknown} = {}
@@ -1909,7 +1909,7 @@ local function define_tests()
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
             changed_definition.session_resource = "session"
-            changed_definition.policy_ref = "bee.harness.catalog:codex_fixture_policy"
+            changed_definition.policy_ref = "bee.tests.harness:codex_fixture_policy"
             changed_definition.credentials = {}
             changed_policy.executables = {codex = "/bin/true"}
             changed_policy.provider_ref = nil
@@ -1942,9 +1942,9 @@ local function define_tests()
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
                     profile = {schema_revision = "bee.agent-profile@3", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = "fixture-profile"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
-                local selected = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+                local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
-                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
                     workspace_id = workspace_id, brief = "", saved_profile_id = saved_id, saved_profile_revision = 1,
                     expected_plan_digest = selected.plan_digest}))
                 local carrier_request = assert(bounds.object(admitted.request))
@@ -1986,8 +1986,8 @@ local function define_tests()
         end)
         test.it("fences a selected plan when its host provider changes", function()
             local definition_entry = assert(registry.get(DEFINITION))
-            local codex_policy = assert(registry.get("bee.harness.catalog:codex_fixture_policy"))
-            local provider = assert(registry.get("bee.harness.catalog:codex_fixture_provider"))
+            local codex_policy = assert(registry.get("bee.tests.harness:codex_fixture_policy"))
+            local provider = assert(registry.get("bee.tests.harness:codex_fixture_provider"))
             local original_definition, original_policy, original_provider = definition_entry.data, codex_policy.data, provider.data
             local changed_definition: {[string]: unknown} = {}
             local changed_policy: {[string]: unknown} = {}
@@ -1999,7 +1999,7 @@ local function define_tests()
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
             changed_definition.session_resource = "session"
-            changed_definition.policy_ref = "bee.harness.catalog:codex_fixture_policy"
+            changed_definition.policy_ref = "bee.tests.harness:codex_fixture_policy"
             changed_definition.credentials = {}
             changed_policy.executables = {codex = "/bin/true"}
             local request_id = fresh("provider-fenced")
@@ -2011,14 +2011,14 @@ local function define_tests()
                 initial:update(codex_policy)
                 local applied, apply_error = initial:apply()
                 if not applied then error("configure provider fence: " .. tostring(apply_error)) end
-                local selected = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+                local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
                 changed_provider.model = "gpt-5.1"
                 provider.data = changed_provider
                 local update = registry.snapshot():changes()
                 update:update(provider)
                 local updated, update_error = update:apply()
                 if not updated then error("change provider: " .. tostring(update_error)) end
-                local refused = call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local refused = call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "", expected_plan_digest = selected.plan_digest})
                 test.eq(code(refused), "CONFLICT")
                 test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
@@ -2036,7 +2036,7 @@ local function define_tests()
         end)
         test.it("admits for the requester, obtaining an attempt-bound grant and projection in the requester's authority", function()
             local request_id = fresh("request")
-            local admitted = value(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(admitted.requester, REQUESTER)
             test.eq(admitted.attempt_id, "attempt:" .. request_id)
             test.eq(admitted.thread_id, "thread:" .. request_id)
@@ -2058,45 +2058,45 @@ local function define_tests()
                 end
             end
             test.is_true(found)
-            local replay = value(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local replay = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq((principals.strings((assert(bounds.object(replay.request))).projections))[1], projections[1])
-            test.eq(code(call("bee.harness.binding:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping", thread_id = "t"})), "FORBIDDEN")
+            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping", thread_id = "t"})), "FORBIDDEN")
             -- Bound to the same workspace, so the refusal is the launch policy's.
             local outsider = funcs.new():with_actor(principals.actor("bee.test.other", workspace)):with_scope(scope())
-            local denied, err = outsider:call("bee.harness.binding:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
+            local denied, err = outsider:call("bee.tests.harness.admission:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
             if err then error(tostring(err)) end
             test.eq(code(principals.reply(denied)), "FORBIDDEN")
         end)
         test.it("admits workdir, thread and placement overrides only where the definition and its policy both allow them", function()
             value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "alternate", root_ref = ROOT, subpath = "", allowed_access = "write"}))
             local refused_request = fresh("override-refused")
-            test.eq(code(call("bee.harness.binding:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                 brief = "ping", workdir = "alternate"})), "FORBIDDEN")
-            test.eq(code(call("bee.harness.binding:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                 brief = "ping", thread_title = "Chosen title"})), "FORBIDDEN")
             test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. refused_request})), "NOT_FOUND")
             -- The definition alone allowing an override is not enough: the
             -- host policy must admit it as well.
             with_overrides({"brief", "workdir", "thread", "placement"}, {}, function()
-                local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
                 test.eq(#(principals.strings(plan.overrides)), 1)
                 test.eq((principals.strings(plan.overrides))[1], "brief")
                 test.eq(plan.placement_kind, "native")
-                test.eq(code(call("bee.harness.binding:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "ping", workdir = "alternate"})), "FORBIDDEN")
-                test.eq(code(call("bee.harness.binding:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "ping", thread_title = "Chosen title"})), "FORBIDDEN")
             end)
             with_overrides({"brief"}, {"workdir", "thread", "placement"}, function()
-                test.eq(code(call("bee.harness.binding:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "ping", workdir = "alternate"})), "FORBIDDEN")
             end)
             test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. refused_request})), "NOT_FOUND")
             with_overrides({"brief", "workdir", "thread"}, {"workdir", "thread"}, function()
-                local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
                 test.eq(#(principals.strings(plan.overrides)), 3)
                 local request_id = fresh("override-workdir")
-                local admitted = value(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "ping", workdir = "alternate", thread_title = "Chosen title"}))
                 local carrier_request = assert(bounds.object(admitted.request))
                 test.eq(carrier_request.working_directory, "alternate")
@@ -2109,16 +2109,16 @@ local function define_tests()
                 -- An existing thread the requester belongs to replaces the new one.
                 local chosen = fresh("override-thread")
                 value(call("bee.threads.binding:create", {thread_id = chosen, idempotency_key = fresh("create"), title = "Existing"}))
-                local joined = value(call("bee.harness.binding:admit", {request_id = fresh("override-existing"), definition_ref = DEFINITION,
+                local joined = value(call("bee.tests.harness.admission:admit", {request_id = fresh("override-existing"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = chosen}))
                 test.eq(joined.thread_id, chosen)
                 local foreign_owner = fresh("foreign-owner")
                 local foreign_thread = fresh("foreign-thread")
                 value(call_as(foreign_owner, "bee.threads.binding:create", {thread_id = foreign_thread,
                     idempotency_key = fresh("foreign-create"), title = "Foreign"}))
-                test.eq(code(call("bee.harness.binding:admit", {request_id = fresh("override-foreign"), definition_ref = DEFINITION,
+                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("override-foreign"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = foreign_thread})), "DENIED")
-                test.eq(code(call("bee.harness.binding:admit", {request_id = fresh("override-both"), definition_ref = DEFINITION,
+                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("override-both"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = chosen, thread_title = "Both"})), "INVALID")
             end)
         end)
@@ -2128,26 +2128,26 @@ local function define_tests()
             with_entry(DEFINITION, function(changed)
                 changed.thread_policy = {kind = "named", thread_ref = selected}
             end, function()
-                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("named-thread"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("named-thread"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = selected}))
                 test.eq(admitted.thread_id, selected)
-                test.eq(code(call("bee.harness.binding:admit", {request_id = fresh("different-thread"), definition_ref = DEFINITION,
+                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("different-thread"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = fresh("other")})), "FORBIDDEN")
-                test.eq(code(call("bee.harness.binding:admit", {request_id = fresh("named-title"), definition_ref = DEFINITION,
+                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("named-title"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_title = "New thread"})), "FORBIDDEN")
-                test.eq(code(call_as(fresh("nonmember"), "bee.harness.binding:admit", {request_id = fresh("named-nonmember"), definition_ref = DEFINITION,
+                test.eq(code(call_as(fresh("nonmember"), "bee.tests.harness.admission:admit", {request_id = fresh("named-nonmember"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = selected})), "DENIED")
             end)
         end)
         test.it("refuses a placement other than the host's before any thread or grant exists", function()
-            local native = value(call("bee.harness.binding:admit", {request_id = fresh("placement-native"), definition_ref = DEFINITION,
+            local native = value(call("bee.tests.harness.admission:admit", {request_id = fresh("placement-native"), definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "native"}))
             test.eq((assert(bounds.object(native.plan))).placement_kind, "native")
             local request_id = fresh("placement-docker")
-            test.eq(code(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION,
+            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "docker"})), "FORBIDDEN")
             with_overrides({"brief", "placement"}, {"placement"}, function()
-                local refused = call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local refused = call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", placement = "docker"})
                 test.eq(code(refused), "PLACEMENT_UNAVAILABLE")
             end)
@@ -2155,35 +2155,35 @@ local function define_tests()
             -- "vm" names no installed placement package, but decoding no
             -- longer refuses it by shape: the definition's own override
             -- allow-list is what refuses it here, same as "docker" above.
-            test.eq(code(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION,
+            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "vm"})), "FORBIDDEN")
-            test.eq(code(call("bee.harness.binding:admit", {request_id = fresh("placement-malformed"), definition_ref = DEFINITION,
+            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("placement-malformed"), definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "bad\0placement"})), "INVALID")
         end)
         test.it("selects an installed placement package once the host's policy names its binding", function()
-            local FIXTURE_PLACEMENT = "bee.harness.catalog:fixture_placement_binding"
+            local FIXTURE_PLACEMENT = "bee.tests.harness:fixture_placement_binding"
             with_overrides({"brief", "placement"}, {"placement"}, function()
-                local unselected = call("bee.harness.binding:admit", {request_id = fresh("placement-fixture-unselected"), definition_ref = DEFINITION,
+                local unselected = call("bee.tests.harness.admission:admit", {request_id = fresh("placement-fixture-unselected"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", placement = "fixture"})
                 test.eq(code(unselected), "PLACEMENT_UNAVAILABLE")
                 test.is_true(refusal_message(unselected):find("it places it native", 1, true) ~= nil)
                 with_entry(POLICY, function(changed) changed.placement_binding = FIXTURE_PLACEMENT end, function()
-                    local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+                    local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
                     test.eq(plan.placement_kind, "fixture")
-                    local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("placement-fixture-selected"), definition_ref = DEFINITION,
+                    local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("placement-fixture-selected"), definition_ref = DEFINITION,
                         workspace_id = workspace, brief = "ping", placement = "fixture"}))
                     test.eq((assert(bounds.object(admitted.plan))).placement_kind, "fixture")
                 end)
             end)
         end)
         test.it("sets up a folder under an admitted root as the working directory only under a workdir override", function()
-            local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+            local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
             local refused = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                 expected_plan_digest = plan.plan_digest, workdir = {root_ref = ROOT, path = "chosen"}})
             test.eq(refused.ok, false)
             test.eq(refused.error, "the launch does not allow a workdir override")
             with_overrides({"brief", "workdir"}, {"workdir"}, function()
-                local allowed = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION}))
+                local allowed = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
                 local reply = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                     expected_plan_digest = allowed.plan_digest, workdir = {root_ref = ROOT, path = "chosen/deeper"}})
                 if reply.ok ~= true then error(tostring(reply.error)) end
@@ -2199,7 +2199,7 @@ local function define_tests()
                 local again = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                     expected_plan_digest = allowed.plan_digest, workdir = {root_ref = ROOT, path = "chosen/deeper"}})
                 test.eq((assert(bounds.object(again))).workdir, name)
-                local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("folder-workdir"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("folder-workdir"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", workdir = name, expected_plan_digest = allowed.plan_digest}))
                 test.eq((assert(bounds.object(admitted.request))).working_directory, name)
                 for _, bad in ipairs({{root_ref = ROOT, path = "../escape"}, {root_ref = ROOT, path = "/abs"}, {root_ref = "bee.harness.catalog:not_a_root", path = "x"},
@@ -2217,7 +2217,7 @@ local function define_tests()
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Profiled folder",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}},
                         workdir = {root_ref = ROOT, path = "profiled"}}}))
-                local plan = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local function subpath_of(reply: {[string]: unknown}): unknown
                     if reply.ok ~= true then error(tostring(reply.error)) end
@@ -2234,7 +2234,7 @@ local function define_tests()
             end)
         end)
         test.it("reconciles a prepared and claimed attempt after its carrier disappears", function()
-            local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("orphan-prestart"),
+            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("orphan-prestart"),
                 definition_ref = DEFINITION, workspace_id = workspace, brief = "fail during placement preparation"}))
             with_entry(POLICY, function(changed)
                 changed.placement_binding = "bee.placement.native.binding:binding"
@@ -2254,7 +2254,7 @@ local function define_tests()
                 test.is_nil(row)
 
                 local reply, call_error = funcs.new():with_actor(principals.actor(REQUESTER, workspace))
-                    :with_scope(scope()):call("bee.harness.catalog:managed_run_probe", {operation = "wait",
+                    :with_scope(scope()):call("bee.tests.harness:managed_run_probe", {operation = "wait",
                         thread_id = admitted.thread_id, attempt_id = admitted.attempt_id, wait_ms = 0})
                 if call_error then error("reconcile wait: " .. tostring(call_error)) end
                 local settled = value(principals.reply(reply))
@@ -2267,7 +2267,7 @@ local function define_tests()
         end)
         test.it("keeps a lost running attempt live until placement finishes draining, then settles it", function()
             local request_id = fresh("orphan-running")
-            local fixture_bin = assert(env.get("bee.harness.catalog:fixture_bin"))
+            local fixture_bin = assert(env.get("bee.tests.harness:fixture_bin"))
             local release = fixture_bin .. "/" .. fresh("lost-carrier-child")
             orphan_gate.create(release)
             local retention = assert(process.listen("bee.test.retention.armed", {message = true}))
@@ -2277,11 +2277,11 @@ local function define_tests()
                 environment.BEE_TEST_RETENTION_CONTROLLER = tostring(process.pid())
                 changed.environment = environment
             end, function()
-                local admitted = value(call("bee.harness.binding:admit", {request_id = request_id,
+                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id,
                     definition_ref = DEFINITION, workspace_id = workspace, brief = "prove lost carrier recovery"}))
                 local carrier_request = assert(bounds.object(admitted.request))
                 local spawner = process.with_context({}):with_actor(principals.actor(REQUESTER, workspace)):with_scope(scope())
-                local lost_pid, spawn_error = spawner:spawn_monitored("bee.harness.catalog:carrier_faulted", "bee:workers",
+                local lost_pid, spawn_error = spawner:spawn_monitored("bee.tests.harness:carrier_faulted", "bee:workers",
                     carrier_request, "open", process.pid(), "attempt_started")
                 if not lost_pid then error("spawn faulted carrier: " .. tostring(spawn_error)) end
                 local events = assert(process.events())
@@ -2298,7 +2298,7 @@ local function define_tests()
                 end
 
                 local thread_id, attempt_id = tostring(admitted.thread_id), tostring(admitted.attempt_id)
-                local current = value(call("bee.harness.catalog:managed_run_probe", {operation = "status",
+                local current = value(call("bee.tests.harness:managed_run_probe", {operation = "status",
                     thread_id = thread_id, attempt_id = attempt_id}))
                 test.eq(current.state, "running", "placement still owns a live runner and recovery remains possible")
                 test.eq(count(kinds(thread_id), "receipt"), 0, "a missing carrier alone is not terminal")
@@ -2343,7 +2343,7 @@ local function define_tests()
                 db:release()
                 assert(not stale_error, tostring(stale_error))
 
-                current = value(call("bee.harness.catalog:managed_run_probe", {operation = "status",
+                current = value(call("bee.tests.harness:managed_run_probe", {operation = "status",
                     thread_id = thread_id, attempt_id = attempt_id}))
                 test.eq(current.outcome, "uncertain")
                 local failure = bounds.object(current.error)
@@ -2364,13 +2364,13 @@ local function define_tests()
                 local request: {[string]: unknown} = {request_id = request_id, definition_ref = RETAINED_DEFINITION,
                     workspace_id = workspace, brief = "ping"}
                 request[field] = "caller-selected"
-                test.eq(code(call("bee.harness.binding:admit", request)), "INVALID")
+                test.eq(code(call("bee.tests.harness.admission:admit", request)), "INVALID")
                 test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
             end
         end)
         test.it("uses a host-selected retained session resource with a retry-stable identity", function()
             local request_id = fresh("retained")
-            local admitted = value(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.is_true(type(admitted.session_ref) == "string" and (admitted.session_ref):match("^session:[0-9a-f]+$") ~= nil)
             local carrier_request = assert(bounds.object(admitted.request))
             test.eq(carrier_request.session_ref, admitted.session_ref)
@@ -2383,7 +2383,7 @@ local function define_tests()
             if not session_grant then error("retained session grant missing") end
             test.eq(session_grant.name, "session")
             test.eq(session_grant.access, "write")
-            local replay = value(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local replay = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(replay.session_ref, admitted.session_ref)
             local replay_resources = principals.objects((assert(bounds.object(replay.request))).resources)
             local replay_grant = nil
@@ -2391,7 +2391,7 @@ local function define_tests()
                 if resource.purpose == "session" then replay_grant = resource end
             end
             test.eq(replay_grant and replay_grant.grant_ref, session_grant.grant_ref)
-            local other = value(call("bee.harness.binding:admit", {request_id = fresh("retained"), definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local other = value(call("bee.tests.harness.admission:admit", {request_id = fresh("retained"), definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.neq(other.session_ref, admitted.session_ref)
         end)
         test.it("refuses a host definition whose retained resource is unavailable before creating a thread", function()
@@ -2404,7 +2404,7 @@ local function define_tests()
             local ok, failure = pcall(function()
                 entry.data = changed
                 apply(entry)
-                local refused = call("bee.harness.binding:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"})
+                local refused = call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = RETAINED_DEFINITION, workspace_id = workspace, brief = "ping"})
                 test.eq(code(refused), "NOT_FOUND")
                 test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
             end)
@@ -2414,10 +2414,10 @@ local function define_tests()
         end)
         test.it("recovers a start that failed after placement intent and before the first checkpoint", function()
             local request_id = fresh("request")
-            local admitted = value(call("bee.harness.binding:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             local carrier_request = assert(bounds.object(admitted.request))
             local spawner = process.with_context({}):with_actor(principals.actor(REQUESTER, workspace)):with_scope(scope())
-            local crashed_pid, spawn_error = spawner:spawn_monitored("bee.harness.catalog:carrier_faulted", "bee:workers", carrier_request, "open", process.pid(), "placement_intent")
+            local crashed_pid, spawn_error = spawner:spawn_monitored("bee.tests.harness:carrier_faulted", "bee:workers", carrier_request, "open", process.pid(), "placement_intent")
             if not crashed_pid then error("spawn faulted carrier: " .. tostring(spawn_error)) end
             local events = assert(process.events())
             local deadline = time.after("30s")
@@ -2435,7 +2435,7 @@ local function define_tests()
             test.eq(count(before, "action.admitted"), 1)
             test.eq(count(before, "attempt.prepared"), 1)
             test.eq(count(before, "turn.request"), 0)
-            local retried = value(call("bee.harness.binding:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local retried = value(call("bee.tests.harness.admission:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(retried.mode, "open")
             test.eq(await_settled("thread:" .. request_id, tostring(retried.attempt_id)).answer, "pong")
             local after = kinds("thread:" .. request_id)
@@ -2447,7 +2447,7 @@ local function define_tests()
         end)
         test.it("starts the carrier to settlement and a retried start recovers the same attempt", function()
             local request_id = fresh("request")
-            local started = value(call("bee.harness.binding:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local started = value(call("bee.tests.harness.admission:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(started.mode, "open")
             local thread_id = tostring(started.thread_id)
             test.eq(await_settled(thread_id, tostring(started.attempt_id)).answer, "pong")
@@ -2455,7 +2455,7 @@ local function define_tests()
             test.eq(count(list, "action.admitted"), 1)
             test.eq(count(list, "attempt.prepared"), 1)
             test.eq(count(list, "receipt"), 1)
-            local settled_replay = value(call("bee.harness.binding:start", {request_id = request_id,
+            local settled_replay = value(call("bee.tests.harness.admission:start", {request_id = request_id,
                 definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(settled_replay.mode, "settled")
             test.eq(settled_replay.thread_id, started.thread_id)
@@ -2463,7 +2463,7 @@ local function define_tests()
             test.eq(settled_replay.attempt_id, started.attempt_id)
             test.eq(count(kinds(thread_id), "receipt"), 1)
             local retried_id = fresh("request")
-            local first = value(call("bee.harness.binding:start", {request_id = retried_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local first = value(call("bee.tests.harness.admission:start", {request_id = retried_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(await_settled(tostring(first.thread_id), tostring(first.attempt_id)).answer, "pong")
             local retried_list = kinds(tostring(first.thread_id))
             test.eq(count(retried_list, "attempt.started"), 1)
@@ -2482,9 +2482,9 @@ local function define_tests()
                 local shared = fresh("autoresearch")
                 value(call("bee.threads.binding:create", {thread_id = shared, idempotency_key = fresh("create"), title = "Autoresearch"}))
                 local first_id, second_id = fresh("research-one"), fresh("research-two")
-                local first = value(call("bee.harness.binding:start", {request_id = first_id, definition_ref = DEFINITION,
+                local first = value(call("bee.tests.harness.admission:start", {request_id = first_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "investigate the first hypothesis", thread_id = shared}))
-                local second = value(call("bee.harness.binding:start", {request_id = second_id, definition_ref = DEFINITION,
+                local second = value(call("bee.tests.harness.admission:start", {request_id = second_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "investigate the second hypothesis", thread_id = shared}))
                 test.eq(first.thread_id, shared)
                 test.eq(second.thread_id, shared)
@@ -2519,7 +2519,7 @@ local function define_tests()
                 test.is_nil(caught_up.page_id)
                 value(call("bee.threads.binding:unsubscribe", {thread_id = shared,
                     idempotency_key = fresh("close-consumer"), subscription_id = subscribed.subscription_id}))
-                local settled_replay = value(call("bee.harness.binding:start", {request_id = first_id,
+                local settled_replay = value(call("bee.tests.harness.admission:start", {request_id = first_id,
                     definition_ref = DEFINITION, workspace_id = workspace, brief = "investigate the first hypothesis", thread_id = shared}))
                 test.eq(settled_replay.mode, "settled")
                 test.eq(settled_replay.thread_id, first.thread_id)
@@ -2554,7 +2554,7 @@ local function define_tests()
             policy_entry.data = window_policy
             apply(policy_entry)
             local origin = fresh("window-origin")
-            local first = value(call("bee.harness.binding:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
+            local first = value(call("bee.tests.harness.admission:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
                 workspace_id = workspace, brief = ""}))
             local transport = carrier_io(workspace)
             local planned, plan_error = machine.plan(transport, carrier_fixtures.request(first.request))
@@ -2576,22 +2576,22 @@ local function define_tests()
             local request: admission.Request = {request_id = fresh("resume"), definition_ref = RETAINED_DEFINITION, workspace_id = workspace,
                 brief = "", expected_plan_digest = first_plan.plan_digest,
                 continuation = {origin_request_id = origin, previous_attempt_id = first.attempt_id, thread_id = first.thread_id}}
-            local refused_resume = call("bee.harness.binding:admit", request)
+            local refused_resume = call("bee.tests.harness.admission:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             value(call("bee.threads.binding:receipt", {thread_id = first.thread_id, action_id = first.action_id, attempt_id = first.attempt_id,
                 idempotency_key = fresh("receipt"), carrier_epoch = prepared.epoch, receipt = {scope = "attempt", outcome = "cancelled", evidence_refs = {},
                     error = {code = "fixture_closed", message = "predecessor fixture closed", retryable = false}}}))
-            local refused_resume = call("bee.harness.binding:admit", request)
+            local refused_resume = call("bee.tests.harness.admission:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             local db, db_error = placement_store.open()
             if not db then error(tostring(db_error)) end
             test.is_true(placement_store.transition(db, first.attempt_id, {execution = "starting", evidence = {kind = "fixture", detail = "no process started"}}).ok)
             test.is_true(placement_store.transition(db, first.attempt_id, {execution = "exited", evidence = {kind = "fixture", detail = "no process exists"}}).ok)
-            local refused_resume = call("bee.harness.binding:admit", request)
+            local refused_resume = call("bee.tests.harness.admission:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             test.is_true(placement_store.transition(db, first.attempt_id, {cleanup = "complete", evidence = {kind = "fixture", detail = "no home materialized"}}).ok)
             db:release()
-            local resumed = value(call("bee.harness.binding:admit", request))
+            local resumed = value(call("bee.tests.harness.admission:admit", request))
             test.eq(resumed.action_id, first.action_id)
             test.eq(resumed.thread_id, first.thread_id)
             test.eq(resumed.session_ref, first.session_ref)
@@ -2600,7 +2600,7 @@ local function define_tests()
             test.eq(resumed.request.brief, "")
             test.eq(resumed.request.resources[1].name, first.request.resources[1].name)
             test.is_true(resumed.request.resources[1].grant_ref ~= first.request.resources[1].grant_ref)
-            local replay = value(call("bee.harness.binding:admit", request))
+            local replay = value(call("bee.tests.harness.admission:admit", request))
             test.eq(replay.request.resources[1].grant_ref, resumed.request.resources[1].grant_ref)
             test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. request.request_id})), "NOT_FOUND")
             local resume_plan, resume_error = machine.plan(transport, carrier_fixtures.request(resumed.request))
@@ -2614,12 +2614,12 @@ local function define_tests()
             apply(policy_entry)
             request.request_id = fresh("reviewed-resume")
             request.continuation.reauthorize = true
-            local refused_resume = call("bee.harness.binding:admit", request)
+            local refused_resume = call("bee.tests.harness.admission:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             local current, current_error = admission.resolve(RETAINED_DEFINITION, "window")
             if not current then error(tostring(current_error)) end
             request.expected_plan_digest = current.plan_digest
-            local reviewed = value(call("bee.harness.binding:admit", request))
+            local reviewed = value(call("bee.tests.harness.admission:admit", request))
             test.eq(reviewed.plan.plan_digest, current.plan_digest)
             test.eq(reviewed.session_ref, first.session_ref)
             test.eq(reviewed.action_id, first.action_id)
@@ -2635,27 +2635,27 @@ local function define_tests()
             -- Mutated saved references and changed host plans cannot select
             -- another session or silently replay under new configuration.
             request.workspace_id = fresh("foreign-workspace")
-            local refused_resume = call("bee.harness.binding:admit", request)
+            local refused_resume = call("bee.tests.harness.admission:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             request.workspace_id = workspace
             request.expected_plan_digest = string.rep("0", 64)
-            local refused_resume = call("bee.harness.binding:admit", request)
+            local refused_resume = call("bee.tests.harness.admission:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             request.continuation.reauthorize = true
-            test.eq(code(call("bee.harness.binding:admit", request)), "CONFLICT", "review never bypasses the current plan fence")
+            test.eq(code(call("bee.tests.harness.admission:admit", request)), "CONFLICT", "review never bypasses the current plan fence")
             request.continuation.reauthorize = false
             request.expected_plan_digest = first.plan.plan_digest
             request.brief = "repeat original prompt"
-            test.eq(code(call("bee.harness.binding:admit", request)), "INVALID")
+            test.eq(code(call("bee.tests.harness.admission:admit", request)), "INVALID")
             request.brief = ""
-            local foreign, foreign_error = funcs.new():with_actor(security.new_actor("bee.test.foreign")):with_scope(scope()):call("bee.harness.binding:admit", request)
+            local foreign, foreign_error = funcs.new():with_actor(security.new_actor("bee.test.foreign")):with_scope(scope()):call("bee.tests.harness.admission:admit", request)
             if foreign_error then error(tostring(foreign_error)) end
             test.is_false((principals.reply(foreign)).ok)
             -- Current resource authority must approve again; the old grant
             -- and committed hook do not authorize a new attempt.
             value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "read"}))
             request.request_id = fresh("revoked-resume")
-            test.is_false(call("bee.harness.binding:admit", request).ok)
+            test.is_false(call("bee.tests.harness.admission:admit", request).ok)
             value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
             entry.data = original
             apply(entry)
@@ -2663,7 +2663,7 @@ local function define_tests()
             apply(policy_entry)
         end)
         test.it("resolves an agent route to a hashed closure and admits its exact tools, prompt and mapped model", function()
-            local first = assert(bounds.object(value(call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION}))))
+            local first = assert(bounds.object(value(call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION}))))
             test.eq(first.agent_ref, AGENT_REVIEWER)
             local digest = first.agent_digest
             test.eq(type(digest), "string")
@@ -2676,10 +2676,10 @@ local function define_tests()
             test.eq(#agent_tools, 2)
             test.eq(agent_tools[1], "FileReport")
             test.eq(agent_tools[2], "FileRead")
-            local second = assert(bounds.object(value(call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION}))))
+            local second = assert(bounds.object(value(call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION}))))
             test.eq(second.agent_digest, digest)
             test.eq(second.plan_digest, first.plan_digest)
-            local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("agent-admit"),
+            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("agent-admit"),
                 definition_ref = AGENT_DEFINITION, workspace_id = workspace, brief = "review fixture"}))
             test.eq(admitted.plan.agent_digest, digest)
             local carrier_request = assert(bounds.object(admitted.request))
@@ -2695,19 +2695,19 @@ local function define_tests()
             test.is_true(instructions:find("repo: workspace", 1, true) ~= nil)
         end)
         test.it("refuses a changed agent reference before admission", function()
-            local selected = assert(bounds.object(value(call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION}))))
+            local selected = assert(bounds.object(value(call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION}))))
             with_entry(AGENT_REVIEWER, function(data) data.prompt = "Changed review prompt." end, function()
-                local changed = assert(bounds.object(value(call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION}))))
+                local changed = assert(bounds.object(value(call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION}))))
                 test.neq(changed.plan_digest, selected.plan_digest)
                 test.neq(changed.agent_digest, selected.agent_digest)
-                local refused = call("bee.harness.binding:admit", {request_id = fresh("agent-changed"), definition_ref = AGENT_DEFINITION,
+                local refused = call("bee.tests.harness.admission:admit", {request_id = fresh("agent-changed"), definition_ref = AGENT_DEFINITION,
                     workspace_id = workspace, brief = "review fixture", expected_plan_digest = selected.plan_digest})
                 test.eq(code(refused), "CONFLICT")
             end)
         end)
         test.it("never reduces a trait to its prompt", function()
             with_entry(AGENT_TRAIT, function(data) data.wrappers = {"bee.harness.catalog:agent_wrapper"} end, function()
-                local refused = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})
+                local refused = call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION})
                 test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
                 local message = refusal_message(refused)
                 test.is_true(message:find("agent_repository_trait", 1, true) ~= nil)
@@ -2716,12 +2716,12 @@ local function define_tests()
         end)
         test.it("refuses unknown agent fields", function()
             with_entry(AGENT_REVIEWER, function(data) data.bogus_field = true end, function()
-                test.eq(code(call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})), "INVALID")
+                test.eq(code(call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION})), "INVALID")
             end)
         end)
         test.it("refuses a model the host never mapped and a driver that takes no model", function()
             with_entry(AGENT_REVIEWER, function(data) data.model = "unmapped-model" end, function()
-                local refused = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})
+                local refused = call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION})
                 test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
                 test.is_true(refusal_message(refused):find("unmapped-model", 1, true) ~= nil)
             end)
@@ -2730,7 +2730,7 @@ local function define_tests()
                     data.binding_ref = "bee.driver.codex.binding:binding"
                     data.profile_id = "batch"
                 end, function()
-                    local refused = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})
+                    local refused = call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION})
                     test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
                     test.is_true(refusal_message(refused):find("codex", 1, true) ~= nil)
                 end)
@@ -2738,14 +2738,14 @@ local function define_tests()
         end)
         test.it("declines only owner-permitted tuning hints", function()
             with_entry(AGENT_REVIEWER, function(data) data.tuning = {temperature = 0.2, top_k = 1} end, function()
-                local refused = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})
+                local refused = call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION})
                 test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
                 test.is_true(refusal_message(refused):find("top_k", 1, true) ~= nil)
             end)
         end)
         test.it("refuses delegates outside host admission", function()
             with_entry(AGENT_POLICY, function(data) data.agent_delegates = {} end, function()
-                local refused = call("bee.harness.binding:resolve", {definition_ref = AGENT_DEFINITION})
+                local refused = call("bee.tests.harness.admission:resolve", {definition_ref = AGENT_DEFINITION})
                 test.eq(code(refused), "FORBIDDEN")
                 test.is_true(refusal_message(refused):find("agent_helper", 1, true) ~= nil)
             end)

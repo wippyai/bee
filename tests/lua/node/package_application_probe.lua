@@ -6,7 +6,7 @@ local function define_tests()
         test.it("runs as its associated application", function()
             local actor = assert(security.actor())
             local meta = actor:meta() :: {[string]: unknown}
-            test.eq(meta.definition_id, "bee.tests.node.hub_tests_fixture:application")
+            test.eq(meta.definition_id, "bee.tests.node.hub.fixture:application")
         end)
     end)
 end

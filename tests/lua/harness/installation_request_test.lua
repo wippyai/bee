@@ -27,10 +27,10 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:installation_client_policy", "bee.tests.support:gateway_manage_policy",
+local scope_names = {"bee.tests.harness:installation_client_policy", "bee.tests.support:gateway_manage_policy",
     "bee.tests.support:gateway_admit_policy", "bee.threads.security:create",
     "bee.threads.security:lifecycle", "bee.threads.security:observe",
-    "bee.harness.catalog:approver_client_policy", "bee.security.approvals:approval_decide_policy",
+    "bee.tests.harness:approver_client_policy", "bee.security.approvals:approval_decide_policy",
     "bee.security.approvals:approval_consume_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
@@ -350,7 +350,7 @@ local function define_tests()
                     proposal_digest = read.proposal_digest, effect_key = assert(bounds.object(read.effect)).effect_id,
                     state = "canceled", result = {closed = true}})
                 local owner = funcs.new():with_actor(security.new_actor("bee.gateway.external"))
-                    :with_scope(security.new_scope({assert(security.policy("bee.harness.catalog:installation_client_policy")),
+                    :with_scope(security.new_scope({assert(security.policy("bee.tests.harness:installation_client_policy")),
                         assert(security.policy("bee.security.approvals:approval_owner_policy"))}))
                 local raw, err = owner:call("bee.approvals.binding:events", {destination = "gateway.installation", cursor = 0, limit = 64})
                 assert(not err, tostring(err))

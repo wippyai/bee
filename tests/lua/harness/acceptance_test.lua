@@ -18,9 +18,9 @@ local REQUEST_ID = "perm-1"
 type Object = {[string]: unknown}
 type Run = {observations: {Object}, boundary: integer, request: adapter.Request?, exit_code: integer, stderr: string}
 local function fixture(): (string, string)
-    local bin, bin_error = env.get("bee.harness.catalog:fixture_bin")
+    local bin, bin_error = env.get("bee.tests.harness:fixture_bin")
     if bin_error or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
-    local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
+    local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
     if streams_error or type(streams) ~= "string" or streams == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
     return bin .. "/claude", streams .. "/claude/stream-json-2/permission.jsonl"
 end
@@ -29,10 +29,10 @@ local function encoded(line: string?, err: string?): string
     return line
 end
 local function fixture_adapter(): adapter.Adapter
-    local entry = registry.get("bee.harness.catalog:permission_fixture_adapter")
+    local entry = registry.get("bee.tests.harness:permission_fixture_adapter")
     if not entry then error("fixture adapter entry") end
     local data = assert(bounds.object(entry.data))
-    local decoded, err = adapter.decode("bee.harness.catalog:permission_fixture_adapter", data.adapter)
+    local decoded, err = adapter.decode("bee.tests.harness:permission_fixture_adapter", data.adapter)
     if not decoded then error(tostring(err)) end
     return decoded
 end
@@ -171,12 +171,12 @@ local function define_tests()
             stdout:close()
             executor:release()
             local fixture_digest = assert(hash.sha256(content))
-            local record, err = acceptance.decode("bee.harness.catalog:permission_fixture_acceptance", {schema_revision = "bee.permission-acceptance@2", binding_id = "bee.driver.claude.binding:binding", profile_id = "session",
-                binding_digest = string.rep("1", 64), profile_digest = string.rep("2", 64), adapter_ref = "bee.harness.catalog:permission_fixture_adapter", adapter_digest = pinned.digest,
+            local record, err = acceptance.decode("bee.tests.harness:permission_fixture_acceptance", {schema_revision = "bee.permission-acceptance@2", binding_id = "bee.driver.claude.binding:binding", profile_id = "session",
+                binding_digest = string.rep("1", 64), profile_digest = string.rep("2", 64), adapter_ref = "bee.tests.harness:permission_fixture_adapter", adapter_digest = pinned.digest,
                 fixture_digest = fixture_digest, executable_revision = "bee.executable-measurement@1", executable_kind = "script", executable_digest = string.rep("7", 64), proof_revision = "bee.permission-proof@1", accepted_by = "bee.test.operator", accepted_at = "2026-09-09T00:00:00.000Z"})
             if not record then error(tostring(err)) end
             local measured = {binding_id = "bee.driver.claude.binding:binding", profile_id = "session", binding_digest = string.rep("1", 64), profile_digest = string.rep("2", 64),
-                adapter_ref = "bee.harness.catalog:permission_fixture_adapter", adapter_digest = pinned.digest, fixture_digest = fixture_digest}
+                adapter_ref = "bee.tests.harness:permission_fixture_adapter", adapter_digest = pinned.digest, fixture_digest = fixture_digest}
             test.is_nil(acceptance.matches(record, measured))
             measured.fixture_digest = assert(hash.sha256(content .. "\n"))
             test.eq(acceptance.matches(record, measured), "proof fixture changed since acceptance")

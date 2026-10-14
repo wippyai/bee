@@ -18,7 +18,7 @@ function M.scope(names: {string}): security.Scope
     return security.new_scope(policies)
 end
 function M.caller(id: string, grants: {string}, metadata: {[string]: string | integer}?): funcs.Executor
-    local names: {string} = {"bee.approvals:client_test_policy"}
+    local names: {string} = {"bee.tests.approvals:client_test_policy"}
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return funcs.new():with_actor(security.new_actor(id, metadata)):with_scope(M.scope(names))
 end

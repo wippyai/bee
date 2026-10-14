@@ -19,10 +19,10 @@ local sql = require("sql")
 local placement_fixture = require("placement_fixture")
 local harness = require("harness")
 local ACTOR = "bee.test.gateway_carrier"
-local POLICY = "bee.harness.catalog:gateway_fixture_policy"
-local ROOT = "bee.harness.catalog:project_fixture"
+local POLICY = "bee.tests.harness:gateway_fixture_policy"
+local ROOT = "bee.tests.harness:project_fixture"
 local BINDING = "bee.driver.claude.binding:binding"
-local CARRIER = "bee.harness.catalog:carrier_faulted"
+local CARRIER = "bee.tests.harness:carrier_faulted"
 -- The scripted author's own workspace. The shipped host profiles admit the
 -- overlay named by the guide's workspace-application rule; nothing here
 -- configures a profile.
@@ -34,8 +34,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
-    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.tests.support:gateway_manage_policy", "bee.tests.support:gateway_admit_policy"}
+local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.tests.harness:gateway_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
+    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.tests.support:gateway_manage_policy", "bee.tests.support:gateway_admit_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -65,12 +65,12 @@ local function code(target: string, request: unknown): string
     return tostring((assert(bounds.object(reply.error))).code)
 end
 local function fixture_bin(): string
-    local bin, err = env.get("bee.harness.catalog:fixture_bin")
+    local bin, err = env.get("bee.tests.harness:fixture_bin")
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end
 local function stream(name: string): string
-    local base, err = env.get("bee.harness.catalog:fixture_streams")
+    local base, err = env.get("bee.tests.harness:fixture_streams")
     if err or type(base) ~= "string" or base == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
     return base .. "/claude/stream-json-2/" .. name
 end
@@ -320,7 +320,7 @@ end
 local function define_tests()
     test.describe("Gateway through the carrier", function()
         install_policy(POLICY)
-        install_policy("bee.harness.catalog:gateway_surface_policy")
+        install_policy("bee.tests.harness:gateway_surface_policy")
         admit_root()
         open_gateway()
         local readiness = call("bee.gateway.binding:ready", {})
@@ -339,7 +339,7 @@ local function define_tests()
             db:release()
             local policy = assert(security.policy("bee.security.gateway:gateway_materialize_policy"))
             local materializer = funcs.new():with_actor(principals.actor(ACTOR, nil))
-                :with_scope(security.new_scope({policy, assert(security.policy("bee.harness.catalog:gateway_client_policy"))}))
+                :with_scope(security.new_scope({policy, assert(security.policy("bee.tests.harness:gateway_client_policy"))}))
             local ok, result = pcall(function(): Object
                 local raw, err = materializer:call("bee.gateway.binding:materialize", {
                 attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding.binding_id,
@@ -425,7 +425,7 @@ local function define_tests()
         test.it("delivers configured traits and bounded context to the managed MCP child", function()
             local thread_id = thread()
             local result = run_carrier(request(thread_id, fresh("surface"), {BEE_FIXTURE_GATEWAY_SURFACE = "1"}, nil,
-                "bee.harness.catalog:gateway_surface_policy"), "open", nil)
+                "bee.tests.harness:gateway_surface_policy"), "open", nil)
             if not result.value then error("configured carrier failed: " .. tostring(result.error)) end
             test.eq((assert(bounds.object(result.value.settlement))).outcome, "succeeded")
             local seen = report(thread_id)
@@ -869,7 +869,7 @@ local function define_tests()
             -- refused with a named remedy; round 2 authors the guide's own
             -- example in the same overlay and the destination preflight is
             -- ready.
-            install_policy("bee.harness.catalog:gateway_author_policy")
+            install_policy("bee.tests.harness:gateway_author_policy")
             local source = "counter"
             local environment = {BEE_FIXTURE_GATEWAY_AUTHOR = "repair", BEE_FIXTURE_AUTHOR_WORKSPACE = source,
                 BEE_FIXTURE_AUTHOR_SOURCE = source, BEE_FIXTURE_AUTHOR_DESTINATION = AUTHOR_WORKSPACE,
@@ -878,7 +878,7 @@ local function define_tests()
             local attempt_id = fresh("author")
             -- The gateway takes the delivery destination from the binding, so
             -- the authoring session is bound to the destination workspace.
-            local authoring = request(thread_id, attempt_id, environment, nil, "bee.harness.catalog:gateway_author_policy")
+            local authoring = request(thread_id, attempt_id, environment, nil, "bee.tests.harness:gateway_author_policy")
             authoring.workspace_id = AUTHOR_WORKSPACE
             local outcome = run_carrier(authoring, "open", nil, SCRIPTED_AUTHOR_TIMEOUT_MS)
             if not outcome.value then error("authoring carrier failed: " .. tostring(outcome.error)) end

@@ -17,7 +17,7 @@ local function define_tests()
                 policies[#policies + 1] = assert(security.policy(id))
             end
             local reply, problem = funcs.new():with_actor(assert(security.new_actor(assert(bounds.id(actor.id)))))
-                :with_scope(assert(security.new_scope(policies))):call("bee.gateway:effects_scope_probe")
+                :with_scope(assert(security.new_scope(policies))):call("bee.tests.gateway:effects_scope_probe")
             test.is_nil(problem, tostring(problem))
             local result = assert(bounds.object(reply))
             test.eq(result.pending, false)

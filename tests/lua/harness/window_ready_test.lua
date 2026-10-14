@@ -14,7 +14,7 @@ local json = require("json")
 local recovery = require("recovery")
 
 local WORKSPACE = string.rep("c", 32)
-local DEFINITION = "bee.harness.catalog:window_ready_definition"
+local DEFINITION = "bee.tests.harness:window_ready_definition"
 
 local function apply(entry: {[string]: unknown})
     local changes = assert(registry.snapshot()):changes()
@@ -29,7 +29,7 @@ local function define_tests()
             local batch = assert(registry.get(DEFINITION))
             local data = assert(bounds.object(batch.data))
             data.default_mode, data.profile_id = "batch", "batch"
-            local policy_ref = "bee.harness.catalog:window_ready_policy"
+            local policy_ref = "bee.tests.harness:window_ready_policy"
             local original_policy = assert(registry.get(policy_ref))
             local policy = assert(registry.get(policy_ref))
             assert(bounds.object(policy.data)).environment = {}
@@ -42,7 +42,7 @@ local function define_tests()
                 local principal = assert(application.actor(WORKSPACE, instance,
                     assert(application.definition("bee.harness.app:app")), 1))
                 local launched = assert(process.with_options({terminal = assert(view:grant())}):with_actor(principal):spawn_monitored(
-                    "bee.harness.catalog:window_ready_probe", "bee:workers", {version = 1,
+                    "bee.tests.harness:window_ready_probe", "bee:workers", {version = 1,
                         broker_pid = process.pid(), workspace_pid = process.pid(), workspace_id = WORKSPACE,
                         instance_id = instance, view_id = instance, definition_id = "bee.harness.app:app",
                         execution_generation = 1, definition_revision = "1", registry_revision = "1",
@@ -115,7 +115,7 @@ local function define_tests()
             local definition = assert(application.definition("bee.harness.app:app"))
             local principal = assert(application.actor(WORKSPACE, instance_id, definition, 1))
             local window, spawn_error = process.with_options({terminal = grant}):with_actor(principal):spawn_monitored(
-                "bee.harness.catalog:window_ready_probe", "bee:workers", {version = 1,
+                "bee.tests.harness:window_ready_probe", "bee:workers", {version = 1,
                     broker_pid = self, workspace_pid = self, workspace_id = WORKSPACE,
                     instance_id = instance_id, view_id = instance_id, definition_id = "bee.harness.app:app",
                     execution_generation = 1, definition_revision = "1", registry_revision = "1",

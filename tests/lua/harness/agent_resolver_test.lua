@@ -9,8 +9,8 @@ local bounds = require("bounds")
 local registry = require("registry")
 local agent_resolver = require("agent_resolver")
 local ACTIVATION = "bee.harness.launch:harness_activation"
-local WITH_MODEL = "bee.harness.catalog:fixture_open_cli_binding"
-local WITHOUT_MODEL = "bee.harness.catalog:fixture_open_cli_no_model_binding"
+local WITH_MODEL = "bee.tests.harness:fixture_open_cli_binding"
+local WITHOUT_MODEL = "bee.tests.harness:fixture_open_cli_no_model_binding"
 local function pinned(): registry.Snapshot
     local snapshot, err = registry.snapshot()
     if not snapshot then error(tostring(err)) end

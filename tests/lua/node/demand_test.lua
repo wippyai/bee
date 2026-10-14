@@ -28,7 +28,7 @@ end
 local function create(): string
     local id = assert(uuid.v7())
     assert(runs.create({run_id = id, workspace_id = string.rep("c",32), actor_id = "demand-test",
-        overlay = "", application = "bee.tests.node.hub_tests_fixture:application", plan = {}, state = "pending", result = nil}))
+        overlay = "", application = "bee.tests.node.hub.fixture:application", plan = {}, state = "pending", result = nil}))
     return id
 end
 local function wake()
@@ -121,7 +121,7 @@ local function define_tests()
             local tx = assert(db:begin())
             for _, row in ipairs({{id = running, state = "running"}, {id = pending, state = "pending"}}) do
                 assert(tx:execute("INSERT INTO bee_node_test_runs (run_id, workspace_id, actor_id, overlay, application, plan_json, state, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    {row.id, string.rep("c",32), "demand-test", "", "bee.tests.node.hub_tests_fixture:application", "[]", row.state, 0}))
+                    {row.id, string.rep("c",32), "demand-test", "", "bee.tests.node.hub.fixture:application", "[]", row.state, 0}))
             end
             assert(tx:commit())
             db:release()

@@ -31,7 +31,7 @@ local function define_tests()
         test.it("filters typed rune chunks and erases a complete Unicode character", function()
             local originals: {registry.Entry} = {}
             local changes = assert(registry.snapshot()):changes()
-            for _, ref in ipairs({"bee.tests.sessions:fake_owner", "bee.tests.sessions:fake_catalog_owner", "bee.threads.sessions.binding:owner_binding", "bee.threads.sessions.binding:catalog_binding"}) do
+            for _, ref in ipairs({"bee.tests.threads.sessions:fake_owner", "bee.tests.threads.sessions:fake_catalog_owner", "bee.threads.sessions.binding:owner_binding", "bee.threads.sessions.binding:catalog_binding"}) do
                 originals[#originals + 1] = assert(registry.get(ref))
                 local entry = assert(registry.get(ref))
                 local data = assert(bounds.object(entry.data))

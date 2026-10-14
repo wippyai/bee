@@ -37,12 +37,12 @@ local function shell(command: string, environment: {[string]: string}?): (string
     return output, math.floor(tonumber(code) or -1)
 end
 local function fixture_bin(): string
-    local bin, err = env.get("bee.harness.catalog:fixture_bin")
+    local bin, err = env.get("bee.tests.harness:fixture_bin")
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end
 local function codex_bin(): string?
-    local bin, err = env.get("bee.harness.catalog:codex_bin")
+    local bin, err = env.get("bee.tests.harness:codex_bin")
     if err or type(bin) ~= "string" or bin == "" then return nil end
     return bin
 end

@@ -37,9 +37,9 @@ local function define_tests()
         test.it("supplies admitted grant references through authenticated tool context", function()
             local grants: {context.ResourceGrant} = {{grant_ref = "g", workspace_id = "home", name = "project", subpath = "src", access = "read", subject = "owner"}}
             local binding = {binding_id = "binding", subject = "owner", action_id = "action", attempt_id = "attempt", thread_id = "thread", workspace_id = "home"}
-            local executor, failure = subject_call.executor(binding, {assert(security.policy("bee.gateway:profile_context_policy"))}, {}, nil, grants)
+            local executor, failure = subject_call.executor(binding, {assert(security.policy("bee.tests.gateway:profile_context_policy"))}, {}, nil, grants)
             if not executor then error(tostring(failure and failure.error and failure.error.message)) end
-            local raw, err = executor:call("bee.gateway:profile_context_probe", {})
+            local raw, err = executor:call("bee.tests.gateway:profile_context_probe", {})
             if err then error(tostring(err)) end
             local attributed = assert(bounds.object(raw))
             test.eq(attributed.subject, "owner")

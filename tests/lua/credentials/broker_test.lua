@@ -14,16 +14,16 @@ local fs = require("fs")
 local credential_protocol = require("credential_protocol")
 local store = require("store")
 local SENTINEL = "sentinel-secret-7f3a9c"
-local SOURCE = "bee.credentials:sentinel_key"
-local MISSING_SOURCE = "bee.credentials:missing_key"
-local OTHER_SOURCE = "bee.credentials:other_key"
-local BROKEN_SOURCE = "bee.credentials:broken_key"
-local CODEX_LOGIN_SOURCE = "bee.credentials:codex_login_fixture"
-local CLAUDE_LOGIN_SOURCE = "bee.credentials:claude_login_fixture"
-local INVALID_LOGIN_SOURCE = "bee.credentials:invalid_login_fixture"
-local MISSING_LOGIN_SOURCE = "bee.credentials:missing_login_fixture"
-local UNPRIVILEGED_LOGIN_SOURCE = "bee.credentials:unprivileged_login_fixture"
-local UNREADABLE_LOGIN_SOURCE = "bee.credentials:unreadable_login_fixture"
+local SOURCE = "bee.tests.credentials:sentinel_key"
+local MISSING_SOURCE = "bee.tests.credentials:missing_key"
+local OTHER_SOURCE = "bee.tests.credentials:other_key"
+local BROKEN_SOURCE = "bee.tests.credentials:broken_key"
+local CODEX_LOGIN_SOURCE = "bee.tests.credentials:codex_login_fixture"
+local CLAUDE_LOGIN_SOURCE = "bee.tests.credentials:claude_login_fixture"
+local INVALID_LOGIN_SOURCE = "bee.tests.credentials:invalid_login_fixture"
+local MISSING_LOGIN_SOURCE = "bee.tests.credentials:missing_login_fixture"
+local UNPRIVILEGED_LOGIN_SOURCE = "bee.tests.credentials:unprivileged_login_fixture"
+local UNREADABLE_LOGIN_SOURCE = "bee.tests.credentials:unreadable_login_fixture"
 local AGY_ONBOARDING = ".gemini/antigravity-cli/cache/onboarding.json"
 local ONBOARDING_SENTINEL = "agy-onboarding-sentinel-42"
 local GROK_CONFIG = ".grok/config.toml"
@@ -51,7 +51,7 @@ local function scope(names: {string}): security.Scope
 end
 type Principal = {id: string, names: {string}}
 local function caller(id: string, grants: {string}): Principal
-    local names: {string} = {"bee.credentials:client_test_policy"}
+    local names: {string} = {"bee.tests.credentials:client_test_policy"}
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return {id = id, names = names}
 end
@@ -347,7 +347,7 @@ local function define_tests()
             local ws, attempt = fresh("custom-provider"), fresh("custom-provider-attempt")
             local secret = "custom-provider-fixture-value-832a"
             local defined = value(call(manager, "define", {workspace_id = ws, name = "custom", provider = "local_endpoint",
-                source = {kind = "env_variable", ref = "bee.credentials:custom_key"}}))
+                source = {kind = "env_variable", ref = "bee.tests.credentials:custom_key"}}))
             test.eq(defined.destination, "LOCAL_ENDPOINT_API_KEY")
             local stored = call(manager, "set_value", {workspace_id = ws, name = "custom", value = secret})
             test.is_true(stored.ok)
@@ -360,7 +360,7 @@ local function define_tests()
             test.eq(materialized.value, secret)
             local listed = call(manager, "list", {workspace_id = ws})
             local checked = call(runner, "check", {projection_id = projected.projection_id, subject = USER, audience = USER, attempt_id = attempt})
-            for _, object in ipairs({listed, checked, assert(registry.get("bee.credentials:custom_key"))}) do
+            for _, object in ipairs({listed, checked, assert(registry.get("bee.tests.credentials:custom_key"))}) do
                 test.is_true(not assert(json.encode(object)):find(secret, 1, true))
             end
             local db = assert(store.open())
@@ -1123,13 +1123,13 @@ local function define_tests()
 
             -- Calls reach the probe; the filesystem check itself must deny access.
             -- The positive control proves the same file and probe can read it.
-            local admitted = caller(USER, {"bee.credentials:fs_test_policy"})
-            local positive, positive_error = bound(admitted, ws):call("bee.credentials:probe_direct_fs_read", CODEX_LOGIN_SOURCE)
+            local admitted = caller(USER, {"bee.tests.credentials:fs_test_policy"})
+            local positive, positive_error = bound(admitted, ws):call("bee.tests.credentials:probe_direct_fs_read", CODEX_LOGIN_SOURCE)
             if positive_error or type(positive) ~= "table" then error("direct read control did not execute") end
             test.is_true(positive.ok)
             test.eq(positive.value, CODEX_FILE_SENTINEL)
             for _, ordinary in ipairs({user, manager, outsider}) do
-                local denied, denied_error = bound(ordinary, ws):call("bee.credentials:probe_direct_fs_read", CODEX_LOGIN_SOURCE)
+                local denied, denied_error = bound(ordinary, ws):call("bee.tests.credentials:probe_direct_fs_read", CODEX_LOGIN_SOURCE)
                 if denied_error or type(denied) ~= "table" then error("direct read probe did not execute") end
                 test.is_false(denied.ok)
                 test.eq(denied.stage, "get")

@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.resources
+namespace: bee.tests.resources
 entries:
 - name: unadmitted_fixture
   kind: fs.directory
@@ -21,13 +21,13 @@ entries:
   kind: env.storage.memory
 - name: unrelated_secret
   kind: env.variable
-  storage: bee.resources:unrelated_secret_storage
+  storage: bee.tests.resources:unrelated_secret_storage
   variable: RESOURCE_UNRELATED_SECRET
   default: .wippy/resource-unrelated-secret
 - name: unrelated_env_root
   kind: fs.directory
   meta: {type: test_support}
-  directory: ${env:bee.resources:unrelated_secret}
+  directory: ${env:bee.tests.resources:unrelated_secret}
   auto_init: true
 - name: apply_test_policy
   kind: security.policy
@@ -50,10 +50,10 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, time, sql]
   security:
-    policies: [bee.resources:apply_test_policy, bee.resources.security:resource_store_policy]
+    policies: [bee.tests.resources:apply_test_policy, bee.resources.security:resource_store_policy]
   imports:
     bounds: bee.values:bounds
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
     authority: bee.resources.persist:authority
     capability_model: bee.capability:model

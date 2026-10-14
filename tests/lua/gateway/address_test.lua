@@ -66,14 +66,14 @@ local function run()
         end)
         test.it("reads the actual selected native listener without accepting a caller address", function()
             local endpoint_link = registry.get("bee.gateway.env:endpoint_ref")
-            local endpoint = registry.get("bee.gateway:address_test_endpoint")
+            local endpoint = registry.get("bee.tests.gateway:address_test_endpoint")
             local listener_link = registry.get("bee.gateway.env:listener_ref")
             if not endpoint_link or not endpoint or not listener_link then error("missing gateway component host selections") end
             local changed_endpoint_link: Object = {id = endpoint_link.id, kind = endpoint_link.kind, meta = endpoint_link.meta,
-                data = {resource_ref = "bee.gateway:address_test_endpoint"}}
+                data = {resource_ref = "bee.tests.gateway:address_test_endpoint"}}
             local changed_endpoint: Object = {id = endpoint.id, kind = endpoint.kind, meta = endpoint.meta, data = {address = "127.0.0.1:0"}}
             local changed_listener_link: Object = {id = listener_link.id, kind = listener_link.kind, meta = listener_link.meta,
-                data = {resource_ref = "bee.gateway:ephemeral_listener"}}
+                data = {resource_ref = "bee.tests.gateway:ephemeral_listener"}}
             local function update()
                 local changes = registry.snapshot():changes()
                 changes:update(changed_endpoint_link); changes:update(changed_endpoint); changes:update(changed_listener_link)
@@ -82,7 +82,7 @@ local function run()
             end
             local ok, failure = pcall(function()
                 update()
-                await_listener("bee.gateway:ephemeral_listener")
+                await_listener("bee.tests.gateway:ephemeral_listener")
                 local address, err = configuration.endpoint()
                 if not address then error(tostring(err)) end
                 test.is_true(configuration.valid_address(address, false))
@@ -98,9 +98,9 @@ local function run()
                 update()
                 local mismatched = configuration.endpoint()
                 test.is_true(mismatched == nil)
-                changed_listener_link.data = {resource_ref = "bee.gateway:alternate_listener"}
+                changed_listener_link.data = {resource_ref = "bee.tests.gateway:alternate_listener"}
                 update()
-                await_listener("bee.gateway:alternate_listener")
+                await_listener("bee.tests.gateway:alternate_listener")
                 local alternate, alternate_error = configuration.endpoint()
                 if not alternate then error(tostring(alternate_error)) end
                 test.is_true(alternate:match("^127%.0%.0%.2:%d+$") ~= nil)

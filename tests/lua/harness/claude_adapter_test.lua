@@ -20,7 +20,7 @@ local ADAPTER = "bee.driver.claude.permission:permission_adapter"
 local BINDING = "bee.driver.claude.binding:binding"
 type Object = {[string]: unknown}
 local function capture_path(): string
-    local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
+    local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
     if streams_error or type(streams) ~= "string" or streams == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
     return streams .. "/claude/stream-json-2/control.jsonl"
 end

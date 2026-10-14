@@ -68,7 +68,7 @@ entries:
   imports:
     test: wippy.test:test
     distributor: bee.sync.service:distributor
-    completion: bee.placement.native:completion
+    completion: bee.tests.placement.native:completion
 - name: replica_protocol_test
   kind: function.lua
   source: file://replica_protocol_test.lua
@@ -117,7 +117,7 @@ entries:
     cursors: bee.sync.persist:distribution_store
     version: bee.sync.values:version
     distributor: bee.sync.service:distributor
-    completion: bee.placement.native:completion
+    completion: bee.tests.placement.native:completion
 - name: exports
   kind: registry.entry
   meta:

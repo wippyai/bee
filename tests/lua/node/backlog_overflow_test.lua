@@ -18,7 +18,7 @@ local SERVICE = "bee.node.service:tests_service"
 local function create(): string
     local id = assert(uuid.v7())
     assert(runs.create({run_id = id, workspace_id = string.rep("c",32), actor_id = "demand-test",
-        overlay = "", application = "bee.tests.node.hub_tests_fixture:application", plan = {}, state = "pending", result = nil}))
+        overlay = "", application = "bee.tests.node.hub.fixture:application", plan = {}, state = "pending", result = nil}))
     return id
 end
 local function define_tests()

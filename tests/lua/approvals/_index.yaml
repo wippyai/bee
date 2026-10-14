@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.approvals
+namespace: bee.tests.approvals
 entries:
 - name: test_principals
   kind: library.lua
@@ -45,7 +45,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [db.get]
-    resources: [bee.approvals:test_db]
+    resources: [bee.tests.approvals:test_db]
     effect: allow
 - name: attention_test_policy
   kind: security.policy
@@ -61,10 +61,10 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, system, process, channel, time]
   security:
-    policies: [bee.approvals:apply_test_policy, bee.approvals:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy]
+    policies: [bee.tests.approvals:apply_test_policy, bee.tests.approvals:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy]
   imports:
-    support: bee.approvals:test_principals
-    principals: bee.tests.principals:bound
+    support: bee.tests.approvals:test_principals
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     protocol: bee.hive:protocol
@@ -75,10 +75,10 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, time, sql, process, channel, json, events]
   security:
-    policies: [bee.approvals:commits_test_policy, bee.approvals:attention_test_policy, bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   imports:
-    support: bee.approvals:test_principals
-    principals: bee.tests.principals:bound
+    support: bee.tests.approvals:test_principals
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
@@ -103,9 +103,9 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, uuid]
   security:
-    policies: [bee.approvals:lease_flow_test_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
+    policies: [bee.tests.approvals:lease_flow_test_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
     capability_model: bee.capability:model
     bounds: bee.values:bounds
@@ -118,7 +118,7 @@ entries:
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, uuid, time]
-  security: {policies: [bee.approvals:apply_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]}
+  security: {policies: [bee.tests.approvals:apply_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]}
   imports: {test: wippy.test:test, service: bee.approvals.binding:service, lease: bee.approvals.types:runtime_lease, bounds: bee.values:bounds}
 
 - name: window_test
@@ -128,7 +128,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [sql, registry, uuid]
   security:
-    policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_owner_policy]
+    policies: [bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_owner_policy]
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
@@ -152,13 +152,13 @@ entries:
     canonical: bee.values:canonical
     bounds: bee.values:bounds
   security:
-    policies: [bee.approvals:migration_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_consume_policy]
+    policies: [bee.tests.approvals:migration_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_consume_policy]
 - name: migration_test_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [db.get]
-    resources: [bee.approvals:migration_test_db]
+    resources: [bee.tests.approvals:migration_test_db]
     effect: allow
 - name: fixture_effect_consumer
   kind: registry.entry
@@ -184,7 +184,7 @@ entries:
     dispatch: bee.approvals.persist:dispatch
     resources: bee.approvals.env:resources
     demand: bee.process:demand
-    principals: bee.approvals:test_principals
+    principals: bee.tests.approvals:test_principals
 - name: grants_test
   kind: function.lua
   source: file://grants_test.lua
@@ -193,7 +193,7 @@ entries:
   meta: {type: test, suite: bee}
   security:
     policies:
-    - bee.approvals:store_test_policy
+    - bee.tests.approvals:store_test_policy
     - bee.tests.support:schema_policy
     - bee.approvals.inbox.security:grants_policy
   imports:
@@ -219,7 +219,7 @@ entries:
     test: wippy.test:test
     confirmation: bee.approvals.app:confirmation
     dialog: bee.approvals.app:dialog
-    fixture: bee.approvals:confirmation_fixture
+    fixture: bee.tests.approvals:confirmation_fixture
     bounds: bee.values:bounds
 - name: effect_lifecycle_test
   kind: function.lua
@@ -240,7 +240,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [db.get]
-    resources: [bee.approvals:trait_test_db]
+    resources: [bee.tests.approvals:trait_test_db]
     effect: allow
 - name: trait_revocation_test
   kind: function.lua
@@ -249,7 +249,7 @@ entries:
   modules: [sql]
   meta: {type: test, suite: bee}
   security:
-    policies: [bee.approvals:trait_test_policy, bee.tests.support:schema_policy]
+    policies: [bee.tests.approvals:trait_test_policy, bee.tests.support:schema_policy]
   imports:
     test: wippy.test:test
     grants: bee.approvals.grants:store

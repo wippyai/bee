@@ -29,15 +29,15 @@ local placement_fixture = require("placement_fixture")
 local exits = require("exits")
 local ACTOR = "bee.test.carrier"
 local APPROVER = "bee.test.approver"
-local POLICY = "bee.harness.catalog:permission_fixture_policy"
-local PRODUCTION_POLICY = "bee.harness.catalog:permission_production_policy"
-local UNPINNED_POLICY = "bee.harness.catalog:permission_production_policy_unpinned"
+local POLICY = "bee.tests.harness:permission_fixture_policy"
+local PRODUCTION_POLICY = "bee.tests.harness:permission_production_policy"
+local UNPINNED_POLICY = "bee.tests.harness:permission_production_policy_unpinned"
 local REAL_ADAPTER = "bee.driver.claude.permission:permission_adapter"
-local PRODUCTION_ACCEPTANCE = "bee.harness.catalog:permission_production_acceptance"
-local ADAPTER = "bee.harness.catalog:permission_fixture_adapter"
-local ACCEPTANCE = "bee.harness.catalog:permission_fixture_acceptance"
+local PRODUCTION_ACCEPTANCE = "bee.tests.harness:permission_production_acceptance"
+local ADAPTER = "bee.tests.harness:permission_fixture_adapter"
+local ACCEPTANCE = "bee.tests.harness:permission_fixture_acceptance"
 local APPROVER_POLICY = "carrier-fixture"
-local ROOT = "bee.harness.catalog:project_fixture"
+local ROOT = "bee.tests.harness:project_fixture"
 local BINDING = "bee.driver.claude.binding:binding"
 local REQUEST_ID = "perm-1"
 local counter = 0
@@ -47,8 +47,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local carrier_scope = {"bee.harness.catalog:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
-    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
+local carrier_scope = {"bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
+    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
 local function scope(names: {string}): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do
@@ -59,7 +59,7 @@ local function scope(names: {string}): security.Scope
     return security.new_scope(policies)
 end
 local actor = security.new_actor(ACTOR)
-local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.harness.catalog:approver_client_policy", "bee.security.approvals:approval_decide_policy"}))
+local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.tests.harness:approver_client_policy", "bee.security.approvals:approval_decide_policy"}))
 local function reply_value(target: string, result: unknown, err: unknown): Object
     if err then error(target .. ": " .. tostring(err)) end
     local reply = result
@@ -75,9 +75,9 @@ local function approve_call(target: string, request: unknown): Object
     return reply_value(target, result, err)
 end
 local function fixture_paths(): (string, string)
-    local bin, bin_error = env.get("bee.harness.catalog:fixture_bin")
+    local bin, bin_error = env.get("bee.tests.harness:fixture_bin")
     if bin_error or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
-    local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
+    local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
     if streams_error or type(streams) ~= "string" or streams == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
     return bin .. "/claude", streams .. "/claude/stream-json-2/permission.jsonl"
 end
@@ -178,7 +178,7 @@ local function prepare_host(): string
     if not real_entry then error("real adapter entry") end
     local real_adapter, real_error = adapter.decode(REAL_ADAPTER, (assert(bounds.object(real_entry.data))).adapter)
     if not real_adapter then error(tostring(real_error)) end
-    local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
+    local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
     if streams_error or type(streams) ~= "string" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
     local capture_digest = file_digest(streams .. "/claude/stream-json-2/control.jsonl")
     local production_record = registry.get(PRODUCTION_ACCEPTANCE)
@@ -408,7 +408,7 @@ local function define_tests()
             local before_sources = assert(registry.get("bee.credentials.env:credential_sources"))
             local before_files = assert(registry.get("bee.credentials.security:credential_file_policy"))
             local ok, failure = pcall(function()
-                local bin = assert(bounds.text(env.get("bee.harness.catalog:fixture_bin"))) .. "/grok-acp"
+                local bin = assert(bounds.text(env.get("bee.tests.harness:fixture_bin"))) .. "/grok-acp"
                 local binding = "bee.driver.grok.binding:binding"
                 local declaration = assert(registry.get("bee.driver.grok.permission:permission_adapter"))
                 local decoded = assert(adapter.decode(declaration.id, assert(bounds.object(declaration.data)).adapter))
@@ -435,7 +435,7 @@ local function define_tests()
                 local sources = assert(registry.get("bee.credentials.env:credential_sources"))
                 local source_data = assert(bounds.object(sources.data))
                 local allowed = principals.objects(source_data.sources)
-                allowed[#allowed + 1] = {ref = "bee.harness.catalog:grok_login_fixture", workspace_id = "*", audience = ACTOR,
+                allowed[#allowed + 1] = {ref = "bee.tests.harness:grok_login_fixture", workspace_id = "*", audience = ACTOR,
                     provider = "grok", projection_kinds = {"file"}, path = ".grok/auth.json", write_back = true,
                     setup_path = ".grok/config.toml", setup_destination = ".grok/.bee-global-config.toml",
                     setup_content_format = "opaque", setup_initialize_empty = true}
@@ -444,21 +444,21 @@ local function define_tests()
                 local file_data = assert(bounds.object(file_policy.data))
                 local resource_policy = assert(bounds.object(file_data.policy))
                 local resource_ids = principals.strings(resource_policy.resources)
-                resource_ids[#resource_ids + 1] = "bee.harness.catalog:grok_login_fixture"
+                resource_ids[#resource_ids + 1] = "bee.tests.harness:grok_login_fixture"
                 resource_policy.resources = resource_ids; apply(file_policy)
                 for _, scenario in ipairs({{decision = "approved"}, {decision = "denied"}, {decision = "approved", crash = "protocol_prepared"}}) do
                     local decision = scenario.decision
                     local thread_id, workspace = thread(), fresh("grok-ws")
                     local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
-                    launch.binding_ref = binding; launch.environment = {BEE_FIXTURE_STREAMS = assert(bounds.text(env.get("bee.harness.catalog:fixture_streams")))}
+                    launch.binding_ref = binding; launch.environment = {BEE_FIXTURE_STREAMS = assert(bounds.text(env.get("bee.tests.harness:fixture_streams")))}
                     local credential_caller = funcs.new():with_actor(principals.actor(ACTOR, workspace)):with_scope(scope({
-                        "bee.credentials:client_test_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}))
+                        "bee.tests.credentials:client_test_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}))
                     local function credential(method: string, input: Object): Object
                         local raw, err = credential_caller:call("bee.credentials.binding:" .. method, input)
                         return reply_value(method, raw, err)
                     end
                     credential("define", {workspace_id = workspace, name = "grok_login", provider = "grok", optional = true,
-                        source = {kind = "fs_directory", ref = "bee.harness.catalog:grok_login_fixture"}})
+                        source = {kind = "fs_directory", ref = "bee.tests.harness:grok_login_fixture"}})
                     local plan = assert(machine.plan({call = function(target: string, input: unknown): (unknown, string?)
                             local raw, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call(target, input)
                             return raw, err and tostring(err) or nil
@@ -468,11 +468,11 @@ local function define_tests()
                         attempt_id = launch.attempt_id, profile_id = "batch", profile_digest = plan.binding.profile_digest.entry,
                         binding_digest = plan.binding.binding_digest.entry, launch_policy_digest = plan.policy.digest, idempotency_key = fresh("key")})
                     launch.projections = {projection.projection_id}
-                    local pid = spawn_carrier(scenario.crash and "bee.harness.catalog:carrier_faulted" or "bee.harness.service:carrier", launch, "open", scenario.crash)
+                    local pid = spawn_carrier(scenario.crash and "bee.tests.harness:carrier_faulted" or "bee.harness.service:carrier", launch, "open", scenario.crash)
                     if scenario.crash then
                         local crashed = await_carrier(pid)
                         test.is_true(tostring(crashed.error):find("crash after protocol_prepared", 1, true) ~= nil)
-                        pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
+                        pid = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "resume", nil)
                     end
                     local view = await_request(workspace, pid)
                     test.eq(view.request_kind, "permission")
@@ -571,7 +571,7 @@ local function define_tests()
                 local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
                 local paused = assert(process.listen("bee.carrier.paused", {message = true}))
                 local decided_before = crash == "permission_consumed" or crash == "write_intended" or crash == "write_dispatched"
-                local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", crash, decided_before and "approval_created" or nil)
+                local first = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", crash, decided_before and "approval_created" or nil)
                 if decided_before then
                     await_paused(paused, first, "approval_created")
                     decide(pending_request(workspace), "approved")
@@ -582,7 +582,7 @@ local function define_tests()
                 if not decided_before and crash ~= "permission_intended" then
                     decide(pending_request(workspace), "approved")
                 end
-                local resumed = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil,
+                local resumed = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "resume", nil,
                     crash == "permission_intended" and "checkpoint_read,approval_created" or nil)
                 if crash == "permission_intended" then
                     await_paused(paused, resumed, "checkpoint_read")
@@ -615,7 +615,7 @@ local function define_tests()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-            local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "permission_revalidated")
+            local pid = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", nil, "permission_revalidated")
             local view = await_request(workspace, pid)
             local db = assert(approvals.open())
             assert(approvals.establish(db))
@@ -637,7 +637,7 @@ local function define_tests()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-            local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "hints_opened")
+            local pid = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", nil, "hints_opened")
             await_paused(paused, pid, "hints_opened")
             process.unlisten(paused)
             local stored = call("bee.threads.binding:checkpoint", {thread_id = thread_id, attempt_id = launch.attempt_id})
@@ -657,7 +657,7 @@ local function define_tests()
         test.it("refuses to dispatch after recovery when the launch policy no longer measures as planned", function()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
-            local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "permission_consumed")
+            local first = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", "permission_consumed")
             decide(await_request(workspace, first), "approved")
             local crashed = await_carrier(first, "permission_consumed")
             test.is_true(tostring(crashed.error):find("crash after permission_consumed", 1, true) ~= nil)
@@ -667,7 +667,7 @@ local function define_tests()
             local drain = data.drain_ms
             data.drain_ms = 2500
             apply(policy)
-            local resumed = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
+            local resumed = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "resume", nil)
             local settlement = settlement_of(await_carrier(resumed, "changed policy"), "changed policy")
             data.drain_ms = drain
             apply(policy)
@@ -706,13 +706,13 @@ local function define_tests()
             local copy, original = bind_copy()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
-            local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "permission_consumed")
+            local first = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", "permission_consumed")
             local view = await_request(workspace, first)
             decide(view, "approved")
             local crashed = await_carrier(first, "permission_consumed")
             test.is_true(tostring(crashed.error):find("crash after permission_consumed", 1, true) ~= nil)
             shell('printf "# changed after the decision\\n" >> ' .. copy)
-            local settlement = settlement_of(await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil), "changed executable"), "changed executable")
+            local settlement = settlement_of(await_carrier(spawn_carrier("bee.tests.harness:carrier_faulted", launch, "resume", nil), "changed executable"), "changed executable")
             unbind_copy(original, copy)
             if settlement.outcome == "succeeded" then error("dispatched after the executable changed: phases " .. table.concat(phases(records_of(thread_id)), ",")) end
             local records = records_of(thread_id)
@@ -732,7 +732,7 @@ local function define_tests()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-            local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "permission_revalidated")
+            local pid = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", nil, "permission_revalidated")
             local view = await_request(workspace, pid)
             local db = assert(approvals.open())
             assert(approvals.establish(db))
@@ -760,7 +760,7 @@ local function define_tests()
         test.it("leaves a write uncertain when the runner is lost during recovery and sends nothing after settlement", function()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, nil)
-            local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "write_intended")
+            local first = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", "write_intended")
             decide(await_request(workspace, first), "approved")
             local crashed = await_carrier(first, "write_intended")
             test.is_true(tostring(crashed.error):find("crash after write_intended", 1, true) ~= nil)
@@ -784,7 +784,7 @@ local function define_tests()
             process.unmonitor(runner)
             local reconciled = call("bee.placement.native.binding:reconcile", {attempt_id = launch.attempt_id})
             test.eq(reconciled.execution_state, "exited")
-            local settlement = settlement_of(await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil), "lost runner"), "lost runner")
+            local settlement = settlement_of(await_carrier(spawn_carrier("bee.tests.harness:carrier_faulted", launch, "resume", nil), "lost runner"), "lost runner")
             test.neq(settlement.outcome, "succeeded")
             local records = records_of(thread_id)
             test.eq(table.concat(writes(records), ","), "intended,uncertain")
@@ -793,7 +793,7 @@ local function define_tests()
             -- Observe the abandoned child's actual exit before approving;
             -- the fixture declares a one-second permission protocol bound.
             local late_launch = request(late_thread, fresh("attempt"), late_workspace, stream, "1")
-            local paused = spawn_carrier("bee.harness.catalog:carrier_faulted", late_launch, "open", "permission_requested")
+            local paused = spawn_carrier("bee.tests.harness:carrier_faulted", late_launch, "open", "permission_requested")
             local late_view = await_request(late_workspace, paused)
             await_carrier(paused, "permission_requested")
             local late_exits = assert(process.listen(placement_protocol.TOPIC_EXIT, {message = true}))
@@ -808,7 +808,7 @@ local function define_tests()
             end
             process.unlisten(late_exits)
             decide(late_view, "approved")
-            local late = settlement_of(await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", late_launch, "resume", nil), "late decision"), "late decision")
+            local late = settlement_of(await_carrier(spawn_carrier("bee.tests.harness:carrier_faulted", late_launch, "resume", nil), "late decision"), "late decision")
             test.neq(late.outcome, "succeeded")
             local late_records = records_of(late_thread)
             test.eq(#writes(late_records), 0)

@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.driver.wippy.test
+namespace: bee.tests.driver.wippy
 entries:
 - name: mock_listener
   kind: http.service
@@ -13,23 +13,23 @@ entries:
   kind: http.router
   meta:
     type: test_support
-    server: bee.driver.wippy.test:mock_listener
+    server: bee.tests.driver.wippy:mock_listener
   prefix: /
 - name: mock_completions
   kind: http.endpoint
   meta:
     type: test_support
-    router: bee.driver.wippy.test:mock_router
+    router: bee.tests.driver.wippy:mock_router
   method: POST
   path: /v1/chat/completions
-  func: bee.driver.wippy.test:mock_server
+  func: bee.tests.driver.wippy:mock_server
 - name: mock_server
   kind: function.lua
   meta: {type: test_support}
   source: file://mock_server.lua
   method: handle
   modules: [http, json]
-  imports: {principals: bee.tests.principals:bound, bounds: bee.values:bounds}
+  imports: {principals: bee.tests.support.principals:bound, bounds: bee.values:bounds}
 
 - name: driver_wippy_test
   kind: function.lua
@@ -41,7 +41,7 @@ entries:
     timeout: "60s"
   modules: [system, json, registry, funcs, security, time, events, channel]
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     test_fixtures: bee.tests.support:fixtures

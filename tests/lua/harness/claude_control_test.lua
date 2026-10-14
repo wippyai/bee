@@ -27,11 +27,11 @@ local placement_fixture = require("placement_fixture")
 local principals = require("principals")
 local ACTOR = "bee.test.claude_control"
 local APPROVER = "bee.test.approver"
-local POLICY = "bee.harness.catalog:claude_control_fixture_policy"
+local POLICY = "bee.tests.harness:claude_control_fixture_policy"
 local ADAPTER = "bee.driver.claude.permission:permission_adapter"
-local ACCEPTANCE = "bee.harness.catalog:claude_control_acceptance"
+local ACCEPTANCE = "bee.tests.harness:claude_control_acceptance"
 local APPROVER_POLICY = "claude-control"
-local ROOT = "bee.harness.catalog:project_fixture"
+local ROOT = "bee.tests.harness:project_fixture"
 local PROJECT = ".wippy/carrier-project"
 local BINDING = "bee.driver.claude.binding:binding"
 local SENTINEL = "sk-ant-sentinel-bee-000"
@@ -42,8 +42,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local carrier_scope = {"bee.harness.catalog:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
-    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
+local carrier_scope = {"bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
+    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
 local function scope(names: {string}): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(names) do
@@ -54,7 +54,7 @@ local function scope(names: {string}): security.Scope
     return security.new_scope(policies)
 end
 local actor = security.new_actor(ACTOR)
-local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.harness.catalog:approver_client_policy", "bee.security.approvals:approval_decide_policy"}))
+local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.tests.harness:approver_client_policy", "bee.security.approvals:approval_decide_policy"}))
 local function reply_value(target: string, result: unknown, err: unknown): Object
     if err then error(target .. ": " .. tostring(err)) end
     local reply = result
@@ -97,17 +97,17 @@ local function apply(entry: Object)
     if not applied then error("apply " .. tostring(entry.id) .. ": " .. tostring(err)) end
 end
 local function claude_bin(): string?
-    local bin, err = env.get("bee.harness.catalog:claude_bin")
+    local bin, err = env.get("bee.tests.harness:claude_bin")
     if err or type(bin) ~= "string" or bin == "" then return nil end
     return bin
 end
 local function fixture_bin(): string
-    local bin, err = env.get("bee.harness.catalog:fixture_bin")
+    local bin, err = env.get("bee.tests.harness:fixture_bin")
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end
 local function capture_digest(): string
-    local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
+    local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
     if streams_error or type(streams) ~= "string" or streams == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
     local sum, hash_error = hash.sha256(shell("cat " .. streams .. "/claude/stream-json-2/control.jsonl"))
     if not sum then error("digest the capture: " .. tostring(hash_error)) end
@@ -235,7 +235,7 @@ end
 -- barrier, for the recovery matrix.
 local function spawn_faulted(request_value: Object, mode: string, crash_after: string?, pause_after: string?): string
     local spawner = process.with_context({}):with_actor(actor):with_scope(scope(carrier_scope))
-    local pid, err = spawner:spawn_monitored("bee.harness.catalog:carrier_faulted", "bee:workers", request_value, mode, process.pid(), crash_after, nil, pause_after)
+    local pid, err = spawner:spawn_monitored("bee.tests.harness:carrier_faulted", "bee:workers", request_value, mode, process.pid(), crash_after, nil, pause_after)
     if not pid then error("spawn faulted carrier: " .. tostring(err)) end
     return tostring(pid)
 end

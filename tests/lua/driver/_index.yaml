@@ -30,7 +30,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [json, toml, hash, registry]
-  security: {policies: [bee.harness.profiles:repair_policy]}
+  security: {policies: [bee.tests.harness.profiles:repair_policy]}
   imports:
     universal: bee.driver.binding:universal
     test: wippy.test:test
@@ -57,12 +57,12 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
-    claude: bee.tests.driver.support:claude_protocol
-    codex: bee.tests.driver.support:codex_protocol
-    muse: bee.tests.driver.support:muse_protocol
-    claude_launch: bee.tests.driver.support:claude_launch
-    codex_launch: bee.tests.driver.support:codex_launch
-    muse_launch: bee.tests.driver.support:muse_launch
+    claude: bee.tests.support.driver:claude_protocol
+    codex: bee.tests.support.driver:codex_protocol
+    muse: bee.tests.support.driver:muse_protocol
+    claude_launch: bee.tests.support.driver:claude_launch
+    codex_launch: bee.tests.support.driver:codex_launch
+    muse_launch: bee.tests.support.driver:muse_launch
     observation: bee.threads.records:observation
     quote: bee.driver.binding:quote
 - name: fixtures
@@ -76,15 +76,15 @@ entries:
   modules: [registry]
   meta: {type: test, suite: bee}
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
-    codex_launch: bee.tests.driver.support:codex_launch
-    claude_launch: bee.tests.driver.support:claude_launch
-    agy_launch: bee.tests.driver.support:agy_launch
-    grok_launch: bee.tests.driver.support:grok_launch
-    muse_launch: bee.tests.driver.support:muse_launch
-    opencode_launch: bee.tests.driver.support:opencode_launch
+    codex_launch: bee.tests.support.driver:codex_launch
+    claude_launch: bee.tests.support.driver:claude_launch
+    agy_launch: bee.tests.support.driver:agy_launch
+    grok_launch: bee.tests.support.driver:grok_launch
+    muse_launch: bee.tests.support.driver:muse_launch
+    opencode_launch: bee.tests.support.driver:opencode_launch
     provider_projection: bee.placement.native.service:provider_projection
     formats: bee.credentials:formats
     driver_types: bee.driver:types
@@ -127,7 +127,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [registry, funcs]
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     test: wippy.test:test
     descriptor: bee.driver.descriptor:descriptor
     resolver: bee.driver.binding:resolver
@@ -166,7 +166,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     registry: registry
@@ -239,7 +239,7 @@ entries:
   method: run
   meta: {type: test, suite: bee, timeout: 60s}
   modules: [registry, json, toml]
-  security: {policies: [bee.harness.profiles:repair_policy]}
+  security: {policies: [bee.tests.harness.profiles:repair_policy]}
   imports:
     test: wippy.test:test
     cases: bee.tests.driver:option_coverage_cases

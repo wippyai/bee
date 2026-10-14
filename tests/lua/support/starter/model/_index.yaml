@@ -1,0 +1,6 @@
+version: '1.0'
+namespace: bee.tests.support.starter.model
+entries:
+- name: greeting
+  kind: library.lua
+  source: file://greeting.lua

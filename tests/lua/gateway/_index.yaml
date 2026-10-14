@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.gateway
+namespace: bee.tests.gateway
 entries:
 - name: effects_scope_probe
   kind: function.lua
@@ -24,14 +24,14 @@ entries:
   lifecycle: {auto_start: true}
 - name: surface_test_policy
   kind: security.policy
-  policy: {actions: [db.get], resources: [bee.gateway:surface_test_db], effect: allow}
+  policy: {actions: [db.get], resources: [bee.tests.gateway:surface_test_db], effect: allow}
 - name: surface_store_test
   kind: function.lua
   source: file://surface_store_test.lua
   method: run
   modules: [sql]
   meta: {type: test, suite: bee}
-  security: {policies: [bee.gateway:surface_test_policy, bee.tests.support:schema_policy]}
+  security: {policies: [bee.tests.gateway:surface_test_policy, bee.tests.support:schema_policy]}
   imports: {test: wippy.test:test, schema: bee.tests.support:schema, store: bee.gateway.persist:surface_store, bounds: bee.values:bounds, grants: bee.approvals.grants:store, grant_schema: bee.approvals.grants:schema, clock: bee.values:clock}
 - name: catalog_test
   kind: function.lua
@@ -46,7 +46,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json, funcs]
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     hooks: bee.gateway.hooks:hooks
@@ -58,9 +58,9 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [registry, json]
-  security: {policies: [bee.gateway:mcp_test_policy]}
+  security: {policies: [bee.tests.gateway:mcp_test_policy]}
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     mcp: bee.gateway.api:mcp
@@ -83,7 +83,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     context: bee.gateway.catalog:context
@@ -115,7 +115,7 @@ entries:
   modules: [registry, funcs, events, system, channel, time]
   meta: {type: test, suite: bee}
   security:
-    policies: [bee.gateway:address_test_policy]
+    policies: [bee.tests.gateway:address_test_policy]
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -141,7 +141,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [registry, security, json, time]
   security:
-    policies: [bee.gateway:policy_reference_admin]
+    policies: [bee.tests.gateway:policy_reference_admin]
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -157,7 +157,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     mcp: bee.gateway.api:mcp
@@ -167,7 +167,7 @@ entries:
 - name: session_boundary_probe_policy
   kind: security.policy
   meta: {type: test_support}
-  policy: {actions: [funcs.call], resources: [bee.gateway:session_boundary_probe], effect: allow}
+  policy: {actions: [funcs.call], resources: [bee.tests.gateway:session_boundary_probe], effect: allow}
 - name: session_boundary_probe
   kind: function.lua
   source: file://session_boundary_probe.lua
@@ -193,7 +193,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [security]
-  security: {policies: [bee.gateway:profile_context_policy, bee.gateway.security:execute_policy]}
+  security: {policies: [bee.tests.gateway:profile_context_policy, bee.gateway.security:execute_policy]}
   imports: {test: wippy.test:test, access: bee.driver.profiles:profile_access, scope: bee.gateway.catalog:profile_scope, context: bee.gateway.catalog:context, subject_call: bee.gateway.security:subject_call, bounds: bee.values:bounds}
 - name: profile_context_probe
   kind: function.lua
@@ -232,7 +232,7 @@ entries:
   security:
     policies:
     - bee.tests.support:approval_effect_policy
-    - bee.gateway:external_test_policy
+    - bee.tests.gateway:external_test_policy
     - bee.gateway.security:access_call_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
@@ -261,14 +261,14 @@ entries:
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [process, system, channel, time, tty, sql, json, funcs, security, fs]
-  security: {policies: [bee.gateway:external_test_policy, bee.tests.principals:application_scope_policy, bee.tests.apps:capture_policy]}
+  security: {policies: [bee.tests.gateway:external_test_policy, bee.tests.support.principals:application_scope_policy, bee.tests.apps:capture_policy]}
   imports:
     test: wippy.test:test
     client: bee.node:client
     bounds: bee.values:bounds
     external: bee.gateway.binding:external
     gateway: bee.gateway.binding:gateway
-    app_scope: bee.tests.principals:application
+    app_scope: bee.tests.support.principals:application
 - name: external_hive_test
   kind: function.lua
   source: file://external_hive_test.lua
@@ -277,7 +277,7 @@ entries:
   modules: [system, funcs, security, channel]
   security:
     policies:
-    - bee.gateway:external_test_policy
+    - bee.tests.gateway:external_test_policy
     - bee.gateway.security:external_view_policy
     - bee.hive.security:caller
     - bee.hive.security:messaging
@@ -330,14 +330,14 @@ entries:
   meta: {type: test_support}
 - name: grants_migration_policy
   kind: security.policy
-  policy: {actions: [db.get], resources: ['bee.gateway:grants_migration_db'], effect: allow}
+  policy: {actions: [db.get], resources: ['bee.tests.gateway:grants_migration_db'], effect: allow}
 - name: grants_migration_test
   kind: function.lua
   source: file://grants_migration_test.lua
   method: run
   modules: [sql, json, funcs]
   meta: {type: test, suite: bee}
-  security: {policies: ['bee.gateway:grants_migration_policy', 'bee.tests.support:schema_policy', 'bee.approvals.inbox.security:grants_policy']}
+  security: {policies: ['bee.tests.gateway:grants_migration_policy', 'bee.tests.support:schema_policy', 'bee.approvals.inbox.security:grants_policy']}
   imports:
     test: wippy.test:test
     schema: bee.tests.support:schema

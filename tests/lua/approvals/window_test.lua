@@ -25,7 +25,7 @@ local function install_policy()
     assert(change:update(entry)); assert(change:apply())
 end
 local function open(): sql.DB
-    local db = schema.open("bee.approvals:test_db", "bee.approvals.migrations")
+    local db = schema.open("bee.tests.approvals:test_db", "bee.approvals.migrations")
     assert(service.establish(db))
     return db
 end

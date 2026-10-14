@@ -61,7 +61,7 @@ end
 
 local function request_of(workspace: string): Object
     return {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY,
-        proposal = {kind = "operation", ref = "bee.harness.binding:start", revision = "r1", payload = {profile = "claude", argv = {"--print"}}},
+        proposal = {kind = "operation", ref = "bee.tests.harness.admission:start", revision = "r1", payload = {profile = "claude", argv = {"--print"}}},
         prompt = {text = "Launch claude in " .. workspace .. "?"}}
 end
 

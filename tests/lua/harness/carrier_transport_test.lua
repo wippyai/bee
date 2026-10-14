@@ -326,7 +326,7 @@ local function define_tests()
             local request = plan("window", "pty").request
             request.binding_ref = "bee.driver.claude.binding:binding"
             request.profile_id = "batch"
-            request.policy_ref = "bee.harness.catalog:fixture_policy"
+            request.policy_ref = "bee.tests.harness:fixture_policy"
             request.brief = "test"
             local replies: {unknown} = {
                 {ok = true, launch = {executable = 42, argv = {}, readiness = "ready"}},

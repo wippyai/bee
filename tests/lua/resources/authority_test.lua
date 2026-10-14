@@ -10,9 +10,9 @@ local registry = require("registry")
 local time = require("time")
 local authority = require("authority")
 local persist = require("persist")
-local PROJECT = "bee.resources:project_fixture"
-local SHARED = "bee.resources:shared_fixture"
-local UNRELATED_ENV_ROOT = "bee.resources:unrelated_env_root"
+local PROJECT = "bee.tests.resources:project_fixture"
+local SHARED = "bee.tests.resources:shared_fixture"
+local UNRELATED_ENV_ROOT = "bee.tests.resources:unrelated_env_root"
 local MANAGER, USER, OTHER, PLACEMENT = "bee.test.manager", "bee.test.user", "bee.test.other", "bee.test.placement"
 local counter = 0
 type Advance = (integer) -> ()
@@ -46,7 +46,7 @@ local function scope(names: {string}): security.Scope
 end
 type Principal = {id: string, names: {string}}
 local function caller(id: string, grants: {string}): Principal
-    local names: {string} = {"bee.resources:client_test_policy"}
+    local names: {string} = {"bee.tests.resources:client_test_policy"}
     for _, grant in ipairs(grants) do names[#names + 1] = grant end
     return {id = id, names = names}
 end
@@ -110,7 +110,7 @@ local function define_tests()
         test.it("associates under the host ceiling for managers only and replaces at the next revision", function()
             local workspace = fresh("ws")
             test.eq(code(call(outsider, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "", allowed_access = "write"})), "DENIED")
-            test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = "bee.resources:unadmitted_fixture", allowed_access = "read"})), "FORBIDDEN")
+            test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = "bee.tests.resources:unadmitted_fixture", allowed_access = "read"})), "FORBIDDEN")
             test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "shared", root_ref = SHARED, allowed_access = "write"})), "FORBIDDEN")
             test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "../up"})), "INVALID")
             local first = value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "src", allowed_access = "write"}))

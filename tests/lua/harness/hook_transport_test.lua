@@ -20,7 +20,7 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.harness.catalog:gateway_client_policy", "bee.harness.security:carrier_policy", "bee.threads.security:create", "bee.threads.security:observe",
+local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.tests.harness:gateway_client_policy", "bee.harness.security:carrier_policy", "bee.threads.security:create", "bee.threads.security:observe",
     "bee.tests.support:gateway_manage_policy", "bee.tests.support:gateway_admit_policy", "bee.security.gateway:gateway_materialize_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}

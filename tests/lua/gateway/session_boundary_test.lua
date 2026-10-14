@@ -18,12 +18,12 @@ local function define_tests()
                 local data = assert(bounds.object(entry.data))
                 local grants = assert(bounds.object(data.security))
                 local references = assert(bounds.array(grants.policies, 32))
-                local policies: {security.Policy} = {assert(security.policy("bee.gateway:session_boundary_probe_policy"))}
+                local policies: {security.Policy} = {assert(security.policy("bee.tests.gateway:session_boundary_probe_policy"))}
                 for _, reference in ipairs(references) do
                     policies[#policies + 1] = assert(security.policy(assert(bounds.id(reference))))
                 end
                 local scope = security.new_scope(policies)
-                local raw, err = funcs.new():with_scope(scope):call("bee.gateway:session_boundary_probe",
+                local raw, err = funcs.new():with_scope(scope):call("bee.tests.gateway:session_boundary_probe",
                     {session = opened.session, thread = description.thread_ref, event = harness.key()})
                 if err then error(tostring(err)) end
                 local result = assert(bounds.object(raw))
@@ -34,7 +34,7 @@ local function define_tests()
                 test.not_nil(active)
                 local pulled = active and harness.value(journal:call("turn_pull", {turn = active.turn, claim = active.claim}))
                 test.eq(pulled and pulled.phase, "accepted")
-                local stale_raw, stale_error = funcs.new():with_scope(scope):call("bee.gateway:session_boundary_probe",
+                local stale_raw, stale_error = funcs.new():with_scope(scope):call("bee.tests.gateway:session_boundary_probe",
                     {session = opened.session, thread = description.thread_ref, event = harness.key(), attempt = "stale-attempt"})
                 if stale_error then error(tostring(stale_error)) end
                 local stale = assert(bounds.object(stale_raw))

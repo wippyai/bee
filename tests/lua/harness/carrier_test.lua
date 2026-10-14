@@ -19,8 +19,8 @@ local quote = require("quote")
 local placement_fixture = require("placement_fixture")
 local exits = require("exits")
 local ACTOR = "bee.test.carrier"
-local POLICY = "bee.harness.catalog:fixture_policy"
-local ROOT = "bee.harness.catalog:project_fixture"
+local POLICY = "bee.tests.harness:fixture_policy"
+local ROOT = "bee.tests.harness:project_fixture"
 local BINDING = "bee.driver.claude.binding:binding"
 local counter = 0
 
@@ -41,8 +41,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local scope_names = {"bee.harness.catalog:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
-    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy"}
+local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
+    "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -61,7 +61,7 @@ local function call(target: string, request: unknown): {[string]: unknown}
     return assert(bounds.object(reply.value))
 end
 local function fixture_bin(): string
-    local bin, err = env.get("bee.harness.catalog:fixture_bin")
+    local bin, err = env.get("bee.tests.harness:fixture_bin")
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end
@@ -74,7 +74,7 @@ local function command(argv: {string})
     assert(code == 0, "fixture command: " .. tostring(err))
 end
 local function stream(name: string): string
-    local base, err = env.get("bee.harness.catalog:fixture_streams")
+    local base, err = env.get("bee.tests.harness:fixture_streams")
     if err or type(base) ~= "string" or base == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
     return base .. "/claude/stream-json-2/" .. name
 end
@@ -338,9 +338,9 @@ local function define_tests()
             local base_texts, base_ended = stream_counts(baseline_records)
             local split_thread = thread()
             local split = request(split_thread, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_SPLIT = "1", BEE_FIXTURE_LINGER = "1"})
-            local crashed = run_carrier("bee.harness.catalog:carrier_faulted", split, "open", "committed")
+            local crashed = run_carrier("bee.tests.harness:carrier_faulted", split, "open", "committed")
             test.is_nil(crashed.value)
-            local resumed = run_carrier("bee.harness.catalog:carrier_faulted", split, "resume", nil)
+            local resumed = run_carrier("bee.tests.harness:carrier_faulted", split, "resume", nil)
             if not resumed.value then error("split resume failed: " .. tostring(resumed.error)) end
             test.eq((assert(bounds.object(resumed.value.settlement))).answer, "pong")
             local _, split_records = kinds(split_thread)
@@ -349,10 +349,10 @@ local function define_tests()
             test.eq(split_ended, base_ended)
             local batch_thread = thread()
             local batched = request(batch_thread, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_LINGER = "1"})
-            local partial = run_carrier("bee.harness.catalog:carrier_faulted", batched, "open", "partial_commit", 2)
+            local partial = run_carrier("bee.tests.harness:carrier_faulted", batched, "open", "partial_commit", 2)
             test.is_nil(partial.value)
             test.is_true(tostring(partial.error):find("crash after partial_commit", 1, true) ~= nil)
-            local continued = run_carrier("bee.harness.catalog:carrier_faulted", batched, "resume", nil, 2)
+            local continued = run_carrier("bee.tests.harness:carrier_faulted", batched, "resume", nil, 2)
             if not continued.value then error("partial resume failed: " .. tostring(continued.error)) end
             test.eq((assert(bounds.object(continued.value.settlement))).answer, "pong")
             local batch_list, batch_records = kinds(batch_thread)
@@ -381,9 +381,9 @@ local function define_tests()
             test.eq(framing_notices(records), 0)
             local resumed_thread = thread()
             local held = request(resumed_thread, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_HUGE = "1", BEE_FIXTURE_LINGER = "1"})
-            local crashed = run_carrier("bee.harness.catalog:carrier_faulted", held, "open", "committed")
+            local crashed = run_carrier("bee.tests.harness:carrier_faulted", held, "open", "committed")
             test.is_nil(crashed.value)
-            local resumed = run_carrier("bee.harness.catalog:carrier_faulted", held, "resume", nil)
+            local resumed = run_carrier("bee.tests.harness:carrier_faulted", held, "resume", nil)
             if not resumed.value then error("resume across a held frame failed: " .. tostring(resumed.error)) end
             test.eq((assert(bounds.object(resumed.value.settlement))).answer, "pong")
             local _, resumed_records = kinds(resumed_thread)
@@ -422,11 +422,11 @@ local function define_tests()
             for _, crash in ipairs({"write_intended", "write_dispatched"}) do
                 local thread_id = thread()
                 local launch = request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_READ = "1", BEE_FIXTURE_LINGER = "2"})
-                local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", crash)
+                local pid = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", crash)
                 process.send(pid, "bee.carrier.input", {write_id = "w2", data = "ping\n"})
                 local crashed = await_carrier(pid)
                 test.is_true(tostring(crashed.error):find("crash after " .. crash, 1, true) ~= nil)
-                local resumed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
+                local resumed = run_carrier("bee.tests.harness:carrier_faulted", launch, "resume", nil)
                 if not resumed.value then error(crash .. ": resume failed: " .. tostring(resumed.error)) end
                 test.eq((assert(bounds.object(resumed.value.settlement))).answer, "pong")
                 local _, records = kinds(thread_id)
@@ -462,10 +462,10 @@ local function define_tests()
             local thread_id = thread()
             local launch = request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_READ = "1", BEE_FIXTURE_PACE = "0.3"})
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-            local old = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, nil, "write_intended,write_settled")
+            local old = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", nil, nil, "write_intended,write_settled")
             process.send(old, "bee.carrier.input", {write_id = "w5", data = "ping\n"})
             await_paused(paused, old, "write_intended")
-            local replacement_pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil, nil, "checkpoint_read")
+            local replacement_pid = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "resume", nil, nil, "checkpoint_read")
             await_paused(paused, replacement_pid, "checkpoint_read")
             -- The old carrier is not fenced yet: its write is accepted and
             -- committed after the replacement read the checkpoint. It then
@@ -496,7 +496,7 @@ local function define_tests()
             -- The old carrier holds mid-stream, after committing its first
             -- output, until the replacement is fenced in.
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-            local old = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, nil, "committed")
+            local old = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", nil, nil, "committed")
             await_paused(paused, old, "committed")
             process.unlisten(paused)
             local replacement_pid = spawn_carrier("bee.harness.service:carrier", launch, "resume", nil)
@@ -517,7 +517,7 @@ local function define_tests()
         test.it("refuses an old carrier's admitted write dispatched after the replacement is fenced", function()
             local thread_id = thread()
             local launch = request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_READ = "1", BEE_FIXTURE_PACE = "0.3"})
-            local old = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, nil, "write_intended")
+            local old = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", nil, nil, "write_intended")
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             process.send(old, "bee.carrier.input", {write_id = "w9", data = "ping\n"})
             await_paused(paused, old, "write_intended")
@@ -548,10 +548,10 @@ local function define_tests()
                 local thread_id = thread()
                 local attempt_id = fresh("attempt")
                 local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_LINGER = "1"})
-                local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", crash)
+                local crashed = run_carrier("bee.tests.harness:carrier_faulted", launch, "open", crash)
                 test.is_nil(crashed.value)
                 test.is_true(tostring(crashed.error):find("crash after " .. crash, 1, true) ~= nil)
-                local resumed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
+                local resumed = run_carrier("bee.tests.harness:carrier_faulted", launch, "resume", nil)
                 if not resumed.value then error(crash .. ": resume failed: " .. tostring(resumed.error)) end
                 local settlement = assert(bounds.object(resumed.value.settlement))
                 test.eq(settlement.outcome, "succeeded", crash .. ": " .. require("json").encode(settlement))
@@ -593,7 +593,7 @@ local function define_stream_tests()
                 BEE_TEST_BACKPRESSURE_CONTROLLER = tostring(process.pid())}
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pressure = assert(process.listen("bee.test.native.backpressure", {message = true}))
-            local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
+            local pid = spawn_carrier("bee.tests.harness:carrier_faulted", request(thread_id, attempt_id, environment),
                 "open", nil, nil, "committed")
             local events = assert(process.events())
             local committed, full = false, false
@@ -669,7 +669,7 @@ local function define_drain_tests()
             local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local drained = assert(process.listen("bee.test.drain.paused", {message = true}))
             local events = assert(process.events())
-            local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
+            local pid = spawn_carrier("bee.tests.harness:carrier_faulted", request(thread_id, attempt_id, environment),
                 "open", nil, nil, "committed*")
             local proved = false
             local outcome: Outcome? = nil
@@ -742,7 +742,7 @@ local function define_drain_tests()
                 local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
                     BEE_FIXTURE_ORPHAN_FIFO = release})
                 local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-                local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed", nil, "placement_started")
+                local pid = spawn_carrier("bee.tests.harness:carrier_faulted", launch, "open", "committed", nil, "placement_started")
                 local events = assert(process.events())
                 exits.paused(pid, "placement_started", exited, function(poll: boolean): unknown
                     local selected

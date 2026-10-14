@@ -62,9 +62,9 @@ entries:
     bounds: bee.values:bounds
     client: bee.node:client
     catalog: bee.node.binding:catalog_types
-    app_scope: bee.tests.principals:application
+    app_scope: bee.tests.support.principals:application
   security:
-    policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
+    policies: [bee.tests.support.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
 - name: catalog_test_policy
   kind: security.policy
   meta: {comment: The catalog test makes app actors and asks the node owner for its state}
@@ -130,9 +130,9 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     client: bee.node:client
-    app_scope: bee.tests.principals:application
+    app_scope: bee.tests.support.principals:application
   security:
-    policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
+    policies: [bee.tests.support.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
 - name: app_sessions_probe
   kind: function.lua
   source: file://app_sessions_probe.lua
@@ -163,13 +163,13 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     client: bee.node:client
-    app_scope: bee.tests.principals:application
+    app_scope: bee.tests.support.principals:application
     capability_model: bee.capability:model
     capability_grants: bee.gov.types:capability_grants
     test_fixtures: bee.tests.support:fixtures
   security:
     policies:
-    - bee.tests.principals:application_scope_policy
+    - bee.tests.support.principals:application_scope_policy
     - bee.tests.node:catalog_test_policy
     - bee.tests.node:app_sessions_registry_policy
 - name: overlay_listing_fault
@@ -242,10 +242,10 @@ entries:
     test: wippy.test:test
     application: bee.node:application
   security:
-    policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
+    policies: [bee.tests.support.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
 - name: tools_app
   kind: process.lua
-  source: file://runner_fixture/app.lua
+  source: file://runner/fixture/app.lua
   method: main
   modules: [process]
   meta:
@@ -253,7 +253,7 @@ entries:
     application: {api_version: 1, title: Progress, lifetime: view, revision: '1', instance_policy: multiple}
 - name: tools_twin
   kind: process.lua
-  source: file://runner_fixture/app.lua
+  source: file://runner/fixture/app.lua
   method: main
   modules: [process]
   meta:
@@ -344,7 +344,7 @@ entries:
   source: file://package_application_probe.lua
   method: run
   modules: [security]
-  meta: {type: app_test, application: bee.tests.node.hub_tests_fixture:application, suite: package}
+  meta: {type: app_test, application: bee.tests.node.hub.fixture:application, suite: package}
   imports:
     test: wippy.test:test
 - name: application_tests_test

@@ -8,7 +8,7 @@ local bounds = require("bounds")
 local store = require("store")
 local clock = require("clock")
 local service = require("service")
-local DATABASE = "bee.gateway:grants_migration_db"
+local DATABASE = "bee.tests.gateway:grants_migration_db"
 local function migrate(name: string)
     local id = "bee.gateway.migrations:" .. name
     local result, err = funcs.call(id,{target_db = "bee:db",database_id = DATABASE,direction = "up",id = id})

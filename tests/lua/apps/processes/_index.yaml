@@ -1,0 +1,55 @@
+version: '1.0'
+namespace: bee.tests.apps.processes
+entries:
+- name: app_test
+  kind: function.lua
+  source: file://app_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [system, tty, channel, process, sql, json]
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+    protocol: bee.hive:protocol
+    bounds: bee.values:bounds
+  security:
+    policies: [bee.security.approvals:approval_store_policy]
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  modules:
+  - tty
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    probe: bee.apps.processes.app:probe
+    view: bee.apps.processes.app:view
+    history_values: bee.apps.processes.app:history
+- name: probe_test
+  kind: function.lua
+  source: file://probe_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    probe: bee.apps.processes.app:probe
+    viz: bee.ui.viz:viz
+    history_values: bee.apps.processes.app:history
+- name: hive_test
+  kind: function.lua
+  source: file://hive_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    viz: bee.ui.viz:viz
+    hive: bee.apps.processes.app:hive
+    view: bee.apps.processes.app:view

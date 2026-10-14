@@ -30,7 +30,7 @@ local THREAD_POLICIES = {
     "bee.threads.security:lifecycle",
     "bee.threads.security:carrier",
     "bee.harness.security:carrier_policy",
-    "bee.driver.wippy.test:test_http_policy",
+    "bee.tests.driver.wippy:test_http_policy",
 }
 
 local function listener_ready(status: string, details: string?): boolean
@@ -38,7 +38,7 @@ local function listener_ready(status: string, details: string?): boolean
 end
 
 local function get_mock_url(): string
-    local reference = "bee.driver.wippy.test:mock_listener"
+    local reference = "bee.tests.driver.wippy:mock_listener"
     local subscription, subscription_error = events.subscribe("supervisor", "service.update")
     if subscription_error or not subscription then error("subscribe to mock listener state: " .. tostring(subscription_error)) end
     local updates = subscription:channel()
@@ -150,14 +150,14 @@ end
 
 local function seed_registry()
     local snap = registry.snapshot()
-    local agent_id = "bee.driver.wippy.test:test_agent"
-    local trait_id = "bee.driver.wippy.test:test_trait"
-    local wrapper_trait_id = "bee.driver.wippy.test:wrapper_trait"
-    local wrapper_agent_id = "bee.driver.wippy.test:wrapper_agent"
-    local memory_agent_id = "bee.driver.wippy.test:memory_agent"
-    local delegate_id = "bee.driver.wippy.test:helper_agent"
-    local delegate_agent_id = "bee.driver.wippy.test:delegate_agent"
-    local key_id = "bee.driver.wippy.test:api_key"
+    local agent_id = "bee.tests.driver.wippy:test_agent"
+    local trait_id = "bee.tests.driver.wippy:test_trait"
+    local wrapper_trait_id = "bee.tests.driver.wippy:wrapper_trait"
+    local wrapper_agent_id = "bee.tests.driver.wippy:wrapper_agent"
+    local memory_agent_id = "bee.tests.driver.wippy:memory_agent"
+    local delegate_id = "bee.tests.driver.wippy:helper_agent"
+    local delegate_agent_id = "bee.tests.driver.wippy:delegate_agent"
+    local key_id = "bee.tests.driver.wippy:api_key"
     local changes = snap:changes()
     local agent_entry = {
         id = agent_id,
@@ -166,7 +166,7 @@ local function seed_registry()
         data = {
             prompt = "Review the supplied change.",
             traits = {trait_id},
-            tools = {"bee.driver.wippy.test:test_tool"},
+            tools = {"bee.tests.driver.wippy:test_tool"},
             delegates = {},
             memory = {},
             context = {repo = "workspace"},
@@ -181,7 +181,7 @@ local function seed_registry()
         meta = {type = "agent.trait", title = "Test Trait", test_support = true},
         data = {
             prompt = "Follow instructions.",
-            tools = {"bee.driver.wippy.test:test_tool"},
+            tools = {"bee.tests.driver.wippy:test_tool"},
             context = {repo = "workspace"},
         }
     }
@@ -192,7 +192,7 @@ local function seed_registry()
         data = {
             prompt = "Wrap every answer.",
             tools = {},
-            wrappers = {"bee.driver.wippy.test:wrapper"},
+            wrappers = {"bee.tests.driver.wippy:wrapper"},
             context = {},
         }
     }
@@ -330,7 +330,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Please call_tool FileReport for review",
                 host_config = {
                     endpoint = url,
@@ -390,7 +390,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Please call_unadmitted_tool",
                 host_config = {
                     endpoint = url,
@@ -422,7 +422,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Just a standard greeting",
                 host_config = {
                     endpoint = url,
@@ -447,7 +447,7 @@ local function define_tests()
                 thread_id = thread_id2,
                 action_id = action_id2,
                 attempt_id = attempt_id2,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Please call_tool FileReport via stream",
                 host_config = {
                     endpoint = url,
@@ -510,7 +510,7 @@ local function define_tests()
             prepare(thread_id, action_id, attempt_id)
             local res = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent", brief = "call_tool_bad_arguments",
+                agent_ref = "bee.tests.driver.wippy:test_agent", brief = "call_tool_bad_arguments",
                 host_config = {endpoint = get_mock_url(), stream = true},
             })
             test.is_false(res.ok)
@@ -525,7 +525,7 @@ local function define_tests()
             prepare(thread_id, action_id, attempt_id)
             local res = raw_call("bee.driver.wippy.binding:run", {
                 operation = "run", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent", brief = "call_tool_large_checkpoint",
+                agent_ref = "bee.tests.driver.wippy:test_agent", brief = "call_tool_large_checkpoint",
                 host_config = {endpoint = get_mock_url(), stream = false},
             })
             test.is_false(res.ok)
@@ -638,7 +638,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Should not finish",
                 host_config = {
                     endpoint = url,
@@ -666,7 +666,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id1,
                 attempt_id = attempt_id1,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "First turn greeting",
                 host_config = {endpoint = url, stream = false},
             })
@@ -684,7 +684,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id2,
                 attempt_id = attempt_id2,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Second turn follow-up",
                 host_config = {endpoint = url, stream = false},
             })
@@ -713,7 +713,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Please call_tool_long",
                 host_config = {endpoint = url, stream = false},
             })
@@ -737,7 +737,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Please call_tool_many at once",
                 host_config = {endpoint = url, stream = false},
             })
@@ -760,7 +760,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "First turn greeting",
                 carrier_epoch = 999,
                 host_config = {endpoint = url, stream = false},
@@ -783,7 +783,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "First turn greeting",
                 host_config = {endpoint = "http://example.com/v1", stream = false},
             })
@@ -795,10 +795,10 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "First turn greeting",
                 host_config = {endpoint = url, stream = false,
-                    credential_ref = "bee.driver.wippy.test:missing_cred"},
+                    credential_ref = "bee.tests.driver.wippy:missing_cred"},
             })
             test.is_false(cred.ok)
             test.is_true(tostring((assert(bounds.object(cred.error))).message):find("resolve credential", 1, true) ~= nil)
@@ -808,7 +808,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "First turn greeting",
                 host_config = {endpoint = url, stream = false, bogus_field = 1},
             })
@@ -834,7 +834,7 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "Just checking status flow",
                 host_config = {endpoint = url, stream = false},
             })
@@ -852,10 +852,10 @@ local function define_tests()
 
         test.it("resolves credentials by reference and never sends the reference as the key", function()
             test.is_nil(client.resolve_key(nil))
-            local key, key_error = client.resolve_key("bee.driver.wippy.test:api_key")
+            local key, key_error = client.resolve_key("bee.tests.driver.wippy:api_key")
             test.eq(key, "secret-xyz-test-key")
             test.is_nil(key_error)
-            local missing, missing_error = client.resolve_key("bee.driver.wippy.test:missing_cred")
+            local missing, missing_error = client.resolve_key("bee.tests.driver.wippy:missing_cred")
             test.is_nil(missing)
             test.is_true(tostring(missing_error):find("not in the registry", 1, true) ~= nil)
 
@@ -869,10 +869,10 @@ local function define_tests()
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
-                agent_ref = "bee.driver.wippy.test:test_agent",
+                agent_ref = "bee.tests.driver.wippy:test_agent",
                 brief = "First turn greeting",
                 host_config = {endpoint = url, stream = false,
-                    credential_ref = "bee.driver.wippy.test:api_key"},
+                    credential_ref = "bee.tests.driver.wippy:api_key"},
             })
             test.is_true(res.ok)
             test.eq((assert(bounds.object(res.value))).outcome, "succeeded")
@@ -880,7 +880,7 @@ local function define_tests()
 
         test.it("denies tool execution when a declared scope is not admitted", function()
             local ok_exec, denied = runner.execute_tool(
-                {ref = "bee.driver.wippy.test:test_tool", scopes = {"bee.driver.wippy.test:missing_policy"}},
+                {ref = "bee.tests.driver.wippy:test_tool", scopes = {"bee.tests.driver.wippy:missing_policy"}},
                 {}, "att-scope-1", "default")
             test.is_false(ok_exec)
             test.eq((assert(bounds.object(denied))).code, "DENIED")
@@ -889,11 +889,11 @@ local function define_tests()
         test.it("refuses unproven trait capabilities but admits memory on the native route", function()
             seed_registry()
             local snap = registry.snapshot()
-            local refused, refuse_err = runner.resolve_agent(snap, "bee.driver.wippy.test:wrapper_agent", {endpoint = "http://127.0.0.1:9/v1"})
+            local refused, refuse_err = runner.resolve_agent(snap, "bee.tests.driver.wippy:wrapper_agent", {endpoint = "http://127.0.0.1:9/v1"})
             test.is_nil(refused)
             test.is_true(tostring(refuse_err):find("wrappers", 1, true) ~= nil)
 
-            local memory_agent, memory_err = runner.resolve_agent(snap, "bee.driver.wippy.test:memory_agent", {endpoint = "http://127.0.0.1:9/v1"})
+            local memory_agent, memory_err = runner.resolve_agent(snap, "bee.tests.driver.wippy:memory_agent", {endpoint = "http://127.0.0.1:9/v1"})
             test.not_nil(memory_agent)
             test.is_nil(memory_err)
         end)
@@ -901,12 +901,12 @@ local function define_tests()
         test.it("refuses delegates the host never admitted", function()
             seed_registry()
             local snap = registry.snapshot()
-            local refused, refuse_err = runner.resolve_agent(snap, "bee.driver.wippy.test:delegate_agent", {endpoint = "http://127.0.0.1:9/v1"})
+            local refused, refuse_err = runner.resolve_agent(snap, "bee.tests.driver.wippy:delegate_agent", {endpoint = "http://127.0.0.1:9/v1"})
             test.is_nil(refused)
             test.is_true(tostring(refuse_err):find("not admitted by the host policy", 1, true) ~= nil)
 
-            local admitted, admit_err = runner.resolve_agent(snap, "bee.driver.wippy.test:delegate_agent",
-                {endpoint = "http://127.0.0.1:9/v1", admitted_delegates = {"bee.driver.wippy.test:helper_agent"}})
+            local admitted, admit_err = runner.resolve_agent(snap, "bee.tests.driver.wippy:delegate_agent",
+                {endpoint = "http://127.0.0.1:9/v1", admitted_delegates = {"bee.tests.driver.wippy:helper_agent"}})
             test.not_nil(admitted)
             test.is_nil(admit_err)
         end)

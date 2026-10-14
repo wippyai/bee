@@ -7,9 +7,9 @@ local grant_schema = require("grant_schema")
 local clock = require("clock")
 local bounds = require("bounds")
 local function open(): sql.DB
-    local first = schema.open("bee.gateway:surface_test_db", "bee.approvals.migrations")
+    local first = schema.open("bee.tests.gateway:surface_test_db", "bee.approvals.migrations")
     first:release()
-    return schema.open("bee.gateway:surface_test_db", "bee.gateway.migrations")
+    return schema.open("bee.tests.gateway:surface_test_db", "bee.gateway.migrations")
 end
 local function begin(db: sql.DB): sql.Transaction
     local tx, err = db:begin()

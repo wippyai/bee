@@ -10,7 +10,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    launch: bee.tests.driver.support:opencode_launch
+    launch: bee.tests.support.driver:opencode_launch
     prepare: bee.driver.opencode.binding:prepare
     dispatch: bee.driver.opencode.binding:dispatch
     quote: bee.driver.binding:quote
@@ -26,7 +26,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-    protocol: bee.tests.driver.support:opencode_protocol
+    protocol: bee.tests.support.driver:opencode_protocol
     normalize: bee.driver.opencode.binding:normalize
     stream_json: bee.driver.transport:stream_json
     observation: bee.threads.records:observation
@@ -37,7 +37,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
-    principals: bee.tests.principals:bound
+    principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     registry: registry
@@ -56,8 +56,8 @@ entries:
     policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy]
   imports:
     test: wippy.test:test
-    fixture: bee.tests.driver.support:opencode_hooks
-    principals: bee.tests.principals:bound
+    fixture: bee.tests.support.driver:opencode_hooks
+    principals: bee.tests.support.principals:bound
     gateway_hooks: bee.gateway.hooks:hooks
     hook_records: bee.harness.carrier:hook_records
 - name: carrier_test
@@ -72,7 +72,7 @@ entries:
     test: wippy.test:test
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
-    opencode_hooks: bee.tests.driver.support:opencode_hooks
+    opencode_hooks: bee.tests.support.driver:opencode_hooks
 - name: observer_test
   kind: function.lua
   source: file://observer_test.lua

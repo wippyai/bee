@@ -7,7 +7,7 @@ local service = require("service")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local json = require("json")
-local DATABASE = "bee.approvals:migration_test_db"
+local DATABASE = "bee.tests.approvals:migration_test_db"
 local function migrate(name: string)
     local id = "bee.approvals.migrations:" .. name
     local reply, err = funcs.call(id, {target_db = "bee:db", database_id = DATABASE, direction = "up", id = id})

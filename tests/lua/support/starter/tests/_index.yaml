@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.tests.support.starter.tests
+entries:
+- name: greeting_test
+  kind: function.lua
+  source: file://greeting_test.lua
+  method: run
+  meta: {type: test, suite: hello}
+  imports:
+    test: wippy.test:test
+    greeting: bee.tests.support.starter.model:greeting

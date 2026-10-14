@@ -9,7 +9,7 @@ local registry = require("registry")
 local security = require("security")
 local json = require("json")
 
-local POLICY = "bee.gateway:policy_reference_target"
+local POLICY = "bee.tests.gateway:policy_reference_target"
 local RESOURCE = "bee.gateway.probe:policy_reference_sentinel"
 
 type Object = {[string]: unknown}

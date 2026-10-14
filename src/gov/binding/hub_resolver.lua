@@ -27,14 +27,14 @@ type Captured = {revision: integer, entries: {Entry}, resolution: Object?,
     overlay_ids: {[string]: boolean}?, preview: (Entry) -> (RegistryPlan?, string?)}
 type Root = {component: string, version: string, parameters: {unknown}}
 type Policy = application_capabilities.Policy
-type Prepared = {artifact_bytes: string, artifact_digest: string, root: Root, captured: Captured,
+type Preparation = {artifact_bytes: string, artifact_digest: string, root: Root, captured: Captured,
     expected: {Entry}, preview: RegistryPlan, flattened: {Entry}, selected: {[string]: boolean},
     owned_namespaces: {[string]: boolean}, artifacts: {preflight.Artifact}, candidate_entries: {preflight.Entry},
     requirements: {preflight.Requirement}, migrations: {preflight.Migration}, current: {[string]: preflight.StateEntry}}
-type Deps = {prepared: Prepared?, capture: () -> (Captured?, string?), root: (unknown, unknown?) -> (Root?, string?),
+type Deps = {prepared: Preparation?, capture: () -> (Captured?, string?), root: (unknown, unknown?) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 type Resolver = resolution.Resolver
-type Instance = {prepared: Prepared?, capture: () -> (Captured?, string?), root: (unknown, unknown?) -> (Root?, string?),
+type Instance = {prepared: Preparation?, capture: () -> (Captured?, string?), root: (unknown, unknown?) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?),
     resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
 
@@ -265,7 +265,7 @@ local function same_state(prior: Captured, current: Captured): boolean
     return next(entries) == nil
 end
 
-local function prepare(captured: Captured, root: Root, spec: Object, expected: {Entry}): (Prepared?, string?)
+local function prepare(captured: Captured, root: Root, spec: Object, expected: {Entry}): (Preparation?, string?)
     if type(spec.artifact_bytes) ~= "string" or type(spec.artifact_digest) ~= "string" then
         return nil, "selected artifact identity is invalid"
     end

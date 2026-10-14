@@ -8,7 +8,6 @@ local hash = require("hash")
 local bounds = require("bounds")
 local migration_work = require("migration_work")
 local application_admission = require("application_admission")
-local capability_grants = require("capability_grants")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -237,16 +236,6 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         or admission.record.source_workspace ~= source_workspace or admission.record.artifact_digest ~= artifact_blob.digest) then
         return nil, "application admission does not match the accepted plan"
     end
-    local capability_proposal: capability_grants.Proposal? = nil
-    local capability_installed: capability_grants.Installed? = nil
-    local capability_review: capability_grants.Review? = nil
-    local capability_evidence = context.host_evidence.capability
-    if capability_evidence.kind == "new" then
-        capability_proposal, capability_review = capability_evidence.proposal, capability_evidence.review
-    elseif capability_evidence.kind == "installed" then
-        capability_proposal, capability_installed, capability_review = capability_evidence.proposal,
-            capability_evidence.installed, capability_evidence.review
-    end
     local result: Object = {owner_node = owner, workspace_id = workspace, source_node = source,
         source_workspace = source_workspace, version = version, plan_digest = plan_digest,
         plan_revision = revision, selection_revision = selection_revision,
@@ -259,12 +248,7 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         result.application_admission = admission
         result.application_admission_digest = admission.digest
     end
-    if capability_proposal then result.capability_proposal = capability_proposal end
-    if capability_installed then
-        result.capability_installed = capability_installed
-        result.grant_predecessor_digest = capability_installed.record_digest
-    end
-    if capability_review then result.capability_review = capability_review end
+    capability_observation(result, context.host_evidence.capability)
     if preparation and unchanged_inputs then
         preparation.inputs = copy(unchanged_inputs)
         preparation.registry = context.registry_preparation

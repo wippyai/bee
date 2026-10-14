@@ -521,7 +521,6 @@ entries:
     preflight: bee.gov.binding:preflight
     migration_work: bee.gov.types:migration_work
     application_admission: bee.gov.types:governed_application_admission
-    capability_grants: bee.gov.types:capability_grants
     canonical: bee.values:canonical
     bounds: bee.values:bounds
 - name: application_admissions

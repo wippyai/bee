@@ -900,10 +900,8 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
         local db = assert(store.open())
         local monitors = assert(db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('runner.start_accepted', 'runner.monitored') LIMIT 1", {attempt.attempt_id}))
         db:release()
-        local runner = bounds.id(row.runner_pid)
-        local present = runner and process.monitor(runner)
-        if present then process.unmonitor(runner) end
-        if #monitors > 0 or present then
+        local present = #monitors > 0 or M.runner_present(row)
+        if present then
             local enforcement = M.supervise_grants(attempt)
             if enforcement then return enforcement end
             return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "startup outcome belongs to the runtime runner monitor"}})
@@ -966,7 +964,12 @@ function M.sweep(): Reply
     db:release()
     local outcomes: {{attempt_id: string, ok: boolean, code: string?}} = {}
     for index, attempt in ipairs(live) do
-        local result = attempt.execution_state == "exited" and M.cleanup_attempt(attempt, true) or M.reconcile_attempt(attempt)
+        local result: Reply
+        if attempt.execution_state == "exited" then result = M.cleanup_attempt(attempt, true)
+        else
+            result = M.supervise_grants(attempt) or transition(attempt.attempt_id, {
+                evidence = {kind = "reconcile.supervised", detail = "resource grants checked; child lifecycle belongs to its runtime owner"}})
+        end
         outcomes[index] = {attempt_id = attempt.attempt_id, ok = result.ok, code = result.error and result.error.code or nil}
     end
     return succeed({reconciled = #live, outcomes = outcomes})

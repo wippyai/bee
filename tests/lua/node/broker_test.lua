@@ -58,6 +58,29 @@ end
 
 local function define_tests()
     test.describe("node broker", function()
+        test.it("retains an authenticated window review in snapshots until its app clears it", function()
+            local events = assert(process.listen(client.EVENTS, {message = true}))
+            local id, view = open(events, {"accept", "", "", "review"})
+            local event = assert(client.event(raw_event(events, "review")))
+            test.eq(event.id, id)
+            test.eq(assert(event.review).approval_id, "request-1")
+            local state = assert(client.state(call("watch", {})))
+            local kept = false
+            local desktop: string? = nil
+            for _, instance in ipairs(state.running) do
+                if instance.id == id then
+                    kept = instance.review ~= nil and instance.review.title == "Use Progress?"
+                    desktop = instance.desktop
+                end
+            end
+            test.is_true(kept)
+            call("open", {app = BROKER, desktop = assert(desktop), args = {arguments = {"clear-review"}}})
+            local cleared = assert(client.event(raw_event(events, "review")))
+            test.eq(cleared.id, id)
+            test.is_nil(cleared.review)
+            view:close(); call("close", {id = id}); closed(events, id)
+            process.unlisten(events)
+        end)
         test.it("titles an app's window as the app says and tells the watchers", function()
             local events = assert(process.listen(client.EVENTS, {message = true}))
             local id, view = open(events, {"accept"})

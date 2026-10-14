@@ -26,8 +26,8 @@ local function define_tests()
     test.describe("Inbox frame", function()
         test.it("separates an access question into labelled facts and a local deadline", function()
             local state = model.new({"ws-1"})
-            local item = request("access-card", "pending", "Let this agent session use Hub and Library? It asks: Read the installed applications to find the progress app.")
-            item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {requester_name = "Claude Code"}}
+            local item = request("access-card", "pending", "Misleading legacy prompt must not supply card facts")
+            item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {requester_name = "Claude Code", review = {title = "Let this agent session use Hub and Library?", access = "Hub and Library", reason = "Read the installed applications to find the progress app."}}}
             state.requester_names = {["bee.test.requester"] = "Claude Code · hi"}
             model.select(state, "access-card")
             model.apply_read(state, "access-card", reply({ok = true, value = item}))
@@ -46,6 +46,22 @@ local function define_tests()
             end
             local compact = view.draw(40, 12, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
             for _, hit in ipairs(compact.hits) do test.is_false(hit.kind == "approve" or hit.kind == "deny") end
+        end)
+        test.it("uses proposal fields in list rows and offers Details on the opened card", function()
+            local state = model.new({"ws-1"})
+            local item = request("structured", "pending", "Let this agent session use Wrong? It asks: Wrong reason")
+            item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {review = {title = "Use Progress?", access = "Progress", reason = "Track the build"}}}
+            model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
+            local listed = tty.text.plain(table.concat(view.draw(120, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n"))
+            test.contains(listed, "Use Progress?")
+            test.contains(listed, "Can use Progress")
+            test.is_nil((listed:find("Wrong", 1, true)))
+            model.select(state, "structured")
+            model.apply_read(state, "structured", reply({ok = true, value = item}))
+            local opened = view.draw(120, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            local found = false
+            for _, button in ipairs(assert(opened.controls).overflow) do if button.kind == "technical" and button.key == "T" and button.label == "Details" then found = true end end
+            test.is_true(found)
         end)
         test.it("shows the whole question before enabling a decision", function()
             local state = model.new({"ws-1"})
@@ -119,7 +135,8 @@ local function define_tests()
         end)
         test.it("leads MCP pairing cards with the client name and the requested trait summary", function()
             local state = model.new({"ws-1"})
-            local item = request("mcp-card", "pending", "Let this agent session use Read Bee documentation and this client's thread? It asks: Pair external MCP client Terminal Claude. Bee shows its configuration once in the requesting terminal.")
+            local item = request("mcp-card", "pending", "A legacy paragraph with different content")
+            item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {review = {title = "Pair external MCP client Terminal Claude", access = "Read Bee documentation and this client's thread", reason = "Pair this terminal"}}}
             model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
             local shown = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
             test.contains(tty.text.plain(shown.rows[3]), "Pair external MCP client Terminal Claude")
@@ -146,7 +163,7 @@ local function define_tests()
                 if width >= 60 then
                     test.contains(title, "App")
                     test.contains(shown.rows[4], "Bash")
-                    test.contains(shown.rows[5], "expires 2026-09-09")
+                    test.contains(shown.rows[5], "Decide by:")
                 end
                 for y = 3, last do
                     local target = frames.hit(shown.hits, 2, y)
@@ -325,10 +342,12 @@ local function define_tests()
             local text = table.concat(frame.rows, "\n")
             test.is_true(text:find("Effect: Bash", 1, true) ~= nil)
             test.is_true(text:find("Digest", 1, true) ~= nil)
-            test.is_true(text:find("Allow once", 1, true) ~= nil)
+            test.is_nil((text:find("Allow once", 1, true)))
             local approve = false
             for _, hit in ipairs(frame.hits) do if hit.kind == "approve" then approve = true end end
-            test.is_true(approve)
+            test.is_false(approve)
+            model.toggle_technical(state)
+            test.contains(table.concat(view.draw(100, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n"), "A Approve")
         end)
         test.it("shows saved workspace names and effect cards at both frame sizes", function()
             for _, size in ipairs({{120, 36}, {80, 24}}) do
@@ -552,9 +571,9 @@ local function define_tests()
             test.is_true(detailed:find("F10 More", 1, true) ~= nil)
             local details_button = false
             for _, button in ipairs(assert(view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).controls).overflow) do
-                if button.kind == "technical" and button.label == "Hide technical" then details_button = true end
+                if button.kind == "technical" and button.label == "Hide details" then details_button = true end
             end
-            test.is_false(details_button)
+            test.is_true(details_button)
         end)
         test.it("shows keyboard guidance when no operation needs attention", function()
             local state = model.new({"ws-1"})

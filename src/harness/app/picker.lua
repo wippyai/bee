@@ -230,6 +230,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end)
     end
     local function leave_session()
+        client.review(launch, nil)
         conversation, draft, status, session_busy = nil, "", "", false
         queued_tasks, queued_text = {}, nil
         catalog_open = false
@@ -346,6 +347,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 frame.render(edit_frame, menu, preferences)
                 rows = edit_frame.rows
             elseif conversation then
+                client.review(launch, conversation.review)
                 session_frame = session_view.draw(width, height, preferences, conversation, draft, status, directory)
                 frame.render(session_frame, menu, preferences)
                 rows = session_frame.rows
@@ -434,7 +436,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     if result.conversation.session.snapshot.terminal == true and not result.conversation.node then
                         output:close()
                         client.title(launch, text.bound(result.conversation.title, 76))
-                        local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes)
+                        local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes, result.conversation.session.snapshot.thread_ref)
                         if closing then return finish(nil, view_error) end
                         client.title(launch, "Agents")
                         output = assert(tty.surface())

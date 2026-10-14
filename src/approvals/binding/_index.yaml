@@ -12,6 +12,14 @@ entries:
     - bee.security.approvals:grant_adapters_policy
     - bee.security.approvals:approval_store_policy
     - bee.security.approvals:approval_announce_policy
+- name: waiting
+  kind: function.lua
+  source: file://waiting_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
 - name: node_summary
   kind: function.lua
   source: file://node_summary_method.lua

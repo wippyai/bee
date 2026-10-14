@@ -758,8 +758,10 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         end
         fit()
         local current = scene()
+        local reviews: {[string]: client.Review} = {}
+        for _, instance in ipairs(running) do if instance.review then reviews[instance.id] = instance.review end end
         local drawn = render.draw(current, order(), contents, capture, preview, status, desktop_label(), preferences,
-            {alert = current_alert(), alert_popup = alert_popup, start = start, catalog = catalog, destinations = destinations(), editor = editor,
+            {reviews = reviews, alert = current_alert(), alert_popup = alert_popup, start = start, catalog = catalog, destinations = destinations(), editor = editor,
                 modal = modal, selection = active_selection, workspaces = workspaces_open})
         tab_hits = drawn.tabs
         assert(surface:present(drawn.rows, {cursor = drawn.cursor}))
@@ -915,6 +917,8 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             if active_selection and selection.binding(active_selection).view_id == id then active_selection = nil end
             forget(id)
             drop_app_dialog(id)
+        elseif event.kind == "review" and event.id then
+            for _, instance in ipairs(running) do if instance.id == event.id then instance.review = event.review end end
         elseif event.kind == "title" and event.id and event.title then
             local id, title = event.id, event.title
             for _, instance in ipairs(running) do
@@ -990,6 +994,14 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         local id = input_focus()
         local view = views[id]
         if view then
+            if event.type == "key" and event.action == "press" and event.key_type == "enter" and not event.ctrl and not event.alt then
+                for _, instance in ipairs(running) do
+                    if instance.id == id and instance.review then
+                        open_app("bee.approvals.inbox.app:app", {"--review", instance.review.approval_id})
+                        return
+                    end
+                end
+            end
             if alerts[id] and event.type == "key" and not event.ctrl and not event.alt then
                 local key = event.key:lower()
                 if key == "a" or key == "d" or key == "f" or key:match("^[1-4]$") then

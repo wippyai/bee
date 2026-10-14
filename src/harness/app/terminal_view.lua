@@ -2,6 +2,9 @@
 local tty = require("tty")
 local process = require("process")
 local channel = require("channel")
+local time = require("time")
+local logger = require("logger")
+local waiting = require("waiting")
 local presentation = require("presentation")
 local bounds = require("bounds")
 local client = require("client")
@@ -9,7 +12,7 @@ local input_event = require("input_event")
 local M = {}
 type Channel = channel.Channel
 function M.run(launch: client.Launch, session: string, input: tty.EventChannel,
-    lifecycle: Channel<process.Event>, closes: Channel<process.Message>): (boolean, string?)
+    lifecycle: Channel<process.Event>, closes: Channel<process.Message>, thread_id: string?): (boolean, string?)
     local raw = presentation.attach({session = session})
     local err: string? = nil
     local reply = bounds.object(raw)
@@ -25,14 +28,31 @@ function M.run(launch: client.Launch, session: string, input: tty.EventChannel,
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
     assert(view:resize(width, height))
+    local review_ticks = thread_id and assert(time.ticker("1s")) or nil
+    local reviews = review_ticks and review_ticks:channel()
+    local review_key = ""
+    local function publish_review()
+        if not thread_id then return end
+        local review, problem = waiting.read(thread_id)
+        if problem then logger:warn("Waiting request lookup failed", {error = problem}); return end
+        local key = review and (review.approval_id .. review.title) or ""
+        if key ~= review_key then
+            assert(client.review(launch, review))
+            review_key = key
+        end
+    end
+    publish_review()
     local closing = false
     while true do
         local snapshot, snapshot_error = view:snapshot()
         if snapshot_error then err = tostring(snapshot_error); break end
         if snapshot then assert(output:present(snapshot.rows, {cursor = snapshot.cursor})) end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), closes:case_receive(), updates:case_receive()})
+        local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), updates:case_receive()}
+        if reviews then cases[#cases + 1] = reviews:case_receive() end
+        local event = channel.select(cases)
         if not event.ok then break end
-        if event.channel == lifecycle and event.value.kind == process.event.CANCEL then closing = true; break
+        if reviews and event.channel == reviews then publish_review()
+        elseif event.channel == lifecycle and event.value.kind == process.event.CANCEL then closing = true; break
         elseif event.channel == closes then
             local close = client.close_request(launch, tostring(event.value:from()), event.value:payload():data())
             if close then client.close_reply(launch, close.request_id, {action = "accept"}); closing = true; break end
@@ -49,6 +69,8 @@ function M.run(launch: client.Launch, session: string, input: tty.EventChannel,
             end
         end
     end
+    if review_ticks then review_ticks:stop() end
+    client.review(launch, nil)
     output:close()
     view:close()
     presentation.attach({session = session, detach = true})

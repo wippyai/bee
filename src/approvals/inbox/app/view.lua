@@ -61,6 +61,7 @@ local function draw_review(width: integer, height: integer, preferences: appeara
         if model.window_cap(state) >= 1800000 then buttons[#buttons + 1] = {kind = "allow_30", key = "F", label = detail.reallow and "Re-allow 30 min" or "Allow 30 min", enabled = complete and idle} end
         if model.window_cap(state) > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = "Allow longer", enabled = complete and idle} end
         buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = complete and idle}
+        buttons[#buttons + 1] = {kind = "technical", key = "T", label = "Details", enabled = true, more = true}
         footer_buttons = buttons
     end
     local message = status
@@ -145,24 +146,21 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
             for _, line in ipairs(card_lines(card)) do source[#source + 1] = line end
             source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names)
         else
-            local prompt = model.prompt(item)
-            local access, exposure, reason = prompt:match("^Let this agent session use (.-)%?(.-) It asks: (.+)$")
-            source[#source + 1] = access and ("Let this agent session use " .. access .. "?") or prompt
+            local facts = model.review(item)
+            source[#source + 1] = facts.title
             source[#source + 1] = ""
             source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names)
             local summary = model.summary(item, 0)
-            local stated_access = item.proposal.payload.access_summary
-            source[#source + 1] = "Access: " .. (access or (type(stated_access) == "string" and model.text(stated_access, 8192))
+            source[#source + 1] = "Access: " .. (facts.access
                 or (summary.effect ~= "operation" and summary.effect ~= "attempt" and summary.effect or "This action"))
-            if reason then source[#source + 1] = "Reason: " .. reason end
-            if exposure and exposure ~= "" then source[#source + 1] = model.text(exposure, 8192) end
+            if facts.reason then source[#source + 1] = "Reason: " .. facts.reason end
+            if facts.exposure and facts.exposure ~= "" then source[#source + 1] = facts.exposure end
             local command = item.proposal.payload.command
             if type(command) == "string" then source[#source + 1] = "Command: " .. model.text(command, 8192) end
             for _, line in ipairs(model.permission_lines(item)) do source[#source + 1] = line end
             source[#source + 1] = "Lasts: " .. model.duration(item)
         end
-        local deadline = clock.parse(item.expires_at)
-        source[#source + 1] = "Decide by: " .. (deadline and deadline:in_local():format("2006-01-02 15:04 MST") or item.expires_at)
+        source[#source + 1] = "Decide by: " .. clock.local_deadline(item.expires_at)
         if not card then
             source[#source + 1] = ""
             local consequence = item.proposal.payload.consequence
@@ -192,6 +190,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
     if cap > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = detail.reallow and "Re-allow longer" or "Allow longer", enabled = idle, more = true} end
     buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
     buttons[#buttons + 1] = {kind = "back", key = "Esc", label = "Requests", enabled = true}
+    buttons[#buttons + 1] = {kind = "technical", key = "T", label = "Details", enabled = true, more = true}
     if one_time then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Allow future updates", enabled = idle, more = true} end
     buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your access", enabled = true, more = true}
     if detail.requesting_session then buttons[#buttons + 1] = {kind = "source", key = "S", label = "Conversation", enabled = true, more = true} end
@@ -211,11 +210,30 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if state.grants_view then return draw_windows(width, height, preferences, state, offset, status) end
     local open = state.detail
     local chosen = model.selected_row(state)
-    if open and chosen and open.approval_id == chosen.approval_id and leases.is_review(open) and not (state.longer and slice.review_complete) then
+    if open and chosen and open.approval_id == chosen.approval_id and leases.is_review(open) and not state.technical and not (state.longer and slice.review_complete) then
         return draw_review(width, height, preferences, state, open, slice, status)
     end
     if open and chosen and open.approval_id == chosen.approval_id and not state.technical then
         return draw_prompt(width, height, preferences, state, open, offset, status)
+    end
+    if open and state.technical then
+        local painter = frame.new(width, height, preferences)
+        frame.header(painter, "REQUEST DETAILS", "Read-only")
+        local lines = {"Request: " .. open.approval_id, "Requester: " .. open.requester_id, "Owner: " .. open.owner_node,
+            "Digest: " .. open.proposal_digest, "Revision: " .. tostring(open.revision)}
+        if open.decider_id then lines[#lines + 1] = "Decided by: " .. open.decider_id end
+        local selected = model.summary(open, 0)
+        lines[#lines + 1] = "Effect: " .. selected.effect
+        for _, value in ipairs(model.permission_lines(open)) do lines[#lines + 1] = value end
+        for _, value in ipairs(model.payload_lines(open)) do lines[#lines + 1] = value end
+        local wrapped: {string} = {}
+        for _, value in ipairs(lines) do for _, row in ipairs(prompt_lines(value, width, "")) do wrapped[#wrapped + 1] = row end end
+        local visible = math.floor(math.max(1, height - 5))
+        local top = math.floor(math.max(0, math.min(offset, math.max(0, #wrapped - visible))))
+        for slot = 1, visible do if wrapped[top + slot] then frame.line(painter, slot + 2, wrapped[top + slot], painter.theme.text) end end
+        frame.footer(painter, "", frame.hints({{key = "↑↓", verb = "scroll"}}), nil,
+            {{kind = "technical", key = "T", label = "Hide details", enabled = true, more = true}, {kind = "back", key = "Esc", label = "Request", enabled = true}})
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = visible, offset = top}
     end
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
@@ -257,8 +275,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local row = rows[window.offset + slot]
         if not row then break end
         local card = model.card(row.view)
-        local capabilities, request = row.prompt:match("^Let this agent session use (.-)%? It asks: (.+)$")
-        local title = card and card.title or request or row.prompt
+        local review = model.review(row.view)
+        local title = card and card.title or review.title
         local facts = model.permission_lines(row.view)
         if card then
             facts = {}
@@ -267,16 +285,16 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             end
         end
         local summary = #facts > 0 and table.concat(facts, " · ") or (row.effect ~= "operation" and row.effect ~= "attempt" and (glyphs.capability .. " Can use " .. row.effect) or "Open to read what this allows")
-        if capabilities then summary = glyphs.capability .. " Can use " .. capabilities end
+        if review.access then summary = glyphs.capability .. " Can use " .. review.access end
         local workspace = locations[row.workspace_id]
         if workspace then summary = summary .. " · " .. workspace.label .. " / " .. workspace.folder end
         local one_time = row.view.proposal.ref == leases.ACTIVATION
         local scope = not one_time and (row.view.window_max_ttl_ms or 0) >= 1800000 and "once/30 min" or "once"
         if row.view.window_grant then
             local grant = row.view.window_grant
-            scope = windows.duration(grant.until_ms - grant.granted_ms) .. " until " .. grant.until_at
+            scope = windows.duration(grant.until_ms - grant.granted_ms) .. " until " .. clock.local_deadline(grant.until_at)
         end
-        local expiry = width < 60 and row.expires_at:sub(6, 10) or ("expires " .. row.expires_at:sub(1, 16))
+        local expiry = "Decide by: " .. clock.local_deadline(row.expires_at)
         local separator = width < 60 and " " or " · "
         local meta = state_label(row) .. separator .. (row.view.proposal.ref == "bee.gateway:access" and model.duration(row.view) or scope) .. separator .. expiry
         if card and width >= 100 then meta = meta .. " · " .. card.scope end
@@ -326,7 +344,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local can_open = selected ~= nil and detail == nil
         local buttons: {frame.Button} = {}
         if #rows > 0 then buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = can_open, primary = true} end
-        if pending_detail then
+        if detail then buttons[#buttons + 1] = {kind = "technical", key = "T", label = "Hide details", enabled = true, more = true} end
+        if pending_detail and not state.technical then
             buttons[#buttons + 1] = {kind = "approve", key = "A", label = "Allow once", enabled = idle, primary = true}
             if model.window_cap(state) >= 1800000 then buttons[#buttons + 1] = {kind = "allow_30", key = "F", label = detail.reallow and "Re-allow 30 min" or "Allow 30 min", enabled = idle} end
             if model.window_cap(state) > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = "Allow longer", enabled = idle} end

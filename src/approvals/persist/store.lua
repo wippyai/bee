@@ -169,6 +169,9 @@ function M.attention_count(tx: sql.Transaction, workspace: string, now: integer)
     if type(row.count) ~= "number" or row.count < 0 or row.count ~= math.floor(row.count) then return nil, "attention count is corrupt" end
     return math.floor(row.count), nil
 end
+function M.waiting(tx: sql.Transaction, thread_id: string, now: integer): ({unknown}?, string?)
+    return query(tx, "SELECT approval_id, proposal_json, prompt_json FROM bee_approval_requests WHERE thread_id = ? AND state = 'pending' AND expires_ms > ? AND COALESCE(json_extract(contract_json, '$.presentation'), 'inbox') = 'inbox' ORDER BY created_at, approval_id LIMIT 1", {thread_id, now})
+end
 function M.attention_target(tx: sql.Transaction, workspace: string, now: integer): (unknown?, string?)
     local rows, err = query(tx, "SELECT approval_id, prompt_json FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ? AND COALESCE(json_extract(contract_json, '$.presentation'), 'inbox') = 'inbox' ORDER BY created_at DESC, approval_id DESC LIMIT 1", {workspace, now})
     if err or not rows then return nil, err or "read attention target" end

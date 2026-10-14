@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.harness.security
 entries:
+- name: waiting_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:waiting, bee.threads.binding:get]
+    effect: allow
 - name: launch_spawn_policy
   kind: security.policy
   meta:

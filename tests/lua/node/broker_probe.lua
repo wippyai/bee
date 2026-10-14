@@ -32,6 +32,7 @@ local function main(options: unknown)
         assert(client.query(launch, {kind = "text", title = launch.arguments[2], accept = "Send", initial = "draft"}))
     end
     if launch.arguments[3] and launch.arguments[3] ~= "" then assert(client.checkpoint(launch, launch.arguments[3])) end
+    if launch.arguments[4] == "review" then assert(client.review(launch, {approval_id = "request-1", title = "Use Progress?"})) end
     if launch.arguments[4] == "navigate" then assert(client.navigate(launch, launch.definition_id, {"to", "here"})) end
     while true do
         local cases = {closes:case_receive(), close_results:case_receive(), answers:case_receive(),
@@ -65,7 +66,10 @@ local function main(options: unknown)
                 if type(data) == "table" then lines[3] = "checkpoint " .. tostring(data.error_code) .. "|" .. tostring(data.error) end
             elseif selected.channel == navigations then
                 local args = client.navigation(launch, from, data)
-                if args then lines[4] = "navigated " .. table.concat(args, " ") end
+                if args then
+                    lines[4] = "navigated " .. table.concat(args, " ")
+                    if args[1] == "clear-review" then assert(client.review(launch, nil)) end
+                end
             end
             present()
         end

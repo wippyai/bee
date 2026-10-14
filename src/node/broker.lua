@@ -9,6 +9,7 @@ local M = {}
 
 M.READY = "bee.app.ready"
 M.TITLE = "bee.app.title"
+M.REVIEW = "bee.app.review"
 M.CLOSE = "bee.app.close"
 M.CLOSE_REPLY = "bee.app.close.reply"
 M.CLOSE_RESULT = "bee.app.close.result"
@@ -18,7 +19,7 @@ M.CHECKPOINT = "bee.app.checkpoint"
 M.CHECKPOINT_RESULT = "bee.app.checkpoint_result"
 M.REQUEST = "bee.app.request"
 M.NAVIGATE = "bee.app.navigate"
-M.TOPICS = {M.READY, M.TITLE, M.CLOSE_REPLY, M.QUERY, M.CHECKPOINT, M.REQUEST}
+M.TOPICS = {M.READY, M.TITLE, M.REVIEW, M.CLOSE_REPLY, M.QUERY, M.CHECKPOINT, M.REQUEST}
 
 type Object = {[string]: unknown}
 type Close = {request_id: string, action: "accept" | "cancel" | "confirm", title: string, message: string, accept: string}

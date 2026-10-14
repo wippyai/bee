@@ -385,8 +385,17 @@ local function effect_of(view: ApprovalView): (string, string)
     return effect, target
 end
 function M.prompt(view: ApprovalView): string
-    local prompt = M.text(view.prompt.text, 16384)
-    return (prompt:gsub("^Session bs:%S+ in workspace %S+ asks ", "The agent asks to use "))
+    return M.text(view.prompt.text, 16384)
+end
+type Review = {title: string, access: string?, reason: string?, exposure: string?}
+function M.review(view: ApprovalView): Review
+    local fields = bounds.object(view.proposal.payload.review)
+    local title = fields and bounds.text(fields.title, 8192)
+    local access = fields and bounds.text(fields.access, 8192) or bounds.text(view.proposal.payload.access_summary, 8192)
+    local reason = fields and bounds.text(fields.reason, 8192)
+    local exposure = fields and bounds.text(fields.exposure, 8192)
+    return {title = title and M.text(title, 8192) or M.prompt(view), access = access and M.text(access, 8192),
+        reason = reason and M.text(reason, 8192), exposure = exposure and M.text(exposure, 8192)}
 end
 function M.requester_name(view: ApprovalView, names: {[string]: string}?): string
     local supplied = names and names[view.requester_id] or bounds.line(view.proposal.payload.requester_name, 160)

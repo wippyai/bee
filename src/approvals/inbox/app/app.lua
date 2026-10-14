@@ -163,7 +163,9 @@ local function main(value: unknown)
                 local body = envelope and envelope.ok == true and bounds.object(envelope.value) or nil
                 local snapshot = body and bounds.object(body.value)
                 local title = snapshot and bounds.line(snapshot.title, 160)
-                if title and title ~= "" then state.requester_names[row.requester_id] = title end
+                local profile = snapshot and bounds.object(snapshot.effective_profile)
+                local requester = bounds.line(row.view.proposal.payload.requester_name, 160) or (profile and bounds.line(profile.name, 160))
+                if title and title ~= "" then state.requester_names[row.requester_id] = requester and requester ~= title and (requester .. " · " .. title) or title end
             end
         end
         if answer_form then
@@ -390,11 +392,12 @@ local function main(value: unknown)
         dialog = {request_id = request_id, kind = kind, confirmation = confirmation}
         dirty = true
     end
-    if #launch.arguments == 2 and launch.arguments[1] == "--approval" then model.select(state, launch.arguments[2]) end
+    if #launch.arguments == 2 and (launch.arguments[1] == "--approval" or launch.arguments[1] == "--review") then model.select(state, launch.arguments[2]) end
     state.detail = nil
     perform(function()
         refresh()
         if state.selected and not state.rows[state.selected] then model.select(state, nil) end
+        if launch.arguments[1] == "--review" then open_selected() end
     end)
     while running do
         if dirty then
@@ -417,6 +420,17 @@ local function main(value: unknown)
                 hits = drawn.hits
                 offset = drawn.offset
                 capacity = drawn.capacity
+                if state.detail and not shown_review then
+                    while true do
+                        local queued = channel.select({input:case_receive()}, true)
+                        if queued.default or not queued.ok then break end
+                        local data = queued.value
+                        if data.type == "resize" then width, height = data.width, data.height; dirty = true
+                        elseif data.type == "close" then running = false end
+                    end
+                    drawn = view.draw(width, height, preferences, state, rows, offset, status, slice, workspace_names)
+                    frame.render(drawn, menu, preferences); hits = drawn.hits; offset = drawn.offset; capacity = drawn.capacity
+                end
                 assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
                 shown_review = nil
                 local current = model.confirmation(state)
@@ -457,14 +471,15 @@ local function main(value: unknown)
             end
         elseif event.channel == navigations then
             local args = client.navigation(launch, tostring(event.value:from()), event.value:payload():data())
-            if args and #args == 2 and args[1] == "--approval" then
+            if args and #args == 2 and (args[1] == "--approval" or args[1] == "--review") then
                 if state.selected ~= args[2] then
                     model.select(state, args[2]); state.detail = nil; shown_review = nil; review_progress = nil; review_end = 0; offset = 0
                 end
                 state.grants_view = false; dirty = true
                 perform(function()
                     refresh()
-                    if not state.rows[args[2]] then status = "Request is unavailable" end
+                    if not state.rows[args[2]] then status = "Request is unavailable"
+                    elseif args[1] == "--review" then open_selected() end
                 end)
             end
         elseif event.channel == answers then
@@ -589,12 +604,14 @@ local function main(value: unknown)
                         else status = "This request has no source session" end
                         dirty = true
                     elseif key == "enter" or text == "o" then open_selected()
+                    elseif text == "t" and state.detail then model.toggle_technical(state); offset = 0; shown_review = nil; dirty = true
                     elseif text == "a" then ask("approve")
                     elseif text == "d" then ask("deny")
                     elseif text == "w" then ask("withdraw")
                     elseif text == "r" then perform(function() if state.pending then recover() else refresh() end end)
                     elseif key == "esc" or key == "escape" then
                         if state.longer then state.longer = false; dirty = true
+                        elseif state.technical then state.technical = false; offset = 0; dirty = true
                         elseif state.detail then state.detail = nil; offset = 0; shown_review = nil; dirty = true else running = false end
                     end
                 elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
@@ -615,6 +632,7 @@ local function main(value: unknown)
                         elseif hit.kind == "requests" then state.grants_view = false; offset = 0; perform(refresh); dirty = true
                         elseif hit.kind == "leases" then state.grants_view = true; offset = 0; perform(refresh); dirty = true
                         elseif hit.kind == "lease" then ask_lease("lease_propose")
+                        elseif hit.kind == "technical" then model.toggle_technical(state); offset = 0; shown_review = nil; dirty = true
                         elseif hit.kind == "row" then
                             local row = rows[hit.index]
                             if row then model.select(state, row.approval_id); dirty = true end
@@ -624,7 +642,8 @@ local function main(value: unknown)
                                 local _, err = client.navigate(launch, "bee.harness.app:app", {"--session", detail.requesting_session})
                                 status = err or "Opening requesting session"; dirty = true
                             end
-                        elseif hit.kind == "back" then state.detail = nil; offset = 0; shown_review = nil; dirty = true
+                        elseif hit.kind == "back" then
+                            if state.technical then state.technical = false else state.detail = nil end; offset = 0; shown_review = nil; dirty = true
                         elseif hit.kind == "open" then open_selected()
                         elseif hit.kind == "approve" or hit.kind == "deny" or hit.kind == "withdraw" then ask(hit.kind, "click")
                         elseif hit.kind == "refresh" then perform(function() if state.pending then recover() else refresh() end end)

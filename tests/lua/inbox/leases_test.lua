@@ -339,6 +339,10 @@ local function define_tests()
             local technical = view.draw(140, 30, appearance.defaults(), state, model.rows(state), 0, "", slice)
             local lease_key: string? = nil
             for _, button in ipairs(assert(technical.controls).buttons) do if button.kind == "lease" then lease_key = button.key end end
+            test.eq(lease_key, nil)
+            state.technical = false
+            local readable = view.draw(140, 30, appearance.defaults(), state, model.rows(state), 0, "", slice)
+            for _, button in ipairs(assert(readable.controls).buttons) do if button.kind == "lease" then lease_key = button.key end end
             test.eq(lease_key, "E")
             leases.apply_list(slice, "ws-1", "ws-1", grants_reply({ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "active", applies_used = 0,
                 revision = 1, granted_by = "p", uses = {}, envelope = {}, max_applies = 1}}}}))

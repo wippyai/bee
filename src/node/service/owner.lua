@@ -57,10 +57,10 @@ type Dialog = {request_id: string, client_request_id: string, kind: string, titl
 -- an app that answers close requests; closing is the close request it is
 -- answering; args are what it was opened with, kept with its checkpoint.
 type AppAlias = {stable: string, instance: string, workspace_id: string, definition_id: string}
-type Instance = {id: string, app: string, title: string, desktop: string, workspace: string, view: tty.Viewport, pid: string, terminal: boolean,
+type Instance = {review: client.Review?, id: string, app: string, title: string, desktop: string, workspace: string, view: tty.Viewport, pid: string, terminal: boolean,
     execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
     singleton: boolean, revision: string?, relaunch: boolean?, alias: AppAlias}
-type SavedInstance = {id: string, app: string, title: string, desktop: string, workspace: string, handle: string, pid: string, terminal: boolean,
+type SavedInstance = {review: client.Review?, id: string, app: string, title: string, desktop: string, workspace: string, handle: string, pid: string, terminal: boolean,
     execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
     singleton: boolean, revision: string?, relaunch: boolean?, alias: AppAlias?}
 type SavedWatcher = {pid: string, desktop: string}
@@ -312,7 +312,7 @@ local function main(saved: unknown)
     local alerts: {[string]: client.Alert} = {}
 
     local function describe(instance: Instance): {[string]: unknown}
-        return {id = instance.id, app = instance.app, title = instance.title, desktop = instance.desktop, pid = instance.pid, execution_id = instance.execution_id}
+        return {review = instance.review, id = instance.id, app = instance.app, title = instance.title, desktop = instance.desktop, pid = instance.pid, execution_id = instance.execution_id}
     end
 
     -- dialog_of is the wire form of an instance's pending dialog.
@@ -501,7 +501,7 @@ local function main(saved: unknown)
                         local workspace = type(item.workspace) == "string" and item.workspace or ""
                         local alias, alias_error = attest(item.app, workspace, "bee.application:" .. workspace .. ":" .. item.id, item.alias)
                         if not alias then error(alias_error or "restored application membership is unavailable") end
-                        instances[item.id] = {id = item.id, app = item.app, title = item.title, desktop = item.desktop,
+                        instances[item.id] = {review = client.review(item.review), id = item.id, app = item.app, title = item.title, desktop = item.desktop,
                             workspace = type(item.workspace) == "string" and item.workspace or "",
                             view = view, pid = item.pid, terminal = item.terminal == true,
                             execution_id = type(item.execution_id) == "string" and item.execution_id or tostring(uuid.v7()), token = type(item.token) == "string" and item.token or "", negotiate = item.negotiate == true,
@@ -744,6 +744,13 @@ local function main(saved: unknown)
         end
         if topic == broker.READY then
             instance.negotiate = broker.ready(data) == true
+        elseif topic == broker.REVIEW then
+            local body = bounds.object(data)
+            local review = body and client.review(body.review)
+            if review or (body and body.review == false) then
+                instance.review = review
+                broadcast({kind = "review", id = instance.id, review = review or false})
+            end
         elseif topic == broker.TITLE then
             local title = broker.title(data)
             if title and title ~= instance.title then
@@ -1230,7 +1237,7 @@ local function main(saved: unknown)
     local function handover(): Saved
         local saved_instances: {SavedInstance} = {}
         for _, instance in pairs(instances) do
-            saved_instances[#saved_instances + 1] = {id = instance.id, app = instance.app, title = instance.title,
+            saved_instances[#saved_instances + 1] = {review = instance.review, id = instance.id, app = instance.app, title = instance.title,
                 desktop = instance.desktop, workspace = instance.workspace, handle = instance.view:handle(), pid = instance.pid, terminal = instance.terminal,
                 execution_id = instance.execution_id, token = instance.token, negotiate = instance.negotiate, closing = instance.closing, dialog = instance.dialog,
                 args = instance.args, resume_schema = instance.resume_schema, singleton = instance.singleton,

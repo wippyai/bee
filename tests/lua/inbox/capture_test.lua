@@ -19,7 +19,7 @@ local function define_tests()
             capture("empty", view.draw(120, 40, appearance.defaults(), state, {}, 0, "", leases.new()).rows)
             local item = assert(model.decode_view({approval_id = "request", workspace_id = "workspace", requester_id = "bs:node:workspace:session",
                 requesting_session = "bs:node:workspace:session", request_kind = "permission", policy = "agent-access", owner_node = "node", owner_incarnation = 1,
-                proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {requester_name = "Clock helper", duration = "For this agent session", access_summary = "Find and install apps", consequence = "Installed apps can change this workspace."}},
+                proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {review = {title = "Let this agent session use Hub and Library?", access = "Hub and Library", reason = "Find and install a clock for my desktop."}, requester_name = "Clock helper", duration = "For this agent session", access_summary = "Find and install apps", consequence = "Installed apps can change this workspace."}},
                 proposal_digest = string.rep("a", 64), prompt = {text = "Let this agent session use Hub and Library? It asks: Find and install a clock for my desktop."},
                 revision = 1, state = "pending", created_at = "2026-10-13T01:18:41.184Z", expires_at = "2026-10-14T01:18:41.184Z"}))
             model.apply_read(state, "request", {kind = "success", value = item})
@@ -27,11 +27,16 @@ local function define_tests()
             capture("list", view.draw(120, 40, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows)
             model.apply_read(state, "request", {kind = "success", value = item})
             capture("card", view.draw(120, 40, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows)
+            model.toggle_technical(state)
+            capture("card-details", view.draw(120, 40, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows)
             local scene = desktop.add(desktop.new(120, 40), "agent", "agent", "Clock helper")
             scene = desktop.add(scene, "inbox", "inbox", "Needs you", nil, nil, false)
             scene = desktop.attend(scene, "inbox")
             capture("new-request-notice", shell.draw(scene, {"agent", "inbox"}, {}, nil, nil, "", "My workspace", appearance.defaults(),
                 {alert = {id = "inbox", count = 1, title = "Let Clock helper use Hub and Library?", approval_id = "request"}}).rows)
+            capture("waiting-request-banner", shell.draw(scene, {"agent", "inbox"}, {}, nil, nil, "", "My workspace", appearance.defaults(),
+                {alert_popup = false, reviews = {agent = {title = "Let this agent session use Hub and Library?", approval_id = "request"}},
+                    alert = {id = "inbox", count = 1, title = "Let this agent session use Hub and Library?", approval_id = "request"}}).rows)
         end)
     end)
 end

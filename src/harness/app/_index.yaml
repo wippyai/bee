@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.harness.app
 entries:
+- name: waiting
+  kind: library.lua
+  source: file://waiting.lua
+  modules: [funcs]
+  imports:
+    bounds: bee.values:bounds
 - name: request
   kind: library.lua
   source: file://request.lua
@@ -46,6 +52,7 @@ entries:
     client: bee.app:client
     text: bee.ui:text
     bounds: bee.values:bounds
+    waiting: bee.harness.app:waiting
     window_request: bee.harness.app:request
     placement_decode: bee.placement:decode
     input_event: bee.harness.app:input
@@ -89,6 +96,7 @@ entries:
     policies:
     - bee.security.approvals:confirmation_client
     - bee.security.approvals:confirmation_authority
+    - bee.harness.security:waiting_policy
     - bee.harness.security:carrier_policy
     - bee.harness.security:launch_spawn_policy
     - bee.harness.security:interactive_session_policy
@@ -123,6 +131,7 @@ entries:
   - json
   - funcs
   imports:
+    waiting: bee.harness.app:waiting
     names: bee.app:names
     sessions: bee.threads.sessions.client:sessions
     sessions_protocol: bee.threads.sessions.types:protocol
@@ -246,7 +255,10 @@ entries:
   - tty
   - process
   - channel
+  - time
+  - logger
   imports:
+    waiting: bee.harness.app:waiting
     presentation: bee.harness.service:presentation
     bounds: bee.values:bounds
     client: bee.app:client

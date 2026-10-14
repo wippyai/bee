@@ -44,4 +44,13 @@ function M.elapsed_seconds(current_nanoseconds: integer, previous_nanoseconds: i
     return (current_nanoseconds - previous_nanoseconds) / 1000000000
 end
 
+function M.local_deadline(value: string): string
+    local deadline = M.parse(value)
+    if not deadline then return value end
+    local minutes = math.ceil((M.epoch_seconds(deadline) - M.epoch_seconds(time.now())) / 60)
+    local relative = minutes <= 0 and "passed" or (minutes < 60 and ("in " .. tostring(minutes) .. " min")
+        or (minutes < 1440 and ("in " .. tostring(math.ceil(minutes / 60)) .. " hr") or ("in " .. tostring(math.ceil(minutes / 1440)) .. " days")))
+    return relative .. " · " .. deadline:in_local():format("2006-01-02 15:04 MST")
+end
+
 return M

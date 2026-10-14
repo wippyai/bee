@@ -15,6 +15,12 @@ local function define_tests()
             test.is_true(arrival.rows[1] ~= settled.rows[1], "the badge never stops highlighting")
             test.is_nil((table.concat(settled.rows):find("Review access to Hub?", 1, true)))
         end)
+        test.it("keeps a review banner in the waiting window after the arrival popup fades", function()
+            local scene = model.add(model.new(120, 40), "agent", "agent", "Worker")
+            local shown = render.draw(scene, {"agent"}, {}, nil, nil, "", "Workspace", appearance.defaults(),
+                {alert_popup = false, reviews = {agent = {title = "Use Progress?", approval_id = "approval-1"}}})
+            test.contains(table.concat(shown.rows, "\n"), "Needs you: Use Progress? · Enter review")
+        end)
         test.it("shows a counted alert and request card while preserving occupied and idle keyboards", function()
             for _, occupied in ipairs({true, false}) do
                 local scene = model.add(model.new(160, 45), "agent", "agent", "Worker")

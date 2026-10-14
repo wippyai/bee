@@ -1854,6 +1854,30 @@ operations.effect_queue = op_effect_queue
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
+preparations.waiting = function(executor: funcs.Executor, actor: string, object: Object): (Object?, Result?)
+    if bounds.fields(object, {"thread_id"}) then return nil, failure("INVALID_ARGUMENT", "waiting needs only thread_id") end
+    local id = bounds.id(object.thread_id)
+    if not id then return nil, failure("INVALID_ARGUMENT", "invalid thread_id") end
+    local summary, denied = thread_reply(executor, M.THREAD_GET, {thread_id = id})
+    if not summary then return nil, denied end
+    local membership = bounds.object(summary.membership)
+    if not membership or membership.active ~= true then return nil, failure("DENIED", "thread membership is inactive") end
+    return {thread_id = id}, nil
+end
+operations.waiting = function(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    if not prepared then return failure("DENIED", "thread access was not checked") end
+    local rows, err = store.waiting(tx, tostring(prepared.thread_id), now)
+    if not rows or err then return storage(err or "read waiting request") end
+    local item = rows[1] and bounds.object(rows[1])
+    if not item then return success({request = false}, false) end
+    local proposal = type(item.proposal_json) == "string" and bounds.object(json.decode(item.proposal_json))
+    local payload = proposal and bounds.object(proposal.payload)
+    local review = payload and bounds.object(payload.review)
+    local prompt = type(item.prompt_json) == "string" and bounds.object(json.decode(item.prompt_json))
+    local title = review and bounds.text(review.title, 8192) or prompt and bounds.text(prompt.text, 16384)
+    return success({request = {approval_id = item.approval_id, title = (title or "Review request"):gsub("%c", " "):sub(1, 160)}}, false)
+end
+function M.waiting(value: unknown): Reply return run(value, "waiting") end
 function M.grant(value: unknown): Reply return run(value, "grant") end
 function M.effect(value: unknown): Reply return run(value, "effect") end
 function M.events(value: unknown): Reply return run(value, "events") end

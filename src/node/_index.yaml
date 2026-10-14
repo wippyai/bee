@@ -17,6 +17,7 @@ entries:
   modules: [system, process]
   imports:
     protocol: bee.hive:protocol
+    bounds: bee.values:bounds
     appearance: bee.ui:appearance
 - name: route
   kind: registry.entry

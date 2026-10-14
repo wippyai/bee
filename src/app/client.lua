@@ -61,6 +61,13 @@ function M.title(launch: Launch, title: string): (boolean, string?)
     if not sent then return false, tostring(err) end
     return true, nil
 end
+type Review = {approval_id: string, title: string}
+function M.review(launch: Launch, review: Review?): (boolean, string?)
+    if review and (not bounds.id(review.approval_id) or not bounds.line(review.title, 160)) then return false, "Invalid review banner" end
+    local sent, err = process.send(launch.broker_pid, "bee.app.review", {version = 1, instance_id = launch.instance_id,
+        id = launch.view_id, launch_token = launch.launch_token, review = review or false})
+    return sent == true, err and tostring(err)
+end
 type CloseRequest = {request_id: string}
 function M.close_request(launch: Launch, sender: string, value: unknown): CloseRequest?
     if sender ~= launch.broker_pid or type(value) ~= "table" or value.version ~= 1

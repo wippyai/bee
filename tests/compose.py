@@ -837,6 +837,16 @@ def settings_area_fixture(src):
     add_modules(src / "apps/settings/app/_index.yaml", "edit_mode", ["ctx"])
 
 
+def hold_inbox_review(src):
+    """Queue input while the first opened card has not reached its display."""
+    app = src / "approvals/inbox/app/app.lua"
+    replace_once(app, 'local tty = require("tty")', 'local tty = require("tty")\nlocal ctx = require("ctx")')
+    replace_once(app, '    while running do', '    local review_held = false\n    while running do')
+    replace_once(app, '                local drawn = view.draw', '                local controller = ctx.get("bee.test.inbox.review")\n                if state.detail and not review_held and type(controller) == "string" then\n                    review_held = true\n' + textwrap.indent(message_barrier('controller', 'bee.test.inbox.review', 'bee.test.inbox.display', '{}', 'inbox display barrier sender'), " " * 20) + '\n                end\n                local drawn = view.draw')
+    replace_once(app, '    local function act(kind: string, ttl_ms: integer?, gesture: string?)', '    local function act(kind: string, ttl_ms: integer?, gesture: string?)\n        local controller = ctx.get("bee.test.inbox.review")\n        if type(controller) == "string" then\n            assert(process.send(controller, "bee.test.inbox.decide", {approval_id = state.selected, kind = kind}))\n        end')
+    add_modules(src / "approvals/inbox/app/_index.yaml", "app", ["ctx"])
+
+
 def compose():
     shutil.rmtree(COMPOSITION, ignore_errors=True)
     src = COMPOSITION / "src"
@@ -880,6 +890,7 @@ def compose():
     malformed_overlay_listing(src)
     fixture_hub_updates(src)
     settings_area_fixture(src)
+    hold_inbox_review(src)
     shutil.copy2(ROOT / "src/placement/native/service/materialization.lua",
                  TESTS / "lua/placement_publication/materialization.lua")
     shutil.copy2(ROOT / "src/placement/docker/service/image_owner.lua",

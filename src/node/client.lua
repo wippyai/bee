@@ -4,9 +4,11 @@ local protocol = require("protocol")
 local system = require("system")
 local process = require("process")
 local appearance = require("appearance")
+local bounds = require("bounds")
 
 -- pid is the app's process on its node.
-type Instance = {id: string, app: string, title: string, desktop: string, pid: string, execution_id: string?}
+type Review = {title: string, approval_id: string}
+type Instance = {review: Review?, id: string, app: string, title: string, desktop: string, pid: string, execution_id: string?}
 -- A dialog an app asks the person: id is the app instance it belongs to;
 -- the answer names request_id.
 type Dialog = {id: string, request_id: string, kind: "confirm" | "text", title: string, message: string, accept: string, initial: string}
@@ -26,7 +28,7 @@ type Desktop = {id: string, title: string, workspace: string, shown: boolean}
 -- app list could not be refreshed and is out of date, and "attention" the id of an app that needs the
 -- person, which a display brings forward.
 type Alert = {id: string, count: integer, title: string, approval_id: string, app: string?, desktop: string?, workspace: string?}
-type Event = {changed: boolean?, alert: Alert?, kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
+type Event = {review: Review?,changed: boolean?, alert: Alert?, kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
     workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?, attention: boolean?, problem: string?}
 -- What a node reports to list and watch; owner is the PID of the node's
 -- owner process, which a watcher monitors to learn that the node stopped,
@@ -70,12 +72,18 @@ function M.call(node: string, op: string, args: {[string]: unknown}): ({[string]
     return reply.value or {}, nil
 end
 
+function M.review(value: unknown): Review?
+    if type(value) ~= "table" then return nil end
+    local id, title = bounds.id(value.approval_id), bounds.line(value.title, 160)
+    if not id or not title then return nil end
+    return {approval_id = id, title = title}
+end
 local function instance(value: unknown): Instance?
     if type(value) ~= "table" or type(value.id) ~= "string" or type(value.app) ~= "string"
         or type(value.title) ~= "string" or type(value.desktop) ~= "string" or type(value.pid) ~= "string" then
         return nil
     end
-    return {id = value.id, app = value.app, title = value.title, desktop = value.desktop, pid = value.pid, execution_id = type(value.execution_id) == "string" and value.execution_id or nil}
+    return {review = M.review(value.review), id = value.id, app = value.app, title = value.title, desktop = value.desktop, pid = value.pid, execution_id = type(value.execution_id) == "string" and value.execution_id or nil}
 end
 
 -- dialog decodes a dialog an app asks.
@@ -205,6 +213,10 @@ function M.event(data: unknown): Event?
         event.id = data.id
         if data.alert ~= nil then event.alert = M.alert(data.alert); if not event.alert then return nil end end
         if data.changed == true then event.changed = true end
+    elseif data.kind == "review" then
+        if type(data.id) ~= "string" then return nil end
+        event.id, event.review = data.id, M.review(data.review)
+        if data.review ~= false and not event.review then return nil end
     elseif data.kind == "title" then
         if type(data.id) ~= "string" or type(data.title) ~= "string" then return nil end
         event.id, event.title = data.id, data.title

@@ -6,6 +6,9 @@ local terminal_view = require("terminal_view")
 local client = require("client")
 local M = {}
 function M.get(): {[string]: unknown} return {ok = true, value = {}} end
+function M.waiting(): {[string]: unknown}
+    return {ok = true, value = {request = {approval_id = "review-request", title = "Use Progress?"}}}
+end
 function M.viewer(value: unknown, observer: string)
     local launch = assert(client.launch(value))
     local release = assert(process.listen("bee.test.viewer_release", {message = true}))
@@ -15,7 +18,7 @@ function M.viewer(value: unknown, observer: string)
     assert(tty.start())
     process.send(observer, "bee.test.viewer_ready", {})
     release:receive()
-    local closing, err = terminal_view.run(launch, "fixture-session", input, events, closes)
+    local closing, err = terminal_view.run(launch, "fixture-session", input, events, closes, "fixture-thread")
     process.send(observer, "bee.test.viewer_finished", {closing = closing, error = err})
     tty.stop()
 end

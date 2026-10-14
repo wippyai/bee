@@ -10,6 +10,7 @@ local sessions_protocol = require("sessions_protocol")
 local bounds = require("bounds")
 local caller = require("caller")
 local names = require("names")
+local waiting = require("waiting")
 local M = {}
 type Snapshot = sessions_protocol.SessionSnapshot
 type Workspace = {label: string, folder: string}
@@ -26,7 +27,7 @@ type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "starting" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
 type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, progress: string?, cancel_key: string?, segments: {[string]: string}?, tools: {[string]: string}?, diagnostics: string?}
 type Unsent = {text: string, key: string}
-type Conversation = {node: string?, read_only: boolean?, peer_scope: string?, session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
+type Conversation = {review: waiting.Review?, node: string?, read_only: boolean?, peer_scope: string?, session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
     activity_evidence: sessions_protocol.ActivityEvidence?, turns: {Turn}, details: boolean?, unsent: Unsent?, notice: string, thread_cursor: integer?}
 
 local function describe(fault: Fault?): string
@@ -318,6 +319,13 @@ function M.refresh(conv: Conversation): boolean
         end
     end
     observe_thread(conv)
+    if not conv.node then
+        local thread_id = conv.session.snapshot.thread_ref
+        if thread_id then
+            local review, err = waiting.read(thread_id)
+            if err then conv.notice = err else conv.review = review end
+        end
+    end
     return true
 end
 

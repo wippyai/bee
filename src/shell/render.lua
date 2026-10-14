@@ -23,7 +23,7 @@ local M = {}
 local function styled(style: string, text: string): string return style .. text .. "\27[0m" end
 
 -- Overlays drawn above the desktop, at most one of each.
-type Overlays = {alert: Alert?, alert_popup: boolean?, start: menu.State?, catalog: {menu.Descriptor}?, destinations: {menu.Destination}?, editor: title_editor.State?,
+type Overlays = {reviews: {[string]: {title: string, approval_id: string}}?, alert: Alert?, alert_popup: boolean?, start: menu.State?, catalog: {menu.Descriptor}?, destinations: {menu.Destination}?, editor: title_editor.State?,
     modal: dialog.State?, selection: selection.State?, workspaces: workspace_menu.Menu?}
 
 function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Content},
@@ -81,6 +81,14 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
                 end
             else
                 canvas:put(body.x, body.y, styled(FRAME, "View unavailable"), body.width)
+            end
+            local review = overlays.reviews and overlays.reviews[win.id]
+            if review and body.height > 0 then
+                local suffix = " · Enter review"
+                local title = tty.text.truncate(review.title, math.floor(math.max(1, body.width - tty.text.width("Needs you: " .. suffix))), "…")
+                local label = "Needs you: " .. title .. suffix
+                canvas:put(body.x, body.y, appearance.style(theme.warn, theme.surface) .. tty.text.truncate(label, body.width, "…"), body.width)
+                if cursor.y == body.y then cursor.visible = false end
             end
             if body.x ~= rect.x then window_chrome.draw(canvas, win, rect, win.id == scene.focus, theme) end
         end

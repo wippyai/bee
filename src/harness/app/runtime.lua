@@ -28,6 +28,7 @@ local appearance = require("appearance")
 local restore_view = require("restore_view")
 local frame_ui = require("frame")
 local bounds = require("bounds")
+local waiting = require("waiting")
 local placement_decode = require("placement_decode")
 
 local THREADS = "bee.threads.binding"
@@ -896,11 +897,27 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     publish_title()
     if not selected and not ready_announced then client.ready(launch, {negotiate_close = true}) end
 
+    local review_ticks = not retained and assert(time.ticker("1s")) or nil
+    local reviews = review_ticks and review_ticks:channel()
+    local review_key = ""
+    local function publish_review()
+        if retained then return end
+        local review, err = waiting.read(admitted.thread_id)
+        if err then logger:warn("Waiting request lookup failed", {error = err}); return end
+        local key = review and (review.approval_id .. review.title) or ""
+        if key ~= review_key then
+            local sent, send_error = client.review(launch, review)
+            if not sent then error(send_error) end
+            review_key = key
+        end
+    end
+    publish_review()
     local done = terminal:done()
     local closing = false
     local pending = delivery.advance(driver, now_ms())
     while true do
         local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), done:case_receive(), checkpoint_results:case_receive()}
+        if reviews then cases[#cases + 1] = reviews:case_receive() end
         if pending then cases[#cases + 1] = pending.response:case_receive() end
         local timer: time.Timer? = nil
         if (state.hooks_enabled and not hooks.finished(state)) or pending or checkpoint_id then
@@ -927,6 +944,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 publish_title()
             end
             pending = delivery.advance(driver, now_ms())
+        elseif reviews and selected.channel == reviews then
+            publish_review()
         elseif selected.channel == checkpoint_results and selected.ok then
             if checkpoint_id then
                 local acknowledged, result_error = recovery.acknowledged(launch, tostring(selected.value:from()),
@@ -969,6 +988,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             pending = delivery.advance(driver, now_ms())
         end
     end
+    if review_ticks then review_ticks:stop(); client.review(launch, nil) end
     terminal:close()
     terminal:done():receive()
     delivery.shutdown(driver, now_ms(), closing)

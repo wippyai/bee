@@ -51,6 +51,7 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
     -- The person reads what the agent could do by the traits' titles; the
     -- trait ids stay in the proposal.
     local titles: {string} = {}
+    local review_titles: {string} = {}
     local has_extension, retains_originals = false, false
     for _, id in ipairs(traits) do
         local title = id
@@ -75,11 +76,16 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
             end
         end
         titles[#titles + 1] = title
+        for _, trait in ipairs(configuration.catalog.traits) do if trait.id == id then review_titles[#review_titles + 1] = trait.title end end
     end
     local exposure = has_extension and " Listening and hooks include the content of the declared events." or ""
     if retains_originals then exposure = exposure .. " When an app replaces a tool result, originals are stored under its trait consent." end
+    local requested_proposal = proposal(binding, configuration, digest, capability)
+    local payload = assert(bounds.object(requested_proposal.payload))
+    payload.review = {title = "Let this agent session use " .. table.concat(review_titles, ", ") .. "?",
+        access = table.concat(review_titles, ", "), reason = reason, exposure = exposure}
     return subject_call.approvals(binding, M.ACCESS_CALL_POLICY)("request", {workspace_id = workspace_id, idempotency_key = "mcp:" .. request_key,
-        request_kind = "permission", policy = access.policy, proposal = proposal(binding, configuration, digest, capability),
+        request_kind = "permission", policy = access.policy, proposal = requested_proposal,
         prompt = {text = "Let this agent session use " .. table.concat(titles, ", ") .. "?" .. exposure .. " It asks: " .. reason}, thread_id = binding.thread_id})
 end
 -- Re-read the authoritative decision; the agent never supplies a proposal or digest.
@@ -118,7 +124,10 @@ function M.approved(binding: Binding, configuration: surface.Surface, digest: st
         or not capability_model.contains(expected_capability, declared_capability) then
         return nil, fail("DENIED", capability_error or "approval capability differs from the requested MCP access")
     end
-    local expected_json, encode_error = canonical.encode(proposal(binding, configuration, digest, expected_capability))
+    local expected = proposal(binding, configuration, digest, expected_capability)
+    local expected_payload = assert(bounds.object(expected.payload))
+    expected_payload.review = payload.review
+    local expected_json, encode_error = canonical.encode(expected)
     if not expected_json then return nil, fail("INVALID", tostring(encode_error)) end
     local expected_digest, digest_error = hash.sha256(expected_json)
     if not expected_digest then return nil, fail("INVALID", tostring(digest_error)) end

@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
+RECORD = ROOT / '.wippy/prepared.json'
 PREPARED = ROOT / '.wippy/prepared.tar'
 
 
@@ -28,7 +29,7 @@ def application_key():
                 'tests/fixtures/resource_clock', 'tests/fixtures/memory', 'tests/fixtures/harness/host.yaml',
                 'tests/compose.py', 'tests/locked.py', 'tests/.wippy.yaml',
                 'tests/wippy.lock', 'tests/requirements.txt', 'build/ci.py', 'build/prepare.py',
-                'build/binary_identity.py', 'build/release_builder.py', 'build/tools.py', 'Makefile',
+                'build/lua_seed.py', 'build/binary_identity.py', 'build/release_builder.py', 'build/tools.py', 'Makefile',
                 'wippy.yaml', 'wippy.lock', '.wippy.yaml', 'resources').splitlines()
     paths = [ROOT / name for name in names if (ROOT / name).is_file()]
     manifest = json.loads((ROOT / 'wippy.build.json').read_text())
@@ -85,11 +86,24 @@ def plan_warm():
     print('Platforms needing pinned cache warmup: ' + json.dumps(missing))
 
 
+def record_inputs():
+    RECORD.parent.mkdir(parents=True, exist_ok=True)
+    RECORD.write_text(json.dumps({'source_fingerprint': application_key()}))
+
+
+def verify_prepared():
+    record = json.loads(RECORD.read_text())
+    if record.get('consumer_fingerprint') != application_key():
+        raise ValueError('prepared checks do not cover the current inputs; import their CI artifact')
+    print('Application and fixture lint verified by preparation')
+
+
 def export():
     PREPARED.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(PREPARED, 'w') as archive:
         for name in ('.wippy/release-module', '.wippy/vendor', '.wippy/lua-cache',
-                     '.wippy/cache', 'dist/bee.wapp', 'wippy.build.json', 'src/env/identity/_index.yaml'):
+                     '.wippy/cache', '.wippy/prepared.json', 'tests/.wippy/composition', 'tests/.wippy/vendor',
+                     'tests/lua', 'dist/bee.wapp', 'wippy.build.json', 'src/env/identity/_index.yaml'):
             path = Path(os.environ.get('LUA_CACHE', ROOT / name)) if name == '.wippy/lua-cache' else ROOT / name
             if path.exists():
                 archive.add(path, arcname=name, filter=lambda item: None if item.name == '.wippy/cache/application.tar' else item)
@@ -107,12 +121,18 @@ def restore_prepared():
 
 def import_prepared():
     with tarfile.open(PREPARED) as archive:
+        record = json.load(archive.extractfile('.wippy/prepared.json'))
+        if record['source_fingerprint'] != application_key():
+            raise ValueError('prepared application does not match current source inputs')
         archive.extractall(ROOT, filter='data')
+    record['consumer_fingerprint'] = application_key()
+    RECORD.write_text(json.dumps(record))
     if os.environ.get('GITHUB_ENV'):
         identity = json.loads((ROOT / 'src/env/identity/_index.yaml').read_text())
         revision = next(entry['data']['source_revision'] for entry in identity['entries'] if entry['name'] == 'binary_identity')
         with open(os.environ['GITHUB_ENV'], 'a') as environment:
             print('REVISION=' + revision, file=environment)
+            print('CI_PREPARED=1', file=environment)
 
 
 def require_ci():
@@ -208,7 +228,7 @@ def gate():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('application-key', 'tools-outputs', 'export', 'import', 'restore-prepared', 'require-ci', 'warm', 'package', 'gate', 'plan-warm', 'verify-release', 'publish', 'rosetta'))
+    parser.add_argument('command', choices=('application-key', 'record-inputs', 'verify-prepared', 'tools-outputs', 'export', 'import', 'restore-prepared', 'require-ci', 'warm', 'package', 'gate', 'plan-warm', 'verify-release', 'publish', 'rosetta'))
     parser.add_argument('--target', default='linux/amd64')
     parser.add_argument('--version', default='0.2.0-dev')
     args = parser.parse_args()
@@ -224,7 +244,7 @@ def main():
     elif args.command == 'publish':
         publish(args.version)
     else:
-        {'export': export, 'restore-prepared': restore_prepared, 'import': import_prepared, 'require-ci': require_ci, 'gate': gate, 'plan-warm': plan_warm, 'verify-release': verify_release, 'rosetta': rosetta}[args.command]()
+        {'record-inputs': record_inputs, 'verify-prepared': verify_prepared, 'export': export, 'restore-prepared': restore_prepared, 'import': import_prepared, 'require-ci': require_ci, 'gate': gate, 'plan-warm': plan_warm, 'verify-release': verify_release, 'rosetta': rosetta}[args.command]()
 
 
 if __name__ == '__main__':

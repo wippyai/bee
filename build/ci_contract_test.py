@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import yaml
 import ci
+import lua_seed
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,10 +54,71 @@ class CIContractTests(unittest.TestCase):
                 entry = tarfile.TarInfo('src/env/identity/_index.yaml')
                 entry.size = len(identity)
                 output.addfile(entry, io.BytesIO(identity))
+                record = json.dumps({'source_fingerprint': 'original'}).encode()
+                entry = tarfile.TarInfo('.wippy/prepared.json')
+                entry.size = len(record)
+                output.addfile(entry, io.BytesIO(record))
             environment = root / 'environment'
-            with patch.object(ci, 'ROOT', root), patch.object(ci, 'PREPARED', archive), patch.dict(os.environ, {'GITHUB_ENV': str(environment)}, clear=True):
+            with patch.object(ci, 'ROOT', root), patch.object(ci, 'PREPARED', archive), patch.object(ci, 'RECORD', root / '.wippy/prepared.json'), patch.object(ci, 'application_key', side_effect=['original', 'imported']), patch.dict(os.environ, {'GITHUB_ENV': str(environment)}, clear=True):
                 ci.import_prepared()
-                self.assertEqual(environment.read_text(), 'REVISION=prepared\n')
+                self.assertEqual(environment.read_text(), 'REVISION=prepared\nCI_PREPARED=1\n')
+
+    def test_consumers_reject_missing_or_changed_preparation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            record = Path(directory) / 'prepared.json'
+            with patch.object(ci, 'RECORD', record), patch.object(ci, 'application_key', return_value='current'):
+                with self.assertRaises(FileNotFoundError):
+                    ci.verify_prepared()
+                record.write_text(json.dumps({'consumer_fingerprint': 'old'}))
+                with self.assertRaisesRegex(ValueError, 'current inputs'):
+                    ci.verify_prepared()
+                record.write_text(json.dumps({'consumer_fingerprint': 'current'}))
+                ci.verify_prepared()
+
+    def test_ci_consumers_use_preparation_and_local_targets_still_check_fixtures(self):
+        commands = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-shard', 'SHARD=1', 'CI_PREPARED='], cwd=ROOT, text=True)
+        self.assertIn('tests/compose.py', commands)
+        self.assertIn('unittest discover', commands)
+        commands = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-shard', 'SHARD=1', 'CI_PREPARED=1'], cwd=ROOT, text=True)
+        self.assertIn('verify-prepared', commands)
+        self.assertIn('tests/run.py', commands)
+        self.assertNotIn('tests/compose.py', commands)
+        self.assertNotIn('unittest discover', commands)
+        self.assertNotIn('wippy lint', commands)
+        self.assertEqual(next(step['run'] for step in workflow('ci.yml')['jobs']['lint']['steps'] if step.get('name') == 'Lint'), 'make ci-lint')
+
+    def test_seed_keeps_unchanged_entries_and_invalidates_changed_dependency_closures(self):
+        entries = {
+            'compile-a': {'entry_id': 'bee:a', 'source_hash': 'current', 'compile_fingerprint': 'a'},
+            'old-a': {'entry_id': 'bee:a', 'source_hash': 'old', 'compile_fingerprint': 'old'},
+            'compile-b': {'entry_id': 'bee:b', 'source_hash': 'b', 'compile_fingerprint': 'b',
+                          'deps': [{'alias': 'a', 'id': 'bee:a', 'compile_fingerprint': 'a'}]},
+            'old-b': {'entry_id': 'bee:b', 'source_hash': 'b', 'compile_fingerprint': 'old-b',
+                      'deps': [{'alias': 'a', 'id': 'bee:a', 'compile_fingerprint': 'old'}]},
+            'fixture': {'entry_id': 'bee.tests:a', 'source_hash': 'fixture', 'compile_fingerprint': 'fixture'},
+        }
+        selected = lua_seed.select_entries(entries, {'bee:a': {'source_hash': 'current', 'imports': {}}, 'bee:b': {'source_hash': 'b', 'imports': {'a': 'bee:a'}}}, {'bee:a', 'bee:b'})
+        self.assertEqual(set(selected), {'compile-a', 'compile-b'})
+        self.assertEqual(entries['old-a']['source_hash'], 'old')
+        changed_imports = {'bee:a': {'source_hash': 'current', 'imports': {}},
+                           'bee:b': {'source_hash': 'b', 'imports': {'renamed': 'bee:a'}}}
+        self.assertEqual(set(lua_seed.select_entries(entries, changed_imports, {'bee:a', 'bee:b'})), {'compile-a'})
+
+    def test_export_carries_generated_fixture_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            names = ['tests/lua/threads/recovery.lua', 'tests/lua/threads/recovery_worker.lua',
+                     'tests/lua/harness/host/_index.yaml']
+            for name in names:
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text('generated fixture')
+            archive = root / '.wippy/prepared.tar'
+            with patch.object(ci, 'ROOT', root), patch.object(ci, 'PREPARED', archive), patch.dict(os.environ, {}, clear=True):
+                ci.export()
+            with tarfile.open(archive) as output:
+                for name in names:
+                    self.assertEqual(output.extractfile(name).read(), b'generated fixture')
 
     def test_application_key_tracks_content_without_commit_metadata(self):
         with tempfile.TemporaryDirectory() as directory:

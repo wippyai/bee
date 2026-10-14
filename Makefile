@@ -46,7 +46,7 @@ endif
 
 CACHE_ROOT := $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)
 LUA_CACHE ?= $(CACHE_ROOT)/bee-lua/$(shell python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --key)
-LINT_FLAGS := --memory-limit 1G --set lua.cache.dir=$(LUA_CACHE)
+LINT_FLAGS := --memory-limit 1G --set lua.cache.dir=$(LUA_CACHE) --set lua.cache.max_bytes=4294967296
 
 .PHONY: tools-key check boot-check fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test build release-pack install binary-identity hub-publish release-build-check
 
@@ -135,9 +135,11 @@ SHARDS ?= $(shell python3 -c 'import os; print(min(4, max(1, len(os.sched_getaff
 boot-check: test-prepare
 	python3 tests/boot.py $(abspath $(WIPPY)) $(LUA_CACHE)
 
-test-prepare: fixture-lint $(TEST_FIXTURES)/harness/bin/gateway-client
+test-contract-check:
 	python3 build/tools_test.py
 	python3 -m unittest discover -s tests -p '*_test.py'
+
+test-prepare: $(if $(CI_PREPARED),ci-verify,fixture-lint test-contract-check) $(TEST_FIXTURES)/harness/bin/gateway-client
 
 test: boot-check
 	python3 tests/run.py --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --shards $(SHARDS) --tests $(TESTS)
@@ -184,6 +186,7 @@ ci-application-key:
 	@python3 build/ci.py application-key
 
 ci-prepare: tools
+	python3 build/ci.py record-inputs
 	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --fixtures --revision prepared
 	LUA_CACHE=$(LUA_CACHE) python3 build/ci.py export
 
@@ -192,6 +195,11 @@ ci-restore:
 
 ci-import:
 	python3 build/ci.py import
+
+ci-verify:
+	python3 build/ci.py verify-prepared
+
+ci-lint: ci-verify release-build-check agent-corpus-check test-contract-check
 
 ci-stamp:
 	python3 build/release_version.py $(VERSION)

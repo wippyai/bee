@@ -40,8 +40,10 @@ jobs:
         path: |-
           .wippy/cache
           ${{ steps.setup.outputs.lua-path }}
-        key: bee-lua-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup.outputs.runtime }}-${{ steps.key.outputs.fingerprint }}
-        restore-keys: bee-lua-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup.outputs.runtime }}-
+        key: bee-lua-v4-${{ steps.setup.outputs.tools-key }}-${{ steps.key.outputs.fingerprint }}
+        restore-keys: |-
+          bee-lua-v4-${{ steps.setup.outputs.tools-key }}-
+          bee-lua-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup.outputs.runtime }}-
     - name: Restore prepared application
       if: steps.application.outputs.cache-hit == 'true'
       run: make ci-restore
@@ -55,7 +57,7 @@ jobs:
         path: |-
           .wippy/cache
           ${{ steps.setup.outputs.lua-path }}
-        key: bee-lua-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup.outputs.runtime }}-${{ steps.key.outputs.fingerprint }}
+        key: bee-lua-v4-${{ steps.setup.outputs.tools-key }}-${{ steps.key.outputs.fingerprint }}
     - name: Warm native compilation
       if: steps.setup.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
       run: make ci-warm TARGET=linux/arm64
@@ -87,7 +89,7 @@ jobs:
         path: .wippy
     - run: make ci-import
     - name: Lint
-      run: make release-build-check lint
+      run: make ci-lint
     needs: prepare
   boot:
     name: Boot checks

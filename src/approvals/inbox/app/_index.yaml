@@ -117,7 +117,6 @@ entries:
     model: bee.approvals.inbox.app:model
     windows: bee.approvals.types:windows
     grants: bee.approvals.grants:store
-    canonical: bee.values:canonical
     clock: bee.values:clock
     names: bee.app:names
     glyphs: bee.ui:glyphs

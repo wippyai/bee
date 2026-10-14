@@ -28,7 +28,7 @@ type Desktop = {id: string, title: string, workspace: string, shown: boolean}
 -- app list could not be refreshed and is out of date, and "attention" the id of an app that needs the
 -- person, which a display brings forward.
 type Alert = {id: string, count: integer, title: string, approval_id: string, app: string?, desktop: string?, workspace: string?}
-type Event = {review: Review?,changed: boolean?, alert: Alert?, kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
+type Event = {review: Review?, changed: boolean?, alert: Alert?, kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
     workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?, attention: boolean?, problem: string?}
 -- What a node reports to list and watch; owner is the PID of the node's
 -- owner process, which a watcher monitors to learn that the node stopped,

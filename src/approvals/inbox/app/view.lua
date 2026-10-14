@@ -11,7 +11,6 @@ local tty = require("tty")
 local glyphs = require("glyphs")
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer, review_first: integer?, review_last: integer?, review_total: integer?}
 local windows = require("windows")
-local canonical = require("canonical")
 local clock = require("clock")
 local M = {}
 local function prompt_lines(prompt: string, width: integer, prefix: string?): {string}
@@ -224,6 +223,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if open.decider_id then lines[#lines + 1] = "Decided by: " .. open.decider_id end
         local selected = model.summary(open, 0)
         lines[#lines + 1] = "Effect: " .. selected.effect
+        lines[#lines + 1] = "Target: " .. selected.target
+        lines[#lines + 1] = "Policy: " .. selected.policy
+        lines[#lines + 1] = "Proposal: " .. open.proposal.ref .. " · " .. open.request_kind
+        lines[#lines + 1] = "Owner incarnation: " .. tostring(open.owner_incarnation)
+        local assurance = model.assurance(open)
+        if assurance then lines[#lines + 1] = "Confirmed gesture: " .. assurance end
+        if open.requesting_session then lines[#lines + 1] = "Source session: " .. open.requesting_session end
         for _, value in ipairs(model.permission_lines(open)) do lines[#lines + 1] = value end
         for _, value in ipairs(model.payload_lines(open)) do lines[#lines + 1] = value end
         local wrapped: {string} = {}
@@ -242,22 +248,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local pending_total = 0
     for _, row in ipairs(rows) do if row.state == "pending" then pending_total = pending_total + 1 end end
     frame.header(painter, "NEEDS YOU", #rows == 0 and "" or (tostring(pending_total) .. " pending · " .. tostring(#rows) .. " shown"))
-    local detail = state.detail
     local selected = model.selected_row(state)
-    local detail_rows = 0
-    local permission_lines: {string} = {}
-    local asked_lines: {string} = {}
-    local installing = detail ~= nil and not state.technical and model.card(detail) or nil
-    if detail and selected and detail.approval_id == selected.approval_id and height >= 12 then
-        permission_lines = model.permission_lines(detail)
-        asked_lines = prompt_lines(selected.prompt, width)
-        local needed = 4 + #asked_lines + #permission_lines
-        if installing then needed = #card_lines(installing) + 3 end
-        if state.technical then needed = needed + 2 + #model.payload_lines(detail) end
-        detail_rows = math.floor(math.max(6, math.min(height - 5, needed)))
-    end
     local list_first = 3
-    local list_last = height - 3 - detail_rows
+    local list_last = height - 3
     local selected_index = 0
     if selected then
         for index, row in ipairs(rows) do if row.approval_id == selected.approval_id then selected_index = index end end
@@ -304,59 +297,12 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 requester = model.requester_name(row.view, state.requester_names), summary = summary, meta = meta},
             window.offset + slot == selected_index, "row", window.offset + slot, row.approval_id)
     end
-    if detail and selected and detail_rows > 0 then
-        local y = list_last + 1
-        frame.rule(painter, y)
-        local lines: {string} = {}
-        if installing then
-            for _, card_line in ipairs(card_lines(installing)) do lines[#lines + 1] = card_line end
-            lines[#lines + 1] = ""
-            lines[#lines + 1] = model.decision_line(detail) .. (detail.state == "pending" and ("  expires " .. selected.expires_at) or "")
-        else
-            lines[#lines + 1] = "Effect: " .. selected.effect
-            for _, asked_line in ipairs(asked_lines) do lines[#lines + 1] = asked_line end
-            for _, permission_line in ipairs(permission_lines) do
-                lines[#lines + 1] = permission_line
-            end
-            if detail.requesting_session then lines[#lines + 1] = "Source: Session · S returns to the conversation" end
-            lines[#lines + 1] = "State: " .. state_label(selected) .. (selected.decider_id and (" by " .. model.decider(selected.decider_id)) or "") .. "  expires " .. selected.expires_at
-        end
-        if state.technical then
-            if selected.decider_id then lines[#lines + 1] = "Decided by: " .. selected.decider_id end
-            local assurance = model.assurance(detail)
-            if assurance then lines[#lines + 1] = "Confirmed gesture: " .. assurance end
-            lines[#lines + 1] = "Requester: " .. selected.requester_id .. " · Owner: " .. selected.owner_node .. " · Policy: " .. selected.policy
-            lines[#lines + 1] = "Target: " .. selected.target
-            lines[#lines + 1] = "Request " .. selected.approval_id .. "  revision " .. tostring(selected.revision) .. "  incarnation observed " .. tostring(selected.owner_incarnation)
-            lines[#lines + 1] = "Digest " .. model.text(detail.proposal_digest, 80) .. "  kind " .. selected.request_kind
-            for _, payload_line in ipairs(model.payload_lines(detail)) do lines[#lines + 1] = payload_line end
-        end
-        for index, value in ipairs(lines) do
-            if index > detail_rows - 1 then break end
-            frame.line(painter, y + index, value, theme.text)
-        end
-    end
-    local lease_source = detail ~= nil and selected ~= nil and detail.approval_id == selected.approval_id
-    local can_lease = lease_source and detail.state == "pending" and detail.proposal.ref == leases.ACTIVATION
-    local pending_detail = detail ~= nil and selected ~= nil and detail.approval_id == selected.approval_id and detail.state == "pending"
     local idle = state.pending == nil
     if height >= 4 then
-        local can_open = selected ~= nil and detail == nil
+        local can_open = selected ~= nil
         local buttons: {frame.Button} = {}
         if #rows > 0 then buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = can_open, primary = true} end
-        if detail then buttons[#buttons + 1] = {kind = "technical", key = "T", label = "Hide details", enabled = true, more = true} end
-        if pending_detail and not state.technical then
-            buttons[#buttons + 1] = {kind = "approve", key = "A", label = "Allow once", enabled = idle, primary = true}
-            if model.window_cap(state) >= 1800000 then buttons[#buttons + 1] = {kind = "allow_30", key = "F", label = detail.reallow and "Re-allow 30 min" or "Allow 30 min", enabled = idle} end
-            if model.window_cap(state) > 1800000 then buttons[#buttons + 1] = {kind = "allow_longer", key = "L", label = "Allow longer", enabled = idle} end
-            buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
-            buttons[#buttons + 1] = {kind = "withdraw", key = "W", label = "Withdraw", enabled = idle, more = true}
-        end
         buttons[#buttons + 1] = {kind = "refresh", key = "R", label = "Refresh", enabled = idle, primary = #rows == 0, more = #rows > 0}
-        if detail then
-            buttons[#buttons + 1] = {kind = "source", key = "S", label = "Return to source", enabled = detail.requesting_session ~= nil, more = true}
-        end
-        if can_lease then buttons[#buttons + 1] = {kind = "lease", key = "E", label = "Lease", enabled = idle, more = true} end
         buttons[#buttons + 1] = {kind = "windows", key = "U", label = "Your access", enabled = true, more = true}
         footer_buttons = buttons
     end

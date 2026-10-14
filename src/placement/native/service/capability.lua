@@ -10,7 +10,9 @@ function M.measure(): Measurement
     local executor, executor_error
     if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then return {capability = "direct_process", exit_observation = "eof_gated", stdin_close = false, detail = "executor unavailable: " .. tostring(executor_error)} end
-    local proc, exec_error = executor:exec("sh -c 'echo $$; ps -o pgid= -p $$'", {process_group = true})
+    local proc, exec_error = executor:exec("sh -c 'echo $$; if [ -r /proc/$$/stat ]; then "
+        .. "IFS= read -r stat < /proc/$$/stat; stat=${stat##*) }; set -f; set -- $stat; echo ${3}; "
+        .. "else ps -o pgid= -p $$; fi'", {process_group = true})
     if not proc then
         executor:release()
         return {capability = "direct_process", exit_observation = "eof_gated", stdin_close = false, detail = "exec refused: " .. tostring(exec_error)}

@@ -41,9 +41,11 @@ entries:
   source: file://identity_probe_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [exec]
+  modules: [exec, registry]
   security:
     policies: [bee.tests.sessions:probe_policy]
   imports:
     test: wippy.test:test
     identity: bee.placement.native.service:identity
+    capability: bee.placement.native.service:capability
+    bounds: bee.values:bounds

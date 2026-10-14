@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://bee.wippy.ai/">
-    <img src="docs/assets/logo.svg" alt="Bee" width="152">
+    <img src="assets/logo.svg" alt="Bee" width="152">
   </a>
 </p>
 
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/bee.gif" alt="Claude Code fixes failing tests and builds a Test Watch app; Codex joins and builds a Test Lint app; both are approved once in Needs you and open as windows next to the work" width="960">
+  <img src="assets/bee.gif" alt="Claude Code fixes failing tests and builds a Test Watch app; Codex joins and builds a Test Lint app; both are approved once in Needs you and open as windows next to the work" width="960">
 </p>
 
 Bee is a persistent workspace your coding agents extend, built on the
@@ -159,6 +159,51 @@ through the `docs` MCP tool and can also search the live
 read [application contracts](src/corpus/docs/application_contracts.md),
 [delivery](src/corpus/docs/distributed_app_delivery.md) and the
 [terminal toolkit](src/corpus/toolkit.md).
+
+## Repository ownership
+
+| Path | Owns |
+| --- | --- |
+| `src/` | Lua application and registry definitions; folders follow `bee.<path>` namespaces |
+| `tests/lua/` | Suites under the source namespace they exercise, with `bee.tests.<path>` IDs; shared fixtures in `support/` |
+| `tests/fixtures/` | External executables, composed resources and historical-ID fixtures |
+| `tests/runner/`, `tests/python/` | Python test harness and its unit tests; measured budgets and shard costs in `tests/runner/data/` |
+| `native/` | Go host integration, Hive handshake, hook posting and OS facts |
+| `build/` | Pinned toolchains, packing, release and CI tooling |
+| `.github/` | CI workflows and setup action |
+| `assets/` | README artwork |
+| `tools/corpus.py` | Embedded documentation generation and validation |
+
+`src/app` provides shared application clients and protocols; `src/apps` owns
+built-in Help, Library, Processes, Settings and Terminal applications.
+`src/docs` implements documentation readers and tools; `src/corpus` contains
+the authored and generated content they serve, and is not a registry namespace.
+
+| Source namespace (`bee.` prefix) | Owns |
+| --- | --- |
+| root, `deps`, `env`, `security` | Host composition, boot dependencies, environment resources and host policies |
+| `approvals`, `capability`, `resources`, `credentials` | Approval decisions and inbox, capability vocabulary, resource grants and credential lifecycle |
+| `driver`, `harness`, `executor.external` | Provider adapters; agent launch, carrier, profiles and permissions; external permission answers |
+| `placement`, `git.worktree`, `process` | Native/Docker placement, worktree lifecycle and shared process infrastructure |
+| `threads` | Durable records, sessions, delivery, hooks and orchestration |
+| `gateway` | Agent tools, external interfaces, authorization and publication |
+| `gov`, `hub` | Governed activation and grants; package inspection, lifecycle and publication |
+| `hive`, `sync` | Distributed routing, exposure, distribution and replica persistence |
+| `node`, `shell`, `ui` | Application instances and workspace settings; desktop shell; shared terminal widgets |
+| `persist`, `values` | SQL helpers and startup state compatibility; shared bounds, canonicalization, replies and clocks |
+
+Within a feature, `app` owns its UI, `binding` its entry adapters, `service`
+its orchestration, `persist` its storage, and `migrations` its historical schema
+steps. Applied migration IDs and persisted registry IDs remain stable when
+organizing files.
+
+Root `wippy.yaml`, `.wippy.yaml`, `wippy.lock` and `wippy.build.json` describe
+the package, workspace, dependency lock and pinned build respectively.
+`Makefile` exposes build/test commands; `install.sh` installs releases.
+`src/corpus/manifest.json` and generated reference pages come from
+`make agent-corpus-local`. Build identity (`src/env/identity/_index.yaml`),
+fixture composition and copied fixture sources, `wippy.build.local.json`,
+`.wippy/`, `.bee/` and `dist/` are generated or local state, not authored code.
 
 ## Build
 

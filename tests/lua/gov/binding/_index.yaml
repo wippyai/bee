@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.tests.gov.binding
+entries:
+- name: application_admissions_dependencies_test
+  kind: function.lua
+  source: file://application_admissions_dependencies_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test

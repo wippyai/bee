@@ -20,6 +20,7 @@ entries:
   - hash
   - json
   imports:
+    catalog_revision: bee.gov.persist:catalog_revision
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     transaction: bee.persist:transaction
@@ -64,3 +65,11 @@ entries:
     transaction: bee.persist:transaction
     semver: bee.hub.package:semver
     version: bee.sync.values:version
+
+- name: catalog_revision
+  kind: library.lua
+  source: file://catalog_revision.lua
+  modules: [sql]
+  imports:
+    bounds: bee.values:bounds
+    transaction: bee.persist:transaction

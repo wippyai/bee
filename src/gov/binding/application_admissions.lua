@@ -10,7 +10,7 @@ local workspace_applications = require("workspace_applications")
 local governed_admission = require("governed_admission")
 local bounds = require("bounds")
 local resources = require("resources")
-local activation_store = require("activation_store")
+local catalog_revision = require("catalog_revision")
 
 local M = {}
 local log = logger:named("bee.gov.application_admission")
@@ -178,7 +178,7 @@ end
 function M.revision(workspace_id: string, node_id: string): string
     local resource = resources.database()
     if not resource then return "unlinked" end
-    local result = activation_store.catalog_revision(resource, node_id, workspace_id)
+    local result = catalog_revision.read(resource, node_id, workspace_id)
     if not result.ok then return "unavailable" end
     local value = bounds.object(result.value)
     if not value or type(value.revision) ~= "string" then return "unavailable" end

@@ -2,6 +2,7 @@
 -- execution progress and recovery pointers are stored separately. This module
 -- does not resolve, approve, apply, or contact another node.
 local sql = require("sql")
+local catalog_revision = require("catalog_revision")
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -1307,33 +1308,7 @@ local MAX_DESIRED_SLOTS = 1024
 -- A bounded revision token for the workspace's process-local application
 -- admission overlays. The broker can compare this cheaply and project the
 -- full catalog only when the token changes.
-function M.catalog_revision(resource: string, node_raw: unknown, workspace_raw: unknown): Result
-    if type(resource) ~= "string" or resource == "" then
-        return failure("UNAVAILABLE", "governance activation database is not linked")
-    end
-    local node, workspace = id(node_raw), id(workspace_raw)
-    if not node or not workspace then return failure("INVALID", "governance activation identity is invalid") end
-    local db, err = sql.get(resource)
-    if not db then return failure("UNAVAILABLE", transaction.error_message("open governance activation database", err)) end
-    local function close_failure(code: string, message: string): Result
-        return transaction.release(db, "governance activation", failure(code, message))
-    end
-    local revisions: {string} = {}
-    local overlay_owners: {string} = {}
-    local rows, query_error = db:query("SELECT overlay_owner, revision FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? ORDER BY overlay_owner LIMIT ?",
-        {node, workspace, MAX_DESIRED_SLOTS + 1})
-    if query_error or not rows then return close_failure("INTERNAL", transaction.error_message("read governance activation revisions", query_error)) end
-    if #rows > MAX_DESIRED_SLOTS then return close_failure("CAPACITY", "governance activation slots exceed their bound") end
-    for _, row in ipairs(rows) do
-        local overlay_owner, revision = id(row.overlay_owner), count(row.revision, false)
-        if not overlay_owner or revision == nil then return close_failure("INTERNAL", "governance activation revision is malformed") end
-        revisions[#revisions + 1] = overlay_owner .. "=" .. tostring(revision)
-        overlay_owners[#overlay_owners + 1] = overlay_owner
-    end
-    local released, release_error = db:release()
-    if released ~= true or release_error then return failure("UNAVAILABLE", transaction.error_message("close governance activation database", release_error)) end
-    return transaction.success({revision = table.concat(revisions, ";"), overlay_owners = overlay_owners}, false)
-end
+M.catalog_revision = catalog_revision.read
 
 -- Every workspace slot on this node that holds an authorized desired intent,
 -- in a stable order. Boot recovery follows exactly these slots.

@@ -548,7 +548,7 @@ entries:
   - logger
   imports:
     bounds: bee.values:bounds
-    activation_store: bee.gov.persist:activation_store
+    catalog_revision: bee.gov.persist:catalog_revision
     resources: bee.gov.binding:staging_resources
     activation_profiles: bee.gov.types:activation_profile_decoder
     capability_grants: bee.gov.types:capability_grants

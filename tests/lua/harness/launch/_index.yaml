@@ -23,3 +23,11 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     locate: bee.harness.launch:locate
+- name: admission_dependencies_test
+  kind: function.lua
+  source: file://admission_dependencies_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test

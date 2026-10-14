@@ -40,6 +40,7 @@ local gateway_protocol = require("gateway_protocol")
 local service_reply = require("service_reply")
 local hook_records = require("hook_records")
 local carrier_types = require("carrier_types")
+local admitted_request = require("admitted_request")
 local hints = require("hints")
 local permission_exchange = require("permission_exchange")
 local hook_exchange = require("hook_exchange")
@@ -558,14 +559,8 @@ local function thread_call(io: IO, session_request: Request, operation: string, 
     fields.idempotency_key = step_key and ("launch:" .. session_request.attempt_id .. ":" .. step_key) or io.key()
     return must(io, M.THREADS .. ":" .. operation, fields)
 end
-function M.admitted_action(request: Request, binding_ref: string, binding_digest: string, budget_ref: string,
-    grant_refs: {string}, input_text: string): record_types.Admitted
-    local admitted: record_types.Admitted = {request_id = "launch:" .. request.attempt_id,
-        principal_id = request.owner_id, binding_ref = binding_ref, binding_digest = binding_digest,
-        grant_refs = grant_refs, budget_ref = budget_ref, input = {text = input_text}}
-    if request.parent_action_id then admitted.parent_action_id = request.parent_action_id end
-    return admitted
-end
+M.admitted_action = admitted_request.admitted_action
+
 local function placement_observation(io: IO, session: Session, attempt: placement_types.Attempt): (boolean, string?)
     local payload = json.encode({placement_attempt_id = attempt.attempt_id, execution_state = attempt.execution_state, cleanup_state = attempt.cleanup_state,
         exit_source = attempt.exit_source, start_failure = attempt.start_failure, evidence_count = attempt.evidence_count, capability = attempt.capability})

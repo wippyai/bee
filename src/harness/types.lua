@@ -1,3 +1,4 @@
+local request_types = require("request_types")
 local classify = require("classify")
 local driver_types = require("driver_types")
 local placement_types = require("placement_types")
@@ -17,35 +18,8 @@ type IO = {
     key: () -> string,
     after: ((string) -> ())?,
 }
-type ProfileGrant = {workspace_id: string, name: string, subpath: string, access: "read" | "write", grant_ref: string}
-type Request = {
-    profile_grants: {ProfileGrant}?,
-    preferences: placement_types.Preferences?,
-    thread_id: string,
-    action_id: string,
-    attempt_id: string,
-    owner_id: string,
-    owner_incarnation: integer,
-    binding_ref: string,
-    profile_id: string,
-    brief: string,
-    policy_ref: string,
-    placement_profile_ref: string?,
-    placement_profile_digest: string?,
-    placement_binding_ref: string?,
-    placement_binding_digest: string?,
-    resources: {placement_types.ResourceGrant},
-    environment: {[string]: string},
-    session_ref: string?,
-    previous_attempt_id: string?,
-    reauthorize: boolean?,
-    working_directory: string?,
-    projections: {string}?,
-    workspace_id: string?,
-    parent_action_id: string?,
-    origin_view: {view_id: string, instance_id: string}?,
-    options: placement_types.WorkdirOptions?,
-}
+type ProfileGrant = request_types.ProfileGrant
+type Request = request_types.Request
 type Exchange = {
     transport: string?,
     answer_mode: string?,

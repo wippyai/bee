@@ -122,6 +122,7 @@ entries:
     gateway_protocol: bee.gateway:protocol
     service_reply: bee.values:reply
     carrier_types: bee.harness:types
+    admitted_request: bee.harness:request
     hints: bee.harness.carrier:hints
     permission_exchange: bee.harness.permission:exchange
     hook_exchange: bee.harness.permission:hook_exchange

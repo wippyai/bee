@@ -5,6 +5,7 @@ entries:
   kind: library.lua
   source: file://types.lua
   imports:
+    request_types: bee.harness:request
     classify: bee.harness.catalog:classify
     driver_types: bee.driver:types
     placement_types: bee.placement:types
@@ -19,3 +20,10 @@ entries:
   methods:
   - name: call
     description: Read or compare-and-set a typed saved agent profile owned by the host node
+
+- name: request
+  kind: library.lua
+  source: file://request.lua
+  imports:
+    placement_types: bee.placement:types
+    record_types: bee.threads:record_types

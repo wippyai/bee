@@ -30,7 +30,7 @@ entries:
     policy: bee.harness.carrier:policy
     definition: bee.harness.launch:definitions
     agent_resolver: bee.harness.launch:agent_resolver
-    carrier: bee.harness.carrier:machine
+    carrier: bee.harness:request
     placement_types: bee.placement:types
     placement_resolver: bee.placement.binding:resolver
     continuation: bee.harness.carrier:continuation

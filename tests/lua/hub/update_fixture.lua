@@ -99,6 +99,7 @@ M.versions = {
         local incompatible = version == "0.2.0-selfupdate.1"
         return {version = version, digest = string.rep(incompatible and "b" or "c", 64),
             entries = function(_: Package, _opts: Options?): (unknown, string?)
+                record(mode .. ":decodes")
                 if component == "fixture/native" then
                     return {{id = "fixture.native:namespace", kind = "ns.definition", meta = {
                         native_requirements = {{package = baked.native_module, version = "9.0.0"}}}, data = {}}}, nil
@@ -111,6 +112,11 @@ M.versions = {
                             version = incompatible and mode == "native" and "9.0.0" or baked.native_version}}}}}
                 if incompatible and mode == "packset" then entries[#entries + 1] = {id = "bee:fixture_native", kind = "ns.dependency",
                     meta = {}, data = {component = "fixture/native", version = "1.0.0", parameters = {}}} end
+                if mode == "decode_once" then
+                    for index = 1, 64 do
+                        entries[#entries + 1] = {id = "bee.fixture:entry" .. tostring(index), kind = "registry.entry", meta = {}, data = {value = index}}
+                    end
+                end
                 return entries, nil
             end,
             metadata = function(_: Package): (unknown, string?) return {}, nil end,

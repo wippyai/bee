@@ -11,9 +11,9 @@ local principal = require("principal")
 local security = require("security")
 local thread_harness = require("thread_harness")
 local WORKSPACE = string.rep("a", 32)
-local function await(viewport: tty.Viewport, needles: {string}, row: integer?): string
+local function await(viewport: tty.Viewport, needles: {string}, row: integer?, duration: string?): string
     local updates = assert(viewport:updates())
-    local deadline = time.after("10s")
+    local deadline = time.after(duration or "10s")
     while true do
         local snapshot = viewport:snapshot()
         local shown = snapshot and tty.text.plain(row and (snapshot.rows[row] or "") or table.concat(snapshot.rows, "\n")) or ""
@@ -60,6 +60,10 @@ local function define_tests()
             local ok, problem = pcall(function()
                 local list = await(viewport, {"Review this first request?"})
                 test.contains(list, "Clock helper")
+                local arriving = request("New approval arrives by event")
+                await(viewport, {"New approval arrives by event"}, nil, "1s")
+                test.eq(state(arriving), "pending")
+
                 test.is_nil((list:find(session, 1, true)))
                 key(viewport, "runes", "a")
                 await(viewport, {"Open a pending request", "Recorded:"})

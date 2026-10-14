@@ -108,6 +108,33 @@ local function define_tests()
                 end
             end
         end)
+        test.it("revalidates registry state using the verified artifact definitions", function()
+            local selected = package("vendor/widget", "1.0.0", "a", {
+                {id = "widget:value", kind = "registry.entry", meta = {}, data = {value = "approved"}},
+            })
+            local reads = 0
+            local original = source({["vendor/widget@1.0.0"] = selected})
+            local read_artifact = original.artifact
+            original.artifact = function(component: string, version: string): (inspect.Inspection?, string?)
+                reads = reads + 1
+                return read_artifact(component, version)
+            end
+            local req = request({action = "install", component = "vendor/widget", version = "1.0.0"})
+            local prepared = assert(plan.prepare(state({}), 1, req, original))
+            local rebased = assert(plan.rebase(prepared, state({
+                {id = "receipt:operation", kind = "registry.entry", meta = {}, data = {}, registry = {owner = ""}},
+            }), 2))
+            test.eq(reads, 1)
+            test.eq(rebased.plan.base_revision, 2)
+            test.eq(rebased.resolved.packages[1].digest, prepared.resolved.packages[1].digest)
+            test.eq(assert(type(rebased.resolved.packages[1].entries[1].data) == "table" and rebased.resolved.packages[1].entries[1].data).value, "approved")
+            test.is_true(rebased.plan.digest ~= prepared.plan.digest)
+            local unavailable = plan.rebase(prepared, state({root("vendor/other", "1.0.0")}, {
+                {name = "vendor/other", version = "1.0.0", digest = string.rep("b", 64)},
+            }), 3)
+            test.is_nil(unavailable)
+            test.eq(reads, 1)
+        end)
         for _, matches in ipairs({true, false}) do
             test.it(matches and "plans a pack matching decoded executable facts" or "refuses another runtime commit from executable facts", function()
                 local running, decode_error = identity_decoder.decode_baked('{"native_module":"github.com/wippyai/bee/native","native_version":"v1.0.0","native_modules":{"github.com/wippyai/bee/native":"v1.0.0"},"runtime_commit":"v0.1.14-0.20261007011850-2bb9e144ab06"}')

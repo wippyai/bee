@@ -321,3 +321,11 @@ entries:
     binary_identity: bee.hub.package:binary_identity
     limits: bee.hub.package:limits
     root_pack: bee.tests.hub:root_pack_fixture
+
+- name: artifact_source_probe
+  kind: function.lua
+  source: file://artifact_source_probe.lua
+  method: run
+  imports:
+    source: bee.hub.binding:artifact_source
+    inventory: bee.hub.package:inventory

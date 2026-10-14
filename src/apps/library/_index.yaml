@@ -82,3 +82,10 @@ entries:
     resources:
     - bee/bee
     effect: allow
+
+- name: installation_changes
+  kind: security.policy
+  policy:
+    actions: [cdc.subscribe]
+    resources: [bee:changes]
+    effect: allow

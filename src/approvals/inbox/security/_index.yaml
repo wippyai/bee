@@ -38,3 +38,10 @@ entries:
     actions: [bee.threads.workspace]
     resources: '*'
     effect: allow
+
+- name: changes_policy
+  kind: security.policy
+  policy:
+    actions: [cdc.subscribe]
+    resources: [bee:changes]
+    effect: allow

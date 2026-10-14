@@ -5,34 +5,45 @@ local json = require("json")
 local M = {}
 M.MAX_DEPTH = 32
 
-type Output = {parts: {string}, bytes: integer, maximum_bytes: integer?}
+type Output = {parts: {string}, chunks: {string}, bytes: integer, maximum_bytes: integer?}
 
 local function append(output: Output, value: string): boolean
     local bytes = output.bytes + #value
     if output.maximum_bytes and bytes > output.maximum_bytes then return false end
     output.parts[#output.parts + 1] = value
     output.bytes = bytes
+    if #output.parts == 128 then
+        output.chunks[#output.chunks + 1] = table.concat(output.parts)
+        output.parts = {}
+    end
     return true
 end
 
-local function escaped(value: string, output: Output): string?
-    local size = #value + 2
-    if output.maximum_bytes and output.bytes + size > output.maximum_bytes then return nil end
-    for char in value:gmatch('[%c"\\]') do
-        size = size + ((char == '"' or char == "\\") and 1 or 5)
-        if output.maximum_bytes and output.bytes + size > output.maximum_bytes then return nil end
-    end
-    local body = value:gsub('[%c"\\]', function(char: string): string
-        if char == '"' then return '\\"' end
-        if char == "\\" then return "\\\\" end
-        return string.format("\\u%04x", char:byte())
-    end)
-    return '"' .. body .. '"'
+local function append_span(output: Output, value: string, first: integer, last: integer): boolean
+    if last < first then return true end
+    if output.maximum_bytes and output.bytes + last - first + 1 > output.maximum_bytes then return false end
+    return append(output, value:sub(first, last))
 end
 
 local function encode_string(value: string, output: Output): boolean
-    local encoded = escaped(value, output)
-    return encoded ~= nil and append(output, encoded)
+    if output.maximum_bytes and output.bytes + #value + 2 > output.maximum_bytes then return false end
+    if not append(output, '"') then return false end
+    local first = 1
+    while first <= #value do
+        local index = value:find('[%c"\\]', first)
+        if not index then break end
+        local byte = value:byte(index)
+        if not append_span(output, value, first, index - 1) then return false end
+        local size = (byte == 34 or byte == 92) and 2 or 6
+        if output.maximum_bytes and output.bytes + size > output.maximum_bytes then return false end
+        local escaped: string
+        if byte == 34 then escaped = '\\"'
+        elseif byte == 92 then escaped = "\\\\"
+        else escaped = string.format("\\u%04x", byte) end
+        if not append(output, escaped) then return false end
+        first = index + 1
+    end
+    return append_span(output, value, first, #value) and append(output, '"')
 end
 
 local function encode_value(value: unknown, depth: integer, maximum_depth: integer, output: Output): (boolean, string?)
@@ -110,10 +121,11 @@ end
 function M.encode(value: unknown, maximum_bytes: integer?, maximum_depth: integer?): (string?, string?)
     if maximum_bytes ~= nil and maximum_bytes < 0 then return nil, "encoded byte bound is invalid" end
     if maximum_depth ~= nil and maximum_depth < 1 then return nil, "maximum depth is invalid" end
-    local output: Output = {parts = {}, bytes = 0, maximum_bytes = maximum_bytes}
+    local output: Output = {parts = {}, chunks = {}, bytes = 0, maximum_bytes = maximum_bytes}
     local ok, encode_error = encode_value(value, 1, maximum_depth or M.MAX_DEPTH, output)
     if not ok then return nil, encode_error end
-    return table.concat(output.parts), nil
+    if #output.parts > 0 then output.chunks[#output.chunks + 1] = table.concat(output.parts) end
+    return table.concat(output.chunks), nil
 end
 
 return M

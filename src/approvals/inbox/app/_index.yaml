@@ -10,6 +10,7 @@ entries:
   - process
   - channel
   - time
+  - cdc
   - uuid
   - funcs
   - registry
@@ -56,6 +57,7 @@ entries:
     - bee.security.approvals:confirmation_authority
     - bee.security.approvals:approval_decide_policy
     - bee.gov.security:governance_delivery_lease_policy
+    - bee.approvals.inbox.security:changes_policy
     - bee.approvals.inbox.security:client_policy
     - bee.approvals.inbox.security:session_names_policy
     - bee.approvals.inbox.security:grants_policy

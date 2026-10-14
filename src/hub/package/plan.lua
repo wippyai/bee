@@ -495,4 +495,29 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     plan.digest = digest
     return {plan = plan, resolved = resolved, installed = installed, baseline = state}, nil
 end
+function M.rebase(prepared: Prepared, state: unknown, revision: integer,
+    baked_identity: binary_identity.Baked?): (Prepared?, string?)
+    local verified = prepared.resolved.packages
+    local source: graph.Source = {
+        versions = function(component: string, _: integer): ({string}?, boolean?, string?)
+            for _, package in ipairs(verified) do
+                if package.component == component then return {package.version}, false, nil end
+            end
+            return nil, nil, "installation now requires an unverified package: " .. component
+        end,
+        artifact = function(component: string, version: string): (inspection.Inspection?, string?)
+            for _, package in ipairs(verified) do
+                if package.component == component and semver.compare(package.version, version) == 0 then
+                    local holes, problem = requirements.read(package.entries, {})
+                    if not holes then return nil, problem end
+                    return {component = component, version = package.version, digest = package.digest,
+                        entries = package.entries, requirements = holes, next_offset = nil, eof = true}, nil
+                end
+            end
+            return nil, "installation now requires another artifact: " .. component .. "@" .. version
+        end,
+    }
+    return M.prepare(state, revision, prepared.plan.request, source, baked_identity)
+end
+
 return M

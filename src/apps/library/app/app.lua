@@ -10,7 +10,7 @@ local process = require("process")
 local channel = require("channel")
 local uuid = require("uuid")
 local funcs = require("funcs")
-local time = require("time")
+local cdc = require("cdc")
 local appearance = require("appearance")
 local frame = require("frame")
 local client = require("client")
@@ -26,7 +26,6 @@ type Reply = {ok: boolean, code: string?, message: string?, full_message: string
 type Pending = {future: funcs.Future, response: channel.Channel, operation: string, generation: integer, apply: boolean}
 type ReadPending = {future: funcs.Future, response: channel.Channel, operation: string, generation: integer, retired: boolean}
 
-local POLL = "2s"
 
 local function new_key(): string
     local value, err = uuid.v4()
@@ -81,8 +80,10 @@ local function main(options: unknown)
     local menu = frame.menu()
     local lifecycle = assert(process.events())
     local changes = assert(process.listen(appearance.TOPIC, {message = true}))
-    local ticker = assert(time.ticker(POLL))
-    local ticks = ticker:channel()
+    local committed_stream = assert(cdc.stream("bee:changes", {tables = {
+        "bee_governance_activation_execution", "bee_governance_follow_progress",
+    }}))
+    local committed = assert(committed_stream:channel())
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
@@ -110,6 +111,7 @@ local function main(options: unknown)
     -- this loop remains responsible for frames, resize and cancellation.
     local updates = channel.new(1)
     local busy = false
+    local refresh_pending = false
 
     local function changed()
         dirty = true
@@ -1066,25 +1068,19 @@ local function main(options: unknown)
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
         end
-        local cases = {input:case_receive(), lifecycle:case_receive(), changes:case_receive(), updates:case_receive(), ticks:case_receive()}
+        local cases = {input:case_receive(), lifecycle:case_receive(), changes:case_receive(), updates:case_receive(), committed:case_receive()}
         if reading then cases[#cases + 1] = reading.response:case_receive() end
         for _, item in ipairs(pending) do cases[#cases + 1] = item.response:case_receive() end
         local event = channel.select(cases)
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then running = false end
-        elseif event.channel == updates then
+        elseif event.channel == updates or event.channel == committed then
             dirty = true
-        elseif event.channel == ticks then
-            -- Approval and installation finish elsewhere; while a version is on
-            -- its way the list follows it.
-            if not busy and view.screen(state) ~= "package" then
-                for _, row in ipairs(model.rows(state, "installed")) do
-                    if row.status == model.STATUS_WAITING or row.status == model.STATUS_INSTALLING or row.follow_state == "following" then
-                        background(refresh_activations)
-                        break
-                    end
-                end
+            if event.channel == committed then refresh_pending = true end
+            if refresh_pending and not busy then
+                refresh_pending = false
+                background(refresh_activations)
             end
         elseif event.channel == changes then
             preferences = appearance.chosen(event.value:payload():data())
@@ -1285,7 +1281,7 @@ local function main(options: unknown)
     for _, item in ipairs(pending) do item.future:cancel() end
     process.unlisten(changes)
     confirmation.cancel(review)
-    ticker:stop()
+    committed_stream:close()
     updates:close()
     output:close()
     tty.stop()

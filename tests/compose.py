@@ -296,7 +296,8 @@ def runner_fixture_type(src):
         if not selected then return nil, problem end
         local configured, invalid = requirements.read(selected.entries, request.parameters)
         if not configured then return nil, invalid end
-        local page = inspection.page(selected.entries, request.entry_offset, request.entry_limit, request.include_data)
+        local page = complete and {entries = selected.entries, next_offset = nil, eof = true}
+            or inspection.page(selected.entries, request.entry_offset, request.entry_limit, request.include_data)
         return {component = selected.component, version = selected.version, digest = selected.digest,
             entries = page.entries, requirements = configured, metadata = selected.metadata,
             next_offset = page.next_offset, eof = page.eof}, nil

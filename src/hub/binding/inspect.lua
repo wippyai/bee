@@ -3,8 +3,9 @@ local hub = require("hub")
 local bounds = require("bounds")
 local requirements = require("requirements")
 local inspection = require("inspection")
+local limits = require("limits")
 local M = {}
-function M.read(raw: unknown): (inspection.Inspection?, string?)
+local function read(raw: unknown, complete: boolean): (inspection.Inspection?, string?)
     local request, request_error = inspection.decode(raw)
     if not request then return nil, request_error end
     -- Hub authorization uses the caller's exact module grant. No caller-selected
@@ -25,6 +26,7 @@ function M.read(raw: unknown): (inspection.Inspection?, string?)
     if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
         return nil, "Hub artifact has no SHA-256 measurement"
     end
+    if #entries > limits.MAX_PACKAGE_ENTRIES then return nil, "artifact entry count exceeds planning bound" end
     local result, requirement_error = requirements.read(entries, request.parameters)
     if not result then return nil, requirement_error end
     local decoded: {inspection.Entry} = {}
@@ -43,8 +45,15 @@ function M.read(raw: unknown): (inspection.Inspection?, string?)
         end
         decoded[#decoded + 1] = {id = id, kind = kind, meta = meta, data = entry.data}
     end
-    local page = inspection.page(decoded, request.entry_offset, request.entry_limit, request.include_data)
+    local page = complete and {entries = decoded, next_offset = nil, eof = true}
+        or inspection.page(decoded, request.entry_offset, request.entry_limit, request.include_data)
     return {component = request.component, version = version, digest = digest, requirements = result,
         entries = page.entries, next_offset = page.next_offset, eof = page.eof, metadata = bounds.object(metadata)}, nil
+end
+function M.read(raw: unknown): (inspection.Inspection?, string?)
+    return read(raw, false)
+end
+function M.artifact(component: string, version: string): (inspection.Inspection?, string?)
+    return read({component = component, version = version}, true)
 end
 return M

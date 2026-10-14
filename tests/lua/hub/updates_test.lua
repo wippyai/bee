@@ -10,7 +10,7 @@ local model = require("model")
 local fixture = require("fixture")
 local function caller(mode: string): funcs.Executor
     local policies: {security.Policy} = {}
-    for _, name in ipairs({"bee.apps.library:hub_client", "bee.apps.library:hub_operations", "bee.apps.library:self_update"}) do
+    for _, name in ipairs({"bee.apps.library:hub_client", "bee.apps.library:hub_operations", "bee.apps.library:self_update", "bee.tests.hub:update_fixture_policy", "bee.hub.security:binary_identity_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
     return assert(funcs.new():with_context({["bee.test.hub.updates"] = mode})
@@ -18,6 +18,16 @@ local function caller(mode: string): funcs.Executor
 end
 local function define_tests()
     test.describe("Hub update selection through About, Library and MCP", function()
+        test.it("decodes a complete planning artifact once across entry pages", function()
+            local before_open = fixture.count("decode_once:opens")
+            local before_decode = fixture.count("decode_once:decodes")
+            local before_close = fixture.count("decode_once:closes")
+            local count = assert(caller("decode_once"):call("bee.tests.hub:artifact_source_probe"))
+            test.eq(count, 65)
+            test.eq(fixture.count("decode_once:opens") - before_open, 1)
+            test.eq(fixture.count("decode_once:decodes") - before_decode, 1)
+            test.eq(fixture.count("decode_once:closes") - before_close, 1)
+        end)
         for _, mode in ipairs({"mixed", "blocked", "equal", "pages", "yanked", "native", "packset"}) do
             test.it("selects compatible catalog releases: " .. mode, function()
                 local executor = caller(mode)

@@ -27,6 +27,7 @@ entries:
   source: file://inspect.lua
   modules: [hub]
   imports:
+    limits: bee.hub.package:limits
     bounds: bee.values:bounds
     requirements: bee.hub.package:requirements
     inspection: bee.hub.package:inspection

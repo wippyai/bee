@@ -10,6 +10,7 @@ local confirmation_ui = require("confirmation_ui")
 local channel = require("channel")
 local process = require("process")
 local time = require("time")
+local cdc = require("cdc")
 local uuid = require("uuid")
 local funcs = require("funcs")
 local registry = require("registry")
@@ -124,8 +125,16 @@ local function main(value: unknown)
     end
     -- One dialog at a time: what it asks and what accepting it does.
     local dialog: {request_id: string, kind: string, confirmation: model.Confirmation?, view: model.ApprovalView?, batch: leases.Intent?}? = nil
-    local ticker = assert(time.ticker(POLL))
-    local ticks = ticker:channel()
+    local committed_stream = assert(cdc.stream("bee:changes", {tables = {
+        "bee_approval_requests", "bee_approval_grants", "bee_approval_window_grants",
+        "bee_governance_leases",
+    }}))
+    local committed = assert(committed_stream:channel())
+    local remote = false
+    for _, source in pairs(configured.sources) do if not source.local_owner then remote = true end end
+    local ticker = remote and assert(time.ticker(POLL)) or nil
+    local ticks = ticker and ticker:channel() or nil
+    local refresh_pending = false
     local function refresh()
         for _, workspace in ipairs(local_workspaces) do
             local raw = funcs.call("bee.node.binding:read", {workspace_id = workspace})
@@ -452,13 +461,26 @@ local function main(value: unknown)
             end
             dirty = false
         end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(), navigations:case_receive(), ticks:case_receive(), updates:case_receive()})
+        local cases = {input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(),
+            navigations:case_receive(), committed:case_receive(), updates:case_receive()}
+        if ticks then cases[#cases + 1] = ticks:case_receive() end
+        local event = channel.select(cases)
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then running = false end
         elseif event.channel == updates then
             dirty = true
-        elseif event.channel == ticks then
+            if refresh_pending and not busy and not action_busy then
+                refresh_pending = false
+                perform(function() if state.pending then recover() else refresh() end end)
+            end
+        elseif event.channel == committed then
+            refresh_pending = true
+            if not busy and not action_busy then
+                refresh_pending = false
+                perform(function() if state.pending then recover() else refresh() end end)
+            end
+        elseif ticks and event.channel == ticks then
             if not busy then
                 if state.pending then perform(recover) else perform(refresh) end
             end
@@ -658,7 +680,8 @@ local function main(value: unknown)
             end
         end
     end
-    ticker:stop()
+    if ticker then ticker:stop() end
+    committed_stream:close()
     process.unlisten(states)
     process.unlisten(answers); process.unlisten(navigations)
     output:close()

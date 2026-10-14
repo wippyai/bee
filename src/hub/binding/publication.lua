@@ -57,6 +57,16 @@ function M.review(prepared: plan.Prepared): (review.Summary?, string?)
     return review.summarize(prepared, prepared.baseline, reader.is_applied)
 end
 
+local function rebase(prepared: plan.Prepared): (plan.Prepared?, string?)
+    local snapshot, snapshot_error = registry.snapshot()
+    if not snapshot then return nil, tostring(snapshot_error) end
+    local state, state_error = snapshot:state()
+    if not state then return nil, tostring(state_error) end
+    local revision = bounds.count(snapshot:version():id())
+    if revision == nil then return nil, "invalid registry revision" end
+    return plan.rebase(prepared, state, revision, (binary_identity.read_baked()))
+end
+
 local function expected_modules(raw: unknown): {ExpectedModule}?
     if type(raw) ~= "table" then return nil end
     local count = 0
@@ -559,11 +569,13 @@ local function service_work(prepared: plan.Prepared): (lifecycle.Work?, string?)
     for _, entry in pairs(final) do entries[#entries + 1] = entry end
     return lifecycle.capture(state, changes, entries)
 end
-local function publish_intent(receipt: Receipt): Result
+local function publish_intent(receipt: Receipt, verified: plan.Prepared?): Result
     local request = receipt.request and plan.decode(receipt.request)
     local intent = receipt.lifecycle_work
     if not request or not intent then return hub_result.failure("INTERNAL", "missing service intent") end
-    local prepared, problem = M.prepare(receipt.request)
+    local prepared, problem
+    if verified then prepared, problem = rebase(verified)
+    else prepared, problem = M.prepare(receipt.request) end
     if not prepared or effect(prepared.plan) ~= receipt.effect_digest then
         return incomplete_removal(receipt, problem or "candidate or installation changed after lifecycle intent")
     end
@@ -581,7 +593,7 @@ local function publish_intent(receipt: Receipt): Result
     intent.phase = "quiesced"
     local checkpoint = save(receipt)
     if not checkpoint.ok then return checkpoint end
-    local refreshed, refresh_error = M.prepare(receipt.request)
+    local refreshed, refresh_error = rebase(prepared)
     if not refreshed or effect(refreshed.plan) ~= receipt.effect_digest then
         return incomplete_removal(receipt, refresh_error or "candidate or registry changed during owner drain")
     end
@@ -784,6 +796,6 @@ function M.apply(raw: unknown, expected: unknown): Result
         conversion = displayed.conversion, lifecycle_work = intent, effect_digest = measured_effect}
     local recorded = save(receipt)
     if not recorded.ok then return recorded end
-    return publish_intent(receipt)
+    return publish_intent(receipt, prepared)
 end
 return M

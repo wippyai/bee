@@ -54,6 +54,21 @@ local function define_tests()
             test.eq(canonical.encode(source, #expected), expected)
             test.is_nil(canonical.encode(source, #expected - 1))
         end)
+        test.it("preserves the canonical spelling of every byte", function()
+            local raw: {string} = {}
+            local expected: {string} = {'"'}
+            for byte = 0, 255 do
+                local char = string.char(byte)
+                raw[#raw + 1] = char
+                if byte < 32 or byte == 127 then expected[#expected + 1] = string.format("\\u%04x", char:byte())
+                elseif byte == 34 or byte == 92 then expected[#expected + 1] = string.char(92) .. char
+                else expected[#expected + 1] = char end
+            end
+            expected[#expected + 1] = '"'
+            local encoded = table.concat(expected)
+            test.eq(canonical.encode(table.concat(raw), #encoded), encoded)
+            test.is_nil(canonical.encode(table.concat(raw), #encoded - 1))
+        end)
         test.it("rejects non-finite numbers", function()
             local encoded, encode_error = canonical.encode(math.huge)
             test.eq(encoded, nil)

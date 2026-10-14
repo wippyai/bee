@@ -18,13 +18,13 @@ local function screen(view: tty.Viewport): string
     local shown = view:snapshot()
     return shown and (table.concat(shown.rows, "\n"):gsub("\27%[[0-9;]*m", "")) or ""
 end
-local function await(view: tty.Viewport, needle: string, selected: boolean?)
+local function await(view: tty.Viewport, needle: string, selected: boolean?, within: string?, absent: boolean?)
     local updates = assert(view:updates())
-    local deadline = time.after("60s")
+    local deadline = time.after(within or "60s")
     local function ready(): boolean
         local shown = screen(view)
         local content = selected and (shown:match("\n(›[^\n]+)") or "") or shown
-        return content:find(needle, 1, true) ~= nil and shown:find("Working…", 1, true) == nil
+        return (content:find(needle, 1, true) ~= nil) ~= (absent == true) and shown:find("Working…", 1, true) == nil
     end
     while not ready() do
         local selected = channel.select({updates:case_receive(), deadline:case_receive()})
@@ -167,6 +167,7 @@ local function define_tests()
                 test.eq(#assert(bounds.array(payload.migrations, 8)), 2)
                 harness.answer(window.workspace, item.approval_id, "denied")
                 harness.drain()
+                await(window.view, "Waiting for your approval", false, "1s", true)
             end)
             close(window)
             if not ok then error(tostring(failure)) end

@@ -48,7 +48,7 @@ CACHE_ROOT := $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)
 LUA_CACHE ?= $(CACHE_ROOT)/bee-lua/$(shell python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --key)
 LINT_FLAGS := --memory-limit 1G --set lua.cache.dir=$(LUA_CACHE) --set lua.cache.max_bytes=4294967296
 
-.PHONY: tools-key check boot-check fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test build release-pack install binary-identity hub-publish release-build-check
+.PHONY: tools-key check boot-check fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test build release-pack install binary-identity hub-publish test-python
 
 tools:
 	python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --bin $(BIN)
@@ -74,19 +74,13 @@ native-pin:
 	@test -n "$(NATIVE_VERSION)" || { echo "set NATIVE_VERSION=<pushed bee commit>"; exit 2; }
 	python3 build/native_pin.py $(NATIVE_VERSION)
 
-# tests/compose.py writes the copy of src the suites load, with their
+# tests/runner/compose.py writes the copy of src the suites load, with their
 # test-only seams; it never changes src or a pack.
 compose: binary-identity
-	python3 tests/compose.py
+	python3 -m tests.runner.compose
 
 binary-identity: tools
 	python3 build/binary_identity.py --manifest $(MANIFEST) --toolchain $(WIPPY) --version $(VERSION) $(if $(REVISION),--revision $(REVISION))
-
-release-build-check:
-	python3 build/binary_identity_test.py
-	python3 build/release_contract_test.py
-	python3 build/ci_contract_test.py
-	python3 build/hub_publish_test.py
 
 hub-publish:
 	python3 build/hub_publish.py --version "$(VERSION)" --wippy "$(abspath $(WIPPY))"
@@ -98,17 +92,17 @@ agent-corpus-check:
 	python3 tools/corpus.py --check
 
 fixture-install: compose
-	cd tests && python3 locked.py exclusive .wippy/composition.lock $(abspath $(WIPPY)) install
+	python3 -m tests.runner.locked --cwd tests exclusive tests/.wippy/composition.lock $(abspath $(WIPPY)) install
 
 fixture-lint: fixture-install
-	cd tests && python3 locked.py shared .wippy/composition.lock $(abspath $(WIPPY)) lint $(LINT_FLAGS)
+	python3 -m tests.runner.locked --cwd tests shared tests/.wippy/composition.lock $(abspath $(WIPPY)) lint $(LINT_FLAGS)
 
 lint: binary-identity fixture-lint
 	python3 tools/corpus.py --check
 	$(WIPPY) lint $(LINT_FLAGS)
 
 check:
-	+python3 tests/check.py
+	+python3 -m tests.runner.check
 
 # The tests workspace loads bee/bee from the composed copy of src through its
 # workspace replacement, so suites never ship in the application pack. Each
@@ -123,7 +117,7 @@ check:
 # the store suites queue, reserve, claim and drain that work themselves.
 # TESTS keeps the native runner's substring filters. SHARDS defaults to four
 # or fewer on small machines; each process receives its share of Go CPUs.
-# tests/run.py --measure regenerates the balancing map from native runner logs.
+# python3 -m tests.runner.run --measure regenerates the balancing map from native runner logs.
 # Copied metadata uses measured entry costs within existing deadline ceilings.
 # Unmeasured entries keep the 30s fallback; each shard shares one measured
 # suite_timeout among entries in the same named suite.
@@ -137,20 +131,19 @@ SHARDS ?= $(shell python3 -c 'import os; print(min(4, max(1, len(os.sched_getaff
 TEST_CACHE_MODE ?= readwrite
 
 boot-check: test-prepare
-	python3 tests/boot.py $(abspath $(WIPPY)) $(LUA_CACHE) $(TEST_CACHE_MODE)
+	python3 -m tests.runner.boot $(abspath $(WIPPY)) $(LUA_CACHE) $(TEST_CACHE_MODE)
 
-test-contract-check:
-	python3 build/tools_test.py
-	python3 -m unittest discover -s tests -p '*_test.py'
+test-python:
+	python3 -m unittest discover -s tests/python -t .
 
-test-prepare: $(if $(CI_TESTS),fixture-install,fixture-lint test-contract-check) $(TEST_FIXTURES)/harness/bin/gateway-client
+test-prepare: $(if $(CI_TESTS),fixture-install,fixture-lint test-python) $(TEST_FIXTURES)/harness/bin/gateway-client
 
 test: boot-check
-	python3 tests/run.py --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --tests $(TESTS)
+	python3 -m tests.runner.run --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --tests $(TESTS)
 
 test-shard: test-prepare
 	@test -n "$(SHARD)" || { echo "set SHARD=<1-based shard>"; exit 2; }
-	python3 tests/run.py --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --shard $(SHARD) --tests $(TESTS)
+	python3 -m tests.runner.run --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --shard $(SHARD) --tests $(TESTS)
 
 
 
@@ -206,7 +199,7 @@ ci-assemble: tools
 ci-import:
 	python3 build/ci.py import
 
-ci-lint: release-build-check agent-corpus-check test-contract-check
+ci-lint: agent-corpus-check test-python
 
 ci-stamp:
 	python3 build/release_version.py $(VERSION)

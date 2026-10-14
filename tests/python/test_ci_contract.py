@@ -75,7 +75,7 @@ class CIContractTests(unittest.TestCase):
         self.assertNotIn('unittest discover', remote)
         self.assertNotIn('wippy lint', remote)
         self.assertNotIn('verify-prepared', remote)
-        self.assertEqual(next(step['run'] for step in workflow('ci.yml')['jobs']['lint']['steps'] if step.get('name') == 'Lint'), 'make ci-lint')
+        self.assertEqual(next(step['run'] for step in workflow('ci.yml')['jobs']['lint']['steps'] if step.get('name') == 'Python unit tests and corpus'), 'make ci-lint')
 
     def test_profile_merge_rejects_other_sources_and_missing_checks(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -72,7 +72,7 @@ jobs:
       uses: ./.github/actions/setup-bee
       with:
         target: linux/amd64
-    - name: Lint
+    - name: Python unit tests and corpus
       run: make ci-lint
   boot:
     name: Boot checks

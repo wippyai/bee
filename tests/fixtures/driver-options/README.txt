@@ -12,11 +12,5 @@ runner. option_coverage_test.lua exercises production preparation,
 configuration, effective schemas, typed controls, profile storage, the profile
 protocol codec and launch-preference reconstruction.
 
-To check compatibility against installed CLIs of these exact versions, run:
-
-  python3 tests/driver_option_compat.py
-
-Use --driver claude or --driver codex to select one. The checker uses isolated
-homes, help output and Codex strict-config probes, including negative controls;
-it does not log in or call a provider. A different CLI version requires new
-captures and updated coverage data.
+Installed-CLI compatibility proofs live in the private acceptance repository.
+A different CLI version requires new captures and updated coverage data.

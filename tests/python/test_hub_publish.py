@@ -1,7 +1,6 @@
 import hashlib
 from build import ci
 import subprocess
-import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,9 +8,7 @@ import yaml
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("hub_publish", ROOT / "build/hub_publish.py")
-publisher = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(publisher)
+from build import hub_publish as publisher
 
 
 class HubPublishTest(unittest.TestCase):

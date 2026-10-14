@@ -1,5 +1,4 @@
 """OS ownership includes adopted descendants and excludes the inspector itself."""
-import importlib.util
 from pathlib import Path
 import unittest
 import subprocess
@@ -9,9 +8,7 @@ import os
 import queue
 import threading
 
-spec = importlib.util.spec_from_file_location('process_guard', Path(__file__).parents[1] / 'lua/hygiene/process_guard.py')
-guard = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(guard)
+from tests.lua.hygiene import process_guard as guard
 
 
 class ProcessGuardTests(unittest.TestCase):

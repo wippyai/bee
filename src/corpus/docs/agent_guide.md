@@ -61,7 +61,7 @@ unknown result and must not cause a blind retry.
 ```sh
 make tools        # install the pinned builder and build the matching wippy toolchain
 make lint         # corpus check, then lint of src and of the tests workspace
-make check        # lint, Python runner tests, boot checks and every Lua suite
+make check        # lint, Python runner and build tests, boot checks and every Lua suite
 make test TESTS=corpus_test  # run selected test entries by id
 make build        # pack the application and build dist/bee
 make install      # install dist/bee as ~/.local/bin/bee, keeping the previous as bee.prev
@@ -74,17 +74,16 @@ checkout.
 
 Suites are `function.lua` entries with `meta: {type: test, suite: bee}` in
 `tests/lua/<component>/_index.yaml`. `make test` first composes a copy of
-`src` with test-only seams (`tests/compose.py`), starts from fresh run state
+`src` with test-only seams (`tests/runner/compose.py`), starts from fresh run state
 and runs under a clean environment: fixture executables from
 `tests/fixtures/harness/bin` stand in for the agent CLIs, and the suites never
 reach the person's home, PATH or provider credentials. `make check` runs lint,
-fixture lint, Python runner tests, boot checks and the Lua suites. Linux CI runs
+fixture lint, Python runner and build tests, boot checks and the Lua suites. Linux CI runs
 lint and release-build contract checks, boot checks and eight Lua shards for
 pushes to main, pull requests and manual dispatches. Releases require CI on the
 same commit and compile and verify Linux and macOS targets. Install the Python
 dependencies from `tests/requirements.txt` before using the build scripts;
-`python3 -m unittest discover -s build -p '*_test.py'` and the same command with
-`-s tests` run the Python unit tests directly. Documentation changes run
+`make test-python` discovers all Python unit tests in `tests/python/`. Documentation changes run
 `make lint`, which checks the corpus manifest; regenerate its byte counts and
 digests with
 `python3 tools/corpus.py`.

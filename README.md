@@ -197,20 +197,22 @@ support. Fixture agents use isolated homes and fake provider values.
 
 ```sh
 make lint
-python3 -m unittest discover -s build -p '*_test.py'
-python3 -m unittest discover -s tests -p '*_test.py'
+make test-python
 make check SHARDS=8
 ```
 
 `make lint` checks the documentation corpus, application source and fixture
 composition. After documentation edits, regenerate with `make agent-corpus-local`.
-`make check` runs lint, fixture lint, Python runner tests, boot checks and all
+`make check` runs lint, fixture lint, Python runner and build tests, boot checks and all
 Lua suites, then prints one status line with timing and load. Without an
 explicit `SHARDS` value it uses up to four shards, depending on available CPUs.
 `make test TESTS=<substring>` selects Lua entries by ID; `make test-shard
 SHARDS=8 SHARD=<1..8>` runs one partition of the eight-shard plan.
 
-The public suites and runner live in `tests/`. `tests/compose.py` creates a
+The Lua suites live in `tests/lua/`, the packaged harness in `tests/runner/`,
+and all Python unit tests in `tests/python/`. `make test-python` discovers every
+Python unit test, including build and release contracts. Runner measurements
+live in `tests/runner/data/`. `python3 -m tests.runner.compose` creates a
 copy of the application with test-only seams. Each shard has its own state,
 fixture executables, databases, home and gateway port. The harness pulls
 required digest-pinned Docker images before starting suite deadlines and
@@ -224,8 +226,8 @@ boot checks and eight Lua shards on Linux, and combines their results in the
 Check gate. Platform jobs warm native build caches when required. macOS jobs
 compile and verify release targets; they do not run the Linux process guard.
 
-`python3 tests/run.py --update-durations` records entry body and hygiene costs.
-`python3 tests/budgets.py <passing results.json>` refreshes measured budgets
+`python3 -m tests.runner.run --update-durations` records entry body and hygiene costs.
+`python3 -m tests.runner.budgets <passing results.json>` refreshes measured budgets
 within the existing deadline limits.
 
 ## Release

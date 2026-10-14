@@ -1250,7 +1250,7 @@ function M.history(raw_request: unknown): Reply
     return succeed(page)
 end
 
-for _, name in ipairs({"open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close", "catalog"}) do
+for _, name in ipairs({"open", "run", "send", "await", "join", "get", "history", "cancel", "close", "catalog"}) do
     local local_method = M[name]
     M[name] = function(raw: unknown): Reply
         local input = object(raw)

@@ -220,7 +220,6 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         if not identified then proc:signal(9); executor:release(); return refuse(identify_error or "Docker identity unavailable") end
         fields = identified
     end
-    local handle = proc
     local pid = proc:pid()
     if not backend and pid then
         fields.pid = pid
@@ -263,7 +262,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             evidence(db, attempt_id, "stdin.uncertain", "initial input write failed")
         end
         if request.launch.stdin_eof == true then
-            if accepted and type(handle.close_stdin) == "function" then
+            if accepted then
                 local closed, close_error = proc:close_stdin()
                 if closed then
                     stdin_closed = true
@@ -271,16 +270,12 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 else
                     evidence(db, attempt_id, "stdin.uncertain", "stdin close failed")
                 end
-            elseif accepted then
-                evidence(db, attempt_id, "stdin.uncertain", "executor cannot close stdin")
             end
         end
     end
     -- Pumps hand chunks to the loop through a small channel; a full channel
     -- blocks the pump, and a blocked pump blocks the child. The exit is
-    -- learned from the runtime's done channel where it exists; otherwise
-    -- wait() runs only after both streams end, because wait() consumes the
-    -- handle and would end signalling and input.
+    -- learned independently from the runtime's done channel.
     local function chunk_value(value: Chunk): Chunk return {stream = value.stream, data = value.data, eof = value.eof} end
     local chunks = channel.new(4)
     local exits = channel.new(1)
@@ -298,27 +293,11 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     pump("stdout", stdout)
     pump("stderr", stderr)
-    local has_done = type(handle.done) == "function"
-    local waited = false
-    local function reap()
-        if waited then return end
-        waited = true
-        coroutine.spawn(function()
-            local code, wait_error = proc:wait()
-            local exit_code = bounds.integer(code)
-            if not exit_code then error("executor returned an invalid exit code") end
-            exits:send({code = exit_code, error = wait_error})
-        end)
-    end
-    if has_done then
-        local done = proc:done()
-        coroutine.spawn(function()
-            local outcome = done:receive()
-            local code = bounds.integer(outcome.code)
-            if not code then error("executor returned an invalid exit code") end
-            exits:send({code = code, error = outcome.error})
-        end)
-    end
+    local done = assert(proc:done())
+    coroutine.spawn(function()
+        local outcome = assert((done:receive()))
+        exits:send({code = outcome.code, error = outcome.error})
+    end)
     -- The recipient is watched: a carrier that dies while the child lives
     -- has its binding retired here, independently of any replacement.
     if recipient then
@@ -517,7 +496,6 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 enqueue(chunk.stream, nil, true, marked)
                 eof_seen = eof_seen + 1
             end
-            if eof_seen >= 2 and not has_done and not exited then reap() end
             flush()
         elseif selected.channel == exits then
             local outcome = selected.value
@@ -605,9 +583,6 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                         closed_now = true
                     elseif exited then
                         reason = "the child has exited"
-                    elseif type(handle.close_stdin) ~= "function" then
-                        reason = "executor cannot close stdin"
-                        evidence(db, attempt_id, "stdin.uncertain", "executor cannot close stdin at the owner's request")
                     else
                         local closed, close_error = proc:close_stdin()
                         if closed then
@@ -674,7 +649,6 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             if event.kind == process.event.CANCEL then
                 if not exited then
                     signal(9, "signal.kill", "runner cancelled")
-                    if not has_done then reap() end
                     local outcome = exits:receive()
                     if type(outcome) == "table" and type(outcome.code) == "number" then exit_code = math.floor(outcome.code) end
                     store.transition(db, attempt_id, {execution = "exited", fields = {exit_code = exit_code, exit_source = "runner"}, evidence = {kind = "child.exited", detail = "after runner cancellation, exit code " .. tostring(exit_code)}})

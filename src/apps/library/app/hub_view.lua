@@ -23,6 +23,12 @@ local function maximum(a: integer, b: integer): integer if a > b then return a e
 local function align(value: string, width: integer): string
     return value .. string.rep(" ", maximum(0, width - tty.text.width(value)))
 end
+local function permission_values(raw: unknown): string?
+    if type(raw) ~= "table" then return nil end
+    local values: {string} = {}
+    for _, value in ipairs(raw) do values[#values + 1] = model.text(value, 256) end
+    return table.concat(values, ", ")
+end
 local function request_lines(request: {[string]: unknown}): {string}
     local lines: {string} = {"Request " .. model.text(request.action, 16) .. " " .. model.text(request.component, 160)
         .. "  migrations " .. model.text(request.migration_policy, 16)}
@@ -417,38 +423,30 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         elseif #runs == 0 then item("None")
         else for _, migration in ipairs(runs) do item(model.text(migration.id, 256) .. " → " .. model.text(migration.target_db, 256)) end end
         heading("Permission changes")
-        if # (plan.policy_changes or {}) == 0 then item("None") end
+        if #(plan.policy_changes or {}) == 0 then item("None") end
         for _, policy in ipairs(plan.policy_changes or {}) do
             item(model.text(policy.change, 32) .. " " .. model.text(policy.id, 256))
-            local actions, resources = policy.actions, policy.resources
-            if type(actions) == "table" then
-                local names: {string} = {}
-                for _, value in ipairs(actions) do names[#names + 1] = model.text(value, 256) end
-                item("Actions: " .. table.concat(names, ", "))
-            end
-            if type(resources) == "table" then
-                local names: {string} = {}
-                for _, value in ipairs(resources) do names[#names + 1] = model.text(value, 256) end
-                item("Resources: " .. table.concat(names, ", "))
-            end
+            local actions, resources = permission_values(policy.actions), permission_values(policy.resources)
+            if actions then item("Actions: " .. actions) end
+            if resources then item("Resources: " .. resources) end
             if policy.expression == true then item("Conditional permission · open Details") end
         end
         heading("Other changes")
         item(plan.other_entries ~= nil and (tostring(plan.other_entries) .. " other updated entries · Details shows the full plan")
             or "Updated entry count unavailable · open Details")
     else
-    if #plan.migrations > 0 then
-        heading("Migrations", "policy " .. state.policy)
-        for _, migration in ipairs(plan.migrations) do item(model.text(migration.id, 256) .. " → " .. model.text(migration.target_db, 256)) end
-    end
-    if #plan.starts > 0 then
-        heading("Automatic starts")
-        for _, id in ipairs(plan.starts) do item(id) end
-    end
-    if #plan.capabilities > 0 then
-        heading("Declared capabilities")
-        for _, id in ipairs(plan.capabilities) do item(id) end
-    end
+        if #plan.migrations > 0 then
+            heading("Migrations", "policy " .. state.policy)
+            for _, migration in ipairs(plan.migrations) do item(model.text(migration.id, 256) .. " → " .. model.text(migration.target_db, 256)) end
+        end
+        if #plan.starts > 0 then
+            heading("Automatic starts")
+            for _, id in ipairs(plan.starts) do item(id) end
+        end
+        if #plan.capabilities > 0 then
+            heading("Declared capabilities")
+            for _, id in ipairs(plan.capabilities) do item(id) end
+        end
     end
     if #review == 0 then review = {{text = "No package changes", heading = false}} end
     local flowed: {ReviewLine} = {}

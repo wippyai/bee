@@ -11,3 +11,15 @@ entries:
   imports:
     test: wippy.test:test
     setup: bee.harness.launch:configuration_setup
+- name: locate_test
+  kind: function.lua
+  source: file://locate_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  security:
+    policies: [bee.tests.harness:apply_test_policy, bee.harness.security:launch_locate_probe_policy]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    locate: bee.harness.launch:locate

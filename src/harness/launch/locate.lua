@@ -141,8 +141,14 @@ local function has_locate_facet(pinned: registry.Snapshot, binding: {[string]: u
     return false
 end
 
-local function selected_descriptor(pinned: registry.Snapshot, provider: string): (Descriptor?, string?)
-    return descriptor_codec.find_provider(pinned, provider)
+local function selected_descriptor(pinned: registry.Snapshot, provider: string, reference: unknown): (Descriptor?, string?)
+    if reference == nil then return descriptor_codec.find_provider(pinned, provider) end
+    local ref = bounds.id(reference)
+    if not ref then return nil, "driver binding has an invalid descriptor_ref" end
+    local selected, err = descriptor_codec.load_from(pinned, ref)
+    if not selected then return nil, err end
+    if selected.provider ~= provider then return nil, "driver binding descriptor provider does not match driver_id" end
+    return selected, nil
 end
 
 local function unsupported(selected: Descriptor, reason: string, platform: Platform?): driver_types.LocateResult
@@ -173,7 +179,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
         return result
     end
     if active[binding_ref] ~= true then return nil end
-    local selected, descriptor_error = selected_descriptor(pinned, provider)
+    local selected, descriptor_error = selected_descriptor(pinned, provider, meta and meta.descriptor_ref)
     if not selected then
         if descriptor_error then
             local result = unknown(provider, descriptor_error)

@@ -10,8 +10,8 @@ local application_admission = require("application_admission")
 local capability_grants = require("capability_grants")
 local capability_files = require("capability_files")
 
-local M = {}
 local source_check = require("source_check")
+local M = {}
 
 type Entry = {[string]: unknown}
 type Changes = {

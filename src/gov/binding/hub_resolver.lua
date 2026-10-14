@@ -17,8 +17,8 @@ local application_capabilities = require("application_capabilities")
 local hub_package = require("hub_package")
 local graph = require("graph")
 
-local M = {}
 local source_check = require("source_check")
+local M = {}
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
 type RegistryChange = {entry: Entry, op: string}

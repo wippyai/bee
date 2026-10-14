@@ -16,8 +16,8 @@ local requirement = require("requirement")
 local application_capabilities = require("application_capabilities")
 local workspace_applications = require("workspace_applications")
 
-local M = {}
 local source_check = require("source_check")
+local M = {}
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
 type Captured = {revision: integer, entries: {Entry}, overlay_ids: {[string]: boolean}?,

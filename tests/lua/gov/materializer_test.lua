@@ -1,4 +1,4 @@
--- MIT. Owner-local exact overlay replacement with generation conflict retry.
+-- MIT. Owner-local exact overlay replacement under its captured generation.
 local test = require("test")
 local bounds = require("bounds")
 local materializer = require("materializer")

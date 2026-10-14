@@ -20,6 +20,16 @@ local function execute(tx: sql.Transaction, statement: string, args: {unknown}):
     if err then return tostring(err) end
     return nil
 end
+local function requester_destinations(row: Object): {string}
+    local destinations: {string} = {"requester:" .. tostring(row.requester_id)}
+    local contract = bounds.object(row.contract)
+    local origin = contract and bounds.object(contract.origin)
+    local session = origin and bounds.id(origin.session_id)
+    if row.requester_id == "bee.gov.activation" and session and session:match("^bs:") then
+        destinations[#destinations + 1] = "requester:" .. session
+    end
+    return destinations
+end
 function M.principal(actor: string): Object
     local current = security.actor()
     local definition: string? = nil
@@ -131,12 +141,7 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
         requester = contract.requester, subject = contract.subject, presentation = contract.presentation, response = response}
     local body, body_error = canonical.encode(event, 16384)
     if not body then return body_error end
-    local destinations: {string} = {"requester:" .. tostring(row.requester_id)}
-    local origin = bounds.object(contract.origin)
-    local session = origin and bounds.id(origin.session_id)
-    if row.requester_id == "bee.gov.activation" and session and session:match("^bs:") then
-        destinations[#destinations + 1] = "requester:" .. session
-    end
+    local destinations = requester_destinations(row)
     if state ~= "pending" and type(effect.destination) == "string" then destinations[#destinations + 1] = effect.destination end
     for _, destination in ipairs(destinations) do
         local event_id = approval_id .. ":" .. tostring(revision) .. ":" .. destination
@@ -245,13 +250,7 @@ function M.complete(tx: sql.Transaction, approval_id: string, state: string, res
 end
 function M.completed(tx: sql.Transaction, row: Object, state: string, result: Object, at: string): string?
     local approval_id = assert(bounds.id(row.approval_id))
-    local contract = bounds.object(row.contract)
-    local origin = contract and bounds.object(contract.origin)
-    local session = origin and bounds.id(origin.session_id)
-    local destinations: {string} = {"requester:" .. tostring(row.requester_id)}
-    if row.requester_id == "bee.gov.activation" and session and session:match("^bs:") then
-        destinations[#destinations + 1] = "requester:" .. session
-    end
+    local destinations = requester_destinations(row)
     local body, problem = canonical.encode({approval_id = approval_id, state = state, result = result,
         workspace_id = row.workspace_id, revision = row.revision}, 16384)
     if not body then return problem end

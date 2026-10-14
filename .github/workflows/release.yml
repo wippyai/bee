@@ -1,0 +1,127 @@
+name: Bee release
+env:
+  BEE_VERSION: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v0.2.0-ci-proof' }}
+  WIPPY_CACHE_DIR: ${{ github.workspace }}/.wippy/cache
+  LUA_CACHE: ${{ github.workspace }}/.wippy/lua-cache
+permissions:
+  contents: read
+  actions: read
+jobs:
+  prepare:
+    name: Require CI and stamp release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      artifact: release-source
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: ci
+      name: Require successful CI on exact SHA
+      env:
+        GH_TOKEN: ${{ github.token }}
+        CI_PROOF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && github.ref_name || 'main' }}
+      run: make ci-require
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: linux/amd64
+    - name: Download CI application
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        github-token: ${{ github.token }}
+        run-id: ${{ steps.ci.outputs.run-id }}
+        name: ${{ steps.ci.outputs.artifact }}
+        path: .wippy
+    - name: Stamp release identity using prepared cache
+      run: make ci-import ci-stamp VERSION="${BEE_VERSION#v}"
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: release-source
+        path: .wippy/prepared.tar
+        if-no-files-found: error
+        compression-level: 1
+  build:
+    name: Bee (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+        - goos: linux
+          goarch: amd64
+          runner: ubuntu-24.04
+        - goos: linux
+          goarch: arm64
+          runner: ubuntu-24.04-arm
+        - goos: darwin
+          goarch: amd64
+          runner: macos-26
+        - goos: darwin
+          goarch: arm64
+          runner: macos-26
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: ${{ matrix.goos }}/${{ matrix.goarch }}
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: ${{ needs.prepare.outputs.artifact }}
+        path: .wippy
+    - run: make ci-import
+    - name: Rosetta for Intel validation
+      if: matrix.goos == 'darwin' && matrix.goarch == 'amd64'
+      run: make release-rosetta
+    - name: Compile and validate native binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: '1'
+      run: make release-compile VERSION="${BEE_VERSION#v}"
+    - name: Package with checksum
+      run: make release-package TARGET=${{ matrix.goos }}/${{ matrix.goarch }} VERSION="${BEE_VERSION#v}"
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: bee-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: |
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+          dist/bee-${{ matrix.goos }}-${{ matrix.goarch }}.wapp.sha256
+          dist/bee-*.wapp
+          dist/bee-*.wapp.sha256
+    timeout-minutes: 8
+  release:
+    name: Verify release artifacts
+    needs:
+    - build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        path: dist
+        pattern: bee-*
+        merge-multiple: true
+    - name: Verify every binary embeds the release pack
+      run: make release-verify
+    - name: Create the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: make release-publish VERSION="${BEE_VERSION#v}"
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !inputs.dry_run
+    timeout-minutes: 2
+'on':
+  push:
+    tags:
+    - v*
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Verify successful CI and build without publishing
+        type: boolean
+        default: true
+        required: true

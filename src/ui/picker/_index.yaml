@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.ui.picker
+entries:
+- name: folder
+  kind: library.lua
+  source: file://folder.lua
+  imports:
+    text: bee.ui:text
+    frame: bee.ui:frame
+    bounds: bee.values:bounds
+    reply: bee.values:reply

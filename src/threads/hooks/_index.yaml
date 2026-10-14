@@ -1,0 +1,67 @@
+version: '1.0'
+namespace: bee.threads.hooks
+entries:
+- name: capabilities
+  kind: library.lua
+  source: file://capabilities.lua
+- name: dispatcher
+  kind: library.lua
+  source: file://dispatcher.lua
+  modules: [sql, json, registry, funcs, security, uuid, hash, events, channel, time]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    database: bee.threads.persist:database
+    transaction: bee.threads.persist:transaction
+    traits: bee.threads.delivery:traits
+    application: bee.node:application
+    capabilities: bee.threads.hooks:capabilities
+    supervisor: bee.threads.hooks:supervisor
+- name: supervisor
+  kind: library.lua
+  source: file://supervisor.lua
+  modules: [funcs, channel, time, process, registry]
+  imports:
+    bounds: bee.values:bounds
+    hook_limits: bee.driver.binding:hook_limits
+- name: budget
+  kind: registry.entry
+  meta: {type: bee.session.hook_budget}
+  data: {invocation_ms: 2000, chain_ms: 8000}
+- name: invocation
+  kind: function.lua
+  source: file://invocation.lua
+  method: handle
+  modules: [funcs, security]
+  imports:
+    bounds: bee.values:bounds
+    application: bee.node:application
+    app_identity: bee.threads.records:app_identity
+    supervisor: bee.threads.hooks:supervisor
+  security: {policies: [bee.threads.hooks:execution_policy]}
+
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch_method.lua
+  method: handle
+  imports: {dispatcher: bee.threads.hooks:dispatcher}
+  security: {policies: [bee.threads.hooks:execution_policy]}
+- name: execution_policy
+  kind: security.policy
+  policy:
+    actions: [bee.threads.app_alias, db.get, registry.get, registry.find, registry.snapshot, registry.overlay.get, security.actor.create, security.scope.create, security.policy.get, security.policy_group.get, system.read, funcs.security, funcs.context, funcs.call, events.subscribe, events.send]
+    resources: '*'
+    effect: allow
+- name: response
+  kind: library.lua
+  source: file://response.lua
+  imports: {bounds: bee.values:bounds}
+- name: original
+  kind: library.lua
+  source: file://original.lua
+  modules: [sql, json, security]
+  imports:
+    bounds: bee.values:bounds
+    transaction: bee.threads.persist:transaction
+    traits: bee.threads.delivery:traits
+    supervisor: bee.threads.hooks:supervisor

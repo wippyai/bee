@@ -1,0 +1,152 @@
+local test = require("test")
+local funcs = require("funcs")
+local process = require("process")
+local tty = require("tty")
+local channel = require("channel")
+local time = require("time")
+local uuid = require("uuid")
+local bounds = require("bounds")
+local application = require("application")
+local principal = require("principal")
+local security = require("security")
+local thread_harness = require("thread_harness")
+local WORKSPACE = string.rep("a", 32)
+local function await(viewport: tty.Viewport, needles: {string}): string
+    local updates = assert(viewport:updates())
+    local deadline = time.after("10s")
+    while true do
+        local snapshot = viewport:snapshot()
+        local shown = snapshot and tty.text.plain(table.concat(snapshot.rows, "\n")) or ""
+        for _, needle in ipairs(needles) do if shown:find(needle, 1, true) then return shown end end
+        local selected = channel.select({updates:case_receive(), deadline:case_receive()})
+        assert(selected.channel ~= deadline, "No expected screen: " .. shown)
+    end
+end
+local function key(viewport: tty.Viewport, kind: string, text: string?)
+    assert(viewport:send({type = "key", action = "press", key_type = kind, key = text or ""}))
+end
+local function request(prompt: string, session: string?): string
+    local executor = funcs.new()
+    if session then executor = assert(executor:with_actor(assert(security.new_actor(session, {workspace_id = WORKSPACE})))) end
+    local raw, err = executor:call("bee.approvals.binding:request", {workspace_id = WORKSPACE, idempotency_key = uuid.v7(),
+        policy = "agent-access", request_kind = "permission", proposal = {kind = "operation", ref = "review-test", revision = "1", payload = {}}, prompt = {text = prompt}})
+    assert(not err, tostring(err))
+    local reply = assert(bounds.object(raw))
+    assert(reply.ok == true, tostring(reply.error))
+    return assert(bounds.id(assert(bounds.object(reply.value)).approval_id))
+end
+local function state(id: string): string
+    local raw = funcs.call("bee.approvals.binding:read", {approval_id = id})
+    return tostring(assert(bounds.object(assert(bounds.object(raw)).value)).state)
+end
+local function define_tests()
+    test.describe("Needs you deliberate review", function()
+        test.it("cannot approve arrival or replacement until that card is opened and fully shown", function()
+            local journal = thread_harness.session_owner(WORKSPACE)
+            local opened = thread_harness.value(journal:call("session_create", {operation_key = uuid.v7(), title = "Clock helper", route = {delivery = "hook", definition = "bee.harness.app:app"}}))
+            local session = assert(bounds.id(opened.session))
+            local id = request("Review this first request?", session)
+            local viewport = assert(tty.viewport({width = 120, height = 40}))
+            local identity = assert(principal.value(WORKSPACE, "review-window", "bee.approvals.inbox.app:app", "1", 1))
+            local launch = {version = 1, broker_pid = tostring(process.pid()), workspace_pid = tostring(process.pid()), workspace_id = WORKSPACE,
+                instance_id = "review-window", view_id = "review-window", definition_id = "bee.approvals.inbox.app:app", definition_revision = "1",
+                execution_generation = 1, registry_revision = "1", launch_token = "test-token", resume_schema = "", resume_state = "", arguments = {"--approval", id}}
+            local pid = assert(process.with_options({terminal = assert(viewport:grant())}):with_actor(assert(security.new_actor(identity.id, identity.metadata)))
+                :with_scope(application.scope("bee.approvals.inbox.app:app"))
+                :spawn_monitored("bee.approvals.inbox.app:app", "bee:workers", launch))
+            local ok, problem = pcall(function()
+                local list = await(viewport, {"Review this first request?"})
+                test.contains(list, "Clock helper")
+                test.is_nil((list:find(session, 1, true)))
+                key(viewport, "runes", "a")
+                await(viewport, {"Open a pending request", "Recorded:"})
+                test.eq(state(id), "pending", "arrival armed an unseen approval")
+                key(viewport, "enter")
+                await(viewport, {"Reviewing request"})
+                local second = request("Review this replacement request?", session)
+                assert(process.send(pid, "bee.app.navigate", {version = 1, instance_id = launch.instance_id, view_id = launch.view_id,
+                    execution_generation = 1, launch_token = launch.launch_token, arguments = {"--approval", second}}))
+                await(viewport, {"Review this replacement request?"})
+                key(viewport, "runes", "d")
+                await(viewport, {"Open a pending request", "Recorded:"})
+                test.eq(state(second), "pending", "navigation armed the replacement card")
+                key(viewport, "enter")
+                await(viewport, {"Reviewing request"})
+                assert(viewport:resize(40, 12))
+                await(viewport, {"Reviewing request"})
+                assert(viewport:resize(120, 40))
+                await(viewport, {"Reviewing request"})
+                key(viewport, "runes", "D")
+                await(viewport, {"Recorded:"})
+                test.eq(state(second), "decided")
+                test.eq(state(id), "pending")
+            end)
+            assert(process.cancel(pid))
+            viewport:close()
+            assert(ok, tostring(problem))
+        end)
+        test.it("records the person shortcut when approving folder consent in the inbox", function()
+            local raw, err = funcs.call("bee.approvals.binding:request", {contract_version = 2, workspace_id = WORKSPACE,
+                idempotency_key = uuid.v7(), policy = "configuration-setup", request_kind = "permission", presentation = "inbox",
+                proposal = {kind = "operation", ref = "bee.approvals:confirmation", revision = "1",
+                    payload = {action = "profile.folder_trust", target = {canonical_workdir = "/work"}}},
+                prompt = {text = "Trust this folder for the saved profile?"}})
+            assert(not err, tostring(err))
+            local envelope = assert(bounds.object(raw))
+            assert(envelope.ok == true, tostring(envelope.error))
+            local id = assert(bounds.id(assert(bounds.object(envelope.value)).approval_id))
+            local viewport = assert(tty.viewport({width = 120, height = 40}))
+            local identity = assert(principal.value(WORKSPACE, "folder-review", "bee.approvals.inbox.app:app", "1", 1))
+            local launch = {version = 1, broker_pid = tostring(process.pid()), workspace_pid = tostring(process.pid()), workspace_id = WORKSPACE,
+                instance_id = "folder-review", view_id = "folder-review", definition_id = "bee.approvals.inbox.app:app", definition_revision = "1",
+                execution_generation = 1, registry_revision = "1", launch_token = "test-token", resume_schema = "", resume_state = "", arguments = {"--approval", id}}
+            local pid = assert(process.with_options({terminal = assert(viewport:grant())}):with_actor(assert(security.new_actor(identity.id, identity.metadata)))
+                :with_scope(application.scope("bee.approvals.inbox.app:app")):spawn_monitored("bee.approvals.inbox.app:app", "bee:workers", launch))
+            local ok, problem = pcall(function()
+                await(viewport, {"Trust this folder for the saved profile?"})
+                key(viewport, "enter")
+                await(viewport, {"Reviewing request"})
+                key(viewport, "runes", "a")
+                await(viewport, {"Recorded:"})
+                test.eq(state(id), "decided")
+                local answer = assert(bounds.object(assert(bounds.object(funcs.call("bee.approvals.binding:read", {approval_id = id}))).value))
+                local records = assert(bounds.object(answer.lifecycle_records))
+                local decisions = assert(bounds.array(records.decisions, 64))
+                local decision = assert(bounds.object(decisions[#decisions]))
+                test.contains(tostring(decision.assurance_json), '"gesture":"shortcut"')
+                test.contains(tostring(decision.assurance_json), '"presentation":"inbox"')
+            end)
+            assert(process.cancel(pid))
+            viewport:close()
+            assert(ok, tostring(problem))
+        end)
+        test.it("rejects a wildcard in Settings before requesting an approval", function()
+            local queries = assert(process.listen("bee.app.query", {message = true}))
+            local viewport = assert(tty.viewport({width = 120, height = 40}))
+            local identity = assert(principal.value(WORKSPACE, "settings-review", "bee.apps.settings.app:app", "1", 1))
+            local launch = {version = 1, broker_pid = tostring(process.pid()), workspace_pid = tostring(process.pid()), workspace_id = WORKSPACE,
+                instance_id = "settings-review", view_id = "settings-review", definition_id = "bee.apps.settings.app:app", definition_revision = "1",
+                execution_generation = 1, registry_revision = "1", launch_token = "settings-token", resume_schema = "", resume_state = "", arguments = {}}
+            local pid = assert(process.with_options({terminal = assert(viewport:grant())}):with_actor(assert(security.new_actor(identity.id, identity.metadata)))
+                :with_scope(application.scope("bee.apps.settings.app:app")):with_context({["bee.test.settings.area"] = "bee.*"})
+                :spawn_monitored("bee.apps.settings.app:app", "bee:workers", launch))
+            local ok, problem = pcall(function()
+                await(viewport, {"SETTINGS"})
+                for _ = 1, 3 do key(viewport, "tab") end
+                await(viewport, {"No active edit grants"})
+                key(viewport, "runes", "e")
+                local form = await(viewport, {"Enable editing · this workspace"})
+                test.contains(form, "Test area")
+                test.contains(form, "Duration")
+                test.is_true(channel.select({queries:case_receive()}, true).default, "area form requested confirmation before Review")
+                assert(viewport:send({type = "key", action = "press", key_type = "runes", key = "s", ctrl = true}))
+                await(viewport, {"exact area name"})
+                local next_query = channel.select({queries:case_receive()}, true)
+                test.is_true(next_query.default, "invalid input created an approval confirmation")
+            end)
+            assert(process.cancel(pid)); viewport:close(); process.unlisten(queries)
+            assert(ok, tostring(problem))
+        end)
+    end)
+end
+return test.run_cases(define_tests)

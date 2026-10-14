@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.placement.docker.migrations
+entries:
+- name: grants
+  kind: function.lua
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-17T00:00:00Z'}
+  source: file://grants.lua
+  method: run
+  modules: [fs, json, system, registry]
+  security: {policies: ['bee.placement.docker.security:grant_migration_policy']}
+  imports:
+    migration: wippy.migration:migration
+    resources: bee.placement.native.env:resources
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    grants: bee.approvals.grants:store
+    legacy: bee.placement.docker.env:legacy

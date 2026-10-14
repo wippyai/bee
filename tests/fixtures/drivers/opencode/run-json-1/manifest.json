@@ -1,0 +1,13 @@
+{
+  "harness": "opencode",
+  "protocol": "stream-json",
+  "protocol_revision": "opencode-run-json-1",
+  "executable_version": "1.18.32",
+  "captured_at": "2026-09-26",
+  "capture": "opencode run --format json <prompt>, clean XDG home, no login; absolute workdir paths retained",
+  "samples": {
+    "plain": "step_start, one text step and step_finish with reason stop",
+    "tool": "step_start, a completed read tool_use, step_finish with reason tool-calls, a second step with the answer, step_finish with reason stop",
+    "error": "single error frame for an unknown model"
+  }
+}

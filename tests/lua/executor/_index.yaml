@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.executor.external
+entries:
+- name: permissions_test
+  kind: function.lua
+  source: file://permissions_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, hash]
+  imports:
+    test: wippy.test:test
+    permissions: bee.harness.permission:exchange
+    adapter: bee.harness.permission:adapter
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds

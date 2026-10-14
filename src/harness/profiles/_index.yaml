@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.harness.profiles
+entries:
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  modules:
+  - json
+  imports:
+    profile_values: bee.driver.descriptor:profile_values
+    access: bee.driver.profiles:profile_access
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+- name: grants
+  kind: library.lua
+  source: file://grants.lua
+  modules: [sql]
+  imports:
+    grants: bee.approvals.grants:store
+    bounds: bee.values:bounds
+    clock: bee.values:clock

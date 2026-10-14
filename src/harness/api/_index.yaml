@@ -1,0 +1,37 @@
+version: '1.0'
+namespace: bee.harness.api
+entries:
+- name: gateway_hook
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: POST
+  path: /hook/:action
+  func: bee.gateway.api:hook_http
+- name: gateway_hook_status
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: GET
+  path: /hook/:action/:event
+  func: bee.gateway.api:hook_status_http
+- name: gateway_hook_mcp
+  kind: http.endpoint
+  meta:
+    router: bee:gateway_router
+  method: POST
+  path: /hook/:action/mcp
+  func: bee.gateway.api:hook_mcp_http
+- name: api_router
+  kind: ns.requirement
+  meta:
+    value_kind: http.router
+    comment: The host router the Harness hook endpoints register on
+  default: bee:gateway_router
+  targets:
+  - entry: gateway_hook
+    path: .meta.router
+  - entry: gateway_hook_status
+    path: .meta.router
+  - entry: gateway_hook_mcp
+    path: .meta.router

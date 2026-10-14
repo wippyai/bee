@@ -1,0 +1,76 @@
+version: '1.0'
+namespace: bee.apps.settings.app
+entries:
+- name: live_updates
+  kind: library.lua
+  source: file://live_updates.lua
+  imports:
+    bounds: bee.values:bounds
+    semver: bee.hub.package:semver
+- name: edit_mode
+  kind: library.lua
+  source: file://edit_mode.lua
+  modules: [time]
+  imports:
+    forms: bee.ui.forms:forms
+    bounds: bee.values:bounds
+    profiles: bee.gov.types:activation_profile_decoder
+    kernel: bee.gov.types:protected_kernel
+    super_edit: bee.gov.security:super_edit
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules:
+  - tty
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    live_updates: bee.apps.settings.app:live_updates
+    super_edit: bee.gov.security:super_edit
+    edit_mode: bee.apps.settings.app:edit_mode
+    forms: bee.ui.forms:forms
+- name: choice
+  kind: library.lua
+  source: file://choice.lua
+  imports:
+    appearance: bee.ui:appearance
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Settings
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:system_menu, bee.shell:desktop_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - system
+  - process
+  - channel
+  - funcs
+  - events
+  - registry
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    client: bee.node:client
+    view: bee.apps.settings.app:view
+    choice: bee.apps.settings.app:choice
+    live_updates: bee.apps.settings.app:live_updates
+    edit_mode: bee.apps.settings.app:edit_mode
+    forms: bee.ui.forms:forms
+    app: bee.app:client
+  security:
+    policies:
+    - bee.apps.settings:edit_mode
+    - bee.apps.settings:edit_policy_read
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.apps.settings:hub_client
+    - bee.apps.settings:hub_updates
+    - bee.apps.settings:registry_commits

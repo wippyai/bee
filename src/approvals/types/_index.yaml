@@ -1,0 +1,36 @@
+version: '1.0'
+namespace: bee.approvals.types
+entries:
+- name: runtime_lease
+  kind: library.lua
+  source: file://runtime_lease.lua
+  imports:
+    bounds: bee.values:bounds
+- name: windows
+  kind: library.lua
+  source: file://windows.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+
+- name: exact_scope
+  kind: registry.entry
+  meta:
+    type: bee.approvals.scope
+    scope_type: exact
+    version: '1'
+    digest: 4ece134858741867be6791a940b93288439e4966646402e382074f125a27c8bb
+- name: runtime_grant
+  kind: function.lua
+  source: file://runtime_grant.lua
+  method: build
+  meta:
+    type: bee.approvals.grant-adapter
+    operation_ref: bee.approvals:runtime-lease
+    domain: runtime_lease
+  imports:
+    bounds: bee.values:bounds
+    grants: bee.approvals.grants:store
+    runtime_lease: bee.approvals.types:runtime_lease

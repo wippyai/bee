@@ -1,0 +1,88 @@
+version: '1.0'
+namespace: bee.tests.support
+entries:
+- name: fixtures
+  kind: library.lua
+  source: file://fixtures.lua
+  meta:
+    type: test_support
+  imports:
+    bounds: bee.values:bounds
+  modules:
+  - registry
+  - sql
+- name: schema
+  kind: library.lua
+  source: file://schema.lua
+  meta: {type: test_support}
+  modules: [sql, funcs, registry]
+- name: schema_policy
+  kind: security.policy
+  meta: {type: test_support, comment: A suite may run node migrations against its own database}
+  policy:
+    actions: [funcs.call, registry.find]
+    resources: '*'
+    effect: allow
+- name: gateway_admit_policy
+  kind: security.policy
+  meta: {type: test_support, comment: A carrier admits and revokes gateway bindings for the actions it runs}
+  policy:
+    actions: [bee.gateway.admit]
+    resources: '*'
+    effect: allow
+- name: gateway_manage_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The managed host opens and drains the listener and may revoke any binding}
+  policy:
+    actions: [bee.gateway.manage]
+    resources: [listener, bindings]
+    effect: allow
+- name: approval_effect
+  kind: library.lua
+  source: file://approval_effect.lua
+  modules:
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    committed: bee.tests.support:committed
+- name: approval_effect_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [cdc.stream]
+    resources: ['bee:changes']
+    effect: allow
+- name: committed
+  kind: library.lua
+  source: file://committed.lua
+  meta:
+    type: test_support
+  modules:
+  - cdc
+  - channel
+  - time
+- name: committed_test
+  kind: function.lua
+  source: file://committed_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - sql
+  imports:
+    test: wippy.test:test
+    committed: bee.tests.support:committed
+
+- name: processes
+  kind: library.lua
+  source: file://processes.lua
+  modules: [process, system]
+  meta: {type: test_support}
+
+- name: owner_observer
+  kind: library.lua
+  source: file://owner_observer.lua
+  modules: [process, events, system, channel, uuid]
+  imports: {demand: 'bee.process:demand'}
+  meta: {type: test_support}

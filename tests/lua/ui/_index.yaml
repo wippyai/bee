@@ -1,0 +1,91 @@
+version: '1.0'
+namespace: bee.tests.ui
+entries:
+- name: appearance_test
+  kind: function.lua
+  source: file://appearance_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+- name: viz_test
+  kind: function.lua
+  source: file://viz_test.lua
+  method: run
+  modules: [tty, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    frame: bee.ui:frame
+    viz: bee.ui.viz:viz
+    appearance: bee.ui:appearance
+- name: frame_test
+  kind: function.lua
+  source: file://frame_test.lua
+  modules: [tty]
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+- name: glyphs_test
+  kind: function.lua
+  source: file://glyphs_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    glyphs: bee.ui:glyphs
+- name: native_theme_test
+  kind: function.lua
+  source: file://native_theme_test.lua
+  method: run
+  modules: [tty, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    model: bee.shell:model
+    render: bee.shell:render
+    settings_view: bee.apps.settings.app:view
+- name: footer_apps_test
+  kind: function.lua
+  source: file://footer_apps_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    picker: bee.harness.app:picker_view
+    directory: bee.harness.app:directory_view
+    settings: bee.apps.settings.app:view
+    help: bee.apps.help.app:view
+    library: bee.apps.library.app:view
+    library_model: bee.apps.library.app:model
+    contents: bee.apps.library.app:contents
+    inbox: bee.approvals.inbox.app:view
+    inbox_model: bee.approvals.inbox.app:model
+    leases: bee.approvals.inbox.app:leases
+    gateway: bee.gateway.app:view
+    processes: bee.apps.processes.app:view
+    process_history: bee.apps.processes.app:history
+    process_probe: bee.apps.processes.app:probe
+- name: profile_discovery_test
+  kind: function.lua
+  source: file://profile_discovery_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    picker: bee.harness.app:picker_view
+    directory: bee.harness.app:directory_view
+    view: bee.harness.app:profile_view
+    editor: bee.harness.app:profile_editor
+    caller: bee.app:caller
+    agents: bee.harness.app:agents

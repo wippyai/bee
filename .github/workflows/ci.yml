@@ -1,0 +1,222 @@
+name: Bee CI
+'on':
+  push:
+    branches:
+    - main
+  pull_request: null
+  workflow_dispatch: null
+permissions:
+  contents: read
+  actions: read
+env:
+  WIPPY_CACHE_DIR: ${{ github.workspace }}/.wippy/cache
+  LUA_CACHE: ${{ github.workspace }}/.wippy/lua-cache
+jobs:
+  prepare:
+    name: Prepare application
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    outputs:
+      artifact: ${{ steps.key.outputs.artifact }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: linux/arm64
+    - name: Save host toolchain
+      if: steps.setup.outputs.tools-hit != 'true'
+      uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: ${{ steps.setup.outputs.tools-path }}
+        key: bee-tools-v3-${{ steps.setup.outputs.tools-key }}
+    - id: key
+      run: |-
+        key=$(make --no-print-directory ci-application-key)
+        printf "fingerprint=%s\nartifact=bee-application-%s\n" "$key" "$key" >> "$GITHUB_OUTPUT"
+    - id: application
+      uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: |-
+          .wippy/cache
+          ${{ steps.setup.outputs.lua-path }}
+        key: bee-lua-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup.outputs.runtime }}-${{ steps.key.outputs.fingerprint }}
+        restore-keys: bee-lua-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup.outputs.runtime }}-
+    - name: Restore prepared application
+      if: steps.application.outputs.cache-hit == 'true'
+      run: make ci-restore
+    - name: Prepare application and Lua seed
+      if: steps.application.outputs.cache-hit != 'true'
+      run: make ci-prepare LUA_CACHE="${{ steps.setup.outputs.lua-path }}"
+    - name: Save prepared application
+      if: steps.application.outputs.cache-hit != 'true'
+      uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: |-
+          .wippy/cache
+          ${{ steps.setup.outputs.lua-path }}
+        key: bee-lua-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup.outputs.runtime }}-${{ steps.key.outputs.fingerprint }}
+    - name: Warm native compilation
+      if: steps.setup.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
+      run: make ci-warm TARGET=linux/arm64
+    - name: Save platform cache
+      if: steps.setup.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
+      uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: ${{ steps.setup.outputs.go-path }}
+        key: ${{ steps.setup.outputs.cache-key }}
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.key.outputs.artifact }}
+        path: .wippy/prepared.tar
+        if-no-files-found: error
+        compression-level: 1
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: linux/amd64
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: ${{ needs.prepare.outputs.artifact }}
+        path: .wippy
+    - run: make ci-import
+    - name: Lint
+      run: make release-build-check lint
+    needs: prepare
+  boot:
+    name: Boot checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: linux/amd64
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: ${{ needs.prepare.outputs.artifact }}
+        path: .wippy
+    - run: make ci-import
+    - name: Boot checks
+      run: make boot-check
+    - name: Logs
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: boot-logs
+        path: |-
+          tests/.wippy/runs/**/output.log
+          tests/.wippy/runs/**/plan.json
+          tests/.wippy/runs/**/results.json
+          tests/.wippy/boot/**/output.log
+        if-no-files-found: ignore
+    needs: prepare
+  tests:
+    name: Lua shard ${{ matrix.shard }}/8
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: linux/amd64
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: ${{ needs.prepare.outputs.artifact }}
+        path: .wippy
+    - run: make ci-import
+    - name: Lua shard ${{ matrix.shard }}/8
+      run: make test-shard SHARDS=8 SHARD=${{ matrix.shard }}
+    - name: Logs
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: lua-shard-${{ matrix.shard }}
+        path: |-
+          tests/.wippy/runs/**/output.log
+          tests/.wippy/runs/**/plan.json
+          tests/.wippy/runs/**/results.json
+          tests/.wippy/boot/**/output.log
+        if-no-files-found: ignore
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+    needs: prepare
+  check:
+    name: Check gate
+    needs:
+    - prepare
+    - lint
+    - boot
+    - tests
+    - warm
+    - plan
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - run: make ci-gate
+      env:
+        CHECK_RESULTS: ${{ toJSON(needs) }}
+        WARM_REQUIRED: ${{ needs.plan.outputs.required }}
+  warm:
+    name: Warm ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: ${{ matrix.goos }}/${{ matrix.goarch }}
+    - name: Save host toolchain
+      if: steps.setup.outputs.tools-hit != 'true' && (matrix.goos != 'darwin' || matrix.goarch == 'arm64')
+      uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: ${{ steps.setup.outputs.tools-path }}
+        key: bee-tools-v3-${{ steps.setup.outputs.tools-key }}
+    - name: Warm native compilation
+      if: steps.setup.outputs.cache-hit != 'true'
+      run: make ci-warm TARGET=${{ matrix.goos }}/${{ matrix.goarch }}
+    - name: Save platform cache
+      if: steps.setup.outputs.cache-hit != 'true'
+      uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: ${{ steps.setup.outputs.go-path }}
+        key: ${{ steps.setup.outputs.cache-key }}
+    needs: plan
+    if: needs.plan.outputs.required == 'true'
+  plan:
+    name: Plan platform caches
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      required: ${{ steps.plan.outputs.required }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: plan
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: make ci-plan

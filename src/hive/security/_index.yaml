@@ -1,0 +1,83 @@
+version: '1.0'
+namespace: bee.hive.security
+entries:
+- name: application_dispatch
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find, registry.snapshot, registry.version, registry.overlay.get,
+      security.policy.get, security.policy_group.get, security.actor.create, security.scope.create,
+      funcs.call, funcs.security, funcs.context]
+    resources: '*'
+    effect: allow
+- name: admission_store
+  kind: security.policy
+  policy:
+    actions: [db.get]
+    resources: [bee:db]
+    effect: allow
+- name: supervisor
+  kind: security.policy
+  meta:
+    comment: The node supervisor reads its node identity and holds its mesh-wide name
+  policy:
+    actions: [system.read, process.registry.register, process.registry.register.eventual]
+    resources: ['node', 'cluster', 'bee.hive.supervisor', 'bee.hive.supervisor/*']
+    effect: allow
+- name: routing
+  kind: security.policy
+  meta:
+    comment: The node supervisor reads route entries, resolves the services they name and monitors the processes serving them
+  policy:
+    actions: [registry.get, registry.find, process.registry.lookup, process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow
+- name: routing_changes
+  kind: security.policy
+  meta:
+    comment: The node supervisor follows registry changes to keep its routes current
+  policy:
+    actions: [events.subscribe]
+    resources: [registry]
+    effect: allow
+- name: feed_changes
+  kind: security.policy
+  meta:
+    comment: The node supervisor wakes demand owners that declared interest in a committed Sync feed
+  policy:
+    actions: [events.subscribe]
+    resources: [bee.sync]
+    effect: allow
+- name: caller
+  kind: security.policy
+  meta:
+    comment: A caller checks this node's cluster membership and resolves a supervisor
+  policy:
+    actions: [system.read]
+    resources: [cluster, node]
+    effect: allow
+- name: messaging
+  kind: security.policy
+  meta:
+    comment: Hive calls and replies are messages between processes the registry resolved
+  policy:
+    actions: [process.send]
+    resources: '*'
+    effect: allow
+- name: outbound
+  kind: security.policy
+  policy:
+    actions: [registry.get, registry.find, registry.snapshot, registry.version, registry.overlay.get, process.registry.lookup]
+    resources: '*'
+    effect: allow
+- name: demand
+  kind: security.policy
+  policy:
+    actions: [events.send, events.subscribe, system.read]
+    resources: [supervisor]
+    effect: allow
+- name: demand_changes
+  kind: security.policy
+  policy:
+    actions: [cdc.subscribe]
+    resources: [bee:changes]
+    effect: allow

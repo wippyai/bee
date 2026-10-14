@@ -1,0 +1,1 @@
+{"schema_version":1,"id":"018f0000-0000-7000-8000-00000000d001","stream":{"kind":"session","id":"01a0ad3f-1bad-7bb1-9290-d73200470b9e"},"sequence":1,"record_type":"event","durability":"durable","payload_type":"run.terminal.completed","payload":{"terminal":"completed"}}

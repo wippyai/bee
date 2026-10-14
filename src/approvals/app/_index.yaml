@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.approvals.app
+entries:
+- name: confirmation
+  kind: library.lua
+  source: file://confirmation.lua
+  modules: [funcs, uuid]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    caller: bee.app:caller
+- name: dialog
+  kind: library.lua
+  source: file://dialog.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance

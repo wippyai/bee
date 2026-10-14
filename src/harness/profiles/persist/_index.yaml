@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.harness.profiles.persist
+entries:
+- name: migration
+  kind: library.lua
+  source: file://migration.lua
+  modules: [registry]
+  imports:
+    driver_profile: bee.driver.profiles:profile
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules:
+  - registry
+  - sql
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    sync: bee.sync.persist:store
+    transaction: bee.persist:transaction
+    protocol: bee.harness.profiles:protocol
+    migration: bee.harness.profiles.persist:migration
+    authority: bee.harness.profiles.persist:grants
+    clock: bee.values:clock
+
+- name: grants
+  kind: library.lua
+  source: file://grants.lua
+  modules: [sql, security, ctx, json]
+  imports:
+    protocol: bee.harness.profiles:protocol
+    profile_values: bee.driver.descriptor:profile_values
+    profile_grants: bee.harness.profiles:grants
+    grants: bee.approvals.grants:store
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    clock: bee.values:clock
+- name: grant_policy
+  kind: registry.entry
+  meta: {type: bee.approvals.grant-policy, domain: profile_choices, allow_permanent: true}

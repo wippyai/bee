@@ -1,0 +1,72 @@
+version: '1.0'
+namespace: bee.apps.processes.app
+entries:
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Process Manager
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:system_menu, bee.shell:desktop_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - system
+  - process
+  - channel
+  - time
+  imports:
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    probe: bee.apps.processes.app:probe
+    view: bee.apps.processes.app:view
+    client: bee.node:client
+    clock: bee.values:clock
+    history_values: bee.apps.processes.app:history
+    hive: bee.apps.processes.app:hive
+    application: bee.app:client
+    confirmation: bee.approvals.app:confirmation
+  security:
+    policies:
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.security.approvals:confirmation_client
+    - bee.security.approvals:confirmation_authority
+    - bee.apps.processes:observe
+    - bee.apps.processes:service_titles
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    probe: bee.apps.processes.app:probe
+    text: bee.ui:text
+    viz: bee.ui.viz:viz
+    history_values: bee.apps.processes.app:history
+    hive: bee.apps.processes.app:hive
+- name: history
+  kind: library.lua
+  source: file://history.lua
+  imports:
+    probe: bee.apps.processes.app:probe
+    viz: bee.ui.viz:viz
+- name: probe
+  kind: library.lua
+  source: file://probe.lua
+  modules:
+  - system
+  - registry
+  imports:
+    bounds: bee.values:bounds
+- name: hive
+  kind: library.lua
+  source: file://hive.lua
+  imports:
+    viz: bee.ui.viz:viz
+    bounds: bee.values:bounds

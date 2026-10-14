@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.harness
+entries:
+- name: types
+  kind: library.lua
+  source: file://types.lua
+  imports:
+    classify: bee.harness.catalog:classify
+    driver_types: bee.driver:types
+    placement_types: bee.placement:types
+    policy: bee.harness.carrier:policy
+    permission: bee.harness.permission:adapter
+    checkpoint: bee.harness.carrier:checkpoint
+    stream_json: bee.driver.transport:stream_json
+    settle: bee.harness.carrier:settle
+    record_types: bee.threads:record_types
+- name: profiles
+  kind: contract.definition
+  methods:
+  - name: call
+    description: Read or compare-and-set a typed saved agent profile owned by the host node

@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: app.hello.tests
+entries:
+- name: greeting_test
+  kind: function.lua
+  source: file://greeting_test.lua
+  method: run
+  meta: {type: test, suite: hello}
+  imports:
+    test: wippy.test:test
+    greeting: app.hello.model:greeting

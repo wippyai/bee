@@ -1,0 +1,33 @@
+version: '1.0'
+namespace: bee.apps.terminal.app
+entries:
+- name: command
+  kind: library.lua
+  source: file://command.lua
+  imports:
+    bounds: bee.values:bounds
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Terminal
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      terminal: true
+      menus: [bee.shell:apps_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - exec
+  - process
+  - channel
+  imports:
+    command: bee.apps.terminal.app:command
+  security:
+    policies:
+    - bee.apps.terminal:acquire
+    - bee.apps.terminal:run

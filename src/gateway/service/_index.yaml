@@ -1,0 +1,235 @@
+version: '1.0'
+namespace: bee.gateway.service
+entries:
+- name: worker
+  kind: function.lua
+  source: file://worker.lua
+  method: main
+  modules:
+  - logger
+  imports:
+    installation: bee.gateway.security:installation
+  meta:
+    type: bee.approvals.effect-consumer
+    destination: gateway.installation
+    operation_ref: bee.hub:apply
+    worker_name: bee.gateway.external
+    effect_prefix: 'hub-install:'
+- name: publication_worker
+  kind: function.lua
+  source: file://publication_worker.lua
+  method: main
+  modules:
+  - logger
+  imports:
+    publish: bee.gateway.security:publish
+  meta:
+    type: bee.approvals.effect-consumer
+    destination: gateway.publication
+    operation_ref: bee.hub:publish
+    worker_name: bee.gateway.external
+    effect_prefix: 'hub-publish:'
+- name: external_cli
+  kind: process.lua
+  source: file://external_cli.lua
+  method: main
+  modules:
+  - io
+  imports:
+    protocol: bee.hive:protocol
+    node_client: bee.node:client
+    bounds: bee.values:bounds
+    configuration: bee.gateway.api:external_configuration
+  meta:
+    command:
+      name: mcp
+      host: bee:terminal
+      short: Pair an external MCP client through Needs you
+      security:
+        actor:
+          id: bee.gateway.cli
+        policies:
+        - bee.hive.security:caller
+        - bee.hive.security:messaging
+- name: external
+  kind: process.lua
+  source: file://external.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  - cdc
+  - env
+  - system
+  - registry
+  imports:
+    protocol: bee.hive:protocol
+    bounds: bee.values:bounds
+    external: bee.gateway.binding:external
+    node_client: bee.node:client
+    demand: bee.process:demand
+    task: bee.process:task
+    effects: bee.gateway.service:effects
+- name: external_service
+  kind: process.service
+  process: bee.gateway.service:external
+  host: bee:workers
+  lifecycle:
+    auto_start: false
+    restart:
+      max_attempts: 10
+    requires:
+    - bee.hive.service:supervisor_service
+    security:
+      actor:
+        id: bee.gateway.external
+      policies:
+      - bee.gateway.security:external_host_policy
+      - bee.gateway.security:execute_policy
+      - bee.gateway.security:store_policy
+      - bee.gateway.security:grant_context_policy
+      - bee.gateway.security:address_call_policy
+      - bee.gateway.security:address_policy
+      - bee.gateway.security:supervisor_policy
+      - bee.gateway.security:access_call_policy
+      - bee.gateway.security:access_reference_policy
+      - bee.gateway.security:access_policy_read_policy
+      - bee.hive.security:messaging
+      - bee.gateway.security:effects_host_policy
+      - bee.gateway.security:effects_call_policy
+      - bee.gateway.security:effects_discovery_policy
+      - bee.process:client_policy
+      - bee.process:backlog_policy
+  meta:
+    title: "Gateway \xB7 owner"
+    type: bee.process.demand
+    demand:
+      name: bee.gateway.external
+      probe: bee.gateway.service:backlog
+      tables:
+      - bee_approval_requests
+- name: installation_scope
+  kind: registry.entry
+  meta:
+    type: bee.gateway.effect_scope
+  data:
+    kind: installation
+    entry: bee.gateway.service:worker
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:installation_policy
+    - bee.gateway.security:installation_queue_policy
+    - bee.gateway.security:installation_resolver_policy
+    - bee.gateway.security:installation_worker_policy
+    - bee.gateway.security:installation_read_policy
+    - bee.gateway.security:installation_apply_policy
+    - bee.gateway.security:installation_library_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.security.approvals:approval_installation_effects_policy
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
+    - bee.gateway.security:worker_host_policy
+    - bee.gateway.security:installation_task_policy
+- name: publication_scope
+  kind: registry.entry
+  meta:
+    type: bee.gateway.effect_scope
+  data:
+    kind: publication
+    entry: bee.gateway.service:publication_worker
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:publication_policy
+    - bee.gateway.security:publication_queue_policy
+    - bee.gateway.security:installation_resolver_policy
+    - bee.gateway.security:installation_worker_policy
+    - bee.gateway.security:publication_read_policy
+    - bee.gateway.security:publication_apply_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+    - bee.security.approvals:approval_publication_effects_policy
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
+    - bee.gateway.security:worker_host_policy
+    - bee.gateway.security:publication_task_policy
+- name: effects
+  kind: library.lua
+  source: file://effects.lua
+  modules:
+  - registry
+  - security
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+- name: backlog
+  kind: function.lua
+  source: file://effects.lua
+  method: pending
+  modules:
+  - registry
+  - security
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+- name: access_effects
+  kind: library.lua
+  source: file://access_effects.lua
+  modules: [funcs]
+  imports:
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway
+    subject_call: bee.gateway.security:subject_call
+- name: access_backlog
+  kind: function.lua
+  source: file://access_effects.lua
+  method: pending
+  modules: [funcs]
+  imports:
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway
+    subject_call: bee.gateway.security:subject_call
+- name: access_worker
+  kind: process.lua
+  source: file://access_worker.lua
+  method: main
+  imports:
+    worker: bee.process:worker
+    effects: bee.gateway.service:access_effects
+  meta:
+    type: bee.approvals.effect-consumer
+    destination: gateway.access
+    operation_ref: bee.gateway:access
+    worker_name: bee.gateway.access
+    effect_prefix: 'mcp:'
+- name: access_service
+  kind: process.service
+  process: bee.gateway.service:access_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: false
+    requires: [bee.hive.service:supervisor_service]
+    restart: {max_attempts: 10}
+    security:
+      actor: {id: bee.gateway.access}
+      policies:
+      - bee.gateway.security:access_effect_policy
+      - bee.gateway.security:store_policy
+      - bee.gateway.security:trait_registry_policy
+      - bee.gateway.security:execute_policy
+      - bee.gateway.security:access_call_policy
+      - bee.gateway.security:access_reference_policy
+      - bee.gateway.security:access_policy_read_policy
+      - bee.security.approvals:approval_consume_policy
+      - bee.process:client_policy
+      - bee.process:backlog_policy
+  meta:
+    type: bee.process.demand
+    demand:
+      name: bee.gateway.access
+      probe: bee.gateway.service:access_backlog

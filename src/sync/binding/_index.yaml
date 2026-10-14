@@ -1,0 +1,14 @@
+version: '1.0'
+namespace: bee.sync.binding
+entries:
+- name: replica_receive
+  kind: function.lua
+  source: file://replica_method.lua
+  method: handle
+  modules: [security]
+  security:
+    policies: [bee.sync.security:store]
+  imports:
+    protocol: bee.sync:replica_protocol
+    replicas: bee.sync.persist:replicas
+    transaction: bee.persist:transaction

@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.deps
+entries:
+- name: migration
+  kind: ns.dependency
+  component: wippy/migration
+  version: '>=v0.3.21'
+  parameters:
+  - name: app_db
+    value: bee:db
+- name: bootloader
+  kind: ns.dependency
+  component: wippy/bootloader
+  version: '>=v0.3.17'
+  parameters:
+  - name: application_host
+    value: bee:workers
+  - name: env_storage
+    value: bee:env

@@ -1,0 +1,204 @@
+version: '1.0'
+namespace: bee.harness.binding
+entries:
+- name: call
+  kind: function.lua
+  source: file://method.lua
+  method: handle
+  modules:
+  - security
+  - ctx
+  - system
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+    validation: bee.harness.profiles.binding:validation
+    store: bee.harness.profiles.persist:store
+    transaction: bee.persist:transaction
+  security:
+    policies:
+    - bee.harness.security:profile_store_policy
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports:
+    machine: bee.harness.carrier:machine
+- name: locate_probe
+  kind: function.lua
+  source: file://locate_probe.lua
+  method: handle
+  modules:
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    locator: bee.harness.launch:locate
+  security:
+    policies:
+    - bee.harness.security:launch_locate_probe_policy
+    - bee.harness.security:launch_docker_readiness_policy
+- name: setup_backend
+  kind: function.lua
+  source: file://setup_backend.lua
+  method: handle
+  modules:
+  - hash
+  - funcs
+  - registry
+  - security
+  imports:
+    bounds: bee.values:bounds
+    definition: bee.harness.launch:definitions
+- name: setup
+  kind: function.lua
+  source: file://setup_method.lua
+  method: handle
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+    admission: bee.harness.launch:admission
+    profiles: bee.harness.profiles:protocol
+    folder_consent: bee.harness.launch:folder_consent
+  security:
+    policies:
+    - bee.harness.launch:setup_facade_policy
+    - bee.harness.launch:folder_consent_policy
+- name: present
+  kind: function.lua
+  source: file://presentation_method.lua
+  method: open
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+  security:
+    policies:
+    - bee.harness.security:presentation_facade_policy
+- name: present_restore
+  kind: function.lua
+  source: file://presentation_method.lua
+  method: restore
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+  security:
+    policies:
+    - bee.harness.security:presentation_facade_policy
+- name: present_type
+  kind: function.lua
+  source: file://presentation_method.lua
+  method: type
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+  security:
+    policies:
+    - bee.harness.security:presentation_facade_policy
+- name: present_activity
+  kind: function.lua
+  source: file://presentation_method.lua
+  method: activity
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+  security:
+    policies:
+    - bee.harness.security:presentation_facade_policy
+- name: profiles_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.harness:profiles
+    methods:
+      call: bee.harness.binding:call
+- name: windows
+  kind: library.lua
+  source: file://windows.lua
+  imports:
+    window: bee.placement.native.service:window
+    docker_window: bee.placement.docker.service:window
+
+- name: set_credential_backend
+  kind: function.lua
+  source: file://setup_backend.lua
+  method: set_credential
+  modules:
+  - hash
+  - funcs
+  - registry
+  - security
+  imports:
+    bounds: bee.values:bounds
+    definition: bee.harness.launch:definitions
+
+- name: set_credential
+  kind: function.lua
+  source: file://setup_method.lua
+  method: set_credential
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+    admission: bee.harness.launch:admission
+    profiles: bee.harness.profiles:protocol
+    folder_consent: bee.harness.launch:folder_consent
+  security:
+    policies:
+    - bee.harness.launch:setup_facade_policy
+- name: permission_hook
+  kind: function.lua
+  source: file://permission_hook.lua
+  method: handle
+  modules: [funcs, security, process, channel, time, uuid]
+  imports:
+    bounds: bee.values:bounds
+    prestart: bee.harness.carrier:prestart
+  security:
+    policies: [bee.harness.security:permission_hook_policy]
+
+- name: profile_get
+  kind: function.lua
+  source: file://profile_tools.lua
+  method: get
+  modules: [contract, ctx]
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+
+- name: profile_list
+  kind: function.lua
+  source: file://profile_tools.lua
+  method: list
+  modules: [contract, ctx]
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+
+- name: profile_put
+  kind: function.lua
+  source: file://profile_tools.lua
+  method: put
+  modules: [contract, ctx]
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+- name: extension_hook
+  kind: function.lua
+  source: file://extension_hook.lua
+  method: handle
+  modules: [funcs, security, process, channel, time, uuid]
+  imports:
+    bounds: bee.values:bounds
+    prestart: bee.harness.carrier:prestart
+    supervisor: bee.threads.hooks:supervisor
+  security: {policies: [bee.harness.security:permission_hook_policy]}

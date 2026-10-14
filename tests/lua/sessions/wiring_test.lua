@@ -1,0 +1,73 @@
+-- MIT. The composed journal must resolve every scheduler operation.
+local test = require("test")
+local journal = require("journal")
+local registry = require("registry")
+local security = require("security")
+local funcs = require("funcs")
+local function define_tests()
+    test.describe("Sessions composition", function()
+        test.it("loads the trusted source identity provider for a caller without a session", function()
+            local actor = assert(security.new_actor("fixture:source-caller", {workspace_id = string.rep("a", 32)}))
+            local scope = assert(security.new_scope({assert(security.policy("bee.threads.sessions.security:source_identity_call_policy"))}))
+            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:source_identity", {})
+            test.is_nil(err, tostring(err))
+            local reply = raw :: {[string]: unknown}
+            test.is_true(reply.ok == true)
+            test.not_nil(reply.value)
+        end)
+        test.it("lets a window viewer restore a window and a window bridge create only window principals", function()
+            local actor = security.new_actor("fixture:viewer", {})
+            local viewer = security.new_scope({assert(security.policy("bee.harness.security:presentation_viewer_policy"))})
+            test.eq(viewer:evaluate(actor, "funcs.call", "bee.harness.binding:present_restore"), "allow")
+            test.is_false(viewer:evaluate(actor, "funcs.call", "bee.harness.service:restore") == "allow")
+            local bridge = security.new_scope({assert(security.policy("bee.harness.security:presentation_bridge_policy"))})
+            local window = "bee.application:" .. string.rep("a", 32) .. ":" .. string.rep("b", 64)
+            test.eq(bridge:evaluate(actor, "security.actor.create", window), "allow")
+            local launched = "bee.application:" .. string.rep("a", 32) .. ":01a10deb-dab3-71ae-8c77-b3e2007b7773"
+            test.eq(bridge:evaluate(actor, "security.actor.create", launched), "allow")
+            test.is_false(bridge:evaluate(actor, "security.actor.create", "bee.node:owner") == "allow")
+            test.is_false(bridge:evaluate(actor, "security.actor.create", "bee.application:" .. string.rep("a", 32) .. ":short") == "allow")
+        end)
+        test.it("admits exact session operations and rejects namespaced impostors", function()
+            local actor = security.new_actor("fixture:caller", {})
+            local scope = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_session_policy"))})
+            test.eq(scope:evaluate(actor, "funcs.call", "bee.threads.sessions.binding:run"), "allow")
+            test.eq(scope:evaluate(actor, "contract.open", "bee.threads.sessions:contract"), "allow")
+            test.is_false(scope:evaluate(actor, "funcs.call", "bee.threads.sessions.binding:unadmitted") == "allow")
+            test.is_false(scope:evaluate(actor, "contract.open", "bee.threads.sessions:unadmitted") == "allow")
+            local probe = security.new_scope({assert(security.policy("bee.harness.security:launch_locate_probe_policy"))})
+            test.eq(probe:evaluate(actor, "env.get", "bee.driver.claude.env:executable"), "allow")
+            test.is_false(probe:evaluate(actor, "env.get", "bee.driver.claude.env:executable.extra") == "allow")
+            test.eq(probe:evaluate(actor, "env.get", "bee.driver.gemini.env:executable"), "allow")
+            test.is_false(probe:evaluate(actor, "env.get", "bee.driver.gemini.env:token") == "allow")
+            test.is_false(probe:evaluate(actor, "env.get", "bee.driver.gemini.secrets:executable") == "allow")
+        end)
+        test.it("probes an agent's executable for a caller that holds only the session tools", function()
+            local actor = assert(security.new_actor("fixture:mcp-subject", {}))
+            local scope = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_session_policy"))})
+            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.harness.binding:locate_probe",
+                {binding_ref = "bee.driver.claude.binding:binding", profile_id = "batch"})
+            test.is_nil(err, tostring(err))
+            local reply = raw :: {[string]: unknown}
+            test.is_true(reply.ok == true and reply.located == true, tostring(reply.error))
+            local result = reply.result :: {[string]: unknown}
+            local executable = result.executable :: {[string]: unknown}
+            test.is_true(executable.present == true and type(executable.version) == "string",
+                "the probe ran the executable: " .. tostring(result.reason))
+        end)
+        test.it("registers every callable journal method", function()
+            for _, name in ipairs(journal.METHODS) do
+                local target, err = journal.target(name)
+                test.is_nil(err)
+                test.eq(target, "bee.threads.binding:" .. name)
+            end
+        end)
+        test.it("registers the real owner and catalog bindings", function()
+            for _, ref in ipairs({"bee.threads.sessions.binding:owner_binding", "bee.threads.sessions.binding:catalog_binding"}) do
+                local entry = assert(registry.get(ref))
+                test.not_nil(entry.data.contracts[1].methods)
+            end
+        end)
+    end)
+end
+return test.run_cases(define_tests)

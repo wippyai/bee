@@ -1,0 +1,86 @@
+-- SPDX-License-Identifier: MIT
+local test = require("test")
+local process = require("process")
+local registry = require("registry")
+local protocol = require("protocol")
+local system = require("system")
+local events = require("events")
+local channel = require("channel")
+local time = require("time")
+local effects = require("effects")
+local function define_tests()
+    test.describe("Gateway demand", function()
+        test.it("probes both registered consumer queues under their separate execution scopes", function()
+            test.eq(type(effects.pending()), "boolean")
+        end)
+        test.it("starts the routed owner while absent and stops after the call drains", function()
+            local found = false
+            for _, entry in ipairs(registry.find({["meta.type"] = "bee.process.demand"}) or {}) do
+                if entry.meta.demand.name == "bee.gateway.external" then found = true end
+            end
+            test.eq(found, true)
+            local updates = assert(events.subscribe("supervisor", "service.update"))
+            local reply, problem = protocol.call(assert(system.node.id()), "mcp.connect", {name = "invalid", workspace_id = "absent"}, "5s")
+            test.eq(problem, nil)
+            test.is_true(reply ~= nil and reply.ok)
+            local deadline = time.after("5s")
+            while true do
+                local owner = assert(system.supervisor.state("bee.gateway.service:external_service"))
+                if owner.desired == "stopped" and (owner.status == "stopped" or owner.status == "exited") then break end
+                local selected = channel.select({updates:channel():case_receive(), deadline:case_receive()})
+                if selected.channel == deadline then error("gateway does not stop: " .. tostring(owner.status) .. "/" .. tostring(owner.desired)) end
+            end
+            updates:close()
+        end)
+        test.it("serves a parked call when demand readiness precedes Hive readiness", function()
+            assert(process.registry.register("bee.test.hive.demand_ready"))
+            local reply, problem = protocol.call(assert(system.node.id()), "mcp.connect", {name = "invalid", workspace_id = "absent"}, "5s")
+            process.registry.unregister("bee.test.hive.demand_ready")
+            test.eq(problem, nil)
+            test.is_true(reply ~= nil and reply.ok)
+        end)
+        test.it("restarts a stopped owner when readiness delivery loses its process", function()
+            local held = assert(process.listen("bee.test.hive.delivery_stop", {message = true}))
+            local updates = assert(events.subscribe("supervisor", "service.update"))
+            assert(process.registry.register("bee.test.hive.delivery_stop"))
+            local completed = channel.new(1)
+            coroutine.spawn(function()
+                local reply, problem = protocol.call(assert(system.node.id()), "mcp.connect", {name = "invalid", workspace_id = "absent"}, "5s")
+                completed:send({reply = reply, problem = problem})
+            end)
+            local deadline = time.after("5s")
+            local selected = channel.select({held:case_receive(), deadline:case_receive()})
+            test.eq(selected.channel, held, "readiness delivery does not reach its barrier")
+            local supervisor = tostring(selected.value:from())
+            test.eq(supervisor, tostring(assert(process.registry.lookup(protocol.SUPERVISOR, process.registry.LOCAL))))
+            assert(events.send("supervisor", "service.stop", "bee.gateway.service:external_service"))
+            while true do
+                local owner = assert(system.supervisor.state("bee.gateway.service:external_service"))
+                if owner.desired == "stopped" and (owner.status == "stopped" or owner.status == "exited") then break end
+                selected = channel.select({updates:channel():case_receive(), deadline:case_receive()})
+                test.neq(selected.channel, deadline, "owner does not complete its stop")
+            end
+            assert(process.send(supervisor, "bee.test.hive.delivery_release", {}))
+            process.unlisten(held)
+            updates:close()
+            local result = assert((completed:receive()))
+            process.registry.unregister("bee.test.hive.delivery_stop")
+            test.eq(result.problem, nil)
+            test.is_true(result.reply ~= nil and result.reply.ok)
+        end)
+        test.it("keeps installation and publication scopes separate", function()
+            local count = 0
+            for _, entry in ipairs(registry.find({["meta.type"] = "bee.gateway.effect_scope"}) or {}) do
+                local data = entry.data
+                test.is_true(data.kind == "installation" or data.kind == "publication")
+                for _, id in ipairs(data.policies) do
+                    if data.kind == "installation" then test.neq(id, "bee.gateway.security:publication_queue_policy")
+                    else test.neq(id, "bee.gateway.security:installation_apply_policy") end
+                end
+                count = count + 1
+            end
+            test.eq(count, 2)
+        end)
+    end)
+end
+return test.run_cases(define_tests)

@@ -1,0 +1,84 @@
+version: '1.0'
+namespace: bee.apps.library
+entries:
+- name: destination_client
+  kind: security.policy
+  meta:
+    comment: The Library calls only the destination-owned governance facade, which authorizes each delivery operation before entering its private scope
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.gov.binding:destination_call
+    effect: allow
+- name: delivery_operations
+  kind: security.policy
+  meta:
+    comment: The person operating the Library reads, receives, reviews, chooses and installs versions delivered to any workspace of this node; the approval decision stays with the approval owner
+  policy:
+    actions:
+    - bee.gov.delivery.read
+    - bee.gov.delivery.manage
+    - bee.gov.delivery.activate
+    - bee.gov.delivery.follow
+    resources: '*'
+    effect: allow
+- name: delivery_share
+  kind: security.policy.expr
+  meta:
+    comment: The person shares the installed version of an application made on this bee with the hive through the delivery facade, which publishes only a version the person installed
+  policy:
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || (action == "bee.gov.delivery.publish" && resource != "")
+    actions: [funcs.call, bee.gov.delivery.publish]
+    resources: [bee.gov.binding:delivery_call, '*']
+    effect: allow
+- name: hub_client
+  kind: security.policy
+  meta:
+    comment: The Library calls only the public Hub facade, which authorizes each package operation before entering its private execution scope
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.hub.binding:call
+    effect: allow
+- name: hub_operations
+  kind: security.policy
+  meta:
+    comment: The person operating the Library reads, plans and applies Hub package operations; no registry or Hub credential scope is granted to the app
+  policy:
+    actions:
+    - bee.hub.read
+    - bee.hub.manage
+    resources: '*'
+    effect: allow
+- name: names_client
+  kind: security.policy
+  meta:
+    comment: The Library asks the node names facade, and only that, which bees its shared versions came from are called
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.node.binding:names
+    effect: allow
+- name: names_read
+  kind: security.policy
+  meta:
+    comment: The person operating the Library reads the name each bee reports for itself; the read names nothing else of a node
+  policy:
+    actions:
+    - bee.node.names.read
+    resources:
+    - nodes
+    effect: allow
+- name: self_update
+  kind: security.policy
+  meta:
+    comment: Only the person-operated Library app may update the Bee deployment root; agents receive no self-update authority
+  policy:
+    actions:
+    - bee.hub.self_update
+    resources:
+    - bee/bee
+    effect: allow

@@ -1,0 +1,233 @@
+-- MIT.
+local test = require("test")
+local service = require("service")
+local bounds = require("bounds")
+local registry = require("registry")
+local uuid = require("uuid")
+local schema = require("schema")
+local sql = require("sql")
+type Object = {[string]: unknown}
+local SUBJECT, PERSON, POLICY = "window-subject", "window-person", "window-policy"
+local NOW = 1790942400000
+local function key(): string return assert(uuid.v4()) end
+local function value(result: {ok: boolean, value: unknown, code: string?, message: string?}): Object
+    if not result.ok then error(tostring(result.code) .. ": " .. tostring(result.message)) end
+    return assert(bounds.object(result.value))
+end
+local function install_policy()
+    local entry = assert(registry.get("bee.security.approvals:approver_policies"))
+    local data = assert(bounds.object(entry.data))
+    local listed = assert(bounds.array(data.policies, 64))
+    listed[#listed + 1] = {name = POLICY, approvers = {PERSON}, max_ttl_ms = 14400000}
+    listed[#listed + 1] = {name = "permanent-window-policy", approvers = {PERSON}, max_ttl_ms = 14400000, allow_permanent = true}
+    data.policies = listed
+    local change = registry.snapshot():changes()
+    assert(change:update(entry)); assert(change:apply())
+end
+local function open(): sql.DB
+    local db = schema.open("bee.approvals:test_db", "bee.approvals.migrations")
+    assert(service.establish(db))
+    return db
+end
+local function request(db: sql.DB, workspace: string, payload: Object?, at: integer?, subject: string?): Object
+    return value(service.execute(db, subject or SUBJECT, "request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY,
+        proposal = {kind = "operation", ref = "test:write", revision = "1", payload = payload or {path = "one.txt", action = "write"}},
+        prompt = {text = "Write one file"}}, at or NOW))
+end
+local function item(view: Object, ttl: integer?): Object
+    return {approval_id = view.approval_id, expected_revision = view.revision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest, decision = "approved", window_ttl_ms = ttl}
+end
+local function managed_request(db: sql.DB, workspace: string, tool: string?, input: string?, adapter: string?): Object
+    return value(service.execute(db, SUBJECT, "request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY,
+        proposal = {kind = "attempt", ref = "same-attempt", revision = "same-plan", action_id = "same-action", input_digest = input or string.rep("a", 64),
+            payload = {adapter_ref = "test:adapter", adapter_digest = adapter or string.rep("b", 64), permission_request_id = key(), correlation_id = key(), tool_name = tool or "Write"}},
+        prompt = {text = "Write one file"}}, NOW))
+end
+local function define_tests()
+    test.describe("Person approval windows", function()
+        install_policy()
+        test.it("lists and revokes windows through the common Grant API with one authority identity", function()
+            local db, workspace = open(), key()
+            local first = request(db, workspace)
+            local granted = value(service.execute(db, PERSON, "decide", item(first, 1800000), NOW))
+            local window = assert(bounds.object(granted.window_grant))
+            local listed = value(service.execute(db, PERSON, "grant", {operation = "list", workspace_id = workspace}, NOW))
+            local grants = assert(bounds.array(listed.grants, 64))
+            test.eq(#grants, 1)
+            local grant = assert(bounds.object(grants[1]))
+            test.eq(grant.grant_id, window.grant_id)
+            test.eq(grant.domain, "approval_window")
+            local records = assert(bounds.object(granted.lifecycle_records))
+            test.eq(#assert(bounds.array(records.grants, 64)), 1)
+            value(service.execute(db, PERSON, "grant", {operation = "revoke", grant_id = grant.grant_id, expected_revision = grant.revision}, NOW + 1))
+            test.eq(request(db, workspace, nil, NOW + 2).state, "pending")
+            test.eq(value(service.execute(db, SUBJECT, "read", {approval_id = first.approval_id}, NOW + 2)).decision, "approved")
+            local history = assert(db:query("SELECT kind FROM bee_approval_grant_history WHERE grant_id = ? ORDER BY revision", {grant.grant_id}))
+            test.eq(history[#history].kind, "grant.revoked")
+            db:release()
+        end)
+        test.it("auto settles only the exact subject capability and scope and records every use", function()
+            local db, workspace = open(), key()
+            local first = request(db, workspace)
+            local granted = value(service.execute(db, PERSON, "decide", item(first, 1800000), NOW))
+            local grant = assert(bounds.object(granted.window_grant))
+            test.eq(grant.granted_by, PERSON)
+            test.eq(grant.until_ms, NOW + 1800000)
+            test.eq(service.execute(db, "not-the-person", "grant_window", {operation = "revoke", grant_id = grant.grant_id}, NOW).code, "DENIED")
+            local hidden = value(service.execute(db, "not-the-person", "grant_window", {operation = "list", workspace_id = workspace}, NOW))
+            test.eq(#assert(bounds.array(hidden.grants, 64)), 0)
+            local matched = request(db, workspace, nil, NOW + 1)
+            test.eq(matched.decision, "approved")
+            test.eq(matched.allowed_by_grant, grant.grant_id)
+            test.eq(matched.revision, 2)
+            test.eq(request(db, workspace, {path = "two.txt", action = "write"}).state, "pending")
+            test.eq(request(db, workspace, {path = "one.txt", action = "read"}).state, "pending")
+            test.eq(request(db, key()).state, "pending")
+            test.eq(request(db, workspace, nil, NOW, "other-subject").state, "pending")
+            local history = assert(db:query("SELECT reason FROM bee_approval_history WHERE approval_id = ? AND revision = 2", {matched.approval_id}))
+            test.ok(tostring(history[1].reason):find(tostring(grant.grant_id), 1, true) ~= nil)
+            db:release()
+        end)
+        test.it("keeps permanent consent in the central window authority and requires host opt-in", function()
+            local db, workspace = open(), key()
+            local denied = request(db, workspace)
+            local decision = item(denied)
+            decision.window_permanent = true
+            test.eq(service.execute(db, PERSON, "decide", decision, NOW).code, "FORBIDDEN")
+            local created = value(service.execute(db, SUBJECT, "request", {workspace_id = workspace, idempotency_key = key(),
+                request_kind = "permission", policy = "permanent-window-policy",
+                proposal = {kind = "operation", ref = "test:write", revision = "1", payload = {path = "one.txt"}},
+                prompt = {text = "Allow until revoked"}}, NOW))
+            decision = item(created)
+            decision.window_permanent = true
+            local granted = value(service.execute(db, PERSON, "decide", decision, NOW))
+            local grant = assert(bounds.object(granted.window_grant))
+            test.eq(grant.until_ms, 253402300799000)
+            local listed = value(service.execute(db, PERSON, "grant_window", {operation = "list", workspace_id = workspace}, NOW + 315360000000))
+            test.eq(#assert(bounds.array(listed.grants, 64)), 1)
+            value(service.execute(db, PERSON, "grant_window", {operation = "revoke", grant_id = grant.grant_id}, NOW + 1))
+            listed = value(service.execute(db, PERSON, "grant_window", {operation = "list", workspace_id = workspace}, NOW + 2))
+            test.eq(#assert(bounds.array(listed.grants, 64)), 0)
+            db:release()
+        end)
+        test.it("managed correlation identities do not broaden exact tool input or adapter authority", function()
+            local db, workspace = open(), key()
+            local first = managed_request(db, workspace)
+            value(service.execute(db, PERSON, "decide", item(first, 1800000), NOW))
+            test.eq(managed_request(db, workspace).decision, "approved")
+            test.eq(managed_request(db, workspace, "Read").state, "pending")
+            test.eq(managed_request(db, workspace, nil, string.rep("c", 64)).state, "pending")
+            test.eq(managed_request(db, workspace, nil, nil, string.rep("d", 64)).state, "pending")
+            db:release()
+        end)
+        test.it("allow_grant records permanent terms and reuses only the exact requester scope", function()
+            local db, workspace = open(), key()
+            local asked: Object = {contract_version = 2, workspace_id = workspace, idempotency_key = key(),
+                request_kind = "permission", policy = "permanent-window-policy",
+                proposal = {kind = "operation", ref = "test:write", revision = "1", payload = {path = "one.txt"}},
+                prompt = {text = "Allow until revoked"}}
+            local created = value(service.execute(db, SUBJECT, "request", asked, NOW))
+            local decision = item(created)
+            decision.decision, decision.window_permanent = "allow_grant", true
+            local granted = value(service.execute(db, PERSON, "decide", decision, NOW))
+            local grant = assert(bounds.object(granted.window_grant))
+            test.eq(grant.until_ms, 253402300799000)
+            test.eq(value(service.execute(db, PERSON, "decide", decision, NOW + 1)).approval_id, created.approval_id)
+            asked.idempotency_key = key()
+            test.eq(value(service.execute(db, SUBJECT, "request", asked, NOW + 1)).allowed_by_grant, grant.grant_id)
+            asked.idempotency_key = key()
+            test.eq(value(service.execute(db, "other-subject", "request", asked, NOW + 1)).state, "pending")
+            db:release()
+        end)
+        test.it("permanent windows cannot broaden a separately reviewed subject or scope", function()
+            local db, workspace = open(), key()
+            local created = value(service.execute(db, SUBJECT, "request", {contract_version = 2, workspace_id = workspace,
+                idempotency_key = key(), request_kind = "permission", policy = "permanent-window-policy",
+                subject = {principal_id = "other-subject"}, scope = {type = "exact", parameters = {target = "one"}},
+                proposal = {kind = "operation", ref = "test:write", revision = "1", payload = {path = "one.txt"}},
+                prompt = {text = "Allow until revoked"}}, NOW))
+            local decision = item(created)
+            decision.window_permanent = true
+            test.eq(service.execute(db, PERSON, "decide", decision, NOW).code, "INVALID_ARGUMENT")
+            local active = value(service.execute(db, PERSON, "grant_window", {operation = "list", workspace_id = workspace}, NOW))
+            test.eq(#assert(bounds.array(active.grants, 64)), 0)
+            test.eq(value(service.execute(db, SUBJECT, "read", {approval_id = created.approval_id}, NOW)).state, "pending")
+            db:release()
+        end)
+        test.it("expiry re-prompts at the exact boundary and revocation stops new automatic decisions", function()
+            local db, workspace = open(), key()
+            local first = request(db, workspace)
+            value(service.execute(db, PERSON, "decide", item(first, 1800000), NOW))
+            test.eq(request(db, workspace, nil, NOW + 1799999).decision, "approved")
+            local expired = request(db, workspace, nil, NOW + 1800000)
+            test.eq(expired.state, "pending")
+            test.eq(expired.reallow, true)
+            local granted = value(service.execute(db, PERSON, "decide", item(expired, 1800000), NOW + 1800000))
+            local grant = assert(bounds.object(granted.window_grant))
+            value(service.execute(db, PERSON, "grant_window", {operation = "revoke", grant_id = grant.grant_id}, NOW + 1800001))
+            test.eq(request(db, workspace, nil, NOW + 1800002).state, "pending")
+            db:release()
+        end)
+        test.it("restart preserves active windows and the approver can list them", function()
+            local db, workspace = open(), key()
+            local first = request(db, workspace)
+            local granted = value(service.execute(db, PERSON, "decide", item(first, 1800000), NOW))
+            db:release()
+            db = open()
+            test.eq(request(db, workspace, nil, NOW + 1).decision, "approved")
+            local active = value(service.execute(db, PERSON, "grant_window", {operation = "list", workspace_id = workspace}, NOW + 1))
+            local grants = assert(bounds.array(active.grants, 64))
+            test.eq(#grants, 1)
+            test.eq(assert(bounds.object(grants[1])).grant_id, assert(bounds.object(granted.window_grant)).grant_id)
+            db:release()
+        end)
+        test.it("a batch with repeated scope owns one revocable window", function()
+            local db, workspace = open(), key()
+            local first, second = request(db, workspace), request(db, workspace)
+            value(service.execute(db, PERSON, "decide_batch", {decisions = {item(first), item(second)}, window_ttl_ms = 1800000}, NOW))
+            local active = value(service.execute(db, PERSON, "grant_window", {operation = "list", workspace_id = workspace}, NOW))
+            local grants = assert(bounds.array(active.grants, 64))
+            test.eq(#grants, 1)
+            value(service.execute(db, PERSON, "grant_window", {operation = "revoke", grant_id = assert(bounds.object(grants[1])).grant_id}, NOW + 1))
+            test.eq(request(db, workspace, nil, NOW + 2).state, "pending")
+            db:release()
+        end)
+        test.it("enforces the policy cap and applies one window choice atomically to every batch item", function()
+            local db, workspace = open(), key()
+            local first, second = request(db, workspace), request(db, workspace, {path = "two.txt", action = "write"})
+            test.eq(service.execute(db, PERSON, "decide", item(first, 14400001), NOW).code, "FORBIDDEN")
+            test.eq(service.execute(db, PERSON, "decide", item(first, -1), NOW).code, "INVALID_ARGUMENT")
+            value(service.execute(db, PERSON, "decide_batch", {decisions = {item(first), item(second)}, window_ttl_ms = 1800000}, NOW))
+            test.eq(request(db, workspace, nil, NOW + 1).decision, "approved")
+            test.eq(request(db, workspace, {path = "two.txt", action = "write"}, NOW + 1).decision, "approved")
+            local another = key()
+            local third, fourth = request(db, another), request(db, another, {path = "three.txt", action = "write"})
+            local stale = item(fourth)
+            stale.expected_revision = 99
+            test.eq(service.execute(db, PERSON, "decide_batch", {decisions = {item(third), stale}, window_ttl_ms = 1800000}, NOW).code, "CONFLICT")
+            test.eq(request(db, another, nil, NOW + 1).state, "pending")
+            fourth = request(db, key())
+            test.eq(service.execute(db, PERSON, "decide_batch", {decisions = {item(third), item(fourth)}, window_ttl_ms = 1800000}, NOW).code, "INVALID_ARGUMENT")
+            db:release()
+        end)
+        test.it("forgets expired windows only after retention and all settlement references", function()
+            local db, workspace = open(), key()
+            local first = request(db, workspace)
+            local granted = value(service.execute(db, PERSON, "decide", item(first, 1800000), NOW))
+            local grant = assert(bounds.object(granted.window_grant))
+            local second = request(db, workspace, nil, NOW + 1)
+            value(service.execute(db, PERSON, "reconcile", {}, NOW + 1800001))
+            test.eq(#assert(db:query("SELECT grant_id FROM bee_approval_grants WHERE grant_id = ?", {grant.grant_id})), 1)
+            value(service.execute(db, PERSON, "reconcile", {}, NOW + 1800001 + service.RETENTION_MS))
+            test.eq(#assert(db:query("SELECT grant_id FROM bee_approval_grants WHERE grant_id = ?", {grant.grant_id})), 1)
+            local notices = assert(db:query("SELECT event_id FROM bee_approval_events WHERE approval_id IN (?, ?) AND acknowledged_at IS NULL", {first.approval_id, second.approval_id}))
+            local acknowledgments: {unknown} = {}
+            for _, notice in ipairs(notices) do acknowledgments[#acknowledgments + 1] = notice.event_id end
+            value(service.execute(db, SUBJECT, "events", {acknowledge = acknowledgments}, NOW + 1800001 + service.RETENTION_MS))
+            value(service.execute(db, PERSON, "reconcile", {}, NOW + 1800001 + service.RETENTION_MS))
+            test.eq(#assert(db:query("SELECT grant_id FROM bee_approval_grants WHERE grant_id = ?", {grant.grant_id})), 0)
+            db:release()
+        end)
+    end)
+end
+return test.run_cases(define_tests)

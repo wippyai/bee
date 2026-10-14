@@ -1,0 +1,1979 @@
+version: '1.0'
+namespace: bee.threads.sessions.binding
+entries:
+- name: owner_binding
+  kind: contract.binding
+  meta:
+    type: bee.sessions.owner_binding
+  contracts:
+  - contract: bee.threads.sessions:contract
+    default: true
+    methods:
+      open: bee.threads.sessions.binding:open
+      run: bee.threads.sessions.binding:run
+      send: bee.threads.sessions.binding:send
+      await: bee.threads.sessions.binding:await
+      join: bee.threads.sessions.binding:join
+      get: bee.threads.sessions.binding:get
+      list: bee.threads.sessions.binding:list
+      history: bee.threads.sessions.binding:history
+      cancel: bee.threads.sessions.binding:cancel
+      close: bee.threads.sessions.binding:close
+- name: catalog_binding
+  kind: contract.binding
+  meta:
+    type: bee.sessions.catalog_binding
+  contracts:
+  - contract: bee.threads.sessions:catalog
+    default: true
+    methods:
+      list: bee.threads.sessions.binding:catalog
+- name: open
+  kind: function.lua
+  source: file://owner.lua
+  method: open
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: &id001
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.threads.sessions.security:owner_delivery_policy
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: open
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - spec
+        - operation_key
+        properties:
+          spec:
+            type: object
+            additionalProperties: false
+            required:
+            - definition
+            properties:
+              definition:
+                type: string
+                minLength: 1
+                maxLength: 256
+              profile:
+                type: object
+                additionalProperties: false
+                required:
+                - id
+                - revision
+                properties:
+                  id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  revision:
+                    type: integer
+                    minimum: 1
+              workdir:
+                type: object
+                additionalProperties: false
+                description: 'The working folder: a folder under an admitted node root. The stock root bee.node:machine is
+                  the machine root /, so path is the folder''s absolute path without its leading slash.'
+                properties:
+                  root_ref:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  path:
+                    type: string
+                    maxLength: 4096
+                required:
+                - root_ref
+                - path
+              workspace:
+                type: string
+                pattern: ^[0-9a-f]{32}$
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_open
+- name: run
+  kind: function.lua
+  source: file://owner.lua
+  method: run
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: run
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - spec
+        - input
+        - operation_key
+        properties:
+          spec:
+            type: object
+            additionalProperties: false
+            required:
+            - definition
+            properties:
+              definition:
+                type: string
+                minLength: 1
+                maxLength: 256
+              profile:
+                type: object
+                additionalProperties: false
+                required:
+                - id
+                - revision
+                properties:
+                  id:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  revision:
+                    type: integer
+                    minimum: 1
+              workdir:
+                type: object
+                additionalProperties: false
+                description: 'The working folder: a folder under an admitted node root. The stock root bee.node:machine is
+                  the machine root /, so path is the folder''s absolute path without its leading slash.'
+                properties:
+                  root_ref:
+                    type: string
+                    minLength: 1
+                    maxLength: 256
+                  path:
+                    type: string
+                    maxLength: 4096
+                required:
+                - root_ref
+                - path
+              workspace:
+                type: string
+                pattern: ^[0-9a-f]{32}$
+          input:
+            oneOf:
+            - type: string
+              maxLength: 16384
+            - type: object
+              additionalProperties: false
+              required:
+              - schema
+              - value
+              properties:
+                schema:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                value: {}
+          output:
+            type: string
+            minLength: 1
+            maxLength: 256
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_run
+- name: send
+  kind: function.lua
+  source: file://owner.lua
+  method: send
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: send
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - session
+        - input
+        - operation_key
+        properties:
+          session:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bs:[^:]+:[^:]+:[^:]+$
+          input:
+            oneOf:
+            - type: string
+              maxLength: 16384
+            - type: object
+              additionalProperties: false
+              required:
+              - schema
+              - value
+              properties:
+                schema:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                value: {}
+          output:
+            type: string
+            minLength: 1
+            maxLength: 256
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+          expected_incarnation:
+            type: integer
+            minimum: 1
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_send
+- name: await
+  kind: function.lua
+  source: file://owner.lua
+  method: await
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: &id002
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.threads.sessions.security:owner_principal_policy
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: await
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - subject
+        properties:
+          subject:
+            oneOf:
+            - allOf:
+              - type: string
+                minLength: 1
+                maxLength: 256
+              - pattern: ^bw:[^:]+:[^:]+:[^:]+$
+            - allOf:
+              - type: string
+                minLength: 1
+                maxLength: 256
+              - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+          timeout_ms:
+            type: integer
+            minimum: 0
+            maximum: 60000
+            default: 30000
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_await
+- name: join
+  kind: function.lua
+  source: file://owner.lua
+  method: join
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: join
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - works
+        - operation_key
+        properties:
+          works:
+            type: array
+            minItems: 1
+            maxItems: 64
+            uniqueItems: true
+            items:
+              allOf:
+              - type: string
+                minLength: 1
+                maxLength: 256
+              - pattern: ^bw:[^:]+:[^:]+:[^:]+$
+          policy:
+            enum:
+            - all_success
+            - all_settled
+            - first_success
+            - quorum
+            default: all_success
+          quorum:
+            type: integer
+            minimum: 1
+            maximum: 64
+          timeout_ms:
+            type: integer
+            minimum: 0
+            maximum: 60000
+            default: 30000
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+        if:
+          required:
+          - policy
+          properties:
+            policy:
+              const: quorum
+        then:
+          required:
+          - quorum
+        else:
+          not:
+            required:
+            - quorum
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_join
+- name: get
+  kind: function.lua
+  source: file://owner.lua
+  method: get
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id002
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: get
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          session:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bs:[^:]+:[^:]+:[^:]+$
+          work:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bw:[^:]+:[^:]+:[^:]+$
+          operation:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+        oneOf:
+        - required:
+          - session
+        - required:
+          - work
+        - required:
+          - operation
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_get
+- name: list
+  kind: function.lua
+  source: file://owner.lua
+  method: list
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: list
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          filter:
+            type: object
+            additionalProperties: false
+            properties:
+              workspace:
+                type: string
+                minLength: 1
+                maxLength: 32
+              definition:
+                type: string
+                minLength: 1
+                maxLength: 256
+              activity:
+                enum:
+                - idle
+                - working
+                - blocked
+                - stalled
+              lifecycle:
+                enum:
+                - opening
+                - active
+                - suspended
+                - closing
+                - closed
+          cursor:
+            type: string
+            minLength: 1
+            maxLength: 2048
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_list
+- name: history
+  kind: function.lua
+  source: file://owner.lua
+  method: history
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: history
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - session
+        properties:
+          session:
+            type: string
+          cursor:
+            type: integer
+            minimum: 0
+          limit:
+            type: integer
+            minimum: 1
+            maximum: 64
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_history
+- name: cancel
+  kind: function.lua
+  source: file://owner.lua
+  method: cancel
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id002
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: cancel
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - work
+        - operation_key
+        properties:
+          work:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bw:[^:]+:[^:]+:[^:]+$
+          reason:
+            type: string
+            maxLength: 16384
+          expected_incarnation:
+            type: integer
+            minimum: 1
+            default: 1
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_cancel
+- name: close
+  kind: function.lua
+  source: file://owner.lua
+  method: close
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id002
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: close
+      revision: '1'
+      effect: mutation
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - session
+        - operation_key
+        properties:
+          session:
+            allOf:
+            - type: string
+              minLength: 1
+              maxLength: 256
+            - pattern: ^bs:[^:]+:[^:]+:[^:]+$
+          expected_incarnation:
+            type: integer
+            minimum: 1
+            default: 1
+          operation_key:
+            type: string
+            minLength: 1
+            maxLength: 128
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_close
+- name: catalog
+  kind: function.lua
+  source: file://owner.lua
+  method: catalog
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies:
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.threads.sessions.security:owner_delivery_policy
+    - bee.threads.sessions.security:configuration_catalog_policy
+  meta:
+    application_ref: bee.harness.app:app
+    hive: policy
+    hive_service: sessions
+    hive_operation:
+      name: catalog
+      revision: '1'
+      effect: read
+      input:
+        type: object
+        additionalProperties: false
+        properties:
+          definition_ref:
+            type: string
+            minLength: 1
+            maxLength: 256
+          query:
+            type: string
+            maxLength: 80
+          sort:
+            enum:
+            - name
+            - driver
+          kind:
+            enum:
+            - definition
+            - profile
+            default: definition
+          include_unavailable:
+            type: boolean
+            default: false
+          cursor:
+            type: string
+            minLength: 1
+            maxLength: 2048
+      output:
+        oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - value
+          properties:
+            ok:
+              const: true
+            value:
+              type: object
+        - type: object
+          additionalProperties: false
+          required:
+          - ok
+          - error
+          properties:
+            ok:
+              const: false
+            error:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              - message
+              - retry
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                message:
+                  type: string
+                  maxLength: 16384
+                retry:
+                  enum:
+                  - never
+                  - same_key
+                  - refresh
+                  - reconcile
+                operation_key:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                operation:
+                  allOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 256
+                  - pattern: ^bo:[^:]+:[^:]+:[^:]+$
+                current_revision:
+                  type: integer
+                  minimum: 1
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - summary
+                  - artifacts
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 16384
+                    artifacts:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 256
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+    hive_alias: session_catalog
+- name: attach
+  kind: function.lua
+  source: file://owner.lua
+  method: attach
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+- name: restore
+  kind: function.lua
+  source: file://owner.lua
+  method: restore
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+- name: launch_prompt
+  kind: function.lua
+  source: file://owner.lua
+  method: launch_prompt
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+- name: idle_check
+  kind: function.lua
+  source: file://owner.lua
+  method: idle_check
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id002
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+- name: hook_boundary
+  kind: function.lua
+  source: file://owner.lua
+  method: hook_boundary
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+- name: detach
+  kind: function.lua
+  source: file://owner.lua
+  method: detach
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+- name: attention_count
+  kind: function.lua
+  source: file://owner.lua
+  method: attention_count
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies: *id001
+- name: threads_journal
+  kind: library.lua
+  source: file://threads_journal.lua
+  modules:
+  - registry
+  - funcs
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports: {protocol: bee.threads.sessions.types:protocol}
+  modules:
+  - time
+- name: catalog_service
+  kind: library.lua
+  source: file://catalog.lua
+  modules:
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    harness_catalog: bee.harness.catalog:catalog
+    definition: bee.harness.launch:definitions
+    admission: bee.harness.launch:admission
+    profile_protocol: bee.harness.profiles:protocol
+    locate: bee.threads.sessions.binding:locate
+    locate_driver: bee.driver.locate:locate
+    configuration_setup: bee.harness.launch:configuration_setup
+    readiness: bee.harness.launch:readiness
+    hook_capabilities: bee.threads.hooks:capabilities
+- name: cancellation
+  kind: library.lua
+  source: file://cancellation.lua
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
+- name: host_exposure
+  kind: registry.entry
+  meta:
+    type: bee.hive.host_exposure
+  data:
+    application_ref: bee.harness.app:app
+    operations:
+    - bee.threads.sessions.binding:open
+    - bee.threads.sessions.binding:run
+    - bee.threads.sessions.binding:send
+    - bee.threads.sessions.binding:await
+    - bee.threads.sessions.binding:join
+    - bee.threads.sessions.binding:get
+    - bee.threads.sessions.binding:list
+    - bee.threads.sessions.binding:history
+    - bee.threads.sessions.binding:cancel
+    - bee.threads.sessions.binding:close
+    - bee.threads.sessions.binding:catalog
+    authorizer: bee.threads.sessions.binding:peer_authorize
+    owner_receipts: true
+    permission_action: bee.sessions.workspace
+    outbound_action: bee.sessions.remote
+    origin_provider: bee.threads.sessions.binding:source_identity
+- name: allowances
+  kind: library.lua
+  source: file://allowances.lua
+  modules:
+  - registry
+  - security
+  - hash
+  - funcs
+  - ctx
+  - system
+  - json
+  - uuid
+  imports:
+    bounds: bee.values:bounds
+    workspaces: bee.node:workspaces
+    windows: bee.approvals.types:windows
+- name: allowance
+  kind: function.lua
+  source: 'local allowances = require("allowances")
+
+    return {handle = allowances.manage}'
+  method: handle
+  imports:
+    allowances: bee.threads.sessions.binding:allowances
+  security:
+    policies:
+    - bee.threads.sessions.security:allowance_authority_policy
+- name: peer_authorize
+  kind: function.lua
+  source: 'local allowances = require("allowances")
+
+    return {handle = allowances.authorize}'
+  method: handle
+  imports:
+    allowances: bee.threads.sessions.binding:allowances
+  security:
+    policies:
+    - bee.threads.sessions.security:allowance_authority_policy
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  imports:
+    hive: bee.hive:hive
+    bounds: bee.values:bounds
+    pump: bee.threads.service:pump
+- name: peers
+  kind: function.lua
+  source: file://peers.lua
+  method: list
+  modules:
+  - security
+  - system
+  imports:
+    protocol: bee.hive:protocol
+    nodes: bee.node:client
+    bounds: bee.values:bounds
+  security:
+    policies:
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.hive.security:outbound
+- name: source_identity
+  kind: function.lua
+  source: file://owner.lua
+  method: source_identity
+  modules:
+  - logger
+  - json
+  - security
+  - hash
+  - funcs
+  - time
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.threads.sessions.binding:catalog_service
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values
+    remote: bee.threads.sessions.binding:remote
+  security:
+    policies:
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.threads.sessions.security:owner_principal_policy

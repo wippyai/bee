@@ -1,0 +1,39 @@
+version: '1.0'
+namespace: bee.threads.persist
+entries:
+- name: database
+  kind: library.lua
+  source: file://database.lua
+  modules: [sql]
+- name: reader
+  kind: library.lua
+  source: file://reader.lua
+  modules: [sql]
+- name: transaction
+  kind: library.lua
+  source: file://transaction.lua
+  modules: [sql, time, uuid]
+  imports:
+    shared: bee.persist:transaction
+- name: owner
+  kind: library.lua
+  source: file://owner.lua
+  modules: [sql, uuid]
+- name: journal
+  kind: library.lua
+  source: file://journal.lua
+  modules:
+  - sql
+  imports:
+    bounds: bee.values:bounds
+- name: outbox
+  kind: library.lua
+  source: file://outbox.lua
+  modules:
+  - sql
+  - uuid
+  - json
+  imports:
+    bounds: bee.values:bounds
+    clock: bee.values:clock
+    transaction: bee.threads.persist:transaction

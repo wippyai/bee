@@ -1,0 +1,494 @@
+version: '1.0'
+namespace: bee.tests.node
+entries:
+- name: node_test
+  kind: function.lua
+  source: file://node_test.lua
+  method: run
+  modules: [process, channel, system, time, tty, sql, registry, events, cdc]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    client: bee.node:client
+- name: upgrade_test
+  kind: function.lua
+  source: file://upgrade_test.lua
+  method: run
+  modules: [process, channel, system, time, tty, registry, events, sql]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    client: bee.node:client
+- name: display_stub
+  kind: process.lua
+  source: file://display_stub.lua
+  method: main
+  modules: [process, channel, system]
+  meta: {type: test_support}
+  imports:
+    client: bee.node:client
+- name: probe_app
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [tty, process, channel, security, ctx]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Probe, lifetime: view, revision: '1', instance_policy: multiple, menus: [bee.shell:apps_menu]}
+  imports:
+    appearance: bee.ui:appearance
+    app: bee.app:client
+- name: probe_single
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [tty, process, channel, security, ctx]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Single probe, lifetime: view, revision: '1', instance_policy: singleton}
+  imports:
+    appearance: bee.ui:appearance
+    app: bee.app:client
+- name: workspace_catalog_test
+  kind: function.lua
+  source: file://workspace_catalog_test.lua
+  method: run
+  modules: [funcs, security, system, process, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+    catalog: bee.node.binding:catalog_types
+    app_scope: bee.tests.principals:application
+  security:
+    policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
+- name: catalog_test_policy
+  kind: security.policy
+  meta: {comment: The catalog test makes app actors and asks the node owner for its state}
+  policy:
+    actions: [security.actor.create, funcs.security]
+    resources: '*'
+    effect: allow
+- name: admission
+  kind: registry.entry
+  meta:
+    type: bee.node.application_admission
+    comment: The single probe manages scopes and holds the probe grant through its admission
+  data:
+    bindings:
+    - definition_id: bee.tests.node:probe_single
+      policies: [bee.tests.node:probe_grant]
+      scope_management: true
+- name: probe_grant
+  kind: security.policy
+  meta: {comment: The grant the probe's admission adds; building call scopes holds only under the scope-managing boundary}
+  policy:
+    actions: [bee.tests.probe, security.scope.create]
+    resources: [admitted, with]
+    effect: allow
+- name: broker_probe
+  kind: process.lua
+  source: file://broker_probe.lua
+  method: main
+  modules: [tty, process, channel, uuid]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Broker probe, lifetime: view, revision: '1', instance_policy: singleton,
+      resume_schema: probe.v1, restart_policy: manual}
+  imports:
+    app: bee.app:client
+- name: broker_test
+  kind: function.lua
+  source: file://broker_test.lua
+  method: run
+  modules: [process, channel, system, time, tty, sql, json]
+  meta: {type: test, suite: bee}
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    client: bee.node:client
+- name: probe_command
+  kind: registry.entry
+  meta:
+    type: bee.app_command
+    comment: bee probe opens the probe full-pane, labelled from the command
+  data:
+    name: probe
+    definition_id: bee.tests.node:probe_app
+    arguments: [from-command]
+    fullscreen: true
+- name: app_scope_test
+  kind: function.lua
+  source: file://app_scope_test.lua
+  method: run
+  modules: [funcs, security, system, process]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+    app_scope: bee.tests.principals:application
+  security:
+    policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
+- name: app_sessions_probe
+  kind: function.lua
+  source: file://app_sessions_probe.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [contract]
+  imports:
+    bounds: bee.values:bounds
+- name: app_sessions_registry_policy
+  kind: security.policy
+  meta: {comment: The app sessions test installs the policy activation generates}
+  policy: {actions: [registry.apply], resources: '*', effect: allow}
+- name: app_sessions_test
+  kind: function.lua
+  source: file://app_sessions_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - system
+  - process
+  - registry
+  - uuid
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+    app_scope: bee.tests.principals:application
+    capability_model: bee.capability:model
+    capability_grants: bee.gov.types:capability_grants
+    test_fixtures: bee.tests.support:fixtures
+  security:
+    policies:
+    - bee.tests.principals:application_scope_policy
+    - bee.tests.node:catalog_test_policy
+    - bee.tests.node:app_sessions_registry_policy
+- name: overlay_listing_fault
+  kind: function.lua
+  source: file://overlay_listing_fault.lua
+  method: list
+  meta: {type: test_support}
+- name: tests_runner_test_policy
+  kind: security.policy
+  meta:
+    type: test_support
+    comment: The runner test makes agent actors and calls the overlay and test facades
+      as them
+  policy:
+    actions:
+    - funcs.call
+    - funcs.security
+    - bee.gov.overlay.read
+    - bee.gov.overlay.write
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    - security.policy_group.get
+    - db.get
+    - process.send
+    - registry.get
+    - registry.find
+    - registry.version
+    - registry.snapshot
+    - process.registry.register
+    - process.registry.unregister
+    - process.registry.lookup
+    resources: '*'
+    effect: allow
+- name: tests_runner_test
+  kind: function.lua
+  source: file://tests_runner_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - time
+  - process
+  - sql
+  - registry
+  - system
+  - channel
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  imports:
+    committed: bee.tests.support:committed
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    tests: bee.node:tests
+    test_runs: bee.node:test_runs
+    application: bee.node:application
+    demand: bee.process:demand
+  security:
+    policies:
+    - bee.tests.node:tests_runner_test_policy
+- name: application_test
+  kind: function.lua
+  source: file://application_test.lua
+  method: run
+  modules: [registry, security, system]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    application: bee.node:application
+  security:
+    policies: [bee.tests.principals:application_scope_policy, bee.tests.node:catalog_test_policy]
+- name: tools_app
+  kind: process.lua
+  source: file://runner_fixture/app.lua
+  method: main
+  modules: [process]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Notes tools, lifetime: view, revision: '1', instance_policy: multiple}
+- name: tools_twin
+  kind: process.lua
+  source: file://runner_fixture/app.lua
+  method: main
+  modules: [process]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Notes twin, lifetime: view, revision: '1', instance_policy: multiple}
+- name: tools_add
+  kind: function.lua
+  source: file://tools_note.lua
+  method: add
+  modules: [funcs, security, sql]
+  meta:
+    type: tool
+    llm_alias: notes_add
+    llm_description: Add one note to the notes application
+    input_schema: '{"type":"object","additionalProperties":false,"required":["text"],"properties":{"text":{"type":"string","maxLength":200}}}'
+    output_schema: '{"type":"object","properties":{"added":{"type":"string"},"actor":{"type":"string"}}}'
+    mcp: {annotations: {readOnlyHint: false, idempotentHint: false}}
+- name: tools_list
+  kind: function.lua
+  source: file://tools_note.lua
+  method: list
+  modules: [funcs, security, sql]
+  meta:
+    type: tool
+    llm_alias: notes_list
+    llm_description: List the notes the notes application holds
+    input_schema: '{"type":"object","additionalProperties":false,"properties":{}}'
+    mcp: {annotations: {readOnlyHint: true}}
+- name: tools_twin_add
+  kind: function.lua
+  source: file://tools_note.lua
+  method: add
+  modules: [funcs, security, sql]
+  meta:
+    type: tool
+    llm_alias: notes_add
+    llm_description: Another application's tool under the same name
+    input_schema: '{"type":"object","properties":{"text":{"type":"string"}}}'
+- name: app_tools_test_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The agent tools test installs application grants and calls the node's application tool functions}
+  policy:
+    actions: [funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.get, registry.find, registry.snapshot, registry.apply, registry.version]
+    resources: '*'
+    effect: allow
+- name: app_tools_test
+  kind: function.lua
+  source: file://app_tools_test.lua
+  method: run
+  modules: [funcs, security, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    capability_model: bee.capability:model
+    capability_grants: bee.gov.types:capability_grants
+  security:
+    policies: [bee.tests.node:app_tools_test_policy]
+- name: names_test
+  kind: function.lua
+  source: file://names_test.lua
+  method: run
+  modules: [funcs, system]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+  security:
+    policies: [bee.tests.node:names_test_policy]
+- name: names_test_policy
+  kind: security.policy
+  meta: {comment: The names test calls the names read and holds its action}
+  policy:
+    actions: [funcs.call, bee.node.names.read]
+    resources: '*'
+    effect: allow
+- name: package_application_probe
+  kind: function.lua
+  source: file://package_application_probe.lua
+  method: run
+  modules: [security]
+  meta: {type: app_test, application: bee.tests.node.hub_tests_fixture:application, suite: package}
+  imports:
+    test: wippy.test:test
+- name: application_tests_test
+  kind: function.lua
+  source: file://application_tests_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    application_tests: bee.node:application_tests
+- name: demand_test
+  kind: function.lua
+  source: file://demand_test.lua
+  method: run
+  modules:
+  - process
+  - events
+  - channel
+  - system
+  - uuid
+  - sql
+  meta:
+    type: test
+    suite: demand_node
+    timeout: 40s
+  imports:
+    owner_observer: bee.tests.support:owner_observer
+    committed: bee.tests.support:committed
+    test: wippy.test:test
+    runs: bee.node:test_runs
+    demand: bee.process:demand
+    owners: bee.process:demand_owner
+    routing: bee.hive.service:routing
+    bounds: bee.values:bounds
+- name: idle_services_test
+  kind: function.lua
+  source: file://idle_services_test.lua
+  method: run
+  modules:
+  - process
+  - system
+  meta:
+    type: test
+    suite: a_idle_node
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+- name: boot_residency_test
+  kind: function.lua
+  source: file://boot_residency_test.lua
+  method: run
+  modules: [process, channel, system, time, tty, registry, security, sql]
+  meta: {type: boot_test, suite: a_idle_node, timeout: 30s}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+- name: boot_backlog_probe
+  kind: function.lua
+  source: file://boot_backlog_probe.lua
+  method: pending
+  modules: [sql]
+  meta: {type: test_support}
+
+- name: attach_restart_test
+  kind: function.lua
+  source: file://attach_restart_test.lua
+  method: run
+  modules: [process, channel, system, tty, time, sql]
+  meta: {type: boot_test, suite: a_idle_node, timeout: 30s}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+
+- name: app_namespace_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/app-namespace-test.db
+  lifecycle: {auto_start: true}
+- name: app_namespace_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.tests.node:app_namespace_db]
+    effect: allow
+- name: app_namespace_migration_test
+  kind: function.lua
+  source: file://app_namespace_migration_test.lua
+  method: run
+  modules: [sql, funcs, system]
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee.tests.node:app_namespace_policy, bee.tests.support:schema_policy]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+- name: app_namespace_restart_test
+  kind: function.lua
+  source: file://app_namespace_migration_test.lua
+  method: restart
+  modules: [sql, funcs, system]
+  meta: {type: boot_test, suite: a_idle_node, timeout: 30s}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+
+- name: backlog_overflow_test
+  kind: function.lua
+  source: file://backlog_overflow_test.lua
+  method: run
+  modules:
+  - process
+  - events
+  - channel
+  - cdc
+  - system
+  - uuid
+  - time
+  - sql
+  - json
+  meta:
+    type: test
+    suite: demand_node
+    timeout: 20s
+  imports:
+    owner_observer: bee.tests.support:owner_observer
+    test: wippy.test:test
+    runs: bee.node:test_runs
+    demand: bee.process:demand
+    bounds: bee.values:bounds
+- name: retirement_test
+  kind: function.lua
+  source: file://retirement_test.lua
+  method: run
+  modules: [process, channel, system, time, sql, registry, events, cdc, funcs, uuid]
+  meta: {type: test, suite: bee, timeout: 20s}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+    workspaces: bee.node:workspaces
+- name: state_guard_db
+  kind: db.sql.sqlite
+  file: ':memory:'
+- name: state_guard_test
+  kind: function.lua
+  source: file://state_guard_test.lua
+  method: run
+  modules: [sql, json, funcs]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    guard: bee.persist:state_guard
+    ledger: wippy.migration:repository

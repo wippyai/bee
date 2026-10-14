@@ -1,0 +1,14 @@
+version: '1.0'
+namespace: bee.driver.wippy
+entries:
+- name: types
+  kind: library.lua
+  source: file://types.lua
+  imports:
+    driver_types: bee.driver:types
+- name: protocol
+  kind: library.lua
+  source: file://protocol.lua
+  imports:
+    bounds: bee.values:bounds
+    driver_types: bee.driver:types

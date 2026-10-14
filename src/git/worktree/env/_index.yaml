@@ -1,0 +1,28 @@
+version: '1.0'
+namespace: bee.git.worktree.env
+entries:
+- name: executor_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked native executor
+  resource_ref: bee.git.worktree.env:git_executor
+- name: git_executor
+  kind: exec.native
+  meta:
+    comment: Native executor for git commands
+  default_env:
+    PATH: /usr/local/bin:/usr/bin:/bin
+- name: host_files_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: The linked host files resource
+  resource_ref: bee.git.worktree.env:host_files
+- name: host_files
+  kind: fs.directory
+  meta:
+    comment: Read-only host filesystem volume for git metadata
+  directory: /
+  auto_init: false
+  readonly: true

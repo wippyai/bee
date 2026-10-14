@@ -1,0 +1,764 @@
+{
+  "base": "https://wippy.ai/llm",
+  "ceiling_bytes": 3145728,
+  "documents": [
+    {
+      "bytes": 11631,
+      "id": "runtime/lua/core/base",
+      "sha256": "03c7e0a289e3c871b32a05be3a80324ccfeba2c9fe90f3b1b703033b5c145347",
+      "source": "https://wippy.ai/llm/path/en/lua/core/base",
+      "title": "Standard Lua Libraries",
+      "topic": "core"
+    },
+    {
+      "bytes": 7354,
+      "id": "runtime/lua/core/channel",
+      "sha256": "0fbc5b38f587d2a83b67c16d3e25f11d0bfb76292fd61ee4cf69903a6b2c0856",
+      "source": "https://wippy.ai/llm/path/en/lua/core/channel",
+      "title": "Channels and Coroutines",
+      "topic": "core"
+    },
+    {
+      "bytes": 8563,
+      "id": "runtime/lua/core/contract",
+      "sha256": "e40407fde97e44a32b460aab6a23b4012eb265e3bc64b199811a9d5b7813e5a9",
+      "source": "https://wippy.ai/llm/path/en/lua/core/contract",
+      "title": "Contracts",
+      "topic": "core"
+    },
+    {
+      "bytes": 16678,
+      "id": "runtime/lua/core/process",
+      "sha256": "05ef6aa0397033f08f8204db4fbf4d958af7ca1c9e9c352db83c8aeca0fee46c",
+      "source": "https://wippy.ai/llm/path/en/lua/core/process",
+      "title": "Process Management",
+      "topic": "core"
+    },
+    {
+      "bytes": 11384,
+      "id": "runtime/lua/core/registry",
+      "sha256": "14a8d7db9bfb41fe98c94a82557c5d608aff9439c700e75deb9af2de5aa3cb7c",
+      "source": "https://wippy.ai/llm/path/en/lua/core/registry",
+      "title": "Entry Registry",
+      "topic": "core"
+    },
+    {
+      "bytes": 15860,
+      "id": "runtime/lua/core/time",
+      "sha256": "6eacaae6aeacdff457b2ef116b46b38a9bdd69897027496a542b330909481a3a",
+      "source": "https://wippy.ai/llm/path/en/lua/core/time",
+      "title": "Time & Duration",
+      "topic": "core"
+    },
+    {
+      "bytes": 5939,
+      "id": "runtime/lua/data/json",
+      "sha256": "2fe60006aaa7a149ed98565fd71039812926bf891299bddad43ab286842422e8",
+      "source": "https://wippy.ai/llm/path/en/lua/data/json",
+      "title": "JSON Encoding",
+      "topic": "data"
+    },
+    {
+      "bytes": 16200,
+      "id": "runtime/lua/http/client",
+      "sha256": "46bf6e73acd219ad85d3b18295b13693a2d9ee84c4636a8e8e1cb66d01515d2e",
+      "source": "https://wippy.ai/llm/path/en/lua/http/client",
+      "title": "HTTP Client",
+      "topic": "http"
+    },
+    {
+      "bytes": 11686,
+      "id": "runtime/lua/security/security",
+      "sha256": "58e4ac4d4c62e355a33afac05cf229473767615a8f970b6f1f5b0efab197c07b",
+      "source": "https://wippy.ai/llm/path/en/lua/security/security",
+      "title": "Security & Access Control",
+      "topic": "security"
+    },
+    {
+      "bytes": 4507,
+      "id": "runtime/lua/security/uuid",
+      "sha256": "35a48215ddd61a6422821ad6f031f8d328a4800aafc0bd3f090f2a7927dd4384",
+      "source": "https://wippy.ai/llm/path/en/lua/security/uuid",
+      "title": "UUID Generation",
+      "topic": "security"
+    },
+    {
+      "bytes": 9808,
+      "id": "runtime/lua/storage/filesystem",
+      "sha256": "20d492952217970fc925a0d710a047f5f61a1e78dd3cba12ce231f892559cbbb",
+      "source": "https://wippy.ai/llm/path/en/lua/storage/filesystem",
+      "title": "Filesystem",
+      "topic": "storage"
+    },
+    {
+      "bytes": 35623,
+      "id": "runtime/lua/storage/sql",
+      "sha256": "1679aabb41e64b9b3d5a66ff2f458aff6eb999200b389523447e8d497093b472",
+      "source": "https://wippy.ai/llm/path/en/lua/storage/sql",
+      "title": "SQL Database",
+      "topic": "storage"
+    },
+    {
+      "bytes": 22652,
+      "id": "runtime/lua/system/tty",
+      "sha256": "888cef2390ce7ff6a9e3a31611616ff3f96bad767e5c451e60759d6019143ba0",
+      "source": "https://wippy.ai/llm/path/en/lua/system/tty",
+      "title": "TTY",
+      "topic": "system"
+    },
+    {
+      "bytes": 12334,
+      "id": "runtime/lua/types",
+      "sha256": "51aaeaf60197bb2459aff14c031fd669443b69d82ebab1892c08e3000ba334e4",
+      "source": "https://wippy.ai/llm/path/en/lua/types",
+      "title": "Type System",
+      "topic": "lua"
+    },
+    {
+      "bytes": 9202,
+      "id": "docs/agent_guide",
+      "sha256": "b4f8a098fc31470926ebc15198c959b84351d4cf53fa2fee83d3ab265956bd34",
+      "source": "generated: src/corpus/docs/agent_guide.md",
+      "title": "Working on Bee",
+      "topic": "platform"
+    },
+    {
+      "bytes": 21267,
+      "id": "docs/app_style",
+      "sha256": "44306567c9140905e14860f6b71a2b6a5cd52a59b30e455368ae7f7c99a8673d",
+      "source": "generated: src/corpus/docs/app_style.md",
+      "title": "Application visual style",
+      "topic": "ui"
+    },
+    {
+      "bytes": 10658,
+      "id": "docs/application_contracts",
+      "sha256": "b0178a11f5015c375474a4e54c72f89879423790c72a4d1dbaeaea6b3c77a5a9",
+      "source": "generated: src/corpus/docs/application_contracts.md",
+      "title": "Application contracts",
+      "topic": "application"
+    },
+    {
+      "bytes": 31263,
+      "id": "docs/approvals",
+      "sha256": "fa842388aa75912aa26875fc5b85a7f9f9099edb62ca957b11c5edd3ca2e835e",
+      "source": "generated: src/corpus/docs/approvals.md",
+      "title": "Durable approval requests",
+      "topic": "approvals"
+    },
+    {
+      "bytes": 15200,
+      "id": "docs/carrier",
+      "sha256": "bd3c1f368e312c9179b011d313851c69854900636f607469896744666ded3c3c",
+      "source": "generated: src/corpus/docs/carrier.md",
+      "title": "Carrier contract",
+      "topic": "application"
+    },
+    {
+      "bytes": 4657,
+      "id": "docs/desktop",
+      "sha256": "6f7491fb4c4bd4e4ad3bcc96b09f4578168f602a73452ec812b4b52f221aa840",
+      "source": "generated: src/corpus/docs/desktop.md",
+      "title": "Desktop",
+      "topic": "ui"
+    },
+    {
+      "bytes": 30614,
+      "id": "docs/distributed_app_delivery",
+      "sha256": "8ea74743e81df22196b0e39face9d91375f16acb4552bc59210baccdd39814ff",
+      "source": "generated: src/corpus/docs/distributed_app_delivery.md",
+      "title": "Distributed overlay delivery",
+      "topic": "application"
+    },
+    {
+      "bytes": 10368,
+      "id": "docs/gateway",
+      "sha256": "d876dddf3f0058fd8b0a522ebe1072c2293922277f3ebb7cc4497401b7afe821",
+      "source": "generated: src/corpus/docs/gateway.md",
+      "title": "Gateway",
+      "topic": "gateway"
+    },
+    {
+      "bytes": 5636,
+      "id": "docs/gateway_hooks",
+      "sha256": "f91b8c7bd5bbac78986764114dedcf7256ce000e9573d79ba8e6470bc3061613",
+      "source": "generated: src/corpus/docs/gateway_hooks.md",
+      "title": "Gateway hooks",
+      "topic": "gateway"
+    },
+    {
+      "bytes": 18025,
+      "id": "docs/hub_inspection",
+      "sha256": "3c90016bb710ca4e64afe005e72c962b57c7262c88d99d2a3b0dd2342c1874b5",
+      "source": "generated: src/corpus/docs/hub_inspection.md",
+      "title": "Hub installation and package reads",
+      "topic": "registry"
+    },
+    {
+      "bytes": 13246,
+      "id": "docs/mcp_configuration",
+      "sha256": "b38464c85869e2b770c045372e8be000c2bb10a8d26a2c6a471be0d2e59b4c3d",
+      "source": "generated: src/corpus/docs/mcp_configuration.md",
+      "title": "Configurable managed MCP",
+      "topic": "gateway"
+    },
+    {
+      "bytes": 4533,
+      "id": "docs/package_boundaries",
+      "sha256": "6e51afe43f71c3811b105aecfd99b42f0ab044de9280aa72993fdbd589f2eb4b",
+      "source": "generated: src/corpus/docs/package_boundaries.md",
+      "title": "Package boundaries",
+      "topic": "platform"
+    },
+    {
+      "bytes": 2634,
+      "id": "docs/readme",
+      "sha256": "fb9eb308e0e888c8d5ac3202bc67162674d79ab5d92d7bf72f3e5117827f709f",
+      "source": "generated: src/corpus/docs/readme.md",
+      "title": "Documentation map",
+      "topic": "platform"
+    },
+    {
+      "bytes": 2702,
+      "id": "docs/storage",
+      "sha256": "584de428cba9a7c151496140e02962ea2206194686cbd729eab9a876945892c8",
+      "source": "generated: src/corpus/docs/storage.md",
+      "title": "Node storage",
+      "topic": "storage"
+    },
+    {
+      "bytes": 5664,
+      "id": "docs/sync_and_inbox",
+      "sha256": "eb40bc21aa00bd32862c943e8cdfb00f0a4c811fa6ec8dbac209cee56a489323",
+      "source": "generated: src/corpus/docs/sync_and_inbox.md",
+      "title": "Owner-local sync and inbox",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 6909,
+      "id": "docs/system_map",
+      "sha256": "3b7df280eff848602ae38138233605bc2860074abeb7bf12f775c9e088f24c24",
+      "source": "generated: src/corpus/docs/system_map.md",
+      "title": "Bee ownership and boundaries",
+      "topic": "platform"
+    },
+    {
+      "bytes": 18993,
+      "id": "docs/threads",
+      "sha256": "11e8e5b982eb6a82a121e86ac0d88420df91567f571a2e6cf096b390930095e4",
+      "source": "generated: src/corpus/docs/threads.md",
+      "title": "Threads",
+      "topic": "threads"
+    },
+    {
+      "bytes": 9009,
+      "id": "docs/ui_brand_book",
+      "sha256": "6f445728e65cc19f0110b67ce43fd547f325af4471b493c93349d93d232fceb1",
+      "source": "generated: src/corpus/docs/ui_brand_book.md",
+      "title": "Bee UI brand book",
+      "topic": "ui"
+    },
+    {
+      "bytes": 2751,
+      "id": "docs/workspace_catalog",
+      "sha256": "705fb624959ff38def31235642534534ea463cf1ac5c6a245aaa4b7c4781b5e5",
+      "source": "generated: src/corpus/docs/workspace_catalog.md",
+      "title": "Workspace catalog",
+      "topic": "storage"
+    },
+    {
+      "bytes": 2598,
+      "id": "docs/workspace_state",
+      "sha256": "5c00d043d99c8c4db501156dc1c5c6505a225386c6805aefebec8a02a1df65d1",
+      "source": "generated: src/corpus/docs/workspace_state.md",
+      "title": "Workspace state and application restoration",
+      "topic": "storage"
+    },
+    {
+      "bytes": 4076,
+      "id": "component/app",
+      "sha256": "bf7a343de6f0bdfed177f563ccdf4882e5d62d604003ed70988da6004c89bf8f",
+      "source": "generated: src/app",
+      "title": "bee.app",
+      "topic": "component"
+    },
+    {
+      "bytes": 1401,
+      "id": "component/app:threads",
+      "sha256": "97b78df9481812c17737153927c98aab032c4196a9aa7954a67bb84a6d7b04b4",
+      "source": "generated: src/app/threads",
+      "title": "bee.app.threads",
+      "topic": "component"
+    },
+    {
+      "bytes": 12472,
+      "id": "component/approvals",
+      "sha256": "608ef52c58537ef9a9ffe49aed10c249f8adfa6781475870f5468a7e65ffb6f7",
+      "source": "generated: src/approvals",
+      "title": "Bee approvals",
+      "topic": "component"
+    },
+    {
+      "bytes": 180,
+      "id": "component/apps:help",
+      "sha256": "d3afce27e43a8923084d82bb6a64e9d5b092efb7efc1c348631356dc341306ca",
+      "source": "generated: src/apps/help",
+      "title": "bee.apps.help",
+      "topic": "component"
+    },
+    {
+      "bytes": 5772,
+      "id": "component/apps:library",
+      "sha256": "4c0749180ba0b90c27b308b43824c0b62d560470e4f406f9a14c318dc5299909",
+      "source": "generated: src/apps/library",
+      "title": "bee.apps.library",
+      "topic": "component"
+    },
+    {
+      "bytes": 496,
+      "id": "component/apps:processes",
+      "sha256": "f06b5d21500807d07d2f905878b55b2e82bcee157e8942e96c922c98b49643ef",
+      "source": "generated: src/apps/processes",
+      "title": "bee.apps.processes",
+      "topic": "component"
+    },
+    {
+      "bytes": 656,
+      "id": "component/apps:settings",
+      "sha256": "1c42ab246f0845091b330d858f1f55d0c3b3f366daff61893144b9802c438527",
+      "source": "generated: src/apps/settings",
+      "title": "bee.apps.settings",
+      "topic": "component"
+    },
+    {
+      "bytes": 835,
+      "id": "component/apps:terminal",
+      "sha256": "ea252d4eb8d4f55bfc8acb7da64aa7d76f1dceabacddc660bc34c849f8872f1e",
+      "source": "generated: src/apps/terminal",
+      "title": "bee.apps.terminal",
+      "topic": "component"
+    },
+    {
+      "bytes": 4045,
+      "id": "component/capability",
+      "sha256": "9988776f1e718e053df2bee0e46bb6546e595f153ad2a1f926e0962a47c49627",
+      "source": "generated: src/capability",
+      "title": "Capability model",
+      "topic": "component"
+    },
+    {
+      "bytes": 15170,
+      "id": "component/credentials",
+      "sha256": "634ddf86017cd0522b798561747077ebc317fd6b2ffa943d9f4fa2e2d023c709",
+      "source": "generated: src/credentials",
+      "title": "bee.credentials",
+      "topic": "component"
+    },
+    {
+      "bytes": 2290,
+      "id": "component/docs",
+      "sha256": "0b382417f70b9588f683a4708e3be6423d6d8f490232288d50ed638396c18b41",
+      "source": "generated: src/docs",
+      "title": "bee.docs",
+      "topic": "component"
+    },
+    {
+      "bytes": 12380,
+      "id": "component/driver",
+      "sha256": "1f12025625476e3eb3a1040cb4525a81d1b14abdae80c24e4774eb5b81e1f08b",
+      "source": "generated: src/driver",
+      "title": "Bee driver",
+      "topic": "component"
+    },
+    {
+      "bytes": 975,
+      "id": "component/driver:agy",
+      "sha256": "9ad5dde3ca31d594e56083a61a21771dafcf56ab9aa4fee3895a94472692e39f",
+      "source": "generated: src/driver/agy",
+      "title": "bee.driver.agy",
+      "topic": "component"
+    },
+    {
+      "bytes": 1787,
+      "id": "component/driver:claude",
+      "sha256": "bcc75fc0f02af01183b339005d6f4563567c7eeb89f504e8673250ba9529e6b0",
+      "source": "generated: src/driver/claude",
+      "title": "bee.driver.claude",
+      "topic": "component"
+    },
+    {
+      "bytes": 2336,
+      "id": "component/driver:codex",
+      "sha256": "fc6556f685b28fd746282e7df3f175ab2bf1e59ec98ce9286a74c683c01ca97e",
+      "source": "generated: src/driver/codex",
+      "title": "bee.driver.codex",
+      "topic": "component"
+    },
+    {
+      "bytes": 1136,
+      "id": "component/driver:grok",
+      "sha256": "9dc1073115981bc52788513bd56c97f253e84174ee5ad0d19c088562de180658",
+      "source": "generated: src/driver/grok",
+      "title": "bee.driver.grok",
+      "topic": "component"
+    },
+    {
+      "bytes": 786,
+      "id": "component/driver:muse",
+      "sha256": "bafd749833ce2e28f20969244a5f0ecfa23b0286d60f44509fed3003fa741e74",
+      "source": "generated: src/driver/muse",
+      "title": "bee.driver.muse",
+      "topic": "component"
+    },
+    {
+      "bytes": 4092,
+      "id": "component/driver:opencode",
+      "sha256": "ab430197f66fdcc356d2ad356127ca193a677bce00ab468f976f66c5a41767eb",
+      "source": "generated: src/driver/opencode",
+      "title": "bee.driver.opencode",
+      "topic": "component"
+    },
+    {
+      "bytes": 2102,
+      "id": "component/driver:wippy",
+      "sha256": "94787615dda986196ef69c6e8bae45f6650f1dbc7f0cc06e02f409f26b4f4407",
+      "source": "generated: src/driver/wippy",
+      "title": "bee.driver.wippy",
+      "topic": "component"
+    },
+    {
+      "bytes": 1082,
+      "id": "component/env",
+      "sha256": "35289b0297afa14952f2e02aa26752560a27bbea3b10aa4e97464f31bbf20a3e",
+      "source": "generated: src/env",
+      "title": "bee.env",
+      "topic": "component"
+    },
+    {
+      "bytes": 1099,
+      "id": "component/executor:external",
+      "sha256": "76e53f7b2500f12513441aa24c5eb64985158b6ea8ac5173352f17af852f08db",
+      "source": "generated: src/executor/external",
+      "title": "bee.executor.external",
+      "topic": "component"
+    },
+    {
+      "bytes": 8957,
+      "id": "component/gateway",
+      "sha256": "f44a8cceb19ec7f4a53f8ff83799d7c4b5636565aefd06c7e1cffdee6611a1b8",
+      "source": "generated: src/gateway",
+      "title": "bee.gateway",
+      "topic": "component"
+    },
+    {
+      "bytes": 3741,
+      "id": "component/git:worktree",
+      "sha256": "8e22015c57c20f52e8faa7b008ff7cac0bfa497ce3f2057d19e0333b476b0ea1",
+      "source": "generated: src/git/worktree",
+      "title": "bee.git.worktree",
+      "topic": "component"
+    },
+    {
+      "bytes": 31331,
+      "id": "component/gov",
+      "sha256": "46afddb201fda4ce78cb26611a95fd75f2f4262b24891279854ce62c70687a5b",
+      "source": "generated: src/gov",
+      "title": "Overlay authoring and preflight",
+      "topic": "component"
+    },
+    {
+      "bytes": 7354,
+      "id": "component/harness",
+      "sha256": "3d8004a6301a6bc17e9c6ee69601647c407d848ead11a9ff9b28347d1b4c8efb",
+      "source": "generated: src/harness",
+      "title": "bee.harness",
+      "topic": "component"
+    },
+    {
+      "bytes": 7602,
+      "id": "component/hive",
+      "sha256": "fb305888778c8a19712b0285501cc1103223d41823371df0dd42c8547c9e9c37",
+      "source": "generated: src/hive",
+      "title": "bee.hive",
+      "topic": "component"
+    },
+    {
+      "bytes": 17979,
+      "id": "component/hub",
+      "sha256": "a1b088dcc914d7e77304e192b3828576483627d3fd8799fdc1a7a086ed695d27",
+      "source": "generated: src/hub",
+      "title": "Hub module management",
+      "topic": "component"
+    },
+    {
+      "bytes": 8044,
+      "id": "component/node",
+      "sha256": "9903920791e5cb028afa26a6f4aa90552d00d34df9e93a8f4b79290b76c3db5c",
+      "source": "generated: src/node",
+      "title": "bee.node",
+      "topic": "component"
+    },
+    {
+      "bytes": 1723,
+      "id": "component/persist",
+      "sha256": "4eb5f4d4e4f59a47d70ad964685ce028fab87abc97e95a0898918b6764e796dc",
+      "source": "generated: src/persist",
+      "title": "bee.persist",
+      "topic": "component"
+    },
+    {
+      "bytes": 7051,
+      "id": "component/placement",
+      "sha256": "42547c9f3f1b9254e1f29cae44e20a9d6bf7f9575cc34d1d7fd4f12f4e98405b",
+      "source": "generated: src/placement",
+      "title": "bee.placement",
+      "topic": "component"
+    },
+    {
+      "bytes": 7206,
+      "id": "component/placement:docker",
+      "sha256": "d8ccc0709c8a6450ac23100213a4dbecc85f6b59d5b278dff023f7e9495cf206",
+      "source": "generated: src/placement/docker",
+      "title": "bee.placement.docker",
+      "topic": "component"
+    },
+    {
+      "bytes": 27808,
+      "id": "component/placement:native",
+      "sha256": "b5f375043a0e8eed61a845b68757962d78bd2f478e8d35f61e98c44be37747a9",
+      "source": "generated: src/placement/native",
+      "title": "bee.placement.native",
+      "topic": "component"
+    },
+    {
+      "bytes": 3632,
+      "id": "component/resources",
+      "sha256": "203a7137a9b75e864c9738a7e0870462a6b19ed5650ffd8bbf0a6c85f54a24ab",
+      "source": "generated: src/resources",
+      "title": "bee.resources",
+      "topic": "component"
+    },
+    {
+      "bytes": 9978,
+      "id": "component/sessions",
+      "sha256": "44221a87b4e35f8116457688a41548fc13eb85588494b8ad08028715f2a8aded",
+      "source": "generated: src/threads/sessions",
+      "title": "bee.threads.sessions",
+      "topic": "component"
+    },
+    {
+      "bytes": 896,
+      "id": "component/shell",
+      "sha256": "a210a3b3884732506db86b4b4eedcb0fb69f13273b2033d98d34e96a795205fa",
+      "source": "generated: src/shell",
+      "title": "bee.shell",
+      "topic": "component"
+    },
+    {
+      "bytes": 3325,
+      "id": "component/sync",
+      "sha256": "0478e72bbd4d2d8cea0d76c0a2385ea6a8cd35afb3f223ec4af4883d5f4c16a6",
+      "source": "generated: src/sync",
+      "title": "Bee sync",
+      "topic": "component"
+    },
+    {
+      "bytes": 6364,
+      "id": "component/threads",
+      "sha256": "0dd27af106f78de30adf8d4de2074a225f569fa2ad984a4d6ddb7bdd1af28853",
+      "source": "generated: src/threads",
+      "title": "bee.threads",
+      "topic": "component"
+    },
+    {
+      "bytes": 3682,
+      "id": "component/ui",
+      "sha256": "d99d01d8343ebca1c2a3feaaf7fac69bae6e8f707f3f51897198968ae10f8f05",
+      "source": "generated: src/ui",
+      "title": "bee.ui",
+      "topic": "component"
+    },
+    {
+      "bytes": 646,
+      "id": "component/values",
+      "sha256": "210cd83131475188b38e0dbbdfa8595ac0c2190fe0a35b72a00b9f3e8d54724a",
+      "source": "generated: src/values",
+      "title": "Bee values",
+      "topic": "component"
+    },
+    {
+      "bytes": 3134,
+      "id": "reference_apps/ci_bench",
+      "sha256": "b8debf03476e07e477734d92c2f6c3db715745e9932cbe76ee33cafa203171a4",
+      "source": "generated: src/corpus/reference_apps/ci_bench.md",
+      "title": "Reference application: CI and benchmark board",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 5192,
+      "id": "reference_apps/deploy_board",
+      "sha256": "da01c303b64005bbd7966c285da367e1465d2c6a22c4d985bb657d873def665f",
+      "source": "generated: src/corpus/reference_apps/deploy_board.md",
+      "title": "Reference application: deploy board",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 5326,
+      "id": "reference_apps/deploy_form",
+      "sha256": "190220079ad8272ceb4329cb0ce3f3f6f60385adec359e6c24bcbfb8d24e20e7",
+      "source": "generated: src/corpus/reference_apps/deploy_form.md",
+      "title": "Reference application: deploy wizard",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 3846,
+      "id": "reference_apps/inbox",
+      "sha256": "0e24f982999c79f31967627abfaaaba0d437d6e84dd720e3885fb5093eb29836",
+      "source": "generated: src/corpus/reference_apps/inbox.md",
+      "title": "Reference application: inbox and approvals",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 2526,
+      "id": "reference_apps/index",
+      "sha256": "ee67a98d37d16edc0731d38a399eb1f633b30eaba5c038575e00495da2bb8b3e",
+      "source": "generated: src/corpus/reference_apps",
+      "title": "Reference applications",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 2579,
+      "id": "reference_apps/log_viewer",
+      "sha256": "208abbd94a37a88f757a5b973fffc8fb89bfe8d46ffb05a9d96bb66a62efa7b5",
+      "source": "generated: src/corpus/reference_apps/log_viewer.md",
+      "title": "Reference application: log viewer with a workspace tree",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 3998,
+      "id": "reference_apps/metrics",
+      "sha256": "a7d7f28772d24bcd34c437019ffbb8db26468284b0c5de91a358aaa54e36ce3a",
+      "source": "generated: src/corpus/reference_apps/metrics.md",
+      "title": "Reference application: live metrics monitor",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 4576,
+      "id": "reference_apps/overlays",
+      "sha256": "ca36b0d571b62d39783e4a66684020b2687f5ecfc0bb98d6f64e153d7939bf2f",
+      "source": "generated: src/corpus/reference_apps/overlays.md",
+      "title": "Reference application: command palette, confirmation modal and toast",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 2194,
+      "id": "reference_apps/topology",
+      "sha256": "3dad7da81b3fa910d634de4838f7d0827144225a32431267051aa8eb297b6534",
+      "source": "generated: src/corpus/reference_apps/topology.md",
+      "title": "Reference application: topology and sizes",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 2357,
+      "id": "reference_apps/workflow",
+      "sha256": "537038e04c895ec523ee08444d1e7f0e1af4bac608995393762f7354ce23e3f2",
+      "source": "generated: src/corpus/reference_apps/workflow.md",
+      "title": "Reference application: durable workflow",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 48867,
+      "id": "toolkit",
+      "sha256": "0fa84ffe443a79bfd3f29fcff9f42743f954e82ab3be276098ca7773b9bced15",
+      "source": "generated: src/ui, src/app, tests/lua/ui",
+      "title": "Bee terminal toolkit",
+      "topic": "terminal"
+    },
+    {
+      "bytes": 51395,
+      "id": "reference_drivers/opencode",
+      "sha256": "e64efb23fcd5d035d949f41c2b965174640cd91947f571a4f0795d58a965b7e9",
+      "source": "generated: tools/corpus.py from src/driver/opencode",
+      "title": "Reference driver: OpenCode CLI",
+      "topic": "reference_drivers"
+    },
+    {
+      "bytes": 11997,
+      "id": "runtime/lua/core/funcs",
+      "sha256": "4234d166bcea3dbb465252f880fa98641e0b5485b62c7046f8fcabb030c13ca2",
+      "source": "https://wippy.ai/llm/path/en/lua/core/funcs",
+      "title": "Function Invocation",
+      "topic": "core"
+    },
+    {
+      "bytes": 3723,
+      "id": "runtime/lua/core/errors",
+      "sha256": "ca0be60fad63cc947f4794bc9f1e7b04400bdeeb1268f92d9f4cec2bacc7747d",
+      "source": "https://wippy.ai/llm/path/en/lua/core/errors",
+      "title": "Errors",
+      "topic": "core"
+    },
+    {
+      "bytes": 11553,
+      "id": "runtime/lua/dynamic/exec",
+      "sha256": "380428a0729dce75a9937028a130641ffb325a4feb445455bcf9758e86d56e50",
+      "source": "https://wippy.ai/llm/path/en/lua/dynamic/exec",
+      "title": "Process Execution",
+      "topic": "system"
+    },
+    {
+      "bytes": 4504,
+      "id": "docs/hive_sessions",
+      "sha256": "e01fa3f192d1c1a91594cbdf40dc001def739ac097870498114311250a43bc85",
+      "source": "generated: src/corpus/docs/hive_sessions.md",
+      "title": "Agents and applications across bees",
+      "topic": "cluster"
+    },
+    {
+      "bytes": 9899,
+      "id": "docs/session_traits",
+      "sha256": "96ba905c5c2651869bc82c7c5bfae401560de62ab820ac2ba63b7929a69b2e28",
+      "source": "docs/session_traits.md",
+      "title": "Build an app that listens to a session",
+      "topic": "threads"
+    },
+    {
+      "bytes": 2685,
+      "id": "docs/external_mcp",
+      "sha256": "38f6328588823325c790c4fb927cf0cc14a5adb84d1809f0e793805c2a793347",
+      "source": "docs/external_mcp.md",
+      "title": "External MCP clients",
+      "topic": "docs"
+    },
+    {
+      "bytes": 8588,
+      "id": "docs/app_capabilities",
+      "sha256": "c2f56c46aa9bfa2ece92d1deb8ac6cc35bbbc4b74e45c9454a14f7be83089036",
+      "source": "generated: tools/corpus.py from src/capability/_index.yaml",
+      "title": "App capability catalog",
+      "topic": "capabilities"
+    },
+    {
+      "bytes": 3273,
+      "id": "docs/build_bee_app",
+      "sha256": "d9d5ba840d1d1d764eba8c48a718140e6c46a78d6086d0c6af6018370d248637",
+      "source": "generated: src/corpus/docs/build_bee_app.md",
+      "title": "Build a Bee app",
+      "topic": "docs"
+    },
+    {
+      "bytes": 4792,
+      "id": "reference_apps/starter",
+      "sha256": "fcf1ccfc08c06c8062cca4c2656488a887a5f3f136dc77871c6729467eb9a169",
+      "source": "generated: tools/corpus.py from tests/lua/starter",
+      "title": "Minimal Bee starter app",
+      "topic": "reference_apps"
+    }
+  ],
+  "schema": "bee.docs-corpus@1",
+  "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, errors, funcs, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL, exec and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform). Component: one page per Bee component, written from the entries under src/<component>. Reference applications: one page per application source plus an index. Terminal toolkit: one page covering the tty module, bee.ui frame, viz, diagram and forms, and the bee.app client, checked against src/ui, src/app and tests/lua/ui. Reference drivers: generated by tools/corpus.py from src/driver. The corpus is digest-checked with make lint.",
+  "totals": {
+    "bytes": 845639,
+    "documents": 94
+  }
+}

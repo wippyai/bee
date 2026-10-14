@@ -1,0 +1,364 @@
+version: '1.0'
+namespace: bee.gateway
+entries:
+- name: effects_scope_probe
+  kind: function.lua
+  source: file://effects_scope_probe.lua
+  method: run
+  meta: {type: test_support}
+  imports:
+    effects: bee.gateway.service:effects
+- name: effects_scope_test
+  kind: function.lua
+  source: file://effects_scope_test.lua
+  method: run
+  modules: [registry, security, funcs]
+  meta: {type: boot_test, suite: a_idle_node}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+- name: surface_test_db
+  kind: db.sql.sqlite
+  file: .wippy/surface-test.db
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}
+- name: surface_test_policy
+  kind: security.policy
+  policy: {actions: [db.get], resources: [bee.gateway:surface_test_db], effect: allow}
+- name: surface_store_test
+  kind: function.lua
+  source: file://surface_store_test.lua
+  method: run
+  modules: [sql]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gateway:surface_test_policy, bee.tests.support:schema_policy]}
+  imports: {test: wippy.test:test, schema: bee.tests.support:schema, store: bee.gateway.persist:surface_store, bounds: bee.values:bounds, grants: bee.approvals.grants:store, grant_schema: bee.approvals.grants:schema, clock: bee.values:clock}
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, catalog: bee.gateway.catalog:catalog, surface: bee.gateway.catalog:surface, mcp: bee.gateway.api:mcp, access: bee.gateway.security:access, json_schema: bee.gateway.catalog:json_schema}
+- name: hooks_test
+  kind: function.lua
+  source: file://hooks_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, funcs]
+  imports:
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    hooks: bee.gateway.hooks:hooks
+    configuration: bee.driver.binding:configuration
+    codex_configuration: bee.driver.codex.binding:configuration
+- name: mcp_test
+  kind: function.lua
+  source: file://mcp_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, json]
+  security: {policies: [bee.gateway:mcp_test_policy]}
+  imports:
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    mcp: bee.gateway.api:mcp
+    gateway: bee.gateway.binding:gateway
+- name: mcp_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.get]
+    resources:
+    - bee.gov.traits:authoring_trait
+    - bee.gov.traits:application_delivery_trait
+    - bee.gov.traits:application_publish_trait
+    - bee.gov.traits:application_tests_trait
+    - bee.gov.binding:overlay_call
+    effect: allow
+- name: context_test
+  kind: function.lua
+  source: file://context_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    context: bee.gateway.catalog:context
+- name: ephemeral_listener
+  kind: http.service
+  meta: {type: test_support}
+  addr: 127.0.0.1:0
+  lifecycle: {auto_start: true}
+- name: alternate_listener
+  kind: http.service
+  meta: {type: test_support}
+  addr: 127.0.0.2:0
+  lifecycle: {auto_start: true}
+- name: address_test_endpoint
+  kind: registry.entry
+  meta: {type: test_support}
+  data: {address: 127.0.0.1:0}
+- name: address_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.apply, registry.update.registry.entry, registry.get, funcs.call, events.subscribe, system.read]
+    resources: ['*']
+    effect: allow
+- name: address_test
+  kind: function.lua
+  source: file://address_test.lua
+  method: run
+  modules: [registry, funcs, events, system, channel, time]
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee.gateway:address_test_policy]
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    configuration: bee.gateway.env:configuration
+- name: policy_reference_admin
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [security.policy.get, registry.apply, registry.update.registry.entry, registry.get]
+    resources: ['*']
+    effect: allow
+- name: policy_reference_target
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.probe:policy_reference_other]
+    effect: allow
+- name: policy_reference_test
+  kind: function.lua
+  source: file://policy_reference_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, security, json, time]
+  security:
+    policies: [bee.gateway:policy_reference_admin]
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+- name: sessions_test
+  kind: function.lua
+  source: file://sessions_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, sessions: bee.gateway.catalog:sessions}
+- name: session_tools_test
+  kind: function.lua
+  source: file://session_tools_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    principals: bee.tests.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    mcp: bee.gateway.api:mcp
+    catalog: bee.gateway.catalog:catalog
+    surface: bee.gateway.catalog:surface
+    session_tools: bee.gateway.catalog:session_tools
+- name: session_boundary_probe_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy: {actions: [funcs.call], resources: [bee.gateway:session_boundary_probe], effect: allow}
+- name: session_boundary_probe
+  kind: function.lua
+  source: file://session_boundary_probe.lua
+  method: probe
+  meta: {type: test_support}
+  modules: [funcs, security]
+  imports:
+    bounds: bee.values:bounds
+    boundary: bee.gateway.api:session_boundary
+- name: session_boundary_test
+  kind: function.lua
+  source: file://session_boundary_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+- name: profile_scope_test
+  kind: function.lua
+  source: file://profile_scope_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [security]
+  security: {policies: [bee.gateway:profile_context_policy, bee.gateway.security:execute_policy]}
+  imports: {test: wippy.test:test, access: bee.driver.profiles:profile_access, scope: bee.gateway.catalog:profile_scope, context: bee.gateway.catalog:context, subject_call: bee.gateway.security:subject_call, bounds: bee.values:bounds}
+- name: profile_context_probe
+  kind: function.lua
+  source: file://profile_context_probe.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [ctx]
+  imports: {bounds: bee.values:bounds}
+- name: profile_context_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy: {actions: [funcs.call, security.policy.get], resources: '*', effect: allow}
+- name: external_configuration_test
+  kind: function.lua
+  source: file://external_configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    configuration: bee.gateway.api:external_configuration
+- name: external_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, funcs.security, funcs.context, security.actor.create, security.scope.create, security.policy.get, bee.gateway.admit, bee.gateway.manage, bee.gateway.materialize, bee.gateway.external.manage, registry.find, registry.get, system.read, db.get, bee.approvals.manage, bee.approvals.decide, bee.threads.create, http_client.request, http_client.private_ip, events.subscribe]
+    resources: '*'
+    effect: allow
+- name: external_test
+  kind: function.lua
+  source: file://external_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, json, http_client, events, logger, channel, time]
+  security:
+    policies:
+    - bee.tests.support:approval_effect_policy
+    - bee.gateway:external_test_policy
+    - bee.gateway.security:access_call_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+  imports:
+    approval_effect: bee.tests.support:approval_effect
+    test: wippy.test:test
+    external: bee.gateway.binding:external
+    gateway: bee.gateway.binding:gateway
+    bounds: bee.values:bounds
+    catalog: bee.gateway.catalog:catalog
+- name: external_view_test
+  kind: function.lua
+  source: file://external_view_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.security.docs:docs_policy]}
+  imports:
+    test: wippy.test:test
+    view: bee.gateway.app:view
+    appearance: bee.ui:appearance
+    manuals: bee.apps.help.app:manuals
+- name: external_app_test
+  kind: function.lua
+  source: file://external_app_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [process, system, channel, time, tty, sql, json, funcs, security, fs]
+  security: {policies: [bee.gateway:external_test_policy, bee.tests.principals:application_scope_policy, bee.tests.apps:capture_policy]}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+    bounds: bee.values:bounds
+    external: bee.gateway.binding:external
+    gateway: bee.gateway.binding:gateway
+    app_scope: bee.tests.principals:application
+- name: external_hive_test
+  kind: function.lua
+  source: file://external_hive_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [system, funcs, security, channel]
+  security:
+    policies:
+    - bee.gateway:external_test_policy
+    - bee.gateway.security:external_view_policy
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+  imports:
+    test: wippy.test:test
+    protocol: bee.hive:protocol
+    bounds: bee.values:bounds
+    gateway: bee.gateway.binding:gateway
+- name: node_tools_test
+  kind: function.lua
+  source: file://node_tools_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    mcp: bee.gateway.api:mcp
+    bounds: bee.values:bounds
+    json_schema: bee.gateway.catalog:json_schema
+    peer_tools: bee.node:peer_tools
+
+- name: hub_installation_test
+  kind: function.lua
+  source: file://hub_installation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    surface: bee.gateway.catalog:surface
+    catalog: bee.gateway.catalog:catalog
+    mcp: bee.gateway.api:mcp
+    installer: bee.gateway.security:installation
+    installation: bee.hub.activation:installation
+    bounds: bee.values:bounds
+- name: demand_test
+  kind: function.lua
+  source: file://demand_test.lua
+  method: run
+  modules: [registry, system, events, channel, time, process]
+  meta: {type: test, suite: bee, timeout: 15s}
+  imports:
+    test: wippy.test:test
+    protocol: bee.hive:protocol
+    effects: bee.gateway.service:effects
+- name: grants_migration_db
+  kind: db.sql.sqlite
+  file: .wippy/gateway-grants-migration.db
+  lifecycle: {auto_start: true}
+  meta: {type: test_support}
+- name: grants_migration_policy
+  kind: security.policy
+  policy: {actions: [db.get], resources: ['bee.gateway:grants_migration_db'], effect: allow}
+- name: grants_migration_test
+  kind: function.lua
+  source: file://grants_migration_test.lua
+  method: run
+  modules: [sql, json, funcs]
+  meta: {type: test, suite: bee}
+  security: {policies: ['bee.gateway:grants_migration_policy', 'bee.tests.support:schema_policy', 'bee.approvals.inbox.security:grants_policy']}
+  imports:
+    test: wippy.test:test
+    schema: bee.tests.support:schema
+    grants: bee.approvals.grants:store
+    bounds: bee.values:bounds
+    store: bee.gateway.persist:surface_store
+    clock: bee.values:clock
+    service: bee.approvals.binding:service
+
+- name: extension_test
+  kind: function.lua
+  source: file://extension_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, surface: bee.gateway.catalog:surface, traits: bee.gateway.security:traits, bounds: bee.values:bounds, host: bee.tests.memory:host, gateway: bee.gateway.binding:gateway}
+  security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}
+- name: reattachment_test
+  kind: function.lua
+  source: file://reattachment_test.lua
+  method: run
+  modules: [json]
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, bounds: bee.values:bounds, host: bee.tests.memory:host}
+  security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}

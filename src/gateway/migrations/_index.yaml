@@ -1,0 +1,69 @@
+version: '1.0'
+namespace: bee.gateway.migrations
+entries:
+- name: gateway
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-09T00:00:00Z'
+  source: file://gateway.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+    schema: bee.gateway.migrations:schema
+- name: hooks
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-09T00:01:00Z'
+  source: file://hooks.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: schema
+  kind: library.lua
+  source: file://schema.lua
+- name: complete
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-10T00:01:00Z'
+  source: file://complete.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: lease
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-11T00:02:00Z'
+  source: file://lease.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: external
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-11T00:03:00Z'
+  source: file://external.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: grants
+  kind: function.lua
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-16T00:00:00Z'}
+  source: file://grants.lua
+  method: run
+  modules: [json]
+  imports:
+    migration: wippy.migration:migration
+    grants: bee.approvals.grants:store
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    mcp: bee.gateway.api:mcp

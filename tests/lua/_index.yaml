@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.tests
+entries:
+- name: dependency
+  kind: ns.dependency
+  component: bee/bee
+  version: '*'
+- name: test_framework
+  kind: ns.dependency
+  component: wippy/test
+  version: '0.4.21'

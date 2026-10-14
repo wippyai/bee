@@ -1,0 +1,206 @@
+-- MIT. Catalog conversions are pure and never contact a Hub registry in tests.
+local test = require("test")
+local root_pack = require("root_pack")
+local catalog = require("catalog")
+local fixture = require("fixture")
+local funcs = require("funcs")
+
+local function module(name: string): {[string]: unknown}
+    return {
+        full_name = name,
+        display_name = "Terminal",
+        description = "Native terminal",
+        latest_version = "v1.2.3",
+        id = "opaque-native-id",
+    }
+end
+
+local function browse(items: {unknown}): {[string]: unknown}
+    return {items = items, total = #items, page = 2, page_size = catalog.PAGE_SIZE}
+end
+
+local function versions(items: {unknown}): {[string]: unknown}
+    return {items = items, total = #items, page = 1, page_size = catalog.MAX_VERSIONS}
+end
+
+local function define_tests()
+    test.describe("Hub catalog", function()
+        test.it("lists keyword-tagged Hub applications with Install in default Shared instead of the first global page", function()
+            local shared = assert(funcs.call("bee.tests.hub:catalog_default_shared"))
+            test.eq(shared.component, "bee/progress")
+            test.eq(shared.kind, "app")
+            test.is_true(shared.install)
+            test.eq(shared.total, 1)
+        end)
+        test.it("decodes once per artifact digest across Library catalog refresh calls", function()
+            fixture.select(string.rep("a", 64))
+            for _ = 1, 3 do
+                local reply, problem = funcs.call("bee.tests.hub:catalog_refresh")
+                test.is_nil(problem)
+                test.eq(reply.application, true)
+                test.eq(reply.decodes, 1)
+            end
+            fixture.select(string.rep("b", 64))
+            local changed = assert(funcs.call("bee.tests.hub:catalog_refresh"))
+            test.eq(changed.decodes, 2)
+            fixture.select(string.rep("a", 64))
+            local original = assert(funcs.call("bee.tests.hub:catalog_refresh"))
+            test.eq(original.decodes, 2)
+            fixture.select(string.rep("c", 64), "metadata")
+            local metadata = assert(funcs.call("bee.tests.hub:catalog_refresh"))
+            test.eq(metadata.application, true)
+            test.eq(metadata.decodes, 2)
+            fixture.select(string.rep("d", 64), "library")
+            for _ = 1, 2 do
+                local library = assert(funcs.call("bee.tests.hub:catalog_refresh"))
+                test.eq(library.application, false)
+                test.eq(library.decodes, 3)
+            end
+        end)
+        test.it("finds application declarations in the whole published Bee pack", function()
+            test.is_true(catalog.application({}, root_pack.entries()))
+        end)
+        test.it("classifies applications from Hub metadata without matching package names", function()
+            local app, library = module("unrelated/tasks"), module("bee/app-lookalike")
+            app.type, library.type = "application", "library"
+            local result = assert(catalog.decode_browse(browse({app, library})))
+            test.eq(result.items[1].application, true)
+            test.eq(result.items[2].application, false)
+            test.is_true(catalog.application({}, {{id = "arbitrary:entry", kind = "process.lua", meta = {type = "bee.app"}}}))
+            test.is_false(catalog.application({}, {{id = "bee:app", kind = "library.lua", meta = {title = "Application"}}}))
+        end)
+        test.it("decodes only bounded browse query and page input", function()
+            local default, default_error = catalog.decode({})
+            test.is_nil(default_error)
+            test.not_nil(default)
+            if default then
+                test.is_nil(default.query)
+                test.eq(default.page, 1)
+                test.eq(default.keyword, "bee")
+            end
+            local all_packages = catalog.decode({keyword = ""})
+            test.not_nil(all_packages)
+            if all_packages then test.eq(all_packages.keyword, "") end
+            local filtered = catalog.decode({query = "terminal", keyword = "bee"})
+            test.not_nil(filtered)
+            if filtered then test.eq(filtered.query, "terminal"); test.eq(filtered.keyword, "bee") end
+            local request, request_error = catalog.decode({query = "terminal", page = 2})
+            test.is_nil(request_error)
+            test.not_nil(request)
+            if request then
+                test.eq(request.query, "terminal")
+                test.eq(request.page, 2)
+            end
+            for _, invalid in ipairs({false, {query = ""}, {query = "bad\nquery"},
+                {query = string.rep("a", catalog.MAX_QUERY_BYTES + 1)}, {page = 0}, {page = 1.5},
+                {page = catalog.MAX_PAGE + 1}}) do
+                test.is_nil(catalog.decode(invalid))
+            end
+        end)
+
+        test.it("refuses caller-selected authority and invalid component identifiers", function()
+            for _, field in ipairs({"registry", "token", "url", "path", "actor", "scope"}) do
+                local raw: {[string]: unknown} = {query = "terminal"}
+                raw[field] = "caller-selected"
+                test.is_nil(catalog.decode(raw))
+                local detail: {[string]: unknown} = {component = "wippy/terminal"}
+                detail[field] = "caller-selected"
+                test.is_nil(catalog.decode_detail(detail))
+            end
+            for _, name in ipairs({"", "wippy", "/terminal", "wippy/", "wippy/term/inal", "https://hub/wippy", "./terminal", "wippy/.."}) do
+                test.is_nil(catalog.decode_detail({component = name}))
+            end
+        end)
+
+        test.it("converts a bounded native browse response to the public item shape", function()
+            local result, problem = catalog.decode_browse(browse({module("wippy/terminal")}))
+            test.is_nil(problem)
+            test.not_nil(result)
+            if not result then return end
+            test.eq(result.total, 1)
+            test.eq(result.page, 2)
+            test.eq(result.page_size, catalog.PAGE_SIZE)
+            test.eq(result.items[1].component, "wippy/terminal")
+            test.eq(result.items[1].title, "Terminal")
+            test.eq(result.items[1].description, "Native terminal")
+            test.eq(result.items[1].latest_version, "v1.2.3")
+        end)
+
+        test.it("fails closed for malformed or unbounded native browse data", function()
+            local missing_name = module("wippy/terminal")
+            missing_name.full_name = "invalid"
+            test.is_nil(catalog.decode_browse(browse({missing_name})))
+            test.is_nil(catalog.decode_browse({items = {[2] = module("wippy/terminal")}, total = 1, page = 2,
+                page_size = catalog.PAGE_SIZE}))
+            test.is_nil(catalog.decode_browse({items = {}, total = -1, page = 2, page_size = catalog.PAGE_SIZE}))
+            test.is_nil(catalog.decode_browse({items = {}, total = 0, page = 0, page_size = catalog.PAGE_SIZE}))
+            test.is_nil(catalog.decode_browse({items = {}, total = 0, page = 2, page_size = 0}))
+            local many: {unknown} = {}
+            for index = 1, catalog.MAX_ITEMS + 1 do many[index] = false end
+            test.is_nil(catalog.decode_browse(browse(many)))
+        end)
+
+        test.it("converts exact module, README, and version data for detail", function()
+            local result, problem = catalog.decode_detail_result(module("wippy/terminal"),
+                {content = "# Terminal", filename = "README.md", version = "v1.2.3"},
+                versions({{version = "v1.2.3", yanked = false}, {version = "v1.2.2", yanked = true}}),
+                "wippy/terminal")
+            test.is_nil(problem)
+            test.not_nil(result)
+            if not result then return end
+            test.eq(result.component, "wippy/terminal")
+            test.eq(result.title, "Terminal")
+            test.eq(result.description, "Native terminal")
+            test.eq(result.readme, "# Terminal")
+            test.eq(#result.versions, 2)
+            test.eq(result.versions[1].version, "v1.2.3")
+            test.is_false(result.versions[1].yanked)
+            test.is_true(result.versions[2].yanked)
+        end)
+
+        test.it("keeps the package and its versions when Hub cannot serve its README", function()
+            local result, problem = catalog.decode_detail_result(module("wippy/terminal"), nil,
+                versions({{version = "v1.2.3", yanked = false}}), "wippy/terminal", "internal: failed to get readme")
+            test.is_nil(problem)
+            test.not_nil(result)
+            if not result then return end
+            test.eq(result.readme, "")
+            test.eq(result.readme_error, "internal: failed to get readme")
+            test.eq(#result.versions, 1)
+            test.eq(result.versions[1].version, "v1.2.3")
+        end)
+
+        test.it("rejects mismatched identity and malformed detail data", function()
+            test.is_nil(catalog.decode_detail_result(module("other/terminal"), {content = "README"}, versions({}),
+                "wippy/terminal"))
+            test.is_nil(catalog.decode_detail_result(module("wippy/terminal"), {content = false}, versions({}),
+                "wippy/terminal"))
+            test.is_nil(catalog.decode_detail_result(module("wippy/terminal"), {content = "README"},
+                versions({{version = "v1.2.3", yanked = "false"}}), "wippy/terminal"))
+            test.is_nil(catalog.decode_detail_result(module("wippy/terminal"), {content = "README"},
+                {items = {}, total = 0, page = 1, page_size = 1}, "wippy/terminal"))
+            local history = versions({{version = "v1.2.3", yanked = false}})
+            history.total = catalog.MAX_VERSIONS + 1
+            local detailed, detailed_problem = catalog.decode_detail_result(module("wippy/terminal"),
+                {content = "README"}, history, "wippy/terminal")
+            test.is_nil(detailed_problem)
+            test.not_nil(detailed)
+        end)
+
+        test.it("uses the component as the deterministic title fallback", function()
+            local native = module("wippy/terminal")
+            native.display_name = ""
+            local result, problem = catalog.decode_browse(browse({native}))
+            test.is_nil(problem)
+            test.not_nil(result)
+            if result then test.eq(result.items[1].title, "wippy/terminal") end
+            native.latest_version = ""
+            local unpublished, unpublished_problem = catalog.decode_browse(browse({native}))
+            test.is_nil(unpublished_problem)
+            test.not_nil(unpublished)
+            if unpublished then test.eq(unpublished.items[1].latest_version, "") end
+        end)
+    end)
+end
+
+return test.run_cases(define_tests)

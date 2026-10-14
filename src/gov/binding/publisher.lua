@@ -1,0 +1,144 @@
+-- MIT. Source-owned immutable application publication. The artifact is made
+-- durable before its descriptor enters the ordered Sync feed, so discovery
+-- never points at missing bytes. Publication names no destination and grants
+-- no destination review, selection, approval or activation authority.
+local base64 = require("base64")
+local bounds = require("bounds")
+local delivery = require("delivery")
+local replicas = require("replicas")
+local sync = require("sync")
+local transaction = require("transaction")
+
+local M = {}
+type Result = transaction.Result
+type Object = {[string]: unknown}
+
+local function failure(code: string, message: string): Result
+    return transaction.failure(code, message)
+end
+
+local function put(store: replicas.Store, item: delivery.Delivery, descriptor: delivery.Descriptor): Result
+    local begun = replicas.begin(store, descriptor, 0)
+    if not begun.ok then return begun end
+    local value = bounds.object(begun.value)
+    if value and value.state == "available" then return begun end
+    local decoded = descriptor
+    local offset = value and bounds.count(value.received_bytes, #item.bytes) or 0
+    if offset == nil then return failure("INTERNAL", "published replica progress is malformed") end
+    while offset < #item.bytes do
+        local ending = math.min(#item.bytes, offset + (replicas.MAX_CHUNK_BYTES))
+        local encoded, encode_error = base64.encode(item.bytes:sub(offset + 1, ending))
+        if not encoded then return failure("INTERNAL", tostring(encode_error or "encode published replica chunk")) end
+        local written = replicas.put(store, {source_owner = decoded.owner_id, feed = decoded.feed,
+            version_key = decoded.key, descriptor_digest = decoded.digest}, offset, encoded)
+        if not written.ok then return written end
+        offset = ending
+    end
+    return replicas.finish(store, {source_owner = decoded.owner_id, feed = decoded.feed,
+        version_key = decoded.key, descriptor_digest = decoded.digest})
+end
+
+type Adopted = {name: string?}
+
+-- The version keys a slot query reported, or the reason the reply is malformed.
+function M.slot_keys(held: Result): ({string}?, string?)
+    local slot = bounds.object(held.value)
+    local rows = slot and bounds.array(slot.keys, bounds.MAX_ARRAY_ITEMS) or nil
+    if not rows then return nil, "published replica slot is malformed" end
+    local keys: {string} = {}
+    for _, row in ipairs(rows) do
+        if type(row) ~= "string" then return nil, "published replica slot is malformed" end
+        keys[#keys + 1] = row
+    end
+    return keys, nil
+end
+
+-- The author of the version this source already holds in the slot, when it
+-- holds one: its descriptor's manifest names it, or names no one.
+local function adopted_author(store: replicas.Store, descriptor: delivery.Descriptor, keys: {string}): Adopted?
+    if #keys == 0 then return nil end
+    local listed = replicas.available(store, descriptor.owner_id, descriptor.feed, 128)
+    local rows = listed.ok and bounds.object(listed.value) or nil
+    for _, raw in ipairs(rows and rows.items or {}) do
+        local existing = bounds.object(raw)
+        local manifest = existing and bounds.object(existing.manifest)
+        if existing and manifest and existing.key == descriptor.key then
+            return {name = bounds.line(manifest.author, delivery.MAX_AUTHOR)}
+        end
+    end
+    return nil
+end
+
+local function prepare(source_node: unknown, raw: unknown): (delivery.Delivery?, delivery.Descriptor?, Result?)
+    local node = bounds.id(source_node)
+    local value = bounds.object(raw)
+    if not node or not value then return nil, nil, failure("INVALID", "application publication is invalid") end
+    local extra = bounds.fields(value, {"source_workspace", "component", "version", "artifact", "author"})
+    if extra then return nil, nil, failure("INVALID", "application publication: " .. extra) end
+    local item, create_error = delivery.create({schema_revision = delivery.SCHEMA,
+        source_node = node, source_workspace = value.source_workspace, component = value.component,
+        version = value.version, author = value.author, artifact = value.artifact})
+    if not item then return nil, nil, failure("INVALID", create_error or "create application version") end
+    local descriptor, descriptor_error = delivery.descriptor(item)
+    if not descriptor then return nil, nil, failure("INTERNAL", descriptor_error or "create application descriptor") end
+    local replica_store, replica_error = replicas.open()
+    if not replica_store then return nil, nil, failure("UNAVAILABLE", replica_error or "open published replica store") end
+    -- A version names exactly one artifact: other bytes under a version this
+    -- source already prepared are refused, so review never shows two.
+    local held = replicas.slot(replica_store, descriptor.owner_id, descriptor.feed, item.value.component, item.value.version)
+    if not held.ok then replicas.close(replica_store); return nil, nil, held end
+    -- A version keeps the author it was first prepared under, so a later call
+    -- for the same version, whoever makes it, names the same bytes.
+    local held_keys, slot_error = M.slot_keys(held)
+    if not held_keys then replicas.close(replica_store); return nil, nil, failure("INTERNAL", slot_error or "read published replica slot") end
+    local adopted = adopted_author(replica_store, descriptor, held_keys)
+    if adopted ~= nil and adopted.name ~= item.value.author then
+        local again, again_error = delivery.create({schema_revision = delivery.SCHEMA, source_node = node,
+            source_workspace = value.source_workspace, component = value.component, version = value.version,
+            author = adopted.name, artifact = value.artifact})
+        if not again then replicas.close(replica_store); return nil, nil, failure("INTERNAL", again_error or "recreate application version") end
+        local again_descriptor, descriptor_failure = delivery.descriptor(again)
+        if not again_descriptor then replicas.close(replica_store); return nil, nil, failure("INTERNAL", descriptor_failure or "create application descriptor") end
+        item, descriptor = again, again_descriptor
+    end
+    for _, existing in ipairs(held_keys) do
+        if existing ~= descriptor.key then
+            replicas.close(replica_store)
+            return nil, nil, failure("CONFLICT", item.value.component .. " " .. item.value.version
+                .. " already holds other bytes; freeze the change and deliver it as a higher version")
+        end
+    end
+    local stored = put(replica_store, item, descriptor)
+    replicas.close(replica_store)
+    if not stored.ok then return nil, nil, stored end
+    return item, descriptor, nil
+end
+
+-- Make an authored immutable version locally available for the existing
+-- stage/review/select/approve/apply workflow. No Sync feed entry is appended,
+-- so preparing an edit cannot distribute it.
+function M.prepare(source_node: unknown, raw: unknown): Result
+    local item, descriptor, prepare_error = prepare(source_node, raw)
+    if not item or not descriptor then return assert(prepare_error) end
+    return transaction.success({descriptor = descriptor, version = item.value.version,
+        component = item.value.component}, false)
+end
+
+function M.publish(source_node: unknown, raw: unknown): Result
+    local node = bounds.id(source_node)
+    local item, descriptor, prepare_error = prepare(source_node, raw)
+    if not node or not item or not descriptor then return assert(prepare_error) end
+    local feed_store, feed_error = sync.open({owner = node})
+    if not feed_store then return failure("UNAVAILABLE", feed_error or "open application publication feed") end
+    local published = sync.append(feed_store, {feed = delivery.FEED, event_id = descriptor.digest,
+        idempotency_key = descriptor.digest, event_type = "application.version.published",
+        payload = descriptor, projection_key = item.slot, projection_value = descriptor,
+        expected_revision = 0})
+    sync.close(feed_store)
+    if not published.ok then return published end
+    local receipt = bounds.object(published.value) or {}
+    return transaction.success({descriptor = descriptor, sequence = receipt.sequence,
+        version = item.value.version, component = item.value.component}, published.replayed)
+end
+
+return M

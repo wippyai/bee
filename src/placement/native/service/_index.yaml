@@ -1,0 +1,362 @@
+version: '1.0'
+namespace: bee.placement.native.service
+entries:
+- name: executable
+  kind: library.lua
+  source: file://executable.lua
+  modules:
+  - fs
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    resources: bee.placement.native.env:resources
+    types: bee.placement:types
+    executable_stream: bee.placement.native.service:executable_stream
+- name: executable_stream
+  kind: library.lua
+  source: file://executable_stream.lua
+  modules:
+  - hash
+- name: output_buffer
+  kind: library.lua
+  source: file://output_buffer.lua
+  imports:
+    protocol: bee.placement.native:protocol
+- name: resource_resolution
+  kind: library.lua
+  source: file://resource_resolution.lua
+  imports:
+    bounds: bee.values:bounds
+    types: bee.placement:types
+- name: capability
+  kind: library.lua
+  source: file://capability.lua
+  modules:
+  - exec
+  imports:
+    types: bee.placement:types
+    resources: bee.placement.native.env:resources
+- name: homes
+  kind: library.lua
+  source: file://homes.lua
+  modules:
+  - fs
+  - hash
+  imports:
+    formats: bee.credentials:formats
+    types: bee.placement:types
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    resources: bee.placement.native.env:resources
+- name: identity
+  kind: library.lua
+  source: file://identity.lua
+  modules:
+  - exec
+  imports:
+    resources: bee.placement.native.env:resources
+- name: writable_roots_adapter
+  kind: library.lua
+  source: file://writable_roots_adapter.lua
+  imports:
+    canonical: bee.values:canonical
+    driver_types: bee.driver:types
+- name: cleanup_request
+  kind: function.lua
+  source: file://cleanup_request.lua
+  method: main
+  modules: [process, channel]
+  imports:
+    demand: bee.process:demand
+    bounds: bee.values:bounds
+- name: workdir_preparers
+  kind: library.lua
+  source: file://workdir_preparers.lua
+  modules:
+  - uuid
+  - process
+  - registry
+  - funcs
+  - sql
+  - json
+  imports:
+    resources: bee.placement.native.env:resources
+    types: bee.placement:types
+    bounds: bee.values:bounds
+    store: bee.placement.native.persist:store
+    paths: bee.placement.profiles:paths
+- name: service
+  kind: library.lua
+  source: file://service.lua
+  modules:
+  - process
+  - channel
+  - time
+  - security
+  - uuid
+  - json
+  - funcs
+  - registry
+  - system
+  - sql
+  - cdc
+  imports:
+    profile_values: bee.driver.descriptor:profile_values
+    gateway_configuration: bee.gateway.env:configuration
+    configuration: bee.driver.binding:configuration
+    preferences: bee.driver.descriptor:effective
+    resolver: bee.driver.binding:resolver
+    driver_types: bee.driver:types
+    placement_resolver: bee.placement.binding:resolver
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    types: bee.placement:types
+    request: bee.placement:request
+    transitions: bee.placement:transitions
+    store: bee.placement.native.persist:store
+    executable: bee.placement.native.service:executable
+    resources: bee.placement.native.env:resources
+    capability: bee.placement.native.service:capability
+    homes: bee.placement.native.service:homes
+    identity: bee.placement.native.service:identity
+    protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    gateway_protocol: bee.gateway:protocol
+    service_reply: bee.values:reply
+    credential_protocol: bee.credentials:protocol
+    resource_resolution: bee.placement.native.service:resource_resolution
+    workdir_preparers: bee.placement.native.service:workdir_preparers
+    placement_profiles: bee.placement.profiles:profiles
+    supervision: bee.placement.native.persist:supervision
+    demand: bee.process:demand
+- name: materialization
+  kind: library.lua
+  source: file://materialization.lua
+  modules:
+  - registry
+  - env
+  - fs
+  - funcs
+  - sql
+  - process
+  - hash
+  imports:
+    trust_lifetime: bee.placement.native.service:trust_lifetime
+    effective_schema: bee.driver.descriptor:effective
+    profile_values: bee.driver.descriptor:profile_values
+    trust: bee.driver.descriptor:trust
+    grants: bee.approvals.grants:store
+    profile_grants: bee.harness.profiles:grants
+    store: bee.placement.native.persist:store
+    resources: bee.placement.native.env:resources
+    homes: bee.placement.native.service:homes
+    workdir_preparers: bee.placement.native.service:workdir_preparers
+    writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
+    bounds: bee.values:bounds
+    configuration: bee.placement.native.env:configuration
+    provider_projection: bee.placement.native.service:provider_projection
+    types: bee.placement:types
+    paths: bee.placement.profiles:paths
+    gateway_protocol: bee.gateway:protocol
+    credential_protocol: bee.credentials:protocol
+    service_reply: bee.values:reply
+    formats: bee.credentials:formats
+- name: runner
+  kind: process.lua
+  source: file://runner.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  - sql
+  - exec
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    service: bee.placement.native.service:service
+    materialization: bee.placement.native.service:materialization
+    store: bee.placement.native.persist:store
+    executable: bee.placement.native.service:executable
+    resources: bee.placement.native.env:resources
+    identity: bee.placement.native.service:identity
+    output_buffer: bee.placement.native.service:output_buffer
+    protocol: bee.placement.native:protocol
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
+    process_backend: bee.placement.native.binding:process_backend
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.process:client_policy
+- name: window
+  kind: library.lua
+  source: file://window.lua
+  modules:
+  - process
+  - exec
+  - tty
+  - security
+  - funcs
+  - uuid
+  imports:
+    protocol: bee.placement.native:protocol
+    store: bee.placement.native.persist:store
+    resources: bee.placement.native.env:resources
+    materialization: bee.placement.native.service:materialization
+    executable: bee.placement.native.service:executable
+    quote: bee.driver.binding:quote
+    service: bee.placement.native.service:service
+    bounds: bee.values:bounds
+    identity: bee.placement.native.service:identity
+    process_backend: bee.placement.native.binding:process_backend
+    observer: bee.placement.native.service:observer
+- name: sweeper
+  kind: process.lua
+  source: file://sweeper.lua
+  method: main
+  modules: [process]
+  imports:
+    bounds: bee.values:bounds
+    store: bee.placement.native.persist:store
+    workdir_preparers: bee.placement.native.service:workdir_preparers
+    worker: bee.process:worker
+    service: bee.placement.native.service:service
+- name: sweeper_service
+  meta:
+    title: "Native agents \xB7 supervision"
+    type: bee.process.demand
+    demand:
+      name: bee.placement.sweeper
+      probe: bee.placement.native.service:backlog
+  kind: process.service
+  process: bee.placement.native.service:sweeper
+  lifecycle:
+    auto_start: false
+    requires:
+    - bee.hive.service:supervisor_service
+    security:
+      actor:
+        id: bee.placement.sweeper
+      policies:
+      - bee.placement.native.security:placement_store_policy
+      - bee.placement.native.security:placement_exec_policy
+      - bee.placement.native.security:placement_service_policy
+      - bee.resources.security:resource_resolve_policy
+      - bee.credentials.security:credential_materialize_policy
+      - bee.placement.native.security:placement_sweeper_policy
+      - bee.security.gateway:gateway_supervision_policy
+      - bee.process:client_policy
+      - bee.process:backlog_policy
+    restart:
+      max_attempts: 10
+  host: bee:workers
+- name: provider_projection
+  kind: library.lua
+  source: file://provider_projection.lua
+  modules:
+  - json
+  - toml
+  - registry
+  imports:
+    profiles: bee.placement.profiles:profiles
+    bounds: bee.values:bounds
+    formats: bee.credentials:formats
+    types: bee.driver:types
+- name: process_runner
+  kind: library.lua
+  source: file://runner.lua
+  modules:
+  - process
+  - channel
+  - time
+  - sql
+  - exec
+  - funcs
+  imports:
+    service: bee.placement.native.service:service
+    materialization: bee.placement.native.service:materialization
+    store: bee.placement.native.persist:store
+    executable: bee.placement.native.service:executable
+    resources: bee.placement.native.env:resources
+    identity: bee.placement.native.service:identity
+    output_buffer: bee.placement.native.service:output_buffer
+    protocol: bee.placement.native:protocol
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
+    process_backend: bee.placement.native.binding:process_backend
+    bounds: bee.values:bounds
+- name: startup
+  kind: process.lua
+  source: file://startup.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - sql
+  imports:
+    store: bee.placement.native.persist:store
+    bounds: bee.values:bounds
+    protocol: bee.placement.native:protocol
+    service: bee.placement.native.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+- name: observer
+  kind: library.lua
+  source: file://observer.lua
+  modules:
+  - registry
+  - process
+  - channel
+  - time
+  - uuid
+  - exec
+  imports:
+    bounds: bee.values:bounds
+    resolver: bee.driver.binding:resolver
+    observer_protocol: bee.driver:window_observer
+    resources: bee.placement.native.env:resources
+    quote: bee.driver.binding:quote
+    types: bee.placement:types
+- name: backlog
+  kind: function.lua
+  source: file://backlog.lua
+  method: pending
+  imports:
+    service: bee.placement.native.service:service
+- name: trust_lifetime
+  kind: library.lua
+  source: file://trust_lifetime.lua
+  modules: [sql, json, process]
+  imports:
+    protocol: bee.placement.native:protocol
+    grants: bee.approvals.grants:store
+    profile_grants: bee.harness.profiles:grants
+    bounds: bee.values:bounds
+    homes: bee.placement.native.service:homes
+    trust: bee.driver.descriptor:trust
+- name: revoke_trust
+  kind: function.lua
+  source: file://trust_lifetime.lua
+  method: revoke
+  meta: {type: bee.approvals.grant-revocation-effect, domain: profile_choices, destination: placement.folder_trust}
+  modules: [sql, json, process]
+  security:
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_service_policy]
+  imports:
+    protocol: bee.placement.native:protocol
+    grants: bee.approvals.grants:store
+    profile_grants: bee.harness.profiles:grants
+    bounds: bee.values:bounds
+    homes: bee.placement.native.service:homes
+    trust: bee.driver.descriptor:trust

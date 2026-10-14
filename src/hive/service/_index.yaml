@@ -1,0 +1,56 @@
+version: '1.0'
+namespace: bee.hive.service
+entries:
+- name: supervisor
+  kind: process.lua
+  source: file://supervisor.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - system
+  - logger
+  - events
+  - cdc
+  - time
+  imports:
+    protocol: bee.hive:protocol
+    receiver: bee.hive:receiver
+    bounds: bee.values:bounds
+    remote: bee.hive:remote
+    demand: bee.process:demand
+    demand_owner: bee.process:demand_owner
+    boot_gate: bee.process:boot_gate
+    route_catalog: bee.hive.service:routing
+- name: routing
+  kind: library.lua
+  source: file://routing.lua
+  modules:
+  - registry
+  imports:
+    protocol: bee.hive:protocol
+- name: supervisor_service
+  meta:
+    title: "Hive \xB7 supervisor"
+  kind: process.service
+  process: bee.hive.service:supervisor
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    requires: [wippy.bootloader:bootloader.service, bee:changes]
+    security:
+      actor:
+        id: bee.hive.supervisor
+      policies:
+      - bee.hive.security:supervisor
+      - bee.hive.security:routing
+      - bee.hive.security:routing_changes
+      - bee.hive.security:feed_changes
+      - bee.hive.security:demand
+      - bee.hive.security:demand_changes
+      - bee.hive.security:messaging
+      - bee.hive.security:application_dispatch
+      - bee.hive.security:admission_store
+      - bee.node.security:tests_backend_wake
+    restart:
+      max_attempts: 10

@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.placement.binding
+entries:
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  modules:
+  - hash
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    types: bee.placement:types

@@ -1,0 +1,91 @@
+version: '1.0'
+namespace: bee.approvals.migrations
+entries:
+- name: approvals
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-08T00:00:00Z'
+  source: file://approvals.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+    schema: bee.approvals.migrations:schema
+- name: schema
+  kind: library.lua
+  source: file://schema.lua
+- name: complete
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-10T00:00:00Z'
+  source: file://complete.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+
+- name: universal
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-11T00:00:00Z'
+  source: file://universal.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: effect_routes
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-12T00:00:00Z'
+  source: file://effect_routes.lua
+  method: run
+  modules: [json]
+  imports:
+    migration: wippy.migration:migration
+    resources: bee.approvals.env:resources
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+- name: grants
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-13T00:00:00Z'
+  source: file://grants.lua
+  method: run
+  modules: [sql]
+  imports:
+    migration: wippy.migration:migration
+    grant_schema: bee.approvals.grants:schema
+- name: runtime_grants
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-13T00:01:00Z'
+  source: file://runtime_grants.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: closed_origins
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-14T00:00:00Z'
+  source: file://closed_origins.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: grant_effects
+  kind: function.lua
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-22T00:00:00Z'}
+  source: file://grant_effects.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

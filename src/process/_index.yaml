@@ -1,0 +1,57 @@
+version: '1.0'
+namespace: bee.process
+entries:
+- name: boot_gate
+  kind: library.lua
+  source: file://boot_gate.lua
+  modules: [registry, system]
+  imports:
+    bounds: bee.values:bounds
+- name: boot_gate_policy
+  kind: security.policy
+  policy:
+    actions: [events.subscribe, system.read]
+    resources: [supervisor]
+    effect: allow
+- name: worker
+  kind: library.lua
+  source: file://worker.lua
+  modules: [process, channel, time]
+  imports:
+    demand: bee.process:demand
+- name: demand_state
+  kind: library.lua
+  source: file://demand_state.lua
+- name: demand
+  kind: library.lua
+  source: file://demand.lua
+  modules: [process]
+- name: demand_owner
+  kind: library.lua
+  source: file://demand_owner.lua
+  modules: [registry, process, events, system, funcs, security, logger, time, channel]
+  imports:
+    demand: bee.process:demand
+    worker: bee.process:worker
+    state: bee.process:demand_state
+    bounds: bee.values:bounds
+    clock: bee.values:clock
+- name: client_policy
+  kind: security.policy
+  policy:
+    actions: [process.registry.lookup, process.send]
+    resources: '*'
+    effect: allow
+- name: task
+  kind: library.lua
+  source: file://task.lua
+  modules: [channel, time, logger]
+  imports:
+    worker: bee.process:worker
+    clock: bee.values:clock
+- name: backlog_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: ["bee.credentials.service:backlog", "bee.node:test_backlog", "bee.gov.service:backlog", "bee.gateway.service:backlog", "bee.gateway.service:access_backlog", "bee.placement.docker.service:backlog", "bee.placement.native.service:backlog"]
+    effect: allow

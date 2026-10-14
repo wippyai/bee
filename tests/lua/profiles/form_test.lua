@@ -1,0 +1,338 @@
+-- SPDX-License-Identifier: MIT
+
+local test = require("test")
+local form = require("form")
+local editor = require("editor")
+local funcs = require("funcs")
+local registry = require("registry")
+local bounds = require("bounds")
+local view = require("view")
+local appearance = require("appearance")
+local function read(workspace: string, id: string): {[string]: unknown}
+    local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
+    if err then error(tostring(err)) end
+    local reply = bounds.object(raw)
+    if not reply or reply.ok ~= true then error("read profile failed") end
+    local value = bounds.object(reply.value)
+    if not value then error("read profile returned no value") end
+    return value
+end
+local function define_tests()
+    test.describe("Agent profile form persistence", function()
+        test.it("keeps core choices in Basic and reveals configuration in Advanced without changing the draft", function()
+            local opened = assert(form.load("profile-basic-atlas", {definition_ref = "bee.driver.codex.profiles:default_window", title = "Atlas profile"}, true))
+            local state = view.new(opened, function(_: string, _: {[string]: unknown})
+                return {ok = false, error = {code = "UNAVAILABLE", message = "No call expected"}, replayed = false}
+            end)
+            local basic = table.concat(view.draw(200, 90, appearance.defaults(), state).rows, "\n")
+            test.contains(basic, "Name")
+            test.contains(basic, "Role")
+            test.contains(basic, "Folder")
+            test.contains(basic, "Model")
+            test.is_nil((basic:find("Sandbox", 1, true)))
+            test.is_nil((basic:find("model_providers", 1, true)))
+            test.is_nil((basic:find("access/trust", 1, true)))
+            test.is_nil((basic:find("Context: Add", 1, true)))
+            local before = state.form.draft
+            view.action(state, "advanced")
+            local advanced = table.concat(view.draw(200, 90, appearance.defaults(), state).rows, "\n")
+            test.contains(advanced, "Sandbox")
+            test.contains(advanced, "Context: Add")
+            test.eq(state.form.draft, before)
+        end)
+        test.it("keeps a refused placement draft editable and reserves repair for stored profiles", function()
+            local entry = assert(registry.get("bee.driver.codex.security:launch_policy_codex_batch"))
+            local original = entry.data
+            local policy: {[string]: unknown} = {}
+            for name, value in pairs(assert(bounds.object(original))) do policy[name] = value end
+            policy.fixture = true; entry.data = policy
+            local changes = registry.snapshot():changes()
+            assert(changes:update(entry)); assert(changes:apply())
+            local ok, failure = pcall(function()
+                local opened = assert(form.load("profile-placement-draft", {definition_ref = "bee.driver.codex.profiles:research_batch", title = "Placement draft"}, true))
+                opened.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
+                opened = assert(form.refresh(opened))
+                opened.draft.provider.options = {approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}
+                local id, save_key = opened.profile_id, opened.save_key
+                local state = view.new(opened, function(_: string, _: {[string]: unknown})
+                    return {ok = false, error = {code = "UNAVAILABLE", message = "No confirmation expected"}, replayed = false}
+                end)
+                view.action(state, "advanced")
+                local function placement(direction: string)
+                    for _ = 1, 100 do
+                        local frame = view.draw(160, 90, appearance.defaults(), state)
+                        local focused = false
+                        for _, row in ipairs(frame.rows) do
+                            if row:find("›", 1, true) and row:find("Run in:", 1, true) then focused = true end
+                        end
+                        if focused then
+                            view.input(state, {type = "key", action = "press", key = "", key_type = direction, ctrl = false, alt = false, shift = false}, frame)
+                            return
+                        end
+                        view.input(state, {type = "key", action = "press", key = "", key_type = "tab", ctrl = false, alt = false, shift = false}, frame)
+                    end
+                    error("Run in is missing from the editor")
+                end
+                placement("left")
+                test.is_nil(state.form.repair_json)
+                test.is_nil(state.form.migration_diagnostic)
+                test.eq(state.form.profile_id, id)
+                test.eq(state.form.save_key, save_key)
+                test.eq(state.form.draft.driver_binding_ref, "bee.driver.codex.binding:binding")
+                test.eq(assert(state.form.draft.provider.options).dangerously_bypass_approvals_and_sandbox, true)
+                local rendered = table.concat(view.draw(160, 90, appearance.defaults(), state).rows, "\n")
+                for _, label in ipairs({"Run in:", "Bypass approvals and sandbox", "Approval policy"}) do test.is_true(rendered:find(label, 1, true) ~= nil, label) end
+                test.is_true(rendered:match("Bypass approvals and sandbox[^\n]*ceiling[^\n]*placement") ~= nil, rendered)
+                test.is_false(form.save(state.form))
+                test.is_nil(view.action(state, "save"))
+                test.is_nil(state.form.pending)
+                placement("right")
+                test.not_nil(editor.result(state.form.draft))
+                test.is_nil(state.form.repair_json)
+                test.is_true(form.save(state.form))
+                local stored = assert(form.reload(state.form))
+                local invalid_policy: {[string]: unknown} = {}
+                for name, value in pairs(policy) do invalid_policy[name] = value end
+                invalid_policy.profile_restrictions = {['provider.options.approval_policy'] = {"on-request"}, ['provider.options.dangerously_bypass_approvals_and_sandbox'] = {false}}
+                entry.data = invalid_policy
+                changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())
+                local repair = assert(form.reload(stored))
+                test.not_nil(repair.repair_json)
+                test.not_nil(repair.migration_diagnostic)
+            end)
+            entry.data = original
+            changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())
+            assert(ok, tostring(failure))
+        end)
+        test.it("round trips a container Codex bypass and refuses changing it to native", function()
+            local entry = assert(registry.get("bee.driver.codex.security:launch_policy_codex_batch"))
+            local original = entry.data
+            local data: {[string]: unknown} = {}
+            for name, value in pairs(assert(bounds.object(original))) do data[name] = value end
+            data.fixture = true; entry.data = data
+            local changes = registry.snapshot():changes()
+            assert(changes:update(entry)); assert(changes:apply())
+            local ok, failure = pcall(function()
+                local opened = assert(form.load("profile-container-yolo", {definition_ref = "bee.driver.codex.profiles:research_batch", title = "Container Codex"}, true))
+                test.is_true(editor.cycle_placement(opened.draft, 1))
+                test.is_true(editor.cycle_placement(opened.draft, 1))
+                local refreshed, refresh_error = form.refresh(opened)
+                assert(refreshed, tostring(refresh_error))
+                opened = refreshed
+                test.is_nil(opened.repair_json)
+                opened.draft.provider.options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}
+                local saved, save_error = form.save(opened)
+                assert(saved, tostring(save_error))
+                local restored = assert(form.reload(opened))
+                test.eq(assert(restored.draft.provider.options).sandbox, "danger-full-access")
+                test.eq(assert(restored.draft.provider.options).dangerously_bypass_approvals_and_sandbox, true)
+                restored.draft.placement = {kind = "native", home = "private"}
+                local accepted, reason = form.save(restored)
+                test.is_false(accepted)
+                test.is_true(tostring(reason):find("ceiling", 1, true) ~= nil)
+            end)
+            entry.data = original
+            changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())
+            assert(ok, tostring(failure))
+        end)
+        test.it("edits the CLI permission mode from its declared schema", function()
+            local opened = assert(form.load("profile-cli-permission-edit", {definition_ref = "bee.driver.claude.profiles:default_window", title = "CLI permissions"}, true))
+            test.is_true(editor.cycle_option(opened.draft, "permission_mode"))
+            test.is_true(editor.cycle_option(opened.draft, "permission_mode"))
+            test.eq(opened.draft.provider.permission_mode, "acceptEdits")
+            test.is_true(form.save(opened))
+            local restored = assert(form.reload(opened))
+            test.eq(restored.draft.provider.permission_mode, "acceptEdits")
+            restored.draft.provider.permission_mode = "invented"
+            test.is_nil(editor.result(restored.draft))
+        end)
+        test.it("round trips person folder trust and blocks invalid drafts before save", function()
+            local opened = assert(form.load("profile-folder-trust", {definition_ref = "bee.driver.claude.profiles:default_window", title = "Folder trust"}, true))
+            test.is_true(editor.cycle_option(opened.draft, "folder_trust"))
+            test.is_true(editor.cycle_option(opened.draft, "folder_trust"))
+            test.eq(assert(opened.draft.provider.options).folder_trust, "approved-workdir")
+            test.is_true(form.save(opened))
+            local restored = assert(form.reload(opened))
+            test.eq(assert(restored.draft.provider.options).folder_trust, "approved-workdir")
+            assert(restored.draft.provider.options).folder_trust = "everywhere"
+            test.is_false(form.save(restored))
+            test.is_nil(restored.pending)
+            test.eq(read("profile-folder-trust", restored.profile_id).revision, 1)
+        end)
+        test.it("refuses permission answers without the host's accepted transport", function()
+            local opened = assert(form.load("profile-permission-edit", {definition_ref = "bee.driver.claude.profiles:default_window", title = "Permissions"}, true))
+            opened.draft.bee.permission_answers = "ask"
+            local saved, reason = form.save(opened)
+            test.is_false(saved)
+            test.eq(reason, "This host has no accepted permission transport. Use provider answers.")
+            test.is_nil(opened.pending)
+            opened.draft.bee.permission_answers = "provider"
+            test.is_true(form.save(opened))
+        end)
+        test.it("saves and reloads the declared model under a shipped window policy", function()
+            local workspace = "profile-model-edit"
+            local opened = assert(form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Model worker"}, true))
+            test.is_true(editor.set_text_option(opened.draft, "model", "sonnet"))
+            test.is_true(form.save(opened))
+            local restored = assert(form.reload(opened))
+            test.eq(restored.draft.provider.model, "sonnet")
+            test.is_false(editor.set_text_option(restored.draft, "model", "invalid model\n"))
+            test.eq(restored.draft.provider.model, "sonnet")
+        end)
+        test.it("changes a saved driver through the new driver's declared schema and keeps the profile identity", function()
+            local workspace = "profile-driver-change"
+            local original = assert(form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Named worker"}, true))
+            test.is_true(form.save(original))
+            local editing = assert(form.reload(original))
+            local changed = assert(form.change_driver(editing, {definition_ref = "bee.driver.codex.profiles:default_window", title = "Codex"}))
+            test.eq(changed.profile_id, original.profile_id)
+            test.eq(changed.revision, 1)
+            test.eq(changed.draft.name, "Named worker")
+            test.eq(changed.draft.driver_binding_ref, "bee.driver.codex.binding:binding")
+            test.eq(changed.driver_name, "codex")
+            test.is_true(changed.fields ~= nil)
+            test.is_true(form.save(changed))
+            test.eq(read(workspace, changed.profile_id).revision, 2)
+        end)
+        test.it("saves OpenCode custom providers through the existing schema-driven editor", function()
+            local opened = assert(form.load("profile-opencode-local", {definition_ref = "bee.driver.opencode.profiles:default_window", title = "Local OpenCode"}, true))
+            test.eq(opened.driver_name, "opencode")
+            test.eq(assert(opened.fields).providers.label, "Custom providers")
+            test.eq(assert(opened.credential_keys).opencode_api_key, true)
+            opened.draft.placement = {kind = "native", home = "private"}
+            test.is_true(bounds.member("opencode_api_key", form.credential_names(opened)) ~= nil)
+            test.is_true(editor.set_text_option(opened.draft, "model", "local/gemma"))
+            test.is_true(editor.set_text_option(opened.draft, "providers", '{"local":{"npm":"@ai-sdk/openai-compatible","options":{"baseURL":"http://127.0.0.1:8080/v1","apiKey":"{env:OPENAI_API_KEY}"},"models":{"gemma":{"name":"Gemma"}}}}'))
+            test.is_true(editor.set_text_option(opened.draft, "enabled_providers", '["local"]'))
+            test.is_true(form.save(opened))
+            local restored = assert(form.reload(opened))
+            test.eq(restored.draft.provider.model, "local/gemma")
+            local providers = assert(bounds.object(assert(restored.draft.provider.options).providers))
+            local options = assert(bounds.object(assert(bounds.object(providers["local"])).options))
+            test.eq(options.baseURL, "http://127.0.0.1:8080/v1")
+            test.eq(options.apiKey, "{env:OPENAI_API_KEY}")
+        end)
+        test.it("saves Codex custom providers through the existing schema-driven editor", function()
+            local placement_ref = "bee.placement.docker.profiles:coding"
+            local placement_entry = assert(registry.get(placement_ref))
+            local meta = assert(bounds.object(placement_entry.meta))
+            local ceilings = assert(bounds.object(assert(bounds.object(meta.option_ceilings)).codex))
+            local previous = ceilings.model_providers
+            ceilings.model_providers = {"profile-option"}
+            local changes = registry.snapshot():changes(); assert(changes:update(placement_entry)); assert(changes:apply())
+            local policy_entry = assert(registry.get("bee.driver.codex.security:launch_policy_codex_window"))
+            local original_policy = policy_entry.data
+            local fixture_policy: {[string]: unknown} = {}
+            for name, value in pairs(assert(bounds.object(original_policy))) do fixture_policy[name] = value end
+            fixture_policy.fixture = true; policy_entry.data = fixture_policy
+            changes = registry.snapshot():changes(); assert(changes:update(policy_entry)); assert(changes:apply())
+            local ok, failure = pcall(function()
+                local opened = assert(form.load("profile-codex-local", {definition_ref = "bee.driver.codex.profiles:default_window", title = "Local Codex"}, true))
+                test.eq(opened.driver_name, "codex")
+                test.eq(assert(opened.fields).model_providers.label, "Custom providers")
+                test.eq(assert(opened.credential_keys).codex_api_key, true)
+                opened.draft.placement = {kind = "native", home = "private"}
+                test.is_true(bounds.member("codex_api_key", form.credential_names(opened)) ~= nil)
+                test.is_true(editor.set_text_option(opened.draft, "model", "gemma"))
+                test.is_true(editor.set_text_option(opened.draft, "model_provider", "local"))
+                test.is_true(editor.set_text_option(opened.draft, "model_providers", '{"local":{"name":"Local","base_url":"http://127.0.0.1:8080/v1","env_key":"OPENAI_API_KEY","wire_api":"responses"}}'))
+                local accepted, reason = form.save(opened)
+                test.is_false(accepted); test.is_true(tostring(reason):find("ceiling", 1, true) ~= nil)
+                opened.draft.placement = {kind = "docker", profile_ref = placement_ref}
+                opened = assert(form.refresh(opened))
+                local errors, diagnostic_error = form.option_errors(opened)
+                test.is_nil(diagnostic_error)
+                test.is_nil(next(errors))
+                test.is_true(form.save(opened))
+                local restored = assert(form.reload(opened))
+                test.eq(restored.draft.provider.model, "gemma")
+                local providers = assert(bounds.object(assert(restored.draft.provider.options).model_providers))
+                local provider = assert(bounds.object(providers["local"]))
+                test.eq(provider.base_url, "http://127.0.0.1:8080/v1")
+                test.eq(provider.env_key, "OPENAI_API_KEY")
+            end)
+            policy_entry.data = original_policy
+            changes = registry.snapshot():changes(); assert(changes:update(policy_entry)); assert(changes:apply())
+            ceilings.model_providers = previous
+            changes = registry.snapshot():changes(); assert(changes:update(placement_entry)); assert(changes:apply())
+            assert(ok, tostring(failure))
+        end)
+        test.it("preserves a conflicting draft for reload or a fresh copy", function()
+            local workspace = "profile-form-conflict"
+            local created = assert(form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Claude"}, true))
+            test.is_true(form.save(created))
+            local choice = {title = "Claude", saved_profile_id = created.profile_id, saved_profile_revision = 1}
+            local first = assert(form.load(workspace, choice, false))
+            local second = assert(form.load(workspace, choice, false))
+            test.is_true(editor.set_title(first.draft, "First writer"))
+            test.is_true(form.save(first))
+            test.is_true(editor.set_title(second.draft, "Unsaved draft"))
+            local saved, err = form.save(second)
+            test.is_false(saved)
+            test.is_true(err ~= nil and err:match("^CONFLICT:") ~= nil)
+            test.is_true(second.conflict == true)
+            test.eq(second.draft.name, "Unsaved draft")
+            test.is_nil(second.pending)
+            local reloaded = assert(form.reload(second))
+            test.eq(reloaded.draft.name, "First writer")
+            test.eq(reloaded.revision, 2)
+            local original_id, original_key = second.profile_id, second.save_key
+            test.is_true(form.copy(second))
+            test.is_false(second.profile_id == original_id)
+            test.is_false(second.save_key == original_key)
+            test.eq(second.revision, 0)
+            test.eq(second.draft.name, "Unsaved draft")
+            test.is_true(form.save(second))
+            test.eq(read(workspace, original_id).revision, 2)
+            test.eq(read(workspace, second.profile_id).revision, 1)
+        end)
+        test.it("creates a profile and retries the original submission despite later draft edits", function()
+            local workspace = "profile-form-workspace"
+            local initial = {definition_ref = "bee.driver.claude.profiles:default_window", title = "Claude Code"}
+            local opened, err = form.load(workspace, initial, true)
+            if not opened then error(tostring(err)) end
+            test.is_true(editor.set_title(opened.draft, "My Claude"))
+            test.is_true(form.save(opened))
+            test.is_true(editor.set_title(opened.draft, "Later draft"))
+            test.is_true(form.save(opened))
+            local saved = read(workspace, opened.profile_id)
+            test.eq(saved.revision, 1)
+            local profile = bounds.object(saved.profile)
+            if not profile then error("profile missing") end
+            test.eq(profile.name, "My Claude")
+            test.is_false(form.remove(opened))
+            local saved = {definition_ref = opened.draft.definition_ref, title = "My Claude",
+                saved_profile_id = opened.profile_id, saved_profile_revision = 1}
+            local editing, edit_error = form.load(workspace, saved, false)
+            if not editing then error(tostring(edit_error)) end
+            test.eq(editing.draft.name, "My Claude")
+            test.is_true(form.remove(editing))
+            test.is_true(form.remove(editing))
+            test.eq(read(workspace, opened.profile_id).tombstone, true)
+            test.is_false(form.save(editing))
+            test.is_nil(form.load(workspace, saved, false))
+        end)
+    end)
+    test.describe("Agent profile form subject", function()
+        test.it("opens a saved profile under its own definition and refuses a different one", function()
+            local workspace = "profile-form-subject"
+            local created, err = form.load(workspace, {definition_ref = "bee.driver.claude.profiles:default_window", title = "Claude Code"}, true)
+            if not created then error(tostring(err)) end
+            test.is_true(form.save(created))
+            local saved, saved_error = form.saved(workspace, created.profile_id, 1)
+            if not saved then error(tostring(saved_error)) end
+            test.eq(saved.definition_ref, "bee.driver.claude.profiles:default_window")
+            local reopened, reopen_error = form.load(workspace, {title = "Claude Code", saved_profile_id = created.profile_id,
+                saved_profile_revision = 1}, false)
+            if not reopened then error(tostring(reopen_error)) end
+            test.eq(reopened.draft.definition_ref, "bee.driver.claude.profiles:default_window")
+            local mismatched = form.load(workspace, {definition_ref = "bee.driver.codex.profiles:default_window", title = "x",
+                saved_profile_id = created.profile_id, saved_profile_revision = 1}, false)
+            test.is_nil(mismatched)
+            local stale, stale_error = form.saved(workspace, created.profile_id, 2)
+            test.is_nil(stale)
+            test.eq(stale_error, "Profile changed. Refresh and select it again.")
+        end)
+    end)
+end
+return test.run_cases(define_tests)

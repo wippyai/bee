@@ -1,0 +1,141 @@
+-- SPDX-License-Identifier: MIT
+local test = require("test")
+local process = require("process")
+local channel = require("channel")
+local system = require("system")
+local time = require("time")
+local sql = require("sql")
+local registry = require("registry")
+local events = require("events")
+local cdc = require("cdc")
+local bounds = require("bounds")
+local funcs = require("funcs")
+local uuid = require("uuid")
+local workspaces = require("workspaces")
+local client = require("client")
+local NODE = "bee.node.service:owner_service"
+local THREADS = "bee.threads.service:service"
+local RETIRE = "bee.threads.binding:retire_app_alias"
+local function call(op: string, args: {[string]: unknown}): {[string]: unknown}
+    return assert(client.call(assert(system.node.id()), op, args))
+end
+local function service(updates: events.Subscription, id: string, target: string)
+    local deadline = time.after("5s")
+    while true do
+        local state = assert(system.supervisor.state(id))
+        if state.status == target or (target == "stopped" and state.desired == "stopped" and state.status == "exited") then return end
+        local selected = channel.select({updates:channel():case_receive(), deadline:case_receive()})
+        assert(selected.channel ~= deadline and selected.ok, "service did not become " .. target)
+    end
+end
+local function replace(entry: registry.Entry)
+    local changes = assert(registry.snapshot()):changes()
+    assert(changes:update(entry))
+    assert(changes:apply())
+end
+local function define_tests()
+    test.describe("Node app exit retirement", function()
+        test.it("fences a pending retirement from a new alias generation", function()
+            local updates = assert(events.subscribe("supervisor", "service.update"))
+            assert(events.send("supervisor", "service.stop", THREADS))
+            service(updates, THREADS, "stopped")
+            local workspace = string.rep("d", 32)
+            local alias = {stable = "bee.application:" .. workspace .. ":generation-app",
+                instance = "bee.application:" .. workspace .. ":" .. assert(uuid.v7()),
+                workspace_id = workspace, definition_id = "bee.tests.node:probe_app"}
+            local passed, problem = pcall(function()
+                local registered = assert(bounds.object(funcs.call("bee.threads.binding:register_app_alias", alias)))
+                test.eq(registered.ok, true)
+                assert(workspaces.retire(alias))
+                registered = assert(bounds.object(funcs.call("bee.threads.binding:register_app_alias", alias)))
+                test.eq(registered.ok, true)
+                local db = assert(sql.get("bee:db"))
+                local changes = assert(cdc.stream("bee:changes", {tables = {"bee_thread_app_alias_retirements"}, ops = {"delete"}}))
+                local drained = changes:channel()
+                assert(events.send("supervisor", "service.start", THREADS))
+                local deadline = time.after("5s")
+                while #assert(db:query("SELECT instance FROM bee_thread_app_alias_retirements WHERE instance = ?", {alias.instance})) > 0 do
+                    local selected = channel.select({drained:case_receive(), deadline:case_receive()})
+                    assert(selected.ok and selected.channel ~= deadline, "alias owner did not drain stale retirement")
+                end
+                local rows = assert(db:query("SELECT active, generation FROM bee_thread_app_alias WHERE instance = ?", {alias.instance}))
+                test.eq(rows[1].active, 1)
+                test.eq(rows[1].generation, 2)
+                local retired = assert(bounds.object(funcs.call(RETIRE, alias)))
+                test.eq(retired.ok, true)
+                changes:close()
+                db:release()
+            end)
+            assert(events.send("supervisor", "service.start", THREADS))
+            updates:close()
+            if not passed then error(tostring(problem)) end
+        end)
+        test.it("persists a closed app and drains its retirement after the alias owner returns", function()
+            local inbox = assert(process.listen(client.EVENTS, {message = true}))
+            local updates = assert(events.subscribe("supervisor", "service.update"))
+            local before = assert(client.state(call("watch", {})))
+            local opened = call("open", {app = "bee.tests.node:probe_app", desktop = before.desktop})
+            local id = assert(bounds.id(opened.id))
+            local actor = "bee.application:" .. before.home .. ":" .. id
+            local original = assert(registry.get(RETIRE))
+            local refused = assert(registry.get(RETIRE))
+            local data = assert(bounds.object(refused.data))
+            data.source = 'return {run = function() return {ok = false, error = {code = "BUSY", message = "alias owner busy", retryable = true}, replayed = false} end}'
+            refused.data = data
+            replace(refused)
+            assert(events.send("supervisor", "service.stop", THREADS))
+            service(updates, THREADS, "stopped")
+            local passed, problem = pcall(function()
+                local lifecycle = assert(process.events())
+                assert(process.monitor(before.owner))
+                call("close", {id = id})
+                local deadline = time.after("5s")
+                while true do
+                    local selected = channel.select({inbox:case_receive(), lifecycle:case_receive(), deadline:case_receive()})
+                    assert(selected.channel ~= deadline, "Node did not announce the app close")
+                    if selected.channel == lifecycle and tostring(selected.value.from) == before.owner then
+                        error("Node owner died when the alias owner refused retirement")
+                    end
+                    if selected.channel == inbox then
+                        local event = client.event(selected.value:payload():data())
+                        if event and event.kind == "closed" and event.id == id then break end
+                    end
+                end
+                process.unmonitor(before.owner)
+                test.eq(assert(client.state(call("list", {}))).owner, before.owner)
+                local db = assert(sql.get("bee:db"))
+                test.eq(#assert(db:query("SELECT id FROM bee_node_instances WHERE id = ?", {id})), 0)
+                test.eq(assert(db:query("SELECT active FROM bee_thread_app_alias WHERE instance = ?", {actor}))[1].active, 1)
+                test.eq(#assert(db:query("SELECT instance FROM bee_thread_app_alias_retirements WHERE instance = ?", {actor})), 1)
+                assert(events.send("supervisor", "service.stop", NODE))
+                service(updates, NODE, "stopped")
+                local ready = assert(process.listen("bee.test.node.ready", {message = true}))
+                assert(process.registry.register("bee.test.node.ready"))
+                assert(events.send("supervisor", "service.start", NODE))
+                assert((ready:receive()))
+                process.registry.unregister("bee.test.node.ready")
+                process.unlisten(ready)
+                local restarted = assert(client.state(call("list", {})))
+                test.neq(restarted.owner, before.owner)
+                for _, instance in ipairs(restarted.running) do test.neq(instance.id, id) end
+                local changes = assert(cdc.stream("bee:changes", {tables = {"bee_thread_app_alias"}, ops = {"update"}}))
+                local changed = changes:channel()
+                assert(events.send("supervisor", "service.start", THREADS))
+                local retirement = time.after("5s")
+                while assert(db:query("SELECT active FROM bee_thread_app_alias WHERE instance = ?", {actor}))[1].active ~= 0 do
+                    local selected = channel.select({changed:case_receive(), retirement:case_receive()})
+                    assert(selected.ok and selected.channel ~= retirement, "alias owner did not drain durable retirement")
+                end
+                test.eq(#assert(db:query("SELECT instance FROM bee_thread_app_alias_retirements WHERE instance = ?", {actor})), 0)
+                changes:close()
+                db:release()
+            end)
+            replace(original)
+            assert(events.send("supervisor", "service.start", THREADS))
+            updates:close()
+            process.unlisten(inbox)
+            if not passed then error(tostring(problem)) end
+        end)
+    end)
+end
+return test.run_cases(define_tests)

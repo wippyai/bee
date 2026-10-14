@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.gov.client
+entries:
+- name: governed
+  kind: library.lua
+  source: file://governed.lua
+  imports:
+    bounds: bee.values:bounds
+    preflight: bee.gov.binding:preflight

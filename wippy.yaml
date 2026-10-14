@@ -1,0 +1,10 @@
+organization: bee
+module: bee
+type: application
+version: 0.2.0-dev
+description: Terminal workspace for agents across local nodes
+license: MIT
+# The offline agent documentation corpus is the one filesystem the pack embeds:
+# wippy pack turns bee.env:docs_corpus into a read-only fs.embed volume.
+embed:
+- bee.env:docs_corpus

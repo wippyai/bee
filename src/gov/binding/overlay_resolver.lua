@@ -1,0 +1,450 @@
+-- MIT. Destination-local resolution for exact immutable private-overlay
+-- artifacts. Sync bytes supply definitions only; the host selects their
+-- package identity, overlay owner and capability ceiling.
+local registry = require("registry")
+local artifact = require("artifact")
+local canonical = require("canonical")
+local hash = require("hash")
+local bounds = require("bounds")
+local application_admission = require("application_admission")
+local capability_model = require("capability_model")
+local protected_kernel = require("protected_kernel")
+local lists = require("lists")
+local resolution = require("resolution")
+local driver_admission = require("driver_admission")
+local requirement = require("requirement")
+local application_capabilities = require("application_capabilities")
+local workspace_applications = require("workspace_applications")
+
+local M = {}
+type Object = {[string]: unknown}
+type Entry = {[string]: unknown}
+type Captured = {revision: integer, entries: {Entry}, overlay_ids: {[string]: boolean}?,
+    owner: (Entry) -> (string?, string?)}
+type Root = {component: string, version: string}
+type Policy = application_capabilities.Policy
+-- folder resolves the destination workspace folder file grants are rooted in;
+-- it is consulted only when the plan requests workspace files.
+type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
+    policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
+type Resolver = resolution.Resolver
+type Instance = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
+    policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?,
+    resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
+
+local function object(value: unknown): Object?
+    return bounds.object(value)
+end
+
+local function sha(value: unknown): string?
+    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
+    return value
+end
+
+
+local function measured_entry(entry: Entry, package: string, registry_default_metadata: boolean?): (preflight.Entry?, string?)
+    local clean: Entry = {}
+    -- `registry` is runtime provenance. It is not part of an incoming private
+    -- artifact's authority or materialized definition.
+    for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
+    -- Registry snapshots materialize the author-facing default as an empty
+    -- object. Normalize that representation only when reading a snapshot.
+    -- An incoming artifact is immutable: its candidate digest must be the
+    -- digest of its exact entry bytes, including an omitted `meta` field.
+    if registry_default_metadata
+        and (clean.meta == nil or (type(clean.meta) == "table" and next(clean.meta) == nil)) then
+        clean.meta = table.create(0, 1)
+    end
+    local id, kind = bounds.id(clean.id), bounds.id(clean.kind)
+    if not id or not kind then return nil, "private overlay entry identity is invalid" end
+    local encoded, encode_error = canonical.encode(clean, artifact.MAX_BYTES)
+    if not encoded then return nil, "encode private overlay entry: " .. tostring(encode_error or "unknown error") end
+    local digest, digest_error = hash.sha256(encoded)
+    if not digest then return nil, tostring(digest_error or "measure private overlay entry") end
+    local refs, refs_error = requirement.references(clean)
+    if not refs then return nil, refs_error end
+    local data = object(clean.data)
+    if not data then return nil, "registry entry configuration data is missing" end
+    local modules, modules_error = lists.strings(data.modules, "entry modules", 32)
+    if not modules then return nil, modules_error end
+    local config_objects, config_lists, config_empty, shapes_error = artifact.config_shapes(data)
+    if not config_objects or not config_lists or not config_empty then return nil, tostring(shapes_error or "measure entry configuration shapes") end
+    local security = object(data.security)
+    local grants, grants_error = lists.strings(security and security.policies or nil, "entry policies", 32)
+    if not grants then return nil, grants_error end
+    local lifecycle = object(data.lifecycle)
+    return {id = id, kind = kind, package = package, digest = digest,
+        references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
+        application_checkpoint_invalid = artifact.application_checkpoint_invalid(clean),
+        application_unplaced = artifact.application_unplaced(clean),
+        security_actor = security ~= nil and security.actor ~= nil,
+        security_groups = security ~= nil and security.groups ~= nil,
+        grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
+        config_empty = config_empty}, nil
+end
+
+local function policy_context(policy: Policy, captured: Captured, base_digest: string,
+    current: {[string]: preflight.Entry}, installed: {[string]: preflight.Entry},
+    protected: protected_kernel.Manifest, evidence: preflight.HostEvidence): (preflight.Context?, string?)
+    if not bounds.id(policy.node_id) or not sha(policy.policy_digest) then return nil, "host policy identity is invalid" end
+    for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
+        local raw: unknown = policy
+        local fields = object(raw)
+        if not fields or type(fields[field]) ~= "table" then return nil, "host policy is missing " .. field end
+    end
+    local bindings, bindings_error = resolution.database_bindings(policy.database_bindings)
+    if bindings_error then return nil, bindings_error end
+    local generated: {[string]: string} = {}
+    if policy.generated_databases ~= nil then
+        if type(policy.generated_databases) ~= "table" then
+            return nil, "host policy generated databases are malformed"
+        end
+        for _, raw in ipairs(policy.generated_databases) do
+            local item = object(raw)
+            local database_id = item and bounds.id(item.database_id) or nil
+            local target_db = item and bounds.id(item.target_db) or nil
+            if not item or not database_id or not target_db or generated[database_id] then
+                return nil, "host policy generated database is malformed"
+            end
+            generated[database_id] = target_db
+        end
+    end
+    local context: preflight.Context = {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
+        policy_digest = policy.policy_digest, packages = policy.packages, namespaces = policy.namespaces,
+        kinds = policy.kinds, databases = policy.databases, grants = policy.grants, modules = policy.modules,
+        database_bindings = bindings, entries = current, installed_entries = installed, applied = policy.applied,
+        applied_databases = policy.applied_databases or {}, generated_databases = generated,
+        exact_expansion = true,
+        migration_barrier = policy.migration_barrier == true, auto_start = policy.auto_start == true,
+        super_edit = policy.super_edit == true,
+        protected = protected, host_evidence = evidence}
+    return context, nil
+end
+
+function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
+    local spec = object(spec_raw)
+    local destination = spec and bounds.id(spec.owner_node) or nil
+    local source = spec and bounds.id(spec.source_node) or nil
+    local source_workspace = spec and bounds.id(spec.source_workspace) or nil
+    local version = spec and bounds.id(spec.version) or nil
+    local artifact_digest = spec and sha(spec.artifact_digest) or nil
+    if not spec or not destination or not source or not source_workspace or not version or not artifact_digest then
+        return nil, nil, "selected private artifact identity is invalid"
+    end
+    local expected, artifact_error = artifact.decode(spec.artifact_bytes, artifact_digest)
+    if not expected then return nil, nil, artifact_error end
+    local captured, capture_error = deps.capture()
+    if not captured then return nil, nil, capture_error end
+    if captured.revision < 0 then return nil, nil, "captured registry state is invalid" end
+    local root, root_error = deps.root(spec)
+    local component = root and bounds.text(root.component, 160) or nil
+    if not root or not component or component == "" or root.version ~= version then
+        return nil, nil, root_error or "host-selected private application profile is invalid"
+    end
+
+    -- Resolve the host policy before measuring the semantic base. The policy
+    -- supplies the physical database selected for each logical migration
+    -- target, and remains authoritative for the context returned below.
+    local policy: Policy?, policy_error: string? = deps.policy(spec, captured, root)
+    if not policy then return nil, nil, policy_error or "read destination private-overlay policy" end
+    local original_policy: Policy = policy
+    local database_bindings = policy.database_bindings
+    if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
+
+    local incoming: {Entry} = {}
+    local incoming_by_id: {[string]: Entry} = {}
+    local namespace_set: {[string]: boolean} = {}
+    local namespace_count = 0
+    for _, raw in ipairs(expected) do
+        local entry = object(raw)
+        local id = entry and bounds.text(entry.id, artifact.MAX_ID_BYTES) or nil
+        local kind = entry and bounds.id(entry.kind) or nil
+        if not entry or not id or not kind then return nil, nil, "private artifact contains an invalid definition" end
+        if entry.registry ~= nil then return nil, nil, "private artifact contains reserved registry metadata" end
+        if entry.kind == "ns.dependency" then return nil, nil, "private overlay artifacts cannot introduce Hub dependency directives" end
+        local namespace = id:match("^([^:]+):")
+        if not namespace then return nil, nil, "private artifact definition has no namespace" end
+        if not namespace_set[namespace] then namespace_set[namespace], namespace_count = true, namespace_count + 1 end
+        if incoming_by_id[id] then return nil, nil, "private artifact defines duplicate entry " .. id end
+        incoming_by_id[id] = entry
+        incoming[#incoming + 1] = entry
+    end
+    if namespace_count == 0 or namespace_count > 64 then return nil, nil, "private artifact namespace count exceeds its bound" end
+
+    if policy.workspace_application then
+        local identity = workspace_applications.identity(spec.workspace_id, source_workspace)
+        if identity and policy.namespaces[identity.namespace] == true then
+            local allowed: {[string]: boolean} = {}
+            for name, admitted in pairs(policy.namespaces) do allowed[name] = admitted end
+            local prefix = identity.namespace .. "."
+            for name in pairs(namespace_set) do
+                if name:sub(1, #prefix) == prefix then allowed[name] = true end
+            end
+            policy.namespaces = allowed
+        end
+    end
+
+    local current: {[string]: preflight.Entry} = {}
+    local installed: {[string]: preflight.Entry} = {}
+    local current_raw: {[string]: Entry} = {}
+    local current_namespace: {[string]: string} = {}
+    for _, raw in ipairs(captured.entries) do
+        local entry = object(raw)
+        local id = entry and bounds.id(entry.id) or nil
+        if not entry or not id then return nil, nil, "captured registry contains an invalid entry" end
+        if current_raw[id] then return nil, nil, "captured registry contains duplicate entry " .. id end
+        current_raw[id] = entry
+        if captured.overlay_ids and captured.overlay_ids[id] then
+            -- The selected overlay is intentionally absent from the approval
+            -- base, but callers still need its measured package-owned view to
+            -- compare the staged complete replacement with what is installed.
+            local measured, measured_error = measured_entry(entry, component, true)
+            if not measured then return nil, nil, measured_error end
+            installed[id] = measured
+            -- Native shadows retain their claimed durable module ownership;
+            -- overlay-authored entries have none, which the state API reports
+            -- as an empty owner. This is registry provenance,
+            -- never artifact metadata or an entry-name convention.
+            local metadata = object(entry.registry)
+            if metadata and bounds.line(metadata.owner, 160) then
+                if not incoming_by_id[id] then
+                    return nil, nil, "cannot measure restored durable definition omitted by candidate: " .. id
+                end
+                local package, package_error = captured.owner(entry)
+                if not package then return nil, nil, package_error or "captured shadow has no trusted durable owner" end
+                local claimed, claimed_error = measured_entry(entry, package, true)
+                if not claimed then return nil, nil, claimed_error end
+                current[id] = claimed
+                local namespace = id:match("^([^:]+):")
+                if namespace then current_namespace[namespace] = id end
+            end
+        else
+            local package, package_error = captured.owner(entry)
+            if not package then return nil, nil, package_error or "captured registry entry has no trusted local owner" end
+            local measured, measured_error = measured_entry(entry, package, true)
+            if not measured then return nil, nil, measured_error end
+            current[id] = measured
+            local namespace = id:match("^([^:]+):")
+            if namespace then current_namespace[namespace] = id end
+        end
+    end
+    -- A person-confirmed super-edit profile admits shadows only within its
+    -- exact namespace ceiling. Retain trusted durable identity and ownership
+    -- in the context; the native registry owns restoration on removal.
+    for id in pairs(incoming_by_id) do
+        local namespace = id:match("^([^:]+):")
+        local shadow = policy.super_edit == true and namespace and policy.namespaces[namespace] == true
+        if current[id] and not shadow then return nil, nil, "private artifact entry collides with destination definition " .. id end
+    end
+    for namespace in pairs(namespace_set) do
+        local conflict = current_namespace[namespace]
+        if conflict and not (policy.super_edit == true and policy.namespaces[namespace] == true) then return nil, nil, "private artifact namespace collides with destination definition " .. conflict end
+    end
+
+    local names: {string} = {}
+    for namespace in pairs(namespace_set) do names[#names + 1] = namespace end
+    table.sort(names)
+    table.sort(incoming, function(left: Entry, right: Entry): boolean return (left.id) < (right.id) end)
+    local candidate_entries: {preflight.Entry} = {}
+    local requirements: {preflight.Requirement} = {}
+    local driver_requirements: {[string]: preflight.DriverRequirement} = {}
+    local candidate_migrations: {preflight.Migration} = {}
+    local final: {[string]: Entry} = {}
+    for id, entry in pairs(current_raw) do
+        if not (captured.overlay_ids and captured.overlay_ids[id]) then final[id] = entry end
+    end
+    local driver_artifact = false
+    for _, entry in ipairs(incoming) do
+        local meta = object(entry.meta)
+        if entry.kind == "contract.binding" and meta and meta.type == "harness.driver" then driver_artifact = true end
+    end
+    for _, entry in ipairs(incoming) do
+        -- Incoming registry metadata is neither ownership evidence nor an
+        -- overlay instruction. Keep the exact public definition ID and body.
+        local clean: Entry = {}
+        for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
+        if driver_artifact and (clean.kind == "security.policy" or clean.kind == "security.policy.expr") then
+            local data = object(clean.data)
+            local policy_data = data and object(data.policy) or nil
+            local actions = policy_data and bounds.dense_list(policy_data.actions, 2, "driver descriptor actions") or nil
+            if not policy_data or policy_data.effect ~= "allow" or not actions or #actions == 0 then
+                return nil, nil, "workspace driver policies must be descriptor read policies"
+            end
+            for _, action in ipairs(actions) do
+                if action ~= "registry.get" and action ~= "registry.snapshot" then
+                    return nil, nil, "workspace driver policies may only read registry descriptors"
+                end
+            end
+        end
+        final[clean.id] = clean
+        local measured, measured_error = measured_entry(clean, component)
+        if not measured then return nil, nil, measured_error end
+        candidate_entries[#candidate_entries + 1] = measured
+        local meta = object(clean.meta)
+        if meta and meta.type == "migration" then
+            local target = bounds.id(meta.target_db)
+            local ordinal = bounds.count(meta.ordinal)
+            local id = bounds.id(clean.id)
+            if clean.kind ~= "function.lua" or not target or not id or ordinal == nil or ordinal < 1 then
+                return nil, nil, "migration has no callable definition, target database or append-only ordinal: " .. tostring(clean.id)
+            end
+            candidate_migrations[#candidate_migrations + 1] = {id = id, target_db = target,
+                ordinal = ordinal, checksum = measured.digest}
+        end
+    end
+    local artifact_ids: {[string]: boolean} = {}
+    for _, entry in ipairs(incoming) do artifact_ids[entry.id] = true end
+    for _, entry in ipairs(incoming) do
+        if entry.kind == "ns.requirement" then
+            local meta = object(entry.meta)
+            local catalog: capability_model.Vocabulary? = nil
+            if meta and meta.capability ~= nil then
+                local raw_catalog = current_raw["bee.capability:catalog"]
+                if not raw_catalog then return nil, nil, "host capability catalog is absent" end
+                local decoded, catalog_error = capability_model.decode(raw_catalog)
+                if not decoded then return nil, nil, catalog_error end
+                catalog = decoded
+            end
+            local item, item_error = requirement.resolve(entry, component, final, artifact_ids, catalog)
+            if not item then return nil, nil, item_error end
+            requirements[#requirements + 1] = item
+            if driver_artifact and item.value and #item.targets == 1
+                and item.targets[1] == driver_admission.TARGET then
+                for _, measured in ipairs(candidate_entries) do
+                    if measured.id == item.id then
+                        driver_requirements[item.id] = {binding = item.value, digest = measured.digest}
+                        break
+                    end
+                end
+            end
+        end
+    end
+    local prepared, capability_error = application_capabilities.prepare(policy, spec, incoming,
+        requirements, current_raw, deps.folder)
+    if not prepared then return nil, nil, capability_error end
+    policy = prepared.policy
+    local capability_proposal = prepared.proposal
+    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"},
+        capability = application_capabilities.evidence(prepared)}
+    -- The approval base is the external registry state that can affect this
+    -- candidate. Keep the complete external context above for preflight and
+    -- collision checks, but omit unrelated boot-local definitions and the
+    -- selected overlay itself from this semantic digest. A missing relevant
+    -- entry remains absent; when present, its measured definition is hashed.
+    local relevant_ids: {[string]: boolean} = {}
+    local kernel, kernel_error = protected_kernel.decode(current_raw[protected_kernel.ID])
+    if not kernel then return nil, nil, kernel_error end
+    relevant_ids[protected_kernel.ID] = true
+    if capability_proposal then relevant_ids["bee.capability:catalog"] = true end
+    for _, item in ipairs(candidate_entries) do
+        for _, reference in ipairs(item.references) do relevant_ids[reference] = true end
+    end
+    for _, item in ipairs(requirements) do
+        for _, target in ipairs(item.targets) do relevant_ids[target] = true end
+        local value = bounds.id(item.value)
+        if value then relevant_ids[value] = true end
+        if item.capability_request then relevant_ids["bee.capability:catalog"] = true end
+    end
+    for _, item in ipairs(candidate_migrations) do
+        local raw_bindings = policy.database_bindings
+        local binding = type(raw_bindings) == "table"
+            and object((raw_bindings)[item.target_db]) or nil
+        local physical = binding and bounds.id(binding.database_id) or item.target_db
+        if physical then relevant_ids[physical] = true end
+    end
+    local relevant: {preflight.Entry} = {}
+    local replaced: {Object} = {}
+    for id, raw in pairs(current) do
+        local namespace = id:match("^([^:]+):")
+        if incoming_by_id[id] and policy.super_edit == true and namespace and policy.namespaces[namespace] == true then
+            -- The exact incoming body is already bound by the candidate. Its
+            -- replaced body is not an external dependency. Bind the claimed
+            -- identity, kind and module owner so measurement stays stable after
+            -- native shadow application without duplicating native owner state.
+            replaced[#replaced + 1] = {id = id, kind = raw.kind, package = raw.package}
+        elseif relevant_ids[id] or (namespace and namespace_set[namespace]) then
+            relevant[#relevant + 1] = raw
+        end
+    end
+    table.sort(relevant, function(left: preflight.Entry, right: preflight.Entry): boolean return left.id < right.id end)
+    table.sort(replaced, function(left: Object, right: Object): boolean return (left.id) < (right.id) end)
+    local measurement: Object = {entries = relevant}
+    -- Preserve ordinary private-overlay measurements byte-for-byte.
+    if #replaced > 0 then measurement.replaced = replaced end
+    local base_bytes, base_error = canonical.encode(measurement, 1048576)
+    if not base_bytes then return nil, nil, "measure relevant registry base: " .. tostring(base_error or "unknown error") end
+    local base_digest, base_measure_error = hash.sha256(base_bytes)
+    if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
+    if policy.applications then
+        if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
+            or policy.source_workspace ~= source_workspace or not bounds.id(policy.overlay_owner) then
+            return nil, nil, "application admission policy does not match the selected activation profile"
+        end
+        local projection, projection_error = application_admission.project({identity_generation = "current", workspace_id = policy.workspace_id,
+            overlay_owner = policy.overlay_owner, source_node = policy.source_node,
+            source_workspace = policy.source_workspace, artifact_digest = artifact_digest,
+            bindings = policy.applications, artifact_entries = expected,
+            registry_entries = captured.entries, overlay_ids = captured.overlay_ids,
+            generated_policies = capability_proposal and capability_proposal.policies or nil})
+        if not projection then return nil, nil, projection_error or "application admission projection is absent" end
+        evidence.application_admission = {kind = "measured", value = projection}
+    end
+    local context, context_error = policy_context(policy, captured, base_digest,
+        current, installed, kernel, evidence)
+    if not context then return nil, nil, context_error end
+    context.driver_requirements = driver_requirements
+    context.module_capabilities = prepared.module_capabilities
+    local dependencies: {string} = {}
+    local artifacts: {preflight.Artifact} = {{component = component, version = version, digest = artifact_digest,
+        dependencies = dependencies, namespaces = names}}
+    local candidate: preflight.Candidate = {destination_node = destination, source_node = source,
+        base_revision = captured.revision, base_digest = base_digest, artifacts = artifacts,
+        entries = candidate_entries, requirements = requirements, migrations = candidate_migrations}
+    return candidate, context, nil
+end
+
+type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?),
+    policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
+
+function M.new(config: Config): Resolver
+    local function capture(): (Captured?, string?)
+        local snapshot, snapshot_error = registry.snapshot()
+        if not snapshot then return nil, tostring(snapshot_error or "capture registry snapshot") end
+        local state, state_error = snapshot:state()
+        if not state then return nil, tostring(state_error or "read registry snapshot state") end
+        local version = snapshot:version()
+        local revision = version and version:id() or nil
+        if type(revision) ~= "number" then return nil, "registry snapshot has no revision" end
+        local overlay_ids: {[string]: boolean}? = nil
+        if config.overlay_owner then
+            local overlay, overlay_error = registry.overlay(config.overlay_owner)
+            if not overlay then return nil, tostring(overlay_error or "open destination overlay") end
+            local rows, rows_error = overlay:entries()
+            if not rows then return nil, tostring(rows_error or "read destination overlay") end
+            overlay_ids = {}
+            for _, raw in ipairs(rows) do
+                local entry = object(raw)
+                local id = entry and bounds.id(entry.id) or nil
+                if not id then return nil, "destination overlay contains an invalid entry" end
+                overlay_ids[id] = true
+            end
+        end
+        local entries: {Entry} = state.entries
+        local captured: Captured = {revision = math.floor(revision), entries = entries,
+            overlay_ids = overlay_ids, owner = function(entry: Entry): (string?, string?)
+                local metadata = object(entry.registry)
+                local owner = metadata and bounds.text(metadata.owner, 160) or nil
+                if not owner then return nil, "captured registry entry has no registry-owned module" end
+                return owner, nil
+            end}
+        return captured, nil
+    end
+    local value: Instance
+    value = {capture = capture, root = config.root, policy = config.policy, folder = config.folder,
+        resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
+            return M.resolve_with(value, spec)
+        end}
+    return value
+end
+
+return M

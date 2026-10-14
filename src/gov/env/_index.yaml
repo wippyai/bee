@@ -1,0 +1,48 @@
+version: '1.0'
+namespace: bee.gov.env
+entries:
+- name: database_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+  resource_ref: bee:db
+- name: environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: publication_profiles_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Host-selected publication profiles; absent link fails closed
+  resource_ref: bee.gov:publication_profiles
+- name: activation_profiles_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Host-selected activation profiles; absent link fails closed
+  resource_ref: bee.gov:activation_profiles
+- name: approval_request_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Host-selected approval request policy; absent link fails closed
+  resource_ref: bee.security.approvals:approval_request_policy
+- name: approval_consume_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Host-selected approval consume policy; absent link fails closed
+  resource_ref: bee.security.approvals:approval_consume_policy
+- name: workspace_folder_read_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Host-selected workspace catalog read operation; absent link fails closed
+  resource_ref: bee.node.binding:read
+- name: workspace_folder_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Host-selected workspace folder read policy; absent link fails closed
+  resource_ref: bee.node.security:workspace_folder_read_policy

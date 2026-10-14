@@ -1,0 +1,55 @@
+{
+  "jsonrpc": "2.0",
+  "id": 0,
+  "method": "session/request_permission",
+  "params": {
+    "sessionId": "fixture-session",
+    "toolCall": {
+      "toolCallId": "fixture-call",
+      "kind": "execute",
+      "title": "Execute `rm -f fixture-target`",
+      "rawInput": {
+        "variant": "Bash",
+        "command": "rm -f fixture-target",
+        "description": "Fixture command",
+        "is_background": false
+      },
+      "_meta": {
+        "x.ai/tool": {
+          "version": 1,
+          "name": "run_terminal_command",
+          "kind": "execute",
+          "namespace": "grok_build",
+          "label": "Run Command",
+          "read_only": false,
+          "input": {
+            "command": "rm -f fixture-target",
+            "description": "Fixture command"
+          }
+        }
+      }
+    },
+    "options": [
+      {
+        "optionId": "always-allow",
+        "name": "Yes, and don't ask again for bash commands",
+        "kind": "allow_always"
+      },
+      {
+        "optionId": "allow-once",
+        "name": "Yes, proceed",
+        "kind": "allow_once"
+      },
+      {
+        "optionId": "reject-once",
+        "name": "No, and tell Grok what to do differently",
+        "kind": "reject_once"
+      },
+      {
+        "optionId": "reject-always",
+        "name": "No, and don't ask again for this command",
+        "kind": "reject_always"
+      }
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+version: '1.0'
+namespace: bee.gateway.persist
+entries:
+- name: binding_store
+  kind: library.lua
+  source: file://binding_store.lua
+  modules:
+  - sql
+- name: credential_store
+  kind: library.lua
+  source: file://credential_store.lua
+  modules:
+  - sql
+- name: hook_store
+  kind: library.lua
+  source: file://hook_store.lua
+  modules:
+  - sql
+- name: listener_store
+  kind: library.lua
+  source: file://listener_store.lua
+  modules:
+  - sql
+- name: surface_store
+  kind: library.lua
+  source: file://surface_store.lua
+  modules:
+  - sql
+  - json
+  imports:
+    bounds: bee.values:bounds
+    capability_model: bee.capability:model
+    authority: bee.approvals.grants:store
+    clock: bee.values:clock
+    canonical: bee.values:canonical
+    mcp: bee.gateway.api:mcp
+    profile_grants: bee.harness.profiles:grants
+    agent_trait: bee.values:agent_trait
+    session_traits: bee.threads.delivery:traits
+    trait_access: bee.gateway.security:traits
+- name: external_store
+  kind: library.lua
+  source: file://external_store.lua
+  modules: [sql]

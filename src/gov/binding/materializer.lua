@@ -1,0 +1,570 @@
+-- MIT. Reconcile one exact decoded artifact into one owner-local registry
+-- overlay. The caller chooses the owner from destination configuration; no
+-- request field is consulted here. Overlay generations provide the write CAS.
+local registry = require("registry")
+local artifact = require("artifact")
+local canonical = require("canonical")
+local hash = require("hash")
+local bounds = require("bounds")
+local application_admission = require("application_admission")
+local capability_grants = require("capability_grants")
+local capability_files = require("capability_files")
+
+local M = {}
+
+type Entry = {[string]: unknown}
+type Changes = {
+    create: (Changes, Entry) -> (unknown?, unknown?),
+    update: (Changes, Entry) -> (unknown?, unknown?),
+    delete: (Changes, string) -> (unknown?, unknown?),
+    apply: (Changes) -> (unknown?, unknown?),
+}
+type Snapshot = {
+    entries: (Snapshot) -> ({unknown}?, unknown?),
+    changes: (Snapshot) -> Changes?,
+}
+type Open = (string) -> (Snapshot?, unknown?)
+type Conflict = (unknown) -> boolean
+
+local function encoded(value: unknown): (string?, string?)
+    if type(value) ~= "table" then return nil, "registry entry is not an object" end
+    local source = value
+    local normalized: Entry = {}
+    for field, item in pairs(source) do normalized[field] = item end
+    -- The registry's author-facing snapshot always emits an empty metadata
+    -- object. Treat omitted metadata in an artifact as that same canonical
+    -- default; every non-default field remains byte-for-byte significant.
+    if normalized.meta == nil
+        or (type(normalized.meta) == "table" and next(normalized.meta) == nil) then
+        normalized.meta = table.create(0, 1)
+    end
+    local result, err = canonical.encode(normalized, artifact.MAX_BYTES)
+    if not result then return nil, tostring(err or "cannot encode registry entry") end
+    return result, nil
+end
+
+local function current_entries(snapshot: Snapshot): ({[string]: Entry}?, string?)
+    local rows, err = snapshot:entries()
+    if not rows then return nil, tostring(err or "read governance overlay") end
+    local result: {[string]: Entry} = {}
+    for _, raw in ipairs(rows) do
+        if type(raw) ~= "table" then return nil, "governance overlay contains a malformed entry" end
+        local row = raw
+        local id = bounds.id(row.id)
+        if not id then return nil, "governance overlay contains an invalid entry id" end
+        if result[id] then return nil, "governance overlay contains duplicate entry " .. id end
+        result[id] = row
+    end
+    return result, nil
+end
+
+local function stage(snapshot: Snapshot, desired: {Entry}): (Changes?, boolean?, string?)
+    local current, current_error = current_entries(snapshot)
+    if not current then return nil, nil, current_error end
+    local changes = snapshot:changes()
+    if not changes then return nil, nil, "open governance overlay changes" end
+    local wanted: {[string]: boolean} = {}
+    local changed = false
+    for _, entry in ipairs(desired) do
+        local id = entry.id
+        wanted[id] = true
+        local present = current[id]
+        if not present then
+            local ok, err = changes:create(entry)
+            if not ok then return nil, nil, tostring(err or "create governance overlay entry") end
+            changed = true
+        else
+            local before, before_error = encoded(present)
+            local after, after_error = encoded(entry)
+            if not before or not after then return nil, nil, before_error or after_error end
+            if before ~= after then
+                local ok, err = changes:update(entry)
+                if not ok then return nil, nil, tostring(err or "update governance overlay entry") end
+                changed = true
+            end
+        end
+    end
+    for id in pairs(current) do
+        if not wanted[id] then
+            local ok, err = changes:delete(id)
+            if not ok then return nil, nil, tostring(err or "delete governance overlay entry") end
+            changed = true
+        end
+    end
+    return changes, changed, nil
+end
+
+local function matches_snapshot(snapshot: Snapshot, desired: {Entry}): (boolean?, string?)
+    local current, current_error = current_entries(snapshot)
+    if not current then return nil, current_error end
+    if #desired ~= 0 then
+        local count = 0
+        for _ in pairs(current) do count = count + 1 end
+        if count ~= #desired then return false, nil end
+    elseif next(current) then
+        return false, nil
+    end
+    for _, entry in ipairs(desired) do
+        local present = current[entry.id]
+        if not present then return false, nil end
+        local before, before_error = encoded(present)
+        local after, after_error = encoded(entry)
+        if not before or not after then return nil, before_error or after_error end
+        if before ~= after then return false, nil end
+    end
+    return true, nil
+end
+
+-- Empty is a valid desired overlay state used for cleanup, although it is not
+-- a publishable application artifact. Measure it with the artifact envelope
+-- without weakening artifact.create's nonempty publication contract.
+local function desired(raw: unknown): ({Entry}?, string?, string?)
+    if type(raw) == "table" and next(raw) == nil then
+        local entries: {Entry} = {}
+        local bytes, encode_error = canonical.encode({schema_revision = artifact.SCHEMA,
+            entries = canonical.empty_like(raw)}, artifact.MAX_BYTES)
+        if not bytes then return nil, nil, tostring(encode_error or "measure empty governance overlay") end
+        local digest, digest_error = hash.sha256(bytes)
+        if not digest then return nil, nil, tostring(digest_error or "measure empty governance overlay") end
+        return entries, digest, nil
+    end
+    local measured, artifact_error = artifact.create(raw)
+    if not measured then return nil, nil, artifact_error end
+    for _, entry in ipairs(measured.entries) do
+        if application_admission.reserved(entry.id) then
+            return nil, nil, "portable artifact entry uses a reserved application admission identity"
+        end
+    end
+    return measured.entries, measured.digest, nil
+end
+
+-- provision validates the host-generated resources and policies a grant
+-- installs and appends them to complete. An expression policy is admitted
+-- only for a policy capability_of names a capability enforced through one.
+type Provisioned = {volumes: unknown?, databases: unknown?, executors: unknown?, policies: unknown}
+local function provision(complete: {Entry}, generated: Provisioned, capability_of: {[string]: unknown}): string?
+    local volumes, databases, executors, policies = generated.volumes, generated.databases, generated.executors, generated.policies
+    if type(policies) ~= "table" or (volumes ~= nil and type(volumes) ~= "table")
+        or (databases ~= nil and type(databases) ~= "table")
+        or (executors ~= nil and type(executors) ~= "table") then
+        return "generated capability entries are invalid"
+    end
+    local volume_ids: {[string]: boolean} = {}
+    for _, raw_volume in ipairs((volumes or {})) do
+        local volume = bounds.object(raw_volume)
+        local id = volume and bounds.id(volume.id) or nil
+        local config = volume and bounds.object(volume.data) or nil
+        local directory = config and config.directory or nil
+        if not volume or not id or not id:match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
+            or volume.kind ~= "fs.directory" or type(directory) ~= "string"
+            or (config.base ~= nil and config.base ~= "project") or type(config.auto_init) ~= "boolean"
+            or type(config.readonly) ~= "boolean"
+            or (config.readonly and config.auto_init) then
+            return "generated capability volume is invalid"
+        end
+        local location: string = directory
+        if location == "." or location == "/" then
+            return "generated capability volume exposes private state"
+        end
+        for segment in location:gmatch("[^/]+") do
+            if segment == ".wippy" or segment == ".." then
+                return "generated capability volume exposes private state"
+            end
+        end
+        if volume_ids[id] then return "generated capability volume is duplicated" end
+        volume_ids[id] = true
+        complete[#complete + 1] = volume
+    end
+    local database_ids: {[string]: boolean} = {}
+    for _, raw_database in ipairs((databases or {})) do
+        local database = bounds.object(raw_database)
+        local id = database and bounds.id(database.id) or nil
+        local database_config = database and bounds.object(database.data) or nil
+        local file = database_config and database_config.file or nil
+        if not database or not id or not id:match("^bee%.gov%.grants:database%.[0-9a-f]+$")
+            or database.kind ~= "db.sql.sqlite" or not capability_files.database_file(file) then
+            return "generated capability database is invalid"
+        end
+        if database_ids[id] then return "generated capability database is duplicated" end
+        database_ids[id] = true
+        complete[#complete + 1] = database
+    end
+    local executor_ids: {[string]: boolean} = {}
+    for _, raw_executor in ipairs((executors or {})) do
+        local executor = bounds.object(raw_executor)
+        local id = executor and bounds.id(executor.id) or nil
+        local config = executor and bounds.object(executor.data) or nil
+        local directory = config and config.default_work_dir or nil
+        local environment = config and bounds.object(config.default_env) or nil
+        if not executor or not id or not id:match("^bee%.gov%.grants:executor%.[0-9a-f]+$")
+            or executor.kind ~= "exec.native" or not config or type(directory) ~= "string"
+            or #directory == 0 or bounds.fields(config, {"default_work_dir", "default_env"})
+            or not environment or bounds.fields(environment, {"PATH"})
+            or environment.PATH ~= capability_files.EXEC_PATH then
+            return "generated capability executor is invalid"
+        end
+        for segment in directory:gmatch("[^/]+") do
+            if segment == ".wippy" or segment == ".." then
+                return "generated capability executor runs in private state"
+            end
+        end
+        if executor_ids[id] then return "generated capability executor is duplicated" end
+        executor_ids[id] = true
+        complete[#complete + 1] = executor
+    end
+    local policy_ids: {[string]: boolean} = {}
+    for _, raw_policy in ipairs(policies) do
+        local policy = bounds.object(raw_policy)
+        local id = policy and bounds.id(policy.id) or nil
+        if not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
+            and not id:match("^bee%.governance%.grants:policy%.[0-9a-f]+$"))
+            or (policy.kind ~= "security.policy" and not (policy.kind == "security.policy.expr"
+                and capability_grants.expression(capability_of[id]))) or policy_ids[id] then
+            return "generated capability policy is invalid"
+        end
+        policy_ids[id] = true
+        local data = bounds.object(policy.data)
+        local inner = data and bounds.object(data.policy) or nil
+        local expression = inner and inner.expression or nil
+        if type(expression) == "string" then
+            for executor_id in expression:gmatch("bee%.gov%.grants:executor%.[0-9a-f]+") do
+                if not executor_ids[executor_id] then
+                    return "generated capability policy references an absent executor"
+                end
+            end
+        end
+        local resources = inner and inner.resources or nil
+        if type(resources) == "table" then
+            for _, resource in ipairs(resources) do
+                if type(resource) == "string"
+                    and ((resource):match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
+                        or (resource):match("^bee%.gov%.grants:database%.[0-9a-f]+$"))
+                    and not volume_ids[resource]
+                    and not database_ids[resource] then
+                    return "generated capability policy references an absent resource"
+                end
+            end
+        end
+        complete[#complete + 1] = policy
+    end
+    return nil
+end
+
+-- A governed application admission is one derived registry entry beside the
+-- portable artifact.  Measure its bytes separately so adding it does not turn
+-- a valid 512-entry artifact into an invalid 513-entry artifact or alter the
+-- bytes that replication publishes.
+local function composed(raw: unknown, admission_raw: unknown, generated_raw: unknown?): ({Entry}?, {Entry}?, string?, string?)
+    local portable, artifact_digest, portable_error = desired(raw)
+    if not portable or not artifact_digest then return nil, nil, nil, portable_error end
+    -- Governance runs a version's migrations from its frozen migration work;
+    -- installed, a migration definition would be discovered and run again by
+    -- the runtime's boot migration runner, outside governance.
+    local complete: {Entry} = table.create(#portable + (admission_raw == nil and 0 or 1), 0)
+    for _, entry in ipairs(portable) do
+        local meta = bounds.object(entry.meta)
+        if not (meta and meta.type == "migration") then complete[#complete + 1] = entry end
+    end
+    if admission_raw ~= nil then
+        local blob = bounds.object(admission_raw)
+        if not blob or bounds.fields(blob, {"bytes", "digest", "identity_generation"}) then
+            return nil, nil, nil, "application admission blob is invalid"
+        end
+        local derived, derived_error = application_admission.entry(blob.bytes, blob.digest, blob.identity_generation)
+        if not derived then return nil, nil, nil, derived_error end
+        complete[#complete + 1] = derived
+    end
+    if generated_raw ~= nil then
+        local generated = bounds.object(generated_raw)
+        local policies = generated and generated.policies
+        local bindings = generated and generated.bindings
+        local record = generated and bounds.object(generated.record) or nil
+        local volumes = generated and generated.volumes
+        local databases = generated and generated.databases
+        local executors = generated and generated.executors
+        if not generated or type(policies) ~= "table" or type(bindings) ~= "table"
+            or not record or not capability_grants.reserved(record.id)
+            or record.kind ~= "registry.entry" or #policies ~= #bindings or #policies > 8
+            or (volumes ~= nil and type(volumes) ~= "table")
+            or (databases ~= nil and type(databases) ~= "table")
+            or (executors ~= nil and type(executors) ~= "table") then
+            return nil, nil, nil, "generated capability entries are invalid"
+        end
+        -- An expression grant is installable only for a requirement whose
+        -- capability the host enforces through one.
+        local capability_of: {[string]: unknown} = {}
+        for _, raw_binding in ipairs(bindings) do
+            local binding = bounds.object(raw_binding)
+            local policy_id = binding and bounds.id(binding.policy_id) or nil
+            if binding and policy_id then
+                for _, entry in ipairs(complete) do
+                    local meta = entry.id == binding.requirement_id and bounds.object(entry.meta) or nil
+                    if meta then capability_of[policy_id] = meta.capability end
+                end
+            end
+        end
+        local provision_error = provision(complete, {volumes = volumes, databases = databases,
+            executors = executors, policies = policies}, capability_of)
+        if provision_error then return nil, nil, nil, provision_error end
+        local policy_ids: {[string]: boolean} = {}
+        for _, raw_policy in ipairs(policies) do
+            local policy = bounds.object(raw_policy)
+            local id = policy and bounds.id(policy.id) or nil
+            if id then policy_ids[id] = true end
+        end
+        local requirement_ids: {[string]: boolean} = {}
+        for _, raw_binding in ipairs(bindings) do
+            local binding = bounds.object(raw_binding)
+            local requirement_id = binding and bounds.id(binding.requirement_id) or nil
+            local policy_id = binding and bounds.id(binding.policy_id) or nil
+            if not requirement_id or not policy_id or not policy_ids[policy_id]
+                or requirement_ids[requirement_id] then
+                return nil, nil, nil, "generated requirement binding is invalid"
+            end
+            local found = false
+            for index, entry in ipairs(complete) do
+                if entry.id == requirement_id then
+                    if entry.kind ~= "ns.requirement" then
+                        return nil, nil, nil, "capability binding target is not a requirement"
+                    end
+                    local original = bounds.object(entry.data)
+                    if not original or original.default ~= nil then
+                        return nil, nil, nil, "capability requirement already has a default"
+                    end
+                    local next_data: Entry = {}
+                    for key, value in pairs(original) do next_data[key] = value end
+                    next_data.default = policy_id
+                    local meta = bounds.object(entry.meta)
+                    if meta and meta.capability == "hive.expose" then next_data.targets = {} end
+                    local next_entry: Entry = {}
+                    for key, value in pairs(entry) do next_entry[key] = value end
+                    next_entry.data = next_data
+                    complete[index] = next_entry
+                    found = true
+                    break
+                end
+            end
+            if not found then return nil, nil, nil, "generated requirement is absent from artifact" end
+            requirement_ids[requirement_id] = true
+        end
+        complete[#complete + 1] = record
+    end
+    return portable, complete, artifact_digest, nil
+end
+
+-- The injectable form keeps generation behavior testable without granting a
+-- unit test registry authority. Production uses reconcile(), below.
+local function reconcile_wanted_with(open: Open, conflict: Conflict, owner_raw: unknown,
+    wanted: {Entry}, artifact_digest: string, portable_count: integer): ({[string]: unknown}?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local raw_snapshot, open_error = open(owner)
+    if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
+    local snapshot = raw_snapshot
+    local changes, changed, stage_error = stage(snapshot, wanted)
+    if not changes or changed == nil then return nil, stage_error end
+    if not changed then
+        return {owner = owner, artifact_digest = artifact_digest, entries = portable_count,
+            overlay_entries = #wanted,
+            changed = false, attempts = 1}, nil
+    end
+    local applied, apply_error = changes:apply()
+    if applied then
+        return {owner = owner, artifact_digest = artifact_digest, entries = portable_count,
+            overlay_entries = #wanted,
+            changed = true, attempts = 1}, nil
+    end
+    if conflict(apply_error) then return nil, "governance overlay changed during apply; preflight again" end
+    return nil, tostring(apply_error or "apply governance overlay")
+end
+
+local function matches_wanted_with(open: Open, owner_raw: unknown, wanted: {Entry}): (boolean?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local raw_snapshot, open_error = open(owner)
+    if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
+    return matches_snapshot(raw_snapshot, wanted)
+end
+
+function M.reconcile_with(open: Open, conflict: Conflict, owner_raw: unknown, entries_raw: unknown): ({[string]: unknown}?, string?)
+    local wanted, artifact_digest, artifact_error = desired(entries_raw)
+    if not wanted or not artifact_digest then return nil, artifact_error end
+    return reconcile_wanted_with(open, conflict, owner_raw, wanted, artifact_digest, #wanted)
+end
+
+function M.matches_with(open: Open, owner_raw: unknown, entries_raw: unknown): (boolean?, string?)
+    local wanted, _, artifact_error = desired(entries_raw)
+    if not wanted then return nil, artifact_error end
+    return matches_wanted_with(open, owner_raw, wanted)
+end
+
+function M.reconcile_composed_with(open: Open, conflict: Conflict, owner_raw: unknown,
+    entries_raw: unknown, admission_raw: unknown, generated_raw: unknown?): ({[string]: unknown}?, string?)
+    local portable, complete, artifact_digest, compose_error = composed(entries_raw, admission_raw, generated_raw)
+    if not portable or not complete or not artifact_digest then return nil, compose_error end
+    return reconcile_wanted_with(open, conflict, owner_raw, complete, artifact_digest, #portable)
+end
+
+function M.matches_composed_with(open: Open, owner_raw: unknown, entries_raw: unknown,
+    admission_raw: unknown, generated_raw: unknown?): (boolean?, string?)
+    local _, complete, _, compose_error = composed(entries_raw, admission_raw, generated_raw)
+    if not complete then return nil, compose_error end
+    return matches_wanted_with(open, owner_raw, complete)
+end
+
+-- The host-generated database and grant an application's migrations need
+-- join the application's own overlay before those migrations run, beside
+-- whatever it holds, so the database is installed exactly once, by its owner,
+-- and the application itself is exposed only when the overlay is applied.
+local function provided(provisioned_raw: unknown): ({Entry}?, string?)
+    local provisioned = bounds.object(provisioned_raw)
+    if not provisioned or bounds.fields(provisioned, {"databases", "policies"}) then
+        return nil, "provisioned entries are invalid"
+    end
+    local entries: {Entry} = {}
+    local provision_error = provision(entries, {databases = provisioned.databases,
+        policies = provisioned.policies or {}}, {})
+    if provision_error then return nil, provision_error end
+    return entries, nil
+end
+
+function M.provide_with(open: Open, conflict: Conflict, owner_raw: unknown, provisioned_raw: unknown): ({[string]: unknown}?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local entries, provided_error = provided(provisioned_raw)
+    if not entries then return nil, provided_error end
+    local raw_snapshot, open_error = open(owner)
+    if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
+    local current, current_error = current_entries(raw_snapshot)
+    if not current then return nil, current_error end
+    local wanted: {Entry} = {}
+    local added: {[string]: boolean} = {}
+    for _, entry in ipairs(entries) do added[entry.id] = true end
+    for id, entry in pairs(current) do if not added[id] then wanted[#wanted + 1] = entry end end
+    for _, entry in ipairs(entries) do wanted[#wanted + 1] = entry end
+    return reconcile_wanted_with(open, conflict, owner, wanted, "", #wanted)
+end
+
+function M.provided_with(open: Open, owner_raw: unknown, provisioned_raw: unknown): (boolean?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local entries, provided_error = provided(provisioned_raw)
+    if not entries then return nil, provided_error end
+    local raw_snapshot, open_error = open(owner)
+    if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
+    local current, current_error = current_entries(raw_snapshot)
+    if not current then return nil, current_error end
+    for _, entry in ipairs(entries) do
+        local present = current[entry.id]
+        if not present then return false, nil end
+        local before, before_error = encoded(present)
+        local after, after_error = encoded(entry)
+        if not before or not after then return nil, before_error or after_error end
+        if before ~= after then return false, nil end
+    end
+    return true, nil
+end
+
+-- An application's saved data outlives its removal: the overlay keeps only its
+-- SQL databases, which no grant reaches any more, so governance still reads
+-- their migration ledgers and the next install finds the data as it was.
+local function data_entries(open: Open, owner: string): ({Entry}?, string?)
+    local raw_snapshot, open_error = open(owner)
+    if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
+    local current, current_error = current_entries(raw_snapshot)
+    if not current then return nil, current_error end
+    local kept: {Entry} = {}
+    for _, entry in pairs(current) do
+        local kind = bounds.id(entry.kind)
+        if kind and kind:sub(1, 7) == "db.sql." then kept[#kept + 1] = entry end
+    end
+    return kept, nil
+end
+
+function M.retain_data_with(open: Open, conflict: Conflict, owner_raw: unknown): ({[string]: unknown}?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local kept, kept_error = data_entries(open, owner)
+    if not kept then return nil, kept_error end
+    return reconcile_wanted_with(open, conflict, owner, kept, "", #kept)
+end
+
+function M.retains_data_with(open: Open, owner_raw: unknown): (boolean?, string?)
+    local owner = bounds.id(owner_raw)
+    if not owner then return nil, "governance overlay owner is invalid" end
+    local kept, kept_error = data_entries(open, owner)
+    if not kept then return nil, kept_error end
+    return matches_wanted_with(open, owner, kept)
+end
+
+local function open(owner: string): (Snapshot?, unknown?)
+    local composed, composed_error = registry.snapshot()
+    if not composed then return nil, composed_error end
+    local snapshot, open_error = registry.overlay(owner)
+    if not snapshot then return nil, open_error end
+    local function input(entry: Entry): {id: string, kind: string, meta: Entry, data: Entry, dependency_root: boolean}
+        local id, kind = bounds.id(entry.id), bounds.id(entry.kind)
+        assert(id and kind, "registry entry identity is invalid")
+        return {id = assert(id), kind = assert(kind), meta = bounds.object(entry.meta) or {}, data = assert(bounds.object(entry.data)), dependency_root = entry.dependency_root == true}
+    end
+    local function changes(_self: Snapshot): Changes?
+        local native = snapshot:changes()
+        if not native then return nil end
+        return {
+            create = function(_self: Changes, entry: Entry): (unknown?, unknown?)
+                local decoded = input(entry)
+                local existing = composed:get(decoded.id)
+                if existing then return native:update(decoded) end
+                return native:create(decoded)
+            end,
+            update = function(_self: Changes, entry: Entry): (unknown?, unknown?) return native:update(input(entry)) end,
+            delete = function(_self: Changes, id: string): (unknown?, unknown?) return native:delete(id) end,
+            apply = function(_self: Changes): (unknown?, unknown?) return native:apply() end,
+        }
+    end
+    return {entries = function(_self: Snapshot): ({unknown}?, unknown?) return snapshot:entries() end,
+        changes = changes}, nil
+end
+
+local function conflict(err: unknown): boolean
+    if (type(err) ~= "userdata" and type(err) ~= "table") or errors == nil or errors.CONFLICT == nil then return false end
+    local value = err
+    return value:kind() == errors.CONFLICT
+end
+
+function M.reconcile(owner: unknown, entries: unknown): ({[string]: unknown}?, string?)
+    return M.reconcile_with(open, conflict, owner, entries)
+end
+
+
+function M.matches(owner: unknown, entries: unknown): (boolean?, string?)
+    return M.matches_with(open, owner, entries)
+end
+
+function M.reconcile_composed(owner: unknown, entries: unknown,
+    admission_raw: unknown, generated_raw: unknown?): ({[string]: unknown}?, string?)
+    return M.reconcile_composed_with(open, conflict, owner, entries, admission_raw, generated_raw)
+end
+
+function M.matches_composed(owner: unknown, entries: unknown,
+    admission_raw: unknown, generated_raw: unknown?): (boolean?, string?)
+    return M.matches_composed_with(open, owner, entries, admission_raw, generated_raw)
+end
+
+function M.provide(owner: unknown, provisioned: unknown): ({[string]: unknown}?, string?)
+    return M.provide_with(open, conflict, owner, provisioned)
+end
+
+function M.provides(owner: unknown, provisioned: unknown): (boolean?, string?)
+    return M.provided_with(open, owner, provisioned)
+end
+
+function M.retain_data(owner: unknown): ({[string]: unknown}?, string?)
+    return M.retain_data_with(open, conflict, owner)
+end
+
+function M.retains_data(owner: unknown): (boolean?, string?)
+    return M.retains_data_with(open, owner)
+end
+
+return M

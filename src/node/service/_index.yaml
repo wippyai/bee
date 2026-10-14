@@ -1,0 +1,82 @@
+version: '1.0'
+namespace: bee.node.service
+entries:
+- name: owner
+  kind: process.lua
+  source: file://owner.lua
+  method: main
+  modules: [process, channel, system, registry, tty, uuid, logger, events, env, funcs]
+  imports:
+    protocol: bee.hive:protocol
+    descriptor: bee.app:descriptor
+    application: bee.node:application
+    broker: bee.node:broker
+    command: bee.node:command
+    arguments: bee.app:arguments
+    workspaces: bee.node:workspaces
+    settings: bee.node:settings
+    appearance: bee.ui:appearance
+    client: bee.node:client
+    boot_gate: bee.process:boot_gate
+    confirmation: bee.approvals.app:confirmation
+    bounds: bee.values:bounds
+    app_identity: bee.threads.records:app_identity
+- name: owner_service
+  meta:
+    title: Node · owner
+  kind: process.service
+  process: bee.node.service:owner
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    requires: [bee.hive.service:supervisor_service]
+    security:
+      actor: {id: bee.node}
+      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_attention, bee.security.approvals:confirmation_client, bee.security.approvals:confirmation_authority, bee.node.security:owner_role, bee.node.security:owner_app_alias, bee.process:boot_gate_policy, bee.hive.security:messaging]
+    restart:
+      max_attempts: 10
+- name: tests
+  kind: process.lua
+  source: file://tests.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - funcs
+  - time
+  - logger
+  imports:
+    application: bee.node:application
+    tests: bee.node:tests
+    test_runs: bee.node:test_runs
+    demand: bee.process:demand
+    receiver: bee.hive:receiver
+    bounds: bee.values:bounds
+- name: tests_service
+  meta:
+    title: "Node \xB7 tests"
+    type: bee.process.demand
+    demand:
+      name: bee.node.tests
+      probe: bee.node:test_backlog
+      tables:
+      - bee_node_test_runs
+  kind: process.service
+  process: bee.node.service:tests
+  host: bee:workers
+  lifecycle:
+    auto_start: false
+    requires:
+    - bee.hive.service:supervisor_service
+    security:
+      actor:
+        id: bee.node.tests
+      policies:
+      - bee.node.security:tests_runner
+      - bee.node.security:tests_store
+      - bee.node.security:tests_name
+      - bee.node.security:identity
+      - bee.process:client_policy
+      - bee.process:backlog_policy
+    restart:
+      max_attempts: 10

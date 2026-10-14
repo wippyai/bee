@@ -1,0 +1,20 @@
+version: '1.0'
+namespace: bee.tests.node.hub_tests_fixture
+entries:
+- name: application
+  kind: process.lua
+  source: file://../runner_fixture/app.lua
+  method: main
+  modules: [process]
+  meta:
+    type: bee.app
+    application: {api_version: 1, title: Package tests, lifetime: view, revision: '1', instance_policy: multiple, menus: [bee.tests.gov:unplaced_menu]}
+- name: admission
+  kind: registry.entry
+  meta: {type: bee.node.application_admission}
+  data:
+    tests:
+      bee.tests.node.hub_tests_fixture:application: [bee.tests.node:package_application_probe]
+    bindings:
+    - definition_id: bee.tests.node.hub_tests_fixture:application
+      policies: []

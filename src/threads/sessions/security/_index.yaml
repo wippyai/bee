@@ -1,0 +1,173 @@
+version: '1.0'
+namespace: bee.threads.sessions.security
+entries:
+- name: owner_admission_policy
+  kind: security.policy
+  meta:
+    comment: Session methods resolve host-admitted definitions and saved profiles before creating durable sessions
+  policy:
+    actions:
+    - registry.get
+    - registry.snapshot
+    - funcs.call
+    - bee.harness.permission.answer
+    resources:
+    - bee.gov.binding:driver_bindings
+    - bee.executor.external.binding:answer_hook
+    - bs:*
+    - bee.threads.sessions.binding:open
+    - bee.threads.sessions.env:threads_journal_ref
+    - bee.threads.binding:journal_local
+    - bee.threads.binding:session_create
+    - bee.threads.binding:session_attach
+    - bee.threads.binding:session_describe
+    - bee.threads.binding:session_scan
+    - bee.threads.binding:session_transition
+    - bee.threads.binding:work_send
+    - bee.threads.binding:work_describe
+    - bee.threads.binding:work_await
+    - bee.threads.binding:work_history
+    - bee.threads.binding:work_scan
+    - bee.threads.binding:turn_reserve
+    - bee.threads.binding:turn_recover
+    - bee.threads.binding:turn_pull
+    - bee.threads.binding:turn_accept
+    - bee.threads.binding:turn_observation
+    - bee.threads.binding:work_settle
+    - bee.threads.binding:work_uncertain
+    - bee.threads.binding:work_cancel
+    - bee.threads.binding:operation_lookup
+    - bee.threads.binding:operation_describe
+    - bee.threads.binding:feed_read
+    - bee.placement.native.binding:stop
+    - bee.placement.native.binding:reconcile
+    - bee.placement.native.binding:activity
+    - bee.placement.docker.binding:activity
+    - bee.harness:profiles
+    - bee.harness.binding:call
+    - bee.harness.binding:present
+    - bee.harness.launch:admission
+    - bee.credentials.binding:configuration_setup
+    - bee.harness.binding:setup
+    - bee.harness.binding:locate_probe
+    - bee.hive.binding:call
+    effect: allow
+- name: owner_setup_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - bee.harness.setup
+    resources: '*'
+    expression: resource == actor.meta.workspace_id && resource != ""
+    effect: allow
+- name: owner_delivery_policy
+  kind: security.policy
+  meta:
+    comment: The Sessions owner types each queued message into its session's terminal, resuming a terminal that is gone
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.harness.binding:present_type
+    - bee.harness.binding:present_restore
+    - bee.harness.binding:present_activity
+    - bee.threads.hooks:dispatch
+    effect: allow
+- name: owner_principal_policy
+  kind: security.policy.expr
+  meta:
+    comment: The Sessions owner restores only the owner identity a session's route carries when it stops the session's process
+  policy:
+    actions:
+    - security.actor.create
+    - funcs.security
+    - funcs.context
+    expression: action in ["funcs.security", "funcs.context"] || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"
+    resources: '*'
+    effect: allow
+- name: owner_workspace_identity_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - security.actor.create
+    - funcs.security
+    resources: '*'
+    expression: action == "funcs.security" || resource == actor.id
+    effect: allow
+- name: owner_registry_read_policy
+  kind: security.policy
+  meta:
+    comment: The Sessions owner reads admitted driver, definition and launch policy metadata from one pinned catalog; this
+      grants no registry mutation or launch permission
+  policy:
+    actions:
+    - registry.get
+    - registry.snapshot
+    - system.read
+    resources:
+    - '*'
+    effect: allow
+- name: allowance_authority_policy
+  kind: security.policy
+  policy:
+    actions:
+    - registry.get
+    - registry.find
+    - registry.snapshot
+    - db.get
+    - system.read
+    - funcs.call
+    - funcs.context
+    - security.actor.create
+    - funcs.security
+    - bee.approvals.request
+    - bee.approvals.consume
+    - bee.approvals.decide
+    resources: '*'
+    effect: allow
+- name: peer_workspace_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - bee.sessions.workspace.*
+    resources: '*'
+    effect: allow
+    expression: resource == actor.meta.workspace_id && action in actor.meta.workspace_permissions
+- name: peer_session_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - funcs.call
+    - bee.harness.launch
+    - bee.sessions.send
+    - bee.sessions.discover
+    resources: '*'
+    effect: allow
+    expression: action in ["funcs.call", "bee.harness.launch", "bee.sessions.send", "bee.sessions.discover"]
+- name: person_allowance_policy
+  kind: security.policy.expr
+  policy:
+    actions:
+    - bee.sessions.allowance.manage
+    - funcs.call
+    resources: '*'
+    effect: allow
+    expression: actor.id matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" && actor.meta.definition_id in ["bee.harness.app:app",
+      "bee.approvals.inbox.app:app"] && ((action == "bee.sessions.allowance.manage" && resource == actor.meta.workspace_id)
+      || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:allowance", "bee.threads.sessions.binding:peers"]))
+- name: source_identity_call_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.threads.sessions.binding:source_identity
+    effect: allow
+
+- name: configuration_catalog_policy
+  kind: security.policy.expr
+  policy:
+    actions: [env.get, funcs.call]
+    resources: '*'
+    expression: action == "funcs.call" || (action == "env.get" && resource in ["bee.env:machine_home", "bee.gateway.env:hook_executable"])
+    effect: allow

@@ -1,0 +1,60 @@
+-- SPDX-License-Identifier: MIT
+local bounds = require("bounds")
+local json = require("json")
+local hooks = require("hooks")
+local subject_call = require("subject_call")
+local hook_response = require("hook_response")
+local M = {}
+type Object = {[string]: unknown}
+function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Object?, transport: string?): (Object?, string?)
+    local event, event_id = outcome.event, bounds.id(outcome.event_id)
+    if event ~= "SessionStart" and event ~= "UserPromptSubmit" and event ~= "PreToolUse" and event ~= "PostToolUse" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest" then return {}, nil end
+    if not event_id then return nil, "hook occurrence omitted its identity" end
+    local window = binding.subject:sub(1, 3) == "bs:"
+    if not window and event ~= "PermissionRequest" then return {}, nil end
+    if payload then
+        local decoded, decode_error = hooks.payload(payload)
+        if not decoded then return nil, decode_error end
+        payload = decoded
+    end
+    local request: Object = {session = binding.subject, binding_id = binding.binding_id, event = event, attempt_id = binding.attempt_id, operation_key = event_id, hook_payload = payload}
+    if event == "UserPromptSubmit" and payload and payload.prompt ~= nil then
+        local prompt = bounds.text(payload.prompt, 65536)
+        if not prompt then return nil, "native prompt exceeds its bound" end
+        request.input = prompt
+    end
+    if event == "Stop" and payload and payload.last_assistant_message ~= nil then
+        local answer = bounds.text(payload.last_assistant_message, 65536)
+        if not answer then return nil, "the agent's reply exceeds its bound" end
+        request.answer = answer
+    end
+    if event == "PermissionRequest" then
+        if not payload or not transport then return nil, "permission hook omitted its transport or input" end
+        request.permission = {payload = payload, transport = transport, action_id = binding.action_id, binding_id = binding.binding_id}
+    end
+    local target = "bee.threads.sessions.binding:hook_boundary"
+    if not window then
+        target = event == "PermissionRequest" and "bee.harness.binding:permission_hook" or "bee.harness.binding:extension_hook"
+        request = {binding_id = binding.binding_id, event_id = event_id, payload = payload}
+    end
+    local reply = subject_call.call(binding, {"bee.gateway.security:session_boundary_policy"}, target, request)
+    if not reply.ok then return nil, reply.error and reply.error.message or "session boundary unavailable" end
+    local value = bounds.object(reply.value)
+    if not value or bounds.fields(value, {"additional_context", "permission_response", "extension_response", "hook_driver"}) then return nil, "invalid session boundary reply" end
+    if event == "PermissionRequest" then
+        if value.permission_response == nil then return {}, nil end
+        local line = bounds.text(value.permission_response, 4096)
+        if not line then return nil, "invalid permission hook response" end
+        local decoded = bounds.object(json.decode(line))
+        if not decoded then return nil, "permission hook response is not JSON" end
+        return decoded, nil
+    end
+    if value.extension_response ~= nil then
+        return hook_response.render(tostring(event), value.extension_response, bounds.id(value.hook_driver) or "unknown"), nil
+    end
+    if value.additional_context == nil then return {}, nil end
+    local context = bounds.text(value.additional_context, 24576)
+    if not context then return nil, "session boundary context exceeds its bound" end
+    return {hookSpecificOutput = {hookEventName = "UserPromptSubmit", additionalContext = context}}, nil
+end
+return M

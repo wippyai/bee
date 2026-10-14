@@ -1,0 +1,3514 @@
+[
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "fallback_models",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "sonnet",
+      "opus"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--fallback-model",
+    "kind": "join",
+    "argv": [
+      "--fallback-model",
+      "sonnet,opus"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "system_prompt",
+    "group": "behavior",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "Fixture replacement",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--system-prompt",
+    "kind": "value",
+    "argv": [
+      "--system-prompt",
+      "Fixture replacement"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "agent",
+    "group": "behavior",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "reviewer",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--agent",
+    "kind": "value",
+    "argv": [
+      "--agent",
+      "reviewer"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "agents",
+    "group": "behavior",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "description",
+          "prompt"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "tools": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "disallowedTools": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "skills": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "reviewer": {
+        "description": "Review",
+        "prompt": "Review changes",
+        "tools": [
+          "Read"
+        ]
+      }
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--agents",
+    "kind": "json",
+    "argv": [
+      "--agents",
+      "{\"reviewer\":{\"description\":\"Review\",\"prompt\":\"Review changes\",\"tools\":[\"Read\"]}}"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "autocompact",
+    "group": "behavior",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "value": "200k",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--autocompact",
+    "kind": "value",
+    "argv": [
+      "--autocompact",
+      "200k"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "budget_usd",
+    "group": "behavior",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "value": "1.25",
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--max-budget-usd",
+    "kind": "value",
+    "baseline": true,
+    "argv": [
+      "--max-budget-usd",
+      "1.25"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "prompt_snapshot",
+    "group": "behavior",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "on",
+        "off"
+      ]
+    },
+    "value": "off",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--system-prompt-snapshot",
+    "kind": "value",
+    "argv": [
+      "--system-prompt-snapshot",
+      "off"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "exclude_dynamic_prompt",
+    "group": "behavior",
+    "security_class": "free",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--exclude-dynamic-system-prompt-sections",
+    "kind": "switch",
+    "argv": [
+      "--exclude-dynamic-system-prompt-sections"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "brief_mode",
+    "group": "behavior",
+    "security_class": "free",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--brief",
+    "kind": "switch",
+    "argv": [
+      "--brief"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "prompt_suggestions",
+    "group": "behavior",
+    "security_class": "free",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": false,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--prompt-suggestions",
+    "kind": "boolean",
+    "argv": [
+      "--prompt-suggestions",
+      "false"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "permission_bypass",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--dangerously-skip-permissions",
+    "kind": "switch",
+    "argv": [
+      "--dangerously-skip-permissions"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "allow_permission_bypass",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--allow-dangerously-skip-permissions",
+    "kind": "switch",
+    "argv": [
+      "--allow-dangerously-skip-permissions"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "permission_prompts",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "host",
+        "none"
+      ]
+    },
+    "value": "none",
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--permission-prompts",
+    "kind": "value",
+    "safe": "host",
+    "argv": [
+      "--permission-prompts",
+      "none"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "tools",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "Read",
+      "Edit"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--tools",
+    "kind": "join",
+    "argv": [
+      "--tools",
+      "Read,Edit"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "tool_allow",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "Bash(git status)",
+      "Read"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--allowedTools",
+    "kind": "join",
+    "baseline": false,
+    "argv": [
+      "--allowedTools",
+      "Bash(git status),Read"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "tool_deny",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "Bash(git status)",
+      "Read"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--disallowedTools",
+    "kind": "join",
+    "baseline": true,
+    "argv": [
+      "--disallowedTools",
+      "Bash(git status),Read"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "additional_dirs",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "/workspace/one",
+      "/workspace/two"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--add-dir",
+    "kind": "variadic",
+    "argv": [
+      "--add-dir",
+      "/workspace/one",
+      "/workspace/two"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "mcp_servers",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mcpServers": {
+          "type": "object",
+          "maxProperties": 16,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "stdio",
+                  "http",
+                  "sse"
+                ]
+              },
+              "command": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "args": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "string",
+                  "maxLength": 4096
+                }
+              },
+              "url": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "mcpServers"
+      ]
+    },
+    "value": {
+      "mcpServers": {
+        "fixture": {
+          "type": "stdio",
+          "command": "fixture",
+          "args": [
+            "--fixture"
+          ]
+        }
+      }
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--mcp-config",
+    "kind": "json",
+    "argv": [
+      "--mcp-config",
+      "{\"mcpServers\":{\"fixture\":{\"args\":[\"--fixture\"],\"command\":\"fixture\",\"type\":\"stdio\"}}}"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "strict_mcp",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--strict-mcp-config",
+    "kind": "switch",
+    "safe": true,
+    "argv": [
+      "--strict-mcp-config"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "plugin_dirs",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "fixture-one",
+      "fixture-two"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--plugin-dir",
+    "kind": "repeat",
+    "argv": [
+      "--plugin-dir=fixture-one",
+      "--plugin-dir=fixture-two"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "plugin_urls",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "fixture-one",
+      "fixture-two"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--plugin-url",
+    "kind": "repeat",
+    "argv": [
+      "--plugin-url=fixture-one",
+      "--plugin-url=fixture-two"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "disable_slash_commands",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--disable-slash-commands",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--disable-slash-commands"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "setting_sources",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "enum": [
+          "user",
+          "project",
+          "local"
+        ]
+      }
+    },
+    "value": [
+      "user",
+      "local"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--setting-sources",
+    "kind": "join",
+    "argv": [
+      "--setting-sources",
+      "user,local"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "settings_ref",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-settings.json",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--settings",
+    "kind": "value",
+    "argv": [
+      "--settings",
+      "fixture-settings.json"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "bare",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--bare",
+    "kind": "switch",
+    "argv": [
+      "--bare"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "restricted",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--restricted",
+    "kind": "switch",
+    "argv": [
+      "--restricted"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "safe_mode",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--safe-mode",
+    "kind": "switch",
+    "argv": [
+      "--safe-mode"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "json_schema",
+    "group": "advanced",
+    "security_class": "free",
+    "schema": {
+      "type": [
+        "object",
+        "boolean"
+      ],
+      "maxProperties": 64,
+      "additionalProperties": true
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        }
+      }
+    },
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--json-schema",
+    "kind": "json",
+    "argv": [
+      "--json-schema",
+      "{\"properties\":{\"ok\":{\"type\":\"boolean\"}},\"type\":\"object\"}"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "output_format",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "text",
+        "json",
+        "stream-json"
+      ]
+    },
+    "value": "json",
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--output-format",
+    "kind": "value",
+    "safe": "stream-json",
+    "argv": [
+      "--output-format",
+      "json"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "input_format",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "text",
+        "stream-json"
+      ]
+    },
+    "value": "text",
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--input-format",
+    "kind": "value",
+    "safe": "stream-json",
+    "argv": [
+      "--input-format",
+      "text"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "partial_messages",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--include-partial-messages",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--include-partial-messages"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "hook_events",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--include-hook-events",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--include-hook-events"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "forward_subagent_text",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--forward-subagent-text",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--forward-subagent-text"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "replay_user_messages",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--replay-user-messages",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--replay-user-messages"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "verbose",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--verbose",
+    "kind": "switch",
+    "argv": [
+      "--verbose"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "debug",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "api,hooks",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--debug",
+    "kind": "value",
+    "argv": [
+      "--debug=api,hooks"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "debug_file",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-debug.log",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--debug-file",
+    "kind": "value",
+    "argv": [
+      "--debug-file",
+      "fixture-debug.log"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "screen_reader",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--ax-screen-reader",
+    "kind": "switch",
+    "argv": [
+      "--ax-screen-reader"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "no_session_persistence",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--no-session-persistence",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--no-session-persistence"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "session_name",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "Fixture session",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--name",
+    "kind": "value",
+    "baseline": true,
+    "argv": [
+      "--name",
+      "Fixture session"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "continue_session",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--continue",
+    "kind": "switch",
+    "argv": [
+      "--continue"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "fork_session",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "resume"
+    ],
+    "flag": "--fork-session",
+    "kind": "switch",
+    "argv": [
+      "--fork-session"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "session_id",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "11111111-1111-4111-8111-111111111111",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--session-id",
+    "kind": "value",
+    "argv": [
+      "--session-id",
+      "11111111-1111-4111-8111-111111111111"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "startup_files",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "file_fixture:one.txt",
+      "file_fixture:two.txt"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--file",
+    "kind": "variadic",
+    "argv": [
+      "--file",
+      "file_fixture:one.txt",
+      "file_fixture:two.txt"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "worktree",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-worktree",
+    "contexts": [
+      "window"
+    ],
+    "flag": "--worktree",
+    "kind": "value",
+    "argv": [
+      "--worktree=fixture-worktree"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "tmux",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--tmux",
+    "kind": "switch",
+    "argv": [
+      "--tmux"
+    ],
+    "companions": {
+      "worktree": "fixture-worktree"
+    }
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "from_pr",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "123",
+    "contexts": [
+      "window"
+    ],
+    "flag": "--from-pr",
+    "kind": "value",
+    "argv": [
+      "--from-pr=123"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "teleport",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-session",
+    "contexts": [
+      "window"
+    ],
+    "flag": "--teleport",
+    "kind": "value",
+    "argv": [
+      "--teleport=fixture-session"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "chrome",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--chrome",
+    "kind": "switch",
+    "argv": [
+      "--chrome"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "ide",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--ide",
+    "kind": "switch",
+    "argv": [
+      "--ide"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "desktop",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--desktop",
+    "kind": "switch",
+    "argv": [
+      "--desktop"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "background",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--background",
+    "kind": "switch",
+    "argv": [
+      "--background"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "cloud",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-target",
+    "contexts": [
+      "window"
+    ],
+    "flag": "--cloud",
+    "kind": "value",
+    "argv": [
+      "--cloud=fixture-target"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "remote_control",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-target",
+    "contexts": [
+      "window"
+    ],
+    "flag": "--remote-control",
+    "kind": "value",
+    "argv": [
+      "--remote-control=fixture-target"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "environment",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-target",
+    "contexts": [
+      "window"
+    ],
+    "flag": "--environment",
+    "kind": "value",
+    "argv": [
+      "--environment",
+      "fixture-target"
+    ]
+  },
+  {
+    "driver": "claude",
+    "version": "2.1.296",
+    "id": "betas",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "fixture-beta"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--betas",
+    "kind": "variadic",
+    "argv": [
+      "--betas",
+      "fixture-beta"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "plan_effort",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "value": "high",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "plan_mode_reasoning_effort"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "reasoning_summary",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "concise",
+        "detailed",
+        "none"
+      ]
+    },
+    "value": "detailed",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "model_reasoning_summary"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "verbosity",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "value": "high",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "model_verbosity"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "personality",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "none",
+        "friendly",
+        "pragmatic"
+      ]
+    },
+    "value": "friendly",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "personality"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "context_window",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "value": 123456,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "model_context_window"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "compaction_threshold",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "value": 100000,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "model_auto_compact_token_limit"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "review_model",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096,
+      "format": "model"
+    },
+    "value": "fixture",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "review_model"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "service_tier",
+    "group": "model/provider",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "fast",
+        "flex"
+      ]
+    },
+    "value": "fast",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "service_tier"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "oss",
+    "group": "model/provider",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn"
+    ],
+    "flag": "--oss",
+    "kind": "switch",
+    "argv": [
+      "--oss"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "local_provider",
+    "group": "model/provider",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "ollama",
+        "lmstudio"
+      ]
+    },
+    "value": "ollama",
+    "contexts": [
+      "window",
+      "first_turn"
+    ],
+    "flag": "--local-provider",
+    "kind": "value",
+    "argv": [
+      "--local-provider",
+      "ollama"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "auth_kind",
+    "group": "model/provider",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "chatgpt",
+        "api"
+      ]
+    },
+    "value": "chatgpt",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "forced_login_method"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "instructions_file",
+    "group": "behavior",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture.txt",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "model_instructions_file"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "project_doc_max_bytes",
+    "group": "behavior",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "value": 1234,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "project_doc_max_bytes"
+    ],
+    "baseline": true
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "project_doc_fallback_filenames",
+    "group": "behavior",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "README.md"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "project_doc_fallback_filenames"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "approve_for_me",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn"
+    ],
+    "flag": "--approve-for-me",
+    "kind": "switch",
+    "argv": [
+      "--approve-for-me"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "bypass_hook_trust",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--dangerously-bypass-hook-trust",
+    "kind": "switch",
+    "argv": [
+      "--dangerously-bypass-hook-trust"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "writable_roots",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "/workspace/one",
+      "/workspace/two"
+    ],
+    "contexts": [
+      "window",
+      "first_turn"
+    ],
+    "flag": "--add-dir",
+    "kind": "repeat",
+    "argv": [
+      "--add-dir=/workspace/one",
+      "--add-dir=/workspace/two"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "network_access",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "sandbox_workspace_write",
+      "network_access"
+    ],
+    "safe": false
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "exclude_slash_tmp",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": false,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "sandbox_workspace_write",
+      "exclude_slash_tmp"
+    ],
+    "safe": true
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "exclude_tmpdir_env_var",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": false,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "sandbox_workspace_write",
+      "exclude_tmpdir_env_var"
+    ],
+    "safe": true
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "web_search",
+    "group": "access/trust",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "disabled",
+        "cached",
+        "live"
+      ]
+    },
+    "value": "cached",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "web_search"
+    ],
+    "safe": "disabled"
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "strict_config",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--strict-config",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--strict-config"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "ignore_user_config",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--ignore-user-config",
+    "kind": "switch",
+    "argv": [
+      "--ignore-user-config"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "ignore_rules",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--ignore-rules",
+    "kind": "switch",
+    "argv": [
+      "--ignore-rules"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "shell_inherit",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "all",
+        "core",
+        "none"
+      ]
+    },
+    "value": "none",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "shell_environment_policy",
+      "inherit"
+    ],
+    "safe": "none"
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "output_schema",
+    "group": "advanced",
+    "security_class": "free",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-schema.json",
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--output-schema",
+    "kind": "value",
+    "argv": [
+      "--output-schema",
+      "fixture-schema.json"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "json",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--json",
+    "kind": "switch",
+    "safe": true,
+    "argv": [
+      "--json"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "color",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "always",
+        "never",
+        "auto"
+      ]
+    },
+    "value": "never",
+    "contexts": [
+      "first_turn"
+    ],
+    "flag": "--color",
+    "kind": "value",
+    "baseline": true,
+    "argv": [
+      "--color",
+      "never"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "last_message_file",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture-last-message.txt",
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--output-last-message",
+    "kind": "value",
+    "argv": [
+      "--output-last-message",
+      "fixture-last-message.txt"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "hide_agent_reasoning",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "hide_agent_reasoning"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "show_raw_agent_reasoning",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "show_raw_agent_reasoning"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "no_alt_screen",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--no-alt-screen",
+    "kind": "switch",
+    "argv": [
+      "--no-alt-screen"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "images",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "fixture-one.png",
+      "fixture-two.png"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--image",
+    "kind": "repeat",
+    "argv": [
+      "--image=fixture-one.png",
+      "--image=fixture-two.png"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "workdir",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "/workspace/one",
+    "contexts": [
+      "window",
+      "first_turn"
+    ],
+    "flag": "--cd",
+    "kind": "value",
+    "argv": [
+      "--cd",
+      "/workspace/one"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "worktree",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--worktree",
+    "kind": "switch",
+    "argv": [
+      "--worktree"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "skip_git_repo_check",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--skip-git-repo-check",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--skip-git-repo-check"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "ephemeral",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--ephemeral",
+    "kind": "switch",
+    "argv": [
+      "--ephemeral"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "history_persistence",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "string",
+      "enum": [
+        "save-all",
+        "none"
+      ]
+    },
+    "value": "none",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "history",
+      "persistence"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "history_max_bytes",
+    "group": "advanced",
+    "security_class": "person-only",
+    "schema": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "value": 1234,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "history",
+      "max_bytes"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "thread_source",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "fixture",
+    "contexts": [
+      "first_turn",
+      "resume"
+    ],
+    "flag": "--thread-source",
+    "kind": "value",
+    "argv": [
+      "--thread-source",
+      "fixture"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "remote",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "ws://127.0.0.1:8999",
+    "contexts": [
+      "window"
+    ],
+    "flag": "--remote",
+    "kind": "value",
+    "argv": [
+      "--remote",
+      "ws://127.0.0.1:8999"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "remote_auth_token_env",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "value": "FIXTURE_REMOTE_TOKEN",
+    "contexts": [
+      "window"
+    ],
+    "flag": "--remote-auth-token-env",
+    "kind": "value",
+    "argv": [
+      "--remote-auth-token-env",
+      "FIXTURE_REMOTE_TOKEN"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "no_daemon",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window"
+    ],
+    "flag": "--no-daemon",
+    "kind": "switch",
+    "baseline": true,
+    "argv": [
+      "--no-daemon"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "log_dir",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "value": "logs",
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "log_dir"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "notify",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "fixture"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "notify"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "mcp_servers",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "args": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "cwd": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "env_vars": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "bearer_token_env_var": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "http_headers": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "env_http_headers": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "startup_timeout_sec": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "tool_timeout_sec": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "enabled_tools": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "disabled_tools": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "stdio_fixture": {
+        "command": "fixture",
+        "args": [
+          "--fixture"
+        ],
+        "cwd": "/workspace",
+        "env_vars": [
+          "FIXTURE_REF"
+        ],
+        "enabled": false,
+        "required": false,
+        "startup_timeout_sec": 10,
+        "tool_timeout_sec": 30,
+        "enabled_tools": [
+          "read"
+        ],
+        "disabled_tools": [
+          "write"
+        ]
+      },
+      "http_fixture": {
+        "url": "http://127.0.0.1:8999/mcp",
+        "bearer_token_env_var": "FIXTURE_TOKEN",
+        "enabled": false
+      }
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "mcp_servers"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "shell_exclude",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "FIXTURE"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "shell_environment_policy",
+      "exclude"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "shell_include_only",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": [
+      "PATH"
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "shell_environment_policy",
+      "include_only"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "shell_set",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 4096
+      }
+    },
+    "value": {
+      "FIXTURE": "yes"
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "shell_environment_policy",
+      "set"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "shell_ignore_default_excludes",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "boolean"
+    },
+    "value": true,
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "shell_environment_policy",
+      "ignore_default_excludes"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "plugins",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      }
+    },
+    "value": {
+      "fixture": {
+        "enabled": false
+      }
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "plugins"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "skills",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "enabled"
+        ]
+      }
+    },
+    "value": [
+      {
+        "path": "fixture",
+        "enabled": false
+      }
+    ],
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "skills",
+      "config"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "agents",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "config_file": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "config_file"
+        ]
+      }
+    },
+    "value": {
+      "fixture": {
+        "description": "Fixture",
+        "config_file": "fixture.toml"
+      }
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "agents"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "otel",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "exporter": {
+          "type": "string",
+          "enum": [
+            "none"
+          ]
+        },
+        "log_user_prompt": {
+          "type": "boolean"
+        }
+      }
+    },
+    "value": {
+      "environment": "fixture",
+      "exporter": "none",
+      "log_user_prompt": false
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "otel"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "features",
+    "group": "advanced",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "analytics_plan_history": {
+          "type": "boolean"
+        },
+        "apps": {
+          "type": "boolean"
+        },
+        "auth_elicitation": {
+          "type": "boolean"
+        },
+        "browser_use": {
+          "type": "boolean"
+        },
+        "browser_use_external": {
+          "type": "boolean"
+        },
+        "browser_use_full_cdp_access": {
+          "type": "boolean"
+        },
+        "code_mode_host": {
+          "type": "boolean"
+        },
+        "compaction_image_budget": {
+          "type": "boolean"
+        },
+        "computer_use": {
+          "type": "boolean"
+        },
+        "content_item_kinds": {
+          "type": "boolean"
+        },
+        "daemon_auto_start": {
+          "type": "boolean"
+        },
+        "enable_request_compression": {
+          "type": "boolean"
+        },
+        "fast_mode": {
+          "type": "boolean"
+        },
+        "goals": {
+          "type": "boolean"
+        },
+        "guardian_approval": {
+          "type": "boolean"
+        },
+        "guardian_reuse_parent_compaction": {
+          "type": "boolean"
+        },
+        "hooks": {
+          "type": "boolean"
+        },
+        "image_generation": {
+          "type": "boolean"
+        },
+        "in_app_browser": {
+          "type": "boolean"
+        },
+        "in_app_chat": {
+          "type": "boolean"
+        },
+        "in_app_dictation": {
+          "type": "boolean"
+        },
+        "in_app_local_automation": {
+          "type": "boolean"
+        },
+        "in_app_updates": {
+          "type": "boolean"
+        },
+        "memories": {
+          "type": "boolean"
+        },
+        "mentions_v2": {
+          "type": "boolean"
+        },
+        "multi_agent": {
+          "type": "boolean"
+        },
+        "multi_agent_v2": {
+          "type": "boolean"
+        },
+        "network_proxy": {
+          "type": "boolean"
+        },
+        "plugin_sharing": {
+          "type": "boolean"
+        },
+        "plugins": {
+          "type": "boolean"
+        },
+        "prevent_idle_sleep": {
+          "type": "boolean"
+        },
+        "realtime_conversation": {
+          "type": "boolean"
+        },
+        "recommended_plugins": {
+          "type": "boolean"
+        },
+        "remote_plugin": {
+          "type": "boolean"
+        },
+        "secret_auth_storage": {
+          "type": "boolean"
+        },
+        "shell_snapshot": {
+          "type": "boolean"
+        },
+        "shell_tool": {
+          "type": "boolean"
+        },
+        "skill_mcp_dependency_install": {
+          "type": "boolean"
+        },
+        "skill_search": {
+          "type": "boolean"
+        },
+        "sleep_tool": {
+          "type": "boolean"
+        },
+        "system_proxy_fallback": {
+          "type": "boolean"
+        },
+        "tool_call_mcp_elicitation": {
+          "type": "boolean"
+        },
+        "tool_suggest": {
+          "type": "boolean"
+        },
+        "unbounded_connection_retries": {
+          "type": "boolean"
+        },
+        "unified_exec": {
+          "type": "boolean"
+        },
+        "unified_exec_tty": {
+          "type": "boolean"
+        },
+        "view_image": {
+          "type": "boolean"
+        },
+        "workspace_dependencies": {
+          "type": "boolean"
+        },
+        "worktrees": {
+          "type": "boolean"
+        },
+        "write_stdin_approval": {
+          "type": "boolean"
+        }
+      }
+    },
+    "value": {
+      "apps": false,
+      "guardian_approval": false,
+      "hooks": false,
+      "plugins": false,
+      "shell_tool": false,
+      "network_proxy": false
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "features"
+    ]
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "model_providers",
+    "group": "model/provider",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "base_url": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "wire_api": {
+            "type": "string",
+            "enum": [
+              "responses"
+            ]
+          },
+          "env_key": {
+            "type": "string",
+            "enum": [
+              "OPENAI_API_KEY"
+            ]
+          },
+          "http_headers": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "env_http_headers": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "query_params": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          },
+          "auth": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "request_max_retries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "stream_max_retries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "stream_idle_timeout_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "supports_websockets": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "base_url",
+          "wire_api"
+        ]
+      }
+    },
+    "value": {
+      "fixture": {
+        "name": "Fixture",
+        "base_url": "http://127.0.0.1:8999/v1",
+        "wire_api": "responses",
+        "http_headers": {
+          "X-Fixture": "yes"
+        },
+        "env_http_headers": {
+          "X-Ref": "FIXTURE_HEADER"
+        },
+        "query_params": {
+          "fixture": "yes"
+        },
+        "auth": {
+          "command": "fixture"
+        },
+        "request_max_retries": 2,
+        "stream_max_retries": 3,
+        "stream_idle_timeout_ms": 1000,
+        "supports_websockets": false
+      }
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "model_providers"
+    ],
+    "existing": true
+  },
+  {
+    "driver": "codex",
+    "version": "0.160.1",
+    "id": "hooks",
+    "group": "tools/integrations",
+    "security_class": "host-ceiling",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "SessionStart": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "matcher": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "hooks": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "command",
+                        "mcp_tool"
+                      ]
+                    },
+                    "command": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "server": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "tool": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "input": {
+                      "type": "object",
+                      "maxProperties": 16,
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 4096
+                      }
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 650
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "UserPromptSubmit": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "matcher": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "hooks": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "command",
+                        "mcp_tool"
+                      ]
+                    },
+                    "command": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "server": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "tool": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "input": {
+                      "type": "object",
+                      "maxProperties": 16,
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 4096
+                      }
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 650
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "PreToolUse": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "matcher": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "hooks": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "command",
+                        "mcp_tool"
+                      ]
+                    },
+                    "command": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "server": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "tool": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "input": {
+                      "type": "object",
+                      "maxProperties": 16,
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 4096
+                      }
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 650
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "PostToolUse": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "matcher": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "hooks": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "command",
+                        "mcp_tool"
+                      ]
+                    },
+                    "command": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "server": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "tool": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "input": {
+                      "type": "object",
+                      "maxProperties": 16,
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 4096
+                      }
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 650
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "Stop": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "matcher": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "hooks": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "command",
+                        "mcp_tool"
+                      ]
+                    },
+                    "command": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "server": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "tool": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "input": {
+                      "type": "object",
+                      "maxProperties": 16,
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 4096
+                      }
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 650
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "PermissionRequest": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "matcher": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "hooks": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "command",
+                        "mcp_tool"
+                      ]
+                    },
+                    "command": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "server": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "tool": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "input": {
+                      "type": "object",
+                      "maxProperties": 16,
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 4096
+                      }
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 650
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "fixture",
+              "timeout": 10
+            }
+          ]
+        }
+      ]
+    },
+    "contexts": [
+      "window",
+      "first_turn",
+      "resume"
+    ],
+    "config_path": [
+      "hooks"
+    ]
+  }
+]

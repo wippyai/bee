@@ -1,0 +1,159 @@
+version: '1.0'
+namespace: bee.approvals.inbox.app
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  - time
+  - uuid
+  - funcs
+  - registry
+  - system
+  imports:
+    frame: bee.ui:frame
+    client: bee.app:client
+    node_client: bee.node:client
+    confirmation_ui: bee.approvals.app:confirmation
+    appearance: bee.ui:appearance
+    windows: bee.approvals.types:windows
+    grants: bee.approvals.grants:store
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+    clock: bee.values:clock
+    model: bee.approvals.inbox.app:model
+    view: bee.approvals.inbox.app:view
+    inbox: bee.approvals.inbox.app:client
+    feeds: bee.approvals.inbox.app:feeds
+    leases: bee.approvals.inbox.app:leases
+    lease_form: bee.approvals.inbox.app:lease_form
+    question_form: bee.approvals.inbox.app:question_form
+    source_config: bee.approvals.inbox.app:source_config
+    protocol: bee.hive:protocol
+    allowance_form: bee.threads.sessions.app:allowance_form
+  meta:
+    type: bee.app
+    application:
+      menus:
+      - bee.shell:apps_menu
+      api_version: 1
+      title: Needs you
+      icon: '!'
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: ''
+      role: approvals
+      resume_schema: inbox.v1
+      restart_policy: manual
+  security:
+    policies:
+    - bee.security.approvals:confirmation_client
+    - bee.security.approvals:confirmation_authority
+    - bee.security.approvals:approval_decide_policy
+    - bee.gov.security:governance_delivery_lease_policy
+    - bee.approvals.inbox.security:client_policy
+    - bee.approvals.inbox.security:session_names_policy
+    - bee.approvals.inbox.security:grants_policy
+    - bee.node.security:workspace_catalog_read_policy
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.threads.sessions.security:person_allowance_policy
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules:
+  - json
+  imports:
+    windows: bee.approvals.types:windows
+    grants: bee.approvals.grants:store
+    text: bee.ui:text
+    glyphs: bee.ui:glyphs
+    bounds: bee.values:bounds
+    caller: bee.app:caller
+    typed_form: bee.apps.library.app:form
+- name: leases
+  kind: library.lua
+  source: file://leases.lua
+  modules: [json, hash]
+  imports:
+    grants: bee.approvals.grants:store
+    clock: bee.values:clock
+    bounds: bee.values:bounds
+    model: bee.approvals.inbox.app:model
+- name: lease_form
+  kind: library.lua
+  source: file://lease_form.lua
+  modules:
+  - tty
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    forms: bee.ui.forms:forms
+    model: bee.approvals.inbox.app:model
+    leases: bee.approvals.inbox.app:leases
+- name: feeds
+  kind: library.lua
+  source: file://feeds.lua
+  imports:
+    bounds: bee.values:bounds
+    sync: bee.sync:protocol
+    caller: bee.app:caller
+    source_config: bee.approvals.inbox.app:source_config
+    model: bee.approvals.inbox.app:model
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules:
+  - tty
+  imports:
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
+    leases: bee.approvals.inbox.app:leases
+    model: bee.approvals.inbox.app:model
+    windows: bee.approvals.types:windows
+    grants: bee.approvals.grants:store
+    canonical: bee.values:canonical
+    clock: bee.values:clock
+    names: bee.app:names
+    glyphs: bee.ui:glyphs
+- name: client
+  kind: library.lua
+  source: file://client.lua
+- name: source_config
+  kind: library.lua
+  source: file://sources.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+- name: sources
+  kind: registry.entry
+  meta:
+    type: bee.approvals.inbox.sources
+    comment: Host-selected remote owner/workspace sources; discovery grants no reading or approval authority
+  data:
+    sources: []
+- name: workspaces
+  kind: registry.entry
+  meta:
+    type: bee.approvals.inbox.workspaces
+    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still decides eligibility per request
+  data:
+    workspaces: []
+
+- name: question_form
+  kind: library.lua
+  source: file://question_form.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    forms: bee.ui.forms:forms
+    typed_form: bee.apps.library.app:form
+    model: bee.approvals.inbox.app:model
+    lease_form: bee.approvals.inbox.app:lease_form

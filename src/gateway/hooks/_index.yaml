@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.gateway.hooks
+entries:
+- name: hooks
+  kind: library.lua
+  source: file://hooks.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    service_reply: bee.values:reply
+    canonical: bee.values:canonical

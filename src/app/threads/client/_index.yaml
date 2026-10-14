@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.app.threads.client
+entries:
+- name: status_reader
+  kind: library.lua
+  source: file://status_reader.lua
+  imports:
+    bounds: bee.values:bounds
+    caller: bee.app:caller
+    text: bee.ui:text
+    record_bounds: bee.threads.records:bounds

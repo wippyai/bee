@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.sync.migrations
+entries:
+- name: feeds
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-05T00:00:00Z'
+  source: file://feeds.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration
+- name: replicas
+  kind: function.lua
+  meta:
+    type: migration
+    target_db: bee:db
+    timestamp: '2026-10-05T00:01:00Z'
+  source: file://replicas.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

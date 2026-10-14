@@ -1,0 +1,282 @@
+version: '1.0'
+namespace: bee.harness.launch
+entries:
+- name: definitions
+  kind: library.lua
+  source: file://definition.lua
+  modules:
+  - hash
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    placement_request: bee.placement:request
+    placement_types: bee.placement:types
+- name: admission
+  kind: library.lua
+  source: file://admission.lua
+  modules:
+  - ctx
+  - hash
+  - registry
+  - funcs
+  - process
+  - security
+  - time
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    catalog: bee.harness.catalog:catalog
+    policy: bee.harness.carrier:policy
+    definition: bee.harness.launch:definitions
+    agent_resolver: bee.harness.launch:agent_resolver
+    carrier: bee.harness.carrier:machine
+    placement_types: bee.placement:types
+    placement_resolver: bee.placement.binding:resolver
+    continuation: bee.harness.carrier:continuation
+    interrupted: bee.harness.carrier:interrupted
+    profiles: bee.harness.profiles:protocol
+    profile_validation: bee.harness.profiles.binding:validation
+    effective_schema: bee.driver.descriptor:effective
+    descriptors: bee.driver.descriptor:descriptor
+    placement_profiles: bee.placement.profiles:profiles
+    record_bounds: bee.threads.records:bounds
+- name: agent_resolver
+  kind: library.lua
+  source: file://agent_resolver.lua
+  modules:
+  - hash
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    driver_resolver: bee.driver.binding:resolver
+    agent_tool: bee.values:agent_tool
+    agent_trait: bee.values:agent_trait
+    hook_capabilities: bee.threads.hooks:capabilities
+- name: selection
+  kind: library.lua
+  source: file://selection.lua
+  modules:
+  - registry
+  imports:
+    definitions: bee.harness.launch:definitions
+    bounds: bee.values:bounds
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  modules:
+  - env
+  - exec
+  - fs
+  - registry
+  - json
+  - funcs
+  - hash
+  imports:
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+    descriptor: bee.driver.descriptor:descriptor
+    driver_resolver: bee.driver.binding:resolver
+    driver_types: bee.driver:types
+    locate: bee.driver.locate:locate
+    quote: bee.driver.binding:quote
+    resources: bee.placement.native.env:resources
+    placement_profiles: bee.placement.profiles:profiles
+    placement_resolver: bee.placement.binding:resolver
+    probe_capture: bee.driver.locate:probe_capture
+    probe_version: bee.harness.launch:probe_version
+    login_evidence: bee.driver.locate:login_evidence
+    probe_cache: bee.harness.launch:probe_cache
+- name: probe_cache
+  kind: library.lua
+  source: file://probe_cache.lua
+  modules:
+  - sql
+  - fs
+  - env
+  - hash
+  - time
+  imports:
+    canonical: bee.values:canonical
+    resources: bee.placement.native.env:resources
+- name: probe_version
+  kind: library.lua
+  source: file://probe_version.lua
+  imports:
+    bounds: bee.values:bounds
+- name: readiness
+  kind: library.lua
+  source: file://readiness.lua
+  modules:
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    driver_locate: bee.driver.locate:locate
+    driver_types: bee.driver:types
+- name: managed_run
+  kind: library.lua
+  source: file://managed_run.lua
+  modules:
+  - funcs
+  - time
+  - process
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    placement_resolver: bee.placement.binding:resolver
+    placement_decode: bee.placement:decode
+    prestart: bee.harness.carrier:prestart
+- name: setup_execution_policy
+  kind: security.policy.expr
+  groups:
+  - harness_setup_execution_scope
+  policy:
+    expression: (action == "funcs.call" && (resource == "bee.resources.binding:associate" || resource == "bee.resources.binding:list" || resource == "bee.credentials.binding:define" || resource == "bee.credentials.binding:list" || resource == "bee.credentials.binding:capabilities" || resource == "bee.credentials.binding:set_value"))
+      || ((action == "bee.resources.manage" || action == "bee.credentials.manage") && resource != "" && resource == actor.meta.workspace_id) || action == "registry.get" || action == "registry.find"
+    actions:
+    - funcs.call
+    - bee.resources.manage
+    - bee.credentials.manage
+    - registry.get
+    - registry.find
+    resources: '*'
+    effect: allow
+- name: setup_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: (action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope") || (action == "funcs.call"
+      && resource in ["bee.harness.binding:setup_backend", "bee.harness.binding:set_credential_backend"]) || action == "registry.snapshot"
+    actions:
+    - funcs.security
+    - security.policy_group.get
+    - funcs.call
+    - registry.snapshot
+    resources: '*'
+    effect: allow
+- name: host_environment_names
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: environment_names
+  readonly: true
+- name: harness_activation
+  kind: registry.entry
+  meta:
+    type: bee.harness_activation
+    comment: Driver bindings this host activates; discovery alone activates nothing
+  data:
+    schema_revision: bee.harness-activation@1
+    bindings:
+    - bee.driver.agy.binding:binding
+    - bee.driver.claude.binding:binding
+    - bee.driver.codex.binding:binding
+    - bee.driver.grok.binding:binding
+    - bee.driver.muse.binding:binding
+    - bee.driver.opencode.binding:binding
+    - bee.driver.wippy.binding:binding
+- name: harness_setup
+  kind: registry.entry
+  meta:
+    type: bee.harness_setup
+    comment: Host-selected first-use roots keyed by definition-declared resource names
+  data:
+    roots:
+      project: bee.env:workspace_root
+      session: bee.placement.native.env:root
+    credentials:
+      agy_api_key:
+        provider: agy
+        source:
+          kind: env_variable
+          ref: bee.driver.agy.env:api_key
+        optional: true
+      grok_api_key:
+        provider: grok
+        source:
+          kind: env_variable
+          ref: bee.driver.grok.env:api_key
+        optional: true
+      muse_api_key:
+        provider: muse
+        source:
+          kind: env_variable
+          ref: bee.driver.muse.env:api_key
+        optional: true
+      claude_api_key:
+        provider: claude
+        source:
+          kind: env_variable
+          ref: bee.driver.claude.env:api_key
+        optional: true
+      codex_login:
+        provider: codex
+        source:
+          kind: fs_directory
+          ref: bee.env:machine_login_source
+        optional: true
+      muse_login:
+        provider: muse
+        source:
+          kind: fs_directory
+          ref: bee.env:machine_login_source
+        optional: true
+      agy_login:
+        provider: agy
+        source:
+          kind: fs_directory
+          ref: bee.env:machine_login_source
+        optional: true
+      grok_login:
+        provider: grok
+        source:
+          kind: fs_directory
+          ref: bee.env:machine_login_source
+        optional: true
+      claude_login:
+        provider: claude
+        source:
+          kind: fs_directory
+          ref: bee.env:machine_login_source
+        optional: true
+      opencode_login:
+        provider: opencode
+        source:
+          kind: fs_directory
+          ref: bee.env:machine_login_source
+        optional: true
+
+- name: configuration_setup
+  kind: library.lua
+  source: file://configuration_setup.lua
+  modules: [registry, funcs, env]
+  imports:
+    bounds: bee.values:bounds
+    configuration: bee.driver.binding:configuration
+    resolver: bee.driver.binding:resolver
+    profiles: bee.harness.profiles:protocol
+    preferences: bee.driver.descriptor:effective
+    gateway_configuration: bee.gateway.env:configuration
+    descriptors: bee.driver.descriptor:descriptor
+
+- name: folder_consent
+  kind: library.lua
+  source: file://folder_consent.lua
+  modules: [funcs, security, ctx, uuid, time, sql]
+  imports:
+    admission: bee.harness.launch:admission
+    definitions: bee.harness.launch:definitions
+    profile_values: bee.driver.descriptor:profile_values
+    bounds: bee.values:bounds
+    resources: bee.placement.native.env:resources
+    trust: bee.driver.descriptor:trust
+    database: bee.persist:database
+    grants: bee.approvals.grants:store
+    profile_grants: bee.harness.profiles:grants
+    authority: bee.harness.profiles.persist:grants
+- name: folder_consent_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.call, db.get, exec.get, exec.run, registry.find]
+    expression: (action == "funcs.call" && resource in ["bee.harness.binding:call", "bee.approvals.binding:request", "bee.approvals.binding:read", "bee.approvals.binding:effect"]) || action == "registry.find" || (action == "db.get" && resource == "bee:db") || (action == "exec.get" && resource == "bee.placement.native.env:placement_executor") || (action == "exec.run" && meta.executor == "bee.placement.native.env:placement_executor")
+    resources: '*'
+    effect: allow

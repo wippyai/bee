@@ -1,0 +1,51 @@
+version: '1.0'
+namespace: bee.env
+entries:
+- name: running_binary_identity
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_identity
+  readonly: true
+- name: workspace_environment
+  kind: env.storage.os
+  lifecycle:
+    auto_start: true
+- name: workspace_root
+  kind: fs.directory
+  directory: .
+  base: project
+  auto_init: false
+- name: machine_home
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: HOME
+  readonly: true
+- name: machine_login_source
+  kind: fs.directory
+  link_policy: owner_safe
+  directory: ${env:bee.env:machine_home}
+  base: project
+  mode: '0500'
+  auto_init: false
+- name: docs_corpus
+  kind: fs.directory
+  directory: ./src/corpus
+  mode: '0500'
+  auto_init: false
+  meta:
+    title: Bee agent documentation corpus
+    comment: The offline platform documentation a bound agent reads through the gateway docs tool; wippy.yaml embed freezes it read-only into the pack.
+- name: approved_driver_admission
+  kind: ns.requirement
+  meta: {value_kind: function.lua, comment: The host selects Gov's consumed driver admission, so drivers a person approved through an overlay activate beside the host's own bindings}
+  default: bee.gov.binding:driver_bindings
+  targets:
+  - entry: bee.harness.launch:harness_activation
+    path: .admission
+- name: approved_driver_logins
+  kind: ns.requirement
+  meta: {value_kind: function.lua, comment: The host selects Gov's approved driver logins, so a driver a person approved through an overlay may use the machine login for its own provider}
+  default: bee.gov.binding:driver_logins
+  targets:
+  - entry: bee.credentials.env:credential_sources
+    path: .admission

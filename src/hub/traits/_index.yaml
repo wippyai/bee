@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.hub.traits
+entries:
+- name: research_trait
+  kind: registry.entry
+  meta: {type: agent.trait, title: Component research, comment: Read-only effective registry and Hub package exploration for component authors}
+  prompt: |
+    Use BeeComponents to inspect the effective installed component inventory and to explore Hub packages before authoring. Read package entries, requirements, resources, documentation and examples for patterns you can reuse. Use plan to review the exact dependency closure, requirements, migrations and capabilities before proposing installation. Inspection and planning do not apply a package, grant its policies or modify the registry.
+  tools: [bee.hub.binding:call]

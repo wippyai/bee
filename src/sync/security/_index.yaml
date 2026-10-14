@@ -1,0 +1,68 @@
+version: '1.0'
+namespace: bee.sync.security
+entries:
+- name: store
+  kind: security.policy
+  meta:
+    comment: Sync keeps feeds, replicas and distribution cursors in the node database
+  policy:
+    actions: [db.get]
+    resources: [bee:db]
+    effect: allow
+- name: replica_peer
+  kind: security.policy.expr
+  meta:
+    comment: A peer node delivers only immutable replicas its own node owns
+  policy:
+    expression: actor.meta.node == resource
+    actions: [bee.sync.replica.receive]
+    resources: '*'
+    effect: allow
+- name: node
+  kind: security.policy
+  meta:
+    comment: Sync services read this node's identity, its hive membership and whether it is a client
+  policy:
+    actions: [system.read, env.get]
+    resources: [node, cluster, bee:role]
+    effect: allow
+- name: receiver_names
+  kind: security.policy
+  meta:
+    comment: The receiver holds its node-local and hive-wide names and checks requests come from the Hive supervisor
+  policy:
+    actions: [process.registry.register, process.registry.register.eventual, process.registry.lookup]
+    resources: [bee.sync, 'bee.sync/*', bee.hive.supervisor]
+    effect: allow
+- name: receiver_admission
+  kind: security.policy
+  meta:
+    comment: The receiver runs replica receipt as the calling node under the peer policy
+  policy:
+    actions: [funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get]
+    resources: '*'
+    effect: allow
+- name: distribution_changes
+  kind: security.policy
+  meta:
+    comment: Distribution follows events committed to Sync feeds
+  policy:
+    actions: [cdc.subscribe]
+    resources: [bee:changes]
+    effect: allow
+- name: distribution_events
+  kind: security.policy
+  meta:
+    comment: Distribution follows joining nodes and registry changes and announces each run
+  policy:
+    actions: [events.subscribe, events.send]
+    resources: [cluster, registry, bee.sync]
+    effect: allow
+- name: distribution_routing
+  kind: security.policy
+  meta:
+    comment: Distribution reads exports and receiver routes and resolves receivers and supervisors
+  policy:
+    actions: [registry.get, process.registry.lookup]
+    resources: '*'
+    effect: allow

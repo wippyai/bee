@@ -1,0 +1,13 @@
+{
+  "implementation_version": "1.18.32",
+  "capture": "OpenCode serve with an isolated fake OpenAI-compatible provider, bash permission asked and replied once",
+  "events": {
+    "file": "events.jsonl",
+    "count": 91,
+    "sha256": "2a38cc71f2ca1ae682745c20af3383097c7e10bce06b01c048fff32c92a000b6"
+  },
+  "messages": {
+    "file": "messages.json",
+    "sha256": "90ab090cd31fec18e4c6c243f11f3697710165e71d583407b7320857c0b1cfea"
+  }
+}

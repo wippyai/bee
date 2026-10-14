@@ -1,0 +1,256 @@
+version: '1.0'
+namespace: bee.security.approvals
+entries:
+- name: approval_consume_policy
+  kind: security.policy
+  meta:
+    comment: Effect owners that consume approved decisions in a workspace before acting on them
+  policy:
+    actions:
+    - bee.approvals.consume
+    resources: '*'
+    effect: allow
+- name: approval_owner_policy
+  kind: security.policy
+  meta:
+    comment: Held by the approval owner's worker only; reconciles expiry and retention and registers the worker name
+  policy:
+    actions:
+    - bee.approvals.own
+    - process.registry.register
+    - funcs.call
+    resources:
+    - '*'
+    effect: allow
+- name: approval_request_policy
+  kind: security.policy
+  meta:
+    comment: Operation owners that may ask for approval in a workspace
+  policy:
+    actions:
+    - bee.approvals.request
+    resources: '*'
+    effect: allow
+- name: approval_announce_policy
+  kind: security.policy
+  meta:
+    comment: The approval owner announces a request waiting for the person on the node attention events
+  policy:
+    actions:
+    - events.send
+    resources:
+    - bee.attention
+    effect: allow
+- name: approval_store_policy
+  kind: security.policy
+  meta:
+    comment: The approval owner's store, linked references, node identity, exact migration source and worker wake
+  policy:
+    actions:
+    - db.get
+    - registry.get
+    - registry.find
+    - system.read
+    - process.send
+    - process.registry.lookup
+    resources:
+    - bee:db
+    - bee.approvals.env:policies_ref
+    - bee.security.approvals:approver_policies
+    - node
+    - '*'
+    effect: allow
+- name: approver_policies
+  kind: registry.entry
+  meta:
+    type: bee.approval_policies
+    comment: Host-owned approver policies; a request names one, and only its approvers decide it
+  policies:
+  - name: local-confirmation
+    approvers:
+    - bee.node
+    - bee.shell
+    - definition_id: bee.shell:shell
+    - definition_id: bee.apps.library.app:app
+    - definition_id: bee.apps.settings.app:app
+    - definition_id: bee.apps.processes.app:app
+    - definition_id: bee.harness.app:app
+    - definition_id: bee.gateway.app:app
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 60000
+    max_ttl_ms: 60000
+  - name: workspace-application-delivery
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
+  - name: module-installation
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
+  - name: module-publication
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
+  - name: super-edit-person
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
+  - name: configuration-setup
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
+  - name: agent-access
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
+  - name: docker-environment
+    allow_permanent: true
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 86400000
+    max_ttl_ms: 86400000
+  - name: hive-session-agents
+    approvers:
+    - bee.sessions.allowance.owner
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    request_ttl_ms: 86400000
+    max_ttl_ms: 2592000000
+    allow_permanent: true
+- name: approval_installation_effects_policy
+  kind: security.policy
+  meta:
+    comment: Host-authorized installation worker lists approved Hub effects; the effect owner verifies each binding and approval before applying
+  policy:
+    actions:
+    - bee.approvals.own
+    resources:
+    - gateway.installation
+    effect: allow
+- name: approval_activation_effects_policy
+  kind: security.policy
+  meta:
+    comment: Host-authorized activation worker lists approved governance activations and those whose request ended without approval; the activation owner consumes each approval and applies its exact intent, or settles the intent refused
+  policy:
+    actions:
+    - bee.approvals.own
+    resources:
+    - gov.activation
+    effect: allow
+- name: approval_publication_effects_policy
+  kind: security.policy
+  meta:
+    comment: Host-authorized publication worker lists approved Hub effects; the effect owner verifies each binding and approval before uploading
+  policy:
+    actions:
+    - bee.approvals.own
+    resources:
+    - gateway.publication
+    effect: allow
+- name: approval_decide_policy
+  kind: security.policy
+  meta:
+    comment: Principals that may decide and read the inbox; the approver policy still has to list them
+  policy:
+    actions:
+    - bee.approvals.decide
+    resources: '*'
+    effect: allow
+- name: approval_hive_names
+  kind: security.policy
+  meta:
+    comment: The approvals hive service holds its node-local name, checks requests come from the Hive supervisor and reads this node's identity and role
+  policy:
+    actions:
+    - process.registry.register
+    - process.registry.lookup
+    - system.read
+    - env.get
+    resources:
+    - bee.approvals
+    - bee.hive.supervisor
+    - node
+    - cluster
+    - bee:role
+    effect: allow
+- name: approval_hive_admission
+  kind: security.policy
+  meta:
+    comment: The approvals hive service runs a mapped owner operation as the calling node under the peer policies
+  policy:
+    actions:
+    - funcs.call
+    - funcs.security
+    - security.actor.create
+    - security.scope.create
+    - security.policy.get
+    resources: '*'
+    effect: allow
+- name: approval_hive_peer
+  kind: security.policy
+  meta:
+    comment: A peer node reaches only the mapped owner operations; the destination approver policy decides what its actor may read or settle
+  policy:
+    actions:
+    - funcs.call
+    resources:
+    - bee.approvals.binding:feed_snapshot
+    - bee.approvals.binding:feed_read_after
+    - bee.approvals.binding:read
+    - bee.approvals.binding:decide
+    - bee.approvals.binding:decide_batch
+    - bee.approvals.binding:withdraw
+    - bee.approvals.binding:grant_window
+    effect: allow
+- name: approval_hive_peer_decide
+  kind: security.policy
+  meta:
+    comment: A peer node passes the workspace decision gate; the destination approver policy still has to list its actor
+  policy:
+    actions:
+    - bee.approvals.decide
+    resources: '*'
+    effect: allow
+- name: grant_adapters_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources:
+    - bee.placement.native.service:revoke_trust
+    - bee.gov.types:lease_grant
+    - bee.approvals.types:runtime_grant
+    - bee.placement.docker.env:grant
+    - bee.gateway.security:grant
+    effect: allow
+
+- name: confirmation_client
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:effect, bee.approvals.binding:revalidate]
+    effect: allow
+- name: confirmation_authority
+  kind: security.policy
+  policy:
+    actions: [bee.approvals.request, bee.approvals.decide, bee.approvals.consume]
+    resources: '*'
+    effect: allow
+
+- name: delivery_workspace_identity_policy
+  kind: security.policy.expr
+  policy:
+    actions: [security.actor.create, funcs.security]
+    resources: '*'
+    expression: action == "funcs.security" || resource == actor.id
+    effect: allow

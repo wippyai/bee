@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.driver.wippy.env
+entries:
+- name: host_config
+  kind: registry.entry
+  meta:
+    type: bee.driver_wippy_config
+    comment: Default host configuration for Wippy native driver OpenAI-compatible chat endpoint
+  data:
+    endpoint: http://127.0.0.1:8080/v1
+    model: default

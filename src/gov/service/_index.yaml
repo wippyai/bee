@@ -1,0 +1,111 @@
+version: '1.0'
+namespace: bee.gov.service
+entries:
+- name: recovery_cli
+  kind: process.lua
+  source: file://recovery_cli.lua
+  method: main
+  modules:
+  - io
+  imports:
+    recovery: bee.gov.binding:recovery_service
+  meta:
+    command:
+      name: gov
+      host: bee:terminal
+      short: Restore an installed application's previous version without a display
+      security:
+        actor:
+          id: bee.gov.recovery
+        policies:
+        - bee.gov.security:recovery_command_policy
+- name: recovery
+  kind: process.lua
+  source: file://recovery.lua
+  method: main
+  modules:
+  - process
+  - logger
+  imports:
+    service: bee.gov.binding:destination_service
+- name: recovery_service
+  meta:
+    title: Library · boot recovery
+    type: bee.process.boot_gate
+  kind: process.service
+  process: bee.gov.service:recovery
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    startup: complete
+    requires:
+    - wippy.bootloader:bootloader.service
+    security:
+      actor:
+        id: bee.gov.activation
+      policies:
+      - bee.gov.security:destination_service_policy
+- name: activation_pass
+  kind: library.lua
+  source: file://activation_pass.lua
+  modules:
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    service: bee.gov.binding:destination_service
+- name: activation_worker
+  kind: process.lua
+  source: file://activation_worker.lua
+  method: main
+  modules:
+  - funcs
+  - logger
+  imports:
+    worker: bee.process:worker
+    service: bee.gov.binding:destination_service
+    bounds: bee.values:bounds
+    pass: bee.gov.service:activation_pass
+  meta:
+    type: bee.approvals.effect-consumer
+    destination: gov.activation
+    operation_ref: bee.gov:establish-overlay
+    worker_name: bee.gov.activation_worker
+- name: activation_service
+  meta:
+    title: "Library \xB7 activation"
+    type: bee.process.demand
+    demand:
+      name: bee.gov.activation_worker
+      probe: bee.gov.service:backlog
+      feeds: [governance.application_versions]
+  kind: process.service
+  process: bee.gov.service:activation_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: false
+    requires:
+    - bee.hive.service:supervisor_service
+    security:
+      actor:
+        id: bee.gov.activation
+      policies:
+      - bee.gov.security:destination_service_policy
+      - bee.security.approvals:approval_activation_effects_policy
+      - bee.gov.security:activation_announce_policy
+      - bee.gov.security:activation_worker_policy
+      - bee.process:backlog_policy
+      - bee.process:client_policy
+    restart:
+      max_attempts: 10
+- name: follow_wake
+  kind: library.lua
+  source: file://follow_wake.lua
+  imports:
+    demand: bee.process:demand
+- name: backlog
+  kind: function.lua
+  source: file://backlog.lua
+  method: pending
+  imports:
+    pass: bee.gov.service:activation_pass
+    service: bee.gov.binding:destination_service

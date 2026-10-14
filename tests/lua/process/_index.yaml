@@ -1,0 +1,160 @@
+version: '1.0'
+namespace: bee.tests.process
+entries:
+- name: supervisor_transaction_test
+  kind: function.lua
+  source: file://supervisor_transaction_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: 10s, order: 100000}
+  modules: [process, events, system, channel, time, uuid]
+  imports:
+    test: wippy.test:test
+    protocol: bee.hive:protocol
+- name: transaction_owner
+  kind: process.lua
+  source: file://transaction_owner.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process, channel]
+  imports:
+    demand: bee.process:demand
+    protocol: bee.hive:protocol
+    bounds: bee.values:bounds
+- name: transaction_service
+  kind: process.service
+  process: bee.tests.process:transaction_owner
+  host: bee:workers
+  meta:
+    type: bee.process.demand
+    demand: {name: bee.test.transaction.owner}
+  lifecycle:
+    auto_start: false
+    requires: [bee.hive.service:supervisor_service]
+    security:
+      actor: {id: bee.test.transaction.owner}
+      policies: [bee.hive.security:messaging, bee.process:client_policy, bee.tests.process:transaction_policy]
+- name: transaction_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.registry.register]
+    resources: [bee.test.transaction.owner]
+    effect: allow
+- name: transaction_route
+  kind: registry.entry
+  meta: {type: bee.hive.route}
+  data:
+    prefix: transaction
+    name: bee.test.transaction.owner
+    service: bee.tests.process:transaction_service
+- name: demand_runtime
+  kind: library.lua
+  source: file://demand_runtime.lua
+  imports:
+    demand: bee.process:demand
+- name: demand_owner
+  kind: library.lua
+  source: file://demand_owner.lua
+  modules: [registry, funcs, security, logger, time, channel]
+  imports:
+    process: bee.tests.process:demand_runtime
+    events: bee.tests.process:demand_events
+    system: bee.tests.process:demand_system
+    demand: bee.process:demand
+    worker: bee.process:worker
+    state: bee.process:demand_state
+    bounds: bee.values:bounds
+    clock: bee.values:clock
+- name: demand_events
+  kind: library.lua
+  source: file://demand_events.lua
+  imports:
+    runtime: bee.tests.process:demand_runtime
+- name: demand_system
+  kind: library.lua
+  source: file://demand_system.lua
+  imports:
+    runtime: bee.tests.process:demand_runtime
+- name: demand_owner_test
+  kind: function.lua
+  source: file://demand_owner_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    owner: bee.tests.process:demand_owner
+    runtime: bee.tests.process:demand_runtime
+    state: bee.process:demand_state
+    demand: bee.process:demand
+- name: probe_worker
+  kind: process.lua
+  source: file://probe_worker.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+  imports:
+    worker: bee.process:worker
+- name: worker_test
+  kind: function.lua
+  source: file://worker_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time]
+  imports:
+    test: wippy.test:test
+- name: demand_test
+  kind: function.lua
+  source: file://demand_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    demand_state: bee.process:demand_state
+- name: task_test
+  kind: function.lua
+  source: file://task_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    task: bee.process:task
+- name: demand_model_test
+  kind: function.lua
+  source: file://demand_model_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: 60s}
+  imports:
+    test: wippy.test:test
+    owner: bee.tests.process:demand_owner
+    runtime: bee.tests.process:demand_runtime
+    state: bee.process:demand_state
+    demand: bee.process:demand
+- name: demand_model_absent_test
+  kind: function.lua
+  source: file://demand_model_test.lua
+  method: absent
+  meta: {type: test, suite: bee, timeout: 60s}
+  imports: &demand_model_imports
+    test: wippy.test:test
+    owner: bee.tests.process:demand_owner
+    runtime: bee.tests.process:demand_runtime
+    state: bee.process:demand_state
+    demand: bee.process:demand
+- name: demand_model_ready_test
+  kind: function.lua
+  source: file://demand_model_test.lua
+  method: ready
+  meta: {type: test, suite: bee, timeout: 60s}
+  imports: *demand_model_imports
+- name: demand_model_absent_deferred_test
+  kind: function.lua
+  source: file://demand_model_test.lua
+  method: absent_deferred
+  meta: {type: test, suite: bee, timeout: 60s}
+  imports: *demand_model_imports
+- name: demand_model_ready_deferred_test
+  kind: function.lua
+  source: file://demand_model_test.lua
+  method: ready_deferred
+  meta: {type: test, suite: bee, timeout: 60s}
+  imports: *demand_model_imports

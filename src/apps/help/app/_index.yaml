@@ -1,0 +1,53 @@
+version: '1.0'
+namespace: bee.apps.help.app
+entries:
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  modules:
+  - tty
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    manuals: bee.apps.help.app:manuals
+    markdown: bee.apps.help.app:markdown
+    text: bee.ui:text
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.app
+    application:
+      api_version: 1
+      title: Keyboard help
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:system_menu]
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+    view: bee.apps.help.app:view
+    manuals: bee.apps.help.app:manuals
+    markdown: bee.apps.help.app:markdown
+  security:
+    policies: [bee.security.docs:docs_policy]
+- name: manuals
+  kind: library.lua
+  source: file://manuals.lua
+  imports:
+    corpus: bee.docs.binding:corpus
+    resources: bee.docs.env:resources
+- name: markdown
+  kind: library.lua
+  source: file://markdown.lua
+  imports:
+    frame: bee.ui:frame
+    text: bee.ui:text
+  modules:
+  - tty

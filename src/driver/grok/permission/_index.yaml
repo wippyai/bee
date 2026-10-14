@@ -1,0 +1,31 @@
+version: '1.0'
+namespace: bee.driver.grok.permission
+entries:
+- name: permission_adapter
+  kind: registry.entry
+  meta: {type: harness.permission_adapter}
+  data:
+    adapter:
+      schema_revision: bee.permission-adapter@2
+      event_name: grok.permission
+      event_revision: '1'
+      request:
+        correlation: request_id
+        tool: tool_name
+        input: tool_input
+        prompt: prompt
+      response:
+        envelope:
+          jsonrpc: '2.0'
+          result:
+            outcome:
+              outcome: selected
+        correlation_field: id
+        correlation_kind: integer
+        decision_field: result.outcome.optionId
+        allow_value: allow-once
+        deny_value: reject-once
+      acknowledgment: {mode: continued_output}
+      deny_acknowledgment: {mode: unproven}
+      cancellation: deny_before_close
+      proof_fixture: grok_acp_permission

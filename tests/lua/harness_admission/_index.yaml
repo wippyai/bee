@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.harness.binding
+entries:
+- name: resolve
+  kind: function.lua
+  source: file://resolve_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+    bounds: bee.values:bounds
+- name: admit
+  kind: function.lua
+  source: file://admit_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+- name: start
+  kind: function.lua
+  source: file://start_method.lua
+  method: handle
+  imports:
+    admission: bee.harness.launch:admission
+  security:
+    policies:
+    - bee.harness.security:launch_spawn_policy

@@ -12,6 +12,9 @@ type Entry = {id: string, kind: string, package: string, digest: string, referen
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
     config_empty: {string}?, security_actor: boolean?, security_groups: boolean?, application_checkpoint_invalid: boolean?,
     application_unplaced: boolean?}
+-- Retained state needs identity and edges for collision, removal and kernel
+-- checks. Only definitions used as content evidence carry a digest.
+type StateEntry = {id: string, kind: string, package: string, references: {string}, digest: string?}
 type Artifact = {component: string, version: string, digest: string, dependencies: {string}, namespaces: {string}}
 type CapabilityRequest = {capability: string, parameters: {[string]: string | {string}}, reason: string,
     target: string, path: string, catalog_revision: integer, template_revision: integer}
@@ -29,11 +32,11 @@ type CapabilityEvidence = {kind: "absent"} |
 type HostEvidence = {application_admission: AdmissionEvidence, capability: CapabilityEvidence}
 type Candidate = {destination_node: string, source_node: string, base_revision: integer, base_digest: string,
     artifacts: {Artifact}, entries: {Entry}, requirements: {Requirement}, migrations: {Migration}}
-type Context = {node_id: string, registry_revision: integer, registry_digest: string, policy_digest: string,
+type Context = {registry_preparation: unknown?, node_id: string, registry_revision: integer, registry_digest: string, policy_digest: string,
     packages: {[string]: boolean}, namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean},
     database_bindings: {[string]: DatabaseBinding}?,
-    entries: {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, generated_databases: {[string]: string}?, exact_expansion: boolean,
+    entries: {[string]: StateEntry} | {[string]: Entry}, installed_entries: {[string]: Entry}?, applied: {[string]: Migration}, applied_databases: {[string]: DatabaseEvidence}?, generated_databases: {[string]: string}?, exact_expansion: boolean,
     migration_barrier: boolean, auto_start: boolean, super_edit: boolean?, protected: protected_kernel.Manifest?, host_evidence: HostEvidence,
     driver_requirements: {[string]: DriverRequirement}?, module_capabilities: {[string]: {string}}?}
 type Diagnostic = {code: string, target: string, message: string, remedy: string}
@@ -436,7 +439,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     if not manifest then return nil, manifest_error end
     local kernel: {[string]: boolean} = {}
     local pending_kernel: {string} = {}
-    local function state(id: string): Entry?
+    local function state(id: string): StateEntry?
         return context.entries[id] or (context.installed_entries and context.installed_entries[id]) or nil
     end
     local function protect(id: string)
@@ -510,7 +513,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             if not artifacts[dependency] then issue("UNRESOLVED_DEPENDENCY", dependency, "dependency is missing from measured closure", "resolve the full transitive graph") end
         end
     end
-    local final: {[string]: Entry} = {}
+    local final: {[string]: StateEntry} = {}
     for id, item in pairs(context.entries) do final[id] = item end
     -- The selected private overlay is deliberately absent from `entries`: it
     -- cannot be part of the external-base approval digest or applying the

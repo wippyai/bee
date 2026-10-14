@@ -281,7 +281,7 @@ end
 
 local function destination_resolver(config: Configuration, profile_value: Profile, node_id: string, workspace_id: string,
     activation_store: activations.Store?): unknown
-    local function selected_root(spec_raw: unknown): (ResolverRoot?, string?)
+    local function selected_root(spec_raw: unknown, verified_entries: unknown?): (ResolverRoot?, string?)
         local spec = bounds.object(spec_raw)
         if not spec or spec.owner_node ~= node_id or spec.workspace_id ~= workspace_id
             or spec.source_node ~= profile_value.source_node or spec.source_workspace ~= profile_value.source_workspace
@@ -289,8 +289,12 @@ local function destination_resolver(config: Configuration, profile_value: Profil
         local version = bounds.id(spec.version)
         if not version then return nil, "selected plan version is invalid" end
         if spec.source_workspace == "hub:" .. profile_value.component then
-            local frozen, problem = artifact.decode(spec.artifact_bytes, spec.artifact_digest)
-            if not frozen then return nil, problem end
+            local frozen = verified_entries
+            if frozen == nil then
+                local decoded, problem = artifact.decode(spec.artifact_bytes, spec.artifact_digest)
+                if not decoded then return nil, problem end
+                frozen = decoded
+            end
             local parameters, invalid = package_requirements.frozen_parameters(frozen)
             if not parameters then return nil, invalid end
             local rows: {unknown} = {}

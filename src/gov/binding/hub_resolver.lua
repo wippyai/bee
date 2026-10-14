@@ -27,10 +27,14 @@ type Captured = {revision: integer, entries: {Entry}, resolution: Object?,
     overlay_ids: {[string]: boolean}?, preview: (Entry) -> (RegistryPlan?, string?)}
 type Root = {component: string, version: string, parameters: {unknown}}
 type Policy = application_capabilities.Policy
-type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
+type Prepared = {artifact_bytes: string, artifact_digest: string, root: Root, captured: Captured,
+    expected: {Entry}, preview: RegistryPlan, flattened: {Entry}, selected: {[string]: boolean},
+    owned_namespaces: {[string]: boolean}, artifacts: {preflight.Artifact}, candidate_entries: {preflight.Entry},
+    requirements: {preflight.Requirement}, migrations: {preflight.Migration}, current: {[string]: preflight.StateEntry}}
+type Deps = {prepared: Prepared?, capture: () -> (Captured?, string?), root: (unknown, unknown?) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 type Resolver = resolution.Resolver
-type Instance = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
+type Instance = {prepared: Prepared?, capture: () -> (Captured?, string?), root: (unknown, unknown?) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?),
     resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
 
@@ -204,7 +208,7 @@ local function migration(entry: Entry): (preflight.Migration?, string?)
 end
 
 local function policy_context(policy: Policy, captured: Captured, base_digest: string,
-    current: {[string]: preflight.Entry}, protected: protected_kernel.Manifest,
+    current: {[string]: preflight.StateEntry}, protected: protected_kernel.Manifest,
     evidence: preflight.HostEvidence): (preflight.Context?, string?)
     if not bounds.id(policy.node_id) or not sha(policy.policy_digest) then return nil, "host policy identity is invalid" end
     for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
@@ -228,23 +232,46 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
     return context, nil
 end
 
-function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
-    local spec = object(spec_raw)
-    local destination = spec and bounds.id(spec.owner_node) or nil
-    local source = spec and bounds.id(spec.source_node) or nil
-    if not spec or not destination or not source then return nil, nil, "selected plan identity is invalid" end
-    local expected, artifact_error = artifact.decode(spec.artifact_bytes, spec.artifact_digest)
-    if not expected then return nil, nil, artifact_error end
-    local captured, capture_error = deps.capture()
-    if not captured then return nil, nil, capture_error end
-    if captured.revision < 0 then return nil, nil, "captured registry state is invalid" end
-    local root, root_error = deps.root(spec)
-    local component = root and bounds.text(root.component, 160) or nil
-    local selected_version = root and bounds.text(root.version, 128) or nil
-    if not root or not component or not selected_version then return nil, nil, root_error or "Hub root is invalid" end
-    local root_digest, root_digest_error = hash.sha256(component)
-    if not root_digest then return nil, nil, tostring(root_digest_error or "measure Hub root") end
-    local dependency: Object = {component = component, version = selected_version}
+local function copy(value: unknown): unknown
+    if type(value) ~= "table" then return value end
+    local result: Object = {}
+    for key, item in pairs(value) do result[key] = copy(item) end
+    return result
+end
+
+local function equal(left: unknown, right: unknown): boolean
+    if left == right then return true end
+    if type(left) ~= "table" or type(right) ~= "table" then return false end
+    for key, value in pairs(left) do if not equal(value, right[key]) then return false end end
+    for key in pairs(right) do if left[key] == nil then return false end end
+    return true
+end
+
+-- A revision does not fence overlays. Compare fresh external definitions and
+-- module resolution directly; the selected overlay is excluded from the base
+-- both here and in preflight, since its exact effect is observed separately.
+local function same_state(prior: Captured, current: Captured): boolean
+    if not equal(prior.resolution, current.resolution) then return false end
+    local entries: {[string]: Entry} = {}
+    for _, entry in ipairs(prior.entries) do
+        if not (prior.overlay_ids and prior.overlay_ids[entry.id]) then entries[entry.id] = entry end
+    end
+    for _, entry in ipairs(current.entries) do
+        if not (current.overlay_ids and current.overlay_ids[entry.id]) then
+            if not equal(entries[entry.id], entry) then return false end
+            entries[entry.id] = nil
+        end
+    end
+    return next(entries) == nil
+end
+
+local function prepare(captured: Captured, root: Root, spec: Object, expected: {Entry}): (Prepared?, string?)
+    if type(spec.artifact_bytes) ~= "string" or type(spec.artifact_digest) ~= "string" then
+        return nil, "selected artifact identity is invalid"
+    end
+    local root_digest, root_digest_error = hash.sha256(root.component)
+    if not root_digest then return nil, tostring(root_digest_error or "measure Hub root") end
+    local dependency: Object = {component = root.component, version = root.version}
     -- The registry transcoder cannot infer an array from an empty Lua table.
     -- Omit empty parameters; the native dependency decoder treats absence as
     -- the same empty list. Non-empty parameter rows remain an array.
@@ -252,23 +279,23 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local root_entry: Entry = {id = "bee.gov.deps:" .. root_digest, kind = "ns.dependency", dependency_root = true,
         data = dependency}
     local preview, preview_error = captured.preview(root_entry)
-    if not preview then return nil, nil, preview_error or "preview Hub dependency" end
-    if not sha(preview.digest) or not preview.resolution then return nil, nil, "registry preview is incomplete" end
+    if not preview then return nil, preview_error or "preview Hub dependency" end
+    if not sha(preview.digest) or not preview.resolution then return nil, "registry preview is incomplete" end
     local final, final_error = apply_preview(captured.entries, preview)
-    if not final then return nil, nil, final_error end
+    if not final then return nil, final_error end
     local modules, modules_error = resolution_modules(preview.resolution)
-    if not modules then return nil, nil, modules_error end
+    if not modules then return nil, modules_error end
     local edges, edges_error = dependency_edges(final)
-    if not edges then return nil, nil, edges_error end
-    local selected, closure_error = closure(component, edges, modules)
-    if not selected then return nil, nil, closure_error end
+    if not edges then return nil, edges_error end
+    local selected, closure_error = closure(root.component, edges, modules)
+    if not selected then return nil, closure_error end
     for package in pairs(preview.retained or {}) do selected[package] = nil end
 
     local catalog: capability_model.Vocabulary? = nil
     for _, entry in ipairs(captured.entries) do
         if entry.id == "bee.capability:catalog" then
             local decoded, catalog_error = capability_model.decode(entry)
-            if not decoded then return nil, nil, catalog_error end
+            if not decoded then return nil, catalog_error end
             catalog = decoded
         end
     end
@@ -277,7 +304,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local final_by_id: {[string]: Entry} = {}
     for _, entry in ipairs(final) do
         local package = owner(entry)
-        if not package then return nil, nil, "registry preview entry has no registry-owned module" end
+        if not package then return nil, "registry preview entry has no registry-owned module" end
         final_by_id[entry.id] = entry
         if selected[package] and entry.kind ~= "ns.dependency" then
             local clean: Entry = {}
@@ -289,9 +316,9 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         end
     end
     local exact = artifact.create(flattened)
-    if not exact then return nil, nil, "resolved Hub closure is empty or invalid" end
+    if not exact then return nil, "resolved Hub closure is empty or invalid" end
     if exact.bytes ~= spec.artifact_bytes or exact.digest ~= spec.artifact_digest then
-        return nil, nil, "reviewed artifact does not match the destination Hub expansion"
+        return nil, "reviewed artifact does not match the destination Hub expansion"
     end
     local artifacts: {preflight.Artifact} = {}
     local candidate_entries: {preflight.Entry} = {}
@@ -310,24 +337,24 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         for _, entry in ipairs(entries) do owned[entry.id] = true end
         for _, raw_entry in ipairs(entries) do
             local entry, entry_error = copy_entry(raw_entry)
-            if not entry then return nil, nil, entry_error end
+            if not entry then return nil, entry_error end
             local namespace = assert(bounds.id(entry.id)):match("^([^:]+):")
             if namespace and not namespace_set[namespace] then
                 namespace_set[namespace], owned_namespaces[namespace] = true, true
                 namespaces[#namespaces + 1] = namespace
             end
             local measured, measured_error = measured_entry(entry, package)
-            if not measured then return nil, nil, measured_error end
+            if not measured then return nil, measured_error end
             candidate_entries[#candidate_entries + 1] = measured
             if entry.kind == "ns.requirement" then
                 local item, item_error = requirement.resolve(entry, package, final_by_id, owned, catalog)
-                if not item then return nil, nil, item_error end
+                if not item then return nil, item_error end
                 requirements[#requirements + 1] = item
             end
             local meta = object(entry.meta)
             if meta and meta.type == "migration" then
                 local item, item_error = migration(entry)
-                if not item then return nil, nil, item_error end
+                if not item then return nil, item_error end
                 migrations[#migrations + 1] = item
             end
         end
@@ -336,7 +363,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         for dependency in pairs(edges[package] or {}) do if selected[dependency] then dependencies[#dependencies + 1] = dependency end end
         table.sort(dependencies)
         local module_digest = module_sha(module.digest)
-        if not module_digest then return nil, nil, "resolved module has no immutable digest: " .. package end
+        if not module_digest then return nil, "resolved module has no immutable digest: " .. package end
         artifacts[#artifacts + 1] = {component = package, version = module.version, digest = module_digest,
             dependencies = dependencies, namespaces = namespaces}
     end
@@ -348,16 +375,61 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         return left.id < right.id
     end)
 
-    local current: {[string]: preflight.Entry} = {}
+    local current: {[string]: preflight.StateEntry} = {}
     for _, entry in ipairs(captured.entries) do
         if not (captured.overlay_ids and captured.overlay_ids[entry.id]) then
             local package = owner(entry)
-            if package == nil then return nil, nil, "captured registry entry has no registry-owned module" end
-            local measured, measured_error = measured_entry(entry, package)
-            if not measured then return nil, nil, measured_error end
-            current[entry.id] = measured
+            if package == nil then return nil, "captured registry entry has no registry-owned module" end
+            local id, kind = bounds.id(entry.id), bounds.id(entry.kind)
+            if not id or not kind then return nil, "captured entry identity is invalid" end
+            local refs, references_error = requirement.references(entry)
+            if not refs then return nil, id .. ": " .. tostring(references_error) end
+            current[id] = {id = id, kind = kind, package = package, references = refs}
         end
     end
+
+    local captured_copy: Captured = {revision = captured.revision, entries = copy(captured.entries),
+        resolution = copy(captured.resolution), overlay_ids = copy(captured.overlay_ids), preview = captured.preview}
+    return {artifact_bytes = spec.artifact_bytes, artifact_digest = spec.artifact_digest, root = copy(root),
+        captured = captured_copy, expected = expected, preview = preview, flattened = flattened, selected = selected,
+        owned_namespaces = owned_namespaces, artifacts = artifacts, candidate_entries = candidate_entries,
+        requirements = requirements, migrations = migrations, current = current}, nil
+end
+
+function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
+    local spec = object(spec_raw)
+    if not spec or type(spec.artifact_bytes) ~= "string" or type(spec.artifact_digest) ~= "string" then
+        return nil, nil, "selected artifact identity is invalid"
+    end
+    local destination = spec and bounds.id(spec.owner_node) or nil
+    local source = spec and bounds.id(spec.source_node) or nil
+    if not spec or not destination or not source then return nil, nil, "selected plan identity is invalid" end
+    local captured, capture_error = deps.capture()
+    if not captured then return nil, nil, capture_error end
+    if captured.revision < 0 then return nil, nil, "captured registry state is invalid" end
+    local prior = deps.prepared
+    local expected = prior and prior.artifact_bytes == spec.artifact_bytes
+        and prior.artifact_digest == spec.artifact_digest and prior.expected or nil
+    if not expected then
+        local decoded, artifact_error = artifact.decode(spec.artifact_bytes, spec.artifact_digest)
+        if not decoded then return nil, nil, artifact_error end
+        expected = decoded
+    end
+    local root, root_error = deps.root(spec, expected)
+    local component = root and bounds.text(root.component, 160) or nil
+    local selected_version = root and bounds.text(root.version, 128) or nil
+    if not root or not component or not selected_version then return nil, nil, root_error or "Hub root is invalid" end
+    local prepared = deps.prepared
+    if not prepared or prepared.artifact_bytes ~= spec.artifact_bytes or prepared.artifact_digest ~= spec.artifact_digest
+        or not equal(prepared.root, root) or not same_state(prepared.captured, captured) then
+        local value, prepare_error = prepare(captured, root, spec, expected)
+        if not value then return nil, nil, prepare_error end
+        prepared, deps.prepared = value, value
+    end
+    local expected, preview, flattened = prepared.expected, prepared.preview, prepared.flattened
+    local selected, owned_namespaces = prepared.selected, prepared.owned_namespaces
+    local artifacts, candidate_entries = prepared.artifacts, prepared.candidate_entries
+    local requirements, migrations, current = prepared.requirements, prepared.migrations, prepared.current
 
     local policy, policy_error = deps.policy(spec, captured, preview)
     if not policy then return nil, nil, policy_error or "read destination Hub policy" end
@@ -369,10 +441,10 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     end
     local current_raw: {[string]: Entry} = {}
     for _, entry in ipairs(captured.entries) do current_raw[entry.id] = entry end
-    local prepared, capability_error = application_capabilities.prepare(policy, spec, flattened,
+    local capabilities, capability_error = application_capabilities.prepare(policy, spec, flattened,
         requirements, current_raw, deps.folder)
-    if not prepared then return nil, nil, capability_error end
-    policy = prepared.policy
+    if not capabilities then return nil, nil, capability_error end
+    policy = capabilities.policy
     -- Measure only the existing definitions that can affect this closure:
     -- owned namespaces, external references, and requirement targets. This
     -- excludes unrelated boot-local registry state while retaining every
@@ -400,18 +472,31 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             if database_id then relevant_ids[database_id] = true end
         end
     end
-    local relevant: {preflight.Entry} = {}
+    for _, item in ipairs(migrations) do
+        local binding = policy.database_bindings and policy.database_bindings[item.target_db]
+        local value = object(binding)
+        relevant_ids[value and bounds.id(value.database_id) or item.target_db] = true
+    end
+    local relevant: {preflight.StateEntry} = {}
     for id, raw in pairs(current) do
         local namespace = id:match("^([^:]+):")
-        if relevant_ids[id] or (namespace and owned_namespaces[namespace]) then relevant[#relevant + 1] = raw end
+        if relevant_ids[id] or (namespace and owned_namespaces[namespace]) then
+            local measured = raw.digest and raw or nil
+            if not measured then
+                local value, measured_error = measured_entry(assert(current_raw[id]), raw.package)
+                if not value then return nil, nil, measured_error end
+                measured, current[id] = value, value
+            end
+            relevant[#relevant + 1] = measured
+        end
     end
-    table.sort(relevant, function(left: preflight.Entry, right: preflight.Entry): boolean return left.id < right.id end)
+    table.sort(relevant, function(left: preflight.StateEntry, right: preflight.StateEntry): boolean return left.id < right.id end)
     local base_bytes, base_error = canonical.encode({entries = relevant}, 1048576)
     if not base_bytes then return nil, nil, "measure relevant registry base: " .. tostring(base_error or "unknown error") end
     local base_digest, base_measure_error = hash.sha256(base_bytes)
     if not base_digest then return nil, nil, tostring(base_measure_error or "measure relevant registry base") end
 
-    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = application_capabilities.evidence(prepared)}
+    local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"}, capability = application_capabilities.evidence(capabilities)}
     if policy.applications then
         if policy.workspace_id ~= spec.workspace_id or policy.source_node ~= source
             or policy.source_workspace ~= spec.source_workspace or not bounds.id(policy.overlay_owner) then
@@ -422,19 +507,20 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             source_workspace = policy.source_workspace, artifact_digest = spec.artifact_digest,
             bindings = policy.applications, artifact_entries = expected,
             registry_entries = captured.entries, overlay_ids = captured.overlay_ids,
-            generated_policies = prepared.proposal and prepared.proposal.policies or nil})
+            generated_policies = capabilities.proposal and capabilities.proposal.policies or nil})
         if not projection then return nil, nil, projection_error or "application admission projection is absent" end
         evidence.application_admission = {kind = "measured", value = projection}
     end
     local context, context_error = policy_context(policy, captured, base_digest, current, kernel, evidence)
     if not context then return nil, nil, context_error end
-    context.module_capabilities = prepared.module_capabilities
+    context.module_capabilities = capabilities.module_capabilities
+    context.registry_preparation = prepared
     return {destination_node = destination, source_node = source, base_revision = captured.revision,
         base_digest = base_digest, artifacts = artifacts, entries = candidate_entries,
         requirements = requirements, migrations = migrations}, context, nil
 end
 
-type Config = {overlay_owner: string?, root: (unknown) -> (Root?, string?), policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
+type Config = {overlay_owner: string?, root: (unknown, unknown?) -> (Root?, string?), policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 
 function M.new(config: Config): Resolver
     local function capture(): (Captured?, string?)

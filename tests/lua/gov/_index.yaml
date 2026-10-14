@@ -319,6 +319,7 @@ entries:
     preflight: bee.gov.binding:preflight
     canonical: bee.values:canonical
     application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
 - name: migration_work_test
   kind: function.lua
   source: file://migration_work_test.lua

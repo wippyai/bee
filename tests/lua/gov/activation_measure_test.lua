@@ -9,6 +9,7 @@ local preflight = require("preflight")
 local canonical = require("canonical")
 local hash = require("hash")
 local admission = require("application_admission")
+local capability_grants = require("capability_grants")
 
 local SHA = string.rep("a", 64)
 local EMPTY_STRINGS: {string} = {}
@@ -59,6 +60,51 @@ local function define_tests()
             test.eq(result.selection_revision, 2)
             test.is_true((result.report).ready)
             test.is_nil(result.application_admission)
+        end)
+        test.it("shares evidence only with identical verified registry and policy inputs", function()
+            local plan, candidate, context = facts()
+            context.registry_preparation = {}
+            local preparation: measure.Preparation = {}
+            local first = assert(measure.measure(plan, candidate, context, preparation))
+            local second = assert(measure.measure(plan, candidate, context, preparation))
+            test.is_true(first == second)
+            context.registry_revision = 5
+            test.is_nil(measure.measure(plan, candidate, context, preparation))
+            candidate.base_revision = 5
+            test.is_true(first == assert(measure.measure(plan, candidate, context, preparation)))
+            context.packages["demo/app"] = false
+            local denied, _, refused = measure.measure(plan, candidate, context, preparation)
+            test.is_nil(denied)
+            test.is_true(refused)
+            context.packages["demo/app"] = true
+            context.applied["host:db\ndemo:001"] = {id = "demo:001", target_db = "host:db",
+                checksum = SHA, ordinal = 1}
+            test.is_nil(measure.measure(plan, candidate, context, preparation))
+        end)
+        test.it("shares unchanged preflight after observation while retaining the fresh grant record", function()
+            local plan, candidate, context = facts()
+            context.registry_preparation = {}
+            local proposal: capability_grants.Proposal = {capabilities = {}, policies = {}, bindings = {},
+                volumes = {}, databases = {}, executors = {}, thread_access = "none", digest = SHA}
+            local review: capability_grants.Review = {added = {}, widened = {}, narrowed = {}, removed = {},
+                changed = {}, requires_approval = false, revocation = {grants = {}, fenced_attempts = {}},
+                lines = {}, resolved = {}, delta = {}}
+            context.host_evidence.capability = {kind = "new", proposal = proposal, review = review}
+            local preparation: measure.Preparation = {}
+            local first = assert(measure.measure(plan, candidate, context, preparation))
+            local installed: capability_grants.Installed = {schema_revision = "bee.capability-grants@1",
+                overlay_owner = "bee.gov:overlay", workspace_id = "workspace-a", application = "demo:run",
+                capabilities = {}, bindings = {}, policies = {}, thread_access = "none", digest = SHA,
+                approval_id = "approved", revision = 1, record_digest = string.rep("b", 64)}
+            context.host_evidence.capability = {kind = "installed", proposal = proposal, installed = installed, review = review}
+            local observed = assert(measure.measure(plan, candidate, context, preparation))
+            test.is_true(first.report == observed.report)
+            test.is_nil(first.capability_installed)
+            test.eq(observed.capability_installed.record_digest, installed.record_digest)
+            test.eq(observed.grant_predecessor_digest, installed.record_digest)
+            proposal.digest = string.rep("c", 64)
+            local changed = assert(measure.measure(plan, candidate, context, preparation))
+            test.is_false(changed.report == observed.report)
         end)
         test.it("retains admitted durable shadow authority while normalizing registry revisions", function()
             local plan, candidate, context = facts()

@@ -13,7 +13,60 @@ local capability_grants = require("capability_grants")
 local M = {}
 type Object = {[string]: unknown}
 type Blob = {bytes: string, digest: string}
+type Preparation = {inputs: Object?, registry: unknown?, facts: Object?, capability: preflight.CapabilityEvidence?}
 type Admission = {bytes: string, digest: string, record: application_admission.Record}
+
+local function copy(value: unknown): unknown
+    if type(value) ~= "table" then return value end
+    local result: Object = {}
+    for key, item in pairs(value) do result[key] = copy(item) end
+    return result
+end
+
+local function equal(left: unknown, right: unknown): boolean
+    if left == right then return true end
+    if type(left) ~= "table" or type(right) ~= "table" then return false end
+    for key, value in pairs(left) do if not equal(value, right[key]) then return false end end
+    for key in pairs(right) do if left[key] == nil then return false end end
+    return true
+end
+
+-- The resolver's operation-scoped preparation proves the fresh registry
+-- contents match. Measure unchanged approval inputs once; policy, ledger and
+-- host admission are compared by value on every checkpoint.
+local function inputs(plan: Object, candidate: preflight.Candidate, context: preflight.Context): Object
+    local selected: Object = {}
+    for _, field in ipairs({"owner_node", "workspace_id", "source_node", "source_workspace", "version",
+        "plan_digest", "revision", "selection_revision", "selected", "review_status", "artifact_bytes", "artifact_digest"}) do
+        selected[field] = plan[field]
+    end
+    local resolved: Object = {}
+    for field, value in pairs(candidate) do if field ~= "base_revision" then resolved[field] = value end end
+    local policy: Object = {}
+    for field, value in pairs(context) do
+        if field ~= "entries" and field ~= "registry_revision" and field ~= "registry_preparation" then policy[field] = value end
+    end
+    local evidence = context.host_evidence
+    policy.host_evidence = {application_admission = evidence.application_admission,
+        capability = evidence.capability.kind == "absent" and {kind = "absent"}
+            or {kind = "proposal", proposal = evidence.capability.proposal}}
+    return {plan = selected, candidate = resolved, context = policy}
+end
+
+-- Installed record and review are fresh resolver observations. Preflight
+-- reads the ceiling and work capture reads the proposal's database definitions;
+-- neither reads these observations, which remain live authorization evidence.
+local function capability_observation(result: Object, evidence: preflight.CapabilityEvidence)
+    result.capability_proposal, result.capability_installed, result.capability_review = nil, nil, nil
+    result.grant_predecessor_digest = nil
+    if evidence.kind == "new" or evidence.kind == "installed" then
+        result.capability_proposal, result.capability_review = evidence.proposal, evidence.review
+    end
+    if evidence.kind == "installed" then
+        result.capability_installed = evidence.installed
+        result.grant_predecessor_digest = evidence.installed.record_digest
+    end
+end
 
 local function digest(bytes: string): (string?, string?)
     local measured, err = hash.sha256(bytes)
@@ -48,7 +101,7 @@ end
 -- preflight refused the candidate on this host as opposed to failing to
 -- measure it.
 function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
-    context: preflight.Context): ({[string]: unknown}?, string?, boolean?)
+    context: preflight.Context, preparation: Preparation?): ({[string]: unknown}?, string?, boolean?)
     local plan = bounds.object(plan_raw)
     if not plan then return nil, "selected governance plan is malformed" end
     local owner, workspace = bounds.id(plan.owner_node), bounds.id(plan.workspace_id)
@@ -73,6 +126,27 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     if type(plan.artifact_digest) ~= "string" then return nil, "governance plan is not an accepted current selection" end
     if candidate.destination_node ~= owner then return nil, "local resolution does not match the selected source and destination" end
     if candidate.source_node ~= source then return nil, "local resolution does not match the selected source and destination" end
+    -- Normalization changes only the numeric revision fence. Check that live
+    -- fence before capturing the durable candidate; capture checks every
+    -- semantic preflight input and returns the report used by its work digest.
+    if candidate.base_revision < 0 or candidate.base_revision > 9007199254740991 then
+        return nil, "invalid candidate or host measurement"
+    end
+    if candidate.base_revision ~= context.registry_revision then
+        return nil, "destination preflight is not ready: STALE_BASE: registry changed since resolution", true
+    end
+    local unchanged_inputs: Object? = nil
+    if preparation and context.registry_preparation ~= nil then
+        unchanged_inputs = inputs(plan, candidate, context)
+        if preparation.registry == context.registry_preparation and preparation.facts
+            and equal(preparation.inputs, unchanged_inputs) then
+            if equal(preparation.capability, context.host_evidence.capability) then return preparation.facts, nil end
+            local observed: Object = {}
+            for field, value in pairs(preparation.facts) do observed[field] = value end
+            capability_observation(observed, context.host_evidence.capability)
+            return observed, nil
+        end
+    end
     local entries, artifact_error = artifact.decode(plan.artifact_bytes, plan.artifact_digest)
     if not entries then return nil, artifact_error end
     local measured_entries: {[string]: string} = {}
@@ -96,9 +170,6 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         measured_entries[entry.id] = nil
     end
     if next(measured_entries) then return nil, "resolved candidate omits an exact artifact entry" end
-    local report, report_error = preflight.check(candidate, context)
-    if not report then return nil, report_error end
-    if not report.ready then return nil, preflight_failure(report, "destination preflight is not ready"), true end
     if #candidate.migrations > 0 then
         for _, entry in ipairs(candidate.entries) do
             if entry.auto_start then
@@ -107,7 +178,7 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         end
     end
     -- A runtime rebuild may assign a new numeric registry revision to the same
-    -- composed state. The live preflight above checks the actual revision.
+    -- composed state. The live fence above checks the actual revision.
     -- Durable approval evidence normalizes that transient fence to zero while
     -- retaining the complete semantic base digest, package closure and policy.
     local durable_candidate: preflight.Candidate = {destination_node = candidate.destination_node,
@@ -125,9 +196,15 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         auto_start = context.auto_start, super_edit = context.super_edit,
         protected = context.protected, host_evidence = context.host_evidence,
         driver_requirements = context.driver_requirements}
-    local durable_report, durable_error = preflight.check(durable_candidate, durable_context)
-    if not durable_report then return nil, durable_error or "cannot normalize destination preflight" end
-    if not durable_report.ready then return nil, preflight_failure(durable_report, "normalized destination preflight is not ready"), true end
+    local artifact_blob: Blob = {bytes = plan.artifact_bytes, digest = plan.artifact_digest}
+    local work, work_error, durable_report = migration_work.capture(durable_candidate,
+        {schema_revision = artifact.SCHEMA, entries = entries, bytes = artifact_blob.bytes,
+            digest = artifact_blob.digest}, durable_context)
+    if durable_report and not durable_report.ready then
+        return nil, preflight_failure(durable_report, "destination preflight is not ready"), true
+    end
+    if not work then return nil, work_error or "capture exact migration work" end
+    if not durable_report then return nil, "captured migration work has no preflight evidence" end
     local report_bytes, report_digest, encode_error = preflight.encode_report(durable_report)
     if not report_bytes then return nil, encode_error end
     if not report_digest then return nil, encode_error end
@@ -135,11 +212,6 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     if not resolution_bytes then return nil, resolution_error end
     local resolution_digest, measure_error = digest(resolution_bytes)
     if not resolution_digest then return nil, measure_error end
-    local artifact_blob: Blob = {bytes = plan.artifact_bytes, digest = plan.artifact_digest}
-    local work, work_error = migration_work.capture(durable_candidate,
-        {schema_revision = artifact.SCHEMA, entries = entries, bytes = artifact_blob.bytes,
-            digest = artifact_blob.digest}, durable_context)
-    if not work then return nil, work_error or "capture exact migration work" end
     for _, migration in ipairs(work.migrations) do
         local summary: preflight.Entry? = nil
         for _, entry in ipairs(candidate.entries) do
@@ -193,6 +265,12 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         result.grant_predecessor_digest = capability_installed.record_digest
     end
     if capability_review then result.capability_review = capability_review end
+    if preparation and unchanged_inputs then
+        preparation.inputs = copy(unchanged_inputs)
+        preparation.registry = context.registry_preparation
+        preparation.facts = result
+        preparation.capability = copy(context.host_evidence.capability)
+    end
     return result, nil
 end
 

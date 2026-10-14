@@ -1075,6 +1075,36 @@ local function recovery_tests()
             assert(plan_store.close(plans))
         end)
 
+        test.it("refuses success when the approved overlay effect cannot be observed", function()
+            local plans = assert(plan_store.open("bee:db", "node-owner", "workspace-unobserved-effect"))
+            local activations = assert(activation_store.open("bee:db", "node-owner", "workspace-unobserved-effect"))
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local applications = 0
+            local observations = 0
+            local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
+                approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?)
+                    observations = observations + 1
+                    return false, nil
+                end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
+                    applications = applications + 1
+                    return {changed = true}, nil
+                end}
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a", version = "v1",
+                intent_id = "intent-unobserved", receipt_key = "unobserved"}))
+            local result = owner.advance(config, "intent-unobserved", "unobserved")
+            expect_code(result, "UNCERTAIN")
+            test.eq(applications, 1)
+            test.eq(observations, 2)
+            test.eq(ok(activation_store.get(activations, "intent-unobserved")).outcome, "uncertain")
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+
         test.it("leaves an apply uncertain when the base digest changes without advancing its revision", function()
             local plans, plan_error = plan_store.open("bee:db", "node-owner", "workspace-composed-apply")
             if not plans then error(tostring(plan_error)) end

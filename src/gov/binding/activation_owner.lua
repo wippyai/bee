@@ -35,7 +35,7 @@ type MigrationEffects = {
 type Config = {plans: plans.Store, activations: activations.Store, resolver: Resolver,
     approvals: Executor, actor_id: string, consumer_id: string, overlay_owner: string,
     approval_policy: string, apply: Apply, matches: Observe, migrations: MigrationEffects,
-    leases: lease_store.Store?}
+    leases: lease_store.Store?, measurement: measure.Preparation?}
 
 local function failure(code: string, message: string, value: unknown?): Result
     return transaction.failure(code, message, value)
@@ -95,7 +95,8 @@ local function measured(config: Config, spec: Object): (Object?, Result?)
         return nil, failure("BLOCKED", tostring(resolve_error or "resolve activation on this node"))
     end
     -- A refusal means the host no longer admits what was approved.
-    local result, measurement_error, refused = measure.measure(spec, candidate, context)
+    if not config.measurement then config.measurement = {} end
+    local result, measurement_error, refused = measure.measure(spec, candidate, context, config.measurement)
     if not result then return nil, failure(refused and "CONFLICT" or "BLOCKED", tostring(measurement_error)) end
     return result, nil
 end

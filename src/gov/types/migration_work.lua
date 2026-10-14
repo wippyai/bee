@@ -282,14 +282,18 @@ end
 local function full_artifact(raw: unknown): (artifact.Artifact?, string?)
     local value = object(raw)
     if not value then return nil, "migration work artifact must be an object" end
-    local valid, verify_error = artifact.verify(value)
-    if not valid then return nil, verify_error end
-    local entries, decode_error = artifact.decode(value.bytes, value.digest)
-    if not entries then return nil, decode_error end
-    local copied, copy_error = artifact.create(entries)
+    for field in pairs(value) do
+        if field ~= "schema_revision" and field ~= "entries" and field ~= "bytes" and field ~= "digest" then
+            return nil, "unexpected artifact field: " .. field
+        end
+    end
+    if value.schema_revision ~= artifact.SCHEMA then return nil, "unsupported artifact schema" end
+    -- Creation copies and canonically measures the complete definitions. Byte
+    -- and digest equality supply the same proof as verify, decode and create.
+    local copied, copy_error = artifact.create(value.entries)
     if not copied then return nil, copy_error end
-    if copied.bytes ~= value.bytes then return nil, "migration work artifact changed during capture" end
-    if copied.digest ~= value.digest then return nil, "migration work artifact changed during capture" end
+    if copied.bytes ~= value.bytes then return nil, "artifact bytes do not match entries" end
+    if copied.digest ~= value.digest then return nil, "artifact digest does not match bytes" end
     return copied, nil
 end
 
@@ -306,7 +310,7 @@ local function provisioned(context: preflight.Context, database_id: string): Obj
 end
 
 function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
-    context: preflight.Context): (Work?, string?)
+    context: preflight.Context): (Work?, string?, preflight.Report?)
     local exact_artifact, artifact_error = full_artifact(artifact_raw)
     if not exact_artifact then return nil, artifact_error end
     local report, preflight_error = preflight.check(candidate, context)
@@ -317,7 +321,7 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
             if index > 8 then break end
             reasons[#reasons + 1] = diagnostic.code .. ":" .. diagnostic.target
         end
-        return nil, "destination preflight is not ready for migration work: " .. table.concat(reasons, ", ")
+        return nil, "destination preflight is not ready for migration work: " .. table.concat(reasons, ", "), report
     end
 
     local candidate_bytes, candidate_error = canonical.encode(candidate, 1048576)
@@ -417,6 +421,7 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
                 package = candidate.artifacts[1].component, digest = measured, planned = true, definition = planned}
         else
             if not summary then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
+            if not summary.digest then return nil, "migration database has no content measurement: " .. target_db end
             local kind = database_kind(summary.kind)
             if not kind then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
             databases[#databases + 1] = {target_db = target_db, database_id = database_id,
@@ -438,11 +443,12 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
         work_migrations[#work_migrations + 1] = {id = item.id, target_db = item.target_db,
             ordinal = item.ordinal, checksum = item.checksum, package = summary.package, definition = definition}
     end
-    return seal({schema_revision = M.SCHEMA, destination_node = candidate.destination_node,
+    local work, seal_error = seal({schema_revision = M.SCHEMA, destination_node = candidate.destination_node,
         source_node = candidate.source_node, base_revision = candidate.base_revision,
         base_digest = candidate.base_digest, policy_digest = context.policy_digest,
         candidate_digest = candidate_digest, artifact_digest = exact_artifact.digest,
         plan_digest = report.plan_digest, migrations = work_migrations, databases = databases})
+    return work, seal_error, report
 end
 
 function M.decode(bytes_raw: unknown, digest_raw: unknown): (Work?, string?)

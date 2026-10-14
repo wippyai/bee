@@ -55,6 +55,16 @@ end
 
 local function define_tests()
     test.describe("Governance exact migration work", function()
+        test.it("returns the preflight evidence already checked for the exact migration work", function()
+            local exact, candidate, context = fixture()
+            local work, problem, report = migration_work.capture(candidate, exact, context)
+            test.not_nil(work)
+            test.is_nil(problem)
+            test.not_nil(report)
+            local expected = assert(preflight.check(candidate, context))
+            test.eq(assert(report).plan_digest, expected.plan_digest)
+            test.eq(assert(report).pending_migrations[1], expected.pending_migrations[1])
+        end)
         test.it("captures canonical pending definitions and their final SQL binding", function()
             local exact, candidate, context = fixture()
             local work, problem = migration_work.capture(candidate, exact, context)
@@ -122,6 +132,24 @@ local function define_tests()
             local _, unprovisioned = migration_work.capture(candidate, exact, context)
             test.eq(unprovisioned, "migration database is not an admitted host SQL resource: notes")
         end)
+        test.it("refuses an applied ledger change and unmeasured database on the next capture", function()
+            local exact, candidate, context = fixture(true)
+            assert(migration_work.capture(candidate, exact, context))
+            context.applied["host:db\ndemo:001"] = {id = "demo:001", target_db = "host:db",
+                checksum = string.rep("b", 64), ordinal = 1}
+            local changed, problem, report = migration_work.capture(candidate, exact, context)
+            test.is_nil(changed)
+            test.not_nil(problem)
+            test.is_false(assert(report).ready)
+            context.applied = {}
+            local unmeasured_entries: {[string]: preflight.StateEntry} = {["host:db"] = {
+                id = "host:db", kind = "db.sql.sqlite", package = "host/storage", references = EMPTY_STRINGS}}
+            context.entries = unmeasured_entries
+            local unmeasured, reason = migration_work.capture(candidate, exact, context)
+            test.is_nil(unmeasured)
+            test.not_nil(reason)
+        end)
+
         test.it("preserves the registry root owner marker for a host database", function()
             local exact, candidate, context = fixture()
             context.entries["host:db"].package = ""

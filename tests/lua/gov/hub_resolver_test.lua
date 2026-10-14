@@ -41,11 +41,11 @@ local function source_artifact(): Artifact
     return made
 end
 
-local function deps_fixture(policy: Policy?): (Deps, Spec, {root: Object?, captured: Captured?})
+local function deps_fixture(policy: Policy?): (Deps, Spec, {root: Object?, captured: Captured?, previews: integer?})
     local supplied = source_artifact()
     local spec: Spec = {owner_node = "node-destination", source_node = "node-source",
         artifact_bytes = supplied.bytes, artifact_digest = supplied.digest}
-    local observed: {root: Object?, captured: Captured?} = {}
+    local observed: {root: Object?, captured: Captured?, previews: integer?} = {}
     local current: {Object} = {
         {id = "app:root", kind = "ns.dependency", registry = {owner = "vendor/app"},
             data = {component = "vendor/app"}},
@@ -75,6 +75,7 @@ local function deps_fixture(policy: Policy?): (Deps, Spec, {root: Object?, captu
     local captured: Captured = {
         revision = 23, entries = current, resolution = {base = "captured"},
             preview = function(root_entry: Object): (resolver.RegistryPlan?, string?)
+                observed.previews = (observed.previews or 0) + 1
                 observed.root = root_entry
                 return preview, nil
         end,
@@ -235,6 +236,74 @@ local function define_tests()
             local second = facts(deps, spec)
             test.eq(second.candidate.base_digest, first.candidate.base_digest)
             test.eq((second.context).registry_digest, first.candidate.base_digest)
+        end)
+
+        test.it("hashes only relevant definitions while retaining the complete reference graph", function()
+            local deps, spec, observed = deps_fixture(nil)
+            local captured = assert(observed.captured)
+            captured.entries[#captured.entries + 1] = {id = "other:consumer", kind = "function.lua",
+                registry = {owner = "host/other"}, data = {source = "return 1", config = "app:removed"}}
+            local resolved = facts(deps, spec)
+            local retained = resolved.context.entries["other:consumer"]
+            test.is_nil(retained.digest)
+            test.eq(retained.references[1], "app:removed")
+            test.not_nil(resolved.context.entries["app:removed"].digest)
+            local report = assert(preflight.check(resolved.candidate, resolved.context))
+            local dangling = false
+            for _, diagnostic in ipairs(report.diagnostics) do
+                if diagnostic.code == "DANGLING_REFERENCE" and diagnostic.target == "other:consumer" then dangling = true end
+            end
+            test.is_true(dangling)
+        end)
+
+        test.it("shares verified preparation only while the fresh external state is identical", function()
+            local deps, spec, observed = deps_fixture(nil)
+            local captured = assert(observed.captured)
+            local first = facts(deps, spec)
+            facts(deps, spec)
+            test.eq(observed.previews, 1)
+            captured.overlay_ids = {["app:own"] = true}
+            captured.entries[#captured.entries + 1] = entry("app:own", "__overlay__:test", "own effect")
+            local own = facts(deps, spec)
+            test.eq(observed.previews, 1)
+            test.eq(own.candidate.base_digest, first.candidate.base_digest)
+            captured.entries[4].data.source = "changed same-revision external definition"
+            local changed = facts(deps, spec)
+            test.eq(observed.previews, 2)
+            test.is_true(changed.candidate.base_digest ~= first.candidate.base_digest)
+        end)
+
+        test.it("reads current host policy even when verified preparation is shared", function()
+            local deps, spec = deps_fixture(nil)
+            local read_policy = deps.policy
+            local denied = false
+            local reads = 0
+            deps.policy = function(plan: unknown, captured: unknown, preview: unknown): (Policy?, string?)
+                reads = reads + 1
+                local policy, problem = read_policy(plan, captured, preview)
+                if policy and denied then policy.packages["vendor/app"] = false end
+                return policy, problem
+            end
+            facts(deps, spec)
+            denied = true
+            local changed = facts(deps, spec)
+            test.eq(reads, 2)
+            local report = assert(preflight.check(changed.candidate, changed.context))
+            local refused = false
+            for _, diagnostic in ipairs(report.diagnostics) do
+                if diagnostic.code == "PACKAGE_DENIED" then refused = true end
+            end
+            test.is_true(refused)
+        end)
+
+        test.it("remeasures a changed relevant definition on each captured state", function()
+            local deps, spec, observed = deps_fixture(nil)
+            local captured = assert(observed.captured)
+            local before = facts(deps, spec)
+            captured.entries[4].data.source = "changed existing definition"
+            local after = facts(deps, spec)
+            test.is_true(after.candidate.base_digest ~= before.candidate.base_digest)
+            test.is_true(after.context.entries["app:removed"].digest ~= before.context.entries["app:removed"].digest)
         end)
 
         test.it("removes dependency directives from the flattened artifact", function()

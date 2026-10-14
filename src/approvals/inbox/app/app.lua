@@ -585,7 +585,7 @@ local function main(value: unknown)
                     elseif text == "v" then
                         state.grants_view = true; perform(refresh); offset = 0
                         perform(refresh); dirty = true
-                    elseif leases.is_review(state.detail) and state.selected ~= nil and (key == "up" or key == "down" or key == "pgup" or key == "pgdown" or text == "j" or text == "k") then
+                    elseif leases.is_review(state.detail) and not state.technical and state.selected ~= nil and (key == "up" or key == "down" or key == "pgup" or key == "pgdown" or text == "j" or text == "k") then
                         leases.review_scroll(slice, (key == "up" or text == "k") and -1 or (key == "pgup" and -8 or (key == "pgdown" and 8 or 1)))
                         dirty = true
                     elseif state.detail and (key == "up" or key == "down" or key == "pgup" or key == "pgdown" or text == "j" or text == "k") then

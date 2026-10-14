@@ -98,9 +98,12 @@ function M.is_review(view: model.ApprovalView?): boolean
 end
 
 function M.review_lines(view: model.ApprovalView, width: integer, names: {[string]: string}?): {string}
-    local lines: {string} = {"Asked by " .. model.requester_name(view, names),
-        "Decide before " .. view.expires_at:sub(1, 16):gsub("T", " ") .. " UTC. The time for app updates is shown below."}
+    local facts = model.review(view)
+    local lines: {string} = {facts.title, "", "From: " .. model.requester_name(view, names)}
+    if facts.access then lines[#lines + 1] = "Access: " .. facts.access end
+    if facts.reason then lines[#lines + 1] = "Reason: " .. facts.reason end
     for _, line in ipairs(model.permission_lines(view)) do lines[#lines + 1] = line end
+    lines[#lines + 1] = "Decide by: " .. clock.local_deadline(view.expires_at)
     local wrapped: {string} = {}
     local room = math.floor(math.max(10, width - 4))
     for _, line in ipairs(lines) do

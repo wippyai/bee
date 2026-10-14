@@ -340,6 +340,15 @@ local function define_tests()
                 activations = {malformed}})))
         end)
 
+        test.it("shows the owner failure reason without asking for technical details", function()
+            local state = model.new("workspace-destination")
+            local item = activation()
+            item.phase, item.outcome = "settled", "failed"
+            item.diagnostics = "app.fixtures:status:5:19: syntax error"
+            test.is_true(model.apply_activation(state, reply(item)))
+            test.contains(state.notice, "app.fixtures:status:5:19: syntax error")
+        end)
+
         test.it("names each activation phase in the words a person reads", function()
             local base = {owner_node = "node-destination", workspace_id = "workspace-destination",
                 intent_id = "intent-1", overlay_owner = "overlay", source_node = "node-source",

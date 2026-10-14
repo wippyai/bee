@@ -159,7 +159,7 @@ local ENDED: {[string]: string} = {
     denied = "Denied",
 }
 local function ended_note(item: governed.Intent): string
-    return ENDED[tostring(item.outcome)] or "could not be installed"
+    return ENDED[tostring(item.outcome)] or (item.diagnostics and ("could not be installed: " .. item.diagnostics) or "could not be installed")
 end
 
 local function waiting(item: governed.Intent): boolean

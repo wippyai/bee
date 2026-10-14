@@ -2,7 +2,7 @@
 local tty = require("tty")
 local model = require("model")
 local appearance = require("appearance")
-type Alert = {id: string, count: integer, title: string, approval_id: string, failed: boolean?}
+type Alert = {id: string, count: integer, title: string, approval_id: string, failed: boolean?, installed: boolean?}
 type TabHit = {id: string, x: integer, width: integer, action: string?, y: integer?, height: integer?}
 type Frame = {text: string, hits: {TabHit}}
 local M = {}
@@ -76,7 +76,7 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     if status ~= "" and width >= 36 then right = " " .. status .. " "
     elseif width >= 24 then right = " " .. label .. " ▾ " end
     right = tty.text.truncate(right, math.floor(math.max(0, width >= 100 and 32 or (width >= 80 and 24 or width // 2))))
-    local badge = alert and (alert.failed and " ! Install failed " or (alert.count > 0 and (" ! " .. tostring(alert.count) .. " Needs you ") or "")) or ""
+    local badge = alert and (alert.failed and " ! Install failed " or (alert.installed and " ✓ Installed " or (alert.count > 0 and (" ! " .. tostring(alert.count) .. " Needs you ") or ""))) or ""
     if tty.text.width(badge) + 7 > width then badge = "" end
     if badge ~= "" and tty.text.width(badge) + tty.text.width(right) + 7 > width then right = "" end
     local origin = 7

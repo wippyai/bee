@@ -211,10 +211,10 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     local alert_fade: channel.Channel? = nil
     local function current_alert(): client.Alert?
         for _, instance in ipairs(running) do
-            if instance.desktop == desktop and alerts[instance.id] and (alerts[instance.id].count > 0 or alerts[instance.id].failed) then return alerts[instance.id] end
+            if instance.desktop == desktop and alerts[instance.id] and (alerts[instance.id].count > 0 or alerts[instance.id].failed or alerts[instance.id].installed) then return alerts[instance.id] end
         end
         for _, alert in pairs(alerts) do
-            if alert.desktop == desktop and (alert.count > 0 or alert.failed) then return alert end
+            if alert.desktop == desktop and (alert.count > 0 or alert.failed or alert.installed) then return alert end
         end
         return nil
     end
@@ -685,7 +685,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
                 for _, instance in ipairs(running) do
                     if instance.id == alert.id then app = instance.app; break end
                 end
-                if app then open_app(app, {"--approval", alert.approval_id}) end
+                if app then open_app(app, alert.installed and {} or {"--approval", alert.approval_id}) end
                 if views[alert.id] then focus(alert.id) end
             end
         elseif action == "select_text" then begin_selection(id)
@@ -894,12 +894,12 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
                         and id ~= event.id then alerts[id] = nil end
                 end
                 local previous = alerts[event.id]
-                if not previous or previous.approval_id ~= event.alert.approval_id or event.alert.count > previous.count or event.alert.failed ~= previous.failed then
+                if not previous or previous.approval_id ~= event.alert.approval_id or event.alert.count > previous.count or event.alert.failed ~= previous.failed or event.alert.installed ~= previous.installed then
                     alert_popup = true; alert_fade = time.after("3s")
                 end
                 alerts[event.id] = event.alert
             end
-            if event.changed or (event.alert and event.alert.count == 0 and not event.alert.failed) then return end
+            if event.changed or (event.alert and event.alert.count == 0 and not event.alert.failed and not event.alert.installed) then return end
             if views[event.id] then set_scene(model.attend(scene(), event.id)) else attention_pending[event.id] = true end
         elseif event.kind == "moved" and event.instance then
             local instance = event.instance

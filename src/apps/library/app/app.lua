@@ -82,6 +82,7 @@ local function main(options: unknown)
     local changes = assert(process.listen(appearance.TOPIC, {message = true}))
     local committed_stream = assert(cdc.stream("bee:changes", {tables = {
         "bee_governance_activation_execution", "bee_governance_follow_progress",
+        "bee_governance_activation_intents",
     }}))
     local committed = assert(committed_stream:channel())
     assert(tty.start())
@@ -178,7 +179,10 @@ local function main(options: unknown)
 
     -- Governed reads and the install chain.
     local function refresh_activations()
-        governed.apply_activations(gov, invoke(governed.activations_request(gov)))
+        if governed.apply_activations(gov, invoke(governed.activations_request(gov))) then
+            local latest = gov.intent or gov.activations[1]
+            if latest then state.notice = governed.phase_notice(latest) end
+        end
     end
     -- The bees that made versions are named once each; one that does not
     -- answer is asked again only when the person refreshes.

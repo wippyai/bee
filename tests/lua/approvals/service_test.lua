@@ -1070,6 +1070,42 @@ local function define_tests()
             test.eq(service.execute(db, REQUESTER, "effect", receipt, 1006, nil).replayed, true)
             db:release()
         end)
+        test.it("delivers and acknowledges a compound completion event beyond the principal ID bound", function()
+            local workspace = string.rep("d", 32)
+            local journal = thread_harness.session_owner(workspace)
+            local session = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", definition = "bee.harness.app:app"}})).session
+            local db = open_test_store()
+            local created = executed(service.execute(db, "bee.gov.activation", "request", request_of(workspace,
+                {proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "1", payload = {}},
+                    origin = {session_id = session}, continuation = {destination = "gov.activation", effect_id = "long-result-" .. key(), context = {}},
+                    prompt = {text = "Install Fixture Status 1.0.1?"}}), 1000, nil))
+            executed(service.execute(db, ALICE, "decide", {approval_id = created.approval_id, expected_revision = 1,
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "allow_once"}, 1001, nil))
+            local effect = assert(bounds.object(created.effect)).effect_id
+            executed(service.execute(db, "bee.gov.activation", "effect", {operation = "claim", approval_id = created.approval_id,
+                proposal_digest = created.proposal_digest, effect_key = effect, owner_incarnation = created.owner_incarnation}, 1002, nil))
+            executed(service.execute(db, "bee.gov.activation", "effect", {operation = "complete", approval_id = created.approval_id,
+                proposal_digest = created.proposal_digest, effect_key = effect, state = "succeeded", result = {ok = true, outcome = "applied"}}, 1003, nil))
+            local event_id = tostring(created.approval_id) .. ":completed:" .. string.rep("event", 40)
+            assert(#event_id > bounds.MAX_ID_BYTES)
+            assert(db:execute("UPDATE bee_approval_events SET acknowledged_at = 'already-delivered' WHERE kind <> 'effect.completed'"))
+            assert(db:execute("UPDATE bee_approval_events SET event_id = ? WHERE kind = 'effect.completed' AND destination = ?", {event_id, "requester:" .. tostring(session)}))
+            test.is_nil(dispatch.notify_sessions(db))
+            local page = thread_harness.value(journal:call("work_history", {session = session}))
+            test.contains(tostring(assert(bounds.object(assert(bounds.array(page.items, 64))[1])).input), "Installed Fixture Status 1.0.1")
+            test.is_nil(dispatch.notify_sessions(db))
+            local replay = thread_harness.value(journal:call("work_history", {session = session}))
+            test.eq(#assert(bounds.array(replay.items, 64)), 1)
+            local events = assert(db:query("SELECT acknowledged_at FROM bee_approval_events WHERE event_id = ?", {event_id}))
+            test.not_nil(events[1].acknowledged_at)
+            db:release()
+        end)
+        test.it("tells the requesting agent the installation outcome and preserves its reason", function()
+            test.contains(dispatch.message({approval_id = "install", state = "succeeded", result = {outcome = "applied"}},
+                {text = "Install Fixture Status 1.0.1? It adds: Read workspace files under testdata."}), "Installed Fixture Status 1.0.1")
+            test.contains(dispatch.message({approval_id = "install", state = "failed", result = {outcome = "failed", error = "app.fixtures:status:5:19: syntax error"}},
+                {text = "Install Fixture Status 1.0.0?"}), "Installation failed: app.fixtures:status:5:19: syntax error")
+        end)
         test.it("records the failed effect and its error for the originating agent session once", function()
             local db = open_test_store()
             local created = executed(service.execute(db, "bee.gov.activation", "request", request_of("ws-result-" .. key(),

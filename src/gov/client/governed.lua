@@ -486,6 +486,11 @@ function M.apply_activations(state: State, reply: Reply?)
         decoded[#decoded + 1] = item
     end
     state.activations = decoded
+    if state.intent then
+        for _, item in ipairs(decoded) do
+            if item.intent_id == state.intent.intent_id then state.intent = item; break end
+        end
+    end
     state.notice, state.fault = "", ""
     return true
 end
@@ -559,7 +564,7 @@ function M.phase_notice(item: Intent): string
     if item.phase ~= "settled" then return "Installing" end
     if item.outcome == "applied" then return "Installed" end
     if item.outcome == "uncertain" then return "Installing; Refresh to see how it ended" end
-    return "This version could not be installed; Details (T) says why"
+    return "This version could not be installed" .. (item.diagnostics and (": " .. item.diagnostics) or "")
 end
 function M.apply_activation(state: State, reply: Reply?): boolean
     local value = result_object(reply)

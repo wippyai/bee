@@ -1501,6 +1501,8 @@ entries:
   method: run
   modules:
   - funcs
+  - tty
+  - process
   - events
   - channel
   - sql

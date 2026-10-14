@@ -1378,6 +1378,7 @@ function M.apply_approved(raw: unknown): Result
     local plan_store, activation_store, lease_handle, open_error = stores(config.node_id, workspace_id)
     if not plan_store or not activation_store or not lease_handle then return failure("UNAVAILABLE", open_error or "open destination stores") end
     local result: Result
+    local applied_component: string? = nil
     local bound = activations.bound_to(activation_store, approval_id)
     local intent = bound.ok and bounds.object(bound.value) or nil
     local intent_id = intent and bounds.id(intent.intent_id) or nil
@@ -1409,8 +1410,7 @@ function M.apply_approved(raw: unknown): Result
                 result = owner.advance(configured.config, intent_id, "approved-" .. approval_id)
                 local settled = result.ok and bounds.object(result.value) or nil
                 if settled and settled.outcome == "applied" then
-                    local sent, send_error = events.send(ATTENTION, "application.applied", workspace_id, {component = chosen.component})
-                    if not sent then logger:warn("Applied application not announced", {component = chosen.component, error = tostring(send_error)}) end
+                    applied_component = chosen.component
                 end
             end
         end
@@ -1428,6 +1428,10 @@ function M.apply_approved(raw: unknown): Result
             local completed = bounds.object(raw_complete)
             if complete_error or not completed or completed.ok ~= true then result = failure("UNAVAILABLE", "complete activation effect receipt") end
             if completed and completed.ok == true and completed.replayed ~= true and settled.outcome ~= "uncertain" then
+                if applied_component then
+                    local sent, send_error = events.send(ATTENTION, "application.applied", workspace_id, {component = applied_component, approval_id = approval_id})
+                    if not sent then logger:warn("Applied application not announced", {component = applied_component, error = tostring(send_error)}) end
+                end
                 follow_wake.signal()
             end
         end

@@ -392,7 +392,7 @@ local function main(saved: unknown)
         table.sort(running, function(a, b) return tostring(a.id) < tostring(b.id) end)
         local listed = workspace_catalog() or {}
         local pending_alerts: {client.Alert} = {}
-        for _, alert in pairs(alerts) do if alert.count > 0 then pending_alerts[#pending_alerts + 1] = alert end end
+        for _, alert in pairs(alerts) do if alert.count > 0 or alert.failed or alert.installed then pending_alerts[#pending_alerts + 1] = alert end end
         return {node = node, owner = tostring(process.pid()), supervisor = protocol.supervisor_pid() or "",
             revision = revision, home = home_id, appearance = current, running = running,
             apps = installed_apps, workspaces = listed.workspaces, desktops = listed.desktops, dialogs = dialogs(), alerts = pending_alerts,
@@ -1085,7 +1085,7 @@ local function main(saved: unknown)
 
     -- present opens app with arguments on every desktop a display shows that
     -- works in workspace_id and asks those displays to bring it forward.
-    local function present(workspace_id: string, app: string, arguments: {string}, pending: {count: integer, title: string, approval_id: string, failed: boolean?}?)
+    local function present(workspace_id: string, app: string, arguments: {string}, pending: {count: integer, title: string, approval_id: string, failed: boolean?, installed: boolean?}?)
         local seen: {[string]: boolean} = {}
         for _, desktop_id in pairs(watchers) do
             if desktop_id ~= "" and not seen[desktop_id] then
@@ -1097,7 +1097,7 @@ local function main(saved: unknown)
                     if opened.ok and value then
                         assert(type(value.id) == "string", "Presented app has no instance identity")
                         local alert: client.Alert? = pending and {id = value.id, count = pending.count, title = pending.title,
-                            approval_id = pending.approval_id, failed = pending.failed, app = app, desktop = desktop_id, workspace = workspace_id}
+                            approval_id = pending.approval_id, failed = pending.failed, installed = pending.installed, app = app, desktop = desktop_id, workspace = workspace_id}
                         for id, previous in pairs(alerts) do
                             if previous.desktop == desktop_id and previous.app == app and id ~= value.id then alerts[id] = nil end
                         end
@@ -1131,7 +1131,7 @@ local function main(saved: unknown)
         elseif event.kind == "approval.changed" and type(data.count) == "number" then
             for id, alert in pairs(alerts) do
                 local instance = instances[id]
-                if alert.workspace == workspace_id or (instance and instance.workspace == workspace_id) then
+                if not alert.installed and (alert.workspace == workspace_id or (instance and instance.workspace == workspace_id)) then
                     alert.count = math.floor(data.count)
                     alert.failed = false
                     if type(data.approval_id) == "string" then alert.approval_id = data.approval_id end
@@ -1161,7 +1161,10 @@ local function main(saved: unknown)
             end
             for _, app in ipairs(installed_apps) do
                 local id = app.id
-                if type(id) == "string" and id:sub(1, #prefix) == prefix and not running[id] then present(workspace_id, id, {}) end
+                if type(id) == "string" and id:sub(1, #prefix) == prefix and not running[id] then
+                    local approval_id = type(data.approval_id) == "string" and data.approval_id or nil
+                    present(workspace_id, id, {}, approval_id and {count = 0, title = app.title .. " installed", approval_id = approval_id, installed = true} or nil)
+                end
             end
         end
     end

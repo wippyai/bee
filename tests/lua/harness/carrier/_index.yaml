@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.tests.harness.carrier
+entries:
+- name: machine_schema_test
+  kind: function.lua
+  source: file://machine_schema_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    machine: bee.harness.carrier:machine
+    profile_values: bee.driver.descriptor:profile_values
+    fixtures: bee.tests.harness:carrier_fixtures

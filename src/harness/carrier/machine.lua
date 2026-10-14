@@ -240,7 +240,8 @@ local function measure(request: Request): (Measured?, string?)
     if not profile or not profile.supported then return nil, "profile " .. request.profile_id .. " is not supported by " .. request.binding_ref end
     local policy_entry = catalog.entry(pinned, request.policy_ref)
     if not policy_entry then return nil, "launch policy " .. request.policy_ref .. " is not in the registry" end
-    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, profile_values.schema(request.binding_ref), request.placement_profile_ref)
+    local option_descriptor, _, schema_error = profile_values.schema(request.binding_ref)
+    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, option_descriptor, request.placement_profile_ref)
     if not launch_policy then return nil, policy_error end
     -- The policy is host-owned and decoded from this pinned snapshot. It is
     -- the source of placement selection; request fields only prove that the
@@ -304,7 +305,7 @@ local function measure(request: Request): (Measured?, string?)
             token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
     end
     if not launch_policy.fixture then
-        local descriptor, _, schema_error = profile_values.schema(request.binding_ref)
+        local descriptor = option_descriptor
         if request.preferences and not descriptor then return nil, schema_error or "Driver option schema is unavailable" end
         if descriptor then
             local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref)

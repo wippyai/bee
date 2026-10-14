@@ -89,7 +89,13 @@ local function handle(raw: unknown): Result
         if not result then return hub_result.failure("INVALID", problem or "package plan unavailable") end
         local configuration = hub_package.configuration({component = request.component, version = request.version,
             parameters = request.parameters}, result.resolved)
-        return hub_result.success(configuration or result.plan, false)
+        if configuration then return hub_result.success(configuration, false) end
+        local summary, review_error = publication.review(result)
+        if not summary then return hub_result.failure("UNAVAILABLE", review_error or "review unavailable") end
+        local displayed: {[string]: unknown} = {}
+        for key, item in pairs(result.plan) do displayed[key] = item end
+        displayed.migration_runs, displayed.policy_changes, displayed.other_entries = summary.migration_runs, summary.policy_changes, summary.other_entries
+        return hub_result.success(displayed, false)
     elseif value.operation == "apply" then
         local request, invalid = plan.decode(value.request)
         if not request then return hub_result.failure("INVALID", invalid or "invalid package request") end

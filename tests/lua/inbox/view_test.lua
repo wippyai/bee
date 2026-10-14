@@ -24,6 +24,29 @@ local function request(id: string, state: string, prompt: string): Object
 end
 local function define_tests()
     test.describe("Inbox frame", function()
+        test.it("separates an access question into labelled facts and a local deadline", function()
+            local state = model.new({"ws-1"})
+            local item = request("access-card", "pending", "Let this agent session use Hub and Library? It asks: Read the installed applications to find the progress app.")
+            item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {requester_name = "Claude Code"}}
+            state.requester_names = {["bee.test.requester"] = "Claude Code · hi"}
+            model.select(state, "access-card")
+            model.apply_read(state, "access-card", reply({ok = true, value = item}))
+            local shown = view.draw(120, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            local text = tty.text.plain(table.concat(shown.rows, "\n"))
+            for _, expected in ipairs({"Let this agent session use Hub and Library?", "From: Claude Code · hi",
+                "Access: Hub and Library", "Reason: Read the installed applications to find the progress app.",
+                "Lasts: For this agent session", "Decide by:"}) do test.contains(text, expected) end
+            test.is_nil((text:find("It asks:", 1, true)))
+            test.is_nil((text:find("Asked by", 1, true)))
+            test.is_nil((text:find("Decide before", 1, true)))
+            local first = tty.text.plain(shown.rows[3])
+            test.contains(first, "Let this agent session use")
+            for _, hit in ipairs(shown.hits) do
+                if hit.kind == "approve" or hit.kind == "deny" then test.eq(hit.y, 30) end
+            end
+            local compact = view.draw(40, 12, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+            for _, hit in ipairs(compact.hits) do test.is_false(hit.kind == "approve" or hit.kind == "deny") end
+        end)
         test.it("shows the whole question before enabling a decision", function()
             local state = model.new({"ws-1"})
             local item = request("long-review", "pending", string.rep("Read these terms carefully. ", 14) .. "Last consequence: files change.")
@@ -179,7 +202,7 @@ local function define_tests()
             -- The prompt leads with the question; identities and scope are details.
             test.ok(text:find("Write exactly one file", 1, true) ~= nil)
             test.is_nil((text:find("Subject:", 1, true)))
-            test.ok(text:find("Allows: Bash", 1, true) ~= nil)
+            test.ok(text:find("Access: Bash", 1, true) ~= nil)
             test.is_nil((text:find("attempt-window", 1, true)))
             local thirty = false
             for _, button in ipairs(assert(drawn.controls).overflow) do if button.label == "Re-allow 30 min" then thirty = true end end
@@ -416,7 +439,7 @@ local function define_tests()
             local first = text:find("Use an isolated application database named tasks", 1, true)
             local second = text:find("Use an isolated application database named tasks", (first or 0) + 1, true)
             test.is_nil(second)
-            local summary_row = view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows[4]
+            local summary_row = view.draw(120, 36, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows[3]
             test.contains(tty.text.plain(summary_row), "Install Tasks")
             model.toggle_technical(state)
             test.is_true(drawn_text():find("bee.application:01a06e56ba587c5aa2ab9b0b63c0f001:inbox-instance", 1, true) ~= nil)

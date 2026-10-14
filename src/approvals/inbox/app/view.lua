@@ -140,25 +140,36 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
     local readable = width > 2 and detail.prompt.text ~= nil
     for _, item in ipairs(group) do
         local card = model.card(item)
-        local source: {string} = {"Asked by " .. model.requester_name(item, state.requester_names)}
+        local source: {string} = {}
         if card then
             for _, line in ipairs(card_lines(card)) do source[#source + 1] = line end
+            source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names)
         else
-            source[#source + 1] = model.prompt(item)
+            local prompt = model.prompt(item)
+            local access, exposure, reason = prompt:match("^Let this agent session use (.-)%?(.-) It asks: (.+)$")
+            source[#source + 1] = access and ("Let this agent session use " .. access .. "?") or prompt
+            source[#source + 1] = ""
+            source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names)
             local summary = model.summary(item, 0)
-            if item.proposal.ref ~= "bee.gateway:access" and summary.effect ~= "operation" and summary.effect ~= "attempt" then
-                source[#source + 1] = "Allows: " .. summary.effect
-            end
+            local stated_access = item.proposal.payload.access_summary
+            source[#source + 1] = "Access: " .. (access or (type(stated_access) == "string" and model.text(stated_access, 8192))
+                or (summary.effect ~= "operation" and summary.effect ~= "attempt" and summary.effect or "This action"))
+            if reason then source[#source + 1] = "Reason: " .. reason end
+            if exposure and exposure ~= "" then source[#source + 1] = model.text(exposure, 8192) end
             local command = item.proposal.payload.command
             if type(command) == "string" then source[#source + 1] = "Command: " .. model.text(command, 8192) end
             for _, line in ipairs(model.permission_lines(item)) do source[#source + 1] = line end
             source[#source + 1] = "Lasts: " .. model.duration(item)
+        end
+        local deadline = clock.parse(item.expires_at)
+        source[#source + 1] = "Decide by: " .. (deadline and deadline:in_local():format("2006-01-02 15:04 MST") or item.expires_at)
+        if not card then
+            source[#source + 1] = ""
             local consequence = item.proposal.payload.consequence
             source[#source + 1] = type(consequence) == "string" and model.text(consequence, 2048)
-                or (item.proposal.ref == "bee.gateway:access" and "The agent can use these apps until its session ends or you remove its access. Other requests still need your approval."
-                or "Approval lets this action proceed. Changes it makes may remain after access ends.")
+                or (item.proposal.ref == "bee.gateway:access" and "Other requests still need your approval. You can remove access at any time."
+                or "Approval lets this action proceed. Its changes may remain after access ends.")
         end
-        source[#source + 1] = "Decide before " .. item.expires_at:sub(1, 16):gsub("T", " ") .. " UTC"
         for _, line in ipairs(source) do
             for _, wrapped in ipairs(prompt_lines(line, width, "")) do
                 if tty.text.width(wrapped) > width - 2 then readable = false end

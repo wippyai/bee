@@ -1,6 +1,7 @@
 -- MIT. Plan tests use a pure artifact source; no Hub or registry writer runs.
 local test = require("test")
 local plan = require("plan")
+local review = require("review")
 local graph = require("graph")
 local inspect = require("inspect")
 local requirements = require("requirements")
@@ -74,6 +75,39 @@ end
 
 local function define_tests()
     test.describe("Hub dependency plan", function()
+        test.it("summarizes running migrations and changed permissions without rewriting the plan", function()
+            local db = {id = "acme:db", kind = "db.sql.sqlite", meta = {}, data = {file = "fixture.db"}, registry = {owner = "acme/app"}}
+            local reader = {id = "acme:reader", kind = "security.policy", meta = {}, data = {policy = {actions = {"read"}, resources = {"acme:*"}}}, registry = {owner = "acme/app"}}
+            local installed = state({root("acme/app", "1.0.0"), db, reader}, {{name = "acme/app", version = "1.0.0", source = "hub"}})
+            local artifacts = source({["acme/app@2.0.0"] = package("acme/app", "2.0.0", "a", {
+                {id = "acme:db", kind = "db.sql.sqlite", meta = {}, data = {file = "fixture.db"}},
+                {id = "acme:reader", kind = "security.policy", meta = {}, data = reader.data},
+                {id = "acme:writer", kind = "security.policy", meta = {}, data = {policy = {actions = {"write"}, resources = {"acme:*"}}}},
+                {id = "acme:logic", kind = "library.lua", meta = {}, data = {source = "changed"}},
+                {id = "acme:old", kind = "function.lua", meta = {type = "migration", target_db = "acme:db", timestamp = "1"}, data = {}},
+                {id = "acme:new", kind = "function.lua", meta = {type = "migration", target_db = "acme:db", timestamp = "2"}, data = {}},
+            })})
+            for _, policy in ipairs({"none", "up"}) do
+                local prepared = assert(plan.prepare(installed, 1, request({action = "update", component = "acme/app", version = "2.0.0", migration_policy = policy}), artifacts))
+                local digest, definitions = prepared.plan.digest, #prepared.plan.migrations
+                local calls = 0
+                local summary = assert(review.summarize(prepared, installed, function(_: string, id: string): (boolean?, string?)
+                    calls = calls + 1; return id == "acme:old", nil
+                end))
+                test.eq(#summary.migration_runs, policy == "up" and 1 or 0)
+                test.eq(calls, policy == "up" and 2 or 0)
+                if policy == "up" then test.eq(summary.migration_runs[1].id, "acme:new") end
+                test.eq(#summary.policy_changes, 1)
+                test.eq(summary.policy_changes[1].id, "acme:writer")
+                test.eq(summary.other_entries, 1)
+                test.eq(prepared.plan.digest, digest)
+                test.eq(#prepared.plan.migrations, definitions)
+                if policy == "up" then
+                    local failed, problem = review.summarize(prepared, installed, function(_: string, _: string): (boolean?, string?) return nil, "ledger denied" end)
+                    test.is_nil(failed); test.eq(problem, "ledger denied")
+                end
+            end
+        end)
         for _, matches in ipairs({true, false}) do
             test.it(matches and "plans a pack matching decoded executable facts" or "refuses another runtime commit from executable facts", function()
                 local running, decode_error = identity_decoder.decode_baked('{"native_module":"github.com/wippyai/bee/native","native_version":"v1.0.0","native_modules":{"github.com/wippyai/bee/native":"v1.0.0"},"runtime_commit":"v0.1.14-0.20261007011850-2bb9e144ab06"}')

@@ -79,3 +79,10 @@ entries:
   source: file://result.lua
   imports:
     bounds: bee.values:bounds
+- name: review
+  kind: library.lua
+  source: file://review.lua
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    plan: bee.hub.package:plan

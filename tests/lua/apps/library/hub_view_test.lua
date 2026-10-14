@@ -17,6 +17,47 @@ end
 
 local function define_tests()
     test.describe("Library package screens", function()
+        test.it("reviews only update effects and keeps carried definitions in Details", function()
+            for _, policy in ipairs({"none", "up"}) do
+                local state = model.new()
+                model.select(state, "bee/example")
+                model.select_version(state, "2.0.0")
+                model.apply_installed(state, {ok = true, replayed = false, value = {modules = {}, roots = {}}})
+                model.set_action(state, "update")
+                model.set_policy(state, policy)
+                model.apply_plan(state, {ok = true, replayed = false, value = {
+                    digest = string.rep("a", 64), ready = true, base_revision = 1,
+                    modules = {{component = "bee/example", previous_version = "1.0.0", version = "2.0.0", change = "update", entries = 400}},
+                    missing = {}, migrations = {{id = "example:already-applied", target_db = "example:db"},
+                        {id = "example:new-migration", target_db = "example:db"}},
+                    migration_runs = policy == "up" and {{id = "example:new-migration", target_db = "example:db"}} or {},
+                    starts = {"example:worker"}, capabilities = {"example:unchanged-policy", "example:changed-policy"},
+                    policy_changes = {{id = "example:changed-policy", change = "update", actions = {"read"}, resources = {"example:*"}}},
+                    other_entries = 397,
+                    request = {action = "update", component = "bee/example", version = "2.0.0", parameters = {}, migration_policy = policy},
+                }})
+                local shown = draw(120, 30, state, 0, "")
+                local text = tty.text.plain(table.concat(shown.rows, "\n"))
+                test.contains(text, "1.0.0 → 2.0.0")
+                test.contains(text, "397 other updated entries")
+                test.contains(text, "example:changed-policy")
+                test.is_nil((text:find("example:unchanged-policy", 1, true)))
+                test.is_nil((text:find("example:already-applied", 1, true)))
+                if policy == "none" then test.contains(text, "None"); test.is_nil((text:find("example:new-migration", 1, true)))
+                else test.contains(text, "example:new-migration") end
+                local details = false
+                for _, button in ipairs(assert(shown.controls).buttons) do
+                    if button.kind == "technical" and button.label == "Details" then details = true end
+                end
+                test.is_true(details)
+                local full = tty.text.plain(table.concat(view.draw(120, 40, appearance.defaults(), state, 0, "", false, nil, nil,
+                    {tabs = CHROME.tabs, active = CHROME.active, technical = true}).rows, "\n"))
+                test.contains(full, "example:already-applied")
+                test.contains(full, "example:unchanged-policy")
+                test.is_nil(model.confirm(state))
+                test.eq(assert(model.confirm_intent(state)).expected_digest, string.rep("a", 64))
+            end
+        end)
         test.it("presents host requirements without editable controls or missing-value labels", function()
             local state = model.new()
             model.select(state, "bee/example")
@@ -257,7 +298,10 @@ local function define_tests()
                 missing = {}, migrations = {}, starts = {}, capabilities = {},
                 request = {action = "update", component = "bee/bee", version = "2.0.0", parameters = {}, migration_policy = "none"},
             }})
-            local drawn = draw(120, 28, state, 0, "")
+            local summary = tty.text.plain(table.concat(draw(120, 28, state, 0, "").rows, "\n"))
+            test.is_nil((summary:find("pinned by acme/app", 1, true)))
+            local drawn = view.draw(120, 28, appearance.defaults(), state, 0, "", false, nil, nil,
+                {tabs = CHROME.tabs, active = CHROME.active, technical = true})
             local shown = table.concat(drawn.rows, "\n")
             test.is_true(shown:find("bee/settings", 1, true) ~= nil)
             test.is_true(shown:find("pinned by acme/app", 1, true) ~= nil)

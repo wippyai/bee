@@ -27,7 +27,7 @@ type Parameter = {name: string, value: unknown, json: string}
 type Root = {id: string, component: string, version: string, parameters: {Parameter}, managed: boolean}
 type Requirement = {id: string, json: string, origin: string, targets: {string}, field: form.Field?}
 type RootSelection = {id: string, component: string}
-type Plan = {conversion: {roots: {RootSelection}}?, digest: string, ready: boolean, base_revision: integer, modules: {Object}, missing: {string}, migrations: {Object}, starts: {string}, capabilities: {string}}
+type Plan = {conversion: {roots: {RootSelection}}?, digest: string, ready: boolean, base_revision: integer, modules: {Object}, missing: {string}, migrations: {Object}, migration_runs: {Object}?, policy_changes: {Object}?, other_entries: integer?, starts: {string}, capabilities: {string}}
 type Result = {ok: boolean, code: string, message: string, replayed: boolean, state: string}
 type Operation = {digest: string, component: string, action: string, state: string, message: string, baseline_revision: integer, request: Object?, migration_work: {Object}}
 type Recovery = {digest: string, request: Object, operation: Operation}
@@ -1035,6 +1035,12 @@ function M.apply_plan(state: State, reply: Reply)
             or "The Hub answered something unreadable; try Refresh"
         return
     end
+    local migration_runs, runs_error = object_list(value.migration_runs or {}, "running migrations", M.MAX_PLAN_ITEMS)
+    local policy_changes, policies_error = object_list(value.policy_changes or {}, "permission changes", M.MAX_PLAN_ITEMS)
+    local other_entries = value.other_entries == nil and nil or integer(value.other_entries)
+    if not migration_runs or not policy_changes or (value.other_entries ~= nil and other_entries == nil) then
+        state.notice = runs_error or policies_error or "Invalid updated entry count"; return
+    end
     local conversion: {roots: {RootSelection}}? = nil
     if value.conversion ~= nil then
         local supplied = object(value.conversion)
@@ -1050,7 +1056,8 @@ function M.apply_plan(state: State, reply: Reply)
         conversion = {roots = selected}
     end
     state.plan = {digest = measured_digest, ready = value.ready, base_revision = base_revision, modules = modules,
-        missing = missing, migrations = migrations, starts = starts, capabilities = capabilities, conversion = conversion}
+        missing = missing, migrations = migrations, migration_runs = value.migration_runs ~= nil and migration_runs or nil,
+        policy_changes = policy_changes, other_entries = other_entries, starts = starts, capabilities = capabilities, conversion = conversion}
     state.selected_operation, state.recovery = nil, nil
     state.phase, state.notice = "plan", ""
 end

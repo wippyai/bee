@@ -943,7 +943,8 @@ local function main(options: unknown)
     end
     local function package_hit(kind: string, key: string)
         ui.status = ""
-        if kind == "contents" then
+        if kind == "technical" then model.toggle_technical(state); ui.offset = 0; changed()
+        elseif kind == "contents" then
             if hubs.selected and hubs.selected_version then
                 hub.show_requirements(hubs, false); ui.reading = false; ui.offset = 0
                 begin({contents.start(ui.content, hubs.selected, hubs.selected_version)}); changed()
@@ -1183,7 +1184,7 @@ local function main(options: unknown)
                                 elseif letter == "u" and phase == "details" then package_hit("update", "")
                                 elseif letter == "x" and phase == "details" then package_hit("uninstall", "")
                                 elseif letter == "p" and phase == "details" then plan()
-                                elseif letter == "t" then model.toggle_technical(state); changed()
+                                elseif letter == "t" then package_hit("technical", "")
                                 elseif letter == "r" then if phase == "result" then check_status() elseif phase == "plan" then plan() elseif phase == "details" then details() else changed() end
                                 elseif key == "esc" or key == "escape" then
                                     if phase == "confirm" then cancel_confirmation() else leave_package() end

@@ -64,6 +64,7 @@ entries:
     lifecycle: bee.hub.types:lifecycle
     operations: bee.hub.types:operations
     service_lifecycle: bee.hub.binding:lifecycle
+    review: bee.hub.package:review
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua

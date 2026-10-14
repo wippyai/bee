@@ -89,7 +89,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             or (kind == "requirements" and state.requirements_open) or kind == state.action
             or kind == "policy_" .. state.policy or kind == "confirm" or kind == "review" or kind == "plan"
             or kind == "recover"
-        local action: frame.Button = {kind = kind, label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active,
+        local keys: {[string]: string} = {review = "Enter", confirm = "Enter", cancel = "Esc", refresh_plan = "R", missing = "E"}
+        local action: frame.Button = {kind = kind, key = keys[kind], label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active,
             primary = kind == "confirm" or kind == "review" or kind == "plan" or kind == "recover"}
         return action
     end
@@ -379,6 +380,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         heading("Ownership", "transfer component roots to host ownership")
         for _, root in ipairs(plan.conversion.roots) do item(root.component) end
     end
+    local concise = state.action == "update" and not chrome.technical
     local unchanged = 0
     local changes: {string} = {}
     local name_width = 0
@@ -388,11 +390,15 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local name = align(model.text(entry.component, 160), name_width)
         if entry.change == "keep" then
             unchanged = unchanged + 1
-            if type(entry.reason) == "string" then
+            if not concise and type(entry.reason) == "string" then
                 changes[#changes + 1] = align("keep", 8) .. "  " .. name .. "  " .. model.text(entry.reason, 4096)
             end
         else
-            changes[#changes + 1] = align(model.text(entry.change, 12), 8) .. "  " .. name .. "  " .. model.text(entry.version, 128)
+            local version = model.text(entry.version, 128)
+            if concise and type(entry.previous_version) == "string" and entry.previous_version ~= "" then
+                version = model.text(entry.previous_version, 128) .. " → " .. (version ~= "" and version or "removed")
+            end
+            changes[#changes + 1] = align(model.text(entry.change, 12), 8) .. "  " .. name .. "  " .. version
         end
     end
     if #changes > 0 or unchanged > 0 then
@@ -403,6 +409,34 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         heading("Required")
         for _, missing in ipairs(plan.missing) do item("Required: " .. missing .. "  ·  Configure…", missing) end
     end
+    if concise then
+        heading("Migrations to run")
+        local runs: {model.Object}? = {}
+        if state.policy == "up" or state.policy == "down" then runs = plan.migration_runs end
+        if not runs then item("Ledger status unavailable · open Details")
+        elseif #runs == 0 then item("None")
+        else for _, migration in ipairs(runs) do item(model.text(migration.id, 256) .. " → " .. model.text(migration.target_db, 256)) end end
+        heading("Permission changes")
+        if # (plan.policy_changes or {}) == 0 then item("None") end
+        for _, policy in ipairs(plan.policy_changes or {}) do
+            item(model.text(policy.change, 32) .. " " .. model.text(policy.id, 256))
+            local actions, resources = policy.actions, policy.resources
+            if type(actions) == "table" then
+                local names: {string} = {}
+                for _, value in ipairs(actions) do names[#names + 1] = model.text(value, 256) end
+                item("Actions: " .. table.concat(names, ", "))
+            end
+            if type(resources) == "table" then
+                local names: {string} = {}
+                for _, value in ipairs(resources) do names[#names + 1] = model.text(value, 256) end
+                item("Resources: " .. table.concat(names, ", "))
+            end
+            if policy.expression == true then item("Conditional permission · open Details") end
+        end
+        heading("Other changes")
+        item(plan.other_entries ~= nil and (tostring(plan.other_entries) .. " other updated entries · Details shows the full plan")
+            or "Updated entry count unavailable · open Details")
+    else
     if #plan.migrations > 0 then
         heading("Migrations", "policy " .. state.policy)
         for _, migration in ipairs(plan.migrations) do item(model.text(migration.id, 256) .. " → " .. model.text(migration.target_db, 256)) end
@@ -415,7 +449,16 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         heading("Declared capabilities")
         for _, id in ipairs(plan.capabilities) do item(id) end
     end
+    end
     if #review == 0 then review = {{text = "No package changes", heading = false}} end
+    local flowed: {ReviewLine} = {}
+    for _, row in ipairs(review) do
+        if row.heading then flowed[#flowed + 1] = row
+        else
+            for _, line in ipairs(wrap({row.text})) do flowed[#flowed + 1] = {text = line, heading = false, missing = row.missing} end
+        end
+    end
+    review = flowed
     local capacity = maximum(0, height - 9)
     local next_offset = math.floor(math.max(0, math.min(maximum(0, #review - capacity), offset)))
     frame.line(painter, 5, "Review " .. tostring(math.min(#review, next_offset + 1)) .. "–" .. tostring(math.min(#review, next_offset + capacity))
@@ -431,6 +474,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         end
     end
 
+    button("technical", chrome.technical and "Summary" or "Details", true)
+    footer_buttons[#footer_buttons].key = "T"
     if state.phase == "confirm" then
         frame.line(painter, height - 2, "Applies once, to exactly these changes; any edit clears the confirmation.", theme.text)
         button("confirm", " Confirm ", plan.ready)

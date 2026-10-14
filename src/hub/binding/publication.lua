@@ -18,6 +18,7 @@ local migration_work = require("migration_work")
 local lifecycle = require("lifecycle")
 local service_lifecycle = require("service_lifecycle")
 local operations = require("operations")
+local review = require("review")
 local M = {}
 type Result = hub_result.Result
 type ExpectedModule = {component: string, version: string, change: string}
@@ -45,6 +46,20 @@ function M.prepare(raw: unknown): (plan.Prepared?, string?)
     if not installed then return nil, inventory_error end
     return plan.prepare(state, revision, request, artifact_source.new(state, installed, request.component),
         (binary_identity.read_baked()))
+end
+
+function M.review(prepared: plan.Prepared): (review.Summary?, string?)
+    local snapshot, snapshot_error = registry.snapshot()
+    if not snapshot then return nil, tostring(snapshot_error) end
+    if snapshot:version():id() ~= prepared.plan.base_revision then return nil, "registry changed; refresh the review" end
+    local state, state_error = snapshot:state()
+    if not state then return nil, tostring(state_error) end
+    local entries: {migrations.Entry} = {}
+    for _, migration in ipairs(prepared.plan.migrations) do
+        entries[#entries + 1] = {id = migration.id, meta = {target_db = migration.target_db, type = "migration"}, registry = {owner = migration.component}}
+    end
+    local reader = migration_runner.source(entries)
+    return review.summarize(prepared, state, reader.is_applied)
 end
 
 local function expected_modules(raw: unknown): {ExpectedModule}?

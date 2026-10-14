@@ -9,9 +9,8 @@ local forms = require("forms")
 type Pane = "theme" | "background" | "taskbar" | "edit_mode" | "about"
 type Grid = {columns: integer, rows: integer, capacity: integer, card_width: integer}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
--- Build is what this binary and node are: the runtime build, the Lua
--- language version, the node's id and the folder its node runs in.
-type Build = {runtime: string, lua: string, node: string, folder: string}
+-- Build identifies the runtime, node and workspace folder.
+type Build = {runtime: string, node: string, folder: string}
 local super_edit = require("super_edit")
 local M = {}
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
@@ -58,7 +57,6 @@ local function about_details(width: integer, live: live_updates.Status?, pending
     field("Bee", installed ~= "" and installed or (pending and "reading…" or "unknown"))
     if build then
         field("Runtime", build.runtime)
-        field("Lua", build.lua)
         field("Node", build.node)
         field("Folder", build.folder)
     end

@@ -35,7 +35,7 @@ local function main(options: unknown)
         folder = options.workspace.path
     end
     local runtime_version = system.version()
-    local build: view.Build = {runtime = runtime_version ~= "" and runtime_version or "unknown", lua = _VERSION, node = node, folder = folder}
+    local build: view.Build = {runtime = runtime_version ~= "" and runtime_version or "unknown", node = node, folder = folder}
     local input = assert(tty.events())
     local menu = frame.menu()
     local lifecycle = assert(process.events())

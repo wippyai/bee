@@ -410,7 +410,7 @@ local function output_tests()
             end
             native_fixture.resource_mode("host_configured")
         end)
-        test.it("counts the work a live attempt's process still runs of its own", function()
+        test.it("does not infer agent activity from native descendants", function()
             local function started(argv: {string}): string
                 local request = native_fixture.launch(argv, "direct_process")
                 local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
@@ -419,15 +419,11 @@ local function output_tests()
             end
             local quiet = started({"sleep", "8"})
             local busy = started({"sh", "-c", "sleep 8 & sleep 8"})
-            local function activity(attempt_id: string): {[string]: unknown}
-                return native_fixture.value(native_fixture.call(native_fixture.OWNER, "activity", {attempt_id = attempt_id}))
+            for _, attempt_id in ipairs({quiet, busy}) do
+                local reply = native_fixture.call(native_fixture.OWNER, "activity", {attempt_id = attempt_id})
+                test.is_false(reply.ok)
+                test.eq(reply.error and reply.error.code, "UNSUPPORTED_CAPABILITY")
             end
-            local quiet_activity = activity(quiet)
-            test.eq(quiet_activity.alive, true)
-            test.eq(quiet_activity.descendants, 0)
-            local busy_activity = activity(busy)
-            test.eq(busy_activity.alive, true)
-            test.is_true((tonumber(busy_activity.descendants) or 0) >= 1)
             for _, attempt_id in ipairs({quiet, busy}) do
                 native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = attempt_id, mode = "forced"}))
             end

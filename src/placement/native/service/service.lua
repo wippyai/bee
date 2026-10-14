@@ -974,10 +974,7 @@ function M.sweep(): Reply
     end
     return succeed({reconciled = #live, outcomes = outcomes})
 end
-local function scope_proven(attempt: types.Attempt): (boolean, string)
-    if attempt.required_cleanup ~= "direct_process" then
-        return false, "runtime exposes leader exit, not process-group completion"
-    end
+local function completion_observed(attempt: types.Attempt): (boolean, string)
     if attempt.exit_source == "runner" or attempt.exit_source == "terminal" then
         return true, "exit observed by the runtime handle"
     end
@@ -1022,8 +1019,7 @@ function M.stop_revoked(value: unknown): Reply
     if not stopped then return fail("CONFLICT", "attempt has no revoked resource grant") end
     return stopped
 end
--- cleanup: only a proven-exited attempt whose cleanup scope is proven gone
--- loses its home.
+-- Cleanup follows the runtime owner's completion record.
 function M.cleanup(value: unknown): Reply
     local id, invalid = named(value)
     if not id then return invalid end
@@ -1037,12 +1033,12 @@ function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Re
     local row, row_error = recorded_row(attempt.attempt_id)
     if row_error then return fail("STORAGE", row_error) end
     if not row then return fail("STORAGE", "attempt is not recorded") end
-    local proven, why = scope_proven(attempt)
+    local proven, why = completion_observed(attempt)
     -- Materialization can acknowledge a stop before creating any child. Its
     -- completion and this proof commit together in the existing evidence ledger.
     -- Missing identity alone is never proof; contradictory identity refuses it.
     if not proven and (attempt.start_cancelled or attempt.exit_source == "runner" or attempt.execution_state == "start_failed")
-        and row.pid == nil and row.pgid == nil and row.start_ticks == nil and row.boot_id == nil then
+        and row.pid == nil and row.pgid == nil then
         local db, open_error = store.open()
         if not db then return fail("STORAGE", open_error or "open placement store") end
         local proofs, proof_error = db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'child.not_started' LIMIT 1", {attempt.attempt_id})
@@ -1055,7 +1051,7 @@ function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Re
     if not proven then
         -- A refusal is durable evidence: a continuation that waits on this
         -- cleanup reads its reason from the previous attempt's ledger.
-        local message = "cleanup scope " .. attempt.required_cleanup .. " is not proven gone: " .. why
+        local message = "cleanup requires runtime completion: " .. why
         local noted = transition(attempt.attempt_id, {evidence = {kind = "cleanup.refused", detail = message}})
         if not noted.ok then return noted end
         return fail("CONFLICT", message)

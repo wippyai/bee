@@ -79,17 +79,15 @@ local function cleanup_tests()
                 if not native_fixture.wait_for(function()
                     return (native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
                 end, 8000) then error("grouped attempt did not exit") end
-                -- An identity read that found no process group leaves group
-                -- absence unprovable; a continuation waiting on this cleanup
-                -- must find the refusal and its reason in the ledger.
+                -- A stored state without its runtime completion source cannot authorize cleanup.
                 local db = store.open()
                 if not db then error("store") end
-                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET pgid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
+                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET exit_source = NULL WHERE attempt_id = ?", {prepared.attempt_id})
                 db:release()
-                if clear_error then error("clear process group: " .. tostring(clear_error)) end
+                if clear_error then error("clear completion source: " .. tostring(clear_error)) end
                 local refused = native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id})
                 test.eq(refused.error and refused.error.code, "CONFLICT")
-                local reason = "cleanup scope process_group is not proven gone: no process group recorded"
+                local reason = "cleanup requires runtime completion: runtime exit not observed"
                 test.eq(refused.error and refused.error.message, reason)
                 local recorded = false
                 local page = native_fixture.value(native_fixture.call(native_fixture.OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
@@ -100,7 +98,7 @@ local function cleanup_tests()
                 local after = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
                 test.eq(after.cleanup_state, "pending")
             end)
-            test.it("proves absence from identity after the runner is lost", function()
+            test.it("keeps lost owner outcomes uncertain without reconstructing PID authority", function()
                 local request = native_fixture.launch({"sh", "-c", "sleep 8"}, "process_group")
                 local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
                 native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))
@@ -113,18 +111,24 @@ local function cleanup_tests()
                 if clear_error then error("clear runner: " .. tostring(clear_error)) end
                 local before = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id}))
                 local live = before.liveness
-                if not live.observed or live.alive ~= true then error("running child not identified alive: " .. live.detail) end
-                test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "running")
-                process.terminate(runner)
-                if not native_fixture.wait_for(function() return native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state == "exited" end, 5000) then
-                    error("runner loss did not end the child: " .. table.concat(native_fixture.kinds(prepared.attempt_id), ","))
+                test.is_false(live.observed, "a missing owner must not trigger PID inspection")
+                test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "uncertain")
+                assert(process.monitor(runner))
+                local events = assert(process.events())
+                assert(process.terminate(runner))
+                local deadline = time.after("5s")
+                while true do
+                    local selected = channel.select({events:case_receive(), deadline:case_receive()})
+                    assert(selected.ok and selected.channel == events, "runner EXIT not delivered")
+                    local event = selected.value
+                    if event.kind == process.event.EXIT and tostring(event.from) == runner then break end
                 end
-                test.is_true(native_fixture.has(native_fixture.kinds(prepared.attempt_id), "reconcile.absent"))
-                local absent = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
-                test.eq(absent.exit_source, "reconcile")
-                local cleaned = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
-                test.eq(cleaned.cleanup_state, "complete")
-                test.is_true(native_fixture.has(native_fixture.kinds(prepared.attempt_id), "cleanup.complete"))
+                local outcome = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
+                test.eq(outcome.execution_state, "uncertain")
+                test.is_nil(outcome.exit_source)
+                local cleaned = native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id})
+                test.eq(cleaned.error and cleaned.error.code, "CONFLICT")
+                process.unmonitor(runner)
             end)
             test.it("removes the grandchild with the group on stop", function()
                 local request = native_fixture.launch({"sh", "-c", "sleep 8 & echo child:$!; wait"}, "process_group")

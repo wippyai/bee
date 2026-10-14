@@ -335,8 +335,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     -- records its exit; otherwise readiness is published. When the set loses,
     -- a stop committed while the child was starting or its identity was being
     -- read wins: request close and preserve the stopping state until
-    -- terminal:status() observes done; terminal completion does not prove
-    -- that a process group is absent.
+    -- terminal:status() observes the runtime completion.
     local settled
     local startup_exit = started:status() == "done"
     if startup_exit then

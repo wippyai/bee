@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: MIT
 local sql = require("sql")
 local M = {}
-local NATIVE = "COALESCE(placement_kind, 'native') = 'native' AND (execution_state IN ('starting', 'running', 'stopping') OR (execution_state = 'exited' AND required_cleanup = 'direct_process' AND cleanup_state != 'complete' AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'workdir_preparers.settled')))"
+local NATIVE = "COALESCE(placement_kind, 'native') = 'native' AND (execution_state IN ('starting', 'running', 'stopping') OR (execution_state = 'exited' AND cleanup_state != 'complete' AND NOT EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'workdir_preparers.settled')))"
 local DOCKER = "placement_kind = 'docker' AND (execution_state IN ('starting', 'running', 'stopping', 'uncertain') OR (execution_state = 'exited' AND cleanup_state != 'complete') OR (execution_state = 'start_failed' AND cleanup_state != 'complete' AND EXISTS (SELECT 1 FROM bee_placement_evidence e WHERE e.attempt_id = bee_placement_attempts.attempt_id AND e.kind = 'docker.cleanup_requested')))"
 function M.rows(db: sql.DB, kind: string, limit: integer): ({{[string]: unknown}}?, string?)
     assert(kind == "native" or kind == "docker")

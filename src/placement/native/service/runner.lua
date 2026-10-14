@@ -684,12 +684,12 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         end
     end
     close_streams()
+    if not backend then proc:close(true) end
     if exited and #materialized.writebacks > 0 then
         local scope_absent = false
         local scope_error = "write-back requires a proven-empty process group"
         if backend then scope_absent, scope_error = backend.absent(request)
-        elseif request.required_cleanup == "direct_process" then scope_absent = true
-        else scope_error = "runtime exposes leader exit, not process-group completion"
+        else scope_absent = true
         end
         if scope_absent then
             for _, result in ipairs(materialization.write_back(materialized.home_path, materialized.writebacks, request.owner_id, attempt_id)) do

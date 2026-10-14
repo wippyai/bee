@@ -655,6 +655,17 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         show_app_dialog()
     end
 
+    local function retire(id: string)
+        local kept: {client.Instance} = {}
+        for _, instance in ipairs(running) do
+            if instance.id ~= id then kept[#kept + 1] = instance end
+        end
+        running = kept
+        if active_selection and selection.binding(active_selection).view_id == id then active_selection = nil end
+        forget(id)
+        drop_app_dialog(id)
+    end
+
     -- answer_app sends the person's answer to the dialog spec_id names.
     local function answer_app(spec_id: string, action: string, value: string, gesture: string?)
         local id, request_id = spec_id:sub(#APP_DIALOG + 1):match("^([^:]+):(.+)$")
@@ -817,11 +828,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             if result.kind == "retired" then
                 if node_state.owner ~= owner or node_state.revision < revision then return end
                 node_state.desktop = desktop
-                if result.id then
-                    if active_selection and selection.binding(active_selection).view_id == result.id then active_selection = nil end
-                    forget(result.id)
-                    drop_app_dialog(result.id)
-                end
+                if result.id then retire(result.id) end
             end
             local binding = follow(node_state.owner)
             if not binding.ok then
@@ -943,14 +950,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             if instance.desktop == desktop then attach(instance.id) else forget(instance.id) end
         elseif event.kind == "closed" and event.id then
             local id = event.id
-            local kept: {client.Instance} = {}
-            for _, instance in ipairs(running) do
-                if instance.id ~= id then kept[#kept + 1] = instance end
-            end
-            running = kept
-            if active_selection and selection.binding(active_selection).view_id == id then active_selection = nil end
-            forget(id)
-            drop_app_dialog(id)
+            retire(id)
         elseif event.kind == "review" and event.id then
             for _, instance in ipairs(running) do if instance.id == event.id then instance.review = event.review end end
         elseif event.kind == "title" and event.id and event.title then

@@ -399,7 +399,7 @@ def gate_retired_display(src):
             retired_observed()
             return
         end''')
-    replace_once(shell, '            drop_app_dialog(id)', '            drop_app_dialog(id)\n            retired_observed()')
+    replace_once(shell, '            retire(id)', '            retire(id)\n            retired_observed()')
     replace_once(shell, '            apply(chosen.value)', '''            apply(chosen.value)
             local observer = process.registry.lookup("bee.test.retired.applied", process.registry.LOCAL)
             if observer and (chosen.value.kind == "failed" or chosen.value.kind == "retired" or chosen.value.kind == "done") then

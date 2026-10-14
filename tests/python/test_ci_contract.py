@@ -11,10 +11,10 @@ import unittest
 from unittest.mock import patch
 
 import yaml
-import ci
-import lua_seed
+from build import ci
+from build import lua_seed
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def workflow(name):
@@ -65,11 +65,11 @@ class CIContractTests(unittest.TestCase):
 
     def test_ci_tests_compose_without_lint_and_local_targets_still_check_fixtures(self):
         local = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-shard', 'SHARD=1', 'CI_TESTS='], cwd=ROOT, text=True)
-        self.assertIn('tests/compose.py', local)
+        self.assertIn('tests.runner.compose', local)
         self.assertIn('wippy lint', local)
         self.assertIn('unittest discover', local)
         remote = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-shard', 'SHARD=1', 'CI_TESTS=1', 'TEST_CACHE_MODE=readonly'], cwd=ROOT, text=True)
-        self.assertIn('tests/compose.py', remote)
+        self.assertIn('tests.runner.compose', remote)
         self.assertIn('wippy install', remote)
         self.assertIn('--lua-cache-mode readonly', remote)
         self.assertNotIn('unittest discover', remote)
@@ -234,7 +234,7 @@ class CIContractTests(unittest.TestCase):
         darwin = [row for row in release['build']['strategy']['matrix']['include'] if row['goos'] == 'darwin']
         self.assertEqual({row['goarch'] for row in darwin}, {'amd64', 'arm64'})
         commands = subprocess.check_output(['make', '--no-print-directory', '-n', 'release-compile'], cwd=ROOT, text=True)
-        for forbidden in ('process_guard.py', 'tests/run.py', 'tests/boot.py', 'unittest', 'flock '):
+        for forbidden in ('process_guard.py', 'tests.runner.run', 'tests.runner.boot', 'unittest', 'flock '):
             self.assertNotIn(forbidden, commands)
         self.assertIn('bee-release-builder build', commands)
         self.assertIn('python3 build/release_builder.py', commands)

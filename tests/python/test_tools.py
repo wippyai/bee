@@ -12,19 +12,19 @@ import sys
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-import tools
+from build import tools
 
 
 class ToolsTests(unittest.TestCase):
     def test_archive_tree_uses_cached_tools_without_a_marker_or_git_metadata(self):
-        root = Path(__file__).resolve().parents[1] / ".wippy/tmp"
+        root = Path(__file__).resolve().parents[2] / ".wippy/tmp"
         root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=root) as directory:
             directory = Path(directory)
             tree = directory / "archive"
             (tree / "build").mkdir(parents=True)
             for name in ("tools.py", "binary_identity.py"):
-                shutil.copy2(Path(__file__).with_name(name), tree / "build" / name)
+                shutil.copy2(Path(__file__).resolve().parents[2] / "build" / name, tree / "build" / name)
             manifest = {"runtime": {"module": "runtime", "version": "pin", "go": "1.27.1"}}
             value = tools.inputs(manifest, "builder", tools.platform_inputs())
             key = tools.content_key(value)
@@ -71,7 +71,7 @@ class ToolsTests(unittest.TestCase):
         self.assertEqual(tools.content_key({"a": 1, "b": 2}), tools.content_key({"b": 2, "a": 1}))
 
     def test_prebuilt_import_requires_matching_pins_and_untampered_artifacts(self):
-        root = Path(__file__).resolve().parents[1] / ".wippy/tmp"
+        root = Path(__file__).resolve().parents[2] / ".wippy/tmp"
         root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=root) as directory:
             source = Path(directory) / "source"
@@ -97,7 +97,7 @@ class ToolsTests(unittest.TestCase):
                 tools.import_prebuilt(source, target, value, record["key"])
 
     def test_cross_compile_target_does_not_change_host_tool_binaries(self):
-        root = Path(__file__).resolve().parents[1] / ".wippy/tmp"
+        root = Path(__file__).resolve().parents[2] / ".wippy/tmp"
         root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=root) as directory:
             directory = Path(directory)

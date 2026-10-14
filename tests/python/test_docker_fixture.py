@@ -3,7 +3,7 @@ import subprocess
 import unittest
 from unittest import mock
 
-import docker_fixture as docker
+from tests.runner import docker_fixture as docker
 
 IMAGE = 'node@sha256:' + 'a' * 64
 

@@ -4,7 +4,7 @@ import io
 import unittest
 from unittest.mock import patch
 
-import check
+from tests.runner import check
 
 
 class CheckTests(unittest.TestCase):

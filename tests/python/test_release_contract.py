@@ -3,7 +3,7 @@ import unittest
 import yaml
 import json
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReleaseContractTest(unittest.TestCase):

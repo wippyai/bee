@@ -1,6 +1,6 @@
 """Measured budgets preserve existing ceilings and share one suite bound."""
 import unittest
-import budgets
+from tests.runner import budgets
 
 
 class BudgetTests(unittest.TestCase):

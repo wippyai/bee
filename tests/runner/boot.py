@@ -14,7 +14,7 @@ import uuid
 
 import yaml
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 ROOT = REPO / "tests/.wippy/boot" / uuid.uuid4().hex
 
 

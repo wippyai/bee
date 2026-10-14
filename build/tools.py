@@ -10,7 +10,10 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-import binary_identity
+if __package__:
+    from . import binary_identity
+else:
+    import binary_identity
 
 
 def inputs(manifest, builder, platform):

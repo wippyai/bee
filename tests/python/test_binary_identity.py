@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("binary_identity", ROOT / "build/binary_identity.py")
 identity = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(identity)

@@ -4,7 +4,7 @@ import json
 import math
 from pathlib import Path
 
-PATH = Path(__file__).with_name('budgets.json')
+PATH = Path(__file__).parent / 'data/budgets.json'
 
 
 def load():

@@ -20,12 +20,12 @@ import uuid
 
 import yaml
 
-import budgets
-import docker_fixture
+from . import budgets
+from . import docker_fixture
 
-TESTS = Path(__file__).resolve().parent
+TESTS = Path(__file__).resolve().parents[1]
 REPO = TESTS.parent
-DURATIONS = TESTS / "durations.json"
+DURATIONS = Path(__file__).parent / "data/durations.json"
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 PROGRESS = re.compile(r"^\s+\S+\s+(\S+)\s+\((\d+)/(\d+)\)\s+(\S+)")
 CASE = re.compile(r"^\s+[ox] (.+?)\s+(<1ms|[\d.]+(?:ms|s))$")

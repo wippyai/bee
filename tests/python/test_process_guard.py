@@ -9,7 +9,7 @@ import os
 import queue
 import threading
 
-spec = importlib.util.spec_from_file_location('process_guard', Path(__file__).parent / 'lua/hygiene/process_guard.py')
+spec = importlib.util.spec_from_file_location('process_guard', Path(__file__).parents[1] / 'lua/hygiene/process_guard.py')
 guard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guard)
 
@@ -24,7 +24,7 @@ class ProcessGuardTests(unittest.TestCase):
         self.assertEqual(set(guard.descendants(rows, 1, [2])), {'os:4:12'})
 
     def test_guard_reports_and_joins_a_real_adopted_orphan(self):
-        root = Path(__file__).parent / '.wippy'
+        root = Path(__file__).parents[1] / '.wippy'
         root.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=root, prefix='guard-contract-') as directory:
             Path(directory, '.wippy').mkdir()
@@ -35,7 +35,7 @@ class ProcessGuardTests(unittest.TestCase):
             self.assertIn('Shard OS process leaks:', result.stdout)
 
     def test_guard_preserves_the_command_failure_status(self):
-        root = Path(__file__).parent / '.wippy'
+        root = Path(__file__).parents[1] / '.wippy'
         root.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=root, prefix='guard-contract-') as directory:
             Path(directory, '.wippy').mkdir()

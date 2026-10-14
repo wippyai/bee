@@ -9,6 +9,11 @@ import subprocess
 import tarfile
 import shutil
 
+if __package__:
+    from . import tools
+else:
+    import tools
+
 ROOT = Path(__file__).resolve().parents[1]
 RECORD = ROOT / '.wippy/prepared.json'
 PREPARED = ROOT / '.wippy/prepared.tar'
@@ -28,7 +33,7 @@ def fingerprint(paths, extra=''):
 def application_key():
     names = run('git', 'ls-files', 'src', 'modules', 'tests/lua', 'tests/fixtures/gateway_clock',
                 'tests/fixtures/resource_clock', 'tests/fixtures/memory', 'tests/fixtures/harness/host.yaml',
-                'tests/compose.py', 'tests/locked.py', 'tests/.wippy.yaml',
+                'tests/__init__.py', 'tests/runner/__init__.py', 'tests/runner/compose.py', 'tests/runner/locked.py', 'tests/.wippy.yaml',
                 'tests/wippy.lock', 'tests/requirements.txt', 'build/ci.py', 'build/prepare.py',
                 'build/lua_seed.py', 'build/binary_identity.py', 'build/release_builder.py', 'build/tools.py', 'Makefile',
                 'wippy.yaml', 'wippy.lock', '.wippy.yaml', 'resources').splitlines()
@@ -44,7 +49,6 @@ def tools_outputs(target, host=None):
     if host is None:
         key = run('make', '--no-print-directory', 'tools-key')
     else:
-        import tools
         manifest = json.loads((ROOT / 'wippy.build.json').read_text())
         builder = run('make', '--no-print-directory', 'builder-version')
         goos, goarch = host.split('/')
@@ -56,7 +60,6 @@ def tools_outputs(target, host=None):
     inputs = [ROOT / name for name in ('build/tools.py', 'build/release_builder.py', 'native/go.sum')]
     targets = "darwin/amd64+arm64" if target.startswith("darwin/") else target
     bundle = fingerprint(inputs, key + targets)
-    import tools
     platform = tools.platform_inputs() if host is None else platform
     system = {'linux': 'Linux', 'darwin': 'macOS'}[platform['GOOS']]
     architecture = {'amd64': 'x64', 'arm64': 'arm64'}[platform['GOARCH']]

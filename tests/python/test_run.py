@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 
-import run
+from tests.runner import run
 
 
 class RunnerTests(unittest.TestCase):

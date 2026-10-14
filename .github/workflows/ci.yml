@@ -13,51 +13,39 @@ env:
   LUA_CACHE: ${{ github.workspace }}/.wippy/lua-cache
 jobs:
   prepare:
-    name: Prepare application
+    name: Assemble release seed
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
     outputs:
-      artifact: ${{ steps.key.outputs.artifact }}
+      artifact: bee-application-${{ steps.setup.outputs.application-key }}
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - id: setup
       uses: ./.github/actions/setup-bee
       with:
         target: linux/arm64
+        lua-cache: 'true'
     - name: Save host toolchain
       if: steps.setup.outputs.tools-hit != 'true'
       uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
       with:
         path: ${{ steps.setup.outputs.tools-path }}
         key: bee-tools-v3-${{ steps.setup.outputs.tools-key }}
-    - id: key
-      run: |-
-        key=$(make --no-print-directory ci-application-key)
-        printf "fingerprint=%s\nartifact=bee-application-%s\n" "$key" "$key" >> "$GITHUB_OUTPUT"
-    - id: application
-      uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
-        path: |-
-          .wippy/cache
-          ${{ steps.setup.outputs.lua-path }}
-        key: bee-lua-v4-${{ steps.setup.outputs.tools-key }}-${{ steps.key.outputs.fingerprint }}
-        restore-keys: |-
-          bee-lua-v4-${{ steps.setup.outputs.tools-key }}-
-          bee-lua-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup.outputs.runtime }}-
-    - name: Restore prepared application
-      if: steps.application.outputs.cache-hit == 'true'
-      run: make ci-restore
-    - name: Prepare application and Lua seed
-      if: steps.application.outputs.cache-hit != 'true'
-      run: make ci-prepare LUA_CACHE="${{ steps.setup.outputs.lua-path }}"
-    - name: Save prepared application
-      if: steps.application.outputs.cache-hit != 'true'
+        pattern: lua-profile-*
+        merge-multiple: true
+        path: .wippy/profiles
+    - name: Assemble checked application and seed
+      run: make ci-assemble
+    - name: Save shared Lua entries
+      if: steps.setup.outputs.lua-hit != 'true'
       uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
       with:
         path: |-
           .wippy/cache
           ${{ steps.setup.outputs.lua-path }}
-        key: bee-lua-v4-${{ steps.setup.outputs.tools-key }}-${{ steps.key.outputs.fingerprint }}
+        key: ${{ steps.setup.outputs.lua-cache-key }}
     - name: Warm native compilation
       if: steps.setup.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
       run: make ci-warm TARGET=linux/arm64
@@ -69,10 +57,11 @@ jobs:
         key: ${{ steps.setup.outputs.cache-key }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        name: ${{ steps.key.outputs.artifact }}
+        name: bee-application-${{ steps.setup.outputs.application-key }}
         path: .wippy/prepared.tar
         if-no-files-found: error
         compression-level: 1
+    needs: profiles
   lint:
     name: Lint
     runs-on: ubuntu-24.04
@@ -83,14 +72,8 @@ jobs:
       uses: ./.github/actions/setup-bee
       with:
         target: linux/amd64
-    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-      with:
-        name: ${{ needs.prepare.outputs.artifact }}
-        path: .wippy
-    - run: make ci-import
     - name: Lint
       run: make ci-lint
-    needs: prepare
   boot:
     name: Boot checks
     runs-on: ubuntu-24.04
@@ -101,11 +84,7 @@ jobs:
       uses: ./.github/actions/setup-bee
       with:
         target: linux/amd64
-    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-      with:
-        name: ${{ needs.prepare.outputs.artifact }}
-        path: .wippy
-    - run: make ci-import
+        lua-cache: 'true'
     - name: Boot checks
       run: make boot-check
     - name: Logs
@@ -119,7 +98,10 @@ jobs:
           tests/.wippy/runs/**/results.json
           tests/.wippy/boot/**/output.log
         if-no-files-found: ignore
-    needs: prepare
+    env:
+      CI_TESTS: '1'
+      TEST_CACHE_MODE: readonly
+      REVISION: prepared
   tests:
     name: Lua shard ${{ matrix.shard }}/8
     runs-on: ubuntu-24.04
@@ -130,11 +112,7 @@ jobs:
       uses: ./.github/actions/setup-bee
       with:
         target: linux/amd64
-    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-      with:
-        name: ${{ needs.prepare.outputs.artifact }}
-        path: .wippy
-    - run: make ci-import
+        lua-cache: 'true'
     - name: Lua shard ${{ matrix.shard }}/8
       run: make test-shard SHARDS=8 SHARD=${{ matrix.shard }}
     - name: Logs
@@ -160,7 +138,10 @@ jobs:
         - 6
         - 7
         - 8
-    needs: prepare
+    env:
+      CI_TESTS: '1'
+      TEST_CACHE_MODE: readonly
+      REVISION: prepared
   check:
     name: Check gate
     needs:
@@ -170,6 +151,7 @@ jobs:
     - tests
     - warm
     - plan
+    - profiles
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -222,3 +204,29 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: make ci-plan
+  profiles:
+    name: Lua ${{ matrix.profile }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+        - strict
+        - nonstrict
+        - fixtures
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: linux/arm64
+        lua-cache: 'true'
+    - name: Check Lua profile
+      run: make ci-profile PROFILE=${{ matrix.profile }}
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: lua-profile-${{ matrix.profile }}
+        path: .wippy/${{ matrix.profile }}.tar
+        if-no-files-found: error
+        compression-level: 1

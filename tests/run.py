@@ -251,7 +251,7 @@ def workspace(root, address, identities=()):
         return copy_workspace(root, address, identities)
 
 
-def run_shard(number, identities, run_root, toolchain, cores, count, discovered, reservation, lua_cache):
+def run_shard(number, identities, run_root, toolchain, cores, count, discovered, reservation, lua_cache, lua_cache_mode='readwrite'):
     started = time.monotonic()
     root = run_root / f"shard-{number:02d}"
     with reservation:
@@ -269,6 +269,7 @@ def run_shard(number, identities, run_root, toolchain, cores, count, discovered,
                    "ANTHROPIC_API_KEY": "fixture-shell-value-not-a-key", "GOMAXPROCS": str(min(4, max(2, math.ceil(cores / count))))}
     command = [str(toolchain), "test", "--memory-limit", "1G", "--host", "bee:terminal",
                "--set", "lua.cache.dir=" + str(lua_cache.resolve()),
+               "--set", "lua.cache.mode=" + lua_cache_mode,
                "test", *sorted(identities)]
     command = [sys.executable, str(TESTS / "lua/hygiene/process_guard.py"), "run", *command]
     log = root / "output.log"
@@ -321,6 +322,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wippy", type=Path, default=REPO / ".wippy/bin/wippy")
     parser.add_argument("--lua-cache", type=Path, default=REPO / ".wippy/lua-cache")
+    parser.add_argument("--lua-cache-mode", choices=('readonly', 'readwrite'), default='readwrite')
     parser.add_argument("--shards", type=int, default=max(1, len(os.sched_getaffinity(0)) // 4))
     parser.add_argument("--shard", type=int, help="Run only this 1-based shard of the full duration-balanced plan")
     parser.add_argument("--tests", nargs="*", default=[])
@@ -376,7 +378,7 @@ def main():
             port.bind(("127.0.0.1", 0))
             ports.append(port)
         futures = {pool.submit(run_shard, index, group, run_root, args.wippy.resolve(),
-                               len(os.sched_getaffinity(0)), len(active), discovered, port, args.lua_cache): index
+                               len(os.sched_getaffinity(0)), len(active), discovered, port, args.lua_cache, args.lua_cache_mode): index
                    for (index, group), port in zip(active, ports)}
         completed = {}
         for future in as_completed(futures):

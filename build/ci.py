@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import tarfile
+import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 RECORD = ROOT / '.wippy/prepared.json'
@@ -62,8 +63,14 @@ def tools_outputs(target, host=None):
     distro = '-ubuntu24' + ('-arm64' if architecture == 'arm64' else '') if system == 'Linux' else ''
     prefix = f'setup-go-{system}-{architecture}{distro}-go-{manifest["runtime"]["go"]}-'
     go_cache = Path.home() / ('Library/Caches/go-build' if system == 'macOS' else '.cache/go-build')
+    builder = run('make', '--no-print-directory', 'builder-version')
+    lua_key = tools.content_key(tools.inputs(manifest, builder, {}))
+    legacy_platform = dict(platform, GOOS='linux', GOARCH='arm64', GOAMD64='', CC='gcc', CXX='g++')
+    legacy_key = tools.content_key(tools.inputs(manifest, builder, legacy_platform))
     return {'go': manifest['runtime']['go'], 'tools-key': key,
-            'tools-path': str(cache / 'bee-tools' / key), 'lua-path': str(cache / 'bee-lua' / key),
+            'lua-key': lua_key, 'application-key': application_key(),
+            'lua-legacy-key': legacy_key,
+            'tools-path': str(cache / 'bee-tools' / key), 'lua-path': str(cache / 'bee-lua' / legacy_key),
             'runtime': manifest['runtime']['version'],
             'cache-key': prefix + bundle, 'cache-prefix': prefix,
             'go-path': str(Path.home() / 'go/pkg/mod') + '\n' + str(go_cache)}
@@ -91,13 +98,6 @@ def record_inputs():
     RECORD.write_text(json.dumps({'source_fingerprint': application_key()}))
 
 
-def verify_prepared():
-    record = json.loads(RECORD.read_text())
-    if record.get('consumer_fingerprint') != application_key():
-        raise ValueError('prepared checks do not cover the current inputs; import their CI artifact')
-    print('Application and fixture lint verified by preparation')
-
-
 def export():
     PREPARED.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(PREPARED, 'w') as archive:
@@ -119,6 +119,23 @@ def restore_prepared():
     shutil.copyfile(ROOT / '.wippy/cache/application.tar', PREPARED)
 
 
+def merge_profiles():
+    directory = ROOT / '.wippy/profiles'
+    expected = application_key()
+    for profile in ('strict', 'nonstrict', 'fixtures'):
+        with tarfile.open(directory / (profile + '.tar')) as archive:
+            record = json.load(archive.extractfile('.wippy/profile.json'))
+            if record != {'profile': profile, 'source_fingerprint': expected}:
+                raise ValueError('profile checks do not match current inputs: ' + profile)
+            archive.extractall(ROOT, filter='data')
+    cache = Path(os.environ['LUA_CACHE']).resolve()
+    extracted = ROOT / '.wippy/lua-cache'
+    if extracted.resolve() != cache:
+        shutil.copytree(extracted, cache, dirs_exist_ok=True)
+        shutil.rmtree(extracted)
+    print('Merged strict, non-strict and fixture checks for ' + expected)
+
+
 def import_prepared():
     with tarfile.open(PREPARED) as archive:
         record = json.load(archive.extractfile('.wippy/prepared.json'))
@@ -132,7 +149,6 @@ def import_prepared():
         revision = next(entry['data']['source_revision'] for entry in identity['entries'] if entry['name'] == 'binary_identity')
         with open(os.environ['GITHUB_ENV'], 'a') as environment:
             print('REVISION=' + revision, file=environment)
-            print('CI_PREPARED=1', file=environment)
 
 
 def require_ci():
@@ -228,7 +244,7 @@ def gate():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('application-key', 'record-inputs', 'verify-prepared', 'tools-outputs', 'export', 'import', 'restore-prepared', 'require-ci', 'warm', 'package', 'gate', 'plan-warm', 'verify-release', 'publish', 'rosetta'))
+    parser.add_argument('command', choices=('application-key', 'record-inputs', 'tools-outputs', 'export', 'import', 'restore-prepared', 'merge-profiles', 'require-ci', 'warm', 'package', 'gate', 'plan-warm', 'verify-release', 'publish', 'rosetta'))
     parser.add_argument('--target', default='linux/amd64')
     parser.add_argument('--version', default='0.2.0-dev')
     args = parser.parse_args()
@@ -244,7 +260,7 @@ def main():
     elif args.command == 'publish':
         publish(args.version)
     else:
-        {'record-inputs': record_inputs, 'verify-prepared': verify_prepared, 'export': export, 'restore-prepared': restore_prepared, 'import': import_prepared, 'require-ci': require_ci, 'gate': gate, 'plan-warm': plan_warm, 'verify-release': verify_release, 'rosetta': rosetta}[args.command]()
+        {'record-inputs': record_inputs, 'export': export, 'restore-prepared': restore_prepared, 'merge-profiles': merge_profiles, 'import': import_prepared, 'require-ci': require_ci, 'gate': gate, 'plan-warm': plan_warm, 'verify-release': verify_release, 'rosetta': rosetta}[args.command]()
 
 
 if __name__ == '__main__':

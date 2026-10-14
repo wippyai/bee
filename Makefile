@@ -97,8 +97,11 @@ agent-corpus-local:
 agent-corpus-check:
 	python3 tools/corpus.py --check
 
-fixture-lint: compose
-	cd tests && python3 locked.py exclusive .wippy/composition.lock $(abspath $(WIPPY)) install && python3 locked.py shared .wippy/composition.lock $(abspath $(WIPPY)) lint $(LINT_FLAGS)
+fixture-install: compose
+	cd tests && python3 locked.py exclusive .wippy/composition.lock $(abspath $(WIPPY)) install
+
+fixture-lint: fixture-install
+	cd tests && python3 locked.py shared .wippy/composition.lock $(abspath $(WIPPY)) lint $(LINT_FLAGS)
 
 lint: binary-identity fixture-lint
 	python3 tools/corpus.py --check
@@ -131,22 +134,23 @@ $(TEST_FIXTURES)/harness/bin/gateway-client: $(TEST_FIXTURES)/harness/gateway_cl
 	go build -o $@ $<
 
 SHARDS ?= $(shell python3 -c 'import os; print(min(4, max(1, len(os.sched_getaffinity(0)) // 4)))')
+TEST_CACHE_MODE ?= readwrite
 
 boot-check: test-prepare
-	python3 tests/boot.py $(abspath $(WIPPY)) $(LUA_CACHE)
+	python3 tests/boot.py $(abspath $(WIPPY)) $(LUA_CACHE) $(TEST_CACHE_MODE)
 
 test-contract-check:
 	python3 build/tools_test.py
 	python3 -m unittest discover -s tests -p '*_test.py'
 
-test-prepare: $(if $(CI_PREPARED),ci-verify,fixture-lint test-contract-check) $(TEST_FIXTURES)/harness/bin/gateway-client
+test-prepare: $(if $(CI_TESTS),fixture-install,fixture-lint test-contract-check) $(TEST_FIXTURES)/harness/bin/gateway-client
 
 test: boot-check
-	python3 tests/run.py --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --shards $(SHARDS) --tests $(TESTS)
+	python3 tests/run.py --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --tests $(TESTS)
 
 test-shard: test-prepare
 	@test -n "$(SHARD)" || { echo "set SHARD=<1-based shard>"; exit 2; }
-	python3 tests/run.py --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --shards $(SHARDS) --shard $(SHARD) --tests $(TESTS)
+	python3 tests/run.py --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --shard $(SHARD) --tests $(TESTS)
 
 
 
@@ -190,16 +194,22 @@ ci-prepare: tools
 	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --fixtures --revision prepared
 	LUA_CACHE=$(LUA_CACHE) python3 build/ci.py export
 
+ci-profile: tools
+	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --profile $(PROFILE) --revision prepared
+
+ci-assemble: tools
+	python3 build/ci.py record-inputs
+	LUA_CACHE=$(LUA_CACHE) python3 build/ci.py merge-profiles
+	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --assemble --fixtures --revision prepared
+	LUA_CACHE=$(LUA_CACHE) python3 build/ci.py export
+
 ci-restore:
 	python3 build/ci.py restore-prepared
 
 ci-import:
 	python3 build/ci.py import
 
-ci-verify:
-	python3 build/ci.py verify-prepared
-
-ci-lint: ci-verify release-build-check agent-corpus-check test-contract-check
+ci-lint: release-build-check agent-corpus-check test-contract-check
 
 ci-stamp:
 	python3 build/release_version.py $(VERSION)
@@ -231,3 +241,5 @@ release-package:
 	python3 build/ci.py package --target $(TARGET) --version $(VERSION)
 
 .PHONY: builder-version test-prepare test-shard release-prepare release-compile ci-tools ci-tools-outputs ci-application-key ci-prepare ci-restore ci-import ci-stamp ci-require ci-warm ci-gate ci-plan release-package release-rosetta release-verify release-publish
+
+.PHONY: fixture-install ci-profile ci-assemble ci-lint

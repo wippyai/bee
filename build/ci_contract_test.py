@@ -61,31 +61,39 @@ class CIContractTests(unittest.TestCase):
             environment = root / 'environment'
             with patch.object(ci, 'ROOT', root), patch.object(ci, 'PREPARED', archive), patch.object(ci, 'RECORD', root / '.wippy/prepared.json'), patch.object(ci, 'application_key', side_effect=['original', 'imported']), patch.dict(os.environ, {'GITHUB_ENV': str(environment)}, clear=True):
                 ci.import_prepared()
-                self.assertEqual(environment.read_text(), 'REVISION=prepared\nCI_PREPARED=1\n')
+                self.assertEqual(environment.read_text(), 'REVISION=prepared\n')
 
-    def test_consumers_reject_missing_or_changed_preparation(self):
-        with tempfile.TemporaryDirectory() as directory:
-            record = Path(directory) / 'prepared.json'
-            with patch.object(ci, 'RECORD', record), patch.object(ci, 'application_key', return_value='current'):
-                with self.assertRaises(FileNotFoundError):
-                    ci.verify_prepared()
-                record.write_text(json.dumps({'consumer_fingerprint': 'old'}))
-                with self.assertRaisesRegex(ValueError, 'current inputs'):
-                    ci.verify_prepared()
-                record.write_text(json.dumps({'consumer_fingerprint': 'current'}))
-                ci.verify_prepared()
-
-    def test_ci_consumers_use_preparation_and_local_targets_still_check_fixtures(self):
-        commands = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-shard', 'SHARD=1', 'CI_PREPARED='], cwd=ROOT, text=True)
-        self.assertIn('tests/compose.py', commands)
-        self.assertIn('unittest discover', commands)
-        commands = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-shard', 'SHARD=1', 'CI_PREPARED=1'], cwd=ROOT, text=True)
-        self.assertIn('verify-prepared', commands)
-        self.assertIn('tests/run.py', commands)
-        self.assertNotIn('tests/compose.py', commands)
-        self.assertNotIn('unittest discover', commands)
-        self.assertNotIn('wippy lint', commands)
+    def test_ci_tests_compose_without_lint_and_local_targets_still_check_fixtures(self):
+        local = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-shard', 'SHARD=1', 'CI_TESTS='], cwd=ROOT, text=True)
+        self.assertIn('tests/compose.py', local)
+        self.assertIn('wippy lint', local)
+        self.assertIn('unittest discover', local)
+        remote = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-shard', 'SHARD=1', 'CI_TESTS=1', 'TEST_CACHE_MODE=readonly'], cwd=ROOT, text=True)
+        self.assertIn('tests/compose.py', remote)
+        self.assertIn('wippy install', remote)
+        self.assertIn('--lua-cache-mode readonly', remote)
+        self.assertNotIn('unittest discover', remote)
+        self.assertNotIn('wippy lint', remote)
+        self.assertNotIn('verify-prepared', remote)
         self.assertEqual(next(step['run'] for step in workflow('ci.yml')['jobs']['lint']['steps'] if step.get('name') == 'Lint'), 'make ci-lint')
+
+    def test_profile_merge_rejects_other_sources_and_missing_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profiles = root / '.wippy/profiles'
+            profiles.mkdir(parents=True)
+            for name in ('strict', 'nonstrict', 'fixtures'):
+                with tarfile.open(profiles / (name + '.tar'), 'w') as archive:
+                    data = json.dumps({'profile': name, 'source_fingerprint': 'current' if name != 'fixtures' else 'old'}).encode()
+                    entry = tarfile.TarInfo('.wippy/profile.json')
+                    entry.size = len(data)
+                    archive.addfile(entry, io.BytesIO(data))
+            with patch.object(ci, 'ROOT', root), patch.object(ci, 'application_key', return_value='current'):
+                with self.assertRaisesRegex(ValueError, 'fixtures'):
+                    ci.merge_profiles()
+                (profiles / 'fixtures.tar').unlink()
+                with self.assertRaises(FileNotFoundError):
+                    ci.merge_profiles()
 
     def test_seed_keeps_unchanged_entries_and_invalidates_changed_dependency_closures(self):
         entries = {
@@ -188,7 +196,7 @@ class CIContractTests(unittest.TestCase):
         action = yaml.safe_load((ROOT / '.github/actions/setup-bee/action.yml').read_text())
         steps = action['runs']['steps']
         caches = [step for step in steps if 'actions/cache' in step.get('uses', '')]
-        self.assertEqual(len(caches), 2)
+        self.assertEqual(len(caches), 3)
         self.assertTrue(all('/restore@' in step['uses'] for step in caches))
         self.assertNotIn('restore-keys', caches[0]['with'])
         self.assertEqual(caches[1]['with']['restore-keys'], '${{ steps.key.outputs.cache-prefix }}')
@@ -196,7 +204,7 @@ class CIContractTests(unittest.TestCase):
         go = [step for step in steps if 'actions/setup-go@' in step.get('uses', '')]
         self.assertEqual(len(go), 1)
         self.assertFalse(go[0]['with']['cache'])
-        self.assertEqual(steps[-1]['run'], 'make tools')
+        self.assertTrue(any(step.get('run') == 'make tools' for step in steps))
         release = workflow('release.yml')['jobs']
         self.assertEqual(set(release), {'prepare', 'build', 'release'})
         for job in release.values():
@@ -208,15 +216,21 @@ class CIContractTests(unittest.TestCase):
         self.assertIn('make ci-require', prepare[1]['run'])
         self.assertEqual(prepare[1]['env']['CI_PROOF_BRANCH'], "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && github.ref_name || 'main' }}")
         ci_jobs = workflow('ci.yml')['jobs']
-        application = next(step for step in ci_jobs['prepare']['steps'] if step.get('id') == 'application')
-        self.assertEqual(application['with']['path'].splitlines(), ['.wippy/cache', '${{ steps.setup.outputs.lua-path }}'])
-        self.assertTrue(application['with']['key'].endswith('${{ steps.key.outputs.fingerprint }}'))
-        self.assertNotIn('github.job', application['with']['key'])
-        self.assertNotIn('strategy.job-index', application['with']['key'])
+        self.assertEqual(ci_jobs['prepare']['needs'], 'profiles')
+        profiles = ci_jobs['profiles']
+        self.assertNotIn('needs', profiles)
+        self.assertEqual(profiles['strategy']['matrix']['profile'], ['strict', 'nonstrict', 'fixtures'])
+        saves = [step for job in ci_jobs.values() for step in job['steps'] if 'actions/cache/save@' in step.get('uses', '') and 'Lua' in step.get('name', '')]
+        self.assertEqual(len(saves), 1)
+        self.assertEqual(saves[0]['with']['key'], '${{ steps.setup.outputs.lua-cache-key }}')
         for name in ('lint', 'boot', 'tests'):
-            self.assertEqual(ci_jobs[name]['needs'], 'prepare')
+            self.assertNotIn('needs', ci_jobs[name])
             self.assertEqual(ci_jobs[name]['runs-on'], 'ubuntu-24.04')
-            self.assertTrue(any(step.get('run') == 'make ci-import' for step in ci_jobs[name]['steps']))
+            self.assertFalse(any('actions/download-artifact@' in step.get('uses', '') for step in ci_jobs[name]['steps']))
+            if name != 'lint':
+                self.assertEqual(ci_jobs[name]['env']['TEST_CACHE_MODE'], 'readonly')
+                self.assertEqual(ci_jobs[name]['env']['CI_TESTS'], '1')
+        self.assertIn('profiles', ci_jobs['check']['needs'])
         darwin = [row for row in release['build']['strategy']['matrix']['include'] if row['goos'] == 'darwin']
         self.assertEqual({row['goarch'] for row in darwin}, {'amd64', 'arm64'})
         commands = subprocess.check_output(['make', '--no-print-directory', '-n', 'release-compile'], cwd=ROOT, text=True)

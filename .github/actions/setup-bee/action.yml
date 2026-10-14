@@ -4,6 +4,9 @@ inputs:
   target:
     description: Release platform whose Go compilation cache is restored
     required: true
+  lua-cache:
+    description: Restore the shared per-entry base for CI checks
+    default: 'false'
 outputs:
   cache-key:
     value: ${{ steps.key.outputs.cache-key }}
@@ -29,6 +32,15 @@ outputs:
   runtime:
     description: Exact runtime commit
     value: ${{ steps.key.outputs.runtime }}
+  application-key:
+    description: Content fingerprint of prepared inputs
+    value: ${{ steps.key.outputs.application-key }}
+  lua-cache-key:
+    description: Shared entry cache fingerprint
+    value: bee-lua-v5-${{ steps.key.outputs.lua-key }}-${{ steps.key.outputs.application-key }}
+  lua-hit:
+    description: Whether the shared entry fingerprint is restored exactly
+    value: ${{ steps.lua.outputs.cache-hit }}
 runs:
   using: composite
   steps:
@@ -63,3 +75,18 @@ runs:
   - name: Pinned toolchain
     shell: bash
     run: make tools
+  - id: lua
+    if: inputs.lua-cache == 'true'
+    uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809
+    with:
+      path: |-
+        .wippy/cache
+        ${{ steps.key.outputs.lua-path }}
+      key: bee-lua-v5-${{ steps.key.outputs.lua-key }}-${{ steps.key.outputs.application-key }}
+      restore-keys: |-
+        bee-lua-v5-${{ steps.key.outputs.lua-key }}-
+        bee-lua-v4-${{ steps.key.outputs.lua-legacy-key }}-
+        bee-lua-v3-Linux-ARM64-${{ steps.key.outputs.runtime }}-
+  - if: inputs.lua-cache == 'true'
+    shell: bash
+    run: printf "LUA_CACHE=%s\n" "${{ steps.key.outputs.lua-path }}" >> "$GITHUB_ENV"

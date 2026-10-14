@@ -191,7 +191,8 @@ def run(toolchain, fault):
     (workspace / ".wippy.yaml").write_text(yaml.safe_dump(
         {"version": "1.0", "workspace": {"replacements": {"bee/bee": str(application)}},
          "cluster": {"name": "bee-boot-" + root.parent.name + "-" + root.name},
-         "lua": {"cache": {"dir": str(Path(sys.argv[2]).resolve())}} if len(sys.argv) > 2 else {}}, sort_keys=False))
+         "lua": {"cache": {"dir": str(Path(sys.argv[2]).resolve()),
+                           "mode": sys.argv[3] if len(sys.argv) > 3 else 'readwrite'}} if len(sys.argv) > 2 else {}}, sort_keys=False))
     (workspace / ".wippy").mkdir()
     (workspace / ".wippy/vendor").symlink_to(REPO / "tests/.wippy/vendor", target_is_directory=True)
     home = root / "home"

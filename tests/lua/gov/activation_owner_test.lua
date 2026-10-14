@@ -1172,7 +1172,7 @@ local function recovery_tests()
                     observations = observations + 1
                     return false, nil
                 end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     applications = applications + 1
                     return {changed = true}, nil
                 end}

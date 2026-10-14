@@ -212,7 +212,7 @@ def run(toolchain, fault):
                              "-o", "bee:terminal:hide_logs=false",
                              "-o", "bee:gateway_listener:addr=127.0.0.1:0",
                              "test", "bee.tests.node:boot_residency_test", "bee.tests.node:idle_services_test",
-                             "bee.gateway:effects_scope_test"],
+                             "bee.tests.gateway:effects_scope_test"],
                             cwd=workspace, env=environment, capture_output=True, text=True, timeout=60)
     log = result.stdout + result.stderr
     (root / "output.log").write_text(log)

@@ -337,4 +337,4 @@ Threads are local-owner durable storage: no database replication, compaction,
 cross-database transactions, federated membership or exactly-once execution of
 external effects. Wakeups are hints and delivery is at least once, so consumers
 and projections tolerate duplicates and use the stored identity rules. The
-acceptance suites are `tests/lua/threads` and `tests/lua/sessions`.
+acceptance suites are `tests/lua/threads` and `tests/lua/threads/sessions`.

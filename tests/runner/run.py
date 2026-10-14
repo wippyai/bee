@@ -216,7 +216,7 @@ def copy_workspace(root, address, identities=()):
         document = yaml.safe_load(rewritten)
         changed = declare_deadlines(document, costs, suite_limits)
         if index.is_relative_to(root / "lua"):
-            changed = wrap_suites(document, "file://" + os.path.relpath(root / "lua/hygiene/wrapper.lua", index.parent)) or changed
+            changed = wrap_suites(document, "file://" + os.path.relpath(root / "lua/support/hygiene/wrapper.lua", index.parent)) or changed
         if changed:
             rewritten = yaml.safe_dump(document, sort_keys=False)
         if rewritten != value:
@@ -271,7 +271,7 @@ def run_shard(number, identities, run_root, toolchain, cores, count, discovered,
                "--set", "lua.cache.dir=" + str(lua_cache.resolve()),
                "--set", "lua.cache.mode=" + lua_cache_mode,
                "test", *sorted(identities)]
-    command = [sys.executable, str(TESTS / "lua/hygiene/process_guard.py"), "run", *command]
+    command = [sys.executable, str(TESTS / "lua/support/hygiene/process_guard.py"), "run", *command]
     log = root / "output.log"
     timeline = Timeline({name: discovered[name] for name in identities})
     decoder = codecs.getincrementaldecoder("utf-8")("replace")

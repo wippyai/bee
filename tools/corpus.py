@@ -100,7 +100,7 @@ def capability_page() -> str:
 
 def starter_page() -> str:
     entries = []
-    base = ROOT / "tests/lua/starter"
+    base = ROOT / "tests/lua/support/starter"
     for index in sorted(base.rglob("_index.yaml")):
         document = yaml.safe_load(index.read_text())
         for row in document["entries"]:
@@ -114,7 +114,7 @@ def starter_page() -> str:
             entry = {"id": document["namespace"] + ":" + row["name"], "kind": row["kind"], "data": data}
             if "meta" in row: entry["meta"] = row["meta"]
             entries.append(entry)
-    return "# Minimal Bee starter app\n\nCopy this complete JSON array to entries.json in overlay hello. Replace all app.hello prefixes if you rename the overlay. The UI lives in .app, behaviour in .model and tests in .tests. It needs no extra capabilities. The source is the typed Lua fixture that Bee lints; the greeting tests exercise the same library the app uses. Follow docs/build_bee_app to freeze, preflight, deliver, approve and run the installed tests.\n\n## entries.json\n\n```json\n" + json.dumps(entries, indent=2, ensure_ascii=False) + "\n```\n"
+    return "# Minimal Bee starter app\n\nCopy this complete JSON array to entries.json in overlay hello. Replace all app.hello prefixes if you rename the overlay. The UI lives in .app, behaviour in .model and tests in .tests. It needs no extra capabilities. The source is the typed Lua fixture that Bee lints; the greeting tests exercise the same library the app uses. Follow docs/build_bee_app to freeze, preflight, deliver, approve and run the installed tests.\n\n## entries.json\n\n```json\n" + json.dumps(entries, indent=2, ensure_ascii=False).replace("bee.tests.support.starter.", "app.hello.") + "\n```\n"
 
 
 def main() -> int:
@@ -131,7 +131,7 @@ def main() -> int:
         ("docs/app_capabilities", "App capability catalog", "capabilities",
          "src/capability/_index.yaml", capability_page()),
         ("reference_apps/starter", "Minimal Bee starter app", "reference_apps",
-         "tests/lua/starter", starter_page()),
+         "tests/lua/support/starter", starter_page()),
     ])
     for doc_id, title, topic, source, content in generated:
         target = CORPUS / f"{doc_id}.md"

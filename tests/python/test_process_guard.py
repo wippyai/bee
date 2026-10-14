@@ -8,7 +8,7 @@ import os
 import queue
 import threading
 
-from tests.lua.hygiene import process_guard as guard
+from tests.lua.support.hygiene import process_guard as guard
 
 
 class ProcessGuardTests(unittest.TestCase):

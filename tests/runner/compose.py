@@ -345,7 +345,7 @@ def host_environment():
     environment = next(entry for entry in document["entries"] if entry["name"] == "environment")
     environment["data"]["values"]["claude"] = str(TESTS / "fixtures/harness/bin/claude")
     environment["data"]["values"]["opencode"] = str(TESTS / "fixtures/harness/bin/opencode")
-    target = TESTS / "lua/harness/host/_index.yaml"
+    target = COMPOSITION / "src/harness/host/_index.yaml"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(yaml.safe_dump(document, sort_keys=False))
 
@@ -667,13 +667,13 @@ def observe_preparer_cleanup(src):
     replace_once(src / "placement/native/service/workdir_preparers.lua",
                  "local after = assert(bounds.count(row.evidence_count))",
                  """local after = assert(bounds.count(row.evidence_count))
-    local fixture = registry.get("bee.placement.native:preparer_fixture_config")
+    local fixture = registry.get("bee.tests.placement.native:preparer_fixture_config")
     if fixture and fixture.data and type(fixture.data.cleanup_observer) == "string" then
         assert(process.send(fixture.data.cleanup_observer, "bee.test.preparer.observed", {}))
     end""")
     replace_once(src / "placement/native/service/workdir_preparers.lua",
                  'local db, open_error = store.open()\n    if not db then return false, open_error end\n    local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)',
-                 '''local fixture = registry.get("bee.placement.native:preparer_fixture_config")
+                 '''local fixture = registry.get("bee.tests.placement.native:preparer_fixture_config")
     if fixture and fixture.data and fixture.data.cleanup_crash_attempt == attempt.attempt_id and type(fixture.data.cleanup_crash) == "string" then
         local crash = assert(process.listen("bee.test.preparer.crash", {message = true}))
         assert(process.send(fixture.data.cleanup_crash, "bee.test.preparer.claimed", {}))
@@ -934,6 +934,7 @@ def compose():
     resource_clock(src)
     observe_hook_cancellation(src)
     shutil.copytree(TESTS / "fixtures/memory", src / "test_memory")
+    shutil.copytree(TESTS / "fixtures/persist/retained", src / "test_retained")
     yield_session_defaults(src)
     managed_gateway(src)
     runner_fixture_type(src)
@@ -942,9 +943,9 @@ def compose():
     settings_area_fixture(src)
     hold_inbox_review(src)
     shutil.copy2(ROOT / "src/placement/native/service/materialization.lua",
-                 TESTS / "lua/placement_publication/materialization.lua")
+                 TESTS / "lua/placement/publication/materialization.lua")
     shutil.copy2(ROOT / "src/placement/docker/service/image_owner.lua",
-                 TESTS / "lua/placement_owner/image_owner.lua")
+                 TESTS / "lua/placement/owner/image_owner.lua")
     shutil.copy2(ROOT / "src/gov/service/activation_worker.lua",
                  TESTS / "lua/gov/activation_worker.lua")
     shutil.copy2(ROOT / "src/process/demand_owner.lua",

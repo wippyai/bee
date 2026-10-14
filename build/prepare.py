@@ -47,10 +47,6 @@ def main():
         inventory = json.loads(subprocess.check_output([str(ROOT / '.wippy/bin/wippy'), 'registry', 'list', '--json'], text=True))
         application_ids = {row['id'] for row in inventory}
         entries = cache / 'v1/entries'
-        previous_fixtures = cache / 'fixtures/v1/entries'
-        if previous_fixtures.exists():
-            shutil.copytree(previous_fixtures, entries, dirs_exist_ok=True)
-            shutil.rmtree(cache / 'fixtures')
         wippy = str(ROOT / '.wippy/bin/wippy')
         command = [wippy, 'lint', '--memory-limit', '1G', '--set', 'lua.cache.dir=' + str(cache), '--set', 'lua.cache.max_bytes=4294967296']
         strict = ('strict', ['make', '--no-print-directory', '-o', 'tools', '-o', 'binary-identity', 'release-pack'])

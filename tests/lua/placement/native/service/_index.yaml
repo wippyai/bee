@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.tests.placement.native.service
+entries:
+- name: identity_executor
+  kind: exec.native
+  default_env: {PATH: '.wippy/speed-probe-bin:/usr/bin:/bin'}
+- name: identity_probe_test
+  kind: function.lua
+  source: file://identity_probe_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [exec, registry]
+  security:
+    policies: [bee.tests.threads.sessions:probe_policy]
+  imports:
+    test: wippy.test:test
+    identity: bee.placement.native.service:identity
+    capability: bee.placement.native.service:capability
+    bounds: bee.values:bounds

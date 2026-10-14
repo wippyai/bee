@@ -31,27 +31,40 @@ function M.run(launch: client.Launch, session: string, input: tty.EventChannel,
     local review_ticks = thread_id and assert(time.ticker("1s")) or nil
     local reviews = review_ticks and review_ticks:channel()
     local review_key = ""
-    local function publish_review()
-        if not thread_id then return end
-        local review, problem = waiting.read(thread_id)
-        if problem then logger:warn("Waiting request lookup failed", {error = problem}); return end
-        local key = review and (review.approval_id .. review.title) or ""
-        if key ~= review_key then
-            assert(client.review(launch, review))
-            review_key = key
-        end
+    local review_pending = false
+    local review_results: Channel<{review: waiting.Review?, problem: string?}> = channel.new(1)
+    local active = true
+    local function request_review()
+        if not thread_id or review_pending then return end
+        review_pending = true
+        coroutine.spawn(function()
+            local review, problem = waiting.read(thread_id)
+            if active then review_results:send({review = review, problem = problem}) end
+        end)
     end
-    publish_review()
+    request_review()
     local closing = false
     while true do
         local snapshot, snapshot_error = view:snapshot()
         if snapshot_error then err = tostring(snapshot_error); break end
         if snapshot then assert(output:present(snapshot.rows, {cursor = snapshot.cursor})) end
-        local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), updates:case_receive()}
+        local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), updates:case_receive(), review_results:case_receive()}
         if reviews then cases[#cases + 1] = reviews:case_receive() end
         local event = channel.select(cases)
         if not event.ok then break end
-        if reviews and event.channel == reviews then publish_review()
+        if reviews and event.channel == reviews then request_review()
+        elseif event.channel == review_results then
+            review_pending = false
+            local result = event.value
+            if result.problem then logger:warn("Waiting request lookup failed", {error = result.problem})
+            else
+                local review = result.review
+                local key = review and (review.approval_id .. review.title) or ""
+                if key ~= review_key then
+                    assert(client.review(launch, review))
+                    review_key = key
+                end
+            end
         elseif event.channel == lifecycle and event.value.kind == process.event.CANCEL then closing = true; break
         elseif event.channel == closes then
             local close = client.close_request(launch, tostring(event.value:from()), event.value:payload():data())
@@ -69,6 +82,7 @@ function M.run(launch: client.Launch, session: string, input: tty.EventChannel,
             end
         end
     end
+    active = false
     if review_ticks then review_ticks:stop() end
     client.review(launch, nil)
     output:close()

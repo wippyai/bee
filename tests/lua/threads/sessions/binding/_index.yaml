@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.tests.threads.sessions.binding
+entries:
+- name: close_on_exit_test
+  kind: function.lua
+  source: file://close_on_exit_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+- name: listing_dependencies_test
+  kind: function.lua
+  source: file://listing_dependencies_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test

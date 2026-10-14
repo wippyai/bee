@@ -191,7 +191,7 @@ type Open = (string, unknown) -> (Window?, string?)
 -- The component-owned process supplies constructors keyed by placement binding.
 -- Request data cannot supply executable callbacks or choose a constructor outside
 -- the host-admitted placement plan.
-local function main(value: unknown, constructors: {[string]: Open}, retained: boolean?, session_operation_key: string?)
+local function main(value: unknown, constructors: {[string]: Open}, retained: boolean?, session_operation_key: string?, supplied: admission.Admitted?)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
     local input = assert(tty.events())
@@ -619,6 +619,19 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             error("Managed window recovery surface: " .. tostring(output_error))
         end
+    elseif supplied then
+        assert(retained and supplied.request_id == launch.instance_id
+            and supplied.request.workspace_id == launch.workspace_id, "Invalid retained admission")
+        local prior = supplied.plan
+        local current, refused = admission.resolve(prior.definition_ref, prior.mode, launch.workspace_id,
+            prior.saved_profile_id, prior.saved_profile_revision, prior.agent_ref,
+            prior.owner_component_revision, prior.spec_digest, nil, prior.spawn_overrides)
+        if not current or current.plan_digest ~= prior.plan_digest then
+            show_failure("Managed window admission: " .. (current and "the selected launch plan changed" or failure(refused)))
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            return
+        end
+        admitted = supplied
     elseif direct then
         local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1], launch.thread_id,
             {view_id = launch.view_id, instance_id = launch.instance_id}, phase, launch.arguments[2])

@@ -201,7 +201,7 @@ function M.attach(value: unknown): Object
     return rpc(tostring(owner), {op = request.detach == true and "detach" or "attach"})
 end
 -- start spawns the window executor on a fresh viewport and returns both.
-local function start(workspace_id: string, request_id: string, arguments: {string}, resume_state: string, operation_key: string): (tty.Viewport, string)
+local function start(workspace_id: string, request_id: string, arguments: {string}, resume_state: string, operation_key: string, admitted: admission.Admitted?): (tty.Viewport, string)
     local view = assert(tty.viewport({width = 80, height = 24}))
     local grant = assert(view:grant())
     local pid = assert(process.with_options({terminal = grant})
@@ -210,7 +210,7 @@ local function start(workspace_id: string, request_id: string, arguments: {strin
         version = 1, broker_pid = process.pid(), workspace_pid = process.pid(), workspace_id = workspace_id,
         instance_id = request_id, view_id = request_id, definition_id = "bee.harness.app:app",
         execution_generation = 1, definition_revision = "1", registry_revision = "1", launch_token = request_id,
-        resume_schema = recovery.SCHEMA, resume_state = resume_state, arguments = arguments}, operation_key))
+        resume_schema = recovery.SCHEMA, resume_state = resume_state, arguments = arguments}, operation_key, admitted))
     return view, tostring(pid)
 end
 local function run(value: unknown, name: unknown, initial_token: string, operation_key: string)
@@ -268,7 +268,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
             brief = "", workdir = decoded.workdir, overrides = decoded.overrides, expected_plan_digest = decoded.expected_plan_digest,
             saved_profile_id = decoded.saved_profile_id, saved_profile_revision = decoded.saved_profile_revision,
             thread_id = admitted.thread_id}))
-        launch = function() view, pid = start(decoded.workspace_id, decoded.request_id, {encoded}, "", operation_key) end
+        launch = function() view, pid = start(decoded.workspace_id, decoded.request_id, {encoded}, "", operation_key, admitted) end
         reply_to(initial_token, receipt())
     end
     local mount: string? = nil

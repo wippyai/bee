@@ -7,7 +7,7 @@ local bounds = require("bounds")
 local function cases()
     test.describe("Linux process identity probe", function()
         test.it("reads the process group from procfs when ps is unavailable", function()
-            local executor = assert(exec.get("bee.tests.speed:identity_executor"))
+            local executor = assert(exec.get("bee.tests.placement.native.service:identity_executor"))
             local platform = assert(executor:exec("test -r /proc/self/stat"))
             assert(platform:start())
             if platform:wait() ~= 0 then executor:release(); return end
@@ -24,7 +24,7 @@ local function cases()
                 test.not_nil(recorded.boot_id)
                 local original = assert(registry.get("bee.placement.native.env:executor_ref"))
                 local changed = assert(registry.get("bee.placement.native.env:executor_ref"))
-                assert(bounds.object(changed.data)).resource_ref = "bee.tests.speed:identity_executor"
+                assert(bounds.object(changed.data)).resource_ref = "bee.tests.placement.native.service:identity_executor"
                 local changes = assert(registry.snapshot()):changes()
                 changes:update(changed); assert(changes:apply())
                 local measured_ok, measurement = pcall(capability.measure)

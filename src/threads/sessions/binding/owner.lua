@@ -17,6 +17,7 @@ local session_protocol = require("session_protocol")
 local record_values = require("record_values")
 local remote = require("remote")
 local system = require("system")
+local listing = require("listing")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -69,55 +70,7 @@ local function ref(value: unknown): string?
     return value
 end
 
-local function snapshot(value: unknown): (Object?, string?)
-    local row = object(value)
-    if not row or type(row.session) ~= "string" or type(row.title) ~= "string"
-        or type(row.state) ~= "string" or type(row.revision) ~= "number" then
-        return nil, "Threads returned a malformed session snapshot"
-    end
-    local queued = type(row.queued) == "number" and row.queued or 0
-    local lifecycle = row.state
-    if lifecycle ~= "active" and lifecycle ~= "suspended" and lifecycle ~= "closing" and lifecycle ~= "closed" then
-        return nil, "Threads returned an unsupported session lifecycle"
-    end
-    local activity = row.activity
-    if activity ~= "idle" and activity ~= "working" and activity ~= "blocked" and activity ~= "stalled" then
-        return nil, "Threads returned an unsupported session activity"
-    end
-    local activity_evidence: Object? = nil
-    if row.activity_evidence ~= nil then
-        local evidence = object(row.activity_evidence)
-        local turn = evidence and ref(evidence.turn)
-        local last = evidence and bounds.count(evidence.last_progress_at_ms)
-        local quiet_period = evidence and bounds.count(evidence.quiet_period_ms)
-        local quiet_for = evidence and bounds.count(evidence.quiet_for_ms)
-        if not evidence or bounds.fields(evidence, {"kind", "turn", "last_progress_at_ms", "quiet_period_ms", "quiet_for_ms"})
-            or evidence.kind ~= "quiet" or not turn or not last or not quiet_period or quiet_period < 1
-            or not quiet_for or quiet_for < quiet_period then
-            return nil, "Threads returned malformed quiet-period evidence"
-        end
-        activity_evidence = {kind = "quiet", turn = turn, last_progress_at_ms = last,
-            quiet_period_ms = quiet_period, quiet_for_ms = quiet_for}
-    end
-    local at = type(row.updated_at) == "string" and row.updated_at or row.created_at
-    if type(at) ~= "string" then return nil, "Threads omitted the session timestamp" end
-    local route = object(row.route) or {}
-    local saved_profile: Object? = nil
-    if route.saved_profile_id ~= nil or route.saved_profile_revision ~= nil then
-        local id, revision = ref(route.saved_profile_id), bounds.integer(route.saved_profile_revision)
-        if not id or not revision or revision < 1 then return nil, "Session saved profile is malformed" end
-        saved_profile = {id = id, revision = revision}
-    end
-    local limits: Object = table.create(0, 1)
-    for name, limit in pairs(object(route.budgets) or {}) do limits[name] = limit end
-    return {terminal = route.delivery == "hook", session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
-        driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
-        revision = row.revision, incarnation = 1, title = row.title,
-        lifecycle = lifecycle, activity = activity, activity_evidence = activity_evidence,
-        execution = {state = row.execution_running == true and "running" or "quiescent", evidence_at = at, stale = false},
-        queue_count = queued, effective_limits = limits,
-        saved_profile = saved_profile, effective_profile = profile_values.upgrade(route.effective_profile), profile_digest = route.profile_digest, budget_consumption = row.budget_consumption, continuity = {mode = "provider_resume"}, actions = {}}, nil
-end
+local snapshot = require("snapshot").decode
 
 local finish_closing: (string, string) -> string?
 local deliver: (string, string) -> string?
@@ -1265,85 +1218,9 @@ function M.join(raw_request: unknown): Reply
     return succeed(decided)
 end
 
--- LIST_PAGE_BYTES is the published bound of one reply value; a page carries
--- as many sessions as fit under it with its cursor.
-M.LIST_PAGE_BYTES = 65536
-local LIST_PAGE_OVERHEAD_BYTES = 512
-function M.list(raw_request: unknown): Reply
-    local request, refused = request_input(raw_request)
-    if not request then return assert(refused) end
-    if bounds.fields(request, {"filter", "cursor"}) then return fail("INVALID", "list accepts only filter and cursor") end
-    local filter = object(request.filter)
-    if request.filter ~= nil and (not filter or bounds.fields(filter, {"lifecycle", "activity", "workspace", "definition"})) then
-        return fail("INVALID", "session filter is malformed")
-    end
-    local lifecycle = filter and filter.lifecycle or nil
-    if lifecycle ~= nil and lifecycle ~= "opening" and lifecycle ~= "active" and lifecycle ~= "suspended"
-        and lifecycle ~= "closing" and lifecycle ~= "closed" then return fail("INVALID", "lifecycle filter is invalid") end
-    local activity = filter and filter.activity or nil
-    if activity ~= nil and activity ~= "idle" and activity ~= "working" and activity ~= "blocked" and activity ~= "stalled" then
-        return fail("INVALID", "activity filter is invalid")
-    end
-    local workspace = filter and filter.workspace or nil
-    local definition = filter and filter.definition or nil
-    if (workspace ~= nil and not bounds.id(workspace)) or (definition ~= nil and not ref(definition)) then return fail("INVALID", "workspace or definition filter is invalid") end
-    local cursor = request.cursor == nil and nil or ref(request.cursor)
-    if request.cursor ~= nil and not cursor then return fail("INVALID", "cursor is invalid") end
-    local page, scan_error = journal.invoke("session_scan", {cursor = cursor, limit = 64, workspace = workspace})
-    if scan_error or not page then return unavailable(scan_error or "Threads returned no session page", nil) end
-    local scan = object(page)
-    local refs = scan and scan.items
-    if type(refs) ~= "table" then return unavailable("Threads returned a malformed session page", nil) end
-    local items: {Object} = {}
-    -- The page stays within one published reply value: once the next session
-    -- would not fit, the page ends after the last session scanned.
-    local size = LIST_PAGE_OVERHEAD_BYTES
-    local scanned: string? = nil
-    for _, raw_ref in ipairs(refs) do
-        local session = ref(raw_ref)
-        if not session then return unavailable("Threads returned a malformed session ref", nil) end
-        local current, read_error = describe(session)
-        if not current then return unavailable(read_error or "cannot read a listed session", nil) end
-        if (lifecycle == nil or current.lifecycle == lifecycle) and (activity == nil or current.activity == activity)
-            and (definition == nil or current.definition == definition) then
-            local encoded = json.encode(current)
-            if not encoded then return unavailable("a listed session is not encodable", nil) end
-            if size + #encoded + 1 > M.LIST_PAGE_BYTES then
-                if not scanned then return unavailable("one session exceeds the list page bound", nil) end
-                return succeed({items = items, next = scanned})
-            end
-            size = size + #encoded + 1
-            items[#items + 1] = current
-        end
-        scanned = session
-    end
-    return succeed({items = items, next = scan and ref(scan.next) or nil})
-end
-
--- Read-only display summary for the caller's workspace. No control actions.
-function M.attention_count(raw_request: unknown): Reply
-    local request, refused = request_input(raw_request)
-    if not request then return assert(refused) end
-    local actor, workspace = identity()
-    if not actor or not workspace or request.workspace_id ~= workspace
-        or bounds.fields(request, {"workspace_id"}) then return fail("DENIED", "attention summary requires the caller's workspace") end
-    local count = 0
-    local cursor: string? = nil
-    for _ = 1, 16 do
-        local page = M.list({filter = {workspace = workspace}, cursor = cursor})
-        if not page.ok then return page end
-        local value = object(page.value)
-        local items = value and value.items
-        if type(items) ~= "table" then return unavailable("session summary unavailable", nil) end
-        for _, raw in ipairs(items) do
-            local row = object(raw)
-            if row and row.lifecycle ~= "closed" and (row.activity == "blocked" or row.activity == "stalled") then count = count + 1 end
-        end
-        cursor = value and ref(value.next) or nil
-        if not cursor then return succeed({count = count}) end
-    end
-    return unavailable("session summary exceeds the display page limit", nil)
-end
+M.LIST_PAGE_BYTES = listing.LIST_PAGE_BYTES
+M.list = listing.list
+M.attention_count = listing.attention_count
 
 function M.run(raw_request: unknown): Reply
     local input, refused = request_input(raw_request)

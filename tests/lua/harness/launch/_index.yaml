@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.tests.harness.launch
+entries:
+- name: configuration_preview_test
+  kind: function.lua
+  source: file://configuration_preview_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee.tests.threads.sessions:probe_policy]
+  imports:
+    test: wippy.test:test
+    setup: bee.harness.launch:configuration_setup

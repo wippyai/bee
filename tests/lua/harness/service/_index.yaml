@@ -1,0 +1,21 @@
+version: '1.0'
+namespace: bee.tests.harness.service
+entries:
+- name: executor_handoff_test
+  kind: function.lua
+  source: file://executor_handoff_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, funcs]
+  security:
+    policies: [bee.tests.harness:apply_test_policy]
+  imports:
+    test: wippy.test:test
+- name: runtime_probe
+  kind: library.lua
+  source: file://executor_probe.lua
+  meta: {type: test_support}
+- name: windows_probe
+  kind: library.lua
+  source: file://executor_probe.lua
+  meta: {type: test_support}

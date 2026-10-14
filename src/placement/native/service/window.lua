@@ -418,9 +418,6 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
             if backend then
                 local cleaned, backend_error = backend.cleanup(attempt, false)
                 if not cleaned then cleanup_error = backend_error or "cleanup failed" end
-            else
-                local cleaned = service.cleanup_attempt(attempt, true)
-                if not cleaned.ok then cleanup_error = cleaned.error and cleaned.error.message or "cleanup failed" end
             end
         end
         service.wake_supervision(row.placement_kind)

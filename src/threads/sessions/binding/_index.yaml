@@ -41,6 +41,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -212,6 +214,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -395,6 +399,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -544,6 +550,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -683,6 +691,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -843,6 +853,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -970,27 +982,13 @@ entries:
     hive_alias: session_get
 - name: list
   kind: function.lua
-  source: file://owner.lua
+  source: file://listing.lua
   method: list
-  modules:
-  - logger
-  - json
-  - security
-  - hash
-  - funcs
-  - time
-  - system
+  modules: [json, security, system]
   imports:
     bounds: bee.values:bounds
-    canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
-    catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
-    profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -1123,6 +1121,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1247,6 +1247,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1380,6 +1382,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1510,6 +1514,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1647,6 +1653,8 @@ entries:
   source: file://owner.lua
   method: attach
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1673,6 +1681,8 @@ entries:
   source: file://owner.lua
   method: restore
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1699,6 +1709,8 @@ entries:
   source: file://owner.lua
   method: launch_prompt
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1725,6 +1737,8 @@ entries:
   source: file://owner.lua
   method: idle_check
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1751,6 +1765,8 @@ entries:
   source: file://owner.lua
   method: hook_boundary
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1785,6 +1801,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1800,27 +1818,13 @@ entries:
     policies: *id001
 - name: attention_count
   kind: function.lua
-  source: file://owner.lua
+  source: file://listing.lua
   method: attention_count
-  modules:
-  - logger
-  - json
-  - security
-  - hash
-  - funcs
-  - time
-  - system
+  modules: [json, security, system]
   imports:
     bounds: bee.values:bounds
-    canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
-    cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
-    catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
-    profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -1957,6 +1961,8 @@ entries:
   - time
   - system
   imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    listing: bee.threads.sessions.binding:listing
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
@@ -1977,3 +1983,18 @@ entries:
     - bee.threads.sessions.security:owner_setup_policy
     - bee.threads.sessions.security:owner_workspace_identity_policy
     - bee.threads.sessions.security:owner_principal_policy
+- name: snapshot
+  kind: library.lua
+  source: file://snapshot.lua
+  imports:
+    bounds: bee.values:bounds
+    profile_values: bee.harness.profiles:protocol
+- name: listing
+  kind: library.lua
+  source: file://listing.lua
+  modules: [json, security, system]
+  imports:
+    bounds: bee.values:bounds
+    journal: bee.threads.sessions.binding:threads_journal
+    snapshot: bee.threads.sessions.binding:snapshot
+    remote: bee.threads.sessions.binding:remote

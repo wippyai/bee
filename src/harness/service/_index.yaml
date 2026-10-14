@@ -51,6 +51,7 @@ entries:
   source: file://executor.lua
   method: main
   imports:
+    admission: bee.harness.launch:admission
     runtime: bee.harness.app:runtime
     windows: bee.harness.binding:windows
 - name: open

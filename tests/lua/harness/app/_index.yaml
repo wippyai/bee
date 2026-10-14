@@ -1,0 +1,20 @@
+version: '1.0'
+namespace: bee.tests.harness.app
+entries:
+- name: terminal_view_test
+  kind: function.lua
+  source: file://terminal_view_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, process, tty, time, channel]
+  security:
+    policies: [bee.tests.harness:apply_test_policy]
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+- name: blocked_review
+  kind: function.lua
+  source: file://blocked_review.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]

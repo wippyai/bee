@@ -1,0 +1,15 @@
+version: '1.0'
+namespace: bee.tests.harness.catalog
+entries:
+- name: selected_catalog_test
+  kind: function.lua
+  source: file://selected_catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  security:
+    policies: [bee.tests.harness:apply_test_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    bounds: bee.values:bounds

@@ -264,7 +264,7 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
     local reply, call_error = executor:call(tool.operation, request)
     return reply_result(reply, call_error)
 end
--- The application tools the bound workspace offers now, projected under
+-- The application tools the bound workspace offers, projected under
 -- names no surface tool holds. Discovery runs as the bound subject under the
 -- app_tools tool policy, on every request, so installs and removals show at
 -- once.

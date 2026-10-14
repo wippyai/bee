@@ -72,7 +72,7 @@ local function named(request: unknown, fields: {string}): ({[string]: unknown}?,
     return object, attempt_id, nil
 end
 -- claim: a new carrier epoch on a live attempt; the previous carrier's
--- commits are refused from now on.
+-- subsequent commits are refused.
 function M.claim(db: sql.DB, actor: string, request: unknown): Result
     local mutation, invalid = authority.mutation(request)
     if not mutation then return invalid or failure("INVALID_ARGUMENT", "invalid request") end

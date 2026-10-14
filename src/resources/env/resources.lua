@@ -73,7 +73,7 @@ function M.directory(root_ref: string): (string?, string?)
     if not directory or directory == "" then return nil, "resource root " .. root_ref .. " has no directory" end
     return resolve_directory(directory, root_ref)
 end
--- The fs.directory entry behind a root, as it is now.
+-- The fs.directory entry behind a root, in its current state.
 function M.root(root_ref: string): ({[string]: unknown}?, string?)
     local entry, err = registry.get(root_ref)
     if err or not entry then return nil, "resource root " .. root_ref .. " is not in the registry" end

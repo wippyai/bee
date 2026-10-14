@@ -551,7 +551,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                             end
                         else
                             -- A changed plan is the one a new session of this
-                            -- definition and saved profile is admitted under now;
+                            -- definition and saved profile is admitted under;
                             -- the conversation resumes under it.
                             local reauthorized_id, id_error = uuid.v7()
                             if not reauthorized_id then

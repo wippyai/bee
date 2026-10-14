@@ -166,12 +166,12 @@ local function define_tests()
             test.is_true(retained)
             test.contains(tostring(reason), "unmerged commits")
 
-            -- Now merge the worker branch into main
+            -- Merge the worker branch into main
             local br = tostring(state.branch)
             local merge_cmd: {string} = {"git", "-C", repo, "merge", br}
             checked_run(merge_cmd)
 
-            -- Cleanup again -> now merged, should be removed
+            -- Merged branches permit removal.
             local retained_after_merge, _, clean_after_err = worktree.cleanup_dedicated(state)
             if clean_after_err then
                 cleanup_dir(repo)

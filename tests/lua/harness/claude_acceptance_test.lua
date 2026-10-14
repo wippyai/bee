@@ -244,7 +244,7 @@ local function define_tests()
                 test.is_false(observe(session, "3s", function(run: Run): boolean return tool_result_after(run, nil) ~= nil or ended(run) end))
                 test.is_false(session.ended)
                 test.eq(shell("ls " .. work):find("proof.txt", 1, true), nil)
-                -- Still waiting: the correlated allow now executes it.
+                -- The correlated allow permits execution.
                 respond(session, encoded(adapter.allow(pinned, request, nil)))
                 if not observe(session, "20s", ended) then error("wrong: the turn did not end after the correlated allow") end
                 test.not_nil(tool_result_after(session.run, "succeeded"))

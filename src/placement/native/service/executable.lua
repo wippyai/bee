@@ -95,7 +95,7 @@ function M.capabilities(): Capabilities
     report.detail = "a creating open through the host volume succeeded; the readonly declaration is not enforced by this runtime"
     return report
 end
--- verify: the planned measurement still describes what the path opens now.
+-- verify: the planned measurement still describes what the path opens.
 function M.verify(path: string, planned: types.ExecutableMeasurement): (Measurement?, string?)
     local measured, err = M.measure(path)
     if not measured then return nil, err end

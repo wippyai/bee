@@ -90,7 +90,7 @@ function M.claim_pending(tx: sql.Transaction, head: reader.Head, actor: string, 
         if not delivery_id then return nil, failure("INTERNAL", id_err or "allocate delivery identifier") end
         local delivery: reader.Delivery = {delivery_id = delivery_id, message_id = obligation.message_id, recipient_id = actor, batch_id = batch_id,
             consumer_id = consumer_id, claimant_actor = actor, channel = channel, owner_incarnation = incarnation, state = "claimed", expires_at = expires_at}
-        -- The claimed mark is committed now; the terminal mark is owed.
+        -- The claimed mark is committed; the terminal mark is owed.
         local mark_id, refused = mark(tx, head, actor, delivery, "claimed", nil, 1)
         if not mark_id then return nil, refused or failure("INTERNAL", "commit failed") end
         local delivery_err = transaction.insert_delivery(tx, head.thread_id, delivery_id, obligation.message_id, actor, batch_id, consumer_id, channel, incarnation, now, expires_at, mark_id)

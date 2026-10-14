@@ -109,7 +109,7 @@ function M.read(executor: exec.Executor, pid: integer): (Identity?, string?)
     if not facts then return nil, "read execution identity: " .. tostring(decode_error) end
     return {pid = pid, pgid = facts.pgid, start_ticks = facts.start_ticks, boot_id = facts.boot_id}, nil
 end
--- Compares the recorded identity with what the kernel reports now.
+-- Compares the recorded identity with what the kernel reports.
 function M.observe(recorded: Identity): Observation
     if not recorded.start_ticks or not recorded.boot_id then return {observed = false, detail = "no execution identity recorded"} end
     local executor_ref, reference_error = resources.executor()

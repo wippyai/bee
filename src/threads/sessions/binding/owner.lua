@@ -475,7 +475,7 @@ function M.launch_prompt(raw_request: unknown): Reply
     return succeed({prompt = text})
 end
 
--- idle_check tells a window whether it may stop its agent now: no turn is in
+-- idle_check tells a window whether it may stop its agent: no turn is in
 -- flight, nothing waits, and the placement proves the agent alive with no
 -- work of its own. A placement that cannot count that work keeps it running.
 function M.idle_check(raw_request: unknown): Reply
@@ -729,7 +729,7 @@ function M.send(raw_request: unknown): Reply
     local receipt, send_error = journal.invoke("work_send", {session = session, operation_key = operation_key,
         input = request.input, output_schema = "bee:Text@1"})
     if send_error or not receipt then return unavailable(send_error or "Threads returned no work receipt", operation_key) end
-    -- The message is queued either way; delivery that cannot happen now
+    -- The message is queued either way; delivery that cannot happen immediately
     -- happens when the agent next starts or ends a turn.
     local problem = deliver(session, "send:" .. operation_key)
     if problem then logger:warn("Session message not delivered yet", {session = session, cause = problem}) end

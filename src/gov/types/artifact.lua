@@ -2,7 +2,7 @@
 --
 -- This module only copies and measures supplied values.  It never reads the
 -- registry, resolves a package, grants a capability, publishes an entry, or
--- applies an overlay.  The bytes are the immutable handoff between a resolver
+-- applies an overlay.  The bytes are the immutable transfer between a resolver
 -- and the owner that will perform those separately authorized operations.
 local canonical = require("canonical")
 local bounds = require("bounds")
@@ -256,7 +256,7 @@ function M.create(value: unknown): (Artifact?, string?)
     return {schema_revision = M.SCHEMA, entries = copied, bytes = encoded, digest = measured}, nil
 end
 
--- Verify an exact byte handoff against the complete definitions supplied by a
+-- Verify an exact byte sequence against the complete definitions supplied by a
 -- resolver.  Re-encoding is intentional: a digest alone cannot prove that the
 -- receiver retained all fields needed for a later overlay apply.
 function M.verify_bytes(value: unknown, bytes_raw: unknown, digest_raw: unknown): (boolean, string?)
@@ -274,7 +274,7 @@ function M.verify_bytes(value: unknown, bytes_raw: unknown, digest_raw: unknown)
     return true, nil
 end
 
--- Decode a byte-only handoff.  The JSON decoder is used only as a parser;
+-- Decode a byte sequence.  The JSON decoder is used only as a parser;
 -- canonical re-encoding below is what rejects whitespace, reordered/list
 -- ambiguity and extra envelope fields.  The returned entries are fresh
 -- copies, so the receiver can retain them for a later checked apply.

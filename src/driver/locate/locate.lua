@@ -2,7 +2,6 @@
 local bounds = require("bounds")
 local login_evidence = require("login_evidence")
 local M = {}
-local STATUSES = {"ready", "missing", "unconfigured", "incompatible", "unknown"}
 
 type Spec = {provider: string, executable: string, login_evidence: login_evidence.Declaration?}
 type Request = {profile_id: string, configured: boolean, executable: {[string]: unknown}?, login_checks: {login_evidence.Check}?,

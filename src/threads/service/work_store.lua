@@ -1126,7 +1126,7 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
             return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest, session_ref, receipt, now)
         end
         -- A named work is reserved itself, ahead of older queued work: a
-        -- prompt the agent submitted is the turn it runs now.
+        -- prompt the agent submitted is the turn it runs.
         local work_row_data, work_error
         if selected_work then work_row_data, work_error = journal.queued_work_ref(tx, session_ref, selected_work)
         else work_row_data, work_error = journal.queued_work(tx, session_ref) end

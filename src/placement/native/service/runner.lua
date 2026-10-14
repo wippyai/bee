@@ -169,7 +169,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             evidence(db, attempt_id, "executor.failed", tostring(executor_error), {})
             return refuse("executor unavailable: " .. tostring(executor_error))
         end
-        -- The plan's measurement is checked against what the path opens now,
+        -- The plan's measurement is checked against what the path opens,
         -- immediately before exec; a change refuses the start on record.
         if request.executable then
             local verified, verify_error = executable.verify(request.launch.executable, request.executable)

@@ -211,7 +211,7 @@ if not valid then
     return nil, errors.new("Invalid request: " .. err:message()):kind(errors.INVALID)
 end
 
--- Now safe to decode
+-- Decode after validation
 local request, decode_err = json.decode(body)
 if decode_err then return nil, decode_err end
 ```

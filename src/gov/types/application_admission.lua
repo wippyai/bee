@@ -179,7 +179,7 @@ function M.reserved(raw: unknown): boolean
         or (raw):sub(1, #PRIOR_GRANTS_PREFIX) == PRIOR_GRANTS_PREFIX)
 end
 
--- Decode the immutable byte handoff exactly as it was measured.  JSON only
+-- Decode the immutable byte sequence exactly as it was measured.  JSON only
 -- parses the input; remeasurement rejects a valid-looking noncanonical body.
 function M.decode(bytes_raw: unknown, digest_raw: unknown, generation: unknown?): (Measurement?, string?)
     if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > M.MAX_BYTES then

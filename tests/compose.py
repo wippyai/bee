@@ -502,7 +502,7 @@ def stop_hive_delivery(src):
 
 
 def observe_transaction_demand(src):
-    """Observe owner commands and the completed readiness handoff.
+    """Observe owner commands and the completed readiness transition.
 
     registry.begin/start/commit share the runtime supervisor's FIFO subscriber
     and action queue. The command receipt lets the controller withhold commit

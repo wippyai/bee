@@ -227,7 +227,7 @@ function M.select(picker: Picker, index: integer)
 end
 
 -- Enter opens the selected root, or the selected folder of the one shown.
--- True when the picker now needs that folder's first page.
+-- True when the picker needs that folder's first page.
 function M.open(picker: Picker): boolean
     if not picker.root then
         local root = picker.roots[picker.selected]
@@ -244,7 +244,7 @@ function M.open(picker: Picker): boolean
 end
 
 -- Up leaves the folder shown for its parent, and a root's top for the list
--- of roots. True when the picker now needs the parent's first page.
+-- of roots. True when the picker needs the parent's first page.
 function M.up(picker: Picker): boolean
     if not picker.root then return false end
     if picker.path == "" then

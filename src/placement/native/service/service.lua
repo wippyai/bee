@@ -739,7 +739,7 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
                 kind = "stop.before_start", detail = "stopped before runner claim; no child or attempt home was created"}})
         if stopped.ok or not stopped.error or stopped.error.code ~= "CONFLICT" then return stopped end
         -- Startup may have won. Use its recorded identity and normal stop
-        -- path; never infer that the now-starting child is absent.
+        -- path; never infer that the starting child is absent.
         local current, denied = load(attempt.attempt_id)
         if not current then return assert(denied) end
         attempt = current

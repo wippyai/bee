@@ -61,6 +61,16 @@ entries:
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
     materialization: bee.placement.native.service:materialization
+- name: catalog_test
+  kind: function.lua
+  source: file://catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee.tests.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.profiles:test_read, bee.harness.profiles:test_write]
+  imports:
+    test: wippy.test:test
+    catalog: bee.threads.sessions.binding:catalog_service
 - name: catalog_consumers_test
   kind: function.lua
   source: file://catalog_consumers_test.lua

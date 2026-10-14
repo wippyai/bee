@@ -26,14 +26,7 @@ local function raw_policy(ref: string): {[string]: unknown}
     local entry = registry.get(ref)
     if not entry then error("missing launch policy " .. ref) end
     local data = assert(bounds.object(entry.data))
-    if not data then error("launch policy " .. ref .. " has no data") end
     return data
-end
-
-local function decoded(ref: string): policy.Policy
-    local value, err = policy.decode(ref, (registry.get(ref)))
-    if not value then error(ref .. ": " .. tostring(err)) end
-    return value
 end
 
 local function selected(): preferences.Value

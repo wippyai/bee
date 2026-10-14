@@ -299,7 +299,7 @@ end
 -- the approval was bound to: the attempt still waits with a bound runner,
 -- the launch policy, binding, profile, adapter and acceptance still measure
 -- as planned, the proposal still digests the same, and the placement,
--- reconciled now, still runs under its grants and projections.
+-- reconciled, still runs under its grants and projections.
 -- consume_effect: the effect is reserved under the authority incarnation the
 -- carrier observed; a restarted authority answers REVALIDATE with its current
 -- incarnation, the carrier re-checks its own domain, records the validation

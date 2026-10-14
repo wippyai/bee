@@ -1042,7 +1042,7 @@ function M.renew_attempt(value: unknown): Reply
     db:release()
     return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch, renewed = renewed})
 end
--- check: a binding as it stands now, named by id or by attempt and carrier
+-- check: a binding in its current state, named by id or by attempt and carrier
 -- epoch, for placement's recheck of what an attempt still holds. Bindings,
 -- never bytes.
 function M.check(value: unknown): Reply

@@ -74,7 +74,6 @@ local INTENT_FIELDS = {"owner_node", "workspace_id", "intent_id", "actor_id", "o
 local DESCRIPTOR_FIELDS = {"schema", "owner_id", "feed", "key", "object_id", "version_id", "content_digest",
     "manifest_digest", "content_kind", "total_bytes", "manifest", "digest"}
 local MANIFEST_FIELDS = {"schema_revision", "source_workspace", "component", "artifact_digest", "author"}
-local STATUSES: {[string]: boolean} = {staged = true, reviewed = true, rejected = true}
 local PHASES: {[string]: boolean} = {prepared = true, approval_bound = true, consuming = true,
     authorized = true, applying = true, settled = true}
 local OUTCOMES: {[string]: boolean} = {applied = true, blocked = true, failed = true, uncertain = true,

@@ -149,7 +149,7 @@ function M.open_hints(ctx: Context, io: IO, session: Session): string?
     return nil
 end
 -- take_hints: the outstanding or next page; true when it carries any
--- transition, which is the one reason to read the owner now. A lost
+-- transition, which is the one reason to read the owner. A lost
 -- subscription leaves polling as the only source until the next tick
 -- reopens it.
 function M.take_hints(ctx: Context, io: IO, session: Session): (boolean, string?)

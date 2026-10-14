@@ -120,7 +120,7 @@ function M.review_lines(view: model.ApprovalView, width: integer, names: {[strin
 end
 
 -- review_frame: the window of lines on screen for this view and whether the
--- whole review has now been seen; opening another request starts over.
+-- whole review has been seen; opening another request starts over.
 function M.review_frame(slice: Slice, view: model.ApprovalView, total: integer, visible: integer): (integer, boolean)
     local identity = view.approval_id .. "#" .. tostring(view.revision)
     if slice.review_for ~= identity then slice.review_for, slice.review_offset, slice.review_complete = identity, 0, false end

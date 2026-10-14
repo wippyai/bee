@@ -578,7 +578,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             end
             -- Owner overlays advance their own generation rather than the
             -- durable registry base revision. Exact effect observation permits
-            -- fresh remeasurement now; revision equality cannot decide progress.
+            -- fresh remeasurement; revision equality cannot decide progress.
             local reverified, reverify_error = remeasure_progress(config, intent)
             if not reverified then
                 return uncertain(tostring((reverify_error).message

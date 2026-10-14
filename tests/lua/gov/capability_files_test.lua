@@ -5,7 +5,6 @@ local bounds = require("bounds")
 local files = require("capability_files")
 
 local OWNER = "bee.gov.apps:workspace-1.notes"
-local APP = "app.notes:app"
 -- The classic folder workspace and a workspace nested under the same root.
 local CLASSIC = {root_ref = "bee.env:workspace_root", directory = ".", base = "project", subpath = ""}
 local NESTED = {root_ref = "bee.env:workspace_root", directory = ".", base = "project", subpath = "projects/alpha"}

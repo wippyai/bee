@@ -1425,7 +1425,7 @@ local function main(...: unknown): integer
 end
 
 -- hive_node waits for a node of the hive whose owner serves desktops: the
--- first one serving now, else the first to serve after nodes join.
+-- first one serving, else the first to serve after nodes join.
 local function hive_node(): string?
     local subscription, subscribe_error = events.subscribe("cluster", "node.joined")
     if not subscription then

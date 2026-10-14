@@ -91,7 +91,7 @@ local function define_tests()
                 local prepared = assert(plan.prepare(installed, 1, request({action = "update", component = "acme/app", version = "2.0.0", migration_policy = policy}), artifacts))
                 local digest, definitions = prepared.plan.digest, #prepared.plan.migrations
                 local calls = 0
-                local summary = assert(review.summarize(prepared, installed, function(_: string, id: string): (boolean?, string?)
+                local summary = assert(review.summarize(prepared, prepared.baseline, function(_: string, id: string): (boolean?, string?)
                     calls = calls + 1; return id == "acme:old", nil
                 end))
                 test.eq(#summary.migration_runs, policy == "up" and 1 or 0)
@@ -103,7 +103,7 @@ local function define_tests()
                 test.eq(prepared.plan.digest, digest)
                 test.eq(#prepared.plan.migrations, definitions)
                 if policy == "up" then
-                    local failed, problem = review.summarize(prepared, installed, function(_: string, _: string): (boolean?, string?) return nil, "ledger denied" end)
+                    local failed, problem = review.summarize(prepared, prepared.baseline, function(_: string, _: string): (boolean?, string?) return nil, "ledger denied" end)
                     test.is_nil(failed); test.eq(problem, "ledger denied")
                 end
             end
@@ -121,9 +121,14 @@ local function define_tests()
             end
             local req = request({action = "install", component = "vendor/widget", version = "1.0.0"})
             local prepared = assert(plan.prepare(state({}), 1, req, original))
-            local rebased = assert(plan.rebase(prepared, state({
+            local fresh = state({
                 {id = "receipt:operation", kind = "registry.entry", meta = {}, data = {}, registry = {owner = ""}},
-            }), 2))
+            })
+            local rebased = assert(plan.rebase(prepared, fresh, 2))
+            test.eq(rebased.baseline, fresh)
+            test.eq(assert(review.summarize(rebased, rebased.baseline, function(_: string, _: string): (boolean?, string?)
+                return false, nil
+            end)).other_entries, 1)
             test.eq(reads, 1)
             test.eq(rebased.plan.base_revision, 2)
             test.eq(rebased.resolved.packages[1].digest, prepared.resolved.packages[1].digest)

@@ -125,6 +125,11 @@ function M.release(runner: Runner)
         if event.kind == process.event.EXIT and tostring(event.from) == runner.pid then break end
     end
     process.unmonitor(runner.pid)
+    local db = assert(store.open())
+    local attempt = assert(store.attempt(db, runner.attempt_id))
+    db:release()
+    local reconciled = service.reconcile_attempt(attempt)
+    assert(reconciled.ok, reconciled.error and reconciled.error.message)
     service.wake_supervision("native")
 end
 

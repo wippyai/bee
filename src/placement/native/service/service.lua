@@ -35,7 +35,6 @@ local service_reply = require("service_reply")
 local credential_protocol = require("credential_protocol")
 local resource_resolution = require("resource_resolution")
 local workdir_preparers = require("workdir_preparers")
-local system = require("system")
 type LocalPreparation = {binding: string, kind: string, spec_json: string, home_directory: string, capability: types.Capability, exit_observation: types.ExitObservation, stdin_close: boolean}
 local supervision = require("supervision")
 local demand = require("demand")
@@ -874,24 +873,11 @@ end
 function M.runner_present(row: store.Row): (boolean?, string?)
     local runner = bounds.id(row.runner_pid)
     if not runner then return false, nil end
-    local raw_hosts, hosts_error = system.hosts.list()
-    local hosts = bounds.array(raw_hosts, 1024)
-    if hosts_error or not hosts or #hosts == 0 then return nil, "process hosts unavailable" end
-    for _, raw in ipairs(hosts) do
-        local host = bounds.object(raw)
-        local id = host and bounds.id(host.id)
-        if not id then return nil, "process host identity unavailable" end
-        local raw_processes, processes_error = system.hosts.processes(id)
-        local processes = bounds.array(raw_processes, 65536)
-        if processes_error or not processes then return nil, "host processes unavailable" end
-        for _, item in ipairs(processes) do
-            local proc = bounds.object(item)
-            local pid = proc and bounds.id(proc.pid)
-            if not pid then return nil, "process identity unavailable" end
-            if pid == runner then return true, nil end
-        end
-    end
-    return false, nil
+    local monitored, problem = process.monitor(runner)
+    if monitored then process.unmonitor(runner); return true, nil end
+    if problem and problem:kind() == errors.NOT_FOUND then return false, nil end
+    if problem and problem:kind() == errors.ALREADY_EXISTS then return true, nil end
+    return nil, tostring(problem or "runtime monitor unavailable")
 end
 function M.reconcile_attempt(attempt: types.Attempt): Reply
     if not transitions.live(attempt.execution_state) then return succeed(attempt) end
@@ -901,6 +887,21 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
         local monitors = assert(db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('runner.start_accepted', 'runner.monitored') LIMIT 1", {attempt.attempt_id}))
         db:release()
         local present = #monitors > 0 or M.runner_present(row)
+        if present == false then
+            local recovery_db = assert(store.open())
+            local intents = assert(recovery_db:query("SELECT kind FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('workdir_preparer.state', 'child.creating')", {attempt.attempt_id}))
+            recovery_db:release()
+            local prepared, creating = false, false
+            for _, item in ipairs(intents) do
+                if item.kind == "workdir_preparer.state" then prepared = true end
+                if item.kind == "child.creating" then creating = true end
+            end
+            if prepared and not creating and row.pid == nil and row.pgid == nil then
+                M.retire_gateway(attempt, "runtime owner ended before child creation")
+                return transition(attempt.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
+                    evidence = {kind = "child.not_started", detail = "runtime monitor reports owner absent; preparer persisted without child creation intent"}})
+            end
+        end
         if present then
             local enforcement = M.supervise_grants(attempt)
             if enforcement then return enforcement end

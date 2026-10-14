@@ -9,6 +9,10 @@ local function cases()
             local db = assert(store.open())
             local ok, problem = pcall(function()
                 assert(db:execute("UPDATE bee_placement_attempts SET execution_state = 'exited' WHERE attempt_id = ?", {attempt.attempt_id}))
+                for _, row in ipairs(assert(supervision.rows(db, "native", 10000))) do
+                    test.is_false(row.attempt_id == attempt.attempt_id, "no preparer state means no cleanup work")
+                end
+                assert(store.transition(db, attempt.attempt_id, {evidence = {kind = "workdir_preparer.state", detail = "fixture preparer"}}).ok)
                 local rows = assert(supervision.rows(db, "native", 10000))
                 local found = false
                 for _, row in ipairs(rows) do if row.attempt_id == attempt.attempt_id then found = true end end

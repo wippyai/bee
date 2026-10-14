@@ -259,7 +259,19 @@ local function define_tests()
             local path = assert((workdir_preparers.setup(db, req, req.attempt_id, repo, {repo})))
             local replay = assert((workdir_preparers.setup(db, req, req.attempt_id, repo, {repo})))
             test.eq(path, replay)
-            store.transition(db, req.attempt_id, {fields = {runner_pid = "00000000-0000-0000-0000-000000000001"}, evidence = {kind = "test.crashed", detail = "absent fixture runner"}})
+            local owner = assert(store.row(db, req.attempt_id)).runner_pid
+            assert(type(owner) == "string")
+            assert(process.monitor(owner))
+            local events = assert(process.events())
+            assert(process.terminate(owner))
+            while true do
+                local event = assert((events:receive()))
+                if event.kind == process.event.EXIT and tostring(event.from) == owner then break end
+            end
+            process.unmonitor(owner)
+            for index, held in ipairs(owners) do
+                if held == owner then table.remove(owners, index); break end
+            end
             local attempt = assert(store.attempt(db, req.attempt_id))
             local recovered = service.reconcile_attempt(attempt)
             test.is_true(recovered.ok)

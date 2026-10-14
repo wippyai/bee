@@ -368,6 +368,54 @@ def owner_scheduling(src):
     path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
+def gate_retired_display(src):
+    replace_once(src / "node/service/owner.lua", '    local function stop(instance: Instance): protocol.Reply', '''    local function stop(instance: Instance): protocol.Reply
+        local controller = process.registry.lookup("bee.test.retired.cancel", process.registry.LOCAL)
+        if controller then
+            local release = assert(process.listen("bee.test.retired.release", {message = true}))
+            assert(process.send(tostring(controller), "bee.test.retired.held", {id = instance.id}))
+            assert(tostring(assert((release:receive())):from()) == tostring(controller))
+            process.unlisten(release)
+        end''')
+    shell = src / "shell/shell.lua"
+    replace_once(shell, '    local function attach_job(id: string, shown: string): Result', '''    local function retirement_gate(op: string, id: unknown)
+        local controller = process.registry.lookup("bee.test.retired." .. op, process.registry.LOCAL)
+        if not controller then return end
+        local release = assert(process.listen("bee.test.retired.release", {message = true}))
+        assert(process.send(tostring(controller), "bee.test.retired.held", {id = id}))
+        assert(tostring(assert((release:receive())):from()) == tostring(controller))
+        process.unlisten(release)
+    end
+    local function attach_job(id: string, shown: string): Result
+        retirement_gate("attach", id)''')
+    replace_once(shell, '    local function call_job(op: string, args: {[string]: unknown}): Result',
+                 '    local function call_job(op: string, args: {[string]: unknown}): Result\n        retirement_gate(op, args.id)')
+    replace_once(shell, '    local function node_event(event: client.Event)', '''    local function retired_observed()
+        local observer = process.registry.lookup("bee.test.retired.closed", process.registry.LOCAL)
+        if observer then assert(process.send(tostring(observer), "bee.test.retired.closed", {})) end
+    end
+    local function node_event(event: client.Event)
+        if event.kind == "closed" and process.registry.lookup("bee.test.retired.drop", process.registry.LOCAL) then
+            retired_observed()
+            return
+        end''')
+    replace_once(shell, '            drop_app_dialog(id)', '            drop_app_dialog(id)\n            retired_observed()')
+    replace_once(shell, '            apply(chosen.value)', '''            apply(chosen.value)
+            local observer = process.registry.lookup("bee.test.retired.applied", process.registry.LOCAL)
+            if observer and (chosen.value.kind == "failed" or chosen.value.kind == "retired" or chosen.value.kind == "done") then
+                paint()
+                assert(process.send(tostring(observer), "bee.test.retired.applied", {status = status, running = running, kind = chosen.value.kind}))
+            end''')
+    replace_once(shell, '    local function handle(chosen: channel.SelectResult): boolean',
+                 '    local move_requests = assert(process.listen("bee.test.retired.move", {message = true}))\n    local function handle(chosen: channel.SelectResult): boolean')
+    replace_once(shell, '        if chosen.channel == alert_fade then', '''        if chosen.channel == move_requests then
+            local args = chosen.value:payload():data()
+            run(function(): Result return call_job("move", args) end)
+        elseif chosen.channel == alert_fade then''')
+    replace_once(shell, '        local quit = handle(channel.select(cases()))',
+                 '        local waiting = cases()\n        waiting[#waiting + 1] = move_requests:case_receive()\n        local quit = handle(channel.select(waiting))')
+
+
 def observe_node_ready(src):
     replace_once(src / "node/service/owner.lua", '    logger:info("Node ready",',
                  '\n'.join(['    local observer = process.registry.lookup("bee.test.node.ready", process.registry.LOCAL)',
@@ -862,6 +910,7 @@ def compose():
     hold_hive_backlog(src)
     compose_thread_recovery()
     hold_thread_commits(src)
+    gate_retired_display(src)
     observe_node_ready(src)
     observe_hive_upgrade(src)
     order_hive_readiness(src)

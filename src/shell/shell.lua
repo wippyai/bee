@@ -296,12 +296,26 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     -- app once however many reasons it has to.
     local attaching: {[string]: boolean} = {}
 
+    local function reconcile(id: string, problem: string?): Result
+        local value = client.call(target, "list", {})
+        local snapshot = value and client.state(value)
+        if snapshot then
+            local live = false
+            for _, instance in ipairs(snapshot.running) do
+                if instance.id == id then live = true end
+            end
+            if not live then return {kind = "retired", id = id, state = snapshot} end
+        end
+        if problem then return {kind = "failed", id = id, problem = problem} end
+        return {kind = "done"}
+    end
+
     local function attach_job(id: string, shown: string): Result
-        local attached, attach_error = client.call(target, "attach", {id = id})
-        if not attached then return {kind = "failed", id = id, problem = attach_error} end
-        if type(attached.ref) ~= "string" then return {kind = "failed", id = id, problem = "attach returned no mount"} end
-        local view, view_error = tty.attach(attached.ref)
-        if not view then return {kind = "failed", id = id, problem = tostring(view_error)} end
+        local attached = client.call(target, "attach", {id = id})
+        if not attached then return reconcile(id, "Cannot show this app.") end
+        if type(attached.ref) ~= "string" then return reconcile(id, "Cannot show this app.") end
+        local view = tty.attach(attached.ref)
+        if not view then return reconcile(id, "Cannot show this app.") end
         local title = id
         if type(attached.title) == "string" then title = attached.title end
         return {kind = "attached", id = id, title = title, view = view, desktop = shown}
@@ -309,7 +323,13 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
 
     local function call_job(op: string, args: {[string]: unknown}): Result
         local _, err = client.call(target, op, args)
-        if err then return {kind = "failed", problem = err} end
+        local id = args.id
+        if type(id) == "string" and (op == "close" or op == "move" or op == "answer") then
+            local problem = err and (op == "close" and "Cannot close this app."
+                or op == "move" and "Cannot move this app." or "Cannot answer this app.")
+            if err or op == "close" then return reconcile(id, problem) end
+        end
+        if err then return {kind = "failed", problem = "The request could not be completed."} end
         return {kind = "done"}
     end
 
@@ -792,8 +812,17 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             if binding.problem == "pid not registered" then binding.problem = nil
             elseif binding.problem then binding.problem = "Cannot follow " .. target .. ": " .. binding.problem end
             result.bound:send(binding)
-        elseif result.kind == "watched" and result.state then
+        elseif (result.kind == "watched" or result.kind == "retired") and result.state then
             local node_state = result.state
+            if result.kind == "retired" then
+                if node_state.owner ~= owner or node_state.revision < revision then return end
+                node_state.desktop = desktop
+                if result.id then
+                    if active_selection and selection.binding(active_selection).view_id == result.id then active_selection = nil end
+                    forget(result.id)
+                    drop_app_dialog(result.id)
+                end
+            end
             local binding = follow(node_state.owner)
             if not binding.ok then
                 status = "Cannot follow " .. target .. ": " .. tostring(binding.problem)
@@ -877,6 +906,11 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         elseif result.kind == "existing" and result.id then
             if views[result.id] then focus(result.id) else focus_pending[result.id] = true end
         elseif result.kind == "failed" then
+            if result.id then
+                local live = false
+                for _, instance in ipairs(running) do if instance.id == result.id then live = true end end
+                if not live then return end
+            end
             status = tostring(result.problem)
         end
     end

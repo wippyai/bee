@@ -668,7 +668,9 @@ local function main(saved: unknown)
 
     local function stop(instance: Instance): protocol.Reply
         local cancelled, cancel_error = process.cancel(instance.pid)
-        if not cancelled then return protocol.fail("stop " .. instance.title .. ": " .. tostring(cancel_error)) end
+        if not cancelled and not errors.is(cancel_error, errors.NOT_FOUND) then
+            return protocol.fail("stop " .. instance.title .. ": " .. tostring(cancel_error))
+        end
         return protocol.ok({id = instance.id})
     end
 
@@ -707,7 +709,7 @@ local function main(saved: unknown)
     local function close(id: unknown, force: unknown, expected_execution: unknown): protocol.Reply
         if type(id) ~= "string" then return protocol.fail("close needs an instance id") end
         local instance = instances[id]
-        if not instance then return protocol.fail("no running instance " .. id) end
+        if not instance then return protocol.ok({id = id}) end
         if expected_execution ~= nil and expected_execution ~= instance.execution_id then return protocol.fail("application execution changed") end
         if force == true or not instance.negotiate then return stop(instance) end
         if not instance.closing then
@@ -717,6 +719,7 @@ local function main(saved: unknown)
             local sent, err = process.send(instance.pid, broker.CLOSE, {version = 1, request_id = request_id, id = id, instance_id = id})
             if not sent then
                 instance.closing = nil
+                if errors.is(err, errors.NOT_FOUND) then return protocol.ok({id = id}) end
                 return protocol.fail("ask " .. instance.title .. " to close: " .. tostring(err))
             end
         end

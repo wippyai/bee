@@ -587,6 +587,63 @@ end
 
 local function define_recovery_tests()
     test.describe("display recovery", function()
+        for _, scenario in ipairs({
+            {op = "close", drop = true}, {op = "attach", drop = true}, {op = "move", drop = true},
+            {op = "close", drop = false}, {op = "attach", drop = false}, {op = "move", drop = false},
+        }) do
+            local op = scenario.op
+            display_case("reconciles " .. op .. " after retirement with closed event " .. (scenario.drop and "withheld" or "delivered"), function(fixture: Fixture)
+                local lifecycle = assert(process.events())
+                local view, pid = fixture:start()
+                expect(view, "desktop ready", " BEE ", true)
+                key(view, "esc")
+                local node = assert(system.node.id())
+                local title = assert(bar(view):match("Desktop %d+"))
+                local desktop = ""
+                for _, item in ipairs(node_state().desktops) do if item.title == title then desktop = item.id end end
+                local held = assert(process.listen("bee.test.retired.held", {message = true}))
+                local applied = assert(process.listen("bee.test.retired.applied", {message = true}))
+                local closed = assert(process.listen(client.EVENTS, {message = true}))
+                local observed = assert(process.listen("bee.test.retired.closed", {message = true}))
+                assert(process.registry.register("bee.test.retired.closed"))
+                assert(client.call(node, "watch", {}))
+                if scenario.drop then assert(process.registry.register("bee.test.retired.drop")) end
+                if op == "attach" then assert(process.registry.register("bee.test.retired.attach")) end
+                local opened = assert(client.call(node, "open", {app = "bee.tests.node:probe_app", desktop = desktop}))
+                local id = tostring(opened.id)
+                if op ~= "attach" then
+                    expect(view, "probe attached", "label ", true)
+                    assert(process.registry.register("bee.test.retired." .. op))
+                    if op == "close" then key(view, "w", {ctrl = true})
+                    else assert(process.send(pid, "bee.test.retired.move", {id = id, desktop = desktop})) end
+                end
+                local request = assert((held:receive()))
+                test.eq(tostring(request:from()), pid)
+                test.eq(assert(bounds.object(request:payload():data())).id, id)
+                assert(process.send(tostring(opened.pid), "bee.test.probe.finish", {}))
+                while true do
+                    local event = client.event(assert((closed:receive())):payload():data())
+                    if event and event.kind == "closed" and event.id == id then break end
+                end
+                test.eq(tostring(assert((observed:receive())):from()), pid)
+                assert(process.registry.register("bee.test.retired.applied"))
+                assert(process.send(pid, "bee.test.retired.release", {}))
+                local result = assert(bounds.object(assert((applied:receive())):payload():data()))
+                process.registry.unregister("bee.test.retired." .. op)
+                process.registry.unregister("bee.test.retired.drop")
+                process.registry.unregister("bee.test.retired.applied")
+                process.registry.unregister("bee.test.retired.closed")
+                process.unlisten(observed)
+                process.unlisten(held); process.unlisten(applied); process.unlisten(closed)
+                assert(client.call(node, "leave", {}))
+                test.eq(result.status, "")
+                local listed = assert(bounds.object(result.running))
+                for _, instance in pairs(listed) do test.neq(assert(bounds.object(instance)).id, id) end
+                test.is_false(screen(view):find("label ", 1, true) ~= nil)
+                exits(lifecycle, {pid})
+            end)
+        end
+
         display_case("ignores node events from any process but the owner", function(fixture: Fixture)
             local lifecycle = assert(process.events())
             local view, pid = fixture:start()

@@ -11,6 +11,7 @@ local app = require("app")
 local ctx = require("ctx")
 
 local function main(options: unknown)
+    local finish = assert(process.listen("bee.test.probe.finish", {message = true}))
     local changes = assert(process.listen(appearance.TOPIC, {message = true}))
     local lifecycle = assert(process.events())
     assert(tty.start())
@@ -47,8 +48,9 @@ local function main(options: unknown)
     local controller = type(options) == "table" and type(options.args) == "table" and options.args.exit_controller or nil
     local release = type(controller) == "string" and assert(process.listen("bee.test.probe.exit", {message = true})) or nil
     while true do
-        local selected = channel.select({changes:case_receive(), lifecycle:case_receive()})
+        local selected = channel.select({changes:case_receive(), lifecycle:case_receive(), finish:case_receive()})
         if not selected.ok then break end
+        if selected.channel == finish then break end
         if selected.channel == lifecycle then
             if selected.value.kind == process.event.CANCEL then
                 if release and type(controller) == "string" then

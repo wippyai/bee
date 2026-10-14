@@ -109,16 +109,6 @@ def export():
                 archive.add(path, arcname=name, filter=lambda item: None if item.name == '.wippy/cache/application.tar' else item)
 
 
-    import shutil
-    (ROOT / '.wippy/cache').mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(PREPARED, ROOT / '.wippy/cache/application.tar')
-
-
-def restore_prepared():
-    import shutil
-    shutil.copyfile(ROOT / '.wippy/cache/application.tar', PREPARED)
-
-
 def merge_profiles():
     directory = ROOT / '.wippy/profiles'
     expected = application_key()
@@ -127,6 +117,8 @@ def merge_profiles():
             record = json.load(archive.extractfile('.wippy/profile.json'))
             if record != {'profile': profile, 'source_fingerprint': expected}:
                 raise ValueError('profile checks do not match current inputs: ' + profile)
+    for profile in ('strict', 'nonstrict', 'fixtures'):
+        with tarfile.open(directory / (profile + '.tar')) as archive:
             archive.extractall(ROOT, filter='data')
     cache = Path(os.environ['LUA_CACHE']).resolve()
     extracted = ROOT / '.wippy/lua-cache'
@@ -244,7 +236,7 @@ def gate():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('application-key', 'record-inputs', 'tools-outputs', 'export', 'import', 'restore-prepared', 'merge-profiles', 'require-ci', 'warm', 'package', 'gate', 'plan-warm', 'verify-release', 'publish', 'rosetta'))
+    parser.add_argument('command', choices=('application-key', 'record-inputs', 'tools-outputs', 'export', 'import', 'merge-profiles', 'require-ci', 'warm', 'package', 'gate', 'plan-warm', 'verify-release', 'publish', 'rosetta'))
     parser.add_argument('--target', default='linux/amd64')
     parser.add_argument('--version', default='0.2.0-dev')
     args = parser.parse_args()
@@ -260,7 +252,7 @@ def main():
     elif args.command == 'publish':
         publish(args.version)
     else:
-        {'record-inputs': record_inputs, 'export': export, 'restore-prepared': restore_prepared, 'merge-profiles': merge_profiles, 'import': import_prepared, 'require-ci': require_ci, 'gate': gate, 'plan-warm': plan_warm, 'verify-release': verify_release, 'rosetta': rosetta}[args.command]()
+        {'record-inputs': record_inputs, 'export': export, 'merge-profiles': merge_profiles, 'import': import_prepared, 'require-ci': require_ci, 'gate': gate, 'plan-warm': plan_warm, 'verify-release': verify_release, 'rosetta': rosetta}[args.command]()
 
 
 if __name__ == '__main__':

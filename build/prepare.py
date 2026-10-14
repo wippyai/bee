@@ -103,6 +103,7 @@ def main():
     args = parser.parse_args()
     cache = Path(os.environ['LUA_CACHE']).resolve()
     fingerprint = ci.application_key()
+    (ROOT / '.wippy/cache/application.tar').unlink(missing_ok=True)
     with cache_config(cache):
         subprocess.run(['make', '--no-print-directory', 'binary-identity'] +
                        (['REVISION=' + args.revision] if args.revision else []), check=True)

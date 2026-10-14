@@ -203,9 +203,6 @@ ci-assemble: tools
 	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --assemble --fixtures --revision prepared
 	LUA_CACHE=$(LUA_CACHE) python3 build/ci.py export
 
-ci-restore:
-	python3 build/ci.py restore-prepared
-
 ci-import:
 	python3 build/ci.py import
 
@@ -240,6 +237,6 @@ release-publish:
 release-package:
 	python3 build/ci.py package --target $(TARGET) --version $(VERSION)
 
-.PHONY: builder-version test-prepare test-shard release-prepare release-compile ci-tools ci-tools-outputs ci-application-key ci-prepare ci-restore ci-import ci-stamp ci-require ci-warm ci-gate ci-plan release-package release-rosetta release-verify release-publish
+.PHONY: builder-version test-prepare test-shard release-prepare release-compile ci-tools ci-tools-outputs ci-application-key ci-prepare ci-import ci-stamp ci-require ci-warm ci-gate ci-plan release-package release-rosetta release-verify release-publish
 
 .PHONY: fixture-install ci-profile ci-assemble ci-lint

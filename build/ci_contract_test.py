@@ -1,4 +1,4 @@
-"""Exercise the single preparation and restore-only release workflow contract."""
+"""Exercise independent CI checks and the restore-only release workflow contract."""
 import contextlib
 import io
 import json

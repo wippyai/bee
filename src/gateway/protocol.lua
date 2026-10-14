@@ -208,7 +208,7 @@ function M.hook_claim(value: unknown, expected_binding: string, expected_epoch: 
     return {binding_id = binding_id, carrier_epoch = carrier_epoch, hooks = hooks}, nil
 end
 
--- The trait a person approves before an agent may use application tools.
+-- The host admission marker the surface expands into individual application traits.
 M.APPLICATION_TOOLS_TRAIT_ID = "bee.app:tools"
 M.HUB_LIBRARY_TRAIT_ID = "bee.hub:library"
 -- The trait a person approves before an agent may share an installed

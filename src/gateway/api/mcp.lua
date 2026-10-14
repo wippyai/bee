@@ -234,9 +234,9 @@ local TOOLS: {Tool} = {
             body = {type = "string", maxLength = 1048576},
             timeout = {type = "number", minimum = 1, maximum = 60},
         }}},
-    {name = "app_tools", description = "List the tools this workspace's applications offer agents, the application each belongs to, and why any tool is not offered. Each listed tool is callable by its own name, like any other tool: it runs as its application, with only the grants the person approved for that application, on the same state the application shows the person. Omit node for local discovery. With node, list only the peer tools exposed to this authenticated node. Use operation call, tool and arguments to invoke a listed peer tool; mutations need a stable idempotency_key. Call it again after an application is installed or removed; tools/list follows local discovery on every request.",
+    {name = "app_tools", description = "Inspect the schemas and diagnostics of currently selected application tools. Activate an application's own trait to call its named tools. This inspection tool does not grant application access or execute application tools.",
         operation = "bee.node.binding:app_tools",
-        policies = {TOOL_POLICY_REFS.app_tools}, annotations = {readOnlyHint = false, destructiveHint = false, idempotentHint = false, openWorldHint = false},
+        policies = {TOOL_POLICY_REFS.app_tools}, annotations = {readOnlyHint = true, destructiveHint = false, idempotentHint = false, openWorldHint = false},
         schema = {type = "object", additionalProperties = false, properties = {
             node = {type = "string", minLength = 1, maxLength = 160},
             operation = {type = "string", enum = {"list", "call"}},
@@ -379,10 +379,9 @@ M.OUTPUT_SCHEMAS = OUTPUT_SCHEMAS
 M.APPLICATION_RUNTIME_TRAIT = {id = "bee.app:runtime", title = "Application runtime",
     prompt = "Open only reviewed and admitted workspace applications. They may read and post in this agent's bound thread and continue after the initiating agent finishes under the durable thread lifetime contract.",
     tools = {"application_open"}}
--- The built-in trait that offers the application tools of the bound
--- workspace; a person enables it in the profile or approves it as access.
+-- The host admission marker expanded into the workspace's application traits.
 M.APPLICATION_TOOLS_TRAIT = {id = gateway_protocol.APPLICATION_TOOLS_TRAIT_ID, title = "Application tools",
-    prompt = "Call the tools this workspace's applications offer agents. Each runs as its application with only the grants the person approved for it; app_tools lists them.",
+    prompt = "Inspect application tool metadata. Application tool execution requires selection and consent of the application's own trait.",
     tools = {"app_tools"}}
 -- The built-in trait that lets an agent share an installed application made
 -- on this bee with the hive; a person enables it in the profile or approves

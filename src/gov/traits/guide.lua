@@ -513,10 +513,10 @@ function M.agent_tools(): string
         .. " properties, required, enum, const, bounds, formats, nested objects and arrays, oneOf/allOf/if/then/else/not);"
         .. " preflight refuses a tool that is not this pack's own, uses another schema, declares security or shares an"
         .. " alias. The installed application appears as its own trait, with its title, description and tool names."
-        .. " See docs/session_traits for profile selection, activation and person approval. Select that trait"
+        .. " app_tools inspects selected tool metadata. See docs/session_traits for profile selection, activation and person approval. Select that trait"
         .. " through the existing session trait operations; its tools run by alias with schema validation."
         .. " Uninstall removes the trait and its tools; changed declarations require renewed approval."
-        .. " Two applications offering one alias offer neither."
+        .. " A tool that vanishes during a call answers TOOLS_CHANGED. Two applications offering one alias offer neither."
 end
 
 function M.sharing(): string

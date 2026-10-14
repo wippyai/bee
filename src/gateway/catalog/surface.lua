@@ -70,7 +70,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}, wo
     if home and bounds.member("app_tools", ceiling) then
         local found, err = app_traits.catalog(home)
         if not found then return nil, nil, err end
-        app_catalog = found
+        if #found.traits > 0 then app_catalog = found end
         local copied: {unknown} = {}
         for _, trait in ipairs(declared_traits :: {unknown}) do copied[#copied + 1] = trait end
         declared_traits = copied
@@ -87,7 +87,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}, wo
             end
         end
         ceiling = expanded
-        if access then
+        if access and app_catalog then
             local ids: {string} = {}
             for _, id in ipairs(access.traits) do
                 if id ~= mcp.APPLICATION_TOOLS_TRAIT.id then ids[#ids + 1] = id end
@@ -132,13 +132,13 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}, wo
         if name == "application_open" then has_open = true end
     end
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do
-        if app_catalog and trait.id == mcp.APPLICATION_TOOLS_TRAIT.id then goto next_consent end
-        local tools: {string} = {}
-        for _, name in ipairs(trait.tools) do
-            if admitted_tools[name] then tools[#tools + 1] = name end
+        if not app_catalog or trait.id ~= mcp.APPLICATION_TOOLS_TRAIT.id then
+            local tools: {string} = {}
+            for _, name in ipairs(trait.tools) do
+                if admitted_tools[name] then tools[#tools + 1] = name end
+            end
+            if #tools > 0 then consents[#consents + 1] = {id = trait.id, title = trait.title, prompt = trait.prompt, tools = tools} end
         end
-        if #tools > 0 then consents[#consents + 1] = {id = trait.id, title = trait.title, prompt = trait.prompt, tools = tools} end
-        ::next_consent::
     end
     local traits: {unknown} = {}
     for _, trait in ipairs(declared_traits) do traits[#traits + 1] = trait end
@@ -203,7 +203,11 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}, wo
     if value.selectable_traits ~= nil then
         local selected, err = bounds.ids(value.selectable_traits, true)
         if not selected then return nil, nil, err end
-        for _, id in ipairs(selected) do if not known_traits[id] then return nil, nil, "trait outside launch ceiling: " .. id end end
+        for _, id in ipairs(selected) do
+            if not known_traits[id] and (not app_catalog or id ~= mcp.APPLICATION_TOOLS_TRAIT.id) then
+                return nil, nil, "trait outside launch ceiling: " .. id
+            end
+        end
         local narrowed: {string} = {}
         for _, id in ipairs(allowed) do if bounds.member(id, selected) then narrowed[#narrowed + 1] = id end end
         allowed = narrowed
@@ -217,7 +221,8 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}, wo
     local initial: {string} = {}
     for _, id in ipairs(active) do
         local declared = known_traits[id]
-        if not declared or not requestable[id] or (declared.application_ref == nil and value.selectable_traits == nil) then
+        if not (app_catalog and id == mcp.APPLICATION_TOOLS_TRAIT.id)
+            and (not declared or not requestable[id] or (declared.application_ref == nil and value.selectable_traits == nil)) then
             initial[#initial + 1] = id
         end
     end

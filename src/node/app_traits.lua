@@ -10,6 +10,7 @@ local application = require("application")
 local app_tools = require("app_tools")
 local capability_access = require("capability_access")
 local capability_grants = require("capability_grants")
+local governed_admission = require("governed_admission")
 local M = {}
 type Catalog = {traits: {agent_trait.Declaration}, tools: {app_tools.Tool}}
 function M.workspace(): string?
@@ -18,6 +19,19 @@ function M.workspace(): string?
     return meta and bounds.id(meta.workspace_id) or nil
 end
 function M.catalog(workspace: string): (Catalog?, string?)
+    local records, record_error = registry.find({[".kind"] = "registry.entry", ["meta.type"] = capability_grants.SCHEMA})
+    if not records then return nil, tostring(record_error) end
+    local offers_tools = false
+    for _, entry in ipairs(records) do
+        local data = bounds.object(entry.data)
+        if data and data.workspace_id == workspace then
+            for _, raw in ipairs(bounds.array(data.capabilities, 64) or {}) do
+                local grant = bounds.object(raw)
+                if grant and grant.capability == "agent.tools" then offers_tools = true end
+            end
+        end
+    end
+    if not offers_tools then return {traits = {}, tools = {}}, nil end
     local discovery, err = app_tools.discover(workspace)
     if not discovery then return nil, err end
     local definitions, invalid = application.definitions(workspace)
@@ -76,22 +90,32 @@ function M.catalog(workspace: string): (Catalog?, string?)
     return {traits = traits, tools = discovery.tools}, nil
 end
 function M.load(ref: string, workspace: string?): (agent_trait.Declaration?, string?, string?)
-    local homes: {[string]: boolean} = {}
     local home = workspace or M.workspace()
-    if home then homes[home] = true
-    else
-        local records, err = registry.find({[".kind"] = "registry.entry", ["meta.type"] = capability_grants.SCHEMA})
-        if not records then return nil, tostring(err) end
-        for _, entry in ipairs(records) do
-            local data = bounds.object(entry.data)
-            local workspace = data and bounds.id(data.workspace_id)
-            if workspace then homes[workspace] = true end
+    local records, err = registry.find({[".kind"] = "registry.entry", ["meta.type"] = capability_grants.SCHEMA})
+    if not records then return nil, tostring(err) end
+    local admissions, err = registry.find({[".kind"] = "registry.entry", ["meta.type"] = governed_admission.SCHEMA})
+    if not admissions then return nil, tostring(err) end
+    for _, entry in ipairs(records) do
+        local data = bounds.object(entry.data)
+        local workspace = data and bounds.id(data.workspace_id)
+        local definition = data and bounds.id(data.application)
+        if workspace and definition and (not home or home == workspace) then
+            local owner: string? = nil
+            for _, entry in ipairs(admissions) do
+                local record = bounds.object(entry.data)
+                if record and record.workspace_id == workspace then
+                    for _, raw in ipairs(bounds.array(record.bindings, 64) or {}) do
+                        local binding = bounds.object(raw)
+                        if binding and binding.definition_id == definition then owner = bounds.id(record.overlay_owner) end
+                    end
+                end
+            end
+            if app_identity.trait(workspace, definition, owner) == ref then
+                local catalog, err = M.catalog(workspace)
+                if not catalog then return nil, err end
+                for _, trait in ipairs(catalog.traits) do if trait.id == ref then return trait, nil, workspace end end
+            end
         end
-    end
-    for workspace in pairs(homes) do
-        local catalog, err = M.catalog(workspace)
-        if not catalog then return nil, err end
-        for _, trait in ipairs(catalog.traits) do if trait.id == ref then return trait, nil, workspace end end
     end
     return nil, "trait unavailable: " .. ref
 end

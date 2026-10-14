@@ -142,6 +142,7 @@ entries:
   source: file://app_traits.lua
   modules: [registry, security, hash]
   imports:
+    governed_admission: bee.gov.types:governed_application_admission
     bounds: bee.values:bounds
     agent_trait: bee.values:agent_trait
     canonical: bee.values:canonical

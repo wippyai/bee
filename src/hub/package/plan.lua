@@ -22,7 +22,7 @@ type PolicyChange = {id: string, component: string, change: string, actions: {st
 type Plan = {request: Request, base_revision: integer, root_id: string, root_operation: string, digest: string,
     modules: {Module}, missing: {string}, migrations: {Migration}, starts: {string}, capabilities: {string},
     policy_changes: {PolicyChange}, ready: boolean, conversion: inventory.Conversion?}
-type Prepared = {plan: Plan, resolved: graph.Result, installed: inventory.Result}
+type Prepared = {plan: Plan, resolved: graph.Result, installed: inventory.Result, baseline: unknown}
 
 local POLICY_KINDS: {[string]: boolean} = {["security.policy"] = true, ["security.policy.expr"] = true}
 
@@ -493,6 +493,6 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     local digest, digest_error = hash.sha256(encoded)
     if not digest then return nil, tostring(digest_error) end
     plan.digest = digest
-    return {plan = plan, resolved = resolved, installed = installed}, nil
+    return {plan = plan, resolved = resolved, installed = installed, baseline = state}, nil
 end
 return M

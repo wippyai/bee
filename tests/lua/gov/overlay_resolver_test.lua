@@ -128,6 +128,23 @@ end
 
 local function define_tests()
     test.describe("Workspace driver admission", function()
+        test.it("measures dependency bodies but retains only identity and references for unrelated entries", function()
+            local deps, spec, observed = fixture()
+            local baseline = resolve(deps, spec)
+            local retained = baseline.context.entries["bee.host:db"]
+            test.eq(retained.digest, nil)
+            test.eq(retained.kind, "db.sql.sqlite")
+            test.eq(retained.package, "bee/host")
+            test.is_true(baseline.context.entries["bee.gov:protected_kernel"].digest ~= nil)
+            observed.captured.entries[1].data = {value = "unrelated change"}
+            test.eq(resolve(deps, spec).candidate.base_digest, baseline.candidate.base_digest)
+            changes(spec, {{id = "private.app:main", kind = "function.lua",
+                data = {source = "return true", imports = {db = "bee.host:db"}}}})
+            local dependent = resolve(deps, spec)
+            test.is_true(dependent.context.entries["bee.host:db"].digest ~= nil)
+            observed.captured.entries[1].data = {value = "dependency change"}
+            test.is_true(resolve(deps, spec).candidate.base_digest ~= dependent.candidate.base_digest)
+        end)
         test.it("measures references in a canonically valid retained driver descriptor", function()
             local deps, spec, observed = fixture()
             local descriptor: Object = {config = "bee.host:db"}

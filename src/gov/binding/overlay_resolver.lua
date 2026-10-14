@@ -86,7 +86,7 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
 end
 
 local function policy_context(policy: Policy, captured: Captured, base_digest: string,
-    current: {[string]: preflight.Entry}, installed: {[string]: preflight.Entry},
+    current: {[string]: preflight.StateEntry}, installed: {[string]: preflight.Entry},
     protected: protected_kernel.Manifest, evidence: preflight.HostEvidence): (preflight.Context?, string?)
     if not bounds.id(policy.node_id) or not sha(policy.policy_digest) then return nil, "host policy identity is invalid" end
     for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
@@ -186,7 +186,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         end
     end
 
-    local current: {[string]: preflight.Entry} = {}
+    local current: {[string]: preflight.StateEntry} = {}
     local installed: {[string]: preflight.Entry} = {}
     local current_raw: {[string]: Entry} = {}
     local current_namespace: {[string]: string} = {}
@@ -223,9 +223,11 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         else
             local package, package_error = captured.owner(entry)
             if not package then return nil, nil, package_error or "captured registry entry has no trusted local owner" end
-            local measured, measured_error = measured_entry(entry, package, true)
-            if not measured then return nil, nil, measured_error end
-            current[id] = measured
+            local kind = bounds.id(entry.kind)
+            if not kind then return nil, nil, "captured entry identity is invalid" end
+            local refs, refs_error = requirement.references(entry)
+            if not refs then return nil, nil, refs_error end
+            current[id] = {id = id, kind = kind, package = package, references = refs}
             local namespace = id:match("^([^:]+):")
             if namespace then current_namespace[namespace] = id end
         end
@@ -365,7 +367,10 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             -- native shadow application without duplicating native owner state.
             replaced[#replaced + 1] = {id = id, kind = raw.kind, package = raw.package}
         elseif relevant_ids[id] or (namespace and namespace_set[namespace]) then
-            relevant[#relevant + 1] = raw
+            local measured, measured_error = measured_entry(assert(current_raw[id]), raw.package, true)
+            if not measured then return nil, nil, measured_error end
+            current[id] = measured
+            relevant[#relevant + 1] = measured
         end
     end
     table.sort(relevant, function(left: preflight.Entry, right: preflight.Entry): boolean return left.id < right.id end)

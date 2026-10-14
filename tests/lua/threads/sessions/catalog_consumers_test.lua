@@ -11,7 +11,7 @@ local agents = require("agents")
 local session_tools = require("session_tools")
 local protocol = require("protocol")
 local form = require("form")
-local picker = require("picker")
+local direct = require("direct")
 local admission = require("admission")
 local M = {}
 type Object = {[string]: unknown}
@@ -39,10 +39,10 @@ function M.probe(path: string): Object
                 profile_id = draft.profile_id
             end
         end
-        local admitted, refused = picker.direct(workspace, "bee.driver.codex.profiles:research_batch", nil, nil, nil, "Inspect stored memory")
+        local admitted, refused = direct.run(workspace, "bee.driver.codex.profiles:research_batch", nil, nil, nil, "Inspect stored memory")
         local listed, catalog_error = sessions.client():catalog({include_unavailable = true})
         local page = assert(listed, tostring(catalog_error and catalog_error.message))
-        local window, window_error = picker.direct(workspace, "bee.tests.harness:window_ready_definition")
+        local window, window_error = direct.run(workspace, "bee.tests.harness:window_ready_definition")
         return {batch = batch, profile_id = profile_id, listing = listing, page = page, mode = admitted and admitted.plan.mode, error = refused,
             window_mode = window and window.plan.mode, window_error = window_error}
     end

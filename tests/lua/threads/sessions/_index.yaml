@@ -81,7 +81,7 @@ entries:
     policies: [bee.tests.threads.sessions:catalog_service_test_policy]
   imports:
     form: bee.harness.app:profile_form
-    picker: bee.harness.app:picker
+    direct: bee.harness.app:direct
     admission: bee.harness.launch:admission
     test: wippy.test:test
     bounds: bee.values:bounds
@@ -98,7 +98,7 @@ entries:
   policy: {actions: ['*'], resources: '*', effect: allow}
   imports:
     form: bee.harness.app:profile_form
-    picker: bee.harness.app:picker
+    direct: bee.harness.app:direct
     admission: bee.harness.launch:admission
     test: wippy.test:test
     bounds: bee.values:bounds

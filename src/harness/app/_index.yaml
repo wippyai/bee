@@ -170,6 +170,7 @@ entries:
   - uuid
   - funcs
   imports:
+    directory: bee.harness.app:directory
     canonical: bee.values:canonical
     spawn_form: bee.harness.app:spawn_form
     confirmation: bee.approvals.app:confirmation
@@ -292,3 +293,12 @@ entries:
     title: Agents
     location: start
     order: 10
+
+- name: directory
+  kind: library.lua
+  source: file://directory.lua
+  modules: [channel]
+  imports:
+    bounds: bee.values:bounds
+    agents: bee.harness.app:agents
+    sessions_protocol: bee.threads.sessions.types:protocol

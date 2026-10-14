@@ -18,3 +18,13 @@ entries:
   method: main
   meta: {type: test_support}
   modules: [process]
+
+- name: directory_test
+  kind: function.lua
+  source: file://directory_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [channel, time]
+  imports:
+    test: wippy.test:test
+    directory: bee.harness.app:directory

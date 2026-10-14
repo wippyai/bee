@@ -15,6 +15,7 @@ local input_event = require("input_event")
 local sessions = require("sessions")
 local admission = require("admission")
 local agents = require("agents")
+local directory_reader = require("directory")
 local view = require("view")
 local session_view = require("session_view")
 local directory_view = require("directory_view")
@@ -140,34 +141,13 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local drawn: view.Frame = {rows = {}, hits = {}, capacity = 0, offset = 0}
     -- directory_loaded reads the sessions and the workspaces they live in.
     local function directory_loaded(serial: integer, workspace_filter: string?, closed_requested: boolean): Loaded
-        local rows, load_error = agents.directory(sessions.client(), workspace_filter, closed_requested)
-        local peer_raw, peer_error = funcs.call("bee.threads.sessions.binding:peers", {})
-        local peer_reply = bounds.object(peer_raw)
-        local peer_value = peer_reply and bounds.object(peer_reply.value)
-        local peers = peer_value and bounds.dense_list(peer_value.items, 16, "peer bees")
-        if peer_error then load_error = tostring(peer_error) end
-        rows = rows or {}
-        for _, raw in ipairs(peers or {}) do
-            local peer = bounds.object(raw)
-            local node, scope = peer and bounds.id(peer.node), peer and bounds.id(peer.scope)
-            if node and scope then
-                local remote, err = agents.directory(sessions.client({node = node}), nil, closed_requested)
-                if remote then
-                    for _, row in ipairs(remote) do row.node, row.peer_scope = node, scope; rows[#rows + 1] = row end
-                else load_error = err end
-            end
-        end
-        table.sort(rows, function(a: sessions_protocol.SessionSnapshot, b: sessions_protocol.SessionSnapshot): boolean
-            if a.node ~= b.node then return (a.node or "") < (b.node or "") end
-            return a.execution.evidence_at > b.execution.evidence_at
-        end)
-        local names: {[string]: agents.Workspace} = {}
-        local own = agents.workspace(launch.workspace_id, ask)
-        if own then names[launch.workspace_id] = own end
-        for _, row in ipairs(rows or {}) do
-            local id = agents.home(row.session)
-            if id and not row.node and not names[id] then names[id] = agents.workspace(id, ask) end
-        end
+        local rows, names, load_error = directory_reader.load({
+            directory = function(node: string?, workspace: string?, closed: boolean)
+                return agents.directory(sessions.client(node and {node = node} or nil), workspace, closed)
+            end,
+            peers = function() return funcs.call("bee.threads.sessions.binding:peers", {}) end,
+            workspace = function(id: string) return agents.workspace(id, ask) end,
+        }, launch.workspace_id, workspace_filter, closed_requested)
         return {serial = serial, directory = rows, workspaces = names, error = load_error}
     end
     local function load()

@@ -23,7 +23,7 @@ local function proposal(binding: Binding, configuration: surface.Surface, digest
     local scope = bounds.object(capability.scope)
     for _, id in ipairs(scope and bounds.ids(scope.traits, true) or {}) do
         for _, trait in ipairs(configuration.catalog.traits) do
-            if trait.id == id and agent_trait.extension(trait) then declarations[#declarations + 1] = trait end
+            if trait.id == id and trait.application_ref ~= nil then declarations[#declarations + 1] = trait end
         end
     end
     return {grant_adapter = "bee.gateway.security:grant",kind = "operation", ref = "bee.gateway:access", revision = capability_model.REVISION,
@@ -57,8 +57,8 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
         for _, trait in ipairs(configuration.catalog.traits) do
             if trait.id == id then
                 title = trait.title
-                if agent_trait.extension(trait) then
-                    has_extension = true
+                if trait.application_ref ~= nil then
+                    has_extension = has_extension or #(trait.listens or {}) > 0 or #(trait.hooks or {}) > 0
                     for _, point in ipairs(trait.hooks or {}) do
                         if point == "tool.after" then retains_originals = true end
                     end
@@ -66,7 +66,7 @@ function M.request(binding: Binding, configuration: surface.Surface, digest: str
                     if not live then return fail("UNSUPPORTED_CAPABILITY", err or "trait unavailable") end
                     local unsupported = trait_access.supported(live, trait_access.session(binding), workspace_id, binding.hooks)
                     if unsupported then return fail("UNSUPPORTED_CAPABILITY", unsupported) end
-                    title = title .. " (app " .. tostring(trait.application_ref) .. " @ " .. tostring(trait.application_revision)
+                    title = title .. " (tools: " .. table.concat(trait.tools, ", ") .. "; app " .. tostring(trait.application_ref) .. " @ " .. tostring(trait.application_revision)
                         .. "; listens: " .. table.concat(trait.listens or {}, ", ") .. "; hooks: " .. table.concat(trait.hooks or {}, ", ") .. ")"
                 end
             end
@@ -102,7 +102,7 @@ function M.approved(binding: Binding, configuration: surface.Surface, digest: st
     table.sort(traits)
     for _, id in ipairs(traits) do
         for _, trait in ipairs(configuration.catalog.traits) do
-            if trait.id == id and agent_trait.extension(trait) then
+            if trait.id == id and trait.application_ref ~= nil then
                 local live, err = trait_access.review(trait)
                 if not live then return nil, fail("DENIED", err or "person re-approval required") end
             end

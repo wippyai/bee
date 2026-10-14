@@ -16,6 +16,7 @@ local surface = require("surface")
 local trait_access = require("trait_access")
 local gateway_hooks_catalog = require("gateway_hooks_catalog")
 local descriptors = require("descriptors")
+local app_traits = require("app_traits")
 local M = {}
 M.MAX_AGENT_DELEGATES = 16
 M.MAX_AGENT_MODELS = 16
@@ -150,7 +151,12 @@ local function access_surface(raw: unknown, tools: {string}, seeds: {string}?): 
     if not approver or not traits or #traits == 0 then return nil, traits_error or "names no approver policy or trait" end
     local seen: {[string]: boolean} = {}
     for _, id in ipairs(traits) do seen[id] = true end
-    for _, id in ipairs(seeds or {}) do if not seen[id] then return nil, "trait outside launch ceiling: " .. id end end
+    for _, id in ipairs(seeds or {}) do
+        if not seen[id] and seen[mcp.APPLICATION_TOOLS_TRAIT.id] and app_traits.load(id) then
+            traits[#traits + 1] = id; seen[id] = true
+        end
+        if not seen[id] then return nil, "trait outside launch ceiling: " .. id end
+    end
     local consent: {[string]: boolean} = {}
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do consent[trait.id] = true end
     local extensions: {unknown} = {}
@@ -272,6 +278,22 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if not admitted_tools then return nil, admitted_error end
     -- Credentials bind the host policy; the launch separately measures the
     -- preferences and resulting configuration under that policy.
+    if selected then
+        local wanted: {string} = {}
+        for _, id in ipairs(selected.active_traits or {}) do wanted[#wanted + 1] = id end
+        for _, id in ipairs(selected.requestable or {}) do wanted[#wanted + 1] = id end
+        local app_selected = false
+        for _, id in ipairs(wanted) do if app_traits.load(id) then app_selected = true end end
+        if app_selected and bounds.member("app_tools", admitted_tools) and not bounds.member("app_tools", selected.mcp_tools) then
+            local copied: preferences.Value = {options = selected.options, instructions = selected.instructions,
+                bee = selected.bee, home = selected.home, docker_overrides = selected.docker_overrides,
+                authority_grant_id = selected.authority_grant_id, active_traits = selected.active_traits,
+                requestable = selected.requestable, context = selected.context, mcp_tools = {}}
+            for _, name in ipairs(selected.mcp_tools) do copied.mcp_tools[#copied.mcp_tools + 1] = name end
+            copied.mcp_tools[#copied.mcp_tools + 1] = "app_tools"
+            selected = copied
+        end
+    end
     if selected or descriptor then
         local effective, preference_error = preferences.apply(data, selected, descriptor, placement_ref)
         if not effective then return nil, ref .. ": " .. tostring(preference_error) end

@@ -44,4 +44,12 @@ function M.stable(workspace_id: unknown, definition_id: unknown, overlay_owner: 
     return {id = id, workspace_id = workspace, definition_id = definition, overlay_owner = owner}
 end
 
+function M.trait(workspace_id: string, definition_id: string, overlay_owner: string?): string?
+    local identity = M.stable(workspace_id, definition_id, overlay_owner)
+    if not identity then return nil end
+    local digest = hash.sha256(identity.id)
+    if not digest then return nil end
+    return "bee.application.trait:" .. readable(definition_id) .. "-" .. digest:sub(1, M.DIGEST_BYTES)
+end
+
 return M

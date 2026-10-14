@@ -40,6 +40,30 @@ Launch policies declare gateway tools, trait access and fixed context through
 `gateway_surface`. An access declaration inside that surface is normalized with
 the host's tools; the former `gateway_access` policy field is refused.
 
+## Installed application traits
+
+Every installed application admitted with a live `agent.tools` grant appears in
+this workspace's agent trait catalog. Its title comes from the app declaration;
+its prompt describes the app's tools and their names. Its trait ID comes from
+the same identity owner as application membership: the admitted definition,
+workspace and overlay owner. Read the catalog and use that ID; do not guess a
+namespace or choose Hub and Library to find an app.
+
+MCP `session {operation = "read"}` lists these traits. Put an app ID in profile
+`active_traits` or `requestable`, or in spawn `overrides.traits`, like any trait.
+Parent and profile ceilings still apply. Activate through `session` selection;
+when consent is needed, use `request_access` with that trait ID and a reason,
+then `access_status` for the returned approval. Needs you names the app and its
+exact tools. Approval activates only that app's tools for this session. Agent
+profile writes and delegated launches cannot approve themselves.
+
+The generic `bee.app:tools` selection gives no blanket application tool access.
+Each app has its own approval and selection. Calls use its advertised aliases;
+arguments and replies retain their registry schemas and the node runs each call
+as the app with its live grants. Uninstall removes the trait from existing
+sessions. Upgrades refresh its description and tools and invalidate approval of
+a changed declaration. A withdrawn grant removes the tools as well.
+
 ## Build an app that listens to a session
 
 Ship an ordinary `agent.trait` registry entry with `meta.application_ref` naming

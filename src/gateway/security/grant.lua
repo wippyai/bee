@@ -12,7 +12,12 @@ function M.build(raw: unknown): grants.Grant
     local approval = assert(bounds.id(input.approval_id))
     local declarations = bounds.array(payload.declarations, 16) or {}
     local terms: {[string]: unknown} = {kind = "binding", time_basis = "absolute"}
-    if #declarations > 0 then terms = {kind = "session", session_ref = assert(bounds.id(payload.session_ref)), time_basis = "absolute"} end
+    for _, raw in ipairs(declarations) do
+        local declaration = assert(bounds.object(raw))
+        if #(bounds.ids(declaration.listens, true) or {}) > 0 or #(bounds.ids(declaration.hooks, true) or {}) > 0 then
+            terms = {kind = "session", session_ref = assert(bounds.id(payload.session_ref)), time_basis = "absolute"}
+        end
+    end
     return {grant_id = approval .. ":grant",domain = "gateway_access",owner_node = assert(bounds.id(input.owner_node)),workspace_id = assert(bounds.id(input.workspace_id)),requester_id = subject,granted_by = assert(bounds.id(input.actor_id)),granted_definition = bounds.id(input.definition_id),
         subject = {principal_id = subject,audience = binding},scope = {type = "exact",parameters = proposal},terms = terms,
         provenance = {kind = "decision",approval_id = approval,reviewed_digest = input.reviewed_digest},metadata = {binding_id = binding,configuration_digest = payload.configuration_digest,traits = assert(bounds.ids(scope.traits,true))},

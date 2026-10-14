@@ -11,6 +11,16 @@ local bounds = require("bounds")
 local model = require("capability_model")
 local grants = require("capability_grants")
 
+local app_traits = require("app_traits")
+local app_identity = require("app_identity")
+local surface = require("surface")
+local catalog = require("catalog")
+local mcp = require("mcp")
+local launch_policy = require("launch_policy")
+local profile_scope = require("profile_scope")
+local profile_validation = require("profile_validation")
+local profile_protocol = require("profile_protocol")
+
 local WORKSPACE = string.rep("f", 32)
 local APP = "bee.tests.node:tools_app"
 local TWIN = "bee.tests.node:tools_twin"
@@ -100,6 +110,56 @@ end
 
 local function define_tests()
     test.describe("application agent tools", function()
+        test.it("catalogs Progress by admission and exposes only its selected tools, then removes it on uninstall", function()
+            local installed = install(APP, {ADD, LIST})
+            local original = assert(registry.get(TWIN_ADD))
+            local distinct = assert(registry.get(TWIN_ADD))
+            distinct.meta.llm_alias = "unrelated_add"
+            local changed = assert(registry.snapshot()):changes()
+            changed:update(distinct); assert(changed:apply())
+            local twin = install(TWIN, {TWIN_ADD})
+            local raw = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
+                access = {policy = "agent-access", traits = {"bee.app:tools"}}}
+            local configured = assert((surface.prepare(raw, mcp.TOOLS, {"app_tools"}, WORKSPACE)))
+            local trait_id = assert(app_identity.trait(WORKSPACE, APP, nil))
+            local progress: unknown = nil
+            for _, trait in ipairs(configured.catalog.traits) do
+                test.is_true(trait.id ~= "bee.app:tools")
+                if trait.id == trait_id then progress = trait; test.eq(trait.title, "Progress"); test.eq(table.concat(trait.tools, ","), "notes_add,notes_list") end
+            end
+            test.not_nil(progress)
+            local planned, err = launch_policy.decode("bee.driver.claude.security:launch_policy_claude_window",
+                assert(registry.get("bee.driver.claude.security:launch_policy_claude_window")),
+                function(_ref: string): (string?, string?) return "/usr/bin/fixture", nil end,
+                {options = {}, mcp_tools = {}, instructions = "", active_traits = {trait_id}, requestable = {}})
+            test.not_nil(planned, err)
+            test.not_nil(bounds.member("app_tools", assert(planned).gateway_tools), "the app trait supplies its own tool mechanism")
+            test.is_nil(profile_scope.check({mcp = {}}, "notes_add", "bee.node.binding:app_tool_call", WORKSPACE,
+                {text = "note"}, {definition = APP, trait = trait_id}))
+            test.not_nil(profile_scope.check({mcp = {{tool = "app_tools", scope = {definitions = {TWIN}}}}},
+                "notes_add", "bee.node.binding:app_tool_call", WORKSPACE, {text = "note"}, {definition = APP, trait = trait_id}))
+
+            local profile = assert(profile_protocol.profile({schema_revision = "bee.agent-profile@3", name = "App worker",
+                definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.driver.claude.binding:binding",
+                provider = {}, bee = {mcp = {}}, active_traits = {trait_id}, requestable = {}}))
+            test.is_nil(profile_validation.check(assert(registry.snapshot()), profile))
+            test.is_nil(profile_validation.ceiling(assert(registry.snapshot()), profile, {trait_id}, false))
+            test.not_nil(profile_validation.ceiling(assert(registry.snapshot()), profile, {}, false), "delegation cannot exceed the parent trait ceiling")
+            test.is_nil(surface.select(configured, {trait_id}, {}), "an agent cannot approve its own application trait")
+            local approved = assert(surface.grant(configured, {trait_id}))
+            local selection = assert(surface.select(approved, {trait_id}, {}))
+            local tools = assert(catalog.select(approved.catalog, approved.ceiling, approved.base_tools, approved.allowed_traits, selection.active))
+            test.eq(#tools, 2)
+            test.eq(tools[1].name, "notes_add")
+            test.eq(tools[2].name, "notes_list")
+            remove(installed.ids)
+            local removed = assert(app_traits.catalog(WORKSPACE))
+            for _, trait in ipairs(removed.traits) do test.is_true(trait.id ~= trait_id) end
+            test.is_nil(app_traits.load(trait_id, WORKSPACE))
+            remove(twin.ids)
+            local restore = assert(registry.snapshot()):changes()
+            restore:update(original); assert(restore:apply())
+        end)
         test.it("lists the approved tools and runs them as the application against its own database", function()
             local installed = install(APP, {ADD, LIST})
             local listed = value(call("bee.node.binding:app_tools", {}))
@@ -136,7 +196,10 @@ local function define_tests()
         end)
         test.it("takes a tool away when its grant is withdrawn", function()
             local installed = install(APP, {ADD, LIST})
+            local id = assert(app_identity.trait(WORKSPACE, APP, nil))
+            test.not_nil(app_traits.load(id, WORKSPACE))
             remove({installed.tools_policy})
+            test.is_nil(app_traits.load(id, WORKSPACE))
             local listed = value(call("bee.node.binding:app_tools", {}))
             local refused = call("bee.node.binding:app_tool_call", {tool = "notes_add", arguments = {text = "late"}})
             remove(installed.ids)

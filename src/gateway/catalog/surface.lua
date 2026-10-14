@@ -6,6 +6,7 @@ local context = require("context")
 local mcp = require("mcp")
 local capability_model = require("capability_model")
 local profile_access = require("profile_access")
+local app_traits = require("app_traits")
 local M = {}
 M.APPLICATION_RUNTIME_TRAIT = mcp.APPLICATION_RUNTIME_TRAIT
 -- The approval workspace is the binding's; a declaration names only policy and traits.
@@ -31,7 +32,7 @@ end
 
 -- Built-in descriptions and component descriptions share one validated
 -- catalog. A component cannot shadow a built-in name.
-function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (Surface?, Selection?, string?)
+function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}, workspace: string?): (Surface?, Selection?, string?)
     local value = bounds.object(raw)
     if not value then return nil, nil, "MCP surface must be an object" end
     local extra = bounds.fields(value, {"tools", "traits", "base_tools", "active_traits", "fixed_context", "dynamic_keys", "access", "profile", "resource_grants", "authority_grant_id", "selectable_traits"})
@@ -58,6 +59,56 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     -- re-declare it through an ordinary trait or present it as a base tool.
     local declared_traits = value.traits
     if type(declared_traits) ~= "table" then return nil, nil, "expected list" end
+    local app_catalog: app_traits.Catalog? = nil
+    local home = workspace or app_traits.workspace()
+    if not home then
+        for _, id in ipairs(bounds.ids(value.selectable_traits or value.active_traits, true) or {}) do
+            local trait, _, admitted_workspace = app_traits.load(id)
+            if trait then home = admitted_workspace; break end
+        end
+    end
+    if home and bounds.member("app_tools", ceiling) then
+        local found, err = app_traits.catalog(home)
+        if not found then return nil, nil, err end
+        app_catalog = found
+        local copied: {unknown} = {}
+        for _, trait in ipairs(declared_traits :: {unknown}) do copied[#copied + 1] = trait end
+        declared_traits = copied
+        local expanded: {string} = {}
+        for _, name in ipairs(ceiling) do expanded[#expanded + 1] = name end
+        local taken: {[string]: boolean} = {}
+        for _, tool in ipairs(combined) do taken[tool.name] = true end
+        for _, tool in ipairs(found.tools) do
+            if not taken[tool.alias] then
+                combined[#combined + 1] = {name = tool.alias, operation = "bee.node.binding:app_tool_call",
+                    description = tool.description, policies = {"bee.security.gateway:gateway_tool_app_tools_policy"},
+                    schema = tool.input_schema, annotations = tool.annotations}
+                expanded[#expanded + 1] = tool.alias
+            end
+        end
+        ceiling = expanded
+        if access then
+            local ids: {string} = {}
+            for _, id in ipairs(access.traits) do
+                if id ~= mcp.APPLICATION_TOOLS_TRAIT.id then ids[#ids + 1] = id end
+            end
+            for _, trait in ipairs(found.traits) do
+                local names: {string} = {}
+                for _, name in ipairs(trait.tools) do if not taken[name] then names[#names + 1] = name end end
+                trait.tools = names
+                local existing = false
+                for index, raw in ipairs(copied) do
+                    local declared = bounds.object(raw)
+                    if declared and declared.id == trait.id then copied[index] = trait; existing = true end
+                end
+                if not existing then copied[#copied + 1] = trait end
+                if not bounds.member(trait.id, ids) then ids[#ids + 1] = trait.id end
+            end
+            local expanded_access: Access = {policy = access.policy, traits = ids}
+            access = expanded_access
+        end
+    end
+    if type(declared_traits) ~= "table" then return nil, nil, "expected list" end
     local consent_of: {[string]: catalog.Trait} = {}
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do
         for _, name in ipairs(trait.tools) do consent_of[name] = trait end
@@ -81,11 +132,13 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
         if name == "application_open" then has_open = true end
     end
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do
+        if app_catalog and trait.id == mcp.APPLICATION_TOOLS_TRAIT.id then goto next_consent end
         local tools: {string} = {}
         for _, name in ipairs(trait.tools) do
             if admitted_tools[name] then tools[#tools + 1] = name end
         end
         if #tools > 0 then consents[#consents + 1] = {id = trait.id, title = trait.title, prompt = trait.prompt, tools = tools} end
+        ::next_consent::
     end
     local traits: {unknown} = {}
     for _, trait in ipairs(declared_traits) do traits[#traits + 1] = trait end
@@ -164,7 +217,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     local initial: {string} = {}
     for _, id in ipairs(active) do
         local declared = known_traits[id]
-        if not declared or not requestable[id] or (not agent_trait.extension(declared) and value.selectable_traits == nil) then
+        if not declared or not requestable[id] or (declared.application_ref == nil and value.selectable_traits == nil) then
             initial[#initial + 1] = id
         end
     end

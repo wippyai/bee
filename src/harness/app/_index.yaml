@@ -200,6 +200,7 @@ entries:
   - uuid
   - json
   imports:
+    app_traits: bee.node:app_traits
     validation: bee.harness.profiles.binding:validation
     mcp: bee.gateway.api:mcp
     canonical: bee.values:canonical

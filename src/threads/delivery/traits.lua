@@ -103,6 +103,7 @@ function M.approve(tx: sql.Transaction, grant_id: string): string?
     for _, raw in ipairs(declarations) do
         local declared, invalid = agent_trait.declaration(raw)
         if not declared then return invalid end
+        if not agent_trait.extension(declared) then goto next_declaration end
         local existing, read_error = M.read(tx, session, declared.id)
         if read_error then return read_error end
         if existing then
@@ -116,6 +117,7 @@ function M.approve(tx: sql.Transaction, grant_id: string): string?
         local selection = assert(M.read(tx, session, declared.id))
         err = M.start(tx, selection)
         if err then return err end
+        ::next_declaration::
     end
     return nil
 end

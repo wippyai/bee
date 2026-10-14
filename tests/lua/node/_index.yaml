@@ -250,7 +250,7 @@ entries:
   modules: [process]
   meta:
     type: bee.app
-    application: {api_version: 1, title: Notes tools, lifetime: view, revision: '1', instance_policy: multiple}
+    application: {api_version: 1, title: Progress, lifetime: view, revision: '1', instance_policy: multiple}
 - name: tools_twin
   kind: process.lua
   source: file://runner_fixture/app.lua
@@ -306,6 +306,15 @@ entries:
   modules: [funcs, security, registry]
   meta: {type: test, suite: bee}
   imports:
+    profile_validation: bee.harness.profiles.binding:validation
+    profile_protocol: bee.harness.profiles:protocol
+    launch_policy: bee.harness.carrier:policy
+    profile_scope: bee.gateway.catalog:profile_scope
+    app_traits: bee.node:app_traits
+    app_identity: bee.threads.records:app_identity
+    surface: bee.gateway.catalog:surface
+    catalog: bee.gateway.catalog:catalog
+    mcp: bee.gateway.api:mcp
     test: wippy.test:test
     bounds: bee.values:bounds
     capability_model: bee.capability:model

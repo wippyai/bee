@@ -251,20 +251,33 @@ local function define_tests()
             -- approves them in Needs you, for that session only.
             local asking = stock_session(workspace, "asking")
             local other = stock_session(workspace, "other")
+            local discovered = structured(tool_call(asking, "session", {operation = "read"}))
+            local app_trait: string? = nil
+            for _, raw in ipairs(assert(bounds.array(discovered.traits, 64))) do
+                local trait = assert(bounds.object(raw))
+                if trait.title == guide.TITLE then app_trait = assert(bounds.id(trait.id)) end
+            end
+            test.not_nil(app_trait, "installed application must appear as its own trait")
+            local delegated = structured(tool_call(other, "session", {operation = "read"}))
+            local refused_selection = tool_call(other, "session", {operation = "select", expected_revision = delegated.revision,
+                active_traits = {assert(app_trait)}, context = {}})
+            test.is_true(assert(bounds.object(refused_selection.result)).isError == true,
+                "delegated selection must wait for the existing person approval")
             local before_access = listed(asking)
             test.is_true(before_access.session and before_access.delivery)
             test.is_nil(before_access.app_tools)
             test.is_nil(before_access.counter_list)
             test.is_nil(before_access.publish)
             local requested = structured(tool_call(asking, "session", {operation = "request_access",
-                idempotency_key = "notesdb-access", traits = {"bee.app:tools"}, reason = "Use the counter's tools"}))
+                idempotency_key = "notesdb-access", traits = {assert(app_trait)}, reason = "Use the counter's tools"}))
             local approval_id = assert(bounds.id(requested.approval_id), tostring(json.encode(requested)))
             local asked_person = harness.approve(workspace, approval_id)
-            test.eq((assert(bounds.object(asked_person.prompt))).text, "Let this agent session use Application tools? It asks: Use the counter's tools")
+            test.is_true(tostring(assert(bounds.object(asked_person.prompt)).text):find(guide.TITLE, 1, true) ~= nil)
             local granted = structured(tool_call(asking, "session", {operation = "access_status", approval_id = approval_id}))
             test.eq(granted.status, "granted")
             local after_access = listed(asking)
-            test.is_true(after_access.app_tools and after_access.counter_list and after_access.counter_record)
+            test.is_true(after_access.counter_list and after_access.counter_record)
+            test.is_nil(after_access.app_tools)
             test.eq(counts(structured(tool_call(asking, "counter_list", {}))), "1,2")
             local unapproved = listed(other)
             test.is_nil(unapproved.app_tools)
@@ -292,8 +305,8 @@ local function define_tests()
             local second_outcome = harness.installed(writer, OVERLAY, workspace, "1.0.1", second.intent_id).outcome
             harness.close_presented(before)
             test.eq(second_outcome, "applied")
-            local listed = counts(as_agent(workspace, "counter_list", {}))
-            test.eq(listed, "1:kept,2:kept")
+            local recorded_counts = counts(as_agent(workspace, "counter_list", {}))
+            test.eq(recorded_counts, "1:kept,2:kept")
             local source = OVERLAY
 
             -- 1.0.0 came before add_note: going back would run it on a column it
@@ -314,6 +327,7 @@ local function define_tests()
             test.eq(#harness.restart({owner}), 0)
             test.is_true(registry.get(APP) ~= nil)
             test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
+            test.is_nil(listed(asking).counter_list, "an upgraded app needs approval of its new declaration")
             local returned = harness.value(harness.library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-2"}))
             harness.close_presented(before)
             test.eq(returned.phase, "settled")
@@ -327,6 +341,11 @@ local function define_tests()
             -- again finds the rows, with no migration to run.
             harness.value(harness.library(workspace, {operation = "uninstall", source_workspace = source, receipt_key = "countdb-remove"}))
             test.is_nil((registry.get(APP)))
+            local removed_catalog = structured(tool_call(asking, "session", {operation = "read"}))
+            for _, raw in ipairs(assert(bounds.array(removed_catalog.traits, 64))) do
+                test.is_true(assert(bounds.object(raw)).id ~= app_trait, "uninstall must remove the app trait from an existing session")
+            end
+            test.is_nil(listed(asking).counter_list)
             test.eq(#harness.restart({owner}), 0)
             test.is_nil((registry.get(APP)))
             local again = harness.value(harness.deliver(writer, OVERLAY, workspace, revised(second_version(), "4"), "1.0.3"))

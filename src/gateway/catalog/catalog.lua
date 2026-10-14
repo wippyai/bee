@@ -38,8 +38,8 @@ function M.decode(raw: unknown): (Catalog?, string?)
     if not value then return nil, "catalog must be an object" end
     local extra = bounds.fields(value, {"tools", "traits"})
     if extra then return nil, extra end
-    local tools, tools_error = list(value.tools, 40)
-    local traits, traits_error = list(value.traits, 16)
+    local tools, tools_error = list(value.tools, 128)
+    local traits, traits_error = list(value.traits, 64)
     if not tools then return nil, tools_error end
     if not traits then return nil, traits_error end
     local result: Catalog = {tools = {}, traits = {}}
@@ -123,7 +123,7 @@ function M.from_framework(framework: unknown, policies: unknown): (Catalog?, str
     local extra = bounds.fields(value, {"tools", "traits"})
     if extra then return nil, extra end
     local declared_tools, tools_error = list(value.tools, 32)
-    local declared_traits, traits_error = list(value.traits, 16)
+    local declared_traits, traits_error = list(value.traits, 64)
     if not declared_tools then return nil, tools_error end
     if not declared_traits then return nil, traits_error end
     local host = bounds.object(policies)

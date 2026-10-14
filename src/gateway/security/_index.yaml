@@ -726,6 +726,7 @@ entries:
   source: file://traits.lua
   modules: [registry, json]
   imports:
+    app_traits: bee.node:app_traits
     bounds: bee.values:bounds
     agent_trait: bee.values:agent_trait
     canonical: bee.values:canonical
@@ -736,7 +737,7 @@ entries:
   kind: security.policy
   groups: [external_owner]
   policy:
-    actions: [registry.get, registry.find, registry.snapshot]
+    actions: [registry.get, registry.find, registry.snapshot, registry.version, registry.overlay.get]
     resources: ['*']
     effect: allow
 - name: access_effect_policy
@@ -744,4 +745,11 @@ entries:
   policy:
     actions: [bee.approvals.own, bee.gateway.manage, funcs.call, process.registry.register, process.listen]
     resources: [gateway.access, bindings, bee.gateway.access, bee.process.wake, bee.approvals.binding:effect_queue, bee.approvals.binding:events, bee.approvals.binding:effect, bee.approvals.binding:revalidate]
+    effect: allow
+
+- name: trait_identity_policy
+  kind: security.policy
+  policy:
+    actions: [system.read]
+    resources: [node]
     effect: allow

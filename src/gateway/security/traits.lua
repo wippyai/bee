@@ -6,6 +6,7 @@ local canonical = require("canonical")
 local database = require("database")
 local json = require("json")
 local hook_capabilities = require("hook_capabilities")
+local app_traits = require("app_traits")
 local M = {}
 type Declaration = agent_trait.Declaration
 function M.session(binding: {subject: string, action_id: string}): string
@@ -15,7 +16,7 @@ function M.load(ref: string): (Declaration?, string?)
     local pinned, err = registry.snapshot()
     if not pinned then return nil, tostring(err) end
     local entry, entry_error = pinned:get(ref)
-    if not entry then return nil, "trait unavailable: " .. ref end
+    if not entry then return app_traits.load(ref) end
     local trait, trait_error = agent_trait.registry(ref, entry)
     if not trait then return nil, trait_error end
     local app = trait.application_ref
@@ -36,6 +37,9 @@ function M.review(declared: Declaration): (Declaration?, string?)
         or live.digest ~= declared.digest or canonical.encode(live.listens) ~= canonical.encode(declared.listens)
         or canonical.encode(live.hooks) ~= canonical.encode(declared.hooks) then
         return nil, "application or trait declarations changed; person re-approval required: " .. declared.id
+    end
+    for _, name in ipairs(declared.tools) do
+        if not bounds.member(name, live.tools) then return nil, "trait tool is no longer offered: " .. name end
     end
     return live, nil
 end

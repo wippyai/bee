@@ -512,11 +512,11 @@ function M.agent_tools(): string
         .. " application's other grants. Schemas must stay in the subset Bee advertises (object schemas with typed"
         .. " properties, required, enum, const, bounds, formats, nested objects and arrays, oneOf/allOf/if/then/else/not);"
         .. " preflight refuses a tool that is not this pack's own, uses another schema, declares security or shares an"
-        .. " alias. An agent reaches the tools through app_tools once the person enabled it in the agent's profile or"
-        .. " approved bee.app:tools as session access: app_tools lists the offered tools and why any is not offered,"
-        .. " and each offered tool is called by its alias like any other tool. Arguments and replies are checked"
-        .. " against the declared schemas. A tool disappears when its application or grant does; calling it then"
-        .. " answers TOOLS_CHANGED, and two applications offering one alias offer neither."
+        .. " alias. The installed application appears as its own trait, with its title, description and tool names."
+        .. " See docs/session_traits for profile selection, activation and person approval. Select that trait"
+        .. " through the existing session trait operations; its tools run by alias with schema validation."
+        .. " Uninstall removes the trait and its tools; changed declarations require renewed approval."
+        .. " Two applications offering one alias offer neither."
 end
 
 function M.sharing(): string

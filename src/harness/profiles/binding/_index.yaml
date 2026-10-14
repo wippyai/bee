@@ -7,6 +7,7 @@ entries:
   modules:
   - registry
   imports:
+    app_traits: bee.node:app_traits
     preferences: bee.driver.descriptor:effective
     mcp: bee.gateway.api:mcp
     bounds: bee.values:bounds

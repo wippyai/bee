@@ -48,6 +48,7 @@ entries:
   - env
   - json
   imports:
+    app_traits: bee.node:app_traits
     descriptors: bee.driver.descriptor:descriptor
     bounds: bee.values:bounds
     canonical: bee.values:canonical

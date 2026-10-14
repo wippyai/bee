@@ -7,9 +7,15 @@ type Object = {[string]: unknown}
 local function inside(parent: string, child: unknown): boolean
     return type(child) == "string" and (parent == "" or child == parent or child:sub(1, #parent + 1) == parent .. "/")
 end
-function M.check(profile: access.Bee?, tool: string, operation: string, workspace: string?, arguments: Object): string?
+function M.check(profile: access.Bee?, tool: string, operation: string, workspace: string?, arguments: Object, application: {definition: string, trait: string}?): string?
     if not profile then return nil end
     local spec = bounds.object(arguments.spec) or arguments
+    if application then
+        local copied: Object = {}
+        for key, value in pairs(arguments) do copied[key] = value end
+        copied.definition, copied.trait, copied.operation = application.definition, application.trait, "call"
+        spec = copied
+    end
     local supplied = spec.workspace_id or spec.workspace or arguments.workspace_id
     local requested = supplied or workspace
     local destinations: {unknown} = {}
@@ -33,8 +39,8 @@ function M.check(profile: access.Bee?, tool: string, operation: string, workspac
     end
     local selected: access.Scope? = nil
     if profile.mcp ~= nil then
-        for _, item in ipairs(profile.mcp) do if item.tool == tool then selected = item.scope end end
-        if not selected then return "tool is outside the saved MCP selection" end
+        for _, item in ipairs(profile.mcp) do if item.tool == tool or (application and item.tool == "app_tools") then selected = item.scope end end
+        if not selected and not application then return "tool is outside the saved MCP selection" end
     end
     if selected then
         for key, ceiling in pairs(selected) do

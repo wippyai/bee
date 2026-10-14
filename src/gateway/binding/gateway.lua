@@ -25,6 +25,7 @@ local configuration = require("configuration")
 local hooks = require("hooks")
 local mcp = require("mcp")
 local surface = require("surface")
+local catalog = require("catalog")
 local trait_access = require("trait_access")
 local agent_trait = require("agent_trait")
 local session_traits = require("session_traits")
@@ -547,7 +548,7 @@ function M.admit(value: unknown): Reply
     if selected_surface == nil then
         selected_surface = {tools = {}, traits = {}, base_tools = tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
     end
-    local prepared, initial, surface_error = surface.prepare(selected_surface, mcp.TOOLS, tools)
+    local prepared, initial, surface_error = surface.prepare(selected_surface, mcp.TOOLS, tools, workspace_id)
     if not prepared or not initial then return fail("INVALID", surface_error or "invalid MCP surface") end
     local surface_json, surface_encode_error = json.encode(selected_surface)
     if not surface_json or surface_encode_error or #surface_json > 131072 then return fail("INVALID", "MCP surface exceeds storage bound") end
@@ -1252,19 +1253,21 @@ function M.surface(binding: Binding): (BoundSurface?, Reply?)
     local active, active_error = json.decode(stored.active_json)
     local dynamic, dynamic_error = json.decode(stored.context_json)
     if raw_error or active_error or dynamic_error then return nil, fail("STORAGE", "binding surface JSON is corrupt") end
-    local configured, _, config_error = surface.prepare(raw, mcp.TOOLS, binding.tools)
+    local configured, _, config_error = surface.prepare(raw, mcp.TOOLS, binding.tools, binding.workspace_id)
     if not configured then return nil, fail("STORAGE", config_error or "binding surface is invalid") end
     local extensions: {[string]: boolean} = {}
+    local known: {[string]: boolean} = {}
     for index, trait in ipairs(configured.catalog.traits) do
+        known[trait.id] = true
         if agent_trait.extension(trait) then
             extensions[trait.id] = true
             local live = trait_access.load(trait.id)
-            if live then configured.catalog.traits[index] = live end
+            if live and (#(trait.listens or {}) > 0 or #(trait.hooks or {}) > 0) then configured.catalog.traits[index] = live end
         end
     end
     local binding_traits: {string} = {}
-    for _, id in ipairs(saved) do binding_traits[#binding_traits + 1] = id end
-    for _, id in ipairs(granted) do if not extensions[id] and not bounds.member(id, binding_traits) then binding_traits[#binding_traits + 1] = id end end
+    for _, id in ipairs(saved) do if known[id] then binding_traits[#binding_traits + 1] = id end end
+    for _, id in ipairs(granted) do if known[id] and not extensions[id] and not bounds.member(id, binding_traits) then binding_traits[#binding_traits + 1] = id end end
     if #binding_traits > 0 then
         local extended, extend_error = surface.grant(configured, binding_traits)
         if not extended then return nil, fail("STORAGE", extend_error or "invalid grant") end
@@ -1945,6 +1948,13 @@ function M.managed_binding(binding_id: string): (Binding?, Reply?)
     return binding, missing
 end
 function M.admit_call(binding: Binding, name: string): Reply
+    local current, failure = M.surface(binding)
+    if not current then return failure or fail("DENIED", "call surface unavailable") end
+    local selected = catalog.select(current.configuration.catalog, current.configuration.ceiling,
+        current.configuration.base_tools, current.configuration.allowed_traits, current.selection.active)
+    local active = false
+    for _, tool in ipairs(selected or {}) do if tool.name == name then active = true end end
+    if not active then return fail("DENIED", "tool is not active in this binding") end
     local db, failure = open()
     if not db then return failure or fail("STORAGE","open call authority") end
     local tx, err = db:begin({isolation = sql.isolation.SERIALIZABLE})
@@ -1956,7 +1966,8 @@ function M.admit_call(binding: Binding, name: string): Reply
     local stored, stored_error = surface_store.read(tx,binding.binding_id)
     local declaration = stored and bounds.object(json.decode(stored.surface_json))
     if not declaration then tx:rollback(); db:release(); return fail("STORAGE",stored_error and stored_error.message or "invalid call surface") end
-    local id, authority_error = surface_store.call_authority(tx,binding.binding_id,binding.workspace_id,declaration,name,now)
+    local id, authority_error = surface_store.call_authority(tx,binding.binding_id,binding.workspace_id,declaration,name,now,
+        current.configuration.catalog.traits, current.configuration.access)
     if authority_error then tx:rollback(); db:release(); return fail("DENIED",authority_error.message) end
     if id then
         local grant, read_error = grant_store.read(tx,id)

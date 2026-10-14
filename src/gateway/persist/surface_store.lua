@@ -73,18 +73,29 @@ function M.saved_consent(tx: sql.Transaction, binding_id: string, workspace: str
     end
     return consent, nil
 end
-function M.call_authority(tx: sql.Transaction, binding_id: string, workspace: string?, declaration: {[string]: unknown}, name: string, now: integer): (string?, Fault?)
+local function reviewed(grant: authority.Grant, id: string, name: string?): boolean
+    local proposal = bounds.object(grant.scope.parameters)
+    local payload = proposal and bounds.object(proposal.payload)
+    for _, raw in ipairs(payload and bounds.array(payload.declarations, 16) or {}) do
+        local declaration = agent_trait.declaration(raw)
+        if declaration and declaration.id == id and declaration.application_ref then
+            return trait_access.review(declaration) ~= nil and (name == nil or bounds.member(name, declaration.tools) ~= nil)
+        end
+    end
+    return true
+end
+function M.call_authority(tx: sql.Transaction, binding_id: string, workspace: string?, declaration: {[string]: unknown}, name: string, now: integer, live_traits: {agent_trait.Declaration}?, live_access: unknown?): (string?, Fault?)
     local id = bounds.id(declaration.authority_grant_id)
     if id then
         local record, err = M.profile_authority(tx,binding_id,workspace,declaration,now)
         if not record then return nil,err end
     end
-    local access = bounds.object(declaration.access)
+    local access = bounds.object(live_access or declaration.access)
     local requested = access and bounds.ids(access.traits,true) or {}
     local traits: {[string]: {string}} = {[mcp.APPLICATION_RUNTIME_TRAIT.id] = mcp.APPLICATION_RUNTIME_TRAIT.tools}
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do traits[trait.id] = trait.tools end
     local extensions: {[string]: boolean} = {}
-    for _, raw in ipairs(bounds.array(declaration.traits,64) or {}) do
+    for _, raw in ipairs(bounds.array(live_traits or declaration.traits,64) or {}) do
         local trait = bounds.object(raw)
         local trait_id = trait and bounds.id(trait.id)
         local tools = trait and bounds.ids(trait.tools,true)
@@ -121,7 +132,7 @@ function M.call_authority(tx: sql.Transaction, binding_id: string, workspace: st
                 local saved, saved_error = M.saved_consent(tx, binding_id, workspace, declaration, now)
                 if not saved then return nil, saved_error end
                 if bounds.member(trait, saved) then return id, nil end
-                local receipt, err = M.runtime_grant(tx,binding_id,trait,now)
+                local receipt, err = M.runtime_grant(tx,binding_id,trait,now,name)
                 if not receipt then return nil,err or fault("DENIED","access grant no longer admits calls") end
                 return receipt.approval_id .. ":grant",nil
             end
@@ -210,7 +221,7 @@ function M.grants(tx: sql.Transaction, binding_id: string, now: integer?): ({str
             local traits, invalid = decode_traits(binding_id, encoded, "STORAGE", "invalid grant traits")
             if not traits then return nil, invalid end
             for _, id in ipairs(traits) do
-                if not seen[id] then seen[id] = true; result[#result + 1] = id end
+                if not seen[id] and reviewed(grant, id) then seen[id] = true; result[#result + 1] = id end
             end
         end
     end
@@ -224,7 +235,7 @@ end
 -- A receipt is durable evidence, not a new authorization mechanism.  When
 -- several approved effects carry one trait, the explicit approval-ID order
 -- makes the provenance selected for a retried runtime call stable.
-function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: string, now: integer?): (Grant?, Fault?)
+function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: string, now: integer?, name: string?): (Grant?, Fault?)
     if not bounds.id(binding_id) or not bounds.id(trait_id) then return nil, fault("INVALID", "invalid runtime receipt lookup") end
     local rows, err = tx:query("SELECT a.approval_id,a.proposal_digest,a.traits_json,a.grant_id FROM bee_gateway_access_receipts a JOIN bee_gateway_bindings b ON b.binding_id = a.binding_id WHERE a.binding_id = ? AND b.revoked_at IS NULL AND b.sealed_at IS NULL AND b.expires_at > ? ORDER BY a.approval_id ASC", {binding_id,clock.stamp(now or clock.milliseconds())})
     if not rows or err then return nil, fault("STORAGE", "read application runtime access receipt") end
@@ -246,7 +257,7 @@ function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: stri
             local traits, invalid = decode_traits(binding_id, encoded, "STORAGE", "invalid application runtime access receipt")
             if not traits then return nil, invalid end
             for _, id in ipairs(traits) do
-                if id == trait_id then return {approval_id = approval_id, proposal_digest = proposal_digest, traits = traits}, nil end
+                if id == trait_id and reviewed(grant, id, name) then return {approval_id = approval_id, proposal_digest = proposal_digest, traits = traits}, nil end
             end
         end
     end

@@ -26,6 +26,7 @@ entries:
     hooks: bee.gateway.hooks:hooks
     mcp: bee.gateway.api:mcp
     sessions: bee.gateway.catalog:sessions
+    catalog: bee.gateway.catalog:catalog
     surface: bee.gateway.catalog:surface
     trait_access: bee.gateway.security:traits
     agent_trait: bee.values:agent_trait

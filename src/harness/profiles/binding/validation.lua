@@ -6,6 +6,7 @@ local agent_trait = require("agent_trait")
 local protocol = require("protocol")
 local preferences = require("preferences")
 local mcp = require("mcp")
+local app_traits = require("app_traits")
 local M = {}
 function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
     local requested: {string} = {}
@@ -16,8 +17,9 @@ function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
         for _, trait in ipairs(mcp.CONSENT_TRAITS) do if trait.id == ref then builtin = true end end
         local entry = pinned:get(ref)
         if not builtin then
-            if not entry then return "Trait unavailable: " .. ref end
-            local trait, err = agent_trait.registry(ref, entry)
+            local trait, err = nil, nil
+            if entry then trait, err = agent_trait.registry(ref, entry)
+            else trait, err = app_traits.load(ref) end
             if not trait then return err end
         end
     end
@@ -68,6 +70,7 @@ function M.ceiling(pinned: registry.Snapshot, profile: protocol.Profile, parent:
     end
     for _, list in ipairs({profile.active_traits or {}, profile.requestable or {}}) do
         for _, id in ipairs(list) do
+            if not allowed[id] and allowed[mcp.APPLICATION_TOOLS_TRAIT.id] and app_traits.load(id) then allowed[id] = true end
             if not allowed[id] then return "trait outside launch ceiling: " .. id end
             if parent and not bounds.member(id, parent) then return "trait outside parent ceiling: " .. id end
         end

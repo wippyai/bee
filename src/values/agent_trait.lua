@@ -28,7 +28,7 @@ function M.decode(ref: string, meta: unknown, raw: unknown): (Trait?, string?)
     local title, prompt = bounds.line(metadata.title, 256), bounds.text(data.prompt, 16384)
     if not title or not prompt then return nil, ref .. ": title and prompt must be bounded text" end
     local tools, tool_error = bounds.ids(data.tools == nil and {} or data.tools, true)
-    if not tools or #tools > 32 then return nil, ref .. ": tools: " .. tostring(tool_error or "exceeds 32 items") end
+    if not tools or #tools > 64 then return nil, ref .. ": tools: " .. tostring(tool_error or "exceeds 64 items") end
     local context = bounds.object(data.context == nil and {} or data.context)
     if not context then return nil, ref .. ": context must be an object" end
     local copied: {[string]: string} = {}

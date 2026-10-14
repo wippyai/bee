@@ -53,6 +53,7 @@ entries:
   kind: library.lua
   source: file://surface.lua
   imports:
+    app_traits: bee.node:app_traits
     profile_access: bee.driver.profiles:profile_access
     bounds: bee.values:bounds
     catalog: bee.gateway.catalog:catalog

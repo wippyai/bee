@@ -14,6 +14,7 @@ local json = require("json")
 local canonical = require("canonical")
 local readiness = require("readiness")
 local mcp_catalog = require("mcp")
+local app_traits = require("app_traits")
 local M = {}
 -- What a profile form opens: a definition for a new profile, or a saved
 -- profile, whose own definition applies.
@@ -262,6 +263,14 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
                 gated = meta.application_ref ~= nil or data.listens ~= nil or data.hooks ~= nil}
             listed_traits[entry.id] = true
         end
+    end
+    if offered[mcp_catalog.APPLICATION_TOOLS_TRAIT.id] then
+        local installed, err = app_traits.catalog(workspace)
+        if not installed then return nil, err end
+        for _, trait in ipairs(installed.traits) do
+            traits[#traits + 1] = {id = trait.id, title = trait.title, gated = true}
+        end
+        offered[mcp_catalog.APPLICATION_TOOLS_TRAIT.id] = nil
     end
     local builtins = {mcp_catalog.APPLICATION_RUNTIME_TRAIT}
     for _, trait in ipairs(mcp_catalog.CONSENT_TRAITS) do builtins[#builtins + 1] = trait end

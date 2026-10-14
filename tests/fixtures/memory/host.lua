@@ -76,7 +76,7 @@ function M.bind(owner: harness.Client, session: string, thread: string, trait_id
         surface = {tools = {}, traits = declarations, base_tools = {"capabilities"}, active_traits = seed and {trait_id} or {}, fixed_context = {}, dynamic_keys = {}, access = {policy = "agent-access", traits = offered}}})
     local binding, err = gateway.managed_binding(assert(bounds.id(assert(bounds.object(admitted.binding)).binding_id)))
     if not binding then error(tostring(err and err.error and err.error.message)) end
-    local db = assert(sql.get("bee.tests.hygiene:db"))
+    local db = assert(sql.get("bee.tests.support.hygiene:db"))
     assert(db:execute("INSERT OR IGNORE INTO bee_test_memory_sessions VALUES (?, ?, ?)", {session, owner.id, M.WORKSPACE}))
     assert(db:execute("INSERT OR IGNORE INTO bee_test_memory_bindings VALUES (?, ?)", {binding.binding_id, session}))
     db:release()
@@ -110,7 +110,7 @@ function M.open(seed: boolean?, trait_id: string?, provider: string?, managed: b
     local owner = harness.session_owner(M.WORKSPACE)
     local opened = harness.value(owner:call("session_create", {operation_key = harness.key(), route = {provider = provider or "wippy", delivery = provider and not managed and "hook" or nil}}))
     local session = assert(bounds.id(opened.session))
-    local db = assert(sql.get("bee.tests.hygiene:db"))
+    local db = assert(sql.get("bee.tests.support.hygiene:db"))
     assert(db:execute("INSERT INTO bee_test_memory_sessions VALUES (?, ?, ?)", {session, owner.id, M.WORKSPACE}))
     db:release()
     local described = harness.value(owner:call("session_describe", {session = session}))
@@ -133,7 +133,7 @@ local function revoke_grant(grant_id: string, workspace: string?)
 end
 function M.close_all()
     local updates = assert(events.subscribe("supervisor", "service.update"))
-    local tracking = assert(sql.get("bee.tests.hygiene:db"))
+    local tracking = assert(sql.get("bee.tests.support.hygiene:db"))
     local allocated = assert(tracking:query("SELECT session, owner, workspace FROM bee_test_memory_sessions"))
     local bindings = assert(tracking:query("SELECT binding_id FROM bee_test_memory_bindings"))
     tracking:release()
@@ -190,7 +190,7 @@ function M.close_all()
 
     end
     for _, binding in ipairs(bindings) do M.call("bee.gateway.binding:revoke", {binding_id = binding.binding_id}) end
-    tracking = assert(sql.get("bee.tests.hygiene:db"))
+    tracking = assert(sql.get("bee.tests.support.hygiene:db"))
     assert(tracking:execute("DELETE FROM bee_test_memory_sessions"))
     assert(tracking:execute("DELETE FROM bee_test_memory_bindings"))
     tracking:release()
@@ -229,7 +229,7 @@ function M.turn(session: Session, text: string, observations: {{[string]: unknow
     return harness.value(session.owner:call("work_settle", {turn = reserved.turn, claim = reserved.claim, result = {state = "succeeded", schema = "bee:Text@1", value = {text = text}}, operation_key = harness.key()}))
 end
 function M.endpoint(): string
-    local reference = "bee.driver.wippy.test:mock_listener"
+    local reference = "bee.tests.driver.wippy:mock_listener"
     local subscription = assert(events.subscribe("supervisor", "service.update"))
     local deadline = time.after("30s")
     while true do

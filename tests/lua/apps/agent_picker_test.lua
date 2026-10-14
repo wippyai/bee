@@ -11,13 +11,14 @@ local bounds = require("bounds")
 local function call(operation: string, request: {[string]: unknown}): {[string]: unknown}
     return assert(client.call(assert(system.node.id()), operation, request))
 end
-local function await(viewport: tty.Viewport, needle: string, absent: string?): string
+local function await(viewport: tty.Viewport, needle: string, absent: string?, present: string?): string
     local updates = assert(viewport:updates())
     local deadline = time.after("10s")
     while true do
         local snapshot = viewport:snapshot()
         local shown = snapshot and tty.text.plain(table.concat(snapshot.rows, "\n")) or ""
-        if shown:find(needle, 1, true) and (not absent or not shown:find(absent, 1, true)) then return shown end
+        if shown:find(needle, 1, true) and (not absent or not shown:find(absent, 1, true))
+            and (not present or shown:find(present, 1, true)) then return shown end
         local selected = channel.select({updates:case_receive(), deadline:case_receive()})
         assert(selected.channel ~= deadline, "Agents screen did not show " .. needle .. "\n" .. shown)
     end
@@ -48,18 +49,18 @@ local function define_tests()
                 assert(viewport:resize(120, 40))
                 await(viewport, "SESSIONS")
                 key(viewport, "runes", "p")
-                await(viewport, "PROFILES")
+                await(viewport, "PROFILES", "Loading profiles")
                 key(viewport, "runes", "u")
                 await(viewport, "Claude")
                 key(viewport, "runes", "/")
                 await(viewport, "Search:")
-                key(viewport, "runes", "Cod")
+                key(viewport, "runes", "cod")
                 key(viewport, "runes", "ex")
-                test.contains(await(viewport, "Search: Codex", "Claude"), "Codex CLI")
+                test.contains(await(viewport, "Search: codex", "Claude", "Codex CLI"), "Codex CLI")
                 key(viewport, "runes", "é")
-                await(viewport, "Search: Codexé", "Codex CLI")
+                await(viewport, "Search: codexé", "Codex CLI")
                 key(viewport, "backspace")
-                test.contains(await(viewport, "Search: Codex", "Codexé"), "Codex CLI")
+                test.contains(await(viewport, "Search: codex", "codexé", "Codex CLI"), "Codex CLI")
                 key(viewport, "esc")
                 key(viewport, "esc")
                 await(viewport, "SESSIONS")

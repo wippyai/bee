@@ -79,7 +79,9 @@ local function binding_order(left: BindingSortKey, right: BindingSortKey): boole
     return left.binding_id < right.binding_id
 end
 
-function M.read(pinned: Pinned, limit: integer?): (Snapshot?, string?)
+-- Launch readers classify the selected driver and its competitors; the global
+-- count still detects truncation before certifying uniqueness.
+function M.read(pinned: Pinned, limit: integer?, selected_binding: string?): (Snapshot?, string?)
     local current, generation_error = generation(pinned)
     if not current then return nil, generation_error end
     local cap = limit or M.MAX_BINDINGS
@@ -87,6 +89,9 @@ function M.read(pinned: Pinned, limit: integer?): (Snapshot?, string?)
     local active = active_bindings(pinned, snapshot.diagnostics)
     local found, find_error = pinned:find({[".kind"] = "contract.binding", ["meta.type"] = M.BINDING_TYPE})
     if find_error or not found then return nil, "read driver bindings" end
+    local selected = selected_binding and entry(pinned, selected_binding)
+    local selected_meta = selected and bounds.object(selected.meta)
+    local selected_driver = selected_meta and bounds.id(selected_meta.driver_id)
     local count = 0
     for _, raw in ipairs(found) do
         local candidate = bounds.object(raw)
@@ -100,12 +105,14 @@ function M.read(pinned: Pinned, limit: integer?): (Snapshot?, string?)
                     break
                 end
                 local binding_id = bounds.id(candidate.id) or ""
-                local declaration: Entry? = nil
-                local profiles_ref = bounds.id(meta.profiles_ref)
-                if profiles_ref then declaration = entry(pinned, profiles_ref) end
-                local measurements = declaration and observers.collect(pinned, binding_id, bounds.object(declaration.data) or {}) or nil
-                snapshot.bindings[#snapshot.bindings + 1] = classify.binding({binding = candidate, declaration = declaration,
-                    methods = method_targets(pinned, candidate), adapters = adapter_entries(pinned, declaration), observers = measurements, activated = active[binding_id] == true})
+                if not selected_binding or binding_id == selected_binding or (selected_driver and bounds.id(meta.driver_id) == selected_driver) then
+                    local declaration: Entry? = nil
+                    local profiles_ref = bounds.id(meta.profiles_ref)
+                    if profiles_ref then declaration = entry(pinned, profiles_ref) end
+                    local measurements = declaration and observers.collect(pinned, binding_id, bounds.object(declaration.data) or {}) or nil
+                    snapshot.bindings[#snapshot.bindings + 1] = classify.binding({binding = candidate, declaration = declaration,
+                        methods = method_targets(pinned, candidate), adapters = adapter_entries(pinned, declaration), observers = measurements, activated = active[binding_id] == true})
+                end
             end
         end
     end

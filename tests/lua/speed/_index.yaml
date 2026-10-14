@@ -1,0 +1,49 @@
+version: '1.0'
+namespace: bee.tests.speed
+entries:
+- name: close_on_exit_test
+  kind: function.lua
+  source: file://close_on_exit_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+- name: configuration_preview_test
+  kind: function.lua
+  source: file://configuration_preview_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  security:
+    policies: [bee.tests.sessions:probe_policy]
+  imports:
+    test: wippy.test:test
+    setup: bee.harness.launch:configuration_setup
+- name: selected_catalog_test
+  kind: function.lua
+  source: file://selected_catalog_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
+  imports:
+    test: wippy.test:test
+    catalog: bee.harness.catalog:catalog
+    bounds: bee.values:bounds
+- name: identity_executor
+  kind: exec.native
+  default_env: {PATH: '.wippy/speed-probe-bin:/usr/bin:/bin'}
+- name: identity_probe_test
+  kind: function.lua
+  source: file://identity_probe_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [exec]
+  security:
+    policies: [bee.tests.sessions:probe_policy]
+  imports:
+    test: wippy.test:test
+    identity: bee.placement.native.service:identity

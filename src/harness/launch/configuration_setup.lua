@@ -44,7 +44,7 @@ function M.requirements(plan: Plan): ({Requirement}?, string?)
     end
     local options, option_error = preferences.decode_prepare_options(data.prepare_options)
     if not options then return nil, option_error end
-    local request: configuration.Request = {placement_profile_ref = plan.placement_profile_ref, fixture = data.fixture == true, context = plan.mode == "window" and "window" or "first_turn",
+    local request: configuration.Request = {attempt_id = "configuration-setup", placement_profile_ref = plan.placement_profile_ref, fixture = data.fixture == true, context = plan.mode == "window" and "window" or "first_turn",
         option_values = options, private_home = private,
         instructions = type(data.instructions) == "string" and data.instructions or nil}
     local home, home_error = env.get("bee.env:machine_home")

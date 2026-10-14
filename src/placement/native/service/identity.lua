@@ -41,11 +41,12 @@ local MONTHS: {[string]: integer} = {Jan = 1, Feb = 2, Mar = 3, Apr = 4, May = 5
 local function probe_command(pid: integer): string
     local p = tostring(pid)
     return "sh -c 'case \"$(uname -s)\" in "
-        .. "Linux) echo \"linux_start=$(if [ -r /proc/" .. p .. "/stat ]; then sed -e \"s/^.*) //\" /proc/" .. p .. "/stat | cut -d\" \" -f20; fi)\"; "
+        .. "Linux) if IFS= read -r stat < /proc/" .. p .. "/stat; then stat=${stat##*) }; set -f; set -- $stat; "
+        .. "echo \"linux_start=${20}\"; echo \"pgid=${3}\"; else echo linux_start=; echo pgid=; fi; "
         .. "echo \"linux_boot=$(cat /proc/sys/kernel/random/boot_id)\";; "
         .. "Darwin) echo \"darwin_start=$(LC_ALL=C TZ=UTC0 ps -o lstart= -p " .. p .. ")\"; "
-        .. "echo \"darwin_boot=$(/usr/sbin/sysctl -n kern.bootsessionuuid)\";; "
-        .. "esac; echo \"pgid=$(ps -o pgid= -p " .. p .. ")\"'"
+        .. "echo \"darwin_boot=$(/usr/sbin/sysctl -n kern.bootsessionuuid)\"; "
+        .. "echo \"pgid=$(ps -o pgid= -p " .. p .. ")\";; esac'"
 end
 -- Seconds since the epoch for a C-locale UTC `ps -o lstart` stamp such as
 -- "Thu Sep 24 11:24:20 2026".

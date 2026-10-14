@@ -223,7 +223,7 @@ end
 local function measure(request: Request): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
-    local snapshot, snapshot_error = catalog.read(pinned, nil)
+    local snapshot, snapshot_error = catalog.read(pinned, nil, request.binding_ref)
     if not snapshot then return nil, snapshot_error end
     local usable, usable_error = catalog.usable(snapshot)
     if not usable then return nil, usable_error end

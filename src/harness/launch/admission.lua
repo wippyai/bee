@@ -266,7 +266,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         if not bounds.member(mode, definition.MODES) then return nil, fail("INVALID", "mode must be window, session or batch") end
         chosen = mode
     end
-    local snapshot, snapshot_error = catalog.read(pinned, nil)
+    local snapshot, snapshot_error = catalog.read(pinned, nil, launch.binding_ref)
     if not snapshot then return nil, fail("UNAVAILABLE", snapshot_error or "catalog") end
     for _, candidate in ipairs(snapshot.bindings) do
         if candidate.binding_id == launch.binding_ref and not candidate.activated then

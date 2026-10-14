@@ -373,6 +373,9 @@ function M.detach(raw_request: unknown): Reply
     if stored.state == "active" then
         local transitioned, transition_error = journal.invoke("session_transition", {session = session, state = "suspended", operation_key = operation_key})
         if transition_error or not transitioned then return unavailable(transition_error or "interactive suspension unavailable", operation_key) end
+    elseif stored.state == "closing" then
+        local close_error = finish_closing(session, operation_key)
+        if close_error then return unavailable(close_error, operation_key) end
     end
     return succeed({session = session, attempt_id = attempt})
 end

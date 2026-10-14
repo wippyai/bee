@@ -312,10 +312,10 @@ local function define_tests()
         end)
         test.it("refuses a required host file in a private home but allows it in the inherited home", function()
             local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached",
-                required_files = {{variable = "CODEX_HOME", path = "ds-flash.config.toml", default_directory = ".codex"}}}
+                required_files = {{variable = "CODEX_HOME", path = "fixture-profile.config.toml", default_directory = ".codex"}}}
             local refusal = machine.required_file_refusal(launch, true)
             test.not_nil(refusal)
-            test.is_true(refusal:find("ds-flash", 1, true) ~= nil)
+            test.is_true(refusal:find("fixture-profile", 1, true) ~= nil)
             test.is_true(refusal:find("only available where Bee inherits the user's home", 1, true) ~= nil)
             test.is_nil(machine.required_file_refusal(launch, false))
             local plain: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}

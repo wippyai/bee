@@ -476,8 +476,8 @@ entries:
         optional: true
         write_back: false
         container_content: '{}'
-      - source_path: .config/opencode/towers.key
-        path: .config/opencode/towers.key
+      - source_path: .config/opencode/provider.key
+        path: .config/opencode/provider.key
         kind: config
         optional: true
         write_back: false

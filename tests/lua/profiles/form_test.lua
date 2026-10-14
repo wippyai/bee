@@ -20,7 +20,7 @@ end
 local function define_tests()
     test.describe("Agent profile form persistence", function()
         test.it("keeps core choices in Basic and reveals configuration in Advanced without changing the draft", function()
-            local opened = assert(form.load("profile-basic-atlas", {definition_ref = "bee.driver.codex.profiles:default_window", title = "Atlas profile"}, true))
+            local opened = assert(form.load("profile-basic-fixture", {definition_ref = "bee.driver.codex.profiles:default_window", title = "Fixture profile"}, true))
             local state = view.new(opened, function(_: string, _: {[string]: unknown})
                 return {ok = false, error = {code = "UNAVAILABLE", message = "No call expected"}, replayed = false}
             end)

@@ -1927,7 +1927,7 @@ local function define_tests()
                 shell("mkdir -p " .. codex_home)
                 -- shell() wraps this in sh -c '...'; a single-quoted printf
                 -- would close that wrapper and write nothing.
-                shell("printf \"model = \\\"fixture\\\"\\n\" > " .. codex_home .. "/ds-flash.config.toml")
+                shell("printf \"model = \\\"fixture\\\"\\n\" > " .. codex_home .. "/fixture-profile.config.toml")
                 -- The throwaway home is committed with the policy, so the
                 -- prepared launch never falls back to the runner's own home.
                 changed_policy.environment = {CODEX_HOME = codex_home}
@@ -1941,7 +1941,7 @@ local function define_tests()
                 if not applied then error("configure codex named profile: " .. tostring(apply_error)) end
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
-                    profile = {schema_revision = "bee.agent-profile@3", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = "ds-flash"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
+                    profile = {schema_revision = "bee.agent-profile@3", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = "fixture-profile"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
                 local selected = value(call("bee.harness.binding:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local admitted = value(call("bee.harness.binding:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
@@ -1949,14 +1949,14 @@ local function define_tests()
                     expected_plan_digest = selected.plan_digest}))
                 local carrier_request = assert(bounds.object(admitted.request))
                 local preferences = assert(bounds.object(carrier_request.preferences))
-                test.eq((assert(bounds.object(preferences.options))).config_profile, "ds-flash")
+                test.eq((assert(bounds.object(preferences.options))).config_profile, "fixture-profile")
                 open_gateway()
                 local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
                 if not planned then error(tostring(plan_error)) end
                 -- Codex layers the named profile on its base user config.
                 test.eq(planned.launch.argv[1], "--profile")
-                test.eq(planned.launch.argv[2], "ds-flash")
+                test.eq(planned.launch.argv[2], "fixture-profile")
                 local prepared, prepare_error = machine.prepare_attempt(io, planned)
                 if not prepared then error(tostring(prepare_error)) end
                 local db = assert(placement_store.open())

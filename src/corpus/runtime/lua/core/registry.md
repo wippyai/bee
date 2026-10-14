@@ -289,7 +289,7 @@ changes:create({
     id = "data.crm:connection",
     kind = "registry.entry",
     meta = {},
-    data = {endpoint = "https://crm.internal"}
+    data = {endpoint = "https://crm.example.com"}
 })
 
 local version, err = changes:apply()

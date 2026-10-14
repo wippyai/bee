@@ -20,7 +20,7 @@ local CODEX_BATCH = "bee.driver.codex.security:launch_policy_codex_batch"
 local CODEX_NAMED_BATCH = "bee.driver.codex.security:launch_policy_codex_named_batch"
 local CLAUDE_WINDOW = "bee.driver.claude.security:launch_policy_claude_window"
 local CLAUDE_BATCH = "bee.driver.claude.security:launch_policy_claude_batch"
-local PROFILE = "ds-flash"
+local PROFILE = "fixture-profile"
 
 local function raw_policy(ref: string): {[string]: unknown}
     local entry = registry.get(ref)

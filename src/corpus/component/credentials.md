@@ -64,7 +64,7 @@ file matching such a rule; the broker reads only that path and includes it in
 the transient home format. Each driver request marks the file optional or
 required: an absent optional file is omitted, while an absent selected Codex
 named profile refuses the launch. These rules cover named-profile files such
-as `.codex/ds-flash.config.toml`; they do not scan the source tree.
+as `.codex/fixture-profile.config.toml`; they do not scan the source tree.
 Materialization reads that optional path from the same source. JSON setup is
 bounded to 4 KiB; opaque setup is bounded to 64 KiB. It appends the bytes to the
 transient returned format as an initializer that may be installed even when an
@@ -189,8 +189,11 @@ own placement holds `bee.credentials.security:credential_materialize_workspace_p
 its bound workspace), and `bee.credentials.write_back` (runner-only return of
 an admitted provider login file through the same materialization policy).
 
-OpenCode declares `.config/opencode/towers.key` as an optional auxiliary file
-under the host-admitted OpenCode `.key` rule. The broker projects that exact
+OpenCode declares `.config/opencode/provider.key` as an optional auxiliary file
+under the host-admitted OpenCode `.key` rule. An `apiKey` value in the global
+`opencode.json` can reference it as `{file:~/.config/opencode/provider.key}`.
+Create the file only when that provider configuration needs a file-based key;
+Bee does not create it or choose its contents. The broker projects that exact
 requested file without interpreting its bytes or writing it back. Placement
 rewrites a configuration reference only when this file is materialized; a
 configuration naming a missing or undeclared dependency refuses before start.

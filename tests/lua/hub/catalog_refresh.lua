@@ -12,7 +12,7 @@ local function run(): {decodes: integer, application: boolean?}
     return {decodes = fixture.count(), application = state.catalog[1].application}
 end
 local function default_shared(): {component: string?, kind: string?, install: boolean, total: integer}
-    local state = library.new("atlas")
+    local state = library.new("fixture-workspace")
     state.tab = "shared"
     local intent = model.catalog_intent(state.hub)
     local result = assert(catalog.browse(intent.request))

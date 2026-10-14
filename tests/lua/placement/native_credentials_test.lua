@@ -48,7 +48,7 @@ local function credentials_tests()
                 native_fixture.shell("mkdir -p " .. quote.posix(root))
                 native_fixture.shell("printf %s " .. quote.posix('{}') .. " > " .. quote.posix(root .. "/auth.json"))
                 native_fixture.shell("printf %s " .. quote.posix('[history]\npersistence="save-all"') .. " > " .. quote.posix(root .. "/config.toml"))
-                native_fixture.shell("printf %s " .. quote.posix('[sandbox_workspace_write]\nnetwork_access=true') .. " > " .. quote.posix(root .. "/ds-flash.config.toml"))
+                native_fixture.shell("printf %s " .. quote.posix('[sandbox_workspace_write]\nnetwork_access=true') .. " > " .. quote.posix(root .. "/fixture-profile.config.toml"))
                 local workspace = native_fixture.fresh("named-config")
                 native_fixture.credential_call("define", {workspace_id = workspace, name = "login", provider = "codex", source = {kind = "fs_directory", ref = source}})
                 local attempt = native_fixture.fresh("named-config-attempt")
@@ -63,7 +63,7 @@ local function credentials_tests()
                 launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {
                     {source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
                     {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
-                    {source_path = ".codex/ds-flash.config.toml", path = ".codex/ds-flash.config.toml", kind = "config", optional = false, write_back = false}}}
+                    {source_path = ".codex/fixture-profile.config.toml", path = ".codex/fixture-profile.config.toml", kind = "config", optional = false, write_back = false}}}
                 native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
                 local started = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = attempt}))
                 test.not_nil(started.start_failure)
@@ -124,7 +124,7 @@ local function credentials_tests()
             local refreshed_login = '{"fixture":"ambient-refresh"}'
             test.eq(native_fixture.shell("mkdir -p " .. source_root .. "/.codex && printf %s " .. quote.posix(original_login) .. " > " .. source_root .. "/.codex/auth.json"
                 .. " && printf %s " .. quote.posix("profile = \"fixture\"\n") .. " > " .. source_root .. "/.codex/config.toml"
-                .. " && printf %s " .. quote.posix("model = \"gpt-5-codex\"\n") .. " > " .. source_root .. "/.codex/ds-flash.config.toml"
+                .. " && printf %s " .. quote.posix("model = \"gpt-5-codex\"\n") .. " > " .. source_root .. "/.codex/fixture-profile.config.toml"
                 .. " && printf %s " .. quote.posix("must-not-be-projected") .. " > " .. source_root .. "/machine-home-only.txt"), "")
             local workspace = native_fixture.fresh("private-provider-home-workspace")
             native_fixture.credential_call("define", {workspace_id = workspace, name = "codex_ambient", provider = "codex", source = {kind = "fs_directory", ref = source}})
@@ -134,7 +134,7 @@ local function credentials_tests()
                 launch_policy_digest = native_fixture.DIGEST, idempotency_key = native_fixture.fresh("private-provider-home-key")})
             local script = 'case "$HOME" in */attempts/*/home) ;; *) exit 41;; esac'
                 .. ' && test -s "$CODEX_HOME/auth.json" && test -s "$CODEX_HOME/config.toml"'
-                .. ' && test -s "$CODEX_HOME/ds-flash.config.toml" && test ! -e "$HOME/.codex/other-profile.config.toml"'
+                .. ' && test -s "$CODEX_HOME/fixture-profile.config.toml" && test ! -e "$HOME/.codex/other-profile.config.toml"'
                 .. ' && test ! -e "$HOME/machine-home-only.txt"'
                 .. ' && printf projected-fixture-ok && printf %s ' .. quote.posix(refreshed_login) .. ' > "$CODEX_HOME/auth.json"'
             local request = native_fixture.launch({"sh", "-c", script}, "process_group")
@@ -144,7 +144,7 @@ local function credentials_tests()
             declared_launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
                 files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
                     {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
-                    {source_path = ".codex/ds-flash.config.toml", path = ".codex/ds-flash.config.toml", kind = "config", optional = false, write_back = false}}}
+                    {source_path = ".codex/fixture-profile.config.toml", path = ".codex/fixture-profile.config.toml", kind = "config", optional = false, write_back = false}}}
             local request_resources = principals.objects(request.resources)
             request.resources = request_resources
             request_resources[#request_resources + 1] = {name = "session", grant_ref = "provider-session-grant", root_ref = native_fixture.ROOT,

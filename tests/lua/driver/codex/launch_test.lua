@@ -9,38 +9,38 @@ local quote = require("quote")
 local function define_tests()
     test.describe("Codex named config profile launch", function()
         test.it("places --profile before the window argv and declares the required file", function()
-            local decoded, err = launch.decode({profile_id = "window", brief = "", sandbox = "workspace-write", config_profile = "ds-flash"})
+            local decoded, err = launch.decode({profile_id = "window", brief = "", sandbox = "workspace-write", config_profile = "fixture-profile"})
             if not decoded then error(tostring(err)) end
             local spec = launch.specification(decoded)
-            test.eq(quote.line(spec.argv), "--profile ds-flash --sandbox workspace-write")
+            test.eq(quote.line(spec.argv), "--profile fixture-profile --sandbox workspace-write")
             test.eq(spec.readiness, "terminal:attached")
             test.eq(#spec.required_files, 1)
             test.eq(spec.required_files[1].variable, "CODEX_HOME")
-            test.eq(spec.required_files[1].path, "ds-flash.config.toml")
+            test.eq(spec.required_files[1].path, "fixture-profile.config.toml")
             test.eq(spec.required_files[1].default_directory, ".codex")
         end)
 
         test.it("places --profile before exec and before a resume subcommand", function()
-            local fresh, fresh_error = launch.decode({profile_id = "batch", brief = "research", sandbox = "read-only", config_profile = "ds-flash"})
+            local fresh, fresh_error = launch.decode({profile_id = "batch", brief = "research", sandbox = "read-only", config_profile = "fixture-profile"})
             if not fresh then error(tostring(fresh_error)) end
             test.eq(quote.line(launch.specification(fresh).argv),
-                "--profile ds-flash exec --json --skip-git-repo-check --sandbox read-only -")
-            local resumed, resumed_error = launch.decode({profile_id = "batch", brief = "research", sandbox = "read-only", resume_ref = "session-1", config_profile = "ds-flash"})
+                "--profile fixture-profile exec --json --skip-git-repo-check --sandbox read-only -")
+            local resumed, resumed_error = launch.decode({profile_id = "batch", brief = "research", sandbox = "read-only", resume_ref = "session-1", config_profile = "fixture-profile"})
             if not resumed then error(tostring(resumed_error)) end
             test.eq(quote.line(launch.specification(resumed).argv),
-                "--profile ds-flash --sandbox read-only exec resume session-1 --json --skip-git-repo-check -")
+                "--profile fixture-profile --sandbox read-only exec resume session-1 --json --skip-git-repo-check -")
         end)
 
         test.it("admits the registered named_batch profile", function()
-            local named, named_error = launch.decode({profile_id = "named_batch", brief = "research", sandbox = "read-only", config_profile = "ds-flash"})
+            local named, named_error = launch.decode({profile_id = "named_batch", brief = "research", sandbox = "read-only", config_profile = "fixture-profile"})
             if not named then error(tostring(named_error)) end
-            test.eq(quote.line(launch.specification(named).argv), "--profile ds-flash exec --json --skip-git-repo-check --sandbox read-only -")
+            test.eq(quote.line(launch.specification(named).argv), "--profile fixture-profile exec --json --skip-git-repo-check --sandbox read-only -")
         end)
 
         test.it("keeps effort and the named profile in one stable order", function()
-            local decoded = assert(launch.decode({profile_id = "window", brief = "", sandbox = "read-only", effort = "high", config_profile = "ds-flash"}))
+            local decoded = assert(launch.decode({profile_id = "window", brief = "", sandbox = "read-only", effort = "high", config_profile = "fixture-profile"}))
             test.eq(quote.line(launch.specification(decoded).argv),
-                "--profile ds-flash --config 'model_reasoning_effort=\"high\"' --sandbox read-only")
+                "--profile fixture-profile --config 'model_reasoning_effort=\"high\"' --sandbox read-only")
         end)
 
         test.it("carries no required file and no --profile when none is named", function()

@@ -85,6 +85,9 @@ entries:
     grok_launch: bee.tests.driver.support:grok_launch
     muse_launch: bee.tests.driver.support:muse_launch
     opencode_launch: bee.tests.driver.support:opencode_launch
+    provider_projection: bee.placement.native.service:provider_projection
+    formats: bee.credentials:formats
+    driver_types: bee.driver:types
     universal: bee.driver.binding:universal
     materialization: bee.placement.native.service:materialization
     placement_types: bee.placement:types

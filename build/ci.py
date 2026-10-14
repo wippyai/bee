@@ -119,7 +119,7 @@ def require_ci():
     sha = run('git', 'rev-parse', 'HEAD')
     repository = os.environ['GITHUB_REPOSITORY']
     runs = json.loads(run('gh', 'api', f'repos/{repository}/actions/workflows/ci.yml/runs?head_sha={sha}&status=success&per_page=100'))['workflow_runs']
-    # Main CI is the trusted release gate. Lane dispatches prove the same path
+    # Main CI is the trusted release gate. Manual dispatches prove the same path
     # without permitting a tag publication from a feature-branch CI run.
     expected_branch = os.environ.get('CI_PROOF_BRANCH', 'main')
     candidates = [item for item in runs if item['head_sha'] == sha and item['head_branch'] == expected_branch

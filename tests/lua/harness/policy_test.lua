@@ -236,9 +236,9 @@ local function define_tests()
             data.profile_restrictions = {["provider.options.config_profile"] = {kind = "text", max_bytes = 64}}
             local closed, closed_error = policy.decode("test:policy", raw)
             if not closed then error(tostring(closed_error)) end
-            local opened, opened_error = policy.decode("test:policy", raw, nil, {options = {config_profile = "ds-flash"}, mcp_tools = {}, instructions = ""})
+            local opened, opened_error = policy.decode("test:policy", raw, nil, {options = {config_profile = "fixture-profile"}, mcp_tools = {}, instructions = ""})
             if not opened then error(tostring(opened_error)) end
-            test.eq(opened.prepare_options.config_profile, "ds-flash")
+            test.eq(opened.prepare_options.config_profile, "fixture-profile")
             data.profile_restrictions = {["provider.options.config_profile"] = {kind = "text", max_bytes = 513}}
             test.is_nil(policy.decode("test:policy", raw))
         end)

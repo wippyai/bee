@@ -12,6 +12,9 @@ local registry = require("registry")
 local universal = require("universal")
 local materialization = require("materialization")
 local placement_types = require("placement_types")
+local provider_projection = require("provider_projection")
+local formats = require("formats")
+local driver_types = require("driver_types")
 
 local function define_tests()
     test.describe("Provider window login declarations", function()
@@ -88,6 +91,23 @@ local function define_tests()
         end
     end)
     test.describe("Provider private-home declarations", function()
+        test.it("projects the declared OpenCode provider key and refuses a missing dependency", function()
+            local home: driver_types.ProviderHome = assert(opencode.specification(assert(opencode.decode({profile_id = "batch", brief = "fixture"}))).provider_home)
+            local key = ".config/opencode/provider.key"
+            local config = ".config/opencode/.bee-global-opencode.json"
+            local original: formats.Format = {schema_revision = "bee.credential-format@1", file = {
+                path = ".local/share/opencode/auth.json", content_format = "json", initialize = {
+                    {path = config, source_path = ".config/opencode/opencode.json", content = '{"apiKey":"{file:~/' .. key .. '}"}'},
+                    {path = key, source_path = key, content = "fixture-provider-key"}}}}
+            local projected = assert(provider_projection.native(home, original, "/fixture-host", "/fixture-private"))
+            test.eq(assert(projected.file).initialize[1].content, '{"apiKey":"{file:/fixture-private/' .. key .. '}"}')
+            test.eq(assert(projected.file).initialize[2].content, "fixture-provider-key")
+            test.eq(assert(original.file).initialize[1].content, '{"apiKey":"{file:~/' .. key .. '}"}')
+            table.remove(assert(original.file).initialize, 2)
+            local refused, reason = provider_projection.native(home, original, "/fixture-host", "/fixture-private")
+            test.is_nil(refused)
+            test.eq(reason, config .. ": configuration names an undeclared or absent file dependency")
+        end)
         local cases = {
             {provider = "claude", launch = claude.specification(assert(claude.decode({profile_id = "batch", brief = "fixture"}))),
                 paths = {{".claude/.credentials.json", ".claude/.credentials.json", "login", true},
@@ -106,7 +126,7 @@ local function define_tests()
             {provider = "opencode", launch = opencode.specification(assert(opencode.decode({profile_id = "batch", brief = "fixture"}))),
                 paths = {{".local/share/opencode/auth.json", ".local/share/opencode/auth.json", "login", true},
                     {".config/opencode/opencode.json", ".config/opencode/.bee-global-opencode.json", "config", false},
-                    {".config/opencode/towers.key", ".config/opencode/towers.key", "config", false}}},
+                    {".config/opencode/provider.key", ".config/opencode/provider.key", "config", false}}},
         }
         for _, case in ipairs(cases) do
             test.it(case.provider .. " declares its exact private provider files", function()

@@ -203,15 +203,15 @@ func TestNodesListenOnLoopbackUntilTheHiveSpansMachines(t *testing.T) {
 	require.Equal(t, "", cluster.GetString("membership.advertise_addr", ""))
 
 	shared := local
-	shared.Advertise = "100.64.0.69"
-	shared.Seeds = []string{"100.64.0.28:31001"}
+	shared.Advertise = "100.64.0.2"
+	shared.Seeds = []string{"100.64.0.1:31001"}
 	config, _, err = Prepare(dir, t.TempDir(), shared, &Members{})
 	require.NoError(t, err)
 	cluster = config.Sub("cluster")
 	require.Equal(t, "0.0.0.0", cluster.GetString("membership.bind_addr", ""))
 	require.Equal(t, "0.0.0.0", cluster.GetString("internode.bind_addr", ""))
-	require.Equal(t, "100.64.0.69", cluster.GetString("membership.advertise_addr", ""))
-	require.Contains(t, cluster.GetString("membership.join_addrs", ""), "100.64.0.28:31001")
+	require.Equal(t, "100.64.0.2", cluster.GetString("membership.advertise_addr", ""))
+	require.Contains(t, cluster.GetString("membership.join_addrs", ""), "100.64.0.1:31001")
 }
 
 func TestTheFirstNodeOfAMachineHoldsItsGossipPort(t *testing.T) {
@@ -283,15 +283,15 @@ func TestSelectedCandidatesPreferTheTailnetThenTheLAN(t *testing.T) {
 	assigned := []interfaceAddress{
 		{name: "docker0", address: netip.MustParseAddr("172.17.0.1")},
 		{name: "eth0", address: netip.MustParseAddr("192.168.1.4")},
-		{name: "tailscale0", address: netip.MustParseAddr("100.64.0.69")},
+		{name: "tailscale0", address: netip.MustParseAddr("100.64.0.2")},
 	}
-	candidates := selectJoinCandidates(47931, assigned, []netip.Addr{netip.MustParseAddr("100.64.0.69")}, "box.tail1234.ts.net")
+	candidates := selectJoinCandidates(47931, assigned, []netip.Addr{netip.MustParseAddr("100.64.0.2")}, "box.tail1234.ts.net")
 	var endpoints []string
 	for _, candidate := range candidates {
 		require.True(t, candidate.Valid(), candidate.Endpoint)
 		endpoints = append(endpoints, candidate.Endpoint)
 	}
-	require.Equal(t, []string{"100.64.0.69:47931", "box.tail1234.ts.net:47931", "192.168.1.4:47931", "172.17.0.1:47931"}, endpoints)
+	require.Equal(t, []string{"100.64.0.2:47931", "box.tail1234.ts.net:47931", "192.168.1.4:47931", "172.17.0.1:47931"}, endpoints)
 	require.Equal(t, "vm", candidates[3].Scope)
 }
 

@@ -35,7 +35,7 @@ local function state(): view.State
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"}, ask)
 end
 local function text_state(): view.State
-    local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {label = "ds-flash"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {label = "fixture-profile"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
         {options = {label = {kind = "text", max_bytes = 64}}, mcp_tools = {"thread_read"}, instructions = true})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "agent", revision = 1, draft = draft,
@@ -369,10 +369,10 @@ local function define_tests()
             view.input(s, {type = "key", action = "press", key = "", key_type = "backspace",
                 ctrl = false, alt = false, shift = false}, frame)
             view.input(s, {type = "paste", text = "h"}, frame)
-            test.eq(s.option_text.label, "ds-flash")
+            test.eq(s.option_text.label, "fixture-profile")
             test.eq(s.guidance, "Keep changes small.")
             test.eq(view.action(s, "save"), "save")
-            test.eq(s.form.draft.provider.options.label, "ds-flash")
+            test.eq(s.form.draft.provider.options.label, "fixture-profile")
             test.eq(s.form.draft.provider.system_prompt_append, "Keep changes small.")
         end)
         test.it("keeps rows and mouse targets within compact terminal sizes", function()

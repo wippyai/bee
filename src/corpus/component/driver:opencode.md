@@ -46,8 +46,13 @@ launches carry the brief in argv and close stdin.
 A host-selected gateway renders into `.config/opencode/opencode.json` as the
 single scoped `bee` remote entry, composed into the admitted provider config
 without replacing unrelated keys. Gateway credentials reach that file through
-secret fields. A `.config/opencode/*.key` file is an admitted optional auxiliary
-file the broker projects without interpreting its bytes.
+secret fields. The descriptor declares `.config/opencode/provider.key` as an
+optional auxiliary file for a global configuration using
+`"apiKey": "{file:~/.config/opencode/provider.key}"`. The broker projects its
+bytes without interpreting them or writing them back. Native private placement
+rewrites the reference to the copied file; a referenced file that is absent or
+undeclared refuses the launch. Window launches resolve the user's own key-file
+references through their existing home.
 
 ## Hooks
 

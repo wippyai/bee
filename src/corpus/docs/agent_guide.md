@@ -131,7 +131,7 @@ command; Bee checks existence only and leaves sign-in to the provider.
 | Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` |
 | Grok | `.grok/auth.json` | `.grok/config.toml` |
 | Muse | `.config/muse/auth.json` | `.config/muse/settings.json` |
-| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json`, `.config/opencode/towers.key` |
+| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json`, `.config/opencode/provider.key` |
 
 Only a provider's login file may be returned to its original path after the
 child exits, and only when the source digest is unchanged; provider

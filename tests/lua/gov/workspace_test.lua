@@ -10,7 +10,7 @@ local function input(files: {workspace.File}?): workspace.Input
         selected = {{path = "service/main.lua", content = "return 'ok'"},
             {path = "assets/module.wasm", content = "\0\255wasm"}}
     end
-    return {workspace_id = "wolfy-j/demo", revision = 4, files = selected}
+    return {workspace_id = "example/demo", revision = 4, files = selected}
 end
 
 local function freeze(value: workspace.Input): workspace.Snapshot
@@ -44,7 +44,7 @@ local function define_tests()
             changed.files[1].content = "different"
             test.is_false(freeze(changed).digest == initial)
             changed = input()
-            changed.workspace_id = "wolfy-j/other"
+            changed.workspace_id = "example/other"
             test.is_false(freeze(changed).digest == initial)
             changed = input()
             changed.revision = 5

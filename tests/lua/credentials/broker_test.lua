@@ -777,7 +777,7 @@ local function define_tests()
         test.it("projects one requested Codex profile file and refuses paths outside host admission", function()
             local ws = fresh("codex-profile-file")
             admit_sources(ws)
-            local profile_path = ".codex/ds-flash.config.toml"
+            local profile_path = ".codex/fixture-profile.config.toml"
             local profile_content = 'model = "gpt-5-codex"\n'
             write_file(CODEX_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
             write_file(CODEX_LOGIN_SOURCE, ".codex/config.toml", "profile = \"base\"\n")

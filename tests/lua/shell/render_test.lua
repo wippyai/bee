@@ -173,15 +173,15 @@ local function define_tests()
         end
 
         test.it("uses viewport space and shows the selected folder's complete path", function()
-            local path = "/home/atlas/projects/review-the-released-bee-desktop-and-all-application-states/long-project-name"
-            local opened = workspace_menu.new("d1", {{id = "d1", title = "Review all application states", workspace = "w1", shown = true}},
+            local path = "/home/person/projects/sample-workspace-with-a-deliberately-long-folder-name/long-project-name"
+            local opened = workspace_menu.new("d1", {{id = "d1", title = "Sample workspace", workspace = "w1", shown = true}},
                 {{id = "w1", path = path, label = "long-project-name"}}, {}, {"n1"}, "n1")
             opened.selected = 3
             test.is_true(workspace_menu.panel(200, 50, opened).width > workspace_menu.panel(120, 40, opened).width)
             local rows = draw(model.new(200, 50), {}, {workspaces = opened})
             local rendered = table.concat(rows, "\n")
             test.contains(rendered, path)
-            test.contains(rendered, "Review all application states")
+            test.contains(rendered, "Sample workspace")
             for _, hit_size in ipairs({{80, 24}, {120, 40}, {200, 50}}) do
                 local panel = workspace_menu.panel(hit_size[1], hit_size[2], opened)
                 test.is_true(panel.x >= 1 and panel.x + panel.width - 1 <= hit_size[1])

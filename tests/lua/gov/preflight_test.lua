@@ -24,14 +24,14 @@ local function fixture(): (preflight.Candidate, preflight.Context)
     database.auto_start = true
     local entries: {[string]: preflight.Entry} = {["host:db"] = database}
     local candidate_entries: {preflight.Entry} = {
-        candidate_entry("demo:run", "function.lua", "wolfy-j/demo", SHA, {"host:db"})}
+        candidate_entry("demo:run", "function.lua", "example/demo", SHA, {"host:db"})}
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7, base_digest = SHA,
-        artifacts = {{component = "wolfy-j/demo", version = "1.0.0", digest = SHA, dependencies = {}, namespaces = {"demo"}}},
+        artifacts = {{component = "example/demo", version = "1.0.0", digest = SHA, dependencies = {}, namespaces = {"demo"}}},
         entries = candidate_entries,
-        requirements = {{id = "demo:target_db", package = "wolfy-j/demo", value = "host:db", expected_kind = "db.sql.sqlite", targets = {"demo:run"}}},
+        requirements = {{id = "demo:target_db", package = "example/demo", value = "host:db", expected_kind = "db.sql.sqlite", targets = {"demo:run"}}},
         migrations = {{id = "demo:001", target_db = "host:db", checksum = SHA, ordinal = 1}}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
-        packages = {["wolfy-j/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
+        packages = {["example/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
         entries = entries, installed_entries = nil,
         applied = {}, grants = {}, modules = {}, exact_expansion = true, migration_barrier = false, auto_start = true,
         protected = KERNEL, host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
@@ -49,7 +49,7 @@ local function with_kernel(context: preflight.Context, kernel: Manifest?): prefl
         auto_start = context.auto_start, protected = kernel, host_evidence = context.host_evidence}
 end
 local function entry_of(id: string): preflight.Entry
-    return candidate_entry(id, "library.lua", "wolfy-j/demo", SHA, EMPTY_STRINGS)
+    return candidate_entry(id, "library.lua", "example/demo", SHA, EMPTY_STRINGS)
 end
 local function checked(candidate: preflight.Candidate, context: preflight.Context): preflight.Report
     local result, err = preflight.check(candidate, context)
@@ -156,7 +156,7 @@ local function define_tests()
             local policies = entry("bee.security.approvals:approver_policies", "bee", {"demo:run"})
             policies.kind = "registry.entry"
             context.entries["bee.security.approvals:approver_policies"] = policies
-            local owned = entry("demo:run", "wolfy-j/demo", {})
+            local owned = entry("demo:run", "example/demo", {})
             owned.kind = "function.lua"
             context.entries["demo:run"] = owned
             -- A host record naming an application does not make it kernel code.
@@ -168,7 +168,7 @@ local function define_tests()
             context.kinds["library.lua"], context.kinds["registry.entry"] = true, true
             local direct, _ = fixture()
             direct.artifacts[1].namespaces = {"demo", "bee.gov.extra"}
-            direct.entries[#direct.entries + 1] = entry("bee.gov.extra:shadow", "wolfy-j/demo", {})
+            direct.entries[#direct.entries + 1] = entry("bee.gov.extra:shadow", "example/demo", {})
             local refused = checked(direct, context)
             test.is_false(refused.ready)
             test.is_true(has(refused, "PROTECTED_KERNEL"))
@@ -180,7 +180,7 @@ local function define_tests()
             test.is_true(has(checked(transitive, context), "PROTECTED_KERNEL"))
             -- A host record composed into the application's own overlay.
             context.installed_entries = {["bee.gov:admission.demo"] = {id = "bee.gov:admission.demo",
-                kind = "registry.entry", package = "wolfy-j/demo", digest = SHA, references = {"demo:run"},
+                kind = "registry.entry", package = "example/demo", digest = SHA, references = {"demo:run"},
                 auto_start = false, grants = {}, modules = {}, config_objects = {}, config_lists = {},
                 config_empty = {}}}
             test.is_true(checked(candidate, context).ready)
@@ -190,7 +190,7 @@ local function define_tests()
             test.is_true(has(checked(selector, context), "PROTECTED_KERNEL"))
             local exact, _ = fixture()
             exact.artifacts[1].namespaces = {"demo", "bee"}
-            exact.entries[#exact.entries + 1] = entry("bee.gov:protected_kernel", "wolfy-j/demo", {})
+            exact.entries[#exact.entries + 1] = entry("bee.gov:protected_kernel", "example/demo", {})
             test.is_true(has(checked(exact, context), "PROTECTED_KERNEL"))
             local missing, missing_error = preflight.check(candidate, with_kernel(context, nil))
             test.is_nil(missing)
@@ -211,7 +211,7 @@ local function define_tests()
                 shadow_context.protected = manifest
                 shadowed.artifacts[1].namespaces = {"demo", namespace}
                 shadow_context.namespaces[namespace] = true
-                shadow_context.packages["wolfy-j/demo"] = true
+                shadow_context.packages["example/demo"] = true
                 shadow_context.kinds["library.lua"] = true
                 shadowed.requirements = {}
                 shadowed.migrations = {}
@@ -357,7 +357,7 @@ local function define_tests()
             test.is_true(has(checked(wrong_candidate, wrong_context), "MISSING_DATABASE"))
             candidate, context = logical({database_id = "host:db"})
             candidate.entries[#candidate.entries + 1] = candidate_entry("host:db", "db.sql.sqlite",
-                "wolfy-j/demo", string.rep("b", 64), EMPTY_STRINGS)
+                "example/demo", string.rep("b", 64), EMPTY_STRINGS)
             test.is_true(has(checked(candidate, context), "DATABASE_REPLACEMENT"))
         end)
         test.it("fails closed on missing runtime gates and changed destination base", function()
@@ -389,7 +389,7 @@ local function define_tests()
             local report = checked(candidate, context)
             test.is_true(has(report, "ENTRY_COLLISION"))
             test.is_true(has(report, "DANGLING_REFERENCE"))
-            context.entries["demo:removed"] = candidate_entry("demo:removed", "function.lua", "wolfy-j/demo", SHA, EMPTY_STRINGS)
+            context.entries["demo:removed"] = candidate_entry("demo:removed", "function.lua", "example/demo", SHA, EMPTY_STRINGS)
             candidate.entries[1].references = {"demo:removed"}
             test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
         end)
@@ -405,13 +405,13 @@ local function define_tests()
             -- Removing a target that a retained entry still references is a
             -- fault this candidate does introduce.
             context.entries["host:option"].references = {"demo:retired"}
-            context.entries["demo:retired"] = candidate_entry("demo:retired", "function.lua", "wolfy-j/demo", SHA, EMPTY_STRINGS)
+            context.entries["demo:retired"] = candidate_entry("demo:retired", "function.lua", "example/demo", SHA, EMPTY_STRINGS)
             test.is_true(has(checked(candidate, context), "DANGLING_REFERENCE"))
         end)
         test.it("validates removals against the separately installed private overlay", function()
             local candidate, context = fixture()
             local retained = candidate_entry("host:option", "function.lua", "host", SHA, {"demo:retired"})
-            local retired = candidate_entry("demo:retired", "function.lua", "wolfy-j/demo", SHA, EMPTY_STRINGS)
+            local retired = candidate_entry("demo:retired", "function.lua", "example/demo", SHA, EMPTY_STRINGS)
             context.entries[retained.id] = retained
             context.installed_entries = {[retired.id] = retired}
             local report = checked(candidate, context)
@@ -454,7 +454,7 @@ local function define_tests()
             context.generated_databases = {[database_id] = "notes"}
             context.applied["notes\ndemo:001"] = candidate.migrations[1]
             context.applied_databases = {notes = {database_id = database_id, kind = "db.sql.sqlite",
-                package = "wolfy-j/demo", digest = string.rep("e", 64)}}
+                package = "example/demo", digest = string.rep("e", 64)}}
             local kept = checked(candidate, context)
             test.is_false(has(kept, "APPLIED_DATABASE_CHANGED"))
             test.is_true(kept.ready)
@@ -467,7 +467,7 @@ local function define_tests()
             candidate.entries[1].grants = {"bee.security.approvals:approval_owner_policy"}
             candidate.entries[1].modules = {"os"}
             context.databases["host:db"] = false
-            context.packages["wolfy-j/demo"] = false
+            context.packages["example/demo"] = false
             context.namespaces.demo = false
             local report = checked(candidate, context)
             test.is_true(has(report, "MIGRATION_BARRIER_REQUIRED"))

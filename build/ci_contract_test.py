@@ -89,7 +89,7 @@ class CIContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output'
             environment = {'GITHUB_REPOSITORY': 'wippyai/bee', 'GITHUB_OUTPUT': str(output)}
-            for changes in ({'head_sha': 'b' * 40}, {'head_branch': 'lane/cicd'}, {'conclusion': 'failure'}, {'event': 'pull_request'}):
+            for changes in ({'head_sha': 'b' * 40}, {'head_branch': 'feature/example'}, {'conclusion': 'failure'}, {'event': 'pull_request'}):
                 row = dict(candidate, **changes)
                 with patch.dict(os.environ, environment, clear=True), patch.object(ci, 'run', side_effect=[sha, json.dumps({'workflow_runs': [row]})]):
                     with self.assertRaisesRegex(ValueError, 'exact SHA'):

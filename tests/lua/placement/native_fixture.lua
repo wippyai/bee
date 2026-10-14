@@ -294,7 +294,7 @@ end
 local function provider_home_fixtures(): {{provider: string, launch: {[string]: unknown}}}
     local result: {{provider: string, launch: {[string]: unknown}}} = {}
     local claude = assert(claude_launch.decode({profile_id = "batch", brief = "fixture"}))
-    local codex = assert(codex_launch.decode({profile_id = "batch", brief = "fixture", config_profile = "ds-flash"}))
+    local codex = assert(codex_launch.decode({profile_id = "batch", brief = "fixture", config_profile = "fixture-profile"}))
     local agy = assert(agy_launch.decode({profile_id = "batch", brief = "fixture"}))
     local grok = assert(grok_launch.decode({profile_id = "batch", brief = "fixture", permission_mode = "default"}))
     local muse = assert(muse_launch.decode({profile_id = "batch", brief = "fixture", approval_mode = "never"}))

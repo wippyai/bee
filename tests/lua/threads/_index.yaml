@@ -317,11 +317,7 @@ entries:
   kind: function.lua
   source: file://notice_test.lua
   method: run
-  modules:
-  - process
-  - channel
-  - time
-  - cdc
+  modules: [process, channel, time, cdc]
   meta:
     type: test
     suite: bee
@@ -349,8 +345,7 @@ entries:
   kind: function.lua
   source: file://pump_probe.lua
   method: run
-  meta:
-    type: test_support
+  meta: {type: test_support}
   imports:
     pump_config: bee.threads.service:pump_config
 - name: service_test
@@ -505,20 +500,15 @@ entries:
     owner: bee.threads.persist:owner
 - name: pump_deadline_db
   kind: db.sql.sqlite
-  meta:
-    type: test_support
+  meta: {type: test_support}
   file: .wippy/pump-deadline-test.db
-  lifecycle:
-    auto_start: true
+  lifecycle: {auto_start: true}
 - name: pump_deadline_test
   kind: function.lua
   source: file://pump_deadline_test.lua
   method: run
-  modules:
-  - sql
-  meta:
-    type: test
-    suite: bee
+  modules: [sql]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     outbox: bee.threads.persist:outbox
@@ -526,24 +516,16 @@ entries:
   kind: function.lua
   source: file://pump_fixture_test.lua
   method: run
-  modules:
-  - registry
-  meta:
-    type: test
-    suite: bee
+  modules: [registry]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
 - name: listen_test
   kind: function.lua
   source: file://listen_test.lua
   method: run
-  modules:
-  - funcs
-  - registry
-  - json
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs, registry, json]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -551,10 +533,7 @@ entries:
     harness: bee.tests.threads:harness
     gateway: bee.gateway.binding:gateway
     owner: bee.threads.persist:owner
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: listen_upgrade_test
   kind: function.lua
   source: file://listen_test.lua
@@ -577,44 +556,35 @@ entries:
     policies:
     - bee.tests.memory:host_policy
     - bee.tests.memory:read_policy
+
 - name: search_test
   kind: function.lua
   source: file://search_test.lua
   method: run
-  meta:
-    type: test
-    suite: bee
-  modules:
-  - funcs
+  meta: {type: test, suite: bee}
+  modules: [funcs]
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
     host: bee.tests.memory:host
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: usage_test
   kind: function.lua
   source: file://usage_test.lua
   method: run
-  meta:
-    type: test
-    suite: bee
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
+
 - name: hooks_test
   kind: function.lua
   source: file://hooks_test.lua
   method: core
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -623,19 +593,13 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_native_test
   kind: function.lua
   source: file://hooks_test.lua
   method: native
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -644,19 +608,13 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_boundaries_test
   kind: function.lua
   source: file://hooks_test.lua
   method: boundaries
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -665,19 +623,13 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_capabilities_test
   kind: function.lua
   source: file://hooks_test.lua
   method: capabilities
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -686,19 +638,13 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_claude_test
   kind: function.lua
   source: file://hooks_test.lua
   method: claude
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -707,19 +653,13 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_codex_test
   kind: function.lua
   source: file://hooks_test.lua
   method: codex
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -728,19 +668,13 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_agy_test
   kind: function.lua
   source: file://hooks_test.lua
   method: agy
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -749,19 +683,13 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_muse_test
   kind: function.lua
   source: file://hooks_test.lua
   method: muse
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -770,19 +698,13 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_grok_test
   kind: function.lua
   source: file://hooks_test.lua
   method: grok
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
@@ -791,91 +713,58 @@ entries:
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_clock_test
   kind: function.lua
   source: file://hooks_clock_test.lua
   method: run
-  modules:
-  - funcs
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_replay_test
   kind: function.lua
   source: file://hooks_replay_test.lua
   method: run
-  modules:
-  - funcs
-  - process
-  - events
-  - channel
-  - security
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs, process, events, channel, security]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_budget_test
   kind: function.lua
   source: file://hooks_budget_test.lua
   method: run
-  modules:
-  - funcs
-  - process
-  - events
-  - channel
-  - security
-  meta:
-    type: test
-    suite: bee
+  modules: [funcs, process, events, channel, security]
+  meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
     bounds: bee.values:bounds
     response: bee.threads.hooks:response
-  security:
-    policies:
-    - bee.tests.memory:host_policy
-    - bee.tests.memory:read_policy
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
+
 - name: recovery
   kind: library.lua
   source: file://recovery.lua
-  modules:
-  - logger
+  modules: [logger]
   imports:
     runtime: bee.tests.threads:recovery_runtime
     commits: bee.threads.delivery:commits
 - name: recovery_runtime
   kind: library.lua
   source: file://recovery_runtime.lua
-  modules:
-  - process
+  modules: [process]
 - name: recovery_test
-  modules:
-  - process
-  - channel
-  - time
+  modules: [process, channel, time]
   kind: function.lua
   source: file://recovery_test.lua
   method: run
@@ -886,13 +775,12 @@ entries:
     test: wippy.test:test
     recovery: bee.tests.threads:recovery
     runtime: bee.tests.threads:recovery_runtime
+
 - name: recovery_worker
   kind: process.lua
   source: file://recovery_worker.lua
   method: main
-  modules:
-  - process
-  - channel
+  modules: [process, channel]
   imports:
     recovery: bee.tests.threads:recovery
     runtime: bee.tests.threads:recovery_runtime

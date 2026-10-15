@@ -22,8 +22,8 @@ entries:
     broker: bee.node:broker
     command: bee.node:command
     arguments: bee.app:arguments
-    workspaces: bee.node:workspaces
-    settings: bee.node:settings
+    workspaces: bee.node.persist:workspaces
+    settings: bee.node.persist:settings
     appearance: bee.ui:appearance
     client: bee.node:client
     boot_gate: bee.process:boot_gate
@@ -75,7 +75,7 @@ entries:
   imports:
     application: bee.node:application
     tests: bee.node:tests
-    test_runs: bee.node:test_runs
+    test_runs: bee.node.persist:test_runs
     demand: bee.process:demand
     receiver: bee.hive:receiver
     bounds: bee.values:bounds
@@ -85,7 +85,7 @@ entries:
     type: bee.process.demand
     demand:
       name: bee.node.tests
-      probe: bee.node:test_backlog
+      probe: bee.node.persist:test_backlog
       tables:
       - bee_node_test_runs
   kind: process.service
@@ -115,7 +115,7 @@ entries:
   - registry
   imports:
     descriptor: bee.app:descriptor
-    settings: bee.node:settings
+    settings: bee.node.persist:settings
     appearance: bee.ui:appearance
 - name: handover
   kind: library.lua

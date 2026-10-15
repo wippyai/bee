@@ -4,7 +4,7 @@ A workspace is a folder on the machine the node runs on. The folder the node
 starts in is always one. The node keeps one row per workspace in
 `bee_node_workspaces`: `id` (a UUIDv7 as 32 lowercase hex digits), `path`
 (unique, normalized), `label` (the folder name unless given) and `created_at`.
-`bee.node:workspaces` is the library over those rows (`list`, `ensure`,
+`bee.node.persist:workspaces` is the library over those rows (`list`, `ensure`,
 `workspace`, `remove_workspace`, `normalize`, `label_of`, `absolute`); only the
 node owner and the catalog backend open the node database.
 

@@ -9,8 +9,8 @@ running node.
 | Entry | Responsibility |
 |---|---|
 | `bee.node.service:owner` | The owner process, registered as `bee.node`. It opens and closes app instances, mounts their viewports for watching displays, answers the app broker messages, tracks the installed apps and themes from registry changes and restores the desktops' instances at start |
-| `bee.node:workspaces` | Workspaces (a folder on the machine; the folder the node runs in is always one), desktops (one set per node, each working in one workspace) and the app instances each desktop runs |
-| `bee.node:settings` | Named string values stored together or not at all |
+| `bee.node.persist:workspaces` | Workspaces (a folder on the machine; the folder the node runs in is always one), desktops (one set per node, each working in one workspace) and the app instances each desktop runs |
+| `bee.node.persist:settings` | Named string values stored together or not at all |
 | `bee.node:broker` | The `bee.app.*` messages an app sends the owner: ready, title, close reply, query, checkpoint, request. The owner accepts each only from the app's process carrying its launch token |
 | `bee.node:command` | Resolves `bee NAME` to an installed app |
 | `bee.node:client` | The display side of the owner protocol |
@@ -19,7 +19,7 @@ running node.
 | `bee.node.service:tests` | The test runner, registered as `bee.node.tests`; runs the application tests recorded in `bee_node_test_runs` and writes their results there |
 | `bee.node.binding:tests_call` | The facade the `tests` MCP tool calls |
 | `bee.node.binding:tests_backend` | Plans and records runs and reads results, in the private test backend scope |
-| `bee.node:test_runs` | The run table's access |
+| `bee.node.persist:test_runs` | The run table's access |
 | `bee.node:tests` | The tests request, its bounds and its reply envelope |
 | `bee.node:headless` | The `node` command |
 

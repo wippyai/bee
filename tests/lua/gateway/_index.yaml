@@ -255,7 +255,7 @@ entries:
     test: wippy.test:test
     view: bee.gateway.app:view
     appearance: bee.ui:appearance
-    manuals: bee.apps.help.app:manuals
+    manuals: bee.docs:manuals
 - name: external_app_test
   kind: function.lua
   source: file://external_app_test.lua

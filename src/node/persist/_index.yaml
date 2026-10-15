@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.node.persist
+entries:
+- name: workspaces
+  kind: library.lua
+  source: file://workspaces.lua
+  modules: [sql, uuid, time, json]
+  imports:
+    alias_retirements: bee.threads.service:alias_retirements
+- name: settings
+  kind: library.lua
+  source: file://settings.lua
+  modules: [sql]
+- name: test_runs
+  kind: library.lua
+  source: file://test_runs.lua
+  modules: [sql, json, time]
+  imports:
+    tests: bee.node:tests
+- name: test_backlog
+  kind: function.lua
+  source: file://test_backlog.lua
+  method: pending
+  modules: [sql]

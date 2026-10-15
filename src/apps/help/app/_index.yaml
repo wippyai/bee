@@ -9,8 +9,8 @@ entries:
   imports:
     appearance: bee.ui:appearance
     frame: bee.ui:frame
-    manuals: bee.apps.help.app:manuals
-    markdown: bee.apps.help.app:markdown
+    manuals: bee.docs:manuals
+    markdown: bee.ui:markdown
     text: bee.ui:text
 - name: app
   kind: process.lua
@@ -33,21 +33,7 @@ entries:
     appearance: bee.ui:appearance
     frame: bee.ui:frame
     view: bee.apps.help.app:view
-    manuals: bee.apps.help.app:manuals
-    markdown: bee.apps.help.app:markdown
+    manuals: bee.docs:manuals
+    markdown: bee.ui:markdown
   security:
     policies: [bee.security.docs:docs_policy]
-- name: manuals
-  kind: library.lua
-  source: file://manuals.lua
-  imports:
-    corpus: bee.docs.binding:corpus
-    resources: bee.docs.env:resources
-- name: markdown
-  kind: library.lua
-  source: file://markdown.lua
-  imports:
-    frame: bee.ui:frame
-    text: bee.ui:text
-  modules:
-  - tty

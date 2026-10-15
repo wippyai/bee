@@ -16,3 +16,11 @@ entries:
   modules: [tty]
   imports:
     appearance: bee.ui:appearance
+- name: markdown
+  kind: library.lua
+  source: file://markdown.lua
+  imports:
+    frame: bee.ui:frame
+    text: bee.ui:text
+  modules:
+  - tty

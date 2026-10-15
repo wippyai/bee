@@ -24,7 +24,7 @@ entries:
     access: bee.gov.binding:capability_access
     schemas: bee.gateway.catalog:json_schema
     canonical: bee.values:canonical
-    receipts: bee.hive:receipts
+    receipts: bee.hive.persist:receipts
     protocol: bee.hive:protocol
 - name: operations
   kind: library.lua
@@ -54,15 +54,6 @@ entries:
   kind: library.lua
   source: file://hive.lua
   modules: [funcs]
-- name: receipts
-  kind: library.lua
-  source: file://receipts.lua
-  modules: [json, sql]
-  imports:
-    database: bee.persist:database
-    transaction: bee.persist:transaction
-    canonical: bee.values:canonical
-    protocol: bee.hive:protocol
 - name: remote
   kind: library.lua
   source: file://remote.lua
@@ -78,6 +69,6 @@ entries:
     protocol: bee.hive:protocol
     canonical: bee.values:canonical
     tests: bee.node:tests
-    test_runs: bee.node:test_runs
+    test_runs: bee.node.persist:test_runs
     backend: bee.node.binding:tests_backend_library
     grants: bee.gov.types:capability_grants

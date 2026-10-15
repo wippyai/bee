@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.hive.persist
+entries:
+- name: receipts
+  kind: library.lua
+  source: file://receipts.lua
+  modules: [json, sql]
+  imports:
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    canonical: bee.values:canonical
+    protocol: bee.hive:protocol

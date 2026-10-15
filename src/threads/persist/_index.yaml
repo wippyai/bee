@@ -37,3 +37,32 @@ entries:
     bounds: bee.values:bounds
     clock: bee.values:clock
     transaction: bee.threads.persist:transaction
+- name: work_store
+  kind: library.lua
+  source: file://work_store.lua
+  modules:
+  - ctx
+  - sql
+  imports:
+    usage: bee.threads.service:usage
+    journal: bee.threads.persist:journal
+    budget_values: bee.threads.records:budgets
+    access: bee.threads.service:access
+    transaction: bee.threads.persist:transaction
+    observation: bee.threads.records:observation
+    bounds: bee.values:bounds
+    inbox: bee.threads.service:inbox
+    part_work_records: bee.threads.service:work_records
+    part_session_store: bee.threads.persist:session_store
+    part_work_queries: bee.threads.service:work_queries
+- name: session_store
+  kind: library.lua
+  source: file://session_store.lua
+  modules:
+  - sql
+  imports:
+    journal: bee.threads.persist:journal
+    access: bee.threads.service:access
+    transaction: bee.threads.persist:transaction
+    reader: bee.threads.persist:reader
+    part_work_records: bee.threads.service:work_records

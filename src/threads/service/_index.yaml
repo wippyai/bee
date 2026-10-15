@@ -186,24 +186,6 @@ entries:
   source: file://pump.lua
   imports:
     bounds: bee.values:bounds
-- name: work_store
-  kind: library.lua
-  source: file://work_store.lua
-  modules:
-  - ctx
-  - sql
-  imports:
-    usage: bee.threads.service:usage
-    journal: bee.threads.persist:journal
-    budget_values: bee.threads.records:budgets
-    access: bee.threads.service:access
-    transaction: bee.threads.persist:transaction
-    observation: bee.threads.records:observation
-    bounds: bee.values:bounds
-    inbox: bee.threads.service:inbox
-    part_work_records: bee.threads.service:work_records
-    part_session_store: bee.threads.service:session_store
-    part_work_queries: bee.threads.service:work_queries
 - name: pump_sender
   kind: library.lua
   source: file://pump_sender.lua
@@ -279,17 +261,6 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     record_bounds: bee.threads.records:bounds
-- name: session_store
-  kind: library.lua
-  source: file://session_store.lua
-  modules:
-  - sql
-  imports:
-    journal: bee.threads.persist:journal
-    access: bee.threads.service:access
-    transaction: bee.threads.persist:transaction
-    reader: bee.threads.persist:reader
-    part_work_records: bee.threads.service:work_records
 - name: work_queries
   kind: library.lua
   source: file://work_queries.lua
@@ -303,4 +274,4 @@ entries:
     bounds: bee.values:bounds
     commits: bee.threads.delivery:commits
     part_work_records: bee.threads.service:work_records
-    part_session_store: bee.threads.service:session_store
+    part_session_store: bee.threads.persist:session_store

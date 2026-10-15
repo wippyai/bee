@@ -640,7 +640,7 @@ entries:
   method: session_create
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -652,7 +652,7 @@ entries:
   method: session_attach
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -664,7 +664,7 @@ entries:
   method: session_describe
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -676,7 +676,7 @@ entries:
   method: session_scan
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -688,7 +688,7 @@ entries:
   method: session_transition
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -700,7 +700,7 @@ entries:
   method: work_send
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -712,7 +712,7 @@ entries:
   method: work_describe
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -724,7 +724,7 @@ entries:
   method: work_await
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -737,7 +737,7 @@ entries:
   method: work_history
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -749,7 +749,7 @@ entries:
   method: work_scan
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -761,7 +761,7 @@ entries:
   method: turn_reserve
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -773,7 +773,7 @@ entries:
   method: turn_recover
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -785,7 +785,7 @@ entries:
   method: turn_pull
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -797,7 +797,7 @@ entries:
   method: turn_accept
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -809,7 +809,7 @@ entries:
   method: turn_observation
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -821,7 +821,7 @@ entries:
   method: work_settle
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -833,7 +833,7 @@ entries:
   method: work_uncertain
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -845,7 +845,7 @@ entries:
   method: work_cancel
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -857,7 +857,7 @@ entries:
   method: operation_lookup
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -869,7 +869,7 @@ entries:
   method: operation_describe
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -881,7 +881,7 @@ entries:
   method: feed_read
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:
@@ -1021,7 +1021,7 @@ entries:
   method: node_summary
   imports:
     boundary: bee.threads.service:boundary
-    work_store: bee.threads.service:work_store
+    work_store: bee.threads.persist:work_store
     types: bee.threads:types
   security:
     policies:

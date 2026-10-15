@@ -43,7 +43,7 @@ require a fresh query. Listening alone does not authorize either operation.
 | `bee.threads.migrations` | Immutable schema migrations |
 | `bee.threads.sessions` | The public Sessions contracts, catalog and client |
 
-The journal bindings call `bee.threads.service:work_store` for request validation,
+The journal bindings call `bee.threads.persist:work_store` for request validation,
 owner and summary-reader permission checks, workspace selection and domain
 transitions.
 That service calls `bee.threads.persist:journal` through typed functions for all

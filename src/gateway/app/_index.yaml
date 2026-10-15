@@ -7,7 +7,7 @@ entries:
   imports:
     frame: bee.ui:frame
     appearance: bee.ui:appearance
-    markdown: bee.apps.help.app:markdown
+    markdown: bee.ui:markdown
 - name: app
   kind: process.lua
   source: file://app.lua
@@ -20,7 +20,7 @@ entries:
     client: bee.app:client
     bounds: bee.values:bounds
     confirmation: bee.approvals.app:confirmation
-    manuals: bee.apps.help.app:manuals
+    manuals: bee.docs:manuals
   meta:
     type: bee.app
     application:

@@ -6,3 +6,9 @@ entries:
   source: file://protocol.lua
   imports:
     bounds: bee.values:bounds
+- name: manuals
+  kind: library.lua
+  source: file://manuals.lua
+  imports:
+    corpus: bee.docs.binding:corpus
+    resources: bee.docs.env:resources

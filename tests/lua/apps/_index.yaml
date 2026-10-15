@@ -73,7 +73,7 @@ entries:
     test: wippy.test:test
     client: bee.node:client
     appearance: bee.ui:appearance
-    settings: bee.node:settings
+    settings: bee.node.persist:settings
 - name: manuals_test
   kind: function.lua
   source: file://manuals_test.lua
@@ -90,8 +90,8 @@ entries:
     - bee.security.docs:docs_policy
   imports:
     test: wippy.test:test
-    manuals: bee.apps.help.app:manuals
-    markdown: bee.apps.help.app:markdown
+    manuals: bee.docs:manuals
+    markdown: bee.ui:markdown
     corpus: bee.docs.binding:corpus
     resources: bee.docs.env:resources
     view: bee.apps.help.app:view
@@ -106,7 +106,7 @@ entries:
   imports:
     test: wippy.test:test
     client: bee.node:client
-    manuals: bee.apps.help.app:manuals
+    manuals: bee.docs:manuals
 - name: captures
   kind: fs.directory
   meta: {type: test_support}

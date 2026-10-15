@@ -16,7 +16,7 @@ application.
 A desktop works in one workspace; apps opened on it start there unless the
 open names another. Removing a desktop removes its instances. The node's own
 folder is always a workspace and cannot be removed; a workspace a desktop works
-in cannot be removed either. `bee.node:workspaces` offers the operations
+in cannot be removed either. `bee.node.persist:workspaces` offers the operations
 (`ensure`, `create_desktop`, `use_workspace`, `rename_desktop`, `remove_desktop`,
 `keep`, `remember`, `move_instance`, `forget`, `instances`).
 

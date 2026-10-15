@@ -67,5 +67,5 @@ follows `bee_thread_records`).
 ## Workspace folders
 
 `bee.env:workspace_root` is the folder the node runs in. The node's workspace
-rows, desktops and kept app instances live in `bee.node:workspaces`; see
+rows, desktops and kept app instances live in `bee.node.persist:workspaces`; see
 `docs/workspace_catalog` and `docs/workspace_state`.

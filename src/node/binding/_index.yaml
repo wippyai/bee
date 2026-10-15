@@ -7,7 +7,7 @@ entries:
   modules: [registry, fs]
   imports:
     bounds: bee.values:bounds
-    workspaces: bee.node:workspaces
+    workspaces: bee.node.persist:workspaces
 - name: catalog
   kind: function.lua
   source: file://catalog.lua
@@ -15,7 +15,7 @@ entries:
   modules: [registry, fs, sql, uuid, time, json]
   imports:
     bounds: bee.values:bounds
-    workspaces: bee.node:workspaces
+    workspaces: bee.node.persist:workspaces
 - name: read
   kind: function.lua
   meta:
@@ -78,7 +78,7 @@ entries:
   imports:
     application: bee.node:application
     tests: bee.node:tests
-    test_runs: bee.node:test_runs
+    test_runs: bee.node.persist:test_runs
     demand: bee.process:demand
     discovery: wippy.test:discovery
     application_tests: bee.node:application_tests
@@ -154,7 +154,7 @@ entries:
   imports:
     application: bee.node:application
     tests: bee.node:tests
-    test_runs: bee.node:test_runs
+    test_runs: bee.node.persist:test_runs
     demand: bee.process:demand
     discovery: wippy.test:discovery
     application_tests: bee.node:application_tests

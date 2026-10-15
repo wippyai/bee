@@ -226,7 +226,7 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     tests: bee.node:tests
-    test_runs: bee.node:test_runs
+    test_runs: bee.node.persist:test_runs
     application: bee.node:application
     demand: bee.process:demand
   security:
@@ -374,7 +374,7 @@ entries:
     owner_observer: bee.tests.support:owner_observer
     committed: bee.tests.support:committed
     test: wippy.test:test
-    runs: bee.node:test_runs
+    runs: bee.node.persist:test_runs
     demand: bee.process:demand
     owners: bee.process:demand_owner
     routing: bee.hive.service:routing
@@ -474,7 +474,7 @@ entries:
   imports:
     owner_observer: bee.tests.support:owner_observer
     test: wippy.test:test
-    runs: bee.node:test_runs
+    runs: bee.node.persist:test_runs
     demand: bee.process:demand
     bounds: bee.values:bounds
 - name: retirement_test
@@ -487,7 +487,7 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     client: bee.node:client
-    workspaces: bee.node:workspaces
+    workspaces: bee.node.persist:workspaces
 - name: state_guard_db
   kind: db.sql.sqlite
   file: ':memory:'

@@ -1853,7 +1853,7 @@ entries:
   - uuid
   imports:
     bounds: bee.values:bounds
-    workspaces: bee.node:workspaces
+    workspaces: bee.node.persist:workspaces
     windows: bee.approvals.types:windows
 - name: allowance
   kind: function.lua

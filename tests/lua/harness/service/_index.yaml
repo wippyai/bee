@@ -19,3 +19,20 @@ entries:
   kind: library.lua
   source: file://executor_probe.lua
   meta: {type: test_support}
+- name: supervision_test
+  kind: function.lua
+  source: file://supervision_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, process, channel, time, security, uuid]
+  security:
+    policies: [bee.tests.harness:apply_test_policy]
+  imports:
+    test: wippy.test:test
+    viewer: bee.harness.service:viewer
+- name: owner_probe
+  kind: process.lua
+  source: file://owner_probe.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process, security, ctx]

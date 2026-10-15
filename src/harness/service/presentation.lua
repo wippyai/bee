@@ -158,14 +158,14 @@ local function start(workspace_id: string, request_id: string, arguments: {strin
     local grant = assert(view:grant())
     local pid = assert(process.with_options({terminal = grant})
         :with_context({["bee.workspace_id"] = workspace_id, ["bee.agent.trait_ceiling"] = ctx.get("bee.agent.trait_ceiling")})
-        :spawn_monitored("bee.harness.service:presentation_executor", "bee:workers", {
+        :spawn_linked_monitored("bee.harness.service:presentation_executor", "bee:workers", {
         version = 1, broker_pid = process.pid(), workspace_pid = process.pid(), workspace_id = workspace_id,
         instance_id = request_id, view_id = request_id, definition_id = "bee.harness.app:app",
         execution_generation = 1, definition_revision = "1", registry_revision = "1", launch_token = request_id,
         resume_schema = recovery.SCHEMA, resume_state = resume_state, arguments = arguments}, operation_key, admitted))
     return view, tostring(pid)
 end
-local function run(value: unknown, name: unknown, initial_token: string, operation_key: string)
+local function run(value: unknown, name: unknown, initial_token: string, operation_key: string, supervisor: string)
     local requests = assert(process.listen(TOPIC, {message = true}))
     local events = assert(process.events())
     local request_body = bounds.object(value)
@@ -184,8 +184,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
     end
     local function reply_to(token: string, reply: Object)
         reply.caller_token = token
-        local caller = process.registry.lookup(token)
-        if caller then process.send(caller, REPLY, reply) end
+        process.send(supervisor, REPLY, reply)
     end
     local function receipt(): Object
         local raw, lookup_error = funcs.call("bee.threads.binding:operation_lookup", {operation_key = operation_key})
@@ -331,19 +330,17 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
     if view then view:close() end
     for _, registered in ipairs(aliases) do process.registry.unregister(registered, process.registry.LOCAL) end
 end
-function M.main(value: unknown, name: unknown, initial_token: unknown, operation_key: unknown)
+function M.main(value: unknown, name: unknown, initial_token: unknown, operation_key: unknown, supervisor: string)
+    assert(supervisor == tostring(process.registry.lookup("bee.harness.presentation", process.registry.LOCAL)), "presentation supervisor is missing")
     local token = bounds.id(initial_token)
     if not token or token:sub(1, #CALLER) ~= CALLER then error("invalid window caller token") end
     local key = bounds.text(operation_key, 128)
     if not key or key == "" then error("invalid presentation operation key") end
-    local ok, err = pcall(run, value, name, token, key)
+    local ok, err = pcall(run, value, name, token, key, supervisor)
     if not ok then
-        local caller = process.registry.lookup(token)
-        if caller then
-            local reply = fail(tostring(err))
-            reply.caller_token = token
-            process.send(caller, REPLY, reply)
-        end
+        local reply = fail(tostring(err))
+        reply.caller_token = token
+        process.send(supervisor, REPLY, reply)
         error(tostring(err))
     end
 end

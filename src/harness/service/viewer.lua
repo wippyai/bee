@@ -20,13 +20,19 @@ function M.rpc(target: string?, request: Object, startup: Object?, name: string?
     local replies = assert(process.listen(REPLY, {message = true}))
     assert(process.registry.register(token))
     request.caller_token = token
+    local permit: string? = nil
     local sent: boolean? = nil
     local err: unknown = nil
     if startup and name and owner then
-        local spawned, spawn_error = process.with_options({}):with_context({["bee.workspace_id"] = owner.workspace, ["bee.agent.trait_ceiling"] = owner.trait_ceiling})
-            :with_actor(owner.actor):with_scope(assert(security.scope()))
-            :spawn("bee.harness.service:presentation_owner", "bee:workers", startup, name, token, operation_key)
-        if spawned then target = tostring(spawned); sent = true else err = spawn_error end
+        permit = "bee.session.launch/" .. assert(uuid.v7())
+        assert(process.registry.register(permit))
+        local supervisor, lookup_error = process.registry.lookup("bee.harness.presentation", process.registry.LOCAL)
+        if supervisor then
+            target = tostring(supervisor)
+            sent, err = process.send(target, "bee.session.window.launch", {startup = startup, name = name,
+                operation_key = operation_key, caller_token = token, permit = permit, workspace = owner.workspace,
+                actor_id = owner.actor:id(), actor_meta = owner.actor:meta(), trait_ceiling = owner.trait_ceiling})
+        else err = lookup_error end
     elseif target then sent, err = process.send(target, TOPIC, request) end
     local reply: Object = fail(tostring(err or "window owner did not answer"))
     if sent then
@@ -41,6 +47,7 @@ function M.rpc(target: string?, request: Object, startup: Object?, name: string?
         end
         timer:stop()
     end
+    if permit then process.registry.unregister(permit, process.registry.LOCAL) end
     process.registry.unregister(token, process.registry.LOCAL)
     process.unlisten(replies)
     return reply

@@ -48,6 +48,29 @@ entries:
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
+  security:
+    policies:
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:interactive_session_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.harness.security:profile_workspace_policy
+    - bee.threads.security:create
+    - bee.harness.security:harness_setup_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.placement.native.security:window_observer_policy
+    - bee.resources.security:resource_grant_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_issue_policy
+    - bee.credentials.security:credential_materialize_workspace_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.node.security:workspace_folder_browse_policy
+    - bee.node.security:workspace_catalog_read_policy
+    - bee.threads.security:sessions_owner
+    - bee.harness.security:presentation_owner_policy
+    - bee.harness.security:presentation_bridge_policy
 - name: presentation_executor
   kind: process.lua
   source: file://executor.lua
@@ -281,3 +304,27 @@ entries:
   modules: [process, channel, time, uuid, security, funcs]
   imports:
     bounds: bee.values:bounds
+- name: presentation_supervisor
+  kind: process.lua
+  source: file://supervisor.lua
+  method: main
+  modules: [process, channel, security]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+- name: presentation_service
+  kind: process.service
+  process: bee.harness.service:presentation_supervisor
+  host: bee:workers
+  meta:
+    title: Harness presentation
+  lifecycle:
+    auto_start: true
+    requires:
+    - wippy.bootloader:bootloader.service
+    - bee.threads.service:service
+    restart:
+      max_attempts: 10
+    security:
+      actor: {id: bee.harness.presentation}
+      policies: [bee.harness.security:presentation_supervisor_policy]

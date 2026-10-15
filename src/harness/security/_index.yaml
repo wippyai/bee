@@ -178,8 +178,6 @@ entries:
   - presentation_execution_scope
   policy:
     actions:
-    - process.spawn
-    - process.host
     - process.send
     - process.registry.lookup
     - process.registry.register
@@ -191,9 +189,9 @@ entries:
     - bee.apps.session_present
     resources: '*'
     expression: (action == "process.security" && resource == "security") || (action == "security.actor.create" && resource matches "^bee[.]application:[0-9a-f]{32}:([0-9a-f]{64}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
-      || (action == "process.context" && resource == "bee.workspace_id") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner")
-      || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$")
-      || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:get",
+      || (action == "process.context" && resource == "bee.workspace_id") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id)
+      || action == "process.send" || (action == "process.registry.lookup" && resource == "bee.harness.presentation") || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$")
+      || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.](viewer|launch)/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.threads.sessions.binding:get",
       "bee.apps:open_call", "bee.credentials.binding:configuration_setup", "bee.harness.binding:setup", "bee.harness.service:open", "bee.threads.sessions.binding:restore", "bee.threads.sessions.binding:launch_prompt", "bee.threads.sessions.binding:idle_check"])
     effect: allow
 - name: presentation_owner_policy
@@ -204,6 +202,7 @@ entries:
     actions:
     - process.spawn
     - process.spawn.monitored
+    - process.spawn.linked
     - process.host
     - process.context
     - process.cancel
@@ -217,7 +216,7 @@ entries:
     - env.get
     - funcs.call
     resources: '*'
-    expression: (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action == "funcs.call" && resource == "bee.threads.sessions.binding:idle_check") || (action in ["process.spawn", "process.spawn.monitored"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
+    expression: (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action == "funcs.call" && resource == "bee.threads.sessions.binding:idle_check") || (action in ["process.spawn", "process.spawn.monitored", "process.spawn.linked"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
       ["process.context", "process.cancel", "tty.create", "tty.mount", "tty.observe", "tty.input", "tty.resize"] || ((action == "process.registry.register" || action == "process.registry.unregister") &&
       resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$")
     effect: allow
@@ -254,4 +253,17 @@ entries:
       (action == "bee.gateway.manage" && resource == "bindings") ||
       (action == "process.registry.lookup" && resource matches "^bee[.]harness[.]carrier/attempt[-:][A-Za-z0-9_.:-]+$") ||
       action in ["process.send", "process.monitor"]
+    effect: allow
+- name: presentation_supervisor_policy
+  kind: security.policy.expr
+  policy:
+    actions: [process.context, process.security, process.spawn, process.spawn.monitored, process.spawn.linked, process.host, process.send, process.cancel, process.registry.register, process.registry.unregister, process.registry.lookup, security.actor.create, security.policy_group.get]
+    resources: '*'
+    expression: >-
+      action in ["process.context", "process.security", "process.send", "process.cancel", "security.actor.create"] ||
+      (action in ["process.spawn", "process.spawn.monitored", "process.spawn.linked"] && resource == "bee.harness.service:presentation_owner") ||
+      (action == "process.host" && resource == "bee:workers") ||
+      (action == "security.policy_group.get" && resource == "bee.harness.security:presentation_execution_scope") ||
+      (action in ["process.registry.register", "process.registry.unregister"] && resource == "bee.harness.presentation") ||
+      (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|launch)/[0-9a-f-]+$")
     effect: allow

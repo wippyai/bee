@@ -1,3 +1,5 @@
+local settle_types = require("settle_types")
+local checkpoint_types = require("checkpoint_types")
 -- MIT. The carrier machine: one attempt from plan to receipt, expressed as
 -- steps over an injected IO so the same code runs in the production
 -- process and under a test harness that stops it between steps. Every
@@ -131,7 +133,7 @@ local function placement_observation(io: IO, session: Session, attempt: placemen
         data = {type = "extension", event_name = "bee.placement.attempt", event_revision = "1", payload_json = payload}}}
     return M.commit(io, session, {record})
 end
-local function new_session(plan: Plan, turn_id: string, epoch: integer, revision: integer, point: checkpoint.Checkpoint): Session
+local function new_session(plan: Plan, turn_id: string, epoch: integer, revision: integer, point: checkpoint_types.Checkpoint): Session
     local decoder = stream_json.new(M.MAX_FRAME_BYTES)
     decoder.framer.carry = point.carry.stdout
     decoder.index = point.envelope_index
@@ -748,7 +750,7 @@ function M.stop_session(io: IO, session: Session): (string, string?)
     if stop_error then return "none", stop_error end
     return "stopping", nil
 end
-local function evidence_of(session: Session, drain_elapsed: boolean): settle.Evidence
+local function evidence_of(session: Session, drain_elapsed: boolean): settle_types.Evidence
     local delivery_ended = session.runner == nil or session.runner_ended == true
     return {terminal = session.terminal, stream_ended = session.stream_ended, exit = session.exit, drained = M.drained(session) or (delivery_ended and drain_elapsed),
         exit_codes_trustworthy = session.plan.exit_codes_trustworthy}
@@ -758,7 +760,7 @@ end
 -- settlement records end the attempt.
 function M.ready_to_settle(session: Session, drain_elapsed: boolean): boolean
     if session.settled then return false end
-    local decided: settle.Settlement? = nil
+    local decided: settle_types.Settlement? = nil
     if session.start_cancelled then decided = {outcome = "cancelled", reason = "explicit stop before child creation", exit_reconciled = false}
     elseif session.start_failure then decided = {outcome = "failed", reason = session.start_failure, exit_reconciled = false}
     else decided = settle.decide(evidence_of(session, drain_elapsed)) end
@@ -866,7 +868,7 @@ function M.close(io: IO, session: Session): (placement_types.Attempt?, string?)
     end
     return attempt, nil
 end
-local function pending_write(session: Session, write_id: string): checkpoint.PendingWrite?
+local function pending_write(session: Session, write_id: string): checkpoint_types.PendingWrite?
     for _, pending in ipairs(session.checkpoint.pending_writes) do
         if pending.write_id == write_id then return pending end
     end
@@ -936,9 +938,9 @@ function M.close_exchanges(io: IO, session: Session, drain_elapsed: boolean): (b
     return permission_exchange.close(permission_context(io, session))
 end
 
-function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Settlement?, string?)
+function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle_types.Settlement?, string?)
     if session.settled then return session.settled, nil end
-    local decided: settle.Settlement? = nil
+    local decided: settle_types.Settlement? = nil
     if session.start_failure then decided = {outcome = "failed", reason = session.start_failure, exit_reconciled = false}
     else decided = settle.decide(evidence_of(session, drain_elapsed)) end
     if not decided then return nil, nil end
@@ -950,7 +952,7 @@ function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Set
     if session.output ~= "complete" then
         reason = reason .. "; output " .. session.output .. ", so the ended streams do not prove complete output"
     end
-    local decision: settle.Settlement = {outcome = decided.outcome, answer = decided.answer, resume_ref = decided.resume_ref, reason = reason, exit_reconciled = decided.exit_reconciled}
+    local decision: settle_types.Settlement = {outcome = decided.outcome, answer = decided.answer, resume_ref = decided.resume_ref, reason = reason, exit_reconciled = decided.exit_reconciled}
     local closed_all, close_error = M.close_exchanges(io, session, drain_elapsed)
     if close_error then return nil, close_error end
     if not closed_all then return nil, nil end

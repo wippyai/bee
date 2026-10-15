@@ -1,3 +1,4 @@
+local vocabulary = require("vocabulary")
 -- MIT. Typed driver configuration delivery under an empty callee scope.
 local hash = require("hash")
 local json = require("json")
@@ -25,15 +26,6 @@ M.GATEWAY_PROVIDER_REF = "bee.gateway.api:gateway_endpoint"
 M.LOGIN_PROVIDER_REF = "bee:provider_login"
 M.OPTIONS_PROVIDER_REF = "bee:profile_options"
 M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
-type Object = {[string]: unknown}
-type SecretField = {path: {string}, environment: string, prefix: string}
-type JsonOperation = {kind: "default" | "insert" | "append" | "set", path: {string}}
-type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}, append_text: boolean?} | {kind: "json_patch" | "toml_patch", base_path: string, operations: {JsonOperation}}
-type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
-type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
-type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
-type Delivery = {environment: {[string]: string}?,arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
-type Request = {placement_profile_ref: string?, option_provenance: Object?, configure_renderer: string?, option_values: Object?, context: string?,instructions_path: string?, instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, private_home: boolean?, attempt_id: string?, fixture: boolean}
 
 -- Profile guidance is separate from a turn brief and grants no authority.
 M.instructions = instructions.decode
@@ -56,7 +48,7 @@ function M.endpoint(value: unknown, allow_loopback: boolean, field: string?): (s
     end
     return url, nil
 end
-function M.instruction_builder(value: unknown): (InstructionBuilder?, string?)
+function M.instruction_builder(value: unknown): (vocabulary.InstructionBuilder?, string?)
     if value == nil then return nil, nil end
     local item = bounds.object(value)
     if not item then return nil, "instruction_builder must be an object" end
@@ -77,7 +69,7 @@ local function environment_name(value: unknown, label: string): (string?, string
     if not name or not name:match("^[A-Z][A-Z0-9_]*$") then return nil, label .. " must be an environment name" end
     return name, nil
 end
-local function decode_gateway(value: unknown): (GatewayInput?, string?)
+local function decode_gateway(value: unknown): (vocabulary.GatewayInput?, string?)
     local item = bounds.object(value)
     if not item then return nil, "configuration request.gateway must be an object" end
     local unexpected = bounds.fields(item, {"endpoint", "action_id", "tools", "hooks", "token_environment", "hook_token_environment", "hook_command"})
@@ -114,10 +106,10 @@ local function decode_gateway(value: unknown): (GatewayInput?, string?)
             return nil, "configuration request.gateway.hook_command requires hooks and an absolute bounded path"
         end
     end
-    local result: GatewayInput = {endpoint = endpoint, action_id = action_id, tools = tools, hooks = hooks, token_environment = token, hook_token_environment = hook_token, hook_command = hook_command}
+    local result: vocabulary.GatewayInput = {endpoint = endpoint, action_id = action_id, tools = tools, hooks = hooks, token_environment = token, hook_token_environment = hook_token, hook_command = hook_command}
     return result, nil
 end
-function M.decode_request(value: unknown): (Request?, string?)
+function M.decode_request(value: unknown): (vocabulary.Request?, string?)
     local request = bounds.object(value)
     if not request then return nil, "configuration request must be an object" end
     local unexpected = bounds.fields(request, {"placement_profile_ref", "option_provenance", "configure_renderer", "provider_ref", "provider", "gateway", "home_directory", "private_home", "attempt_id", "fixture", "instructions", "instruction_builder", "option_values", "context"})
@@ -131,21 +123,21 @@ function M.decode_request(value: unknown): (Request?, string?)
     if type(request.fixture) ~= "boolean" then return nil, "configuration request.fixture must be a boolean" end
     local instructions, instructions_error = M.instructions(request.instructions)
     if instructions_error then return nil, instructions_error end
-    local instruction_builder: InstructionBuilder? = nil
+    local instruction_builder: vocabulary.InstructionBuilder? = nil
     if request.instruction_builder ~= nil then
         local builder_error: string?
         instruction_builder, builder_error = M.instruction_builder(request.instruction_builder)
         if not instruction_builder then return nil, builder_error end
     end
     local provider_ref: string? = nil
-    local provider: Object? = nil
+    local provider: vocabulary.Object? = nil
     if request.provider_ref ~= nil then
         provider_ref = bounds.id(request.provider_ref)
         if not provider_ref then return nil, "configuration request.provider_ref is not an identifier" end
         provider = bounds.object(request.provider)
         if not provider then return nil, "configuration request.provider must be an object when provider_ref is set" end
     elseif request.provider ~= nil then return nil, "configuration request.provider needs provider_ref" end
-    local gateway: GatewayInput? = nil
+    local gateway: vocabulary.GatewayInput? = nil
     if request.gateway ~= nil then
         local gateway_error: string?
         gateway, gateway_error = decode_gateway(request.gateway)
@@ -187,7 +179,7 @@ local function sequence(value: unknown, label: string, maximum: integer): ({unkn
     end
     return list, nil
 end
-function M.decode_file(value: unknown): (Configuration?, string?)
+function M.decode_file(value: unknown): (vocabulary.Configuration?, string?)
     local item = bounds.object(value)
     if not item then return nil, "configuration must be an object" end
     local unexpected = bounds.fields(item, {"revision", "path", "content", "digest", "provider_ref", "secret_fields", "composition"})
@@ -207,7 +199,7 @@ function M.decode_file(value: unknown): (Configuration?, string?)
     if digest ~= actual then return nil, "configuration.digest does not match content" end
     local provider_ref = bounds.id(item.provider_ref)
     if not provider_ref then return nil, "configuration.provider_ref is not an identifier" end
-    local result: Configuration = {revision = revision, path = path, content = content, digest = digest, provider_ref = provider_ref}
+    local result: vocabulary.Configuration = {revision = revision, path = path, content = content, digest = digest, provider_ref = provider_ref}
     if item.composition ~= nil then
         local composition = bounds.object(item.composition)
         if not composition then return nil, "invalid configuration composition" end
@@ -233,7 +225,7 @@ function M.decode_file(value: unknown): (Configuration?, string?)
             if bounds.fields(composition, {"kind", "base_path", "operations"}) then return nil, "invalid configuration composition" end
             local raw_operations, operations_error = sequence(composition.operations, "configuration composition operations", 16)
             if not raw_operations or #raw_operations == 0 then return nil, operations_error or "configuration composition operations are empty" end
-            local operations: {JsonOperation} = {}
+            local operations: {vocabulary.JsonOperation} = {}
             local seen: {[string]: boolean} = {}
             for index, raw in ipairs(raw_operations) do
                 local operation = bounds.object(raw)
@@ -269,7 +261,7 @@ function M.decode_file(value: unknown): (Configuration?, string?)
     if item.secret_fields ~= nil then
         local fields, fields_error = sequence(item.secret_fields, "configuration.secret_fields", 8)
         if not fields or #fields == 0 then return nil, fields_error or "configuration.secret_fields is empty" end
-        local selected: {SecretField} = {}
+        local selected: {vocabulary.SecretField} = {}
         local seen: {[string]: boolean} = {}
         for _, value in ipairs(fields) do
             local field = bounds.object(value)
@@ -294,7 +286,7 @@ function M.decode_file(value: unknown): (Configuration?, string?)
     end
     return result, nil
 end
-function M.decode_delivery(value: unknown): (Delivery?, string?)
+function M.decode_delivery(value: unknown): (vocabulary.Delivery?, string?)
     local item = bounds.object(value)
     if not item then return nil, "delivery must be an object" end
     local unexpected = bounds.fields(item, {"arguments", "files", "environment"})
@@ -323,7 +315,7 @@ function M.decode_delivery(value: unknown): (Delivery?, string?)
         if argument_bytes > M.MAX_DELIVERY_ARGUMENT_BYTES then return nil, "delivery.arguments exceeds " .. tostring(M.MAX_DELIVERY_ARGUMENT_BYTES) .. " bytes" end
         arguments[index] = value
     end
-    local files: {Configuration} = {}
+    local files: {vocabulary.Configuration} = {}
     local paths: {[string]: boolean} = {}
     local file_bytes = 0
     local raw_files, files_error = sequence(item.files, "delivery.files", M.MAX_DELIVERY_FILES)
@@ -341,7 +333,7 @@ function M.decode_delivery(value: unknown): (Delivery?, string?)
 end
 -- Native placement appends this private field after validating the selected
 -- driver profile. Provider configure replies cannot choose the adapter.
-function M.decode_stored_delivery(value: unknown): (Delivery?, string?)
+function M.decode_stored_delivery(value: unknown): (vocabulary.Delivery?, string?)
     local item = bounds.object(value)
     if not item then return nil, "delivery must be an object" end
     local unexpected = bounds.fields(item, {"arguments", "files", "environment", "git_writable_roots_adapter"})
@@ -354,10 +346,10 @@ function M.decode_stored_delivery(value: unknown): (Delivery?, string?)
     end
     local decoded, decode_error = M.decode_delivery({environment = item.environment, arguments = item.arguments, files = item.files})
     if not decoded then return nil, decode_error end
-    local retained: Delivery = {environment = decoded.environment, arguments = decoded.arguments, files = decoded.files, git_writable_roots_adapter = adapter}
+    local retained: vocabulary.Delivery = {environment = decoded.environment, arguments = decoded.arguments, files = decoded.files, git_writable_roots_adapter = adapter}
     return retained, nil
 end
-local function prompt_file(file: Configuration, instructions: string): boolean
+local function prompt_file(file: vocabulary.Configuration, instructions: string): boolean
     if file.secret_fields then return false end
     if file.content == instructions then return true end
     local composition = file.composition
@@ -380,7 +372,7 @@ local function prompt_file(file: Configuration, instructions: string): boolean
     end
     return matched
 end
-local function rendered_value(render: Object, value: unknown, values: Object): unknown
+local function rendered_value(render: vocabulary.Object, value: unknown, values: vocabulary.Object): unknown
     local token = bounds.object(render.value)
     if not token then return nil end
     if token.literal ~= nil then return token.literal end
@@ -389,7 +381,7 @@ local function rendered_value(render: Object, value: unknown, values: Object): u
     if name then return (bounds.object(values.env) or {})[name] end
     return value
 end
-local function declared_environment(name: string, actual: string, fields: Object, values: Object, context: string): boolean
+local function declared_environment(name: string, actual: string, fields: vocabulary.Object, values: vocabulary.Object, context: string): boolean
     for field_name, raw in pairs(fields) do
         local field = bounds.object(raw)
         local value = values[field_name]
@@ -408,10 +400,10 @@ local function declared_environment(name: string, actual: string, fields: Object
     end
     return false
 end
-local function declared_file(file: Configuration, fields: Object, values: Object, context: string): boolean
+local function declared_file(file: vocabulary.Configuration, fields: vocabulary.Object, values: vocabulary.Object, context: string): boolean
     if file.secret_fields then return false end
-    local rebuilt: Object = {}
-    local document: Object? = nil
+    local rebuilt: vocabulary.Object = {}
+    local document: vocabulary.Object? = nil
     local matched = false
     local paths: {[string]: string} = {}
     for name, raw in pairs(fields) do
@@ -462,7 +454,7 @@ local function declared_file(file: Configuration, fields: Object, values: Object
     end
     return true
 end
-function M.decode_reply(value: unknown, selected_provider: string?, gateway: GatewayInput?, instructions: string?, private_home: boolean?, option_values: Object?, option_fields: Object?, context: string?, home_directory: string?): (Delivery?, string?)
+function M.decode_reply(value: unknown, selected_provider: string?, gateway: vocabulary.GatewayInput?, instructions: string?, private_home: boolean?, option_values: vocabulary.Object?, option_fields: vocabulary.Object?, context: string?, home_directory: string?): (vocabulary.Delivery?, string?)
     local reply = bounds.object(value)
     if not reply then return nil, "driver configure: reply must be an object" end
     local unexpected = bounds.fields(reply, {"ok", "error", "delivery"})
@@ -478,7 +470,7 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: Gat
     local delivery, delivery_error = M.decode_delivery(reply.delivery)
     if not delivery then return nil, "driver configure: " .. tostring(delivery_error) end
     if selected_provider and #delivery.arguments == 0 and #delivery.files == 0 then return nil, "driver configure omitted the selected provider delivery" end
-    local selected_values: Object = {}
+    local selected_values: vocabulary.Object = {}
     for name, value in pairs(option_values or {}) do selected_values[name] = value end
     if instructions then selected_values.system_prompt_append = instructions end
     if instructions and home_directory then
@@ -541,7 +533,7 @@ function M.digest(binding_ref: string?, request_value: unknown, target: string):
     if hash_error or not digest then return nil, "configuration digest failed" end
     return digest, nil
 end
-function M.call(binding_ref: string?, target: string, request_value: unknown): (Delivery?, string?)
+function M.call(binding_ref: string?, target: string, request_value: unknown): (vocabulary.Delivery?, string?)
     local raw, err = funcs.call("bee.driver.binding:configure", {binding_ref = binding_ref, target = target, request = request_value})
     if err then return nil, tostring(err) end
     local reply = bounds.object(raw)
@@ -549,12 +541,12 @@ function M.call(binding_ref: string?, target: string, request_value: unknown): (
     if type(reply.error) == "string" then return nil, reply.error end
     return M.decode_delivery(reply.delivery)
 end
-function M.execute(binding_ref: string?, target: string, request_value: unknown): (Delivery?, string?)
+function M.execute(binding_ref: string?, target: string, request_value: unknown): (vocabulary.Delivery?, string?)
     local request, request_error = M.decode_request(request_value)
     if not request then return nil, request_error end
     if binding_ref ~= nil and not bounds.id(binding_ref) then return nil, "driver binding is not an identifier" end
     local configure_renderer: string? = nil
-    local option_fields: Object? = nil
+    local option_fields: vocabulary.Object? = nil
     local pinned, pin_error = registry.snapshot()
     if binding_ref then
         if not pinned or pin_error then return nil, "configuration registry snapshot is unavailable" end

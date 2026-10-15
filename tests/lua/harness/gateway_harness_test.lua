@@ -1,3 +1,4 @@
+local configuration_types = require("configuration_types")
 -- MIT. The gateway against the real harnesses through placement: the
 -- version-recorded Claude Code and Codex executables launch under a policy
 -- that admits gateway tools, find the host-approved configuration in
@@ -164,20 +165,20 @@ local function endpoint_address(): string
     if not entry then error("gateway endpoint entry") end
     return tostring((assert(bounds.object(entry.data))).address)
 end
-local function gateway_input(address: string, action_id: string, hooks: {string}?): configuration.GatewayInput
+local function gateway_input(address: string, action_id: string, hooks: {string}?): configuration_types.GatewayInput
     return {endpoint = address, action_id = action_id, tools = {"thread_read", "thread_wait"}, hooks = hooks or {},
         token_environment = GATEWAY_TOKEN, hook_token_environment = hooks and #hooks > 0 and HOOK_TOKEN or nil}
 end
-local function codex_gateway(input: configuration.GatewayInput): codex_configuration.Gateway
+local function codex_gateway(input: configuration_types.GatewayInput): codex_configuration.Gateway
     return {endpoint = input.endpoint, action_id = input.action_id, tools = input.tools, hooks = input.hooks,
         token_environment = input.token_environment, hook_token_environment = input.hook_token_environment}
 end
-local function claude_delivery(input: configuration.GatewayInput): configuration.Delivery
+local function claude_delivery(input: configuration_types.GatewayInput): configuration_types.Delivery
     local delivery, delivery_error = configuration.call("bee.driver.claude.binding:binding", "bee.driver.claude.binding:configure", {fixture = false, gateway = input})
     if not delivery then error(tostring(delivery_error)) end
     return delivery
 end
-local function append_delivery(argv: {string}, delivery: configuration.Delivery)
+local function append_delivery(argv: {string}, delivery: configuration_types.Delivery)
     for _, item in ipairs(delivery.arguments) do argv[#argv + 1] = item end
 end
 local function open_gateway()

@@ -1,3 +1,4 @@
+local configuration_types = require("configuration_types")
 -- MIT. One external driver implementation; provider behavior is selected by
 -- a strictly decoded registry descriptor.
 local bounds = require("bounds")
@@ -17,7 +18,7 @@ type Object = {[string]: unknown}
 type ProtocolStep = {observations: {Object}, terminal: unknown?}
 type Descriptor = descriptor_reader.Descriptor
 type Request = {[string]: descriptor_reader.OptionValue?} & {profile_id: string, brief: string}
-type ConfigureRequest = configuration.Request
+type ConfigureRequest = configuration_types.Request
 type ConfigureRenderer = (ConfigureRequest) -> Object
 type ProviderHomeFileKind = "login" | "config" | "state"
 type LaunchAPI = {

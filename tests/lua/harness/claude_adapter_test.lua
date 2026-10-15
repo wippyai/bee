@@ -1,3 +1,4 @@
+local adapter_types = require("adapter_types")
 -- MIT. The real Claude permission adapter, pure: it decodes from its
 -- entry, the Claude profiles pin its exact digest, the captured control
 -- request is recognized with the request id as the response correlation
@@ -40,7 +41,7 @@ local function read_file(path: string): string
     executor:release()
     return content
 end
-local function real_adapter(): adapter.Adapter
+local function real_adapter(): adapter_types.Adapter
     local entry = registry.get(ADAPTER)
     if not entry then error("adapter entry") end
     local decoded, err = adapter.decode(ADAPTER, (assert(bounds.object(entry.data))).adapter)
@@ -84,7 +85,7 @@ local function define_tests()
         end)
         test.it("recognizes the captured control request and acknowledges through the tool use id", function()
             local observations = observations_of(read_file(capture_path()))
-            local request: adapter.Request? = nil
+            local request: adapter_types.Request? = nil
             local request_index = 0
             for index, observation in ipairs(observations) do
                 if not request then

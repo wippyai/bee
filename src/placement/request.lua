@@ -1,3 +1,4 @@
+local login_evidence_types = require("login_evidence_types")
 -- MIT. Launch request decoding: exact shapes, bounded sizes, every reference
 -- an identifier, every resource named once, the launch's directory
 -- references resolved against the grants. The digest covers the canonical
@@ -261,7 +262,7 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
         if not command or command == "" then return nil, "launch.login.command must be a bounded single line" end
         local files, files_error = decode_files(declared.files, "launch.login.files", declared.any_of == nil)
         if not files then return nil, files_error end
-        local alternatives: {login_evidence.Evidence}? = nil
+        local alternatives: {login_evidence_types.Evidence}? = nil
         if declared.any_of ~= nil then
             local evidence, evidence_error = login_evidence.decode({command = command, any_of = declared.any_of})
             if not evidence then return nil, evidence_error end

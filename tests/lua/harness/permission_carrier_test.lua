@@ -1,3 +1,4 @@
+local adapter_types = require("adapter_types")
 -- MIT. The carrier's permission exchange against the fixture harness: the
 -- request becomes a checkpointed intent, the approval is asked under its
 -- idempotency key, the decision is consumed under the current authority
@@ -116,7 +117,7 @@ local function apply(entry: Object)
     local applied, err = changes:apply()
     if not applied then error("apply " .. tostring(entry.id) .. ": " .. tostring(err)) end
 end
-local function fixture_adapter(): adapter.Adapter
+local function fixture_adapter(): adapter_types.Adapter
     local entry = registry.get(ADAPTER)
     if not entry then error("fixture adapter entry") end
     local data = assert(bounds.object(entry.data))

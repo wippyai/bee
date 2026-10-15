@@ -1,3 +1,4 @@
+local configuration_types = require("configuration_types")
 -- SPDX-License-Identifier: MIT
 local test = require("test")
 local render = require("render")
@@ -19,7 +20,7 @@ local function define_tests()
     test.describe("Descriptor option delivery", function()
         test.it("captures Codex container configuration and rejects the same options on native", function()
             local options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true, model_provider = "openai"}
-            local request: configuration.Request = {fixture = true, private_home = true, context = "first_turn", option_values = options,
+            local request: configuration_types.Request = {fixture = true, private_home = true, context = "first_turn", option_values = options,
                 placement_profile_ref = "bee.placement.docker.profiles:coding"}
             local delivery, err = configuration.call("bee.driver.codex.binding:binding", "bee.driver.codex.binding:configure", request)
             assert(delivery, tostring(err))
@@ -105,7 +106,7 @@ local function define_tests()
             for _, format in ipairs({"json", "toml"}) do
                 local empty = assert(hash.sha256(""))
                 local path = "provider/config." .. format
-                local base: configuration.Configuration = {revision = "test@1", path = path, content = "", digest = empty,
+                local base: configuration_types.Configuration = {revision = "test@1", path = path, content = "", digest = empty,
                     provider_ref = configuration.LOGIN_PROVIDER_REF, composition = {kind = "copy", base_path = "provider/base." .. format}}
                 local files = assert(render.files({settings = field(format, {"agent", "guidance"}, "append")}, {settings = "new"}, "first_turn", {base}))
                 local decoded = assert(configuration.decode_file(files[1]))
@@ -126,7 +127,7 @@ local function define_tests()
         end)
         test.it("fences environment replies to selected declarations and defaults", function()
             local fields: Object = {mode = {default = false, render = {{kind = "env", contexts = {"first_turn"}, name = "PROVIDER_MODE", value = {field = "provider.options.mode"}}}}}
-            local function reply(values: Object, environment: Object, context: string): configuration.Delivery?
+            local function reply(values: Object, environment: Object, context: string): configuration_types.Delivery?
                 return configuration.decode_reply({ok = true, delivery = {arguments = {}, files = {}, environment = environment}},
                     nil, nil, nil, false, values, fields, context)
             end
@@ -144,7 +145,7 @@ local function define_tests()
                 local fields: Object = {settings = declaration}
                 local values: Object = {settings = {enabled = false}}
                 local files = assert(render.files(fields, values, "first_turn", {}))
-                local function reply(): configuration.Delivery?
+                local function reply(): configuration_types.Delivery?
                     return configuration.decode_reply({ok = true, delivery = {arguments = {}, files = files}},
                         nil, nil, nil, false, values, fields, "first_turn")
                 end
@@ -186,7 +187,7 @@ local function define_tests()
             local reply: Object = {}
             if selected then
                 launch = universal.prepare(ref)({profile_id = "batch", brief = "Fixture", extra_mode = "careful", settings = {enabled = false}})
-                reply = universal.configure("fixture", {fixture = function(_request: configuration.Request): Object return {ok = true, delivery = {arguments = {}, files = {}}} end}, ref)
+                reply = universal.configure("fixture", {fixture = function(_request: configuration_types.Request): Object return {ok = true, delivery = {arguments = {}, files = {}}} end}, ref)
                     ({fixture = false, option_values = {extra_mode = "careful", settings = {enabled = false}}})
             end
             entry.data = assert(json.decode(original))

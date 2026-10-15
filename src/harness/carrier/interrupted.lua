@@ -1,3 +1,4 @@
+local checkpoint_types = require("checkpoint_types")
 -- MIT. Settle an interrupted window only after native exit is observed and
 -- recoverable hook deliveries have drained under a fresh carrier epoch.
 local continuation = require("continuation")
@@ -12,7 +13,7 @@ local time = require("time")
 local uuid = require("uuid")
 local M = {}
 type RawCall = (string, unknown) -> (unknown, string?)
-type Resume = (hooks.Config, checkpoint.Checkpoint?, integer) -> (hooks.State?, string?)
+type Resume = (hooks.Config, checkpoint_types.Checkpoint?, integer) -> (hooks.State?, string?)
 local function placement_target(request: continuation.Request, method: string): string?
     return request.placement_methods[method]
 end

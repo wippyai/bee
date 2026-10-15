@@ -1,3 +1,5 @@
+local checkpoint_types = require("checkpoint_types")
+local permission_types = require("permission_types")
 -- MIT. Carrier output framing, normalization and permission intake.
 local json = require("json")
 local permission = require("permission")
@@ -196,7 +198,7 @@ local function revalidate_permission(io: IO, session: Session): string?
     if current.adapter.digest ~= exchange.adapter.digest then return "permission adapter changed" end
     if current.acceptance_digest ~= exchange.acceptance_digest then return "acceptance record changed" end
     for _, state in ipairs(session.checkpoint.permissions) do
-        local found: permission.Request = {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id,
+        local found: permission_types.Request = {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id,
             acknowledgment_id = state.acknowledgment_id or state.correlation_id, tool_name = state.tool_name,
             input_digest = state.input_digest, input = {}, prompt = state.prompt}
         local proposal_digest = digest_of(permission.proposal(exchange.adapter, {action_id = session.plan.request.action_id,
@@ -246,7 +248,7 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
         io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
         return true, nil
     end
-    local protocol_writes: {checkpoint.PendingWrite} = {}
+    local protocol_writes: {checkpoint_types.PendingWrite} = {}
     local protocol_records: {Object} = {}
     local prior_writes = #session.checkpoint.pending_writes
     local before_state, before_state_error = snapshot_state(session.normalizer)
@@ -338,14 +340,14 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
                     end
                     local write_id = "protocol:" .. tostring(envelope.index) .. ":" .. tostring(write_index)
                     local digest = assert(digest_of(line))
-                    local existing: checkpoint.PendingWrite? = nil
+                    local existing: checkpoint_types.PendingWrite? = nil
                     for _, item in ipairs(session.checkpoint.pending_writes) do
                         if item.write_id == write_id then existing = item end
                     end
                     if existing and (existing.input_digest ~= digest or existing.data ~= line) then return refuse("protocol write identity changed on replay") end
                     if not existing then
                         if #session.checkpoint.pending_writes + #protocol_writes >= checkpoint.MAX_PENDING_WRITES then return refuse("too many protocol writes await acknowledgment") end
-                        local pending: checkpoint.PendingWrite = {write_id = write_id, input_digest = digest, data = line, dispatched = false}
+                        local pending: checkpoint_types.PendingWrite = {write_id = write_id, input_digest = digest, data = line, dispatched = false}
                         protocol_writes[#protocol_writes + 1] = pending
                     end
                     protocol_records[#protocol_records + 1] = {source = "bee", body = {type = "extension", event_key = "write:" .. write_id .. ":intended",
@@ -434,7 +436,7 @@ local function control_record(session: Session, write_id: string, phase: string,
     return {source = "bee", body = {type = "extension", event_key = "write:" .. write_id .. ":" .. phase, data = {type = "extension", event_name = "bee.carrier.write", event_revision = "1", payload_json = json.encode(payload)}}}
 end
 local function forget_write(session: Session, write_id: string)
-    local kept: {checkpoint.PendingWrite} = {}
+    local kept: {checkpoint_types.PendingWrite} = {}
     for _, pending in ipairs(session.checkpoint.pending_writes) do
         if pending.write_id ~= write_id then kept[#kept + 1] = pending end
     end
@@ -460,7 +462,7 @@ function M.write(io: IO, session: Session, write_id: string, data: string): (boo
     if #session.checkpoint.pending_writes >= checkpoint.MAX_PENDING_WRITES then return false, "too many writes await acknowledgment" end
     local digest, digest_error = digest_of(data)
     if not digest then return false, digest_error end
-    local pending: checkpoint.PendingWrite = {write_id = write_id, input_digest = digest, data = data, dispatched = false}
+    local pending: checkpoint_types.PendingWrite = {write_id = write_id, input_digest = digest, data = data, dispatched = false}
     session.checkpoint.pending_writes[#session.checkpoint.pending_writes + 1] = pending
     local intended, intended_error = M.commit(io, session, {control_record(session, write_id, "intended", {input_digest = digest})})
     if not intended then

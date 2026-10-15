@@ -1,19 +1,19 @@
+local vocabulary = require("vocabulary")
 -- MIT. Line framing for JSONL streams: chunks arrive fragmented, lines are
 -- reassembled, and a line that outgrows the bound is an error, not a
 -- silently truncated frame.
 local M = {}
-type Framer = {carry: string, frames: integer, overflow: boolean, limit: integer}
 M.MAX_FRAME_BYTES = 1048576
 -- A framer bounds its frames; a caller that must checkpoint the carry
 -- passes the bound it can store.
-function M.new(limit: integer?): Framer
+function M.new(limit: integer?): vocabulary.Framer
     local bound = M.MAX_FRAME_BYTES
     if limit and limit > 0 and limit < bound then bound = limit end
     return {carry = "", frames = 0, overflow = false, limit = bound}
 end
 -- Feeds one chunk; returns the complete lines it closed. A frame that
 -- exceeds the bound poisons the framer until reset.
-function M.feed(framer: Framer, chunk: string): ({string}?, string?)
+function M.feed(framer: vocabulary.Framer, chunk: string): ({string}?, string?)
     if framer.overflow then return nil, "frame exceeds " .. tostring(framer.limit) .. " bytes" end
     local lines: {string} = {}
     local data = framer.carry .. chunk
@@ -43,7 +43,7 @@ function M.feed(framer: Framer, chunk: string): ({string}?, string?)
     return lines, nil
 end
 -- Closes the stream: a trailing partial line is reported, not dropped.
-function M.finish(framer: Framer): (string?, string?)
+function M.finish(framer: vocabulary.Framer): (string?, string?)
     if framer.overflow then return nil, "frame exceeds " .. tostring(framer.limit) .. " bytes" end
     if #framer.carry == 0 then return nil, nil end
     local partial = framer.carry

@@ -6,14 +6,14 @@ entries:
   source: file://types.lua
   imports:
     request_types: bee.harness:request
-    classify: bee.harness.catalog:classify
+    classify: bee.harness:classification
     driver_types: bee.driver:types
     placement_types: bee.placement:types
-    policy: bee.harness.carrier:policy
-    permission: bee.harness.permission:adapter
-    checkpoint: bee.harness.carrier:checkpoint
-    stream_json: bee.driver.transport:stream_json
-    settle: bee.harness.carrier:settle
+    policy: bee.harness:policy_types
+    permission: bee.harness:permission_types
+    checkpoint: bee.harness:checkpoint_types
+    stream_json: bee.driver:stream_types
+    settle: bee.harness:settlement_types
     record_types: bee.threads:record_types
 - name: profiles
   kind: contract.definition
@@ -27,3 +27,25 @@ entries:
   imports:
     placement_types: bee.placement:types
     record_types: bee.threads:record_types
+- name: classification
+  kind: library.lua
+  source: file://classification.lua
+- name: policy_types
+  kind: library.lua
+  source: file://policy_types.lua
+  imports:
+    placement_types: bee.placement:types
+    configuration: bee.driver:configuration_types
+- name: checkpoint_types
+  kind: library.lua
+  source: file://checkpoint_types.lua
+  imports:
+    driver_types: bee.driver:types
+- name: settlement_types
+  kind: library.lua
+  source: file://settlement_types.lua
+  imports:
+    driver_types: bee.driver:types
+- name: permission_types
+  kind: library.lua
+  source: file://permission_types.lua

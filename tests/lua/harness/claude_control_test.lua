@@ -1,3 +1,4 @@
+local adapter_types = require("adapter_types")
 -- MIT. The carrier's permission exchange against the real Claude
 -- executable: the harness runs through placement with the driver's
 -- exchange launch, a scripted loopback endpoint answers one Bash tool_use,
@@ -102,7 +103,7 @@ local function capture_digest(): string
     if not sum then error("digest the capture: " .. tostring(hash_error)) end
     return sum
 end
-local function real_adapter(): adapter.Adapter
+local function real_adapter(): adapter_types.Adapter
     local entry = registry.get(ADAPTER)
     if not entry then error("adapter entry") end
     local decoded, err = adapter.decode(ADAPTER, (assert(bounds.object(entry.data))).adapter)

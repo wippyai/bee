@@ -1,3 +1,4 @@
+local vocabulary = require("vocabulary")
 -- MIT. The launch policy: a host-selected protected entry that decides
 -- what a managed launch requires of its placement and binds executables.
 -- The caller and the driver never choose it; the owner pins its digest.
@@ -28,50 +29,6 @@ M.OVERRIDES = {"workdir", "thread", "placement"}
 -- The host enables a permission exchange by naming the adapter, the
 -- acceptance record and the proven fixture digest here; a production
 -- policy may only name the adapter the profile itself pins.
-type PermissionExchange = {adapter_ref: string, acceptance_ref: string, fixture_digest: string, approver_policy: string, poll_ms: integer, ttl_ms: integer}
-type EnvironmentResolver = (string) -> (string?, string?)
-type Policy = {
-    ref: string,
-    digest: string,
-    permission_exchange: PermissionExchange?,
-    permission_answers: string,
-    provider_ref: string?,
-    instructions: string?,
-    instruction_builder: configuration.InstructionBuilder?,
-    prepare_options: {[string]: unknown},
-    option_provenance: {[string]: unknown}?,
-    required_cleanup: placement_types.Capability,
-    required_exit_observation: placement_types.ExitObservation,
-    stop_grace_ms: integer,
-    drain_ms: integer,
-    runner_drain_ms: integer,
-    retain_ms: integer,
-    executables: {[string]: string},
-    environment: {[string]: string},
-    host_environment: {[string]: string},
-    allow_host_home: boolean,
-    -- gateway_tools names the gateway tools a launch under this policy is
-    -- admitted to; empty means the launch has no gateway binding.
-    gateway_tools: {string},
-    gateway_surface: {[string]: unknown}?,
-    -- agent_model_map approves framework agent models for this route: each
-    -- agent-declared model name maps to the driver model identifier the
-    -- launch carries. An agent model without a mapping is refused.
-    agent_model_map: {[string]: string},
-    -- agent_delegates lists the framework agent references a run under this
-    -- policy may delegate to. Empty means the run may delegate to nothing.
-    agent_delegates: {string},
-    -- gateway_ttl_ms bounds a gateway binding's life from admission.
-    gateway_ttl_ms: integer,
-    -- gateway_hooks names the hook events the launch reports to the gateway.
-    gateway_hooks: {string},
-    hook_command_ref: string?,
-    fixture: boolean,
-    placement_profiles: {string},
-    placement_binding: string?,
-    placement_options: {[string]: unknown}?,
-    allowed_overrides: {string},
-}
 local function decode_map(value: unknown, name: string, empty: boolean?): ({[string]: string}?, string?)
     local result: {[string]: string} = {}
     if value == nil then return result, nil end
@@ -88,7 +45,7 @@ end
 -- separate from registry interpolation: plain registry.entry data is opaque,
 -- and an absent optional component must make its policy unavailable rather
 -- than fail registry boot. The resolved value is included in the policy digest.
-local function decode_executable_env(value: unknown, executables: {[string]: string}, resolve: EnvironmentResolver): string?
+local function decode_executable_env(value: unknown, executables: {[string]: string}, resolve: vocabulary.EnvironmentResolver): string?
     if value == nil then return nil end
     local object = bounds.object(value)
     if not object then return "executable_env must be an object" end
@@ -116,7 +73,7 @@ local function optional_environment(ref: string): (string?, string?)
 end
 -- Host-selected nonsecret environment references are measured with the policy.
 -- Empty defaults mean the user has not set an override; leave that variable absent.
-local function decode_environment_refs(value: unknown, environment: {[string]: string}, host_environment: {[string]: string}, resolve: EnvironmentResolver): string?
+local function decode_environment_refs(value: unknown, environment: {[string]: string}, host_environment: {[string]: string}, resolve: vocabulary.EnvironmentResolver): string?
     if value == nil then return nil end
     local refs, refs_error = decode_map(value, "environment_refs")
     if not refs then return refs_error end
@@ -187,7 +144,7 @@ local function access_surface(raw: unknown, tools: {string}, seeds: {string}?): 
     if #requestable > 0 then composed.access = {policy = approver, traits = requestable} end
     return composed, nil
 end
-function M.decode(ref: string, entry: {[string]: unknown}, resolver: EnvironmentResolver?, selected: preferences.Value?, descriptor: descriptors.Descriptor?, placement_ref: string?): (Policy?, string?)
+function M.decode(ref: string, entry: {[string]: unknown}, resolver: vocabulary.EnvironmentResolver?, selected: preferences.Value?, descriptor: descriptors.Descriptor?, placement_ref: string?): (vocabulary.Policy?, string?)
     local meta = bounds.object(entry.meta) or {}
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
@@ -239,7 +196,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if observation == "eof_gated" and not fixture then return nil, ref .. ": eof_gated execution is permitted only in a fixture policy" end
     local _, profile_restrictions_error = preferences.decode_profile_restrictions(data.profile_restrictions)
     if profile_restrictions_error then return nil, ref .. ": " .. profile_restrictions_error end
-    local exchange: PermissionExchange? = nil
+    local exchange: vocabulary.PermissionExchange? = nil
     if data.permission_exchange ~= nil then
         local declared = bounds.object(data.permission_exchange)
         if not declared then return nil, ref .. ": permission_exchange must be an object" end
@@ -422,7 +379,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not declared or declared < 1000 or declared > 86400000 then return nil, ref .. ": gateway_ttl_ms must be between 1000 and 86400000" end
         gateway_ttl_ms = declared
     end
-    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, permission_answers = answer_mode, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, option_provenance = bounds.object(data.option_provenance), required_cleanup = required_cleanup, required_exit_observation = required_observation,
+    local decoded: vocabulary.Policy = {ref = ref, digest = digest, permission_exchange = exchange, permission_answers = answer_mode, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, option_provenance = bounds.object(data.option_provenance), required_cleanup = required_cleanup, required_exit_observation = required_observation,
         stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_profiles = placement_profiles, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end
@@ -444,7 +401,7 @@ function M.with_workspace(gateway_surface: SurfaceValue?, workspace_id: string):
     result.fixed_context = fixed
     return result
 end
-function M.load(ref: string): (Policy?, string?)
+function M.load(ref: string): (vocabulary.Policy?, string?)
     local entry, err = registry.get(ref)
     if err or not entry then return nil, "launch policy " .. ref .. " is not in the registry" end
     return M.decode(ref, entry)

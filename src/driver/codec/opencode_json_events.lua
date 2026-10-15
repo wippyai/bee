@@ -1,3 +1,4 @@
+local events_types = require("events_types")
 -- SPDX-License-Identifier: MIT
 local json = require("json")
 local events = require("events")
@@ -17,7 +18,7 @@ type State = {
     resumed: boolean,
     answer: string?,
     answer_truncated: boolean,
-    usage: events.Usage?,
+    usage: events_types.Usage?,
     error: Fault?,
     terminal: types.Terminal?,
 }
@@ -139,7 +140,7 @@ function M.decode_state(value: unknown): (State?, string?)
     if object.answer_truncated == true and answer ~= nil then
         return nil, "state.answer must be absent after truncation"
     end
-    local usage: events.Usage? = nil
+    local usage: events_types.Usage? = nil
     if object.usage ~= nil then
         local usage_error: string?
         usage, usage_error = values.usage(object.usage)
@@ -173,7 +174,7 @@ function M.decode_state(value: unknown): (State?, string?)
             resume_ref = bounds.id(terminal_object.resume_ref)
             if not resume_ref then return nil, "state.terminal.resume_ref is not an identifier" end
         end
-        local terminal_usage: events.Usage? = nil
+        local terminal_usage: events_types.Usage? = nil
         if terminal_object.usage ~= nil then
             local terminal_usage_error: string?
             terminal_usage, terminal_usage_error = values.usage(terminal_object.usage)

@@ -1,3 +1,5 @@
+local checkpoint_types = require("checkpoint_types")
+local permission_types = require("permission_types")
 -- SPDX-License-Identifier: MIT
 -- Durable permission decisions shared by stream carriers, executor turns and hooks.
 local json = require("json")
@@ -12,8 +14,8 @@ M.MAX_CONSUME_ATTEMPTS = 3
 type Object = {[string]: unknown}
 type Request = {owner_id: string, attempt_id: string, action_id: string, thread_id: string,
     workspace_id: string?, session_ref: string?, preferences: preferences.Value?}
-type Exchange = {answer_mode: string?, adapter: permission.Adapter, approver_policy: string, poll_ms: integer, ttl_ms: integer}
-type State = {binding_id: string?, request: Request, plan_digest: string, exchange: Exchange?, permissions: {checkpoint.Permission},
+type Exchange = {answer_mode: string?, adapter: permission_types.Adapter, approver_policy: string, poll_ms: integer, ttl_ms: integer}
+type State = {binding_id: string?, request: Request, plan_digest: string, exchange: Exchange?, permissions: {checkpoint_types.Permission},
     epoch: integer, turn_id: string?, proposal_kind: "operation" | "attempt"?}
 type PermissionEventPhase = "refused" | "intended" | "acknowledged" | "requested" | "decided" | "revalidated" | "consumed" | "declined" | "closed"
 type Context = {state: State, recovered: boolean?, now_ms: () -> integer, approvals: string, max_consume_attempts: integer,
@@ -36,7 +38,7 @@ local function reply_of(value: unknown, err: string?): (service_reply.Reply?, st
     if err then return nil, err end
     return service_reply.decode(value)
 end
-local function permission_record(session: State, state: checkpoint.Permission, phase: PermissionEventPhase, extra: {[string]: unknown}): {[string]: unknown}
+local function permission_record(session: State, state: checkpoint_types.Permission, phase: PermissionEventPhase, extra: {[string]: unknown}): {[string]: unknown}
     local payload: {[string]: unknown} = {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id, tool_name = state.tool_name, input_digest = state.input_digest,
         proposal_digest = state.proposal_digest, idempotency_key = state.idempotency_key, effect_key = state.effect_key, write_id = state.write_id, attempt_id = session.request.attempt_id,
         attachment_generation = session.epoch, phase = phase}
@@ -49,11 +51,11 @@ local function permission_record(session: State, state: checkpoint.Permission, p
     if session.turn_id then record.turn_id = session.turn_id end
     return record
 end
-local function request_of(state: checkpoint.Permission): permission.Request
+local function request_of(state: checkpoint_types.Permission): permission_types.Request
     return {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id, acknowledgment_id = state.acknowledgment_id or state.correlation_id, tool_name = state.tool_name,
         input_digest = state.input_digest, input = {}, prompt = state.prompt}
 end
-local function proposal_of(session: State, exchange: Exchange, found: permission.Request): {[string]: unknown}
+local function proposal_of(session: State, exchange: Exchange, found: permission_types.Request): {[string]: unknown}
     local request = session.request
     local proposal = permission.proposal(exchange.adapter, {action_id = request.action_id, attempt_id = request.attempt_id, plan_digest = session.plan_digest}, found)
     if session.proposal_kind == "operation" then
@@ -71,8 +73,8 @@ local function ctx_input(value: unknown): string?
     if not text then return nil end
     return text:sub(1, 512)
 end
-local function live_permissions(session: State): {permission.Request}
-    local pending: {permission.Request} = {}
+local function live_permissions(session: State): {permission_types.Request}
+    local pending: {permission_types.Request} = {}
     for _, state in ipairs(session.permissions) do
         if state.phase ~= "closed" and state.phase ~= "acknowledged" then pending[#pending + 1] = request_of(state) end
     end
@@ -101,7 +103,7 @@ function M.detect(ctx: Context, records: {{[string]: unknown}}): (integer, strin
                 local identity = permission.identity(session.request.owner_id, session.request.attempt_id, found.permission_request_id)
                 local proposal_digest, digest_error = ctx.digest_of(proposal_of(session, exchange, found))
                 if not proposal_digest then return added, digest_error or "permission proposal is not measurable" end
-                local state: checkpoint.Permission = {permission_request_id = found.permission_request_id, correlation_id = found.correlation_id, acknowledgment_id = found.acknowledgment_id, tool_name = found.tool_name, input_digest = found.input_digest,
+                local state: checkpoint_types.Permission = {permission_request_id = found.permission_request_id, correlation_id = found.correlation_id, acknowledgment_id = found.acknowledgment_id, tool_name = found.tool_name, input_digest = found.input_digest,
                     prompt = "Session " .. (session.request.session_ref or session.request.action_id) .. " in workspace " .. (session.request.workspace_id or "unknown")
                         .. " asks " .. found.tool_name .. " " .. ((ctx_input(found.input)) or "{}") .. " (" .. found.prompt .. ")", proposal_digest = proposal_digest, idempotency_key = permission.idempotency_key(identity), effect_key = permission.effect_key(identity),
                     write_id = permission.write_id(identity), deadline_ms = ctx.now_ms() + exchange.ttl_ms, phase = "intended", approval_id = nil, decision = nil, incarnation = nil, response = nil}
@@ -127,7 +129,7 @@ function M.acknowledge(ctx: Context, records: {{[string]: unknown}})
     if not exchange then return end
     local count = #records
     for _, item in ipairs(session.permissions) do
-        local state: checkpoint.Permission = item
+        local state: checkpoint_types.Permission = item
         if state.phase == "written" then
             for index = 1, count do
                 local body = records[index].body
@@ -202,7 +204,7 @@ end
 -- request_approval: the durable intent is asked under its idempotency key,
 -- so a crash between the owner creating the approval and the checkpoint
 -- recording it replays the same approval.
-local function request_approval(ctx: Context, session: State, exchange: Exchange, state: checkpoint.Permission): (boolean, string?)
+local function request_approval(ctx: Context, session: State, exchange: Exchange, state: checkpoint_types.Permission): (boolean, string?)
     local request = session.request
     for _, ref in ipairs(request.preferences and request.preferences.bee and request.preferences.bee.approval_leases or {}) do
         local raw, call_error = ctx.call(ctx.approvals .. ":runtime_lease", {operation = "use", lease_ref = ref, workspace_id = request.workspace_id,
@@ -237,7 +239,7 @@ local function request_approval(ctx: Context, session: State, exchange: Exchange
     ctx.step( "permission_requested")
     return true, nil
 end
-local function poll_decision(ctx: Context, session: State, state: checkpoint.Permission): (boolean, string?)
+local function poll_decision(ctx: Context, session: State, state: checkpoint_types.Permission): (boolean, string?)
     if not state.approval_id then return false, "approval id is missing" end
     local value, err = must(ctx, ctx.approvals .. ":read", {approval_id = state.approval_id})
     if err then return false, err end
@@ -259,7 +261,7 @@ local function poll_decision(ctx: Context, session: State, state: checkpoint.Per
         end
         view = ended
     end
-    local decision: checkpoint.PermissionDecision
+    local decision: checkpoint_types.PermissionDecision
     if view.state == "decided" then
         if not view.decision then return false, "decided approval has no decision" end
         decision = view.decision
@@ -277,7 +279,7 @@ local function poll_decision(ctx: Context, session: State, state: checkpoint.Per
     ctx.step( "permission_decided")
     return true, nil
 end
-local function close_permission(ctx: Context, session: State, state: checkpoint.Permission, reason: string): (boolean, string?)
+local function close_permission(ctx: Context, session: State, state: checkpoint_types.Permission, reason: string): (boolean, string?)
     if state.approval_id then
         local raw, err = must(ctx, ctx.approvals .. ":read", {approval_id = state.approval_id})
         if err then return false, err end
@@ -305,7 +307,7 @@ end
 -- incarnation, the carrier re-checks its own domain, records the validation
 -- and asks again. Replays are safe, so a resumed carrier repeats this
 -- before creating its write intent.
-local function consume_effect(ctx: Context, session: State, state: checkpoint.Permission): (boolean, string?)
+local function consume_effect(ctx: Context, session: State, state: checkpoint_types.Permission): (boolean, string?)
     if state.lease_ref then
         local _, err = must(ctx, ctx.approvals .. ":runtime_lease", {operation = "use", lease_ref = state.lease_ref,
             workspace_id = session.request.workspace_id, tool = state.tool_name, input_digest = state.input_digest, effect_key = state.effect_key})
@@ -342,7 +344,7 @@ local function consume_effect(ctx: Context, session: State, state: checkpoint.Pe
     end
     return false, "consume: the authority restarted " .. tostring(ctx.max_consume_attempts) .. " times during consumption"
 end
-local function write_response(ctx: Context, session: State, exchange: Exchange, state: checkpoint.Permission): (boolean, string?)
+local function write_response(ctx: Context, session: State, exchange: Exchange, state: checkpoint_types.Permission): (boolean, string?)
     if not ctx.waiting() then return close_permission(ctx, session, state, "attempt no longer waiting") end
     local line = state.response
     if not line then return false, "permission response is missing" end
@@ -360,7 +362,7 @@ function M.advance(ctx: Context, poll: boolean): (boolean, string?)
     local exchange = session.exchange
     if not exchange then return true, nil end
     for _, item in ipairs(session.permissions) do
-        local state: checkpoint.Permission = item
+        local state: checkpoint_types.Permission = item
         local replay_consumed = state.phase == "consumed"
         if state.phase == "intended" and exchange.answer_mode == "deny" then
             state.decision = "denied"

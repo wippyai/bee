@@ -12,6 +12,7 @@ entries:
     profile: bee.driver.profiles:profile
     driver_types: bee.driver:types
     permission: bee.harness.permission:adapter
+    vocabulary: bee.harness:classification
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
@@ -22,3 +23,4 @@ entries:
     observers: bee.driver:window_observer
     classify: bee.harness.catalog:classify
     resolver: bee.driver.binding:resolver
+    classify_types: bee.harness:classification

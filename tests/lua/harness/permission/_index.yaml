@@ -13,3 +13,4 @@ entries:
     adapter: bee.harness.permission:adapter
     canonical: bee.values:canonical
     bounds: bee.values:bounds
+    adapter_types: bee.harness:permission_types

@@ -1,3 +1,4 @@
+local configure_protocol_types = require("configure_protocol_types")
 -- MIT. Typed Antigravity CLI (agy) configuration delivery under an empty callee scope.
 -- Agy accepts no host provider configuration. Gateway tools are rendered as
 -- safe-relative configuration files. Command hooks use the host-selected Bee
@@ -15,7 +16,7 @@ M.MCP_REVISION = "bee.agy-mcp@2"
 M.CUSTOMIZATION_DIRECTORY = ".agents"
 M.MCP_PATH = M.CUSTOMIZATION_DIRECTORY .. "/mcp_config.json"
 
-function M.render_mcp(gateway: configure_protocol.GatewayInput): string
+function M.render_mcp(gateway: configure_protocol_types.GatewayInput): string
     local url = "http://" .. gateway.endpoint .. "/mcp/" .. gateway.action_id
     local doc = {
         mcpServers = {
@@ -32,7 +33,7 @@ function M.render_mcp(gateway: configure_protocol.GatewayInput): string
     return encoded .. "\n"
 end
 
-function M.mcp_file(gateway: configure_protocol.GatewayInput): (configure_protocol.Configuration?, string?)
+function M.mcp_file(gateway: configure_protocol_types.GatewayInput): (configure_protocol_types.Configuration?, string?)
     local content = M.render_mcp(gateway)
     local digest, hash_error = hash.sha256(content)
     if hash_error or not digest then return nil, "mcp digest failed" end
@@ -47,7 +48,7 @@ function M.mcp_file(gateway: configure_protocol.GatewayInput): (configure_protoc
 end
 
 -- Agy uses matcher groups for tool events and flat entries for Stop.
-function M.hooks_file(gateway: configure_protocol.GatewayInput): (configure_protocol.Configuration?, string?)
+function M.hooks_file(gateway: configure_protocol_types.GatewayInput): (configure_protocol_types.Configuration?, string?)
     local executable = gateway.hook_command
     if not executable then return nil, "agy hooks require the host-selected hook command" end
     local hook_token = gateway.hook_token_environment

@@ -1,17 +1,15 @@
+local vocabulary = require("vocabulary")
 -- MIT. The stream-json transport adapter: bytes to frames to envelopes. A
 -- frame that is not a JSON object is reported, never skipped silently.
 local json = require("json")
 local framing = require("framing")
 local M = {}
-type Decoder = {framer: framing.Framer, index: integer}
-type Envelope = {index: integer, value: {[string]: unknown}}
-type Problem = {index: integer, message: string, sample: string}
-function M.new(limit: integer?): Decoder
+function M.new(limit: integer?): vocabulary.Decoder
     return {framer = framing.new(limit), index = 0}
 end
-function M.feed(decoder: Decoder, chunk: string): ({Envelope}, {Problem}, string?)
-    local envelopes: {Envelope} = {}
-    local problems: {Problem} = {}
+function M.feed(decoder: vocabulary.Decoder, chunk: string): ({vocabulary.Envelope}, {vocabulary.Problem}, string?)
+    local envelopes: {vocabulary.Envelope} = {}
+    local problems: {vocabulary.Problem} = {}
     local lines, framing_error = framing.feed(decoder.framer, chunk)
     if not lines then return envelopes, problems, framing_error end
     for _, line in ipairs(lines) do
@@ -25,7 +23,7 @@ function M.feed(decoder: Decoder, chunk: string): ({Envelope}, {Problem}, string
     end
     return envelopes, problems, nil
 end
-function M.finish(decoder: Decoder): Problem?
+function M.finish(decoder: vocabulary.Decoder): vocabulary.Problem?
     local partial, framing_error = framing.finish(decoder.framer)
     if framing_error then return {index = decoder.index + 1, message = framing_error, sample = ""} end
     if partial then return {index = decoder.index + 1, message = "stream ended inside a frame", sample = partial:sub(1, 120)} end

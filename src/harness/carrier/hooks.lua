@@ -1,3 +1,4 @@
+local checkpoint_types = require("checkpoint_types")
 -- MIT. One ordered hook batch per window. Commit requests survive lost
 -- replies; only owner-confirmed commits may be acknowledged at the gateway.
 local checkpoint = require("checkpoint")
@@ -25,7 +26,7 @@ type Config = {
 }
 type State = {
     thread_id: string, attempt_id: string, epoch: integer, revision: integer,
-    binding_id: string?, checkpoint: checkpoint.Checkpoint,
+    binding_id: string?, checkpoint: checkpoint_types.Checkpoint,
     hooks_enabled: boolean, drain_ms: integer, decoder: Decoder,
     work: Work, due: integer, clock: integer, inflight: InFlight?,
     batch: Batch?, checkpoint_intent: Intent?, commit: Intent?, ack: Intent?,
@@ -87,7 +88,7 @@ end
 -- carrier. The point is decoded by the recovery owner; this constructor only
 -- checks that the selected configuration still names the same attempt pins,
 -- then fences all subsequent replies with the replacement epoch.
-function M.resume(config: Config, point: checkpoint.Checkpoint?, revision: integer): (State?, string?)
+function M.resume(config: Config, point: checkpoint_types.Checkpoint?, revision: integer): (State?, string?)
     local stored_revision = bounds.integer(revision)
     if not stored_revision or stored_revision < 0 then
         return nil, "checkpoint revision must be a nonnegative integer"

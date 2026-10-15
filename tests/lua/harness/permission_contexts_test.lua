@@ -1,3 +1,4 @@
+local adapter_types = require("adapter_types")
 local test = require("test")
 local registry = require("registry")
 local fs = require("fs")
@@ -24,7 +25,7 @@ local function claude_request(): Object
     end
     error("capture has no control request")
 end
-local function observation(provider: string, selected: adapter.Adapter): Object
+local function observation(provider: string, selected: adapter_types.Adapter): Object
     if provider == "grok" then
         local context = {permission_exchange = true, brief = "Fixture prompt."}
         local first = assert(bounds.object(grok.handle({index = 1, context = context,

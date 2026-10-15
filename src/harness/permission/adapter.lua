@@ -1,3 +1,4 @@
+local vocabulary = require("vocabulary")
 -- MIT. The permission exchange adapter: a pinned typed description of how
 -- one harness asks for permission mid-run, how the answer is encoded, how
 -- the harness acknowledges it and what happens on cancellation. Pure: it
@@ -17,35 +18,14 @@ M.MAX_PATH_SEGMENTS = 8
 M.ACKNOWLEDGMENTS = {"correlation_echo", "continued_output"}
 M.DENY_ACKNOWLEDGMENTS = {"terminal_denial", "unproven"}
 M.CANCELLATIONS = {"deny_before_close", "unsupported"}
-type Object = {[string]: unknown}
 -- acknowledgment names the request field the harness echoes back when
 -- it acts, where that differs from the response correlation.
-type Fields = {correlation: string, tool: string, input: string, prompt: string?, acknowledgment: string?}
-type Response = {correlation_kind: string?, envelope: Object, correlation_field: string?, decision_field: string, allow_value: string, deny_value: string, reason_field: string?, response_field: string?}
 -- correlation_echo names the observation type and the field that carries
 -- the request's correlation back; continued_output claims only that the
 -- harness produced something afterwards.
-type Acknowledgment = {mode: string, event_type: string?, field: string?}
 -- A denial is acknowledged only by a terminal denial the adapter names; an
 -- adapter that cannot name one reports denial dispatch as accepted by the
 -- input transport with harness acknowledgment unproven.
-type DenyAcknowledgment = {mode: string, event_type: string?, field: string?, value: string?, correlation_field: string?}
-type Adapter = {
-    adapter_id: string,
-    schema_revision: string,
-    event_name: string,
-    event_revision: string,
-    request: Fields,
-    response: Response,
-    acknowledgment: Acknowledgment,
-    deny_acknowledgment: DenyAcknowledgment,
-    cancellation: string,
-    proof_fixture: string,
-    digest: string,
-}
-type Request = {permission_request_id: string, correlation_id: string, acknowledgment_id: string, tool_name: string, input_digest: string, input: Object, prompt: string}
-type Attempt = {action_id: string, attempt_id: string, plan_digest: string}
-type Identity = {owner_id: string, attempt_id: string, permission_request_id: string}
 local digest_of = canonical.digest
 
 local function segments_of(path: string): {string}
@@ -54,7 +34,7 @@ local function segments_of(path: string): {string}
     return segments
 end
 -- A field is a dotted path of bounded depth with no empty segment.
-local function field_name(object: Object, name: string, what: string): (string?, string?)
+local function field_name(object: vocabulary.Object, name: string, what: string): (string?, string?)
     local value = bounds.id(object[name])
     if not value then return nil, what .. "." .. name .. " is not an identifier" end
     local segments = segments_of(value)
@@ -74,7 +54,7 @@ local function paths_overlap(first: string, second: string): boolean
 end
 -- The envelope crosses a path when a value sits on the path or a segment
 -- along it is not an object.
-local function envelope_crosses(envelope: Object, path: string): boolean
+local function envelope_crosses(envelope: vocabulary.Object, path: string): boolean
     local current: unknown = envelope
     for _, segment in ipairs(segments_of(path)) do
         local object = bounds.object(current)
@@ -86,7 +66,7 @@ local function envelope_crosses(envelope: Object, path: string): boolean
 end
 -- A request field is a dotted path into the event payload; a response
 -- field is a dotted path into the response line.
-local function lookup(payload: Object, path: string): unknown
+local function lookup(payload: vocabulary.Object, path: string): unknown
     local current: unknown = payload
     for segment in path:gmatch("[^.]+") do
         local object = bounds.object(current)
@@ -95,22 +75,22 @@ local function lookup(payload: Object, path: string): unknown
     end
     return current
 end
-local function copy_object(value: Object): Object
-    local copied: Object = {}
+local function copy_object(value: vocabulary.Object): vocabulary.Object
+    local copied: vocabulary.Object = {}
     for name, item in pairs(value) do
         local nested = bounds.object(item)
         if nested and type(item) == "table" then copied[name] = copy_object(nested) else copied[name] = item end
     end
     return copied
 end
-local function assign(line: Object, path: string, value: unknown): string?
+local function assign(line: vocabulary.Object, path: string, value: unknown): string?
     local segments: {string} = {}
     for segment in path:gmatch("[^.]+") do segments[#segments + 1] = segment end
     local current = line
     for index = 1, #segments - 1 do
         local existing = current[segments[index]]
         if existing == nil then
-            local created: Object = {}
+            local created: vocabulary.Object = {}
             current[segments[index]] = created
             current = created
         else
@@ -123,7 +103,7 @@ local function assign(line: Object, path: string, value: unknown): string?
     return nil
 end
 -- decode: an adapter definition is exact; the digest covers all of it.
-function M.decode(adapter_id: string, value: unknown): (Adapter?, string?)
+function M.decode(adapter_id: string, value: unknown): (vocabulary.Adapter?, string?)
     local object = bounds.object(value)
     if not object then return nil, "adapter must be an object" end
     local unknown_field = bounds.fields(object, {"schema_revision", "event_name", "event_revision", "request", "response", "acknowledgment", "deny_acknowledgment", "cancellation", "proof_fixture"})
@@ -214,7 +194,7 @@ function M.decode(adapter_id: string, value: unknown): (Adapter?, string?)
     elseif declared_ack.event_type ~= nil or declared_ack.field ~= nil then
         return nil, "adapter continued_output names no event_type or field"
     end
-    local acknowledgment: Acknowledgment = {mode = ack_mode, event_type = ack_type, field = ack_field}
+    local acknowledgment: vocabulary.Acknowledgment = {mode = ack_mode, event_type = ack_type, field = ack_field}
     local declared_deny = bounds.object(object.deny_acknowledgment)
     if not declared_deny then return nil, "adapter deny_acknowledgment must be an object" end
     local unknown_deny = bounds.fields(declared_deny, {"mode", "event_type", "field", "value", "correlation_field"})
@@ -236,27 +216,27 @@ function M.decode(adapter_id: string, value: unknown): (Adapter?, string?)
     elseif declared_deny.event_type ~= nil or declared_deny.field ~= nil or declared_deny.value ~= nil or declared_deny.correlation_field ~= nil then
         return nil, "adapter unproven deny_acknowledgment names no observation"
     end
-    local deny_acknowledgment: DenyAcknowledgment = {mode = deny_mode, event_type = denial_type, field = denial_field, value = denial_value, correlation_field = denial_correlation}
+    local deny_acknowledgment: vocabulary.DenyAcknowledgment = {mode = deny_mode, event_type = denial_type, field = denial_field, value = denial_value, correlation_field = denial_correlation}
     local cancellation = bounds.member(object.cancellation, M.CANCELLATIONS)
     if not cancellation then return nil, "adapter cancellation must be deny_before_close or unsupported" end
     local proof_fixture = bounds.id(object.proof_fixture)
     if not proof_fixture then return nil, "adapter proof_fixture names the capture that proves the harness keeps waiting" end
     local sum, digest_error = digest_of(object)
     if not sum then return nil, "adapter is not measurable: " .. tostring(digest_error) end
-    local fields: Fields = {correlation = correlation, tool = tool, input = input, prompt = prompt, acknowledgment = acknowledgment_path}
-    local shape: Response = {correlation_kind = correlation_kind, envelope = envelope, correlation_field = correlation_field, decision_field = decision_field, allow_value = allow_value, deny_value = deny_value, reason_field = reason_field, response_field = response_field}
-    local decoded: Adapter = {adapter_id = adapter_id, schema_revision = M.REVISION, event_name = event_name, event_revision = event_revision, request = fields, response = shape,
+    local fields: vocabulary.Fields = {correlation = correlation, tool = tool, input = input, prompt = prompt, acknowledgment = acknowledgment_path}
+    local shape: vocabulary.Response = {correlation_kind = correlation_kind, envelope = envelope, correlation_field = correlation_field, decision_field = decision_field, allow_value = allow_value, deny_value = deny_value, reason_field = reason_field, response_field = response_field}
+    local decoded: vocabulary.Adapter = {adapter_id = adapter_id, schema_revision = M.REVISION, event_name = event_name, event_revision = event_revision, request = fields, response = shape,
         acknowledgment = acknowledgment, deny_acknowledgment = deny_acknowledgment, cancellation = cancellation, proof_fixture = proof_fixture, digest = sum}
     return decoded, nil
 end
 -- pinned: a profile enables the exchange only with this adapter's exact digest.
-function M.pinned(adapter: Adapter, exchange: driver_types.PermissionExchange): string?
+function M.pinned(adapter: vocabulary.Adapter, exchange: driver_types.PermissionExchange): string?
     if exchange.mode ~= "adapter" then return "the profile does not enable a permission exchange" end
     if exchange.adapter_ref ~= adapter.adapter_id then return "the profile pins adapter " .. tostring(exchange.adapter_ref) .. ", not " .. adapter.adapter_id end
     if exchange.adapter_digest ~= adapter.digest then return "the profile pins adapter digest " .. tostring(exchange.adapter_digest) .. ", the adapter measures " .. adapter.digest end
     return nil
 end
-local function extension_payload(adapter: Adapter, observation: unknown): Object?
+local function extension_payload(adapter: vocabulary.Adapter, observation: unknown): vocabulary.Object?
     local event = bounds.object(observation)
     if not event or event.type ~= "extension" then return nil end
     local data = bounds.object(event.data)
@@ -269,7 +249,7 @@ end
 -- gives it its durable identity: the observation's event key, which the
 -- normalizer derives from the envelope position, so a replayed stream
 -- names the same request.
-function M.request(adapter: Adapter, observation: unknown): (Request?, string?)
+function M.request(adapter: vocabulary.Adapter, observation: unknown): (vocabulary.Request?, string?)
     local event = bounds.object(observation)
     if not event then return nil, "observation must be an object" end
     local payload = extension_payload(adapter, observation)
@@ -304,7 +284,7 @@ end
 -- admit_pending: two simultaneously pending requests with one correlation
 -- id cannot be told apart by the response protocol, so the second is
 -- refused rather than merged into the first.
-function M.admit_pending(pending: {Request}, request: Request): (boolean, string?)
+function M.admit_pending(pending: {vocabulary.Request}, request: vocabulary.Request): (boolean, string?)
     for _, waiting in ipairs(pending) do
         if waiting.permission_request_id == request.permission_request_id then return true, nil end
         if waiting.correlation_id == request.correlation_id then
@@ -316,12 +296,12 @@ end
 -- proposal: the approval binds the attempt plan and the durable permission
 -- request identity; the carrier epoch is execution fencing, never part of
 -- the proposal.
-function M.proposal(adapter: Adapter, attempt: Attempt, request: Request): Object
+function M.proposal(adapter: vocabulary.Adapter, attempt: vocabulary.Attempt, request: vocabulary.Request): vocabulary.Object
     return {kind = "attempt", ref = attempt.attempt_id, revision = attempt.plan_digest, action_id = attempt.action_id, input_digest = request.input_digest,
         payload = {adapter_ref = adapter.adapter_id, adapter_digest = adapter.digest, permission_request_id = request.permission_request_id,
             correlation_id = request.correlation_id, tool_name = request.tool_name}}
 end
-local function keyed(prefix: string, identity: Identity): string
+local function keyed(prefix: string, identity: vocabulary.Identity): string
     local sum = hash.sha256(prefix .. "\n" .. identity.owner_id .. "\n" .. identity.attempt_id .. "\n" .. identity.permission_request_id)
     return prefix .. "-" .. tostring(sum)
 end
@@ -329,16 +309,16 @@ end
 -- checkpoints before asking, the effect key consumption reserves, and the
 -- one write id the response goes out under. Harness correlation ids can
 -- repeat, so every key is qualified by owner, attempt and request.
-function M.idempotency_key(identity: Identity): string
+function M.idempotency_key(identity: vocabulary.Identity): string
     return keyed("permission-request", identity)
 end
-function M.effect_key(identity: Identity): string
+function M.effect_key(identity: vocabulary.Identity): string
     return keyed("permission-effect", identity)
 end
-function M.write_id(identity: Identity): string
+function M.write_id(identity: vocabulary.Identity): string
     return keyed("permission-write", identity)
 end
-local function encode_response(adapter: Adapter, request: Request, decision: string, reason: string?, response: unknown): (string?, string?)
+local function encode_response(adapter: vocabulary.Adapter, request: vocabulary.Request, decision: string, reason: string?, response: unknown): (string?, string?)
     local line = copy_object(adapter.response.envelope)
     local failed: string? = nil
     if adapter.response.correlation_field then
@@ -359,10 +339,10 @@ local function encode_response(adapter: Adapter, request: Request, decision: str
     return encoded .. "\n", nil
 end
 -- allow and deny: one JSON line each, exactly the adapter's response shape.
-function M.allow(adapter: Adapter, request: Request, response: unknown): (string?, string?)
+function M.allow(adapter: vocabulary.Adapter, request: vocabulary.Request, response: unknown): (string?, string?)
     return encode_response(adapter, request, adapter.response.allow_value, nil, response)
 end
-function M.deny(adapter: Adapter, request: Request, reason: string): (string?, string?)
+function M.deny(adapter: vocabulary.Adapter, request: vocabulary.Request, reason: string): (string?, string?)
     return encode_response(adapter, request, adapter.response.deny_value, reason, nil)
 end
 local function is_terminal(observation: unknown): boolean
@@ -376,7 +356,7 @@ end
 -- acknowledged: whether an observation after the response carries the
 -- request's correlation back in the adapter's named observation and field;
 -- continued_output accepts any non-terminal observation and claims no more.
-function M.acknowledged(adapter: Adapter, request: Request, observation: unknown): boolean
+function M.acknowledged(adapter: vocabulary.Adapter, request: vocabulary.Request, observation: unknown): boolean
     local event = bounds.object(observation)
     if not event then return false end
     if adapter.acknowledgment.mode == "correlation_echo" then
@@ -397,7 +377,7 @@ end
 -- adapter names, correlated to the request where the adapter names a
 -- correlation field; false for every adapter whose denial handling is
 -- unproven.
-function M.deny_acknowledged(adapter: Adapter, request: Request, observation: unknown): boolean
+function M.deny_acknowledged(adapter: vocabulary.Adapter, request: vocabulary.Request, observation: unknown): boolean
     if adapter.deny_acknowledgment.mode ~= "terminal_denial" then return false end
     local event = bounds.object(observation)
     if not event or event.type ~= adapter.deny_acknowledgment.event_type then return false end
@@ -408,7 +388,7 @@ function M.deny_acknowledged(adapter: Adapter, request: Request, observation: un
     return true
 end
 -- identity: the tuple every permission key is derived from.
-function M.identity(owner_id: string, attempt_id: string, permission_request_id: string): Identity
+function M.identity(owner_id: string, attempt_id: string, permission_request_id: string): vocabulary.Identity
     return {owner_id = owner_id, attempt_id = attempt_id, permission_request_id = permission_request_id}
 end
 -- transcript_consistent: a transcript is consistent with a continuing
@@ -418,8 +398,8 @@ end
 -- child or that the harness acted on it. Interactive acceptance is proven
 -- by a live fixture runner that records the input-write boundary and the
 -- correlated continuation, and is recorded by a host acceptance record.
-function M.transcript_consistent(adapter: Adapter, observations: {unknown}, response_after: integer): (Request?, string?)
-    local request: Request? = nil
+function M.transcript_consistent(adapter: vocabulary.Adapter, observations: {unknown}, response_after: integer): (vocabulary.Request?, string?)
+    local request: vocabulary.Request? = nil
     local request_index = 0
     for index, observation in ipairs(observations) do
         if not request then
@@ -446,7 +426,7 @@ end
 -- exchange may or may not still be waiting. Nothing is sent after the
 -- attempt settled; an approved decision left unused reaches its own
 -- consumption deadline and its history stays as decided.
-function M.outcome(adapter: Adapter, decision: string, waiting: boolean, settled: boolean): string
+function M.outcome(adapter: vocabulary.Adapter, decision: string, waiting: boolean, settled: boolean): string
     if settled then return "none" end
     if decision == "approved" then
         if waiting then return "allow" end

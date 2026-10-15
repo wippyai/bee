@@ -23,7 +23,7 @@ entries:
   method: handle
   imports:
     configuration: bee.driver.grok.binding:configuration
-    configure_protocol: bee.driver.binding:configuration
+    configure_protocol: bee.driver:configuration_types
     universal: bee.driver.binding:universal
   security:
     policies:
@@ -64,6 +64,7 @@ entries:
     hook_limits: bee.driver.binding:hook_limits
     toml: bee.driver.binding:toml
     configure_protocol: bee.driver.binding:configuration
+    configure_protocol_types: bee.driver:configuration_types
 - name: binding
   kind: contract.binding
   contracts:

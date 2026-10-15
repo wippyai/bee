@@ -1,15 +1,8 @@
+local vocabulary = require("vocabulary")
 -- MIT. Bounded declarations and observations of alternative login sources.
 local bounds = require("bounds")
 local M = {}
 
-type File = {kind: "file_exists", paths: {string}, variable: string?, directory: string?}
-type Environment = {kind: "env_present", names: {string}}
-type Status = {kind: "auth_status", argv: {string}, success_exit_code: integer, timeout_ms: integer}
-type Evidence = File | Environment | Status
-type Declaration = {command: string, any_of: {Evidence}}
-type Check = {present: boolean?, exit_code: integer?, reason: string?}
-type Probe = {file: (string, string?, string?) -> (boolean?, string?), environment: (string) -> boolean?,
-    status: ({string}, integer) -> integer?}
 
 local function array(raw: unknown, limit: integer): {unknown}?
     if type(raw) ~= "table" then return nil end
@@ -39,13 +32,13 @@ local function environment_name(raw: unknown): string?
     return name and name:match("^[A-Z_][A-Z0-9_]*$") and name or nil
 end
 
-function M.decode(raw: unknown): (Declaration?, string?)
+function M.decode(raw: unknown): (vocabulary.Declaration?, string?)
     local item = bounds.object(raw)
     if not item or bounds.fields(item, {"command", "any_of"}) then return nil, "login evidence must declare command and any_of" end
     local command = bounds.line(item.command, 128)
     local alternatives = array(item.any_of, 8)
     if not command or command == "" or not alternatives then return nil, "login evidence requires a command and 1 to 8 alternatives" end
-    local decoded: {Evidence} = {}
+    local decoded: {vocabulary.Evidence} = {}
     local file_count = 0
     for _, raw_alternative in ipairs(alternatives) do
         local alternative = bounds.object(raw_alternative)
@@ -102,8 +95,8 @@ end
 -- probe observes the alternatives in order until one proves the login; the
 -- alternatives after it are left unobserved, so a signed-in CLI starts no
 -- status command.
-function M.probe(declaration: Declaration, probe: Probe): {Check}
-    local checks: {Check} = {}
+function M.probe(declaration: vocabulary.Declaration, probe: vocabulary.Probe): {vocabulary.Check}
+    local checks: {vocabulary.Check} = {}
     local proven = false
     for index, evidence in ipairs(declaration.any_of) do
         if proven then
@@ -117,7 +110,7 @@ function M.probe(declaration: Declaration, probe: Probe): {Check}
 end
 
 -- observe checks one alternative.
-function M.observe(evidence: Evidence, probe: Probe): Check
+function M.observe(evidence: vocabulary.Evidence, probe: vocabulary.Probe): vocabulary.Check
     local present: boolean? = false
     local code: integer? = nil
     local reason: string? = nil
@@ -142,11 +135,11 @@ function M.observe(evidence: Evidence, probe: Probe): Check
     return {present = present, exit_code = code, reason = reason}
 end
 
-function M.decode_checks(raw: unknown, declaration: Declaration): ({Check}?, string?)
+function M.decode_checks(raw: unknown, declaration: vocabulary.Declaration): ({vocabulary.Check}?, string?)
     if raw == nil then return {}, nil end
     local values = array(raw, 8)
     if not values or #values ~= #declaration.any_of then return nil, "login checks must match the declared alternatives" end
-    local checks: {Check} = {}
+    local checks: {vocabulary.Check} = {}
     for index, value in ipairs(values) do
         local item = bounds.object(value)
         if not item or bounds.fields(item, {"present", "exit_code", "reason"}) then return nil, "login check has unknown fields" end
@@ -167,7 +160,7 @@ function M.decode_checks(raw: unknown, declaration: Declaration): ({Check}?, str
     return checks, nil
 end
 
-function M.present(declaration: Declaration, checks: {Check}): boolean?
+function M.present(declaration: vocabulary.Declaration, checks: {vocabulary.Check}): boolean?
     local uncertain = false
     for index in ipairs(declaration.any_of) do
         local check = checks[index]

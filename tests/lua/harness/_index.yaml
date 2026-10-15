@@ -95,6 +95,7 @@ entries:
     classify: bee.harness.catalog:classify
     permission: bee.harness.permission:adapter
     shared_fixtures: bee.tests.support:fixtures
+    classify_types: bee.harness:classification
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua
@@ -112,7 +113,7 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
-    classify: bee.harness.catalog:classify
+    classify: bee.harness:classification
     shared_fixtures: bee.tests.support:fixtures
 - name: carrier_pure_test
   kind: function.lua
@@ -293,9 +294,9 @@ entries:
     driver_types: bee.driver:types
     placement_decode: bee.placement:decode
     bounds: bee.values:bounds
-    policy: bee.harness.carrier:policy
+    policy: bee.harness:policy_types
     placement_types: bee.placement:types
-    classify: bee.harness.catalog:classify
+    classify: bee.harness:classification
     checkpoint: bee.harness.carrier:checkpoint
     stream_json: bee.driver.transport:stream_json
 - name: placement_fixture
@@ -569,6 +570,7 @@ entries:
     shared_executables: bee.tests.harness:executables
     shared_streams: bee.tests.harness:streams
     shared_authority: bee.tests.support:authority
+    configuration_types: bee.driver:configuration_types
 - name: gateway_client_policy
   kind: security.policy
   meta:
@@ -1494,6 +1496,7 @@ entries:
     adapter: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
     events: bee.driver.codec:events
+    adapter_types: bee.harness:permission_types
 - name: permission_fixture_adapter
   kind: registry.entry
   meta:
@@ -1552,6 +1555,7 @@ entries:
     protocol: bee.tests.support.driver:claude_protocol
     adapter: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
+    adapter_types: bee.harness:permission_types
 - name: permission_fixture_policy
   kind: registry.entry
   meta:
@@ -1844,6 +1848,7 @@ entries:
     placement_fixture: bee.tests.harness:placement_fixture
     shared_fixtures: bee.tests.support:fixtures
     shared_authority: bee.tests.support:authority
+    adapter_types: bee.harness:permission_types
 - name: codex_auth_test
   kind: function.lua
   source: file://codex_auth_test.lua
@@ -2029,6 +2034,7 @@ entries:
     stream_json: bee.driver.transport:stream_json
     protocol: bee.tests.support.driver:claude_protocol
     events: bee.driver.codec:events
+    adapter_types: bee.harness:permission_types
 - name: claude_control_fixture_policy
   kind: registry.entry
   meta:
@@ -2095,6 +2101,7 @@ entries:
     shared_fixtures: bee.tests.support:fixtures
     shared_executables: bee.tests.harness:executables
     shared_streams: bee.tests.harness:streams
+    adapter_types: bee.harness:permission_types
 - name: claude_acceptance_test
   kind: function.lua
   source: file://claude_acceptance_test.lua
@@ -2123,6 +2130,7 @@ entries:
     driver_types: bee.driver:types
     shared_executables: bee.tests.harness:executables
     shared_streams: bee.tests.harness:streams
+    adapter_types: bee.harness:permission_types
 - name: codex_credential_client_policy
   kind: security.policy
   meta:
@@ -2200,6 +2208,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     hooks: bee.harness.carrier:hooks
     interrupted: bee.harness.carrier:interrupted
+    checkpoint_types: bee.harness:checkpoint_types
 - name: saved_profiles_test
   kind: function.lua
   source: file://saved_profiles_test.lua
@@ -2608,6 +2617,7 @@ entries:
     exchange: bee.harness.permission:exchange
     grok: bee.driver.grok.binding:normalize
     opencode: bee.driver.opencode.observer:events
+    adapter_types: bee.harness:permission_types
 - name: launch_spec_test
   kind: function.lua
   source: file://launch_spec_test.lua

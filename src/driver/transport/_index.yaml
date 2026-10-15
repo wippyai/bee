@@ -7,6 +7,9 @@ entries:
   modules: [json]
   imports:
     framing: bee.driver.transport:framing
+    vocabulary: bee.driver:stream_types
 - name: framing
   kind: library.lua
   source: file://framing.lua
+  imports:
+    vocabulary: bee.driver:framing_types

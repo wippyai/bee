@@ -19,6 +19,7 @@ entries:
     codex: bee.driver.codex.binding:configure
     grok: bee.driver.grok.binding:configure
     agy: bee.driver.agy.binding:configure
+    configuration_types: bee.driver:configuration_types
 - name: fixture_builder_ok
   kind: function.lua
   source: file://fixture_builder.lua

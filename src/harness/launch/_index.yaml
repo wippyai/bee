@@ -41,6 +41,7 @@ entries:
     placement_profiles: bee.placement.profiles:profiles
     identity: bee.security.identity:identity
     part_request: bee.harness.launch:request
+    policy_types: bee.harness:policy_types
 - name: agent_resolver
   kind: library.lua
   source: file://agent_resolver.lua
@@ -261,6 +262,7 @@ entries:
     preferences: bee.driver.descriptor:effective
     gateway_configuration: bee.gateway.env:configuration
     descriptors: bee.driver.descriptor:descriptor
+    configuration_types: bee.driver:configuration_types
 - name: folder_consent
   kind: library.lua
   source: file://folder_consent.lua

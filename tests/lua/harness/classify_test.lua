@@ -1,3 +1,4 @@
+local classify_types = require("classify_types")
 -- MIT. Classification is pure: a binding with its resolved declaration and
 -- methods is compatible only when every rule holds, and each broken rule
 -- names itself once.
@@ -29,7 +30,7 @@ local function declaration(protocol: string?): Entry
             profiles = {{id = "batch", mode = "batch", protocol = protocol or "stream-json", protocol_revision = "fake-1", answer_path = {strategy = "terminal_field", adapter_ref = "fake:protocol"}},
                 {id = "window", mode = "session", protocol = protocol or "stream-json", protocol_revision = "fake-1", answer_path = {strategy = "terminal_field", adapter_ref = "fake:protocol"}}}}}}
 end
-local function classified(input: Entry?, entry: Entry?, table: {[string]: Entry?}?, activated: boolean?): classify.Binding
+local function classified(input: Entry?, entry: Entry?, table: {[string]: Entry?}?, activated: boolean?): classify_types.Binding
     local request: classify.Input = {binding = binding(), declaration = declaration(), methods = methods(), activated = activated == true}
     if input then request.declaration = input end
     if entry then request.binding = entry end

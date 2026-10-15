@@ -1,3 +1,4 @@
+local adapter_types = require("adapter_types")
 -- MIT. Interactive acceptance of a permission exchange over the live
 -- fixture runner: the request is observed before any response is sent, the
 -- input-write boundary is recorded, and the correlated continuation is
@@ -16,7 +17,7 @@ local adapter = require("adapter")
 local acceptance = require("acceptance")
 local REQUEST_ID = "perm-1"
 type Object = {[string]: unknown}
-type Run = {observations: {Object}, boundary: integer, request: adapter.Request?, exit_code: integer, stderr: string}
+type Run = {observations: {Object}, boundary: integer, request: adapter_types.Request?, exit_code: integer, stderr: string}
 local function fixture(): (string, string)
     local bin, bin_error = env.get("bee.tests.harness:fixture_bin")
     if bin_error or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
@@ -28,7 +29,7 @@ local function encoded(line: string?, err: string?): string
     if not line then error("encode response: " .. tostring(err)) end
     return line
 end
-local function fixture_adapter(): adapter.Adapter
+local function fixture_adapter(): adapter_types.Adapter
     local entry = registry.get("bee.tests.harness:permission_fixture_adapter")
     if not entry then error("fixture adapter entry") end
     local data = assert(bounds.object(entry.data))
@@ -38,7 +39,7 @@ local function fixture_adapter(): adapter.Adapter
 end
 -- drive runs the fixture once; respond decides what to write when the
 -- request is observed and returns the line, or nil to stay silent.
-local function drive(pinned: adapter.Adapter, respond: (adapter.Request) -> string?): Run
+local function drive(pinned: adapter_types.Adapter, respond: (adapter_types.Request) -> string?): Run
     local executable, stream = fixture()
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec(executable, {env = {BEE_FIXTURE_STREAM = stream, BEE_FIXTURE_PERMISSION = REQUEST_ID, BEE_FIXTURE_PERMISSION_TIMEOUT = "1"}})
@@ -102,7 +103,7 @@ local function define_tests()
     test.describe("Permission exchange acceptance", function()
         local pinned = fixture_adapter()
         test.it("allow: the response is written after the request is observed and the correlated tool result follows the write boundary", function()
-            local run = drive(pinned, function(request: adapter.Request): string?
+            local run = drive(pinned, function(request: adapter_types.Request): string?
                 return encoded(adapter.allow(pinned, request, nil))
             end)
             local request = run.request
@@ -121,7 +122,7 @@ local function define_tests()
             if not consistent then error(tostring(err)) end
         end)
         test.it("deny: the harness reports the denial after the write boundary and never runs the tool", function()
-            local run = drive(pinned, function(request: adapter.Request): string?
+            local run = drive(pinned, function(request: adapter_types.Request): string?
                 return encoded(adapter.deny(pinned, request, "denied by the owner"))
             end)
             test.not_nil(run.request)
@@ -135,8 +136,8 @@ local function define_tests()
             test.eq(err, "the harness ended without acknowledging the response")
         end)
         test.it("wrong correlation: the harness keeps waiting and times out without acting", function()
-            local run = drive(pinned, function(request: adapter.Request): string?
-                local other: adapter.Request = {permission_request_id = request.permission_request_id, correlation_id = "perm-9", acknowledgment_id = "perm-9", tool_name = request.tool_name,
+            local run = drive(pinned, function(request: adapter_types.Request): string?
+                local other: adapter_types.Request = {permission_request_id = request.permission_request_id, correlation_id = "perm-9", acknowledgment_id = "perm-9", tool_name = request.tool_name,
                     input_digest = request.input_digest, input = request.input, prompt = request.prompt}
                 return encoded(adapter.allow(pinned, other, nil))
             end)
@@ -147,7 +148,7 @@ local function define_tests()
             test.eq(run.exit_code, 2)
         end)
         test.it("no response: silence past the timeout ends the turn as failed, never as allowed", function()
-            local run = drive(pinned, function(request: adapter.Request): string?
+            local run = drive(pinned, function(request: adapter_types.Request): string?
                 return nil
             end)
             test.not_nil(run.request)

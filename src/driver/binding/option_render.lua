@@ -1,3 +1,4 @@
+local configuration_types = require("configuration_types")
 -- SPDX-License-Identifier: MIT
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -7,7 +8,7 @@ local hash = require("hash")
 local configuration = require("configuration")
 local M = {}
 type Object = {[string]: unknown}
-type Document = {path: string, format: string, value: Object, text: string?, source: configuration.Configuration?, operations: {configuration.JsonOperation}, base_path: string?}
+type Document = {path: string, format: string, value: Object, text: string?, source: configuration_types.Configuration?, operations: {configuration_types.JsonOperation}, base_path: string?}
 
 local function assign(document: Object, path: {string}, value: unknown, append: boolean): string?
     local current = document
@@ -46,7 +47,7 @@ local function token_value(render: Object, value: unknown, values: Object): unkn
     return value
 end
 
-function M.files(fields: Object, values: Object, context: string, files: {configuration.Configuration}): ({configuration.Configuration}?, string?)
+function M.files(fields: Object, values: Object, context: string, files: {configuration_types.Configuration}): ({configuration_types.Configuration}?, string?)
     local documents: {[string]: Document} = {}
     local names: {string} = {}
     for name in pairs(fields) do names[#names + 1] = name end
@@ -114,7 +115,7 @@ function M.files(fields: Object, values: Object, context: string, files: {config
             end
         end
     end
-    local result: {configuration.Configuration} = {}
+    local result: {configuration_types.Configuration} = {}
     for _, file in ipairs(files) do if not documents[file.path] then result[#result + 1] = file end end
     local paths: {string} = {}
     for path in pairs(documents) do paths[#paths + 1] = path end
@@ -138,7 +139,7 @@ function M.files(fields: Object, values: Object, context: string, files: {config
         local digest = hash.sha256(content)
         if not digest then return nil, "OptionSpec configuration digest unavailable" end
         local source = document.source
-        local composition: configuration.Composition? = nil
+        local composition: configuration_types.Composition? = nil
         if document.base_path then
             composition = {kind = document.format == "toml" and "toml_patch" or "json_patch", base_path = document.base_path, operations = document.operations}
         end

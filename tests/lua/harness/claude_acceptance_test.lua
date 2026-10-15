@@ -1,3 +1,4 @@
+local adapter_types = require("adapter_types")
 -- MIT. Interactive acceptance of the real Claude permission exchange: the
 -- version-recorded executable runs with the driver's exchange launch
 -- shape against a scripted loopback endpoint that answers one Bash
@@ -24,7 +25,7 @@ local launch = require("launch")
 local ADAPTER = "bee.driver.claude.permission:permission_adapter"
 local SENTINEL = "sk-ant-sentinel-bee-000"
 type Object = {[string]: unknown}
-type Run = {observations: {Object}, request: adapter.Request?, boundary: integer}
+type Run = {observations: {Object}, request: adapter_types.Request?, boundary: integer}
 local counter = 0
 local function fresh(prefix: string): string
     counter = counter + 1
@@ -52,7 +53,7 @@ local function encoded(line: string?, err: string?): string
     if not line then error("encode response: " .. tostring(err)) end
     return line
 end
-local function real_adapter(): adapter.Adapter
+local function real_adapter(): adapter_types.Adapter
     local entry = registry.get(ADAPTER)
     if not entry then error("adapter entry") end
     local decoded, err = adapter.decode(ADAPTER, (assert(bounds.object(entry.data))).adapter)
@@ -75,7 +76,7 @@ end
 type Session = {proc: exec.Process, executor: exec.Executor, chunks: channel.Channel<string>, feed: (string) -> (), run: Run, ended: boolean}
 -- open runs the executable exactly as the driver launches it for an
 -- exchange: the brief as the first stdin line, stdin kept open.
-local function open(pinned: adapter.Adapter, claude: string, port: string, work: string, home: string): Session
+local function open(pinned: adapter_types.Adapter, claude: string, port: string, work: string, home: string): Session
     local decoded, decode_error = launch.decode({profile_id = "batch", brief = "leave a marker", permission_mode = "manual", permission_exchange = true})
     if not decoded then error(tostring(decode_error)) end
     local specification = launch.specification(decoded)
@@ -227,7 +228,7 @@ local function define_tests()
             end)
             case("wrong", function(session: Session, work: string)
                 local request = session.run.request
-                local other: adapter.Request = {permission_request_id = assert(request.permission_request_id), correlation_id = "not-" .. request.correlation_id, acknowledgment_id = assert(request.acknowledgment_id),
+                local other: adapter_types.Request = {permission_request_id = assert(request.permission_request_id), correlation_id = "not-" .. request.correlation_id, acknowledgment_id = assert(request.acknowledgment_id),
                     tool_name = assert(request.tool_name), input_digest = assert(request.input_digest), input = assert(request.input), prompt = assert(request.prompt)}
                 respond(session, encoded(adapter.allow(pinned, other, nil)))
                 test.is_false(observe(session, "3s", function(run: Run): boolean return tool_result_after(run, nil) ~= nil or ended(run) end))

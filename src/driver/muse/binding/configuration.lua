@@ -1,3 +1,4 @@
+local configure_protocol_types = require("configure_protocol_types")
 -- MIT. The Muse settings file: the one file the private config home needs
 -- for the admitted gateway. Muse offers no argv delivery for MCP servers,
 -- hooks or instructions, so configure renders settings.json under the
@@ -19,8 +20,8 @@ M.HOOK_TOKEN_DIRECTORY = ".config/muse/.bee-hooks"
 -- Every event here is accepted by muse 1.3.0 at startup; anything else is
 -- refused rather than rendered into a skipped handler group.
 M.HOOK_EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop"}
-type Gateway = configure_protocol.GatewayInput
-type Configuration = configure_protocol.Configuration
+type Gateway = configure_protocol_types.GatewayInput
+type Configuration = configure_protocol_types.Configuration
 function M.hook_token_file(home_directory: string, attempt_id: string, hook_environment: string): (Configuration?, string?, string?)
     local identity, identity_error = hash.sha256("muse-hook\n" .. attempt_id)
     if not identity then return nil, nil, tostring(identity_error or "hook credential identity failed") end
@@ -35,7 +36,7 @@ function M.hook_token_file(home_directory: string, attempt_id: string, hook_envi
 end
 function M.settings_file(gateway: Gateway, hook_token_source: string?): (Configuration?, string?)
     local selected: {[string]: unknown} = {}
-    local operations: {configure_protocol.JsonOperation} = {
+    local operations: {configure_protocol_types.JsonOperation} = {
         {kind = "default", path = {"schema_version"}},
     }
     for _, event in ipairs(gateway.hooks) do

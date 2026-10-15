@@ -52,6 +52,7 @@ entries:
     hooks: bee.gateway.hooks:hooks
     configuration: bee.driver.binding:configuration
     codex_configuration: bee.driver.codex.binding:configuration
+    configuration_types: bee.driver:configuration_types
 - name: mcp_test
   kind: function.lua
   source: file://mcp_test.lua

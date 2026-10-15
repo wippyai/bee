@@ -1,3 +1,4 @@
+local configure_protocol_types = require("configure_protocol_types")
 -- SPDX-License-Identifier: MIT
 local hash = require("hash")
 local canonical = require("canonical")
@@ -8,8 +9,8 @@ M.PATH = ".config/opencode/opencode.json"
 M.BASE_PATH = ".config/opencode/.bee-global-opencode.json"
 M.SCHEMA = "https://opencode.ai/config.json"
 M.MAX_CONFIGURATION_BYTES = 8192
-type Gateway = configure_protocol.GatewayInput
-type Configuration = configure_protocol.Configuration
+type Gateway = configure_protocol_types.GatewayInput
+type Configuration = configure_protocol_types.Configuration
 function M.settings_file(gateway: Gateway): (Configuration?, string?)
     if #gateway.tools == 0 then return nil, "opencode configuration needs a gateway" end
     local document: {[string]: unknown} = {
@@ -29,7 +30,7 @@ function M.settings_file(gateway: Gateway): (Configuration?, string?)
     if #content > M.MAX_CONFIGURATION_BYTES then return nil, "configuration exceeds " .. tostring(M.MAX_CONFIGURATION_BYTES) .. " bytes" end
     local digest, digest_error = hash.sha256(content)
     if not digest then return nil, tostring(digest_error or "configuration digest failed") end
-    local operations: {configure_protocol.JsonOperation} = {
+    local operations: {configure_protocol_types.JsonOperation} = {
         {kind = "default", path = {"$schema"}},
         {kind = "insert", path = {"mcp", "bee"}},
     }
@@ -39,7 +40,7 @@ function M.settings_file(gateway: Gateway): (Configuration?, string?)
         secret_fields = {{path = {"mcp", "bee", "headers", "Authorization"}, environment = gateway.token_environment, prefix = "Bearer "}}}
     return file, nil
 end
-function M.login_configuration(): (configure_protocol.Configuration?, string?)
+function M.login_configuration(): (configure_protocol_types.Configuration?, string?)
     local digest, digest_error = hash.sha256("")
     if not digest then return nil, tostring(digest_error or "configuration digest failed") end
     return {revision = M.REVISION, path = M.PATH, content = "", digest = digest,

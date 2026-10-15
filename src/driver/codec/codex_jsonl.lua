@@ -1,3 +1,4 @@
+local events_types = require("events_types")
 -- MIT. Codex CLI exec --json (protocol revision exec-json-1) into thread
 -- observations. turn.completed and turn.failed are the only terminal
 -- reports; the answer is the last agent_message of the turn.
@@ -42,7 +43,7 @@ end
 local function key(index: integer, suffix: string): string
     return "codex:" .. tostring(index) .. ":" .. suffix
 end
-local function usage_of(value: unknown): events.Usage?
+local function usage_of(value: unknown): events_types.Usage?
     if type(value) ~= "table" then return nil end
     local usage = value
     return events.usage(usage.input_tokens, usage.output_tokens, usage.cached_input_tokens)

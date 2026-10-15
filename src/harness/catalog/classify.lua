@@ -1,3 +1,4 @@
+local vocabulary = require("vocabulary")
 -- MIT. Pure classification of driver bindings and their profile
 -- declarations. No registry, no time: the catalog hands in what it read and
 -- gets back what is compatible, what is not, and why.
@@ -11,29 +12,10 @@ local M = {}
 M.CONTRACT = "bee.driver:driver"
 M.METHODS = {"prepare", "dispatch", "normalize", "configure"}
 M.OPTIONAL_METHODS = {"locate"}
-type Entry = {[string]: unknown}
-type Digest = {entry: string, scope: "entry"}
 -- permission reports proof eligibility apart from compatibility: eligible
 -- means the profile pins an adapter the snapshot measures; acceptance is a
 -- host record checked at admission, never inferred from a fixture name.
-type Permission = {mode: string, adapter_ref: string?, adapter_digest: string?, proof_fixture: string?, eligible: boolean}
-type Profile = {id: string, mode: string, protocol: string, protocol_revision: string, supported: boolean, private_home: boolean, permission: Permission}
-type Binding = {
-    binding_id: string,
-    driver_id: string,
-    title: string,
-    implementation_version: string,
-    profiles_ref: string,
-    binding_digest: Digest,
-    profile_digest: Digest,
-    default_profile: string,
-    profiles: {Profile},
-    methods: {[string]: string},
-    state: "compatible" | "incompatible",
-    activated: boolean,
-    diagnostics: {string},
-}
-type Input = {binding: Entry, declaration: Entry?, methods: {[string]: Entry?}, adapters: {[string]: Entry?}?, activated: boolean, observers: observers.Measurements?}
+type Input = {binding: vocabulary.Entry, declaration: vocabulary.Entry?, methods: {[string]: vocabulary.Entry?}, adapters: {[string]: vocabulary.Entry?}?, activated: boolean, observers: observers.Measurements?}
 local digest = canonical.digest
 
 -- Compatibility follows the actual execution paths. Activation and authority
@@ -43,7 +25,7 @@ local function supported(mode: string, protocol: string): boolean
     return (mode == "batch" or mode == "session") and (protocol == "stream-json" or protocol == "native")
 end
 -- Classifies one binding with everything the catalog resolved for it.
-function M.binding(input: Input): Binding
+function M.binding(input: Input): vocabulary.Binding
     local entry = input.binding
     local diagnostics: {string} = {}
     local function fail(message: string)
@@ -117,7 +99,7 @@ function M.binding(input: Input): Binding
         local sum, sum_error = observers.digest(declaration_data, input.observers or {})
         if not sum then fail("profiles are not measurable: " .. tostring(sum_error)) else profile_digest = sum end
     end
-    local profiles: {Profile} = {}
+    local profiles: {vocabulary.Profile} = {}
     local title = ""
     local version = ""
     local default_profile = ""
@@ -172,8 +154,8 @@ function M.binding(input: Input): Binding
         default_profile = default_profile, profiles = profiles, methods = mapped, state = state, activated = input.activated, diagnostics = diagnostics}
 end
 -- Two compatible bindings with one driver_id are ambiguous: neither is usable.
-function M.disambiguate(bindings: {Binding}): {Binding}
-    local seen: {[string]: {Binding}} = {}
+function M.disambiguate(bindings: {vocabulary.Binding}): {vocabulary.Binding}
+    local seen: {[string]: {vocabulary.Binding}} = {}
     for _, item in ipairs(bindings) do
         if item.state == "compatible" then
             local group = seen[item.driver_id] or {}

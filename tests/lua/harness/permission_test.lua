@@ -1,3 +1,4 @@
+local adapter_types = require("adapter_types")
 -- MIT. The permission exchange adapter, pure: a definition decodes and
 -- measures, a profile enables it only under the exact digest, a request
 -- event yields a durable identity, the proposal binds the plan rather than
@@ -24,12 +25,12 @@ end
 local function echo_event(key: string, request_id: string): {[string]: unknown}
     return events.extension(key, "permission_request", "probe-1", json.encode({request_id = request_id, tool_name = "Bash", input = {}, resolved = true}))
 end
-local function decoded_of(value: {[string]: unknown}): adapter.Adapter
+local function decoded_of(value: {[string]: unknown}): adapter_types.Adapter
     local decoded, err = adapter.decode("probe:permission", value)
     if not decoded then error(tostring(err)) end
     return decoded
 end
-local function request_of(decoded: adapter.Adapter, observation: {[string]: unknown}): adapter.Request
+local function request_of(decoded: adapter_types.Adapter, observation: {[string]: unknown}): adapter_types.Request
     local request, err = adapter.request(decoded, observation)
     if not request then error(tostring(err)) end
     return request
@@ -163,7 +164,7 @@ local function define_tests()
             test.neq(adapter.effect_key(identity), adapter.idempotency_key(identity))
             test.neq(adapter.write_id(identity), adapter.effect_key(identity))
             test.eq(adapter.write_id(identity):sub(1, 17), "permission-write-")
-            local pending: {adapter.Request} = {request}
+            local pending: {adapter_types.Request} = {request}
             local same_again = request_of(decoded, request_event("7:request", "req-1", "Bash"))
             test.is_true(adapter.admit_pending(pending, same_again))
             local reused = request_of(decoded, request_event("9:request", "req-1", "Read"))

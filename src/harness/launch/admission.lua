@@ -1,3 +1,4 @@
+local policy_types = require("policy_types")
 -- MIT. Launch admission: resolve a definition into a measured plan with no
 -- effects, then admit a request for the authenticated requester, obtaining
 -- attempt-bound grants and credential projections in that requester's own
@@ -167,7 +168,7 @@ end
 -- may narrow neither outward. The host-approved model mapping owns the
 -- model option.
 local function agent_preferences(selected: Selected?, closure: agent_resolver.Closure, checked: agent_resolver.Checked,
-    launch_policy: policy.Policy, profile_instructions: boolean): (placement_types.Preferences?, Reply?)
+    launch_policy: policy_types.Policy, profile_instructions: boolean): (placement_types.Preferences?, Reply?)
     local options: {[string]: string | number | boolean} = {}
     local saved_instructions = ""
     if selected then
@@ -275,7 +276,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local agent: agent_resolver.Closure? = nil
     local checked: agent_resolver.Checked? = nil
     local effective: placement_types.Preferences? = preference_value(selected)
-    local launch_policy: policy.Policy
+    local launch_policy: policy_types.Policy
     local effective_agent_ref = (selected and selected.profile and selected.profile.agent_ref) or launch.agent_ref or req_agent_ref
     if selected and selected.profile and selected.profile.agent_ref then
         if launch.agent_ref and selected.profile.agent_ref ~= launch.agent_ref then

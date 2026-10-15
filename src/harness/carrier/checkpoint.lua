@@ -1,3 +1,4 @@
+local vocabulary = require("vocabulary")
 -- MIT. The carrier checkpoint: everything a replacement carrier needs to
 -- continue from acknowledged output without a second look at the bytes.
 local bounds = require("bounds")
@@ -6,7 +7,7 @@ local driver_types = require("driver_types")
 local record_values = require("record_values")
 local M = {}
 M.REVISION = "bee.carrier.checkpoint@1"
--- Carry bytes per stream: a frame the carrier cannot checkpoint is never
+-- vocabulary.Carry bytes per stream: a frame the carrier cannot checkpoint is never
 -- acknowledged, so the framing bound equals this.
 M.MAX_CARRY_BYTES = 16384
 M.MAX_PENDING_WRITES = 8
@@ -17,91 +18,14 @@ M.MAX_TERMINAL_BYTES = 8192
 -- consumed: an approved effect consumed at the owner; declined: a denial or
 -- expiry answered without any effect, never an authorization to act.
 M.PERMISSION_PHASES = {"intended", "requested", "decided", "consumed", "declined", "written", "acknowledged", "closed"}
-type Positions = {stdout: integer, stderr: integer}
-type Carry = {stdout: string, stderr: string}
 -- Where a partly committed envelope stands: events before events_committed
 -- are in the thread; the rest are re-derived from the carry on resume.
-type EventCursor = {envelope_index: integer, events_committed: integer}
 -- A write whose intent is committed and whose acceptance is not yet
 -- recorded; a resuming carrier asks the runner before deciding.
-type PendingWrite = {write_id: string, input_digest: string, data: string, dispatched: boolean}
-type PermissionPhase = "intended" | "requested" | "decided" | "consumed" | "declined" | "written" | "acknowledged" | "closed"
-type PermissionDecision = "approved" | "denied" | "expired" | "withdrawn"
-type AttemptState = "prepared" | "running" | "ended"
-type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
 -- One permission exchange from the request the harness emitted to the
 -- response the carrier wrote: every key is derived once and kept, so a
 -- replacement asks the approval owner and the runner about the same
 -- request, effect and write rather than inventing new ones.
-type Permission = {lease_ref: string?,
-    permission_request_id: string,
-    correlation_id: string,
-    acknowledgment_id: string?,
-    tool_name: string,
-    input_digest: string,
-    prompt: string,
-    proposal_digest: string,
-    idempotency_key: string,
-    effect_key: string,
-    write_id: string,
-    phase: PermissionPhase,
-    approval_id: string?,
-    decision: PermissionDecision?,
-    incarnation: integer?,
-    response: string?,
-    deadline_ms: integer?,
-}
-type Checkpoint = {
-    schema_revision: string,
-    pending_writes: {PendingWrite},
-    permissions: {Permission},
-    consumed: Positions,
-    carry: Carry,
-    envelope_index: integer,
-    event_cursor: EventCursor?,
-    normalizer_state: {[string]: unknown}?,
-    terminal: driver_types.Terminal?,
-    -- stream_ended: the terminal was derived from the end of stdout, not
-    -- read from an envelope, so it decides only after exit and the drain.
-    stream_ended: boolean?,
-    -- A frame exceeded the runner's unacknowledged window. Skip to its
-    -- newline after restart without retaining unbounded partial bytes.
-    dropping_stdout: boolean?,
-    binding_ref: string,
-    binding_digest: string,
-    profile_id: string,
-    profile_digest: string,
-    plan_digest: string?,
-    retained_session_ref: string?,
-    hint_subscription: string?,
-    output: string?,
-    -- input_closed: the owner closed the child's stdin after settlement;
-    -- a recovered carrier never writes to that session again.
-    input_closed: boolean?,
-    -- gateway_binding: the gateway binding this attempt was admitted under;
-    -- an identifier, never a token.
-    gateway_binding: string?,
-    -- conversation_ref: the provider conversation a resumed window was
-    -- started with; it continues that conversation before any hook reports it.
-    conversation_ref: string?,
-    attachment_generation: integer,
-}
-type Pinned = {binding_ref: string, binding_digest: string, profile_id: string, profile_digest: string, plan_digest: string?, gateway_binding: string?}
-type CheckpointView = {
-    attempt_id: string,
-    action_id: string,
-    carrier_epoch: integer,
-    checkpoint_revision: integer,
-    checkpoint: unknown,
-    attempt_state: AttemptState,
-    attempt_outcome: Outcome?,
-    attempt_error: {code: string, message: string, retryable: boolean}?,
-    open_turn_id: string?,
-    placement_binding: string?,
-    placement_binding_digest: string?,
-    placement_attempt_id: string?,
-}
-type CommittedRecord = {record_id: string, sequence: integer, replayed: boolean}
 local function bounded_json_object(value: unknown, label: string, maximum: integer): ({[string]: unknown}?, string?)
     local object = bounds.object(value)
     if not object then return nil, label .. " must be an object" end
@@ -110,7 +34,7 @@ local function bounded_json_object(value: unknown, label: string, maximum: integ
     if #encoded > maximum then return nil, label .. " exceeds " .. tostring(maximum) .. " bytes" end
     return object, nil
 end
-local function permission_phase(value: unknown): PermissionPhase?
+local function permission_phase(value: unknown): vocabulary.PermissionPhase?
     if value == "intended" then return "intended" end
     if value == "requested" then return "requested" end
     if value == "decided" then return "decided" end
@@ -121,7 +45,7 @@ local function permission_phase(value: unknown): PermissionPhase?
     if value == "closed" then return "closed" end
     return nil
 end
-local function permission_decision(value: unknown): PermissionDecision?
+local function permission_decision(value: unknown): vocabulary.PermissionDecision?
     if value == "approved" then return "approved" end
     if value == "denied" then return "denied" end
     if value == "expired" then return "expired" end
@@ -166,21 +90,21 @@ function M.normalizer_state(value: unknown): ({[string]: unknown}?, string?)
     if value == nil then return nil, nil end
     return bounded_json_object(value, "normalizer_state", M.MAX_NORMALIZER_STATE_BYTES)
 end
-function M.decode_checkpoint_view(value: unknown): (CheckpointView?, string?)
+function M.decode_checkpoint_view(value: unknown): (vocabulary.CheckpointView?, string?)
     local object = bounds.object(value)
     if not object then return nil, "carrier checkpoint view must be an object" end
     local unknown_field = bounds.fields(object, {"attempt_id", "action_id", "carrier_epoch", "checkpoint_revision", "checkpoint", "attempt_state", "attempt_outcome", "attempt_error", "open_turn_id", "placement_binding", "placement_binding_digest", "placement_attempt_id", "cancel_intent"})
     if unknown_field then return nil, "carrier checkpoint view: " .. unknown_field end
     local attempt_id, action_id = bounds.id(object.attempt_id), bounds.id(object.action_id)
     local carrier_epoch, checkpoint_revision = bounds.count(object.carrier_epoch), bounds.count(object.checkpoint_revision)
-    local attempt_state: AttemptState? = nil
+    local attempt_state: vocabulary.AttemptState? = nil
     if object.attempt_state == "prepared" then attempt_state = "prepared"
     elseif object.attempt_state == "running" then attempt_state = "running"
     elseif object.attempt_state == "ended" then attempt_state = "ended" end
     if attempt_id == nil or action_id == nil or carrier_epoch == nil or checkpoint_revision == nil or attempt_state == nil then
         return nil, "carrier checkpoint identity or state is malformed"
     end
-    local attempt_outcome: Outcome? = nil
+    local attempt_outcome: vocabulary.Outcome? = nil
     if object.attempt_outcome ~= nil then
         if object.attempt_outcome == "succeeded" then attempt_outcome = "succeeded"
         elseif object.attempt_outcome == "failed" then attempt_outcome = "failed"
@@ -264,13 +188,13 @@ function M.decode_commit(value: unknown, attempt_id: string, carrier_epoch: inte
     end
     return revision, nil
 end
-function M.new(pinned: Pinned, generation: integer): Checkpoint
+function M.new(pinned: vocabulary.Pinned, generation: integer): vocabulary.Checkpoint
     return {schema_revision = M.REVISION, retained_session_ref = nil, pending_writes = {}, permissions = {}, consumed = {stdout = 0, stderr = 0}, carry = {stdout = "", stderr = ""}, envelope_index = 0,
         event_cursor = nil, normalizer_state = nil, terminal = nil, stream_ended = nil, dropping_stdout = nil,
         binding_ref = pinned.binding_ref, binding_digest = pinned.binding_digest, profile_id = pinned.profile_id,
         profile_digest = pinned.profile_digest, plan_digest = pinned.plan_digest, hint_subscription = nil, output = nil, input_closed = nil, gateway_binding = pinned.gateway_binding, conversation_ref = nil, attachment_generation = generation}
 end
-local function positions(value: unknown, name: string): (Positions?, string?)
+local function positions(value: unknown, name: string): (vocabulary.Positions?, string?)
     local object = bounds.object(value)
     if not object then return nil, name .. " must be an object" end
     local unknown_field = bounds.fields(object, {"stdout", "stderr"})
@@ -279,7 +203,7 @@ local function positions(value: unknown, name: string): (Positions?, string?)
     if not out or out < 0 or not err or err < 0 then return nil, name .. " positions must be nonnegative integers" end
     return {stdout = out, stderr = err}, nil
 end
-local function carry(value: unknown): (Carry?, string?)
+local function carry(value: unknown): (vocabulary.Carry?, string?)
     local object = bounds.object(value)
     if not object then return nil, "carry must be an object" end
     local unknown_field = bounds.fields(object, {"stdout", "stderr"})
@@ -289,7 +213,7 @@ local function carry(value: unknown): (Carry?, string?)
     if not out or not err then return nil, "carry bytes exceed " .. tostring(M.MAX_CARRY_BYTES) end
     return {stdout = out, stderr = err}, nil
 end
-function M.decode(value: unknown): (Checkpoint?, string?)
+function M.decode(value: unknown): (vocabulary.Checkpoint?, string?)
     local object = bounds.object(value)
     if not object then return nil, "checkpoint must be an object" end
     local unknown_field = bounds.fields(object, {"schema_revision", "pending_writes", "permissions", "consumed", "carry", "envelope_index", "event_cursor", "normalizer_state", "terminal", "stream_ended", "dropping_stdout", "binding_ref", "binding_digest", "profile_id", "profile_digest", "plan_digest", "retained_session_ref", "hint_subscription", "output", "input_closed", "gateway_binding", "conversation_ref", "attachment_generation"})
@@ -301,7 +225,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
     if not carried then return nil, carry_error end
     local envelope = bounds.integer(object.envelope_index)
     if not envelope or envelope < 0 then return nil, "envelope_index must be a nonnegative integer" end
-    local cursor: EventCursor? = nil
+    local cursor: vocabulary.EventCursor? = nil
     if object.event_cursor ~= nil then
         local cursor_object = bounds.object(object.event_cursor)
         if not cursor_object then return nil, "event_cursor must be an object" end
@@ -316,7 +240,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
         state, carry_error = bounded_json_object(object.normalizer_state, "normalizer_state", M.MAX_NORMALIZER_STATE_BYTES)
         if not state then return nil, carry_error end
     end
-    local pending: {PendingWrite} = {}
+    local pending: {vocabulary.PendingWrite} = {}
     if object.pending_writes ~= nil then
         local pending_rows, array_error = bounds.array(object.pending_writes, M.MAX_PENDING_WRITES)
         if not pending_rows then return nil, "pending_writes must be a bounded dense list: " .. tostring(array_error) end
@@ -337,7 +261,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
             pending[index] = {write_id = write_id, input_digest = input_digest, data = data, dispatched = dispatched}
         end
     end
-    local permissions: {Permission} = {}
+    local permissions: {vocabulary.Permission} = {}
     if object.permissions ~= nil then
         local permission_rows, array_error = bounds.array(object.permissions, M.MAX_PERMISSIONS)
         if not permission_rows then return nil, "permissions must be a bounded dense list: " .. tostring(array_error) end
@@ -368,7 +292,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
                 approval_id = bounds.id(permission.approval_id)
                 if not approval_id then return nil, "permissions[" .. tostring(index) .. "] approval_id is not an identifier" end
             end
-            local decision: PermissionDecision? = nil
+            local decision: vocabulary.PermissionDecision? = nil
             if permission.decision ~= nil then
                 decision = permission_decision(permission.decision)
                 if not decision then return nil, "permissions[" .. tostring(index) .. "] decision is not an identifier" end
@@ -455,12 +379,12 @@ function M.decode(value: unknown): (Checkpoint?, string?)
         hint_subscription = hint_subscription, output = output, input_closed = input_closed, gateway_binding = gateway_binding, conversation_ref = conversation_ref, attachment_generation = attachment_generation}, nil
 end
 -- The same checkpoint under a replacement carrier's generation.
-function M.rebind(point: Checkpoint, generation: integer): Checkpoint
+function M.rebind(point: vocabulary.Checkpoint, generation: integer): vocabulary.Checkpoint
     point.attachment_generation = generation
     return point
 end
 -- A checkpoint continues another only forward and only for the same pins.
-function M.continues(previous: Checkpoint, next: Checkpoint): string?
+function M.continues(previous: vocabulary.Checkpoint, next: vocabulary.Checkpoint): string?
     if previous.retained_session_ref ~= next.retained_session_ref then return "retained session changed" end
     if previous.conversation_ref ~= next.conversation_ref then return "resumed conversation changed" end
     if previous.binding_digest ~= next.binding_digest or previous.profile_digest ~= next.profile_digest then return "pinned measurements changed" end

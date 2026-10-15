@@ -18,7 +18,7 @@ entries:
   source: file://configure.lua
   method: handle
   imports:
-    configure_protocol: bee.driver.binding:configuration
+    configure_protocol: bee.driver:configuration_types
     canonical: bee.values:canonical
     universal: bee.driver.binding:universal
     quote: bee.driver.binding:quote

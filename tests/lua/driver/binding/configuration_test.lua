@@ -1,3 +1,4 @@
+local configuration_types = require("configuration_types")
 -- MIT. Provider-independent configuration delivery boundaries.
 local test = require("test")
 local hash = require("hash")
@@ -28,7 +29,7 @@ local function refused(value: unknown, provider: string?)
     local result, err = configuration.decode_reply(value, provider)
     test.is_nil(result); test.is_true(err ~= nil)
 end
-local function gateway(action: string): configuration.GatewayInput
+local function gateway(action: string): configuration_types.GatewayInput
     return {endpoint = "127.0.0.1:4312", action_id = action, tools = {"thread_read"}, hooks = {"SessionStart"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}
 end
 local function define_tests()
@@ -44,7 +45,7 @@ local function define_tests()
             end
         end)
         test.it("fills admitted private JSON fields without modifying the recorded template", function()
-            local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-secret", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
+            local selected: configuration_types.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-secret", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
             local output, output_error = configuration.decode_reply(agy.handle({
                 fixture = false, gateway = selected, home_directory = "/private/agy-session",
             }), nil, selected)
@@ -153,7 +154,7 @@ local function define_tests()
         end)
 
         test.it("renders Agy lifecycle and permission command hooks with quoted host inputs", function()
-            local selected: configuration.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-a", tools = {},
+            local selected: configuration_types.GatewayInput = {endpoint = "127.0.0.1:4312", action_id = "action-a", tools = {},
                 hooks = {"PreToolUse", "PostToolUse", "Stop", "PermissionRequest"}, token_environment = "MCP_TOKEN", hook_token_environment = "HOOK_TOKEN",
                 hook_command = "/private/Bee's bin/bee"}
             local reply = agy.handle({fixture = false, gateway = selected, home_directory = "/private/agy-session"})

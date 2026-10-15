@@ -1,3 +1,4 @@
+local classify_types = require("classify_types")
 -- MIT. The harness catalog: one immutable registry snapshot, every driver
 -- binding with its profiles and methods read from that same snapshot,
 -- classified as compatible or not, and marked activated only when the
@@ -13,7 +14,7 @@ M.ACTIVATION_ENTRY = "bee.harness.launch:harness_activation"
 M.BINDING_TYPE = "harness.driver"
 M.MAX_BINDINGS = 64
 type Entry = {[string]: unknown}
-type Snapshot = {generation: integer, complete: boolean, bindings: {classify.Binding}, diagnostics: {string}}
+type Snapshot = {generation: integer, complete: boolean, bindings: {classify_types.Binding}, diagnostics: {string}}
 type Pinned = registry.Snapshot
 local function generation(pinned: Pinned): (integer?, string?)
     local version = pinned:version()
@@ -138,9 +139,9 @@ function M.entry(pinned: Pinned, id: string): Entry?
 end
 -- Compatible and activated bindings only: what a launch may resolve. An
 -- incomplete catalog resolves nothing.
-function M.usable(snapshot: Snapshot): ({classify.Binding}?, string?)
+function M.usable(snapshot: Snapshot): ({classify_types.Binding}?, string?)
     if not snapshot.complete then return nil, "the catalog is incomplete; uniqueness is not certified" end
-    local result: {classify.Binding} = {}
+    local result: {classify_types.Binding} = {}
     for _, item in ipairs(snapshot.bindings) do
         if item.state == "compatible" and item.activated then result[#result + 1] = item end
     end

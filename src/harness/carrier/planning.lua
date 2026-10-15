@@ -1,3 +1,5 @@
+local configuration_types = require("configuration_types")
+local policy_types = require("policy_types")
 -- MIT. Carrier plan measurement and admission.
 local registry = require("registry")
 local permission = require("permission")
@@ -87,7 +89,7 @@ local digest_of = canonical.digest
 
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_protocol.Request, gateway: placement_types.Gateway?}
+type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy_types.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_types.Request, gateway: placement_types.Gateway?}
 -- verify_acceptance: the acceptance record a host declaration names,
 -- decoded and matched against this snapshot's binding, profile, adapter
 -- and proof fixture. The permission exchange stands on this record type;
@@ -185,7 +187,7 @@ local function measure(request: Request): (Measured?, string?)
     -- The carrier carries only host-selected configuration inputs. Placement
     -- renders and freezes the driver's final delivery with its own HOME path.
     local gateway: placement_types.Gateway? = nil
-    local gateway_input: configuration_protocol.GatewayInput? = nil
+    local gateway_input: configuration_types.GatewayInput? = nil
     local selected, selected_error = driver_resolver.profile(pinned, request.binding_ref, request.profile_id)
     if selected_error then return nil, selected_error end
     local selected_hooks = driver_resolver.select_hooks(selected, launch_policy.gateway_hooks)
@@ -224,7 +226,7 @@ local function measure(request: Request): (Measured?, string?)
         provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
-    local configuration: configuration_protocol.Request = {provider_ref = launch_policy.provider_ref,
+    local configuration: configuration_types.Request = {provider_ref = launch_policy.provider_ref,
         placement_profile_ref = request.placement_profile_ref, option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
         gateway = gateway_input, fixture = launch_policy.fixture}
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,

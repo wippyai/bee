@@ -6,8 +6,8 @@ entries:
   source: file://types.lua
   imports:
     bounds: bee.values:bounds
-    login_evidence: bee.driver.locate:login_evidence
-    events: bee.driver.codec:events
+    login_evidence: bee.driver:login_types
+    events: bee.driver:event_types
     values: bee.threads.records:values
     record_bounds: bee.threads.records:bounds
 - name: driver
@@ -33,3 +33,24 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
+- name: login_types
+  kind: library.lua
+  source: file://login_types.lua
+- name: event_types
+  kind: library.lua
+  source: file://event_types.lua
+  imports:
+    record_types: bee.threads:record_types
+- name: framing_types
+  kind: library.lua
+  source: file://framing_types.lua
+- name: stream_types
+  kind: library.lua
+  source: file://stream_types.lua
+  imports:
+    framing: bee.driver:framing_types
+- name: configuration_types
+  kind: library.lua
+  source: file://configuration_types.lua
+  imports:
+    driver_types: bee.driver:types

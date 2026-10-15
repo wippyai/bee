@@ -1,3 +1,4 @@
+local shared_configuration_types = require("shared_configuration_types")
 -- MIT. The generated Codex provider configuration: the one file the
 -- private CODEX_HOME needs for the selected login method. A host-owned provider
 -- entry selects the endpoint, model and optional developer instructions; this
@@ -129,7 +130,7 @@ function M.projection(provider: Provider, gateway_section: string?, instructions
     if hash_error or not digest then return nil, "configuration digest failed" end
     return {revision = M.REVISION, path = M.PATH, content = content, digest = digest, provider_ref = provider.ref, provider_digest = provider.digest}, nil
 end
-function M.login_configuration(): (shared_configuration.Configuration?, string?)
+function M.login_configuration(): (shared_configuration_types.Configuration?, string?)
     local digest, err = hash.sha256("")
     if not digest then return nil, tostring(err or "Login configuration digest failed") end
     return {revision = "bee.codex-login-config@1", path = M.PATH, content = "", digest = digest,

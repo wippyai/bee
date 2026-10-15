@@ -1,21 +1,18 @@
+local vocabulary = require("vocabulary")
 -- MIT. How a turn settles from what was observed: the driver's terminal
--- envelope decides; process exit alone never does. Exit is observed, the
+-- envelope decides; process exit alone never does. vocabulary.Exit is observed, the
 -- remaining output drained within a bound, and only then is a missing
 -- envelope decided. A terminal the driver derived from the end of the
 -- stream is such a missing envelope: it decides only after exit and the
 -- drain, so output the child wrote before its end is still recorded. Pure.
 local driver_types = require("driver_types")
 local M = {}
-type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
 -- stopped: the child ended after its placement was asked to stop it.
-type Exit = {code: integer?, signal: integer?, uncertain: boolean, stopped: boolean?}
-type Settlement = {outcome: Outcome, answer: string?, resume_ref: string?, reason: string, exit_reconciled: boolean}
 -- stream_ended: the terminal was derived from the end of stdout rather
 -- than read from an envelope.
-type Evidence = {terminal: driver_types.Terminal?, stream_ended: boolean, exit: Exit?, drained: boolean, exit_codes_trustworthy: boolean}
 -- Decides only when the evidence is complete: a terminal envelope, or an
 -- exit with the drain finished. Returns nil while more may still arrive.
-function M.decide(evidence: Evidence): Settlement?
+function M.decide(evidence: vocabulary.Evidence): vocabulary.Settlement?
     local terminal = evidence.terminal
     local exit = evidence.exit
     if terminal and evidence.stream_ended then

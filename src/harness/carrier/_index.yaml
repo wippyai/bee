@@ -16,6 +16,7 @@ entries:
     canonical: bee.values:canonical
     driver_types: bee.driver:types
     record_values: bee.threads.records:values
+    vocabulary: bee.harness:checkpoint_types
 - name: prestart
   kind: library.lua
   source: file://prestart.lua
@@ -36,6 +37,7 @@ entries:
   source: file://settle.lua
   imports:
     driver_types: bee.driver:types
+    vocabulary: bee.harness:settlement_types
 - name: policy
   kind: library.lua
   source: file://policy.lua
@@ -58,6 +60,7 @@ entries:
     trait_access: bee.gateway.security:traits
     gateway_hooks_catalog: bee.gateway.hooks:hooks
     preferences: bee.driver.descriptor:effective
+    vocabulary: bee.harness:policy_types
 - name: continuation
   kind: library.lua
   source: file://continuation.lua
@@ -69,6 +72,7 @@ entries:
     record: bee.threads.records:record
     hooks: bee.gateway.hooks:hooks
     record_bounds: bee.threads.records:bounds
+    checkpoint_types: bee.harness:checkpoint_types
 - name: hook_records
   kind: library.lua
   source: file://hook_records.lua
@@ -107,12 +111,15 @@ entries:
     record_bounds: bee.threads.records:bounds
     part_planning: bee.harness.carrier:planning
     part_output: bee.harness.carrier:output
+    checkpoint_types: bee.harness:checkpoint_types
+    settle_types: bee.harness:settlement_types
 - name: hooks
   kind: library.lua
   source: file://hooks.lua
   imports:
     checkpoint: bee.harness.carrier:checkpoint
     bounds: bee.values:bounds
+    checkpoint_types: bee.harness:checkpoint_types
 - name: delivery
   kind: library.lua
   source: file://delivery.lua
@@ -136,6 +143,7 @@ entries:
     hooks: bee.harness.carrier:hooks
     delivery: bee.harness.carrier:delivery
     records: bee.harness.carrier:hook_records
+    checkpoint_types: bee.harness:checkpoint_types
 - name: planning
   kind: library.lua
   source: file://planning.lua
@@ -150,7 +158,7 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     catalog: bee.harness.catalog:catalog
-    classify: bee.harness.catalog:classify
+    classify: bee.harness:classification
     policy: bee.harness.carrier:policy
     continuation: bee.harness.carrier:continuation
     configuration: bee.driver.binding:configuration
@@ -164,6 +172,8 @@ entries:
     descriptor: bee.driver.descriptor:descriptor
     readiness: bee.harness.launch:readiness
     placement_profiles: bee.placement.profiles:profiles
+    policy_types: bee.harness:policy_types
+    configuration_types: bee.driver:configuration_types
 - name: output
   kind: library.lua
   source: file://output.lua
@@ -184,3 +194,5 @@ entries:
     carrier_types: bee.harness:types
     permission_exchange: bee.harness.permission:exchange
     part_planning: bee.harness.carrier:planning
+    permission_types: bee.harness:permission_types
+    checkpoint_types: bee.harness:checkpoint_types

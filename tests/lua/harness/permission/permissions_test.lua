@@ -1,3 +1,4 @@
+local adapter_types = require("adapter_types")
 -- MIT. Executor permission tests: a Claude control_request observed during
 -- a session turn becomes one approval naming session, workspace, tool and
 -- effect; an approved decision is consumed and answered allow, a denied or
@@ -20,8 +21,8 @@ type IO = {withdraw: (Object) -> (Object?, string?), request_approval: (Object) 
     wait_ms: (integer) -> (), now_ms: () -> integer, waiting: () -> boolean}
 type TurnPlan = {exchange: Exchange?, exchange_refusal: string?, plan_digest: string,
     request: {owner_id: string, attempt_id: string, action_id: string, workspace_id: string?, session_ref: string?}}
-local function scan(decoded: adapter.Adapter, observations: {unknown}): ({adapter.Request}, string?)
-    local found: {adapter.Request} = {}
+local function scan(decoded: adapter_types.Adapter, observations: {unknown}): ({adapter_types.Request}, string?)
+    local found: {adapter_types.Request} = {}
     local seen: {[string]: boolean} = {}
     for _, event in ipairs(observations) do
         local request, err = adapter.request(decoded, event)
@@ -72,7 +73,7 @@ local function context(io: IO, declared: Exchange, labels: Labels): permissions.
             return {ok = true, value = result}, nil
         end}
 end
-local function request(io: IO, declared: Exchange, labels: Labels, found: adapter.Request): (permissions.Context?, string?)
+local function request(io: IO, declared: Exchange, labels: Labels, found: adapter_types.Request): (permissions.Context?, string?)
     local ctx = context(io, declared, labels)
     local payload = {request_id = found.correlation_id, request = {tool_name = found.tool_name,
         input = found.input, description = found.prompt, tool_use_id = found.acknowledgment_id}}
@@ -123,7 +124,7 @@ local function adapter_table(): Object
     }
 end
 
-local function decoded_adapter(): adapter.Adapter
+local function decoded_adapter(): adapter_types.Adapter
     local decoded, err = adapter.decode(ADAPTER_ID, adapter_table())
     if not decoded then error("adapter decodes: " .. tostring(err)) end
     return decoded
@@ -139,7 +140,7 @@ local function observation(): Object
         event_name = "claude.control_request", event_revision = "stream-json-2", payload_json = encoded}}
 end
 
-local function exchange(decoded: adapter.Adapter): Exchange
+local function exchange(decoded: adapter_types.Adapter): Exchange
     return {adapter = decoded, approver_policy = "session-tools", poll_ms = 50, ttl_ms = 60000}
 end
 

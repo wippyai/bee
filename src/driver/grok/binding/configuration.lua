@@ -1,3 +1,4 @@
+local configure_protocol_types = require("configure_protocol_types")
 -- MIT. Grok configuration: one scoped MCP subtree inserted into the
 -- host-approved private configuration snapshot at materialization.
 local hash = require("hash")
@@ -64,7 +65,7 @@ function M.projection(gateway: Gateway): (Projection?, string?)
     }, nil
 end
 
-function M.hooks_file(gateway: configure_protocol.GatewayInput): (configure_protocol.Configuration?, string?)
+function M.hooks_file(gateway: configure_protocol_types.GatewayInput): (configure_protocol_types.Configuration?, string?)
     local executable = gateway.hook_command
     if not executable then return nil, "grok hooks require the host-selected hook command" end
     local token = gateway.hook_token_environment
@@ -88,7 +89,7 @@ function M.hooks_file(gateway: configure_protocol.GatewayInput): (configure_prot
         digest = digest, provider_ref = configure_protocol.GATEWAY_PROVIDER_REF}, nil
 end
 
-function M.login_configuration(): (configure_protocol.Configuration?, string?)
+function M.login_configuration(): (configure_protocol_types.Configuration?, string?)
     local digest, digest_error = hash.sha256("")
     if not digest then return nil, tostring(digest_error or "configuration digest failed") end
     return {revision = M.REVISION, path = M.PATH, content = "", digest = digest,

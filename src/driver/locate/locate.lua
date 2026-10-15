@@ -1,10 +1,11 @@
+local login_evidence_types = require("login_evidence_types")
 -- MIT. Normalize host-probed driver availability without touching credentials.
 local bounds = require("bounds")
 local login_evidence = require("login_evidence")
 local M = {}
 
-type Spec = {provider: string, executable: string, login_evidence: login_evidence.Declaration?}
-type Request = {profile_id: string, configured: boolean, executable: {[string]: unknown}?, login_checks: {login_evidence.Check}?,
+type Spec = {provider: string, executable: string, login_evidence: login_evidence_types.Declaration?}
+type Request = {profile_id: string, configured: boolean, executable: {[string]: unknown}?, login_checks: {login_evidence_types.Check}?,
     platform: {[string]: unknown}?, checked_at: string?}
 type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
 type Login = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?}
@@ -78,7 +79,7 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
 
     local executable = {present = executable_present, version = executable_version}
     local platform = {os = platform_os, arch = platform_arch, compatible = platform_compatible}
-    local checks: {login_evidence.Check} = {}
+    local checks: {login_evidence_types.Check} = {}
     local present: boolean? = true
     if spec.login_evidence then
         local decoded, check_error = login_evidence.decode_checks(object.login_checks, spec.login_evidence)

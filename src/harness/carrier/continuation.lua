@@ -1,3 +1,4 @@
+local checkpoint_types = require("checkpoint_types")
 -- MIT. Resolve native harness continuation from committed owner state.
 local bounds = require("bounds")
 local record_bounds = require("record_bounds")
@@ -73,7 +74,7 @@ end
 -- Explicit interactive resume is not another successful structured turn.
 -- The old process must be gone; its committed observations identify the
 -- conversation, while the new attempt supplies fresh admission and grants.
-type PreviousWindow = {stored: {[string]: unknown}, point: checkpoint.Checkpoint, attempt: {[string]: unknown}, binding: string, private_home: boolean}
+type PreviousWindow = {stored: {[string]: unknown}, point: checkpoint_types.Checkpoint, attempt: {[string]: unknown}, binding: string, private_home: boolean}
 function M.inspect_window(call: Call, request: Request, ended: boolean): (PreviousWindow?, string?)
     local missing_placement = placement_error(request)
     if missing_placement then return nil, missing_placement end

@@ -19,7 +19,7 @@ entries:
   method: handle
   imports:
     configuration: bee.driver.agy.binding:configuration
-    configure_protocol: bee.driver.binding:configuration
+    configure_protocol: bee.driver:configuration_types
     universal: bee.driver.binding:universal
   security:
     policies:
@@ -57,6 +57,7 @@ entries:
     configure_protocol: bee.driver.binding:configuration
     quote: bee.driver.binding:quote
     hook_limits: bee.driver.binding:hook_limits
+    configure_protocol_types: bee.driver:configuration_types
 - name: binding
   kind: contract.binding
   contracts:

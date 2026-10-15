@@ -39,6 +39,7 @@ entries:
     configuration: bee.driver.binding:configuration
     materializer: bee.placement.native.env:configuration
     bounds: bee.values:bounds
+    configuration_types: bee.driver:configuration_types
 - name: providers_test
   kind: function.lua
   source: file://providers_test.lua
@@ -106,6 +107,7 @@ entries:
     agy: bee.driver.agy.binding:locate
     grok: bee.driver.grok.binding:locate
     muse: bee.driver.muse.binding:locate
+    login_evidence_types: bee.driver:login_types
 - name: descriptor_discovery_policy
   kind: security.policy
   meta: {type: test_support}
@@ -145,7 +147,7 @@ entries:
     universal: bee.driver.binding:universal
     codec_registry: bee.driver.codec:codec_registry
     descriptor: bee.driver.descriptor:descriptor
-    configuration: bee.driver.binding:configuration
+    configuration: bee.driver:configuration_types
 - name: normalize_probe
   kind: function.lua
   source: file://normalize_probe.lua

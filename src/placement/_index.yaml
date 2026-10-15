@@ -20,6 +20,7 @@ entries:
     login_evidence: bee.driver.locate:login_evidence
     hook_catalog: bee.gateway.hooks:hooks
     preferences: bee.driver.descriptor:effective
+    login_evidence_types: bee.driver:login_types
 - name: transitions
   kind: library.lua
   source: file://transitions.lua

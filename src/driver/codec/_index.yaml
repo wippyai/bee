@@ -13,6 +13,7 @@ entries:
     types: bee.driver:types
     bounds: bee.values:bounds
     paths: bee.driver.codec:paths
+    events_types: bee.driver:event_types
 - name: codex_jsonl
   kind: library.lua
   source: file://codex_jsonl.lua
@@ -22,6 +23,7 @@ entries:
     types: bee.driver:types
     bounds: bee.values:bounds
     paths: bee.driver.codec:paths
+    events_types: bee.driver:event_types
 - name: opencode_json_events
   kind: library.lua
   source: file://opencode_json_events.lua
@@ -32,6 +34,7 @@ entries:
     bounds: bee.values:bounds
     values: bee.threads.records:values
     paths: bee.driver.codec:paths
+    events_types: bee.driver:event_types
 - name: agy_stream_json
   kind: library.lua
   source: file://agy_stream_json.lua
@@ -53,6 +56,7 @@ entries:
     bounds: bee.values:bounds
     values: bee.threads.records:values
     paths: bee.driver.codec:paths
+    events_types: bee.driver:event_types
 - name: muse_record_jsonl
   kind: library.lua
   source: file://muse_record_jsonl.lua
@@ -82,6 +86,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     record_types: bee.threads:record_types
+    vocabulary: bee.driver:event_types
 - name: normalize
   kind: library.lua
   source: file://normalize.lua

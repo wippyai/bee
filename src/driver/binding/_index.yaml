@@ -15,6 +15,7 @@ entries:
     locate: bee.driver.locate:locate
     codec_registry: bee.driver.codec:codec_registry
     option_render: bee.driver.binding:option_render
+    configuration_types: bee.driver:configuration_types
 - name: resolver
   kind: library.lua
   source: file://resolver.lua
@@ -48,6 +49,7 @@ entries:
     driver_resolver: bee.driver.binding:resolver
     types: bee.driver:types
     instructions: bee.driver.profiles:instructions
+    vocabulary: bee.driver:configuration_types
 - name: option_render
   kind: library.lua
   source: file://option_render.lua
@@ -59,7 +61,7 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     configuration: bee.driver.binding:configuration
-
+    configuration_types: bee.driver:configuration_types
 - name: configure
   kind: function.lua
   source: file://configure.lua

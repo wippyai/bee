@@ -1,3 +1,4 @@
+local events_types = require("events_types")
 -- MIT. Grok CLI streaming-json into thread observations.
 -- The only terminal report is the end envelope; a stream
 -- that ends without one is uncertain, whatever the process exit says.
@@ -20,7 +21,7 @@ type State = {
     terminal: types.Terminal?,
     answer: string?,
     answer_truncated: boolean,
-    usage: events.Usage?,
+    usage: events_types.Usage?,
 }
 type Step = {observations: {Observation}, terminal: types.Terminal?}
 
@@ -37,7 +38,7 @@ function M.new(resumed: boolean): State
     return state
 end
 
-local function decode_usage(value: unknown): (events.Usage?, string?)
+local function decode_usage(value: unknown): (events_types.Usage?, string?)
     if value == nil then return nil, nil end
     local usage, usage_error = values.usage(value)
     if usage_error then return nil, usage_error:gsub("^usage ", "usage.") end
@@ -122,7 +123,7 @@ local function text_of(value: unknown): string
     return tostring(value or "")
 end
 
-local function usage_of(value: unknown): events.Usage?
+local function usage_of(value: unknown): events_types.Usage?
     if type(value) ~= "table" then return nil end
     local usage = value
     local input = usage.input_tokens or usage.prompt_tokens

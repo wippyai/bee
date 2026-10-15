@@ -1,3 +1,4 @@
+local checkpoint_types = require("checkpoint_types")
 -- MIT. Continuation comes from a successful owner receipt and native session.
 local test = require("test")
 local configuration = require("configuration")
@@ -359,7 +360,7 @@ local function define_tests()
                 end
                 return nil, "unexpected recovery target " .. target
             end
-            local function fake_resume(config: hooks.Config, recovered: checkpoint.Checkpoint?, revision: integer): (hooks.State?, string?)
+            local function fake_resume(config: hooks.Config, recovered: checkpoint_types.Checkpoint?, revision: integer): (hooks.State?, string?)
                 captured = config
                 local disabled: hooks.Config = {thread_id = config.thread_id, attempt_id = config.attempt_id, epoch = config.epoch,
                     binding_ref = config.binding_ref, binding_digest = config.binding_digest, profile_id = config.profile_id,

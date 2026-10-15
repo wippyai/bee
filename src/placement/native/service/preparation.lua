@@ -1,3 +1,4 @@
+local configuration_types = require("configuration_types")
 -- MIT. Native launch admission, resources and configuration preparation.
 local funcs = require("funcs")
 local json = require("json")
@@ -228,7 +229,7 @@ end
 -- Configuration inputs come from one host snapshot, not caller-authored
 -- files. The renderer receives the final owner-derived HOME only when a new
 -- intent is recorded; replay uses that intent's frozen delivery.
-local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest, context: LocalPreparation?): (configuration_protocol.Request?, string?, string?, driver_types.GitWritableRootsAdapter?)
+local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest, context: LocalPreparation?): (configuration_types.Request?, string?, string?, driver_types.GitWritableRootsAdapter?)
     local policy_entry, policy_error = resolver.entry(pinned, request.policy_ref)
     if policy_error then return nil, nil, policy_error end
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
@@ -280,7 +281,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     hooks = resolver.select_hooks(selected_profile, hooks)
     table.sort(tools)
     tools = gateway_protocol.offered_tools(tools, data, request.preferences ~= nil)
-    local gateway: configuration_protocol.GatewayInput? = nil
+    local gateway: configuration_types.GatewayInput? = nil
     if #tools > 0 or #hooks > 0 then
         local endpoint, endpoint_error = gateway_configuration.endpoint()
         if not endpoint then return nil, nil, endpoint_error or "gateway endpoint" end

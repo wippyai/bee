@@ -42,7 +42,7 @@ entries:
     admission: bee.harness.launch:admission
     catalog: bee.harness.catalog:catalog
     profiles: bee.harness.profiles:protocol
-    classify: bee.harness.catalog:classify
+    classify: bee.harness:classification
     policy: bee.harness.carrier:policy
     machine: bee.harness.carrier:machine
     descriptor: bee.driver.descriptor:descriptor

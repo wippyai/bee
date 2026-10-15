@@ -11,6 +11,7 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     driver_types: bee.driver:types
+    vocabulary: bee.harness:permission_types
 - name: acceptance
   kind: library.lua
   source: file://acceptance.lua
@@ -31,6 +32,8 @@ entries:
     permission: bee.harness.permission:adapter
     checkpoint: bee.harness.carrier:checkpoint
     service_reply: bee.values:reply
+    permission_types: bee.harness:permission_types
+    checkpoint_types: bee.harness:checkpoint_types
 - name: hook_exchange
   kind: library.lua
   source: file://hook_exchange.lua

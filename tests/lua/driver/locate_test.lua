@@ -1,3 +1,4 @@
+local login_evidence_types = require("login_evidence_types")
 -- MIT. Locate keeps executable and login evidence separate from driver policy.
 local test = require("test")
 local locate = require("locate")
@@ -59,7 +60,7 @@ local function define_tests()
                 {driver = grok, provider = "grok"}, {driver = muse, provider = "muse"}}) do
                 local selected = assert(descriptor.load("bee.driver." .. case.provider .. ".descriptor:cli"))
                 for success_index in ipairs(selected.login_evidence.any_of) do
-                    local checks: {login_evidence.Check} = {}
+                    local checks: {login_evidence_types.Check} = {}
                     for index, evidence in ipairs(selected.login_evidence.any_of) do
                         local matched = index == success_index
                         local code: integer? = nil

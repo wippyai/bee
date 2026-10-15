@@ -1,3 +1,4 @@
+local login_evidence_types = require("login_evidence_types")
 -- MIT. Strict decoder and registry reader for declarative external CLI drivers.
 local bounds = require("bounds")
 local registry = require("registry")
@@ -38,7 +39,7 @@ type Descriptor = {
     provider: string,
     executable: string,
     version_probe: Object,
-    login_evidence: login_evidence.Declaration,
+    login_evidence: login_evidence_types.Declaration,
     platform: Object,
     codec: string,
     json_paths: Object,

@@ -676,7 +676,7 @@ source requires, and its metadata names it an application:
 - name: app
   kind: process.lua
   meta:
-    type: bee.app
+    type: bee.application
     application: {api_version: 1, title: My app, lifetime: view, revision: '1', instance_policy: singleton}
   source: file://app.lua
   method: main

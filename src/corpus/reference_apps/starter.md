@@ -25,7 +25,7 @@ Copy this complete JSON array to entries.json in overlay hello. Replace all app.
       }
     },
     "meta": {
-      "type": "bee.app",
+      "type": "bee.application",
       "application": {
         "api_version": 1,
         "lifetime": "view",

@@ -35,7 +35,7 @@ and metadata describe an app; they never grant authority.
 - name: app
   kind: process.lua
   meta:
-    type: bee.app
+    type: bee.application
     application:
       api_version: 1
       title: Hello

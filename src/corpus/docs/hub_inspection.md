@@ -263,7 +263,7 @@ agent launch policies include them. The configuration link
 An agent publishes a package to the Hub only through a person-approved grant:
 
 ```json
-{"name": "publish_request", "arguments": {"component": "bee/probe", "version": "0.0.1-probe.1", "visibility": "private", "source": "/home/person/work/probe"}}
+{"name": "publish_request", "arguments": {"component": "bee/probe", "version": "0.0.1-probe.1", "visibility": "private", "source": "/work/person/work/probe"}}
 {"name": "publish_status", "arguments": {"request_id": "<request_id>"}}
 ```
 

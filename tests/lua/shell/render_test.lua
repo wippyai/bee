@@ -133,8 +133,8 @@ local function define_tests()
                 {id = "d2", title = "Desktop 2", workspace = "w2", shown = true},
             }
             local workspaces: {workspace_menu.Workspace} = {
-                {id = "w1", path = "/home/a/bee", label = "bee"},
-                {id = "w2", path = "/home/a/site", label = "site"},
+                {id = "w1", path = "/work/a/bee", label = "bee"},
+                {id = "w2", path = "/work/a/site", label = "site"},
             }
             local opened = workspace_menu.new("d2", desktops, workspaces, {d1 = 2}, {"n1"}, "n1")
             local rows = draw(model.new(100, 30), {}, {workspaces = opened})
@@ -149,7 +149,7 @@ local function define_tests()
             test.contains(text, "+ New desktop")
             test.contains(text, "FOLDERS")
             test.contains(text, "✓ site")
-            test.contains(text, "/home/a/site")
+            test.contains(text, "/work/a/site")
             test.contains(text, "+ Add folder…")
             test.contains(text, "Shown here · R rename")
             test.is_nil((text:find("NODES", 1, true)))
@@ -172,7 +172,7 @@ local function define_tests()
         end
 
         test.it("uses viewport space and shows the selected folder's complete path", function()
-            local path = "/home/person/projects/sample-workspace-with-a-deliberately-long-folder-name/long-project-name"
+            local path = "/work/person/projects/sample-workspace-with-a-deliberately-long-folder-name/long-project-name"
             local opened = workspace_menu.new("d1", {{id = "d1", title = "Sample workspace", workspace = "w1", shown = true}},
                 {{id = "w1", path = path, label = "long-project-name"}}, {}, {"n1"}, "n1")
             opened.selected = 3

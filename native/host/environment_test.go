@@ -21,9 +21,9 @@ func resolver() hostResolver {
 			}
 			return "", errors.New("not found")
 		},
-		homeDir:          func() (string, error) { return "/home/person", nil },
-		getwd:            func() (string, error) { return "/home/person/project", nil },
-		executable:       func() (string, error) { return "/home/person/.local/bin/bee", nil },
+		homeDir:          func() (string, error) { return "/work/person", nil },
+		getwd:            func() (string, error) { return "/work/person/project", nil },
+		executable:       func() (string, error) { return "/work/person/.local/bin/bee", nil },
 		environmentNames: func() []string { return []string{"HOME", "PATH"} },
 	}
 }
@@ -32,7 +32,7 @@ func TestHostEnvironmentNamesTheRunningBeeAndItsFolders(t *testing.T) {
 	storage, err := newHostEnvironment(resolver())
 	require.NoError(t, err)
 	ctx := context.Background()
-	for name, want := range map[string]string{"self": "/home/person/.local/bin/bee", "home": "/home/person", "cwd": "/home/person/project"} {
+	for name, want := range map[string]string{"self": "/work/person/.local/bin/bee", "home": "/work/person", "cwd": "/work/person/project"} {
 		got, err := storage.Get(ctx, name)
 		require.NoError(t, err)
 		require.Equal(t, want, got, name)

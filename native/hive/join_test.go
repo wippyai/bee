@@ -282,7 +282,7 @@ func TestNodesOfOtherMachinesAreTrustedUnderTheirAdvertisedKeyInASharedHive(t *t
 func TestSelectedCandidatesPreferTheTailnetThenTheLAN(t *testing.T) {
 	assigned := []interfaceAddress{
 		{name: "docker0", address: netip.MustParseAddr("172.17.0.1")},
-		{name: "eth0", address: netip.MustParseAddr("192.168.1.4")},
+		{name: "eth0", address: netip.MustParseAddr("203.0.113.4")},
 		{name: "tailscale0", address: netip.MustParseAddr("100.64.0.2")},
 	}
 	candidates := selectJoinCandidates(47931, assigned, []netip.Addr{netip.MustParseAddr("100.64.0.2")}, "box.tail1234.ts.net")
@@ -291,19 +291,19 @@ func TestSelectedCandidatesPreferTheTailnetThenTheLAN(t *testing.T) {
 		require.True(t, candidate.Valid(), candidate.Endpoint)
 		endpoints = append(endpoints, candidate.Endpoint)
 	}
-	require.Equal(t, []string{"100.64.0.2:47931", "box.tail1234.ts.net:47931", "192.168.1.4:47931", "172.17.0.1:47931"}, endpoints)
+	require.Equal(t, []string{"100.64.0.2:47931", "box.tail1234.ts.net:47931", "203.0.113.4:47931", "172.17.0.1:47931"}, endpoints)
 	require.Equal(t, "vm", candidates[3].Scope)
 }
 
 func TestJoinFailureNamesTheEndpointsAndTheWSLRemedy(t *testing.T) {
 	line := invite.Invite{Address: netip.MustParseAddrPort("172.30.1.2:47931"),
-		Candidates: []invite.Candidate{{Kind: "interface", Scope: "lan", Endpoint: "192.168.1.4:47931"}}}
+		Candidates: []invite.Candidate{{Kind: "interface", Scope: "lan", Endpoint: "203.0.113.4:47931"}}}
 	advice := joinFailureAdvice(line)
 	require.Contains(t, advice, "172.30.1.2:47931")
-	require.Contains(t, advice, "192.168.1.4:47931")
+	require.Contains(t, advice, "203.0.113.4:47931")
 	require.Contains(t, advice, "networkingMode=mirrored")
 	require.Contains(t, advice, "wsl --shutdown")
-	require.NotContains(t, joinFailureAdvice(invite.Invite{Address: netip.MustParseAddrPort("192.168.1.4:47931")}), "networkingMode")
+	require.NotContains(t, joinFailureAdvice(invite.Invite{Address: netip.MustParseAddrPort("203.0.113.4:47931")}), "networkingMode")
 }
 
 func TestJoinRefusesAMalformedToken(t *testing.T) {

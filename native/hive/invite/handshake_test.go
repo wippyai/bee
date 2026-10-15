@@ -117,8 +117,8 @@ func TestListenerReportsTheObservedJoinAddress(t *testing.T) {
 // allowed, and anything else is refused.
 func TestValidObservedAcceptsOnlyBareIPLiterals(t *testing.T) {
 	for value, want := range map[string]bool{
-		"": true, "127.0.0.1": true, "192.168.1.4": true, "fd7a:115c:a1e0::1": true,
-		"0.0.0.0": false, "not-an-ip": false, "192.168.1.4%eth0": false, "127.0.0.1:4100": false,
+		"": true, "127.0.0.1": true, "203.0.113.4": true, "fd7a:115c:a1e0::1": true,
+		"0.0.0.0": false, "not-an-ip": false, "203.0.113.4%eth0": false, "127.0.0.1:4100": false,
 	} {
 		if got := validObserved(value); got != want {
 			t.Errorf("validObserved(%q) = %v, want %v", value, got, want)

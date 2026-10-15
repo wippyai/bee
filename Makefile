@@ -97,7 +97,10 @@ fixture-install: compose
 fixture-lint: fixture-install
 	python3 -m tests.runner.locked --cwd tests shared tests/.wippy/composition.lock $(abspath $(WIPPY)) lint $(LINT_FLAGS)
 
-lint: binary-identity fixture-lint
+hygiene:
+	python3 -m build.hygiene
+
+lint: hygiene binary-identity fixture-lint
 	python3 tools/corpus.py --check
 	$(WIPPY) lint $(LINT_FLAGS)
 
@@ -196,7 +199,7 @@ ci-assemble: tools
 ci-import:
 	python3 build/ci.py import
 
-ci-lint: agent-corpus-check test-python
+ci-lint: hygiene agent-corpus-check test-python
 
 ci-stamp:
 	python3 build/release_version.py $(VERSION)
@@ -229,4 +232,4 @@ release-package:
 
 .PHONY: builder-version test-prepare test-shard release-prepare release-compile ci-tools ci-tools-outputs ci-prepare ci-import ci-stamp ci-require ci-warm ci-gate ci-plan release-package release-rosetta release-verify release-publish
 
-.PHONY: fixture-install ci-profile ci-assemble ci-lint
+.PHONY: hygiene fixture-install ci-profile ci-assemble ci-lint

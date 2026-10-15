@@ -20,7 +20,7 @@ local function define_tests()
             test.eq(assert(bounds.object(bee.headers)).Authorization, "Bearer ${BEE_MCP_TOKEN}")
         end)
         test.it("refuses non-loopback listeners and malformed identifiers", function()
-            for _, endpoint in ipairs({"10.1.2.3:4312", "192.168.1.2:4312", "localhost:4312", "127.0.0.1:0"}) do
+            for _, endpoint in ipairs({"203.0.113.3:4312", "203.0.113.2:4312", "localhost:4312", "127.0.0.1:0"}) do
                 test.is_nil(configuration.render("client", endpoint, "client-1", "fixture-token"))
             end
             test.is_nil(configuration.render("client", "127.0.0.1:4312", "../client", "fixture-token"))

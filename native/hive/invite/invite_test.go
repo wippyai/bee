@@ -49,7 +49,7 @@ func TestInviteLineRoundTripsExactly(t *testing.T) {
 func TestInviteCarriesBoundedTypedCandidates(t *testing.T) {
 	item := sample(netip.MustParseAddrPort("127.0.0.1:40123"), identity(t))
 	item.Candidates = []Candidate{
-		{Kind: "interface", Scope: "lan", Endpoint: "192.168.1.4:40123"},
+		{Kind: "interface", Scope: "lan", Endpoint: "203.0.113.4:40123"},
 		{Kind: "tailnet", Scope: "tailnet", Endpoint: "[fd7a:115c:a1e0::1]:40123"},
 		{Kind: "magicdns", Scope: "tailnet", Endpoint: "bee.tailnet.ts.net:40123"},
 	}

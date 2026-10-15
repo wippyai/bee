@@ -25,7 +25,7 @@ local function define_tests()
             test.eq(live_updates.decode(reply).state, "error")
         end)
         test.it("shows the build, the installed Bee pack and a check for updates button", function()
-            local build: view.Build = {runtime = "v0.1.14-runtime", node = "node-id", folder = "/home/a/bee"}
+            local build: view.Build = {runtime = "v0.1.14-runtime", node = "node-id", folder = "/work/a/bee"}
             local status = live_updates.decode({ok = true, replayed = false, value = {
                 modules = {{component = "bee/bee", installed_version = "0.1.0", locked_version = "", available_version = "0.2.0",
                     update_available = true}},
@@ -34,7 +34,7 @@ local function define_tests()
             local drawn = view.draw(100, 30, appearance.defaults(), {}, "about", 0, nil, status, false, build)
             local shown = text(drawn.rows)
             for _, expected in ipairs({"BUILD", "Bee       0.1.0", "Runtime   v0.1.14-runtime", "Node      node-id",
-                "Folder    /home/a/bee", "INSTALLED", "update available", "PACKS", "Check for updates", "Bee 0.2.0 is available"}) do
+                "Folder    /work/a/bee", "INSTALLED", "update available", "PACKS", "Check for updates", "Bee 0.2.0 is available"}) do
                 test.contains(shown, expected)
             end
             test.is_nil((shown:find("Lua", 1, true)))

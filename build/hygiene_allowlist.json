@@ -1,0 +1,292 @@
+[
+  {
+    "path": "src/approvals/inbox/app/model.lua",
+    "text": "-- other request. Each statement appears once; \"Now also\" appears only for an",
+    "reason": "Quotes the UI wording whose deduplication the code guarantees."
+  },
+  {
+    "path": "src/capability/model.lua",
+    "text": "-- absolute path or a bare name the host resolves on its PATH, then the fixed",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/docs/binding/call.lua",
+    "text": "-- The corpus is measured once per call; it is a fixed snapshot, so a call",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/driver/binding/resolver.lua",
+    "text": "-- Legacy and fixture drivers without declarative profiles cannot opt into",
+    "reason": "Drivers without declarative profiles remain supported, with restrictions on opting into host policy."
+  },
+  {
+    "path": "src/gateway/catalog/context.lua",
+    "text": "-- an authorization mechanism; the host supplies fixed values separately.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/gateway/catalog/context.lua",
+    "text": "-- from tool arguments. This fixed-size record is outside the configurable",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/gov/binding/workspace_method.lua",
+    "text": "-- before entering the fixed private storage scope; actor context is inherited.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/gov/binding/workspace_method.lua",
+    "text": "-- The guide is this destination's fixed authoring contract. It names no",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/gov/types/capability_files.lua",
+    "text": "-- fixed in the entry so the application cannot choose either.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/gov/types/capability_files.lua",
+    "text": "-- arguments, in the executor's fixed folder with no caller environment.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/gov/types/capability_request.lua",
+    "text": "-- paths share the capability model; fixed host resolvers create package",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/gov/types/migration_work.lua",
+    "text": "-- Resolve one logical target from already validated immutable work. Legacy",
+    "reason": "The decoder still accepts scalar targets and inline derived work."
+  },
+  {
+    "path": "src/harness/binding/setup_method.lua",
+    "text": "-- fixed host setup scope; metadata never grants workspace management.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/harness/carrier/continuation.lua",
+    "text": "-- advances the owner's scan window. The thread itself has a fixed bound.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/harness/carrier/hook_records.lua",
+    "text": "-- Only fixed labels leave the decoder; no prompt, tool input or arbitrary",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/harness/carrier/machine.lua",
+    "text": "-- binding surface's fixed context: a bound tool reads which workspace it",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/harness/carrier/machine.lua",
+    "text": "-- still travels as host-selected fixed context.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/harness/carrier/policy.lua",
+    "text": "-- gateway surface's fixed context. A bound subject reads it as host-selected",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/harness/launch/admission.lua",
+    "text": "-- legacy routes without an agent reference.",
+    "reason": "Admission still accepts routes without an agent reference."
+  },
+  {
+    "path": "src/hub/binding/backend.lua",
+    "text": "-- MIT. Fixed private execution entry. The facade supplies the caller identity",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/hub/binding/facade.lua",
+    "text": "-- MIT. Authorize the public operation before entering the fixed Hub scope.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/placement/native/service/homes.lua",
+    "text": "-- content, read to a fixed bound; it never overwrites an existing file.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/sync/persist/store.lua",
+    "text": "-- MIT. Owner-local ordered feed and projection.  The owner is fixed when a",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/threads/delivery/subscriptions.lua",
+    "text": "-- time. A page is a fixed range of the immutable stream; acknowledging it by",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/threads/delivery/subscriptions.lua",
+    "text": "-- Returns the outstanding page, or opens the next one. Pages are fixed",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/ui/appearance.lua",
+    "text": "-- A theme is a palette over fixed roles. Themes are registry entries of type",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "src/ui/viz/viz.lua",
+    "text": "-- optional muted \"│\" at now, and the from and to labels on the last row.",
+    "reason": "Names the current-time marker on the timeline."
+  },
+  {
+    "path": "tests/fixtures/harness/gateway_client.go",
+    "text": "// machine can take longer than any fixed transport cutoff. Long-polling",
+    "reason": "Explains why long polling follows the remote state machine duration."
+  },
+  {
+    "path": "tests/lua/harness/app/terminal_view_test.lua",
+    "text": "-- MIT. Retained presentation enters the fixed host scope through a trusted function boundary.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "tests/lua/harness/permission_carrier_test.lua",
+    "text": "-- of a fixed sleep guessing how long the carrier takes to reach it under a",
+    "reason": "Explains why the test uses a protocol barrier to prove the carrier state."
+  },
+  {
+    "path": "tests/lua/harness/presentation_test.lua",
+    "text": "-- MIT. Retained presentation enters the fixed host scope through a trusted function boundary.",
+    "reason": "Describes an immutable bound, scope, role or host-selected value."
+  },
+  {
+    "path": "Makefile",
+    "text": "# suite databases, HOME, XDG directories, temporary directory and gateway",
+    "reason": "Names the isolated filesystem directory allocated to each test shard."
+  },
+  {
+    "path": "build/hygiene.py",
+    "text": "('100.64.0.0/10', '10.0.0.0/8', '192.168.0.0/16'))",
+    "reason": "Network prefixes define the prohibited address policy, not deployment endpoints."
+  },
+  {
+    "path": "native/hive/network.go",
+    "text": "var tailnetPrefix = netip.MustParsePrefix(\"100.64.0.0/10\")",
+    "reason": "RFC 6598 prefix defines carrier-grade NAT classification."
+  },
+  {
+    "path": "native/hive/join_test.go",
+    "text": "shared.Advertise = \"100.64.0.2\"",
+    "reason": "Synthetic RFC 6598 addresses exercise tailnet candidate classification and membership wiring."
+  },
+  {
+    "path": "native/hive/join_test.go",
+    "text": "shared.Seeds = []string{\"100.64.0.1:31001\"}",
+    "reason": "Synthetic RFC 6598 addresses exercise tailnet candidate classification and membership wiring."
+  },
+  {
+    "path": "native/hive/join_test.go",
+    "text": "require.Equal(t, \"100.64.0.2\", cluster.GetString(\"membership.advertise_addr\", \"\"))",
+    "reason": "Synthetic RFC 6598 addresses exercise tailnet candidate classification and membership wiring."
+  },
+  {
+    "path": "native/hive/join_test.go",
+    "text": "require.Contains(t, cluster.GetString(\"membership.join_addrs\", \"\"), \"100.64.0.1:31001\")",
+    "reason": "Synthetic RFC 6598 addresses exercise tailnet candidate classification and membership wiring."
+  },
+  {
+    "path": "native/hive/join_test.go",
+    "text": "{name: \"tailscale0\", address: netip.MustParseAddr(\"100.64.0.2\")},",
+    "reason": "Synthetic RFC 6598 addresses exercise tailnet candidate classification and membership wiring."
+  },
+  {
+    "path": "native/hive/join_test.go",
+    "text": "candidates := selectJoinCandidates(47931, assigned, []netip.Addr{netip.MustParseAddr(\"100.64.0.2\")}, \"box.tail1234.ts.net\")",
+    "reason": "Synthetic RFC 6598 addresses exercise tailnet candidate classification and membership wiring."
+  },
+  {
+    "path": "native/hive/join_test.go",
+    "text": "require.Equal(t, []string{\"100.64.0.2:47931\", \"box.tail1234.ts.net:47931\", \"203.0.113.4:47931\", \"172.17.0.1:47931\"}, endpoints)",
+    "reason": "Synthetic RFC 6598 addresses exercise tailnet candidate classification and membership wiring."
+  },
+  {
+    "path": "src/placement/docker/binding/spec.lua",
+    "text": "M.HOME = \"/home/bee\"",
+    "reason": "The container account has this stable home directory."
+  },
+  {
+    "path": "src/placement/docker/service/runtime_probe.lua",
+    "text": "\"--env\", \"HOME=/home/bee\", \"--tmpfs\", \"/home/bee:rw,nosuid,nodev,size=16m\", \"--entrypoint\", runtime, image}",
+    "reason": "The isolated container probe mounts the container account home."
+  },
+  {
+    "path": "src/placement/profiles/profiles.lua",
+    "text": "local targets: {string} = {\"/home/bee\", \"/tmp\", \"/proc\", \"/sys\", \"/dev\", \"/run\", \"/\"}",
+    "reason": "The container account home is a reserved mount target."
+  },
+  {
+    "path": "tests/lua/placement/docker/spec_test.lua",
+    "text": "Config = {Image = value.image, Env = {\"HOME=/home/bee\", \"BEE_ATTEMPT_ID=\" .. value.attempt_id}},",
+    "reason": "The fixture asserts the production container home mount contract."
+  },
+  {
+    "path": "tests/lua/placement/docker/spec_test.lua",
+    "text": "Mounts = {{Type = \"bind\", Source = HOME, Destination = \"/home/bee\", RW = true}},",
+    "reason": "The fixture asserts the production container home mount contract."
+  },
+  {
+    "path": "tests/lua/placement/docker/spec_test.lua",
+    "text": "raw.Mounts = {{Type = \"bind\", Source = \"/foreign/home\", Destination = \"/home/bee\", RW = true}}",
+    "reason": "The fixture asserts the production container home mount contract."
+  },
+  {
+    "path": "tests/lua/placement/docker/profile_test.lua",
+    "text": "value = docker(); value.mounts = {{resource = \"project\", target = \"/home/bee\", access = \"write\"}}",
+    "reason": "The fixture proves that the container home mount cannot be overridden."
+  },
+  {
+    "path": "tests/lua/placement/native/native_test.lua",
+    "text": "local unrelated = assert(homes.os_path(attempt_home .. \"/home/machine-home-only.txt\"))",
+    "reason": "This is a filename inside the attempt-relative home, not a user account path."
+  },
+  {
+    "path": "src/corpus/component/placement:docker.md",
+    "text": "`/home/bee`, with only the resources admitted for the attempt.",
+    "reason": "Documents the stable container account home directory."
+  },
+  {
+    "path": "src/placement/docker/service/image.lua",
+    "text": ".. '\\nCOPY bin/ /usr/local/bin/\\nENV PATH=\"/usr/local/bin:/usr/bin:/bin\" HOME=\"/home/bee\"\\nUSER 1000:1000\\nWORKDIR /home/bee\\n'",
+    "reason": "The container image declares the stable account home and working directory."
+  },
+  {
+    "path": "src/corpus/runtime/lua/http/client.md",
+    "text": "- carrier-grade NAT `100.64.0.0/10`, `192.0.0.0/24`, multicast `224.0.0.0/4`, reserved `240.0.0.0/4`",
+    "reason": "Documents the RFC 6598 network excluded by the HTTP private-address policy."
+  },
+  {
+    "path": "src/corpus/runtime/lua/http/client.md",
+    "text": "- loopback, private (10.x, 172.16-31.x, 192.168.x), link-local unicast and multicast, and the unspecified address",
+    "reason": "RFC 1918 example demonstrates private-address rejection, not a deployment endpoint."
+  },
+  {
+    "path": "src/corpus/runtime/lua/http/client.md",
+    "text": "local resp, err = http_client.get(\"http://192.168.1.1/admin\")",
+    "reason": "RFC 1918 example demonstrates private-address rejection, not a deployment endpoint."
+  },
+  {
+    "path": "src/corpus/runtime/lua/http/client.md",
+    "text": "-- Error: not allowed: private IP 192.168.1.1",
+    "reason": "RFC 1918 example demonstrates private-address rejection, not a deployment endpoint."
+  },
+  {
+    "path": "build/hygiene.py",
+    "text": "PRIVATE_TERMS = ('towers', 'wolfden', 'kickside', 'bee-briefs', 'bee-e2e', 'bee-site-private', 'wolfy-j')",
+    "reason": "Literal policy vocabulary identifies forbidden infrastructure and private repository names."
+  },
+  {
+    "path": "tests/lua/gateway/address_test.lua",
+    "text": "for _, address in ipairs({\"127.0.0.1:0\", \"127.0.0.1:1\", \"127.0.0.1:65535\", \"127.0.0.2:0\", \"172.17.0.1:0\", \"10.0.0.1:80\", \"192.168.1.2:65535\"}) do",
+    "reason": "Synthetic RFC 1918 addresses exercise acceptance of both private IPv4 ranges."
+  },
+  {
+    "path": "tests/lua/approvals/service_test.lua",
+    "text": "source-size",
+    "reason": "approvals lane in flight"
+  }
+]

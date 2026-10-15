@@ -106,7 +106,7 @@ local function attempt(workspace: string): Binding
 end
 local function measured(): Object
     local staged: Object = {component = "bee/publish-probe", version = "0.0.1-probe.1",
-        digest = PACK, visibility = "private", organization = "bee", source = "/home/person/work/probe"}
+        digest = PACK, visibility = "private", organization = "bee", source = "/work/person/work/probe"}
     local plan_digest = publishing.plan_digest(staged)
     if not plan_digest then error("measure staged publication") end
     staged.plan_digest = plan_digest
@@ -176,7 +176,7 @@ local function define_tests()
                 local selected = port(binding, fixture)
                 local filed = value_of(publish.request(selected, binding, APPROVER_POLICY,
                     {component = "bee/publish-probe", version = "0.0.1-probe.1",
-                        visibility = "private", source = "/home/person/work/probe"}))
+                        visibility = "private", source = "/work/person/work/probe"}))
                 test.eq(filed.status, "pending")
                 test.eq(filed.component, "bee/publish-probe")
                 test.eq(filed.version, "0.0.1-probe.1")
@@ -235,7 +235,7 @@ local function define_tests()
                 local selected = port(binding, fixture)
                 local filed = value_of(publish.request(selected, binding, APPROVER_POLICY,
                     {component = "bee/publish-probe", version = "0.0.1-probe.1",
-                        visibility = "private", source = "/home/person/work/probe"}))
+                        visibility = "private", source = "/work/person/work/probe"}))
                 local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = filed.request_id})
                 call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = filed.request_id,
                     expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest, reviewed_digest = read.reviewed_digest})
@@ -261,7 +261,7 @@ local function define_tests()
             local binding = attempt(workspace)
             local foreign = raw_call(OTHER, workspace, "bee.gateway.binding:publish_request",
                 {binding_id = binding.binding_id, component = "bee/publish-probe",
-                    version = "0.0.1-probe.1", visibility = "private", source = "/home/person/work/probe"})
+                    version = "0.0.1-probe.1", visibility = "private", source = "/work/person/work/probe"})
             test.is_false(foreign.ok)
             test.eq((assert(bounds.object(foreign.error))).code, "DENIED")
             local reference = registry.get(publish.CONFIGURATION_REF)
@@ -272,7 +272,7 @@ local function define_tests()
             apply(reference)
             local unlinked = raw_call(AGENT, workspace, "bee.gateway.binding:publish_request",
                 {binding_id = binding.binding_id, component = "bee/publish-probe",
-                    version = "0.0.1-probe.1", visibility = "private", source = "/home/person/work/probe"})
+                    version = "0.0.1-probe.1", visibility = "private", source = "/work/person/work/probe"})
             data.resource_ref = linked
             apply(reference)
             test.is_false(unlinked.ok)

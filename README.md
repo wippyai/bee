@@ -251,13 +251,24 @@ make test-python
 make check SHARDS=8
 ```
 
-`make lint` checks the documentation corpus, application source and fixture
-composition. After documentation edits, regenerate with `make agent-corpus-local`.
+`make lint` checks repository hygiene, the documentation corpus, application
+source and fixture composition. After documentation edits, regenerate with `make agent-corpus-local`.
 `make check` runs lint, fixture lint, Python runner and build tests, boot checks and all
 Lua suites, then prints one status line with timing and load. Without an
 explicit `SHARDS` value it uses up to four shards, depending on available CPUs.
 `make test TESTS=<substring>` selects Lua entries by ID; `make test-shard
 SHARDS=8 SHARD=<1..8>` runs one partition of the eight-shard plan.
+
+`make hygiene` scans tracked working-tree files and reports `file:line` findings
+for editorial comments, commented Lua statements, private references and file
+size limits (65,536 bytes for Lua/Python/Go source; 1,000,000 bytes otherwise).
+Only `assets/bee.gif` is exempt from the general file limit. Oversized approval
+files have explicit `source-size` entries with reason `approvals lane in flight`
+until that lane completes; no other source-size exceptions are accepted. Domain exceptions
+in `build/hygiene_allowlist.json` require a literal path, exact comment or line,
+and a one-line reason; unused entries fail the check. Lua comment statements
+are compiled without execution using the pinned Lupa dependency. The existing
+CI lint stage runs this same check through `make ci-lint`.
 
 The Lua suites live in `tests/lua/`, the packaged harness in `tests/runner/`,
 and all Python unit tests in `tests/python/`. `make test-python` discovers every

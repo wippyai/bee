@@ -199,7 +199,7 @@ local function define_tests()
             local named, named_error = launch_policy.decode("bee.driver.codex.security:launch_policy_codex_named_batch", named_entry,
                 function(ref: string): (string?, string?)
                     if ref == "bee.driver.codex.env:executable" then return "/usr/bin/named-agent", nil end
-                    if ref == "bee.driver.codex.env:config_home" then return "/home/person/.codex", nil end
+                    if ref == "bee.driver.codex.env:config_home" then return "/work/person/.codex", nil end
                     return nil, "unadmitted environment reference"
                 end)
             if not named then error(tostring(named_error)) end

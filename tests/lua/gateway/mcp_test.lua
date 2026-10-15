@@ -272,13 +272,13 @@ local function define_tests()
                 test.not_nil(mcp.OUTPUT_SCHEMAS[name])
             end
             local request = mcp.hub_publish_arguments({arguments = {component = "bee/probe",
-                version = "0.0.1-probe.1", visibility = "private", source = "/home/person/work/probe"}})
+                version = "0.0.1-probe.1", visibility = "private", source = "/work/person/work/probe"}})
             test.eq(request and request.visibility, "private")
             local _, missing = mcp.hub_publish_arguments({arguments = {component = "bee/probe",
                 version = "0.0.1-probe.1", visibility = "private"}})
             test.eq(missing, "source is required as an absolute locked source tree")
             local _, visibility = mcp.hub_publish_arguments({arguments = {component = "bee/probe",
-                version = "0.0.1-probe.1", visibility = "internal", source = "/home/person/work/probe"}})
+                version = "0.0.1-probe.1", visibility = "internal", source = "/work/person/work/probe"}})
             test.eq(visibility, "visibility is required as public or private")
             local polled = mcp.hub_publish_status_arguments({arguments = {request_id = "approval-1"}})
             test.eq(polled and polled.request_id, "approval-1")

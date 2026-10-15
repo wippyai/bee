@@ -189,7 +189,7 @@
     {
       "bytes": 18025,
       "id": "docs/hub_inspection",
-      "sha256": "3c90016bb710ca4e64afe005e72c962b57c7262c88d99d2a3b0dd2342c1874b5",
+      "sha256": "809c8ceb6229c9bf0837b3d0d6bd968c6abd583691ab3f056a12bd33e0e69f4f",
       "source": "generated: src/corpus/docs/hub_inspection.md",
       "title": "Hub installation and package reads",
       "topic": "registry"

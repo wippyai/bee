@@ -110,8 +110,8 @@ local function define_tests()
         end)
         test.it("keeps only allowlisted fields, sizes and digests, and drops control fields and content", function()
             local payload: Object = {hook_event_name = "PostToolUse", session_id = "s1", turn_id = "t1", tool_use_id = "toolu_1", tool_name = "mcp__bee__thread_read",
-                tool_input = {cursor = 0, secret = "sk-live-000"}, tool_response = {content = {{type = "text", text = "private"}}}, duration_ms = 35, cwd = "/home/someone",
-                reason = "stdout: sk-live-111 /home/someone/file", error = "rate_limit", permission_mode = "dontAsk", source = "not-a-source",
+                tool_input = {cursor = 0, secret = "sk-live-000"}, tool_response = {content = {{type = "text", text = "private"}}}, duration_ms = 35, cwd = "/work/someone",
+                reason = "stdout: sk-live-111 /work/someone/file", error = "rate_limit", permission_mode = "dontAsk", source = "not-a-source",
                 decision = "block", continue = false, hookSpecificOutput = {permissionDecision = "deny"}}
             local cleaned = hooks.control_free(payload)
             test.is_nil(cleaned.decision)
@@ -143,7 +143,7 @@ local function define_tests()
             test.is_nil((encoded:find("sk-live", 1, true)))
             test.is_nil((encoded:find("file", 1, true)))
             test.is_nil((encoded:find("private", 1, true)))
-            test.is_nil((encoded:find("/home/someone", 1, true)))
+            test.is_nil((encoded:find("/work/someone", 1, true)))
             local same = hooks.normalize("PostToolUse", cleaned)
             test.eq((same).digest, submission.digest)
             cleaned.tool_response = {content = {{type = "text", text = "changed"}}}

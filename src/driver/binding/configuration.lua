@@ -10,6 +10,7 @@ local security = require("security")
 local registry = require("registry")
 local driver_resolver = require("driver_resolver")
 local driver_types = require("types")
+local descriptors = require("descriptors")
 local instructions = require("instructions")
 local M = {}
 M.MAX_CONFIGURATION_BYTES = 8192
@@ -504,7 +505,8 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: voc
     end
     return delivery, nil
 end
-function M.digest(binding_ref: string?, request_value: unknown, target: string): (string?, string?)
+type Selection = {snapshot: registry.Snapshot, descriptor: descriptors.Descriptor?}
+function M.digest(binding_ref: string?, request_value: unknown, target: string, selection: Selection?): (string?, string?)
     local request, request_error = M.decode_request(request_value)
     if not request then return nil, request_error end
     local selected = bounds.id(target)
@@ -512,10 +514,11 @@ function M.digest(binding_ref: string?, request_value: unknown, target: string):
     if binding_ref ~= nil and not bounds.id(binding_ref) then return nil, "driver binding is not an identifier" end
     local configure_renderer: string? = nil
     local descriptor_digest: string? = nil
-    local pinned, pin_error = registry.snapshot()
+    local pinned, pin_error = selection and selection.snapshot, nil
+    if not pinned then pinned, pin_error = registry.snapshot() end
     if binding_ref then
         if not pinned or pin_error then return nil, "configuration registry snapshot is unavailable" end
-        local resolved, resolve_error, declaration = driver_resolver.configure_renderer(pinned, binding_ref, selected)
+        local resolved, resolve_error, declaration = driver_resolver.configure_renderer(pinned, binding_ref, selected, selection and selection.descriptor)
         if resolve_error then return nil, resolve_error end
         configure_renderer = resolved
         if declaration then

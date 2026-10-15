@@ -11,6 +11,7 @@ local json = require("json")
 local tty = require("tty")
 local bounds = require("bounds")
 local admission = require("admission")
+local setup = require("setup")
 local canonical = require("canonical")
 local recovery = require("recovery")
 local principal = require("principal")
@@ -62,11 +63,8 @@ function M.open(value: unknown): Object
     local plan, refused = admission.resolve(tostring(spec.definition), "window", workspace,
         profile and bounds.id(profile.id), profile and bounds.integer(profile.revision), nil, nil, nil, nil, spec.overrides)
     if not plan then return refused or fail("window plan unavailable") end
-    local setup, setup_error = funcs.call("bee.harness.binding:setup", {workspace_id = workspace,
-        definition_ref = plan.definition_ref, expected_plan_digest = plan.plan_digest,
-        saved_profile_id = plan.saved_profile_id, saved_profile_revision = plan.saved_profile_revision, workdir = spec.workdir, overrides = spec.overrides})
-    local prepared = bounds.object(setup)
-    if setup_error or not prepared or prepared.ok ~= true then return fail(tostring(setup_error or (prepared and prepared.error) or "window setup failed")) end
+    local prepared = setup.run(plan, workspace, spec.workdir)
+    if prepared.ok ~= true then return fail(tostring(prepared.error or "window setup failed")) end
     local request, request_error = admission.decode_request({request_id = digest, definition_ref = plan.definition_ref,
         workspace_id = workspace, brief = "", mode = "window", workdir = prepared.workdir,
         saved_profile_id = plan.saved_profile_id, saved_profile_revision = plan.saved_profile_revision,

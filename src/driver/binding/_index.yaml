@@ -47,6 +47,7 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     driver_resolver: bee.driver.binding:resolver
+    descriptors: bee.driver.descriptor:descriptor
     types: bee.driver:types
     instructions: bee.driver.profiles:instructions
     vocabulary: bee.driver:configuration_types

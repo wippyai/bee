@@ -6,8 +6,9 @@ local effective = require("effective")
 local M = {}
 type Object = {[string]: unknown}
 type Stored = {schema_ref: string, schema_revision: string, values: Object}
-function M.schema(binding_ref: string): (descriptors.Descriptor?, string?, string?)
-    local pinned, err = registry.snapshot()
+function M.schema(binding_ref: string, snapshot: registry.Snapshot?): (descriptors.Descriptor?, string?, string?)
+    local pinned, err = snapshot, nil
+    if not pinned then pinned, err = registry.snapshot() end
     if not pinned then return nil, nil, tostring(err) end
     local binding = pinned:get(binding_ref)
     local meta = binding and bounds.object(binding.meta)

@@ -8,7 +8,7 @@ local preferences = require("preferences")
 local mcp = require("mcp")
 local app_traits = require("app_traits")
 local M = {}
-function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
+function M.check(pinned: registry.Snapshot, profile: protocol.Profile, decoded: descriptors.Descriptor?): string?
     local requested: {string} = {}
     for _, ref in ipairs(profile.active_traits or {}) do requested[#requested + 1] = ref end
     for _, ref in ipairs(profile.requestable or {}) do requested[#requested + 1] = ref end
@@ -30,7 +30,8 @@ function M.check(pinned: registry.Snapshot, profile: protocol.Profile): string?
     local meta = binding and bounds.object(binding.meta)
     local ref = meta and bounds.id(meta.descriptor_ref)
     if not ref then return "Driver has no CLI descriptor" end
-    local descriptor, err = descriptors.load_from(pinned, ref)
+    local descriptor, err = decoded, nil
+    if not descriptor then descriptor, err = descriptors.load_from(pinned, ref) end
     if not descriptor then return err or "CLI descriptor is unavailable" end
     local selected, selection_error = protocol.preferences(profile)
     if not selected then return selection_error end

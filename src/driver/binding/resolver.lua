@@ -125,7 +125,7 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
     return target, nil, driver_id
 end
 
-function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, target: string?): (string?, string?, descriptor.Descriptor?)
+function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, target: string?, decoded: descriptor.Descriptor?): (string?, string?, descriptor.Descriptor?)
     local declared, declaration_error = M.configure(pinned, binding_ref)
     if not declared then return nil, declaration_error end
     if target ~= nil and target ~= declared then return nil, "configuration target differs from the selected driver binding" end
@@ -139,7 +139,8 @@ function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, ta
         if meta and meta.descriptor_ref ~= nil then return nil, "driver binding has an invalid descriptor_ref" end
         return nil, nil
     end
-    local selected, descriptor_error = descriptor.load_from(pinned, descriptor_ref)
+    local selected, descriptor_error = decoded, nil
+    if not selected then selected, descriptor_error = descriptor.load_from(pinned, descriptor_ref) end
     if descriptor_error then return nil, descriptor_error end
     if selected and selected.provider ~= provider then return nil, "driver binding descriptor provider does not match driver_id" end
     return selected and selected.configure or nil, nil, selected

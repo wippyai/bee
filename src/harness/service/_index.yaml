@@ -21,6 +21,7 @@ entries:
     bounds: bee.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
+    setup: bee.harness.launch:setup
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
@@ -45,6 +46,7 @@ entries:
     bounds: bee.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
+    setup: bee.harness.launch:setup
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
@@ -100,11 +102,14 @@ entries:
     bounds: bee.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
+    setup: bee.harness.launch:setup
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
   security:
     policies:
+    - bee.harness.launch:setup_facade_policy
+    - bee.harness.launch:folder_consent_policy
     - bee.harness.security:carrier_policy
     - bee.harness.security:interactive_session_policy
     - bee.harness.security:carrier_environment_policy
@@ -147,6 +152,7 @@ entries:
     bounds: bee.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
+    setup: bee.harness.launch:setup
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
@@ -194,6 +200,7 @@ entries:
     bounds: bee.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
+    setup: bee.harness.launch:setup
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
@@ -241,6 +248,7 @@ entries:
     bounds: bee.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
+    setup: bee.harness.launch:setup
     canonical: bee.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal

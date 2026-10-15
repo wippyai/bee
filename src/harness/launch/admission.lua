@@ -198,8 +198,12 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     return {context = selected and selected.profile.context or nil, requestable = selected and selected.profile.requestable or nil, active_traits = selected and selected.profile.active_traits or nil,authority_grant_id = selected and selected.grant_id or nil,bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
 local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, placement_override: profiles.Placement?, spawn_overrides: profiles.Overrides?): (Plan?, Reply?, placement_types.Preferences?)
+    local binding_entry = catalog.entry(pinned, launch.binding_ref)
+    local binding_meta = binding_entry and bounds.object(binding_entry.meta)
+    local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
+    local descriptor = descriptor_ref and descriptors.load_from(pinned, descriptor_ref)
     if selected then
-        local invalid = profile_validation.check(pinned, selected.profile)
+        local invalid = profile_validation.check(pinned, selected.profile, descriptor)
         if invalid then return nil, fail("UNSUPPORTED_CAPABILITY", invalid) end
     end
     local requested, override_error = profiles.overrides(spawn_overrides)
@@ -475,10 +479,6 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         end
     end
     if placement_override then effective_profile.placement = placement_override end
-    local binding_entry = catalog.entry(pinned, launch.binding_ref)
-    local binding_meta = binding_entry and bounds.object(binding_entry.meta)
-    local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
-    local descriptor = descriptor_ref and descriptors.load_from(pinned, descriptor_ref)
     local fields = descriptor and bounds.object(descriptor.options.fields) or {}
     local compiled_values = launch_policy.prepare_options
     if descriptor then

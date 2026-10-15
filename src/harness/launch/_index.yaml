@@ -306,3 +306,11 @@ entries:
     continuation: bee.harness.carrier:continuation
     profiles: bee.harness.profiles:protocol
     record_bounds: bee.threads.records:bounds
+- name: setup
+  kind: library.lua
+  source: file://setup.lua
+  modules: [funcs, security]
+  imports:
+    bounds: bee.values:bounds
+    admission: bee.harness.launch:admission
+    folder_consent: bee.harness.launch:folder_consent

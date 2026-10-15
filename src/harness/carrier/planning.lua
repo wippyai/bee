@@ -89,7 +89,7 @@ local digest_of = canonical.digest
 
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy_types.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_types.Request, gateway: placement_types.Gateway?}
+type Measured = {generation: integer, snapshot: registry.Snapshot, descriptor: descriptor.Descriptor?, binding: classify.Binding, profile: classify.Profile, policy: policy_types.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_types.Request, gateway: placement_types.Gateway?}
 -- verify_acceptance: the acceptance record a host declaration names,
 -- decoded and matched against this snapshot's binding, profile, adapter
 -- and proof fixture. The permission exchange stands on this record type;
@@ -141,7 +141,7 @@ local function measure(request: Request): (Measured?, string?)
     if not profile or not profile.supported then return nil, "profile " .. request.profile_id .. " is not supported by " .. request.binding_ref end
     local policy_entry = catalog.entry(pinned, request.policy_ref)
     if not policy_entry then return nil, "launch policy " .. request.policy_ref .. " is not in the registry" end
-    local option_descriptor, _, schema_error = profile_values.schema(request.binding_ref)
+    local option_descriptor, _, schema_error = profile_values.schema(request.binding_ref, pinned)
     local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, option_descriptor, request.placement_profile_ref)
     if not launch_policy then return nil, policy_error end
     -- The policy is host-owned and decoded from this pinned snapshot. It is
@@ -172,7 +172,8 @@ local function measure(request: Request): (Measured?, string?)
         if not verified then return nil, verify_error end
         local transport = "stdio"
         if not launch_policy.fixture then
-            local capability, capability_error = descriptor.find_provider(pinned, binding.driver_id)
+            local capability, capability_error = option_descriptor, nil
+            if not capability then capability, capability_error = descriptor.find_provider(pinned, binding.driver_id) end
             if not capability then return nil, capability_error end
             local context = profile.mode == "window" and "window" or "first_turn"
             local answer = descriptor.permission_answer(capability, context)
@@ -229,7 +230,7 @@ local function measure(request: Request): (Measured?, string?)
     local configuration: configuration_types.Request = {provider_ref = launch_policy.provider_ref,
         placement_profile_ref = request.placement_profile_ref, option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
         gateway = gateway_input, fixture = launch_policy.fixture}
-    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
+    return {generation = snapshot.generation, snapshot = pinned, descriptor = option_descriptor, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
         configuration = configuration, gateway = gateway}
 end
 -- A launch may declare a host file it needs before it starts. Bee never
@@ -280,7 +281,8 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
     end
     local configuration_context = profile.mode == "window" and "window" or (resume_ref and "resume" or "first_turn")
     configuration.context = configuration_context
-    local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, configuration, assert(binding.methods.configure))
+    local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, configuration, assert(binding.methods.configure),
+        {snapshot = measured.snapshot, descriptor = measured.descriptor})
     if not configuration_digest then return nil, configuration_error end
     local private_home = previous_private_home
     if private_home == nil then private_home = profile.private_home end

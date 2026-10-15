@@ -74,6 +74,30 @@ local function define_tests()
             test.eq(encoded, nil)
             test.eq(encode_error, "number is not finite")
         end)
+        test.it("preserves canonical number spellings at integer and floating point boundaries", function()
+            local cases = {
+                {value = -0.0, encoded = "0"}, {value = 0.1, encoded = "0.10000000000000001"},
+                {value = 1.5, encoded = "1.5"}, {value = 1e-20, encoded = "9.9999999999999995e-21"},
+                {value = 9007199254740991, encoded = "9007199254740991"},
+                {value = 9007199254740992.0, encoded = "9007199254740992"},
+                {value = -9007199254740992.0, encoded = "-9007199254740992"},
+                {value = 1e20, encoded = "1e+20"},
+            }
+            for _, item in ipairs(cases) do
+                test.eq(canonical.encode(item.value, #item.encoded), item.encoded)
+                test.is_nil(canonical.encode(item.value, #item.encoded - 1))
+            end
+        end)
+        test.it("preserves adjacent escapes, literal escape text and Unicode in nested keys and values", function()
+            local expected = '{"\\u000a\\u0009\\u007f":["\\\\n\\\"\\\\","你好😀  ",{},[]]}'
+            local value = {[string.char(10, 9, 127)] = {'\\n"\\', "你好😀  ", table.create(0, 1), table.create(1, 0)}}
+            test.eq(canonical.encode(value, #expected), expected)
+            for bound = 0, #expected - 1 do
+                local encoded, err = canonical.encode(value, bound)
+                test.is_nil(encoded)
+                test.eq(err, "value exceeds the encoded byte bound")
+            end
+        end)
         test.it("rejects mixed-key and sparse tables", function()
             local mixed, mixed_error = canonical.encode({[1] = "first", name = "value"})
             test.eq(mixed, nil)

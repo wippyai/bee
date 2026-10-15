@@ -20,31 +20,26 @@ local function append(output: Output, value: string): boolean
     return true
 end
 
-local function append_span(output: Output, value: string, first: integer, last: integer): boolean
-    if last < first then return true end
-    if output.maximum_bytes and output.bytes + last - first + 1 > output.maximum_bytes then return false end
-    return append(output, value:sub(first, last))
-end
+local ESCAPES: {[string]: string} = {['"'] = '\\"', ['\\'] = '\\\\'}
+for byte = 0, 31 do ESCAPES[string.char(byte)] = string.format("\\u%04x", string.char(byte):byte()) end
+ESCAPES[string.char(127)] = "\\u007f"
 
-local function encode_string(value: string, output: Output): boolean
-    if output.maximum_bytes and output.bytes + #value + 2 > output.maximum_bytes then return false end
-    if not append(output, '"') then return false end
-    local first = 1
-    while first <= #value do
-        local index = value:find('[%c"\\]', first)
-        if not index then break end
-        local byte = value:byte(index)
-        if not append_span(output, value, first, index - 1) then return false end
-        local size = (byte == 34 or byte == 92) and 2 or 6
-        if output.maximum_bytes and output.bytes + size > output.maximum_bytes then return false end
-        local escaped: string
-        if byte == 34 then escaped = '\\"'
-        elseif byte == 92 then escaped = "\\\\"
-        else escaped = string.format("\\u%04x", byte) end
-        if not append(output, escaped) then return false end
-        first = index + 1
+local function encode_string(value: string, output: Output, suffix: string?): boolean
+    local ending = suffix or ""
+    if output.maximum_bytes then
+        local bytes = output.bytes + #value + 2 + #ending
+        if bytes > output.maximum_bytes then return false end
+        local first = 1
+        while first <= #value do
+            local index = value:find('[%c"\\]', first)
+            if not index then break end
+            local byte = value:byte(index)
+            bytes = bytes + ((byte == 34 or byte == 92) and 1 or 5)
+            if bytes > output.maximum_bytes then return false end
+            first = index + 1
+        end
     end
-    return append_span(output, value, first, #value) and append(output, '"')
+    return append(output, '"' .. value:gsub('[%c"\\]', ESCAPES) .. '"' .. ending)
 end
 
 local function encode_value(value: unknown, depth: integer, maximum_depth: integer, output: Output): (boolean, string?)
@@ -99,7 +94,7 @@ local function encode_value(value: unknown, depth: integer, maximum_depth: integ
     if not append(output, "{") then return false, "value exceeds the encoded byte bound" end
     for index, key in ipairs(keys) do
         if index > 1 and not append(output, ",") then return false, "value exceeds the encoded byte bound" end
-        if not encode_string(key, output) or not append(output, ":") then
+        if not encode_string(key, output, ":") then
             return false, "value exceeds the encoded byte bound"
         end
         local ok, item_error = encode_value(value[key], depth + 1, maximum_depth, output)

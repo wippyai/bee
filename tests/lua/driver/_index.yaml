@@ -131,6 +131,7 @@ entries:
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
     descriptor: bee.driver.descriptor:descriptor
+    profile_values: bee.driver.descriptor:profile_values
     resolver: bee.driver.binding:resolver
     login_evidence: bee.driver.locate:login_evidence
     bounds: bee.values:bounds

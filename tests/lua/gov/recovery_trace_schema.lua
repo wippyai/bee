@@ -1,0 +1,10 @@
+-- SPDX-License-Identifier: MIT
+return require("migration").define(function()
+    migration("Create the boot recovery start trace", function()
+        database("sqlite", function()
+            up(function(db)
+                assert(db:execute("CREATE TABLE bee_test_recovery_starts (started INTEGER NOT NULL)"))
+            end)
+        end)
+    end)
+end)

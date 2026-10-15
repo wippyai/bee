@@ -837,6 +837,7 @@ def observe_sync_idle(src):
 
 def observe_boot_recovery(src):
     shutil.copy2(TESTS / "lua/gov/recovery_trace.lua", src / "gov/service/recovery_trace.lua")
+    shutil.copy2(TESTS / "lua/gov/recovery_trace_schema.lua", src / "gov/service/recovery_trace_schema.lua")
     replace_once(src / "gov/service/recovery.lua", 'local logger = require("logger")',
                  'local trace = require("trace")\nlocal logger = require("logger")')
     replace_once(src / "gov/service/recovery.lua", "local function main()", "local function main()\n    trace.record()")
@@ -844,6 +845,9 @@ def observe_boot_recovery(src):
     document = yaml.safe_load(path.read_text())
     next(entry for entry in document["entries"] if entry["name"] == "recovery")["imports"]["trace"] = "bee.gov.service:recovery_trace"
     document["entries"].append({"name": "recovery_trace", "kind": "library.lua", "source": "file://recovery_trace.lua", "modules": ["sql"], "meta": {"type": "test_support"}})
+    document["entries"].append({"name": "recovery_trace_schema", "kind": "function.lua", "source": "file://recovery_trace_schema.lua", "method": "run",
+                                "imports": {"migration": "wippy.migration:migration"},
+                                "meta": {"type": "migration", "target_db": "bee:db", "timestamp": "2026-10-12T00:00:00Z", "test_support": True}})
     path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 

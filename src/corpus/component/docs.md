@@ -14,7 +14,8 @@ SHA-256 digest. `tools/corpus.py` regenerates the reference driver pages and the
 manifest; `make lint` runs `python3 tools/corpus.py --check`, which fails when a
 page or a manifest record differs from the source.
 
-`bee.docs.binding:call` is the read-only facade the gateway's `docs` tool calls.
+`bee.docs.traits:call` is the gateway's `docs` tool adapter. It calls the read-only
+domain facade `bee.docs.binding:call` under the caller's admitted scope.
 `bee.docs:protocol` decodes one strict request:
 
 | Operation | Fields | Bound |

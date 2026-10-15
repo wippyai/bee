@@ -6,4 +6,25 @@ entries:
   meta: {type: agent.trait, title: Component research, comment: Read-only effective registry and Hub package exploration for component authors}
   prompt: |
     Use BeeComponents to inspect the effective installed component inventory and to explore Hub packages before authoring. Read package entries, requirements, resources, documentation and examples for patterns you can reuse. Use plan to review the exact dependency closure, requirements, migrations and capabilities before proposing installation. Inspection and planning do not apply a package, grant its policies or modify the registry.
-  tools: [bee.hub.binding:call]
+  tools: [bee.hub.traits:call]
+- name: call
+  kind: function.lua
+  source: file://call.lua
+  method: handle
+  modules:
+  - funcs
+  meta:
+    type: tool
+    title: Component explorer
+    llm_alias: BeeComponents
+    llm_description: Inspect effective installed component state and exact Hub packages without applying them
+    input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","updates","plan"]},"request":{"type":"object"}}}'
+    output_schema: '{"type":"object","required":["ok"],"properties":{"ok":{"type":"boolean"},"value":{},"code":{"type":"string"},"message":{"type":"string"},"replayed":{"type":"boolean"}},"if":{"properties":{"ok":{"const":false}}},"then":{"required":["code","message"]}}'
+    mcp:
+      required_scopes:
+      - bee.security.gateway:gateway_tool_components_policy
+      annotations:
+        readOnlyHint: true
+        destructiveHint: false
+        idempotentHint: true
+        openWorldHint: true

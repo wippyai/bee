@@ -54,3 +54,10 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     profile_migration: bee.harness.profiles.persist:migration
+- name: tool_selections
+  kind: function.lua
+  source: file://tool_selections.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-23T00:03:00Z'}
+  imports:
+    migration: wippy.migration:migration

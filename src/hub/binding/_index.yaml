@@ -104,13 +104,6 @@ entries:
     hub_result: bee.hub.package:result
   security:
     policies: [bee.hub.security:facade_policy]
-  meta:
-    type: tool
-    title: Component explorer
-    llm_alias: BeeComponents
-    llm_description: Inspect effective installed component state and exact Hub packages without applying them
-    input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","updates","plan"]},"request":{"type":"object"}}}'
-
 - name: artifact_source
   kind: library.lua
   source: file://artifact_source.lua

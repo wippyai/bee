@@ -72,10 +72,10 @@ local function define_tests()
         end)
         test.it("discovers the production traits and overlay schema", function()
             for _, expected in ipairs({
-                {id = "bee.gov.traits:authoring_trait", tools = {"bee.gov.binding:overlay_call"}},
-                {id = "bee.gov.traits:application_delivery_trait", tools = {"bee.gov.binding:delivery_call"}},
-                {id = "bee.gov.traits:application_publish_trait", tools = {"bee.gov.binding:delivery_call"}},
-                {id = "bee.gov.traits:application_tests_trait", tools = {"bee.node.binding:tests_call"}},
+                {id = "bee.gov.traits:authoring_trait", tools = {"bee.gov.traits:overlay_call"}},
+                {id = "bee.gov.traits:application_delivery_trait", tools = {"bee.gov.traits:delivery_call"}},
+                {id = "bee.gov.traits:application_publish_trait", tools = {"bee.gov.traits:publish_call"}},
+                {id = "bee.gov.traits:application_tests_trait", tools = {"bee.gov.traits:tests_call"}},
             }) do
                 local trait = entry(expected.id)
                 test.eq(trait.kind, "registry.entry")
@@ -84,7 +84,7 @@ local function define_tests()
                 test.eq(#(principals.strings(data.tools)), #expected.tools)
                 for index, tool in ipairs(expected.tools) do test.eq((principals.strings(data.tools))[index], tool) end
             end
-            local overlay = entry("bee.gov.binding:overlay_call")
+            local overlay = entry("bee.gov.traits:overlay_call")
             local metadata = assert(bounds.object(overlay.meta))
             local encoded = metadata.input_schema
             if type(encoded) ~= "string" then error("overlay input schema is missing") end
@@ -98,7 +98,7 @@ local function define_tests()
         test.it("offers the application tests tool with the node's own request decoder", function()
             local tool = mcp.tool("tests")
             if not tool then error("tests tool") end
-            test.eq(tool.operation, "bee.node.binding:tests_call")
+            test.eq(tool.operation, "bee.gov.traits:tests_call")
             test.eq(tool.policies[1], "bee.gateway.env:tool_tests_policy_ref")
             test.is_true(mcp.is_tool_policy_reference(tool.policies[1]))
             test.not_nil(mcp.OUTPUT_SCHEMAS.tests)
@@ -429,11 +429,11 @@ local function define_tests()
             test.eq(workspace_tools[1].name, "overlay")
             local workspace_annotations = assert(bounds.object(workspace_tools[1].annotations))
             test.eq(workspace_annotations.readOnlyHint, false)
-            test.eq(mcp.tool("overlay") and mcp.tool("overlay").operation, "bee.gov.binding:overlay_call")
+            test.eq(mcp.tool("overlay") and mcp.tool("overlay").operation, "bee.gov.traits:overlay_call")
             local delivery_tools = principals.objects(mcp.list({"delivery"}).tools)
             test.eq(#delivery_tools, 1)
             test.eq(delivery_tools[1].name, "delivery")
-            test.eq(mcp.tool("delivery") and mcp.tool("delivery").operation, "bee.gov.binding:delivery_call")
+            test.eq(mcp.tool("delivery") and mcp.tool("delivery").operation, "bee.gov.traits:delivery_call")
             local delivery_schema = assert(bounds.object(delivery_tools[1].inputSchema))
             local delivery_required = principals.strings(delivery_schema.required)
             local delivery_properties = assert(bounds.object(delivery_schema.properties))
@@ -453,7 +453,7 @@ local function define_tests()
             test.eq(delivery_annotations.readOnlyHint, false)
             local components_tools = principals.objects(mcp.list({"components"}).tools)
             test.eq(#components_tools, 1)
-            test.eq(mcp.tool("components") and mcp.tool("components").operation, "bee.hub.binding:call")
+            test.eq(mcp.tool("components") and mcp.tool("components").operation, "bee.hub.traits:call")
             local components_schema = assert(bounds.object(components_tools[1].inputSchema))
             local components_operation = assert(bounds.object((assert(bounds.object(components_schema.properties))).operation))
             local read_operations = principals.strings(components_operation.enum)
@@ -485,7 +485,7 @@ local function define_tests()
             test.eq(authority_error, "unknown field registry")
             local publish_tools = principals.objects(mcp.list({"publish"}).tools)
             test.eq(#publish_tools, 1)
-            test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.gov.binding:delivery_call")
+            test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.gov.traits:publish_call")
             local publish_schema = assert(bounds.object(publish_tools[1].inputSchema))
             test.eq(#(principals.strings(publish_schema.required)), 2)
             local publish_request = mcp.publish_arguments({arguments = {workspace_id = "ws", source_overlay_id = "src", version = "1.0.1"}})

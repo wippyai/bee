@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.tests.docs.traits
+entries:
+- name: call_test
+  kind: function.lua
+  source: file://call_test.lua
+  method: run
+  modules: [funcs, security]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds

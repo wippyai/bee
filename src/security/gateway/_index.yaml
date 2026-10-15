@@ -57,13 +57,15 @@ entries:
   meta:
     comment: A bound MCP subject may run and read the tests of an application delivered from an overlay it owns through the node's test facade, which verifies ownership through the overlay facade and enters the node's private test backend; this grants no authority for the tests themselves, which run as the application
   policy:
-    expression: (action == "funcs.call" && (resource == "bee.node.binding:tests_call" || resource == "bee.gov.binding:overlay_call")) || (action == "bee.gov.overlay.read" && resource == "own-overlays")
+    expression: (action == "funcs.call" && ((resource == "bee.node.binding:tests_call" || resource == "bee.gov.traits:tests_call") || (resource == "bee.gov.binding:overlay_call" || resource == "bee.gov.traits:overlay_call"))) || (action == "bee.gov.overlay.read" && resource == "own-overlays")
     actions:
     - funcs.call
     - bee.gov.overlay.read
     resources:
     - bee.node.binding:tests_call
+    - bee.gov.traits:tests_call
     - bee.gov.binding:overlay_call
+    - bee.gov.traits:overlay_call
     - own-overlays
     - '*'
     effect: allow
@@ -73,12 +75,13 @@ entries:
     comment: A bound MCP subject may inspect effective installed component state, package previews and effect-free plans through the strict Hub facade; it receives no apply, publication or registry-write
       authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.hub.binding:call") || (action == "bee.hub.read" && resource != "")
+    expression: (action == "funcs.call" && (resource == "bee.hub.binding:call" || resource == "bee.hub.traits:call")) || (action == "bee.hub.read" && resource != "")
     actions:
     - funcs.call
     - bee.hub.read
     resources:
     - bee.hub.binding:call
+    - bee.hub.traits:call
     - '*'
     effect: allow
 - name: gateway_tool_delivery_policy
@@ -87,7 +90,7 @@ entries:
     comment: A bound MCP subject may request delivery of its frozen artifact (publication prepare, destination stage and preflight, and once ready the activation that asks the person) and read delivery
       status; the facade and the owner services enforce workspace, profile and destination authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || ((action == "bee.gov.delivery.manage" || action == "bee.gov.delivery.read" || action == "bee.gov.delivery.activate") && resource != "")
+    expression: (action == "funcs.call" && (resource == "bee.gov.binding:delivery_call" || resource == "bee.gov.traits:delivery_call")) || ((action == "bee.gov.delivery.manage" || action == "bee.gov.delivery.read" || action == "bee.gov.delivery.activate") && resource != "")
     actions:
     - funcs.call
     - bee.gov.delivery.manage
@@ -95,6 +98,7 @@ entries:
     - bee.gov.delivery.activate
     resources:
     - bee.gov.binding:delivery_call
+    - bee.gov.traits:delivery_call
     - '*'
     effect: allow
 - name: gateway_tool_docs_policy
@@ -108,6 +112,7 @@ entries:
     - registry.get
     resources:
     - bee.docs.binding:call
+    - bee.docs.traits:call
     - bee.docs.env:corpus_ref
     - bee.env:docs_corpus
     effect: allow
@@ -152,7 +157,7 @@ entries:
   meta:
     comment: A bound MCP subject may author only through the overlay facade; the store enforces actor ownership and this grants no publication or activation authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:overlay_call") || ((action == "bee.gov.overlay.read" || action == "bee.gov.overlay.write" || action == "bee.gov.overlay.source") &&
+    expression: (action == "funcs.call" && (resource == "bee.gov.binding:overlay_call" || resource == "bee.gov.traits:overlay_call")) || ((action == "bee.gov.overlay.read" || action == "bee.gov.overlay.write" || action == "bee.gov.overlay.source") &&
       resource != "")
     actions:
     - funcs.call
@@ -161,6 +166,7 @@ entries:
     - bee.gov.overlay.source
     resources:
     - bee.gov.binding:overlay_call
+    - bee.gov.traits:overlay_call
     - '*'
     effect: allow
 - name: gateway_tool_publish_policy
@@ -168,12 +174,13 @@ entries:
   meta:
     comment: A bound MCP subject may publish only the exact locally reviewed and applied version; publication refuses anything else, and this grants no review, selection, approval or overlay authority
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:delivery_call") || (action == "bee.gov.delivery.publish" && resource != "")
+    expression: (action == "funcs.call" && (resource == "bee.gov.binding:delivery_call" || resource == "bee.gov.traits:publish_call")) || (action == "bee.gov.delivery.publish" && resource != "")
     actions:
     - funcs.call
     - bee.gov.delivery.publish
     resources:
     - bee.gov.binding:delivery_call
+    - bee.gov.traits:publish_call
     - '*'
     effect: allow
 - name: gateway_tool_read_policy

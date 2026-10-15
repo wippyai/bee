@@ -112,7 +112,11 @@ local function define_tests()
             test.eq(totals.passed, 4, tostring(json.encode(completed)))
             test.eq(totals.failed, 0)
             test.eq(totals.errors, 0)
-            local catalog = assert(client.call(assert(system.node.id()), "list", {}))
+            local node = assert(system.node.id())
+            local desktop = assert(client.call(node, "desktop_create", {workspace = workspace, title = "Hub fixture"})).desktop
+            local catalog = assert(client.call(node, "watch", {desktop = desktop}))
+            assert(client.call(node, "leave", {}))
+            assert(client.call(node, "desktop_close", {id = desktop}))
             local placed = false
             for _, raw in ipairs(catalog.apps :: {unknown}) do
                 local app = assert(bounds.object(raw))

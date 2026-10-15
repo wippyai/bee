@@ -38,6 +38,7 @@ entries:
   imports:
     admission: bee.harness.launch:admission
     bounds: bee.values:bounds
+    profiles: bee.harness.profiles:protocol
 - name: admit
   kind: function.lua
   source: file://admit_method.lua

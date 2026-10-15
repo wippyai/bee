@@ -97,7 +97,7 @@ local function define_tests()
                 idempotency_key = "suite-1"}}))
             test.eq(run.idempotency_key, "suite-1")
             test.eq(assert(mcp.tool("app_tools")).operation, "bee.node.binding:app_tools")
-            test.eq(assert(mcp.tool("tests")).operation, "bee.node.binding:tests_call")
+            test.eq(assert(mcp.tool("tests")).operation, "bee.gov.traits:tests_call")
         end)
         test.it("refuses malformed nodes and mixed discovery/call fields", function()
             for _, node in ipairs({false, 5, "*", "runner\n", string.rep("x", 161)}) do

@@ -27,10 +27,13 @@ local await_settled = fixture.await_settled
 local function define_tests()
     test.describe("Launch spec", function()
         local workspace = fixture.prepare()
-        test.it("refuses a saved container Codex bypass when launch selects native placement", function()
+        test.it("admits saved Codex full permissions on native placement while rejecting a stale plan", function()
             local definition_ref = "bee.driver.codex.profiles:research_batch"
             local policy_ref = "bee.driver.codex.security:launch_policy_codex_batch"
-            with_entry(definition_ref, function(data) data.allowed_overrides = {"thread", "workdir", "placement"} end, function()
+            with_entry(definition_ref, function(data)
+                data.allowed_overrides = {"thread", "workdir", "placement"}
+                data.credentials = {}
+            end, function()
                 with_entry(policy_ref, function(data)
                     data.allowed_overrides = {"thread", "workdir", "placement"}
                     data.executables, data.executable_env = {codex = "/bin/true"}, {}
@@ -49,7 +52,19 @@ local function define_tests()
                         workspace_id = workspace, saved_profile_id = id, saved_profile_revision = 1, brief = "Fixture", expected_plan_digest = planned.plan_digest,
                         placement_override = {kind = "native", home = "private"}})
                     test.is_false(denied.ok)
-                    test.is_true(tostring(denied.error and denied.error.message):find("ceiling", 1, true) ~= nil, tostring(denied.error and denied.error.message))
+                    test.is_true(tostring(denied.error and denied.error.message):find("selected launch plan changed", 1, true) ~= nil, tostring(denied.error and denied.error.message))
+                    local selected = value(call("bee.tests.harness.launch:resolve", {definition_ref = definition_ref, workspace_id = workspace,
+                        saved_profile_id = id, saved_profile_revision = 1, placement_override = {kind = "native", home = "private"}}))
+                    local thread = fresh("native-yolo-thread")
+                    value(call("bee.threads.binding:create", {thread_id = thread, idempotency_key = fresh("create"), title = "Native full permissions"}))
+                    local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("native-yolo"), definition_ref = definition_ref,
+                        workspace_id = workspace, saved_profile_id = id, saved_profile_revision = 1, brief = "Fixture", expected_plan_digest = selected.plan_digest,
+                        thread_id = thread, placement_override = {kind = "native", home = "private"}}))
+                    test.not_nil(admitted.attempt_id)
+                    local native = assert(bounds.object(admitted.plan))
+                    test.eq(native.placement_kind, "native")
+                    test.eq(native.plan_digest, selected.plan_digest)
+                    test.neq(native.plan_digest, planned.plan_digest)
                 end)
             end)
         end)

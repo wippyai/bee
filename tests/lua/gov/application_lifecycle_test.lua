@@ -38,7 +38,7 @@ local function define_tests()
         test.after_all(memory_host.close_all)
         test.it("installs an application through the person's approval and removes it again", function()
             local suffix = assert(uuid.v7()):gsub("%-", ""):sub(1, 12)
-            local name = "lifecycle_" .. suffix
+            local name = "lifecycle" .. suffix
             local namespace = "app." .. name
             local application = namespace .. ":app"
             local node = assert(system.node.id())

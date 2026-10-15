@@ -4,7 +4,7 @@ local canonical = require("canonical")
 local clock = require("clock")
 local security = require("security")
 local ctx = require("ctx")
-local json = require("json")
+local funcs = require("funcs")
 local profile_values = require("profile_values")
 local protocol = require("protocol")
 local profile_grants = require("profile_grants")
@@ -96,7 +96,21 @@ function M.decorate(tx: sql.Transaction, owner: string, value: {[string]: unknow
     value.approving_grant_id = record and record.provenance.approving_grant_id or nil
     return nil
 end
-function M.save_folder(tx: sql.Transaction | sql.DB, parent: grants.Grant, workdir: string, binding: string, approval: string): (grants.Grant?, string?)
+function M.folder_decision(approval: string, workspace: string): ({[string]: unknown}?, string?)
+    local caller = security.actor()
+    local metadata = caller and bounds.object(caller:meta())
+    if ctx.get("bee.gateway.binding") ~= nil or not security.can("bee.approvals.decide", workspace)
+        or (metadata and metadata.definition_id ~= nil and metadata.definition_id ~= "bee.harness.app:app") then
+        return nil, "Folder trust requires a person write with consent provenance"
+    end
+    local reply, err = funcs.new():call("bee.approvals.binding:consumed_decision",
+        {approval_id = approval, workspace_id = workspace, effect_key = approval})
+    local result = bounds.object(reply)
+    local row = result and result.ok == true and bounds.object(result.value) or nil
+    if not row or err then return nil, "Folder trust requires a recorded person approval" end
+    return row, nil
+end
+function M.save_folder(tx: sql.Transaction | sql.DB, parent: grants.Grant, workdir: string, binding: string, approval: string, row: {[string]: unknown}): (grants.Grant?, string?)
     local caller = security.actor()
     local metadata = caller and bounds.object(caller:meta())
     if ctx.get("bee.gateway.binding") ~= nil or not security.can("bee.approvals.decide", parent.workspace_id)
@@ -108,14 +122,11 @@ function M.save_folder(tx: sql.Transaction | sql.DB, parent: grants.Grant, workd
     local parent_parameters = bounds.object(active.scope.parameters)
     local configuration = parent_parameters and bounds.object(parent_parameters.configuration)
     if not configuration or configuration.driver_binding_ref ~= binding then return nil, "Folder trust selects a different profile driver" end
-    local consumer = grants.principal("")
-    local rows, err = tx:query([[SELECT r.proposal_json,r.decider_id,d.decision_id,d.decider_json,r.decided_at
-        FROM bee_approval_requests r JOIN bee_approval_decisions d ON d.approval_id=r.approval_id AND d.revision=r.revision
-        WHERE r.approval_id=? AND r.workspace_id=? AND r.state='decided' AND r.decision='approved'
-        AND r.consumer_id=? AND r.consumed_effect=r.approval_id]], {approval, parent.workspace_id, consumer})
-    if not rows or err or #rows ~= 1 then return nil, "Folder trust requires a recorded person approval" end
-    local row = rows[1]
-    local proposal = bounds.object(json.decode(tostring(row.proposal_json)))
+    if row.approval_id ~= approval or row.workspace_id ~= parent.workspace_id
+        or row.consumer_id ~= grants.principal("") or row.effect_key ~= approval then
+        return nil, "Folder trust evidence belongs to another effect or consumer"
+    end
+    local proposal = bounds.object(row.proposal)
     local payload = proposal and bounds.object(proposal.payload)
     local target = payload and bounds.object(payload.target)
     if not proposal or proposal.ref ~= "bee.approvals:confirmation" or not payload or payload.action ~= "profile.folder_trust"
@@ -124,7 +135,7 @@ function M.save_folder(tx: sql.Transaction | sql.DB, parent: grants.Grant, workd
     local id = grants.identity("profile_choices", parent.owner_node, parent.workspace_id, approval)
     local previous, previous_error = grants.read(tx, id)
     if previous or previous_error then return previous, previous_error end
-    local decider = bounds.object(json.decode(tostring(row.decider_json)))
+    local decider = bounds.object(row.decider)
     local profile = bounds.id(parent.metadata.profile_id)
     if not profile then return nil, "Folder trust requires a saved profile" end
     local record: grants.Grant = {grant_id = id, approval_id = approval, decision_id = tostring(row.decision_id), domain = "profile_choices",

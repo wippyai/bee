@@ -14,7 +14,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.harness.binding:call, bee.tests.harness.profiles:context_probe, bee.approvals.binding:grant, bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:effect, bee.tests.harness.profiles:folder_consent_write]
+    resources: [bee.harness.binding:call, bee.tests.harness.profiles:context_probe, bee.approvals.binding:grant, bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:effect, bee.approvals.binding:consumed_decision, bee.tests.harness.profiles:folder_consent_write]
     effect: allow
 - name: test_read
   kind: security.policy
@@ -257,4 +257,4 @@ entries:
     authority: bee.harness.profiles.persist:grants
     bounds: bee.values:bounds
   security:
-    policies: [bee.security.approvals:approval_store_policy]
+    policies: [bee.security.approvals:approval_store_policy, bee.harness.security:consumed_decision_policy]

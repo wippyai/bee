@@ -82,7 +82,7 @@ function M.reply(result: Result): Reply
     if result.ok then return {ok = true, error = nil, value = result.value, replayed = result.replayed} end
     return {ok = false, error = {code = result.code or "INTERNAL", message = result.message or "approval operation failed"}, value = result.value, replayed = false}
 end
-local operations: {[string]: Operation} = {}
+local operations: {[string]: Operation} = {consumed_decision = part_queries.op_consumed_decision}
 local preparations: {[string]: Preparation} = {}
 local mutating: {[string]: boolean} = {read = true, request = true, decide = true, decide_batch = true, withdraw = true, withdraw_origin = true, consume = true, revalidate = true,
     grant_window = true, runtime_lease = true, reconcile = true, effect = true, events = true, end_request = true, grant = true}
@@ -231,6 +231,7 @@ function M.withdraw(value: unknown): Reply return run(value, "withdraw") end
 function M.consume(value: unknown): Reply return run(value, "consume") end
 function M.effect_queue(value: unknown): Reply return run(value, "effect_queue") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
+function M.consumed_decision(value: unknown): Reply return run(value, "consumed_decision") end
 function M.read(value: unknown): Reply return run(value, "read") end
 function M.attention_count(value: unknown): Reply return run(value, "attention_count") end
 function M.node_summary(value: unknown): Reply return run(value, "node_summary") end

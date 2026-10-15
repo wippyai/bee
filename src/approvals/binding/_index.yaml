@@ -356,6 +356,7 @@ entries:
       decide_batch: bee.approvals.binding:decide_batch
       withdraw: bee.approvals.binding:withdraw
       withdraw_origin: bee.approvals.binding:withdraw_origin
+      consumed_decision: bee.approvals.binding:consumed_decision
       consume: bee.approvals.binding:consume
       revalidate: bee.approvals.binding:revalidate
       read: bee.approvals.binding:read
@@ -619,3 +620,12 @@ entries:
     part_records: bee.approvals.binding:records
     part_authority: bee.approvals.binding:authority
     part_effects: bee.approvals.binding:effects
+
+- name: consumed_decision
+  kind: function.lua
+  source: file://consumed_decision_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: [bee.security.approvals:approval_store_policy]

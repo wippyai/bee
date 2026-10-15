@@ -127,6 +127,27 @@ entries:
     - {format: application/schema+json, definition: {"type":"object","properties":{"session":{"type":"string"},"attempt_id":{"type":"string"},"operation_key":{"type":"string"}},"additionalProperties":true,"description":"Attach the admitted native attempt to its durable interactive session"}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
+  - name: route_capability
+    description: Read the provider capability identity of an exact workspace session under host route-read admission
+    input_schemas:
+    - format: application/schema+json
+      definition:
+        type: object
+        additionalProperties: false
+        required: [session, workspace_id]
+        properties:
+          session: {type: string}
+          workspace_id: {type: string}
+    output_schemas:
+    - format: application/schema+json
+      definition:
+        type: object
+        required: [ok, replayed]
+        properties:
+          ok: {type: boolean}
+          replayed: {type: boolean}
+          value: {type: object, properties: {provider: {type: string}}}
+          error: {type: object}
   - name: session_describe
     description: Read a session and its current work summary
     input_schemas:

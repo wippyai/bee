@@ -322,6 +322,21 @@ local function op_node_summary(tx: sql.Transaction, _: string, object: Object, n
 end
 M.op_attention_count = op_attention_count
 M.op_effect_queue = op_effect_queue
+function M.op_consumed_decision(tx: sql.Transaction, actor: string, object: Object, _now: integer, _prepared: Object?): Result
+    local extra = bounds.fields(object, {"approval_id", "workspace_id", "effect_key"})
+    local approval, workspace, effect = bounds.id(object.approval_id), bounds.id(object.workspace_id), bounds.id(object.effect_key)
+    if extra or not approval or not workspace or not effect then return failure("INVALID_ARGUMENT", extra or "consumed decision identity is invalid") end
+    local raw, err = store.consumed_decision(tx, approval, workspace, actor, effect)
+    if err then return storage(err) end
+    local row = bounds.object(raw)
+    if not row then return failure("DENIED", "caller has no consumed decision for this effect") end
+    local proposal = bounds.object(json.decode(tostring(row.proposal_json)))
+    local decider = bounds.object(json.decode(tostring(row.decider_json)))
+    if not proposal or not decider then return storage("consumed decision is corrupt") end
+    return success({approval_id = approval, workspace_id = workspace, consumer_id = actor, effect_key = effect,
+        proposal = proposal, decider = decider, decider_id = row.decider_id,
+        decision_id = row.decision_id, decided_at = row.decided_at}, false)
+end
 M.op_events = op_events
 M.op_feed_read_after = op_feed_read_after
 M.op_feed_snapshot = op_feed_snapshot

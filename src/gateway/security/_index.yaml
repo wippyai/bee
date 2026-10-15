@@ -724,20 +724,20 @@ entries:
 - name: traits
   kind: library.lua
   source: file://traits.lua
-  modules: [registry, json]
+  modules: [registry, funcs]
   imports:
     app_traits: bee.node:app_traits
     bounds: bee.values:bounds
     agent_trait: bee.values:agent_trait
     canonical: bee.values:canonical
-    database: bee.threads.persist:database
     hook_capabilities: bee.threads.hooks:capabilities
     descriptor: bee.app:descriptor
 - name: trait_registry_policy
-  kind: security.policy
+  kind: security.policy.expr
   groups: [external_owner]
   policy:
-    actions: [registry.get, registry.find, registry.snapshot, registry.version, registry.overlay.get]
+    actions: [registry.get, registry.find, registry.snapshot, registry.version, registry.overlay.get, funcs.call, bee.threads.route_capability]
+    expression: (action == "funcs.call" && resource == "bee.threads.binding:route_capability") || action == "bee.threads.route_capability" || action in ["registry.get", "registry.find", "registry.snapshot", "registry.version", "registry.overlay.get"]
     resources: ['*']
     effect: allow
 - name: access_effect_policy

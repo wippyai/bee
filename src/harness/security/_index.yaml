@@ -267,3 +267,10 @@ entries:
       (action in ["process.registry.register", "process.registry.unregister"] && resource == "bee.harness.presentation") ||
       (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|launch)/[0-9a-f-]+$")
     effect: allow
+
+- name: consumed_decision_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:consumed_decision]
+    effect: allow

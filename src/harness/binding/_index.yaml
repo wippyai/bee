@@ -19,6 +19,7 @@ entries:
   security:
     policies:
     - bee.harness.security:profile_store_policy
+    - bee.harness.security:consumed_decision_policy
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua

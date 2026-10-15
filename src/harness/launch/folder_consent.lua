@@ -101,11 +101,13 @@ function M.run(plan: admission.Plan, workspace: string, workdir: string?, execut
         proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest, effect_key = approval,
         owner_incarnation = effect.owner_incarnation, expected_revision = effect.revision})
     if not started then return start_error end
+    local decision, decision_error = authority.folder_decision(approval, workspace)
+    if not decision then return decision_error end
     db, open_error = database.open()
     if not db then return open_error end
     local tx, begin_error = db:begin()
     if not tx then db:release(); return tostring(begin_error) end
-    local recorded, record_error = authority.save_folder(tx, parent, physical, plan.binding_ref, approval)
+    local recorded, record_error = authority.save_folder(tx, parent, physical, plan.binding_ref, approval, decision)
     if not recorded then tx:rollback(); db:release(); return record_error end
     local committed, commit_error = tx:commit()
     if not committed or commit_error then tx:rollback(); db:release(); return tostring(commit_error) end

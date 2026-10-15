@@ -3,8 +3,7 @@ local bounds = require("bounds")
 local agent_trait = require("agent_trait")
 local descriptor = require("descriptor")
 local canonical = require("canonical")
-local database = require("database")
-local json = require("json")
+local funcs = require("funcs")
 local hook_capabilities = require("hook_capabilities")
 local app_traits = require("app_traits")
 local M = {}
@@ -45,13 +44,11 @@ function M.review(declared: Declaration): (Declaration?, string?)
 end
 function M.supported(declared: Declaration, session: string, workspace: string, admitted_hooks: {string}?): string?
     if #(declared.hooks or {}) == 0 then return nil end
-    local db, err = database.open()
-    if not db then return err end
-    local rows, failure = db:query("SELECT route_json FROM bee_sessions WHERE session_ref=? AND workspace_id=?", {session, workspace})
-    db:release()
-    if not rows or failure or #rows ~= 1 then return "extension session is unavailable" end
-    local route = type(rows[1].route_json) == "string" and bounds.object(json.decode(rows[1].route_json)) or nil
-    local driver = route and bounds.id(route.provider) or "unknown"
+    local reply, err = funcs.new():call("bee.threads.binding:route_capability", {session = session, workspace_id = workspace})
+    local result = bounds.object(reply)
+    local value = result and result.ok == true and bounds.object(result.value) or nil
+    local driver = value and bounds.id(value.provider)
+    if err or not driver then return "extension session is unavailable" end
     for _, point in ipairs(declared.hooks or {}) do
         local capability = hook_capabilities.at(driver, point)
         if not capability or not capability.supported then return point .. ": " .. (capability and capability.reason or "unknown hook point") end

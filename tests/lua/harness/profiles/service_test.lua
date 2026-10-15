@@ -94,6 +94,12 @@ local function define_tests()
             raw, err = person:call("bee.approvals.binding:effect", {operation = "claim", approval_id = requested.approval_id,
                 proposal_digest = requested.proposal_digest, effect_key = requested.approval_id, owner_incarnation = requested.owner_incarnation})
             assert(not err, tostring(err)); value(assert(bounds.object(raw)))
+            raw, err = person:call("bee.approvals.binding:consumed_decision", {approval_id = requested.approval_id, workspace_id = WORKSPACE, effect_key = requested.approval_id})
+            assert(not err, tostring(err)); test.eq(assert(bounds.object(raw)).ok, true)
+            raw, err = reviewer:call("bee.approvals.binding:consumed_decision", {approval_id = requested.approval_id, workspace_id = WORKSPACE, effect_key = requested.approval_id})
+            assert(not err, tostring(err)); test.eq(assert(bounds.object(raw)).ok, false)
+            raw, err = person:call("bee.approvals.binding:consumed_decision", {approval_id = requested.approval_id, workspace_id = "another-workspace", effect_key = requested.approval_id})
+            assert(not err, tostring(err)); test.eq(assert(bounds.object(raw)).ok, false)
             local agent = caller("profile-agent", "bee.tests.harness.profiles:test_delegated_write"):with_actor(security.new_actor("profile-agent", {definition_id = "fixture:agent"}))
             agent = assert(agent:with_context({["bee.gateway.binding"] = {subject = "profile-agent", approving_grant_id = saved.grant_id}}))
             local input = {parent_grant_id = saved.grant_id, canonical_workdir = target.canonical_workdir,

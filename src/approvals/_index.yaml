@@ -97,6 +97,28 @@ entries:
     - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"required":["approval_id","expected_revision","proposal_digest"],"properties":{"approval_id":{"type":"string"},"expected_revision":{"type":"integer","minimum":1},"proposal_digest":{"type":"string"},"reviewed_digest":{"type":"string"}},"description":"Withdraw the caller's pending revision with proposal and reviewed digest checks, or learn the outcome that already committed"}}
     output_schemas:
     - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"properties":{"ok":{"type":"boolean"},"error":{"type":"object"},"value":{},"replayed":{"type":"boolean"}}}}
+  - name: consumed_decision
+    description: Read immutable decision evidence for an approved effect consumed by the authenticated caller in the exact workspace
+    input_schemas:
+    - format: application/schema+json
+      definition:
+        type: object
+        additionalProperties: false
+        required: [approval_id, workspace_id, effect_key]
+        properties:
+          approval_id: {type: string}
+          workspace_id: {type: string}
+          effect_key: {type: string}
+    output_schemas:
+    - format: application/schema+json
+      definition:
+        type: object
+        required: [ok, replayed]
+        properties:
+          ok: {type: boolean}
+          replayed: {type: boolean}
+          value: {type: object}
+          error: {type: object}
   - name: consume
     description: The effect owner binds an approved decision to one effect identity
       under the authority incarnation it observed; it revalidates policy, attempt

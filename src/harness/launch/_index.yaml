@@ -294,7 +294,7 @@ entries:
     - exec.run
     - registry.find
     expression: (action == "funcs.call" && resource in ["bee.harness.binding:call", "bee.approvals.binding:request", "bee.approvals.binding:read",
-      "bee.approvals.binding:effect"]) || action == "registry.find" || (action == "db.get" && resource == "bee:db") || (action
+      "bee.approvals.binding:effect", "bee.approvals.binding:consumed_decision"]) || action == "registry.find" || (action == "db.get" && resource == "bee:db") || (action
       == "exec.get" && resource == "bee.placement.native.env:placement_executor") || (action == "exec.run" && meta.executor
       == "bee.placement.native.env:placement_executor")
     resources: '*'

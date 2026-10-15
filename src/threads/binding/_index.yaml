@@ -1042,6 +1042,7 @@ entries:
       session_create: bee.threads.binding:session_create
       session_attach: bee.threads.binding:session_attach
       session_describe: bee.threads.binding:session_describe
+      route_capability: bee.threads.binding:route_capability
       session_scan: bee.threads.binding:session_scan
       session_transition: bee.threads.binding:session_transition
       work_send: bee.threads.binding:work_send
@@ -1092,3 +1093,18 @@ entries:
     original: bee.threads.hooks:original
     types: bee.threads:types
   security: {policies: [bee.threads.security:store, bee.threads.security:listen_registry]}
+
+- name: route_capability
+  kind: function.lua
+  source: file://route_capability.lua
+  method: handle
+  modules: [security, json, sql]
+  imports:
+    bounds: bee.values:bounds
+    database: bee.threads.persist:database
+    journal: bee.threads.persist:journal
+    transaction: bee.threads.persist:transaction
+    boundary: bee.threads.service:boundary
+    types: bee.threads:types
+  security:
+    policies: [bee.threads.security:store]

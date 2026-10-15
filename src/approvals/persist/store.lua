@@ -230,4 +230,13 @@ function M.revoke_window(tx: sql.Transaction, id: string, at: string): string?
     if err then return err end
     return execute(tx, "INSERT OR IGNORE INTO bee_approval_grant_history SELECT grant_id,revision,'grant.revoked',granted_by,'{}',? FROM bee_approval_grants WHERE grant_id = ?", {at,id}, "record window revocation")
 end
+function M.consumed_decision(tx: sql.Transaction, approval: string, workspace: string, consumer: string, effect: string): (unknown?, string?)
+    local rows, err = query(tx, [[SELECT r.proposal_json,r.decider_id,d.decision_id,d.decider_json,r.decided_at
+        FROM bee_approval_requests r JOIN bee_approval_decisions d ON d.approval_id=r.approval_id AND d.revision=r.revision
+        WHERE r.approval_id=? AND r.workspace_id=? AND r.state='decided' AND r.decision='approved'
+        AND r.consumer_id=? AND r.consumed_effect=?]], {approval, workspace, consumer, effect})
+    if not rows or err then return nil, err end
+    if #rows ~= 1 then return nil, nil end
+    return rows[1], nil
+end
 return M

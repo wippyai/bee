@@ -43,9 +43,9 @@ local function define_tests()
                 local shared = fresh("autoresearch")
                 value(call("bee.threads.binding:create", {thread_id = shared, idempotency_key = fresh("create"), title = "Autoresearch"}))
                 local first_id, second_id = fresh("research-one"), fresh("research-two")
-                local first = value(call("bee.tests.harness.admission:start", {request_id = first_id, definition_ref = DEFINITION,
+                local first = value(call("bee.tests.harness.launch:start", {request_id = first_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "investigate the first hypothesis", thread_id = shared}))
-                local second = value(call("bee.tests.harness.admission:start", {request_id = second_id, definition_ref = DEFINITION,
+                local second = value(call("bee.tests.harness.launch:start", {request_id = second_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "investigate the second hypothesis", thread_id = shared}))
                 test.eq(first.thread_id, shared)
                 test.eq(second.thread_id, shared)
@@ -80,7 +80,7 @@ local function define_tests()
                 test.is_nil(caught_up.page_id)
                 value(call("bee.threads.binding:unsubscribe", {thread_id = shared,
                     idempotency_key = fresh("close-consumer"), subscription_id = subscribed.subscription_id}))
-                local settled_replay = value(call("bee.tests.harness.admission:start", {request_id = first_id,
+                local settled_replay = value(call("bee.tests.harness.launch:start", {request_id = first_id,
                     definition_ref = DEFINITION, workspace_id = workspace, brief = "investigate the first hypothesis", thread_id = shared}))
                 test.eq(settled_replay.mode, "settled")
                 test.eq(settled_replay.thread_id, first.thread_id)
@@ -115,7 +115,7 @@ local function define_tests()
             policy_entry.data = window_policy
             apply(policy_entry)
             local origin = fresh("window-origin")
-            local first = value(call("bee.tests.harness.admission:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
+            local first = value(call("bee.tests.harness.launch:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
                 workspace_id = workspace, brief = ""}))
             local transport = carrier_io(workspace)
             local planned, plan_error = machine.plan(transport, carrier_fixtures.request(first.request))
@@ -137,22 +137,22 @@ local function define_tests()
             local request: admission.Request = {request_id = fresh("resume"), definition_ref = RETAINED_DEFINITION, workspace_id = workspace,
                 brief = "", expected_plan_digest = first_plan.plan_digest,
                 continuation = {origin_request_id = origin, previous_attempt_id = first.attempt_id, thread_id = first.thread_id}}
-            local refused_resume = call("bee.tests.harness.admission:admit", request)
+            local refused_resume = call("bee.tests.harness.launch:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             value(call("bee.threads.binding:receipt", {thread_id = first.thread_id, action_id = first.action_id, attempt_id = first.attempt_id,
                 idempotency_key = fresh("receipt"), carrier_epoch = prepared.epoch, receipt = {scope = "attempt", outcome = "cancelled", evidence_refs = {},
                     error = {code = "fixture_closed", message = "predecessor fixture closed", retryable = false}}}))
-            local refused_resume = call("bee.tests.harness.admission:admit", request)
+            local refused_resume = call("bee.tests.harness.launch:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             local db, db_error = placement_store.open()
             if not db then error(tostring(db_error)) end
             test.is_true(placement_store.transition(db, first.attempt_id, {execution = "starting", evidence = {kind = "fixture", detail = "no process started"}}).ok)
             test.is_true(placement_store.transition(db, first.attempt_id, {execution = "exited", evidence = {kind = "fixture", detail = "no process exists"}}).ok)
-            local refused_resume = call("bee.tests.harness.admission:admit", request)
+            local refused_resume = call("bee.tests.harness.launch:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             test.is_true(placement_store.transition(db, first.attempt_id, {cleanup = "complete", evidence = {kind = "fixture", detail = "no home materialized"}}).ok)
             db:release()
-            local resumed = value(call("bee.tests.harness.admission:admit", request))
+            local resumed = value(call("bee.tests.harness.launch:admit", request))
             test.eq(resumed.action_id, first.action_id)
             test.eq(resumed.thread_id, first.thread_id)
             test.eq(resumed.session_ref, first.session_ref)
@@ -161,7 +161,7 @@ local function define_tests()
             test.eq(resumed.request.brief, "")
             test.eq(resumed.request.resources[1].name, first.request.resources[1].name)
             test.is_true(resumed.request.resources[1].grant_ref ~= first.request.resources[1].grant_ref)
-            local replay = value(call("bee.tests.harness.admission:admit", request))
+            local replay = value(call("bee.tests.harness.launch:admit", request))
             test.eq(replay.request.resources[1].grant_ref, resumed.request.resources[1].grant_ref)
             test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. request.request_id})), "NOT_FOUND")
             local resume_plan, resume_error = machine.plan(transport, carrier_fixtures.request(resumed.request))
@@ -175,12 +175,12 @@ local function define_tests()
             apply(policy_entry)
             request.request_id = fresh("reviewed-resume")
             request.continuation.reauthorize = true
-            local refused_resume = call("bee.tests.harness.admission:admit", request)
+            local refused_resume = call("bee.tests.harness.launch:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             local current, current_error = admission.resolve(RETAINED_DEFINITION, "window")
             if not current then error(tostring(current_error)) end
             request.expected_plan_digest = current.plan_digest
-            local reviewed = value(call("bee.tests.harness.admission:admit", request))
+            local reviewed = value(call("bee.tests.harness.launch:admit", request))
             test.eq(reviewed.plan.plan_digest, current.plan_digest)
             test.eq(reviewed.session_ref, first.session_ref)
             test.eq(reviewed.action_id, first.action_id)
@@ -196,27 +196,27 @@ local function define_tests()
             -- Mutated saved references and changed host plans cannot select
             -- another session or silently replay under new configuration.
             request.workspace_id = fresh("foreign-workspace")
-            local refused_resume = call("bee.tests.harness.admission:admit", request)
+            local refused_resume = call("bee.tests.harness.launch:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             request.workspace_id = workspace
             request.expected_plan_digest = string.rep("0", 64)
-            local refused_resume = call("bee.tests.harness.admission:admit", request)
+            local refused_resume = call("bee.tests.harness.launch:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             request.continuation.reauthorize = true
-            test.eq(code(call("bee.tests.harness.admission:admit", request)), "CONFLICT", "review never bypasses the current plan fence")
+            test.eq(code(call("bee.tests.harness.launch:admit", request)), "CONFLICT", "review never bypasses the current plan fence")
             request.continuation.reauthorize = false
             request.expected_plan_digest = first.plan.plan_digest
             request.brief = "repeat original prompt"
-            test.eq(code(call("bee.tests.harness.admission:admit", request)), "INVALID")
+            test.eq(code(call("bee.tests.harness.launch:admit", request)), "INVALID")
             request.brief = ""
-            local foreign, foreign_error = funcs.new():with_actor(security.new_actor("bee.test.foreign")):with_scope(scope()):call("bee.tests.harness.admission:admit", request)
+            local foreign, foreign_error = funcs.new():with_actor(security.new_actor("bee.test.foreign")):with_scope(scope()):call("bee.tests.harness.launch:admit", request)
             if foreign_error then error(tostring(foreign_error)) end
             test.is_false((principals.reply(foreign)).ok)
             -- Current resource authority must approve again; the old grant
             -- and committed hook do not authorize a new attempt.
             value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "read"}))
             request.request_id = fresh("revoked-resume")
-            test.is_false(call("bee.tests.harness.admission:admit", request).ok)
+            test.is_false(call("bee.tests.harness.launch:admit", request).ok)
             value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"}))
             entry.data = original
             apply(entry)

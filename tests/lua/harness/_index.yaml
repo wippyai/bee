@@ -1303,9 +1303,9 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.tests.harness.admission:resolve
-    - bee.tests.harness.admission:admit
-    - bee.tests.harness.admission:start
+    - bee.tests.harness.launch:resolve
+    - bee.tests.harness.launch:admit
+    - bee.tests.harness.launch:start
     - bee.resources.binding:associate
     - bee.resources.binding:grant
     - bee.credentials.binding:define

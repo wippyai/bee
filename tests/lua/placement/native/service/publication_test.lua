@@ -8,7 +8,7 @@ local request = require("request")
 local types = require("types")
 local service = require("service")
 local runner_fixture = require("runner_fixture")
-local RUNNER = "bee.tests.placement.publication:materialization_runner_process"
+local RUNNER = "bee.tests.placement.native.service:materialization_runner_process"
 local counter = 0
 local function fresh(): string
     counter = counter + 1

@@ -1,0 +1,56 @@
+version: '1.0'
+namespace: bee.tests.apps.settings.app
+entries:
+- name: settings_test
+  kind: function.lua
+  source: file://settings_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    choice: bee.apps.settings.app:choice
+    appearance: bee.ui:appearance
+- name: settings_about_test
+  kind: function.lua
+  source: file://settings_about_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [tty]
+  imports:
+    test: wippy.test:test
+    view: bee.apps.settings.app:view
+    appearance: bee.ui:appearance
+    live_updates: bee.apps.settings.app:live_updates
+- name: settings_app_test
+  kind: function.lua
+  source: file://settings_app_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process, channel, time, tty]
+  imports:
+    test: wippy.test:test
+- name: settings_edit_test
+  kind: function.lua
+  source: file://settings_edit_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.ui:appearance
+    interaction: bee.app:interaction
+    view: bee.apps.settings.app:view
+    model: bee.apps.settings.app:edit_mode
+    forms: bee.ui.forms:forms
+    super_edit: bee.gov.security:super_edit
+- name: native_theme_test
+  kind: function.lua
+  source: file://native_theme_test.lua
+  method: run
+  modules: [process, system, channel, time, tty, sql]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+    appearance: bee.ui:appearance
+    settings: bee.node.persist:settings

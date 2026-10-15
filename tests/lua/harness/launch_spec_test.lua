@@ -42,10 +42,10 @@ local function define_tests()
                             placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}, bee = {},
                             provider = {options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}}}})
                     assert(written.ok == true, tostring(written.message))
-                    local planned = value(call("bee.tests.harness.admission:resolve", {definition_ref = definition_ref, workspace_id = workspace,
+                    local planned = value(call("bee.tests.harness.launch:resolve", {definition_ref = definition_ref, workspace_id = workspace,
                         saved_profile_id = id, saved_profile_revision = 1}))
                     test.eq(planned.placement_kind, "docker")
-                    local denied = call("bee.tests.harness.admission:admit", {request_id = fresh("native-yolo"), definition_ref = definition_ref,
+                    local denied = call("bee.tests.harness.launch:admit", {request_id = fresh("native-yolo"), definition_ref = definition_ref,
                         workspace_id = workspace, saved_profile_id = id, saved_profile_revision = 1, brief = "Fixture", expected_plan_digest = planned.plan_digest,
                         placement_override = {kind = "native", home = "private"}})
                     test.is_false(denied.ok)
@@ -104,9 +104,9 @@ local function define_tests()
                             requestable = selected.id == child_id and {"bee.tests.memory:trait", "bee.tests.memory:outside"} or {"bee.tests.memory:trait"}, context = {project = "Bee", child_profile = child_id, child_definition = RETAINED_DEFINITION}}}))
                 end
                 open_gateway()
-                local measured = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                local measured = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = parent_id, saved_profile_revision = 1, overrides = {name = "Parent", role = "Inspect", traits = {"bee.tests.memory:review", "bee.tests.memory:trait"}, context = {task = "Review", readonly = false}}}))
-                local started = value(call("bee.tests.harness.admission:start", {request_id = fresh("spec-start"), definition_ref = DEFINITION,
+                local started = value(call("bee.tests.harness.launch:start", {request_id = fresh("spec-start"), definition_ref = DEFINITION,
                     workspace_id = workspace, saved_profile_id = parent_id, saved_profile_revision = 1, expected_plan_digest = measured.plan_digest,
                     brief = "Read the supplied context", overrides = {name = "Parent", role = "Inspect", traits = {"bee.tests.memory:review", "bee.tests.memory:trait"}, context = {task = "Review", readonly = false}}}))
                 await_settled(tostring(started.thread_id), tostring(started.attempt_id))

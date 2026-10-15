@@ -263,7 +263,7 @@ local function prepare_host(workspace: string)
     value(call("bee.credentials.binding:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}}))
 end
 local function setup(workspace: string, definition_ref: string): {[string]: unknown}
-    local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = definition_ref}))
+    local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = definition_ref}))
     local reply = call_setup({workspace_id = workspace, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
     return reply
 end

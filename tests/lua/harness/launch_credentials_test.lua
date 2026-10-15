@@ -35,9 +35,9 @@ local function define_tests()
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Selected credentials",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {},
                         bee = {mcp = {}, credential_refs = refs, files = {{workspace_id = workspace, resource = "project", subpath = "", access = "read"}}}}}))
-                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("credential-admit"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("credential-admit"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest}))
                 local request = assert(bounds.object(admitted.request))
                 test.eq(#assert(bounds.array(request.projections, 64)), #refs)
@@ -53,7 +53,7 @@ local function define_tests()
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Undeclared",
                     definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
-            local refused = call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
+            local refused = call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
             test.eq(code(refused), "DENIED")
         end)
         test.it("honors credential environment destinations and rejects retargeting or literal conflicts", function()
@@ -82,8 +82,8 @@ local function define_tests()
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Environment",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
-                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
-                replies[index] = call("bee.tests.harness.admission:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
+                local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
+                replies[index] = call("bee.tests.harness.launch:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})
             end
             declaration.data = assert(json.decode(saved_descriptor)); policy_entry.data = assert(json.decode(saved_policy))
@@ -134,7 +134,7 @@ local function define_tests()
             test.eq(definitions[1].name, "anthropic")
             test.eq(definitions[1].revision, 1)
             test.eq(#(principals.items(first.credentials)), 1)
-            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("setup-admit"), definition_ref = RETAINED_DEFINITION,
+            local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("setup-admit"), definition_ref = RETAINED_DEFINITION,
                 workspace_id = first_workspace, brief = "ping"}))
             local request = assert(bounds.object(admitted.request))
             local resources = principals.objects(request.resources)
@@ -160,7 +160,7 @@ local function define_tests()
                 local after = associations(target)
                 test.eq(after[1].revision, prior_revision + 1)
                 test.neq(after[1].association_id, before[1].association_id)
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("setup-root-refresh-admit"),
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("setup-root-refresh-admit"),
                     definition_ref = RETAINED_DEFINITION, workspace_id = target, brief = "ping"}))
                 test.eq(#(principals.items((assert(bounds.object(admitted.request))).resources)), 2)
             end)
@@ -312,7 +312,7 @@ local function define_tests()
             local conflict = setup(conflicting_workspace, DEFINITION)
             test.is_false(conflict.ok == true)
             test.eq(#associations(conflicting_workspace), 1)
-            local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
+            local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION}))
             local changed_workspace = fresh("setup-changed")
             local entry = assert(registry.get(DEFINITION))
             local original = entry.data

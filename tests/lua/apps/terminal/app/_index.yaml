@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.tests.apps.terminal.app
+entries:
+- name: terminal_test
+  kind: function.lua
+  source: file://terminal_test.lua
+  method: run
+  modules: [process, channel, system, tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+    command: bee.apps.terminal.app:command

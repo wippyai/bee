@@ -25,7 +25,7 @@ local function define_tests()
         local workspace = fixture.prepare()
         test.it("admits for the requester, obtaining an attempt-bound grant and projection in the requester's authority", function()
             local request_id = fresh("request")
-            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local admitted = value(call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(admitted.requester, REQUESTER)
             test.eq(admitted.attempt_id, "attempt:" .. request_id)
             test.eq(admitted.thread_id, "thread:" .. request_id)
@@ -47,45 +47,45 @@ local function define_tests()
                 end
             end
             test.is_true(found)
-            local replay = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            local replay = value(call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq((principals.strings((assert(bounds.object(replay.request))).projections))[1], projections[1])
-            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping", thread_id = "t"})), "FORBIDDEN")
+            test.eq(code(call("bee.tests.harness.launch:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping", thread_id = "t"})), "FORBIDDEN")
             -- Bound to the same workspace, so the refusal is the launch policy's.
             local outsider = funcs.new():with_actor(principals.actor("bee.test.other", workspace)):with_scope(scope())
-            local denied, err = outsider:call("bee.tests.harness.admission:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
+            local denied, err = outsider:call("bee.tests.harness.launch:admit", {request_id = fresh("request"), definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})
             if err then error(tostring(err)) end
             test.eq(code(principals.reply(denied)), "FORBIDDEN")
         end)
         test.it("admits workdir, thread and placement overrides only where the definition and its policy both allow them", function()
             value(call("bee.resources.binding:associate", {workspace_id = workspace, name = "alternate", root_ref = ROOT, subpath = "", allowed_access = "write"}))
             local refused_request = fresh("override-refused")
-            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+            test.eq(code(call("bee.tests.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                 brief = "ping", workdir = "alternate"})), "FORBIDDEN")
-            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+            test.eq(code(call("bee.tests.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                 brief = "ping", thread_title = "Chosen title"})), "FORBIDDEN")
             test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. refused_request})), "NOT_FOUND")
             -- The definition alone allowing an override is not enough: the
             -- host policy must admit it as well.
             with_overrides({"brief", "workdir", "thread", "placement"}, {}, function()
-                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
+                local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION}))
                 test.eq(#(principals.strings(plan.overrides)), 1)
                 test.eq((principals.strings(plan.overrides))[1], "brief")
                 test.eq(plan.placement_kind, "native")
-                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                test.eq(code(call("bee.tests.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "ping", workdir = "alternate"})), "FORBIDDEN")
-                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                test.eq(code(call("bee.tests.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "ping", thread_title = "Chosen title"})), "FORBIDDEN")
             end)
             with_overrides({"brief"}, {"workdir", "thread", "placement"}, function()
-                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
+                test.eq(code(call("bee.tests.harness.launch:admit", {request_id = refused_request, definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "ping", workdir = "alternate"})), "FORBIDDEN")
             end)
             test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. refused_request})), "NOT_FOUND")
             with_overrides({"brief", "workdir", "thread"}, {"workdir", "thread"}, function()
-                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
+                local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION}))
                 test.eq(#(principals.strings(plan.overrides)), 3)
                 local request_id = fresh("override-workdir")
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace,
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "ping", workdir = "alternate", thread_title = "Chosen title"}))
                 local carrier_request = assert(bounds.object(admitted.request))
                 test.eq(carrier_request.working_directory, "alternate")
@@ -98,16 +98,16 @@ local function define_tests()
                 -- An existing thread the requester belongs to replaces the new one.
                 local chosen = fresh("override-thread")
                 value(call("bee.threads.binding:create", {thread_id = chosen, idempotency_key = fresh("create"), title = "Existing"}))
-                local joined = value(call("bee.tests.harness.admission:admit", {request_id = fresh("override-existing"), definition_ref = DEFINITION,
+                local joined = value(call("bee.tests.harness.launch:admit", {request_id = fresh("override-existing"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = chosen}))
                 test.eq(joined.thread_id, chosen)
                 local foreign_owner = fresh("foreign-owner")
                 local foreign_thread = fresh("foreign-thread")
                 value(call_as(foreign_owner, "bee.threads.binding:create", {thread_id = foreign_thread,
                     idempotency_key = fresh("foreign-create"), title = "Foreign"}))
-                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("override-foreign"), definition_ref = DEFINITION,
+                test.eq(code(call("bee.tests.harness.launch:admit", {request_id = fresh("override-foreign"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = foreign_thread})), "DENIED")
-                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("override-both"), definition_ref = DEFINITION,
+                test.eq(code(call("bee.tests.harness.launch:admit", {request_id = fresh("override-both"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = chosen, thread_title = "Both"})), "INVALID")
             end)
         end)
@@ -117,26 +117,26 @@ local function define_tests()
             with_entry(DEFINITION, function(changed)
                 changed.thread_policy = {kind = "named", thread_ref = selected}
             end, function()
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("named-thread"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("named-thread"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = selected}))
                 test.eq(admitted.thread_id, selected)
-                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("different-thread"), definition_ref = DEFINITION,
+                test.eq(code(call("bee.tests.harness.launch:admit", {request_id = fresh("different-thread"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = fresh("other")})), "FORBIDDEN")
-                test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("named-title"), definition_ref = DEFINITION,
+                test.eq(code(call("bee.tests.harness.launch:admit", {request_id = fresh("named-title"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_title = "New thread"})), "FORBIDDEN")
-                test.eq(code(call_as(fresh("nonmember"), "bee.tests.harness.admission:admit", {request_id = fresh("named-nonmember"), definition_ref = DEFINITION,
+                test.eq(code(call_as(fresh("nonmember"), "bee.tests.harness.launch:admit", {request_id = fresh("named-nonmember"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = selected})), "DENIED")
             end)
         end)
         test.it("refuses a placement other than the host's before any thread or grant exists", function()
-            local native = value(call("bee.tests.harness.admission:admit", {request_id = fresh("placement-native"), definition_ref = DEFINITION,
+            local native = value(call("bee.tests.harness.launch:admit", {request_id = fresh("placement-native"), definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "native"}))
             test.eq((assert(bounds.object(native.plan))).placement_kind, "native")
             local request_id = fresh("placement-docker")
-            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
+            test.eq(code(call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "docker"})), "FORBIDDEN")
             with_overrides({"brief", "placement"}, {"placement"}, function()
-                local refused = call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local refused = call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", placement = "docker"})
                 test.eq(code(refused), "PLACEMENT_UNAVAILABLE")
             end)
@@ -144,35 +144,35 @@ local function define_tests()
             -- "vm" names no installed placement package, but decoding no
             -- longer refuses it by shape: the definition's own override
             -- allow-list is what refuses it here, same as "docker" above.
-            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
+            test.eq(code(call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "vm"})), "FORBIDDEN")
-            test.eq(code(call("bee.tests.harness.admission:admit", {request_id = fresh("placement-malformed"), definition_ref = DEFINITION,
+            test.eq(code(call("bee.tests.harness.launch:admit", {request_id = fresh("placement-malformed"), definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "bad\0placement"})), "INVALID")
         end)
         test.it("selects an installed placement package once the host's policy names its binding", function()
             local FIXTURE_PLACEMENT = "bee.tests.harness:fixture_placement_binding"
             with_overrides({"brief", "placement"}, {"placement"}, function()
-                local unselected = call("bee.tests.harness.admission:admit", {request_id = fresh("placement-fixture-unselected"), definition_ref = DEFINITION,
+                local unselected = call("bee.tests.harness.launch:admit", {request_id = fresh("placement-fixture-unselected"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", placement = "fixture"})
                 test.eq(code(unselected), "PLACEMENT_UNAVAILABLE")
                 test.is_true(refusal_message(unselected):find("it places it native", 1, true) ~= nil)
                 with_entry(POLICY, function(changed) changed.placement_binding = FIXTURE_PLACEMENT end, function()
-                    local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
+                    local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION}))
                     test.eq(plan.placement_kind, "fixture")
-                    local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("placement-fixture-selected"), definition_ref = DEFINITION,
+                    local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("placement-fixture-selected"), definition_ref = DEFINITION,
                         workspace_id = workspace, brief = "ping", placement = "fixture"}))
                     test.eq((assert(bounds.object(admitted.plan))).placement_kind, "fixture")
                 end)
             end)
         end)
         test.it("sets up a folder under an admitted root as the working directory only under a workdir override", function()
-            local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
+            local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION}))
             local refused = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                 expected_plan_digest = plan.plan_digest, workdir = {root_ref = ROOT, path = "chosen"}})
             test.eq(refused.ok, false)
             test.eq(refused.error, "the launch does not allow a workdir override")
             with_overrides({"brief", "workdir"}, {"workdir"}, function()
-                local allowed = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
+                local allowed = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION}))
                 local reply = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                     expected_plan_digest = allowed.plan_digest, workdir = {root_ref = ROOT, path = "chosen/deeper"}})
                 if reply.ok ~= true then error(tostring(reply.error)) end
@@ -188,7 +188,7 @@ local function define_tests()
                 local again = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                     expected_plan_digest = allowed.plan_digest, workdir = {root_ref = ROOT, path = "chosen/deeper"}})
                 test.eq((assert(bounds.object(again))).workdir, name)
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("folder-workdir"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("folder-workdir"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", workdir = name, expected_plan_digest = allowed.plan_digest}))
                 test.eq((assert(bounds.object(admitted.request))).working_directory, name)
                 for _, bad in ipairs({{root_ref = ROOT, path = "../escape"}, {root_ref = ROOT, path = "/abs"}, {root_ref = "bee.harness.catalog:not_a_root", path = "x"},
@@ -206,7 +206,7 @@ local function define_tests()
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Profiled folder",
                         definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}},
                         workdir = {root_ref = ROOT, path = "profiled"}}}))
-                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local function subpath_of(reply: {[string]: unknown}): unknown
                     if reply.ok ~= true then error(tostring(reply.error)) end

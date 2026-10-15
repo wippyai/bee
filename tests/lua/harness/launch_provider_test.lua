@@ -37,9 +37,9 @@ local function define_tests()
             }}
             local ok, failure = pcall(function()
                 apply(binding)
-                local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
+                local selected = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION}))
                 local request_id = fresh("complete-config-inputs")
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", expected_plan_digest = selected.plan_digest}))
                 local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
@@ -120,8 +120,8 @@ local function define_tests()
             local ok, failure = pcall(function()
                 local workspace_id = fresh("claude-host-home")
                 setup(workspace_id, SHIPPED_SHAPE_DEFINITION)
-                local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = SHIPPED_SHAPE_DEFINITION}))
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("claude-host-home-admit"),
+                local selected = value(call("bee.tests.harness.launch:resolve", {definition_ref = SHIPPED_SHAPE_DEFINITION}))
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("claude-host-home-admit"),
                     definition_ref = SHIPPED_SHAPE_DEFINITION, workspace_id = workspace_id, brief = "host config fixture",
                     expected_plan_digest = selected.plan_digest}))
                 local planned, plan_error = machine.plan(carrier_io(workspace), carrier_fixtures.request(admitted.request))
@@ -169,7 +169,7 @@ local function define_tests()
                 changes:update(policy_entry)
                 local applied, apply_error = changes:apply()
                 if not applied then error("configure missing provider: " .. tostring(apply_error)) end
-                local unapproved = value(call("bee.tests.harness.admission:admit", {request_id = fresh("unapproved-host-home"), definition_ref = DEFINITION,
+                local unapproved = value(call("bee.tests.harness.launch:admit", {request_id = fresh("unapproved-host-home"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""}))
                 local refused_plan, refusal = machine.plan(carrier_io(workspace), carrier_fixtures.request(unapproved.request))
                 test.is_nil(refused_plan)
@@ -180,7 +180,7 @@ local function define_tests()
                 changed_policy.allow_host_home = true
                 policy_entry.data = changed_policy
                 apply(policy_entry)
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""}))
                 local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
@@ -200,7 +200,7 @@ local function define_tests()
                 changed_policy.provider_ref = "bee.tests.harness:codex_fixture_provider"
                 policy_entry.data = changed_policy
                 apply(policy_entry)
-                local conflicted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("provider-home-conflict"), definition_ref = DEFINITION,
+                local conflicted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("provider-home-conflict"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""}))
                 local refused, refusal = machine.plan(io, carrier_fixtures.request(conflicted.request))
                 test.is_nil(refused)
@@ -214,9 +214,9 @@ local function define_tests()
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
                         name = "Private provider", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding",
                         provider = {}, bee = {mcp = {}}, placement = {kind = "native", home = "private"}}}))
-                local private_selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION,
+                local private_selected = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION,
                     workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
-                local private = value(call("bee.tests.harness.admission:admit", {request_id = fresh("provider-private-home-admit"),
+                local private = value(call("bee.tests.harness.launch:admit", {request_id = fresh("provider-private-home-admit"),
                     definition_ref = DEFINITION, workspace_id = workspace, brief = "",
                     saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = private_selected.plan_digest}))
                 local private_plan, private_error = machine.plan(io, carrier_fixtures.request(private.request))
@@ -277,9 +277,9 @@ local function define_tests()
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
                     profile = {schema_revision = "bee.agent-profile@3", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = "fixture-profile"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
-                local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+                local selected = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
                     workspace_id = workspace_id, brief = "", saved_profile_id = saved_id, saved_profile_revision = 1,
                     expected_plan_digest = selected.plan_digest}))
                 local carrier_request = assert(bounds.object(admitted.request))
@@ -346,14 +346,14 @@ local function define_tests()
                 initial:update(codex_policy)
                 local applied, apply_error = initial:apply()
                 if not applied then error("configure provider fence: " .. tostring(apply_error)) end
-                local selected = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION}))
+                local selected = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION}))
                 changed_provider.model = "gpt-5.1"
                 provider.data = changed_provider
                 local update = registry.snapshot():changes()
                 update:update(provider)
                 local updated, update_error = update:apply()
                 if not updated then error("change provider: " .. tostring(update_error)) end
-                local refused = call("bee.tests.harness.admission:admit", {request_id = request_id, definition_ref = DEFINITION,
+                local refused = call("bee.tests.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "", expected_plan_digest = selected.plan_digest})
                 test.eq(code(refused), "CONFLICT")
                 test.eq(code(call("bee.threads.binding:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")

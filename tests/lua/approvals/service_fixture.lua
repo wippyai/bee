@@ -100,7 +100,7 @@ local function new()
         if not applied then error("replace test approvers: " .. tostring(apply_error)) end
     end
     local function proposal(payload: {[string]: unknown}?): {[string]: unknown}
-        return {kind = "operation", ref = "bee.tests.harness.admission:start", revision = "r1", payload = payload or {profile = "claude", argv = {"--print"}}}
+        return {kind = "operation", ref = "bee.tests.harness.launch:start", revision = "r1", payload = payload or {profile = "claude", argv = {"--print"}}}
     end
     local function attempt_proposal(action_id: string?, attempt_id: string): {[string]: unknown}
         return {kind = "attempt", ref = attempt_id, revision = "r1", action_id = action_id, payload = {tool = "Bash", correlation_id = "c-1"}}

@@ -17,7 +17,7 @@ local function cases()
         local decision = selected.decision
         test.it("asks once in Needs you and handles " .. decision .. " without a login projection, admitted mapping " .. tostring(selected.admitted), function()
             local id = "composition-" .. principals.key()
-            local volume = assert(fs.get("bee.tests.placement.publication:configuration_source"))
+            local volume = assert(fs.get("bee.tests.placement.native.service:configuration_source"))
             local source = selected.admitted and '{"provider":{"synthetic":{"npm":"@ai-sdk/openai-compatible","options":{"baseURL":"https://synthetic.test/v1","apiKey":"{env:OPENAI_API_KEY}"},"models":{"fixture":{"name":"Fixture"}}}}}'
                 or '{"provider":{"synthetic":{"options":{"apiKey":"{file:/synthetic/provider.key}"}}}}'
             assert(volume:writefile("opencode.json", source))
@@ -32,7 +32,7 @@ local function cases()
                 provider_ref = "bee.test:provider", composition = composition}}}
             local value: types.LaunchRequest = {workspace_id = id, idempotency_key = id, attempt_id = id,
                 owner_id = "bee.test.configuration", owner_incarnation = 1, action_id = id,
-                binding_ref = "bee.driver.opencode.binding:binding", policy_ref = selected.admitted and "bee.tests.placement.publication:admitted_provider_policy" or "bee.test:policy", profile_id = "window",
+                binding_ref = "bee.driver.opencode.binding:binding", policy_ref = selected.admitted and "bee.tests.placement.native.service:admitted_provider_policy" or "bee.test:policy", profile_id = "window",
                 binding_digest = string.rep("b", 64), profile_digest = string.rep("c", 64),
                 launch = {executable = "sh", argv = {}, environment = {}, readiness = "none", home_ref = "session",
                     provider_home = {provider = "opencode", private = false, files = {}}},
@@ -45,7 +45,7 @@ local function cases()
             local intended = store.intend(db, value, assert(request.digest(value)), assert(json.encode(value)),
                 {capability = "process_group", exit_observation = "independent"})
             test.is_true(intended.ok)
-            local runner = runner_fixture.claim("bee.tests.placement.publication:materialization_runner_process", value, 0)
+            local runner = runner_fixture.claim("bee.tests.placement.native.service:materialization_runner_process", value, 0)
             local changes = assert(cdc.stream("bee:changes", {tables = {"bee_approval_requests"}, ops = {"insert", "update"}}))
             local results: Channel<runner_fixture.Outcome> = channel.new(1)
             coroutine.spawn(function() results:send(runner_fixture.prepare(runner)) end)

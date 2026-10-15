@@ -81,9 +81,9 @@ local function define_tests()
                     end
                     open_gateway()
                     for _ = 1, (scenario == "saved" or scenario == "legacy") and 2 or 1 do
-                    local measured = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                    local measured = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                         saved_profile_id = parent_id, saved_profile_revision = 1}))
-                    local started = value(call("bee.tests.harness.admission:start", {request_id = fresh("regression-start"), definition_ref = DEFINITION,
+                    local started = value(call("bee.tests.harness.launch:start", {request_id = fresh("regression-start"), definition_ref = DEFINITION,
                         workspace_id = workspace, saved_profile_id = parent_id, saved_profile_revision = 1,
                         expected_plan_digest = measured.plan_digest, brief = "Spawn the child"}))
                     await_settled(tostring(started.thread_id), tostring(started.attempt_id))
@@ -111,9 +111,9 @@ local function define_tests()
                     local child_actor: string
                     if scenario == "cleared" or scenario == "delegated" then
                         local overrides = {context = {from_parent = true}}
-                        local measured = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                        local measured = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                             saved_profile_id = child_id .. "-cleared", saved_profile_revision = 1, overrides = overrides}))
-                        local launched = value(call("bee.tests.harness.admission:start", {request_id = fresh("cleared-start"), definition_ref = DEFINITION,
+                        local launched = value(call("bee.tests.harness.launch:start", {request_id = fresh("cleared-start"), definition_ref = DEFINITION,
                             workspace_id = workspace, saved_profile_id = child_id .. "-cleared", saved_profile_revision = 1,
                             expected_plan_digest = measured.plan_digest, brief = "Read your session", overrides = overrides}))
                         child_thread, child_actor = assert(bounds.id(launched.thread_id)), REQUESTER

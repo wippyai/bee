@@ -32,3 +32,17 @@ entries:
     protocol: bee.placement.native:protocol
     native_fixture: bee.tests.placement.native:native_fixture
     supervision: bee.placement.native.persist:supervision
+- name: eligibility_db
+  kind: db.sql.sqlite
+  file: .wippy/placement-eligibility.db
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}
+- name: eligibility_test
+  kind: function.lua
+  source: file://eligibility_test.lua
+  method: run
+  modules: [sql]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    supervision: bee.placement.native.persist:supervision

@@ -1,20 +1,6 @@
 version: '1.0'
-namespace: bee.tests.placement.owner
+namespace: bee.tests.placement.docker.service
 entries:
-- name: eligibility_db
-  kind: db.sql.sqlite
-  file: .wippy/placement-eligibility.db
-  meta: {type: test_support}
-  lifecycle: {auto_start: true}
-- name: eligibility_test
-  kind: function.lua
-  source: file://eligibility_test.lua
-  method: run
-  modules: [sql]
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    supervision: bee.placement.native.persist:supervision
 - name: image_fixture
   kind: library.lua
   source: file://image_fixture.lua
@@ -41,14 +27,14 @@ entries:
   modules: [process, channel]
   meta: {type: test_support}
   imports:
-    image: bee.tests.placement.owner:image_fixture
-    environment: bee.tests.placement.owner:environment_fixture
-    service: bee.tests.placement.owner:sweep_fixture
+    image: bee.tests.placement.docker.service:image_fixture
+    environment: bee.tests.placement.docker.service:environment_fixture
+    service: bee.tests.placement.docker.service:sweep_fixture
     bounds: bee.values:bounds
     demand: bee.process:demand
     task: bee.process:task
   security:
-    policies: [bee.tests.placement.owner:owner_fixture_policy]
+    policies: [bee.tests.placement.docker.service:owner_fixture_policy]
 - name: docker_owner_test
   kind: function.lua
   source: file://docker_owner_test.lua
@@ -57,9 +43,9 @@ entries:
   meta: {type: test, suite: bee, timeout: 20s}
   imports:
     test: wippy.test:test
-    image: bee.tests.placement.owner:image_fixture
+    image: bee.tests.placement.docker.service:image_fixture
   security:
-    policies: [bee.tests.placement.owner:owner_fixture_policy]
+    policies: [bee.tests.placement.docker.service:owner_fixture_policy]
 - name: demand_dispatch_test
   kind: function.lua
   source: file://demand_dispatch_test.lua

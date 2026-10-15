@@ -959,9 +959,9 @@ def compose():
     settings_area_fixture(src)
     hold_inbox_review(src)
     shutil.copy2(ROOT / "src/placement/native/service/materialization.lua",
-                 TESTS / "lua/placement/publication/materialization.lua")
+                 TESTS / "lua/placement/native/service/materialization.lua")
     shutil.copy2(ROOT / "src/placement/docker/service/image_owner.lua",
-                 TESTS / "lua/placement/owner/image_owner.lua")
+                 TESTS / "lua/placement/docker/service/image_owner.lua")
     shutil.copy2(ROOT / "src/gov/service/activation_worker.lua",
                  TESTS / "lua/gov/activation_worker.lua")
     shutil.copy2(ROOT / "src/process/demand_owner.lua",

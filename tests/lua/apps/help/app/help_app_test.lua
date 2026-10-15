@@ -27,7 +27,7 @@ end
 local function capture(name: string, snapshot: Snapshot)
     test.eq(snapshot.width, 120)
     test.eq(snapshot.height, 40)
-    local captures = assert(fs.get("bee.tests.apps:captures"))
+    local captures = assert(fs.get("bee.tests.apps.help.app:captures"))
     assert(captures:writefile(name .. ".txt", tty.text.plain(table.concat(snapshot.rows, "\n")) .. "\n"))
 end
 local function define_tests()

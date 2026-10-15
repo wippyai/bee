@@ -1,0 +1,57 @@
+version: '1.0'
+namespace: bee.tests.apps.help.app
+entries:
+- name: help_test
+  kind: function.lua
+  source: file://help_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    view: bee.apps.help.app:view
+    menu: bee.shell:menu
+    appearance: bee.ui:appearance
+- name: manuals_test
+  kind: function.lua
+  source: file://manuals_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - tty
+  - fs
+  - hash
+  security:
+    policies:
+    - bee.security.docs:docs_policy
+  imports:
+    test: wippy.test:test
+    manuals: bee.docs:manuals
+    markdown: bee.ui:markdown
+    corpus: bee.docs.binding:corpus
+    resources: bee.docs.env:resources
+    view: bee.apps.help.app:view
+    appearance: bee.ui:appearance
+- name: help_app_test
+  kind: function.lua
+  source: file://help_app_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [tty, system, time, channel, fs]
+  security: {policies: [bee.security.docs:docs_policy, bee.tests.apps.help.app:capture_policy]}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client
+    manuals: bee.docs:manuals
+- name: captures
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/docsui-screens
+  auto_init: true
+- name: capture_policy
+  kind: security.policy
+  policy:
+    actions: [fs.get]
+    resources: [bee.tests.apps.help.app:captures]
+    effect: allow

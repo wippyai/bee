@@ -67,13 +67,13 @@ local function define_tests()
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
                         name = "Custom provider", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding",
                         provider = {}, bee = {mcp = {}}, placement = {kind = "native", home = "private"}}}))
-                local plan = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = target,
+                local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = target,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local prepared = call_setup({workspace_id = target, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest,
                     saved_profile_id = saved_id, saved_profile_revision = 1})
                 test.is_true(prepared.ok, tostring(prepared.error))
                 test.eq(assert(bounds.array(prepared.credentials, 64))[1], "anthropic")
-                local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("private-provider-admit"),
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("private-provider-admit"),
                     definition_ref = DEFINITION, workspace_id = target, brief = "Fixture", expected_plan_digest = plan.plan_digest,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 test.eq(#assert(bounds.array(assert(bounds.object(admitted.request)).projections, 64)), 1)
@@ -102,12 +102,12 @@ local function define_tests()
                 bee = {mcp = {}}, placement = {kind = "native", home = "private"}}
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = target, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"), profile = profile}))
-            local plan = value(call("bee.tests.harness.admission:resolve", {workspace_id = target, definition_ref = ref,
+            local plan = value(call("bee.tests.harness.launch:resolve", {workspace_id = target, definition_ref = ref,
                 saved_profile_id = saved_id, saved_profile_revision = 1}))
             local setup_reply = call_setup({workspace_id = target, definition_ref = ref, expected_plan_digest = plan.plan_digest,
                 saved_profile_id = saved_id, saved_profile_revision = 1})
             assert(setup_reply.ok == true, tostring(setup_reply.error))
-            local admitted = value(call("bee.tests.harness.admission:admit", {workspace_id = target, definition_ref = ref, request_id = fresh("custom-admit"),
+            local admitted = value(call("bee.tests.harness.launch:admit", {workspace_id = target, definition_ref = ref, request_id = fresh("custom-admit"),
                 expected_plan_digest = plan.plan_digest, saved_profile_id = saved_id, saved_profile_revision = 1, brief = "Fixture"}))
             test.eq(#assert(bounds.array(assert(bounds.object(admitted.request)).projections, 64)), 2)
             local saved = value(call("bee.harness.binding:call", {operation = "get", workspace_id = target, profile_id = saved_id}))
@@ -143,9 +143,9 @@ local function define_tests()
                             name = "Remember", definition_ref = route.definition, driver_binding_ref = "bee.driver.claude.binding:binding",
                             provider = {}, bee = {mcp = {}}, active_traits = {"bee.tests.memory:trait"},
                             role = "Remember facts", context = {project = "Bee", readonly = false}}}))
-                    local measured = value(call("bee.tests.harness.admission:resolve", {definition_ref = route.definition, workspace_id = workspace,
+                    local measured = value(call("bee.tests.harness.launch:resolve", {definition_ref = route.definition, workspace_id = workspace,
                         saved_profile_id = saved_id, saved_profile_revision = 1}))
-                    local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("trait-admission"), definition_ref = route.definition, expected_plan_digest = measured.plan_digest,
+                    local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("trait-admission"), definition_ref = route.definition, expected_plan_digest = measured.plan_digest,
                         workspace_id = workspace, brief = "remember", saved_profile_id = saved_id, saved_profile_revision = 1}))
                     local requested = assert(bounds.object(admitted.request))
                     local preferences = assert(bounds.object(requested.preferences))
@@ -168,12 +168,12 @@ local function define_tests()
                     expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
             end
             save(0, "First profile", {})
-            local original = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+            local original = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 1}))
             test.eq(original.saved_profile_id, saved_id)
             test.eq(original.saved_profile_revision, 1)
             test.is_nil(original.preferences)
-            local admitted = value(call("bee.tests.harness.admission:admit", {request_id = fresh("saved-profile-admit"), definition_ref = DEFINITION,
+            local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("saved-profile-admit"), definition_ref = DEFINITION,
                 workspace_id = workspace_id, brief = "profile fixture", saved_profile_id = saved_id, saved_profile_revision = 1,
                 expected_plan_digest = original.plan_digest}))
             local carrier_request = assert(bounds.object(admitted.request))
@@ -181,11 +181,11 @@ local function define_tests()
             test.eq(preferences.instructions, "")
             test.eq(#(principals.items(preferences.mcp_tools)), 0)
             save(1, "Revised profile", {})
-            local refused = call("bee.tests.harness.admission:admit", {request_id = fresh("stale-profile"), definition_ref = DEFINITION,
+            local refused = call("bee.tests.harness.launch:admit", {request_id = fresh("stale-profile"), definition_ref = DEFINITION,
                 workspace_id = workspace_id, brief = "never launch", saved_profile_id = saved_id, saved_profile_revision = 1,
                 expected_plan_digest = original.plan_digest})
             test.eq(code(refused), "CONFLICT")
-            local updated = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+            local updated = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 2}))
             test.neq(original.plan_digest, updated.plan_digest)
             local unsafe = profile_call({operation = "put", workspace_id = workspace_id, profile_id = saved_id,
@@ -193,7 +193,7 @@ local function define_tests()
                     definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = "dontAsk"}, bee = {mcp = {}}}})
             test.eq(unsafe.ok, false)
             test.eq(unsafe.code, "DENIED")
-            local unchanged = value(call("bee.tests.harness.admission:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
+            local unchanged = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 2}))
             test.eq(unchanged.plan_digest, updated.plan_digest)
         end)

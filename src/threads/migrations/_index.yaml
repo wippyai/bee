@@ -125,3 +125,12 @@ entries:
     migration: wippy.migration:migration
     canonical: bee.values:canonical
   modules: [json]
+- name: tool_selection_paths
+  kind: function.lua
+  source: file://tool_selection_paths.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-23T00:04:00Z'}
+  imports:
+    migration: wippy.migration:migration
+    canonical: bee.values:canonical
+  modules: [json]

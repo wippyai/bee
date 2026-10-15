@@ -380,8 +380,9 @@ def gate_retired_display(src):
             assert(tostring(assert((release:receive())):from()) == tostring(controller))
             process.unlisten(release)
         end''')
+    jobs = src / "shell/jobs.lua"
     shell = src / "shell/shell.lua"
-    replace_once(shell, '    local function attach_job(id: string, shown: string): Result', '''    local function retirement_gate(op: string, id: unknown)
+    replace_once(jobs, '    local function attach_job(id: string, shown: string): Result', '''    local function retirement_gate(op: string, id: unknown)
         local controller = process.registry.lookup("bee.test.retired." .. op, process.registry.LOCAL)
         if not controller then return end
         local release = assert(process.listen("bee.test.retired.release", {message = true}))
@@ -391,7 +392,7 @@ def gate_retired_display(src):
     end
     local function attach_job(id: string, shown: string): Result
         retirement_gate("attach", id)''')
-    replace_once(shell, '    local function call_job(op: string, args: {[string]: unknown}): Result',
+    replace_once(jobs, '    local function call_job(op: string, args: {[string]: unknown}): Result',
                  '    local function call_job(op: string, args: {[string]: unknown}): Result\n        retirement_gate(op, args.id)')
     replace_once(shell, '    local function node_event(event: client.Event)', '''    local function retired_observed()
         local observer = process.registry.lookup("bee.test.retired.closed", process.registry.LOCAL)
@@ -603,12 +604,13 @@ def hold_access_readiness(src):
 
 def fail_owner_registry_reads(src):
     """Fail the node owner's installed app, menu and theme reads while a controller holds the failure name."""
-    owner = src / "node/service/owner.lua"
+    owner = src / "node/service/catalog.lua"
     text = owner.read_text()
     assert text.count("registry.find(") == 4, f"{owner}: expected four registry reads"
     text = text.replace("registry.find(", "find_installed(")
     owner.write_text(text)
     replace_once(owner, 'local registry = require("registry")', '''local registry = require("registry")
+local process = require("process")
 local function find_installed(filter)
     local controller = process.registry.lookup("bee.test.node.registry_failure", process.registry.LOCAL)
     if controller then
@@ -617,6 +619,8 @@ local function find_installed(filter)
     end
     return registry.find(filter)
 end''')
+
+    add_modules(src / "node/service/_index.yaml", "catalog", ["process"])
 
 
 def fail_remote_registry_reads(src):

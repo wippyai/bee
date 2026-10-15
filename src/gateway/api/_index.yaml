@@ -184,9 +184,9 @@ entries:
     json_schema: bee.gateway.catalog:json_schema
     gateway_protocol: bee.gateway:protocol
     canonical: bee.values:canonical
-    record_bounds: bee.threads.records:bounds
     app_requests: bee.node:app_tool_request
     requirements: bee.hub.package:requirements
+    part_arguments: bee.gateway.api:arguments
 - name: gateway_endpoint
   kind: registry.entry
   meta:
@@ -226,3 +226,17 @@ entries:
   imports:
     bounds: bee.values:bounds
     address: bee.gateway.api:address_value
+- name: arguments
+  kind: library.lua
+  source: file://arguments.lua
+  imports:
+    bounds: bee.values:bounds
+    message: bee.threads.records:message
+    arguments: bee.app:arguments
+    workspace_protocol: bee.gov.types:workspace_protocol
+    delivery_protocol: bee.gov.types:delivery_protocol
+    node_tests: bee.node:tests
+    docs_protocol: bee.docs:protocol
+    record_bounds: bee.threads.records:bounds
+    app_requests: bee.node:app_tool_request
+    requirements: bee.hub.package:requirements

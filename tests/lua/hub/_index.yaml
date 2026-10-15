@@ -262,6 +262,10 @@ entries:
     graph: bee.hub.package:graph
     inspect: bee.hub.package:inspection
     requirements: bee.hub.package:requirements
+    plan_identity_cases: bee.tests.hub:plan_identity_cases
+    plan_components_cases: bee.tests.hub:plan_components_cases
+    plan_native_cases: bee.tests.hub:plan_native_cases
+    support: bee.tests.hub:plan_fixture
 - name: preview_test
   kind: function.lua
   source: file://preview_test.lua
@@ -333,3 +337,46 @@ entries:
   imports:
     source: bee.hub.binding:artifact_source
     inventory: bee.hub.package:inventory
+- name: plan_fixture
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://plan_fixture.lua
+  imports:
+    test: wippy.test:test
+    plan: bee.hub.package:plan
+    review: bee.hub.package:review
+    identity_decoder: bee.hub.package:binary_identity
+    graph: bee.hub.package:graph
+    inspect: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements
+- name: plan_identity_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://plan_identity_cases.lua
+  imports:
+    test: wippy.test:test
+    plan: bee.hub.package:plan
+    identity_decoder: bee.hub.package:binary_identity
+    support: bee.tests.hub:plan_fixture
+- name: plan_components_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://plan_components_cases.lua
+  imports:
+    test: wippy.test:test
+    plan: bee.hub.package:plan
+    inspect: bee.hub.package:inspection
+    requirements: bee.hub.package:requirements
+    support: bee.tests.hub:plan_fixture
+- name: plan_native_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://plan_native_cases.lua
+  imports:
+    test: wippy.test:test
+    plan: bee.hub.package:plan
+    support: bee.tests.hub:plan_fixture

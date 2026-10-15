@@ -341,8 +341,6 @@ entries:
   kind: function.lua
   source: file://activation_owner_test.lua
   method: run
-  modules:
-  - hash
   meta:
     type: test
     suite: bee
@@ -350,29 +348,17 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
-    artifact: bee.gov.types:artifact
-    plan_store: bee.gov.persist:plan_store
-    activation_store: bee.gov.persist:activation_store
-    lease_store: bee.gov.persist:lease_store
-    activation_owner: bee.gov.binding:activation_owner
-    preflight: bee.gov.binding:preflight
-    application_admission: bee.gov.types:governed_application_admission
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    migration_work: bee.gov.types:migration_work
-    follow_source: bee.gov.binding:follow_source
-    follow_store: bee.gov.persist:follow_store
-    delivery: bee.gov.types:delivery
+    activation_authority_cases: bee.tests.gov:activation_authority_cases
+    activation_admission_cases: bee.tests.gov:activation_admission_cases
+    activation_recovery_cases: bee.tests.gov:activation_recovery_cases
+    activation_migration_cases: bee.tests.gov:activation_migration_cases
+    activation_follow_cases: bee.tests.gov:activation_follow_cases
+    support: bee.tests.gov:activation_owner_fixture
 - name: activation_owner_admission_test
   kind: function.lua
   source: file://activation_owner_test.lua
   method: admission
-  modules:
-  - hash
   meta:
     type: test
     suite: bee
@@ -380,29 +366,17 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
-    artifact: bee.gov.types:artifact
-    plan_store: bee.gov.persist:plan_store
-    activation_store: bee.gov.persist:activation_store
-    lease_store: bee.gov.persist:lease_store
-    activation_owner: bee.gov.binding:activation_owner
-    preflight: bee.gov.binding:preflight
-    application_admission: bee.gov.types:governed_application_admission
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    migration_work: bee.gov.types:migration_work
-    follow_source: bee.gov.binding:follow_source
-    follow_store: bee.gov.persist:follow_store
-    delivery: bee.gov.types:delivery
+    activation_authority_cases: bee.tests.gov:activation_authority_cases
+    activation_admission_cases: bee.tests.gov:activation_admission_cases
+    activation_recovery_cases: bee.tests.gov:activation_recovery_cases
+    activation_migration_cases: bee.tests.gov:activation_migration_cases
+    activation_follow_cases: bee.tests.gov:activation_follow_cases
+    support: bee.tests.gov:activation_owner_fixture
 - name: activation_owner_recovery_test
   kind: function.lua
   source: file://activation_owner_test.lua
   method: recovery
-  modules:
-  - hash
   meta:
     type: test
     suite: bee
@@ -410,29 +384,17 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
-    artifact: bee.gov.types:artifact
-    plan_store: bee.gov.persist:plan_store
-    activation_store: bee.gov.persist:activation_store
-    lease_store: bee.gov.persist:lease_store
-    activation_owner: bee.gov.binding:activation_owner
-    preflight: bee.gov.binding:preflight
-    application_admission: bee.gov.types:governed_application_admission
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    migration_work: bee.gov.types:migration_work
-    follow_source: bee.gov.binding:follow_source
-    follow_store: bee.gov.persist:follow_store
-    delivery: bee.gov.types:delivery
+    activation_authority_cases: bee.tests.gov:activation_authority_cases
+    activation_admission_cases: bee.tests.gov:activation_admission_cases
+    activation_recovery_cases: bee.tests.gov:activation_recovery_cases
+    activation_migration_cases: bee.tests.gov:activation_migration_cases
+    activation_follow_cases: bee.tests.gov:activation_follow_cases
+    support: bee.tests.gov:activation_owner_fixture
 - name: activation_owner_migration_test
   kind: function.lua
   source: file://activation_owner_test.lua
   method: migration
-  modules:
-  - hash
   meta:
     type: test
     suite: bee
@@ -440,23 +402,13 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
-    artifact: bee.gov.types:artifact
-    plan_store: bee.gov.persist:plan_store
-    activation_store: bee.gov.persist:activation_store
-    lease_store: bee.gov.persist:lease_store
-    activation_owner: bee.gov.binding:activation_owner
-    preflight: bee.gov.binding:preflight
-    application_admission: bee.gov.types:governed_application_admission
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    migration_work: bee.gov.types:migration_work
-    follow_source: bee.gov.binding:follow_source
-    follow_store: bee.gov.persist:follow_store
-    delivery: bee.gov.types:delivery
+    activation_authority_cases: bee.tests.gov:activation_authority_cases
+    activation_admission_cases: bee.tests.gov:activation_admission_cases
+    activation_recovery_cases: bee.tests.gov:activation_recovery_cases
+    activation_migration_cases: bee.tests.gov:activation_migration_cases
+    activation_follow_cases: bee.tests.gov:activation_follow_cases
+    support: bee.tests.gov:activation_owner_fixture
 - name: artifact_test
   kind: function.lua
   source: file://artifact_test.lua
@@ -894,22 +846,13 @@ entries:
   kind: function.lua
   source: file://overlay_resolver_test.lua
   method: run
-  modules:
-  - hash
   meta:
     type: test
     suite: bee
   imports:
-    principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
-    artifact: bee.gov.types:artifact
-    overlay_resolver: bee.gov.binding:overlay_resolver
-    capability_grants: bee.gov.types:capability_grants
-    application_admission: bee.gov.types:governed_application_admission
-    preflight: bee.gov.binding:preflight
-    activation_measure: bee.gov.binding:activation_measure
+    overlay_driver_cases: bee.tests.gov:overlay_driver_cases
+    overlay_artifact_cases: bee.tests.gov:overlay_artifact_cases
 - name: publication_test_policy
   kind: security.policy.expr
   meta:
@@ -1315,8 +1258,6 @@ entries:
   kind: function.lua
   source: file://activation_owner_test.lua
   method: follow
-  modules:
-  - hash
   meta:
     type: test
     suite: bee
@@ -1324,23 +1265,13 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
-    artifact: bee.gov.types:artifact
-    plan_store: bee.gov.persist:plan_store
-    activation_store: bee.gov.persist:activation_store
-    lease_store: bee.gov.persist:lease_store
-    activation_owner: bee.gov.binding:activation_owner
-    preflight: bee.gov.binding:preflight
-    application_admission: bee.gov.types:governed_application_admission
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    migration_work: bee.gov.types:migration_work
-    follow_source: bee.gov.binding:follow_source
-    follow_store: bee.gov.persist:follow_store
-    delivery: bee.gov.types:delivery
+    activation_authority_cases: bee.tests.gov:activation_authority_cases
+    activation_admission_cases: bee.tests.gov:activation_admission_cases
+    activation_recovery_cases: bee.tests.gov:activation_recovery_cases
+    activation_migration_cases: bee.tests.gov:activation_migration_cases
+    activation_follow_cases: bee.tests.gov:activation_follow_cases
+    support: bee.tests.gov:activation_owner_fixture
 - name: hive_sdk_guide_test
   kind: function.lua
   source: file://hive_sdk_guide_test.lua
@@ -1554,3 +1485,158 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     harness: bee.tests.gov:delivery_harness
+- name: activation_owner_fixture
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://activation_owner_fixture.lua
+  modules:
+  - hash
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    migration_work: bee.gov.types:migration_work
+- name: activation_authority_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://activation_authority_cases.lua
+  modules:
+  - hash
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    support: bee.tests.gov:activation_owner_fixture
+- name: activation_admission_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://activation_admission_cases.lua
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    activation_owner: bee.gov.binding:activation_owner
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    capability_model: bee.capability:model
+    support: bee.tests.gov:activation_owner_fixture
+- name: activation_recovery_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://activation_recovery_cases.lua
+  imports:
+    test: wippy.test:test
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    activation_owner: bee.gov.binding:activation_owner
+    support: bee.tests.gov:activation_owner_fixture
+- name: activation_migration_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://activation_migration_cases.lua
+  modules:
+  - hash
+  imports:
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    activation_owner: bee.gov.binding:activation_owner
+    migration_work: bee.gov.types:migration_work
+    support: bee.tests.gov:activation_owner_fixture
+- name: activation_follow_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://activation_follow_cases.lua
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    artifact: bee.gov.types:artifact
+    plan_store: bee.gov.persist:plan_store
+    activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    activation_owner: bee.gov.binding:activation_owner
+    application_admission: bee.gov.types:governed_application_admission
+    capability_grants: bee.gov.types:capability_grants
+    follow_source: bee.gov.binding:follow_source
+    follow_store: bee.gov.persist:follow_store
+    delivery: bee.gov.types:delivery
+    support: bee.tests.gov:activation_owner_fixture
+- name: overlay_resolver_fixture
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://overlay_resolver_fixture.lua
+  modules:
+  - hash
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    overlay_resolver: bee.gov.binding:overlay_resolver
+    capability_grants: bee.gov.types:capability_grants
+    application_admission: bee.gov.types:governed_application_admission
+    preflight: bee.gov.binding:preflight
+    activation_measure: bee.gov.binding:activation_measure
+    resolver: bee.driver.binding:resolver
+- name: overlay_driver_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://overlay_driver_cases.lua
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    overlay_resolver: bee.gov.binding:overlay_resolver
+    preflight: bee.gov.binding:preflight
+    activation_measure: bee.gov.binding:activation_measure
+    support: bee.tests.gov:overlay_resolver_fixture
+- name: overlay_artifact_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://overlay_artifact_cases.lua
+  modules:
+  - hash
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    canonical: bee.values:canonical
+    artifact: bee.gov.types:artifact
+    overlay_resolver: bee.gov.binding:overlay_resolver
+    capability_grants: bee.gov.types:capability_grants
+    preflight: bee.gov.binding:preflight
+    support: bee.tests.gov:overlay_resolver_fixture

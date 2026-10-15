@@ -4,36 +4,20 @@
 -- durable fact lives in thread records, placement receipts and the
 -- checkpoint; the machine keeps only what the checkpoint holds.
 local json = require("json")
-local registry = require("registry")
-local permission = require("permission")
-local acceptance = require("acceptance")
-local gateway_configuration = require("gateway_configuration")
 local bounds = require("bounds")
 local record_bounds = require("record_bounds")
-local canonical = require("canonical")
-local catalog = require("catalog")
-local classify = require("classify")
 local policy = require("policy")
-local provenance = require("provenance")
 local checkpoint = require("checkpoint")
 local prestart = require("prestart")
-local continuation = require("continuation")
 local settle = require("settle")
 local stream_json = require("stream_json")
-local driver_types = require("driver_types")
 local placement_types = require("placement_types")
 local placement_resolver = require("placement_resolver")
-local placement_profiles = require("placement_profiles")
 local placement_protocol = require("placement_protocol")
 local placement_decode = require("placement_decode")
 local record_types = require("record_types")
 local thread_record = require("thread_record")
-local observation_decode = require("observation_decode")
-local launch_request = require("launch_request")
-local configuration_protocol = require("configuration")
-local driver_resolver = require("driver_resolver")
 local gateway_protocol = require("gateway_protocol")
-local service_reply = require("service_reply")
 local hook_records = require("hook_records")
 local carrier_types = require("carrier_types")
 local admitted_request = require("admitted_request")
@@ -41,32 +25,50 @@ local hints = require("hints")
 local permission_exchange = require("permission_exchange")
 local hook_exchange = require("hook_exchange")
 local gateway_hooks_catalog = require("gateway_hooks_catalog")
-local descriptor = require("descriptor")
-local readiness = require("readiness")
-local profile_values = require("profile_values")
-local effective_schema = require("effective_schema")
 local M = {}
+local part_output = require("part_output")
+type Object = part_output.Object
+type IO = part_output.IO
+type Plan = part_output.Plan
+local must = part_output.must
+M.plan = part_output.plan
+M.CARRIER_OPS = part_output.CARRIER_OPS
+M.MAX_RECORDS_PER_COMMIT = part_output.MAX_RECORDS_PER_COMMIT
+M.MAX_FRAME_BYTES = part_output.MAX_FRAME_BYTES
+M.APPROVALS = part_output.APPROVALS
+type OutputState = part_output.OutputState
+type Session = part_output.Session
+local step = part_output.step
+M.commit = part_output.commit
+type FrameProblem = part_output.FrameProblem
+type FrameEnvelope = part_output.FrameEnvelope
+M.placement_target = part_output.placement_target
+type Normalized = part_output.Normalized
+local from_runner = part_output.from_runner
+local permission_context = part_output.permission_context
+function M.on_output(io: IO, session: Session, sender: string, message: placement_protocol.Output): (boolean, string?)
+    return part_output.on_output(io, session, sender, message, M.MAX_RECORDS_PER_COMMIT)
+end
+local control_record = part_output.control_record
+local forget_write = part_output.forget_write
+M.write = part_output.write
+local part_planning = require("part_planning")
+type Reply = part_planning.Reply
+type Request = part_planning.Request
+type Exchange = part_planning.Exchange
+type Acceptance = part_planning.Acceptance
+local reply_of = part_planning.reply_of
+type ExecutableCapability = part_planning.ExecutableCapability
+type Measured = part_planning.Measured
+type DeclaredAcceptance = part_planning.DeclaredAcceptance
+M.verify_acceptance = part_planning.verify_acceptance
+M.required_file_refusal = part_planning.required_file_refusal
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
 M.CARRIER_REGISTRY_PREFIX = prestart.CARRIER_REGISTRY_PREFIX
 M.THREADS = hints.THREADS
-M.CARRIER_OPS = "bee.threads.binding"
 M.GATEWAY = "bee.gateway.binding"
-M.MAX_RECORDS_PER_COMMIT = 64
--- A frame may be as large as the chunks the runner holds unacknowledged; a
--- checkpoint carries only a partial frame up to checkpoint.MAX_CARRY_BYTES.
-M.MAX_FRAME_BYTES = placement_protocol.MAX_OUTSTANDING_CHUNKS * placement_protocol.MAX_CHUNK_BYTES
-M.APPROVALS = "bee.approvals.binding"
 M.DELIVERY = hints.DELIVERY
-type Object = {[string]: unknown}
-type Reply = service_reply.Reply
-type IO = carrier_types.IO
-type Request = carrier_types.Request
 type ProfileGrant = carrier_types.ProfileGrant
-type Exchange = carrier_types.Exchange
-type Acceptance = carrier_types.Acceptance
-type Plan = carrier_types.Plan
-type OutputState = carrier_types.OutputState
-type Session = carrier_types.Session
 local inbox_context_value: hints.Context? = nil
 local function inbox_context(): hints.Context
     if inbox_context_value == nil then error("carrier inbox context is not initialized") end
@@ -86,62 +88,6 @@ function M.close_hints(io: IO, session: Session)
     hints.close_hints(inbox_context(), io, session)
 end
 
-local function step(io: IO, name: string): ()
-    if io.after then io.after(name) end
-end
--- The durable states travel in the checkpoint so a replacement keeps what
--- was observed; unobserved and incomplete are conclusions, never stored
--- over an observation.
-local function mark_output(session: Session, state: OutputState)
-    session.output = state
-    if state == "open" or state == "complete" or state == "truncated" then session.checkpoint.output = state end
-end
-local function reply_of(value: unknown, err: string?): (Reply?, string?)
-    if err then return nil, err end
-    return service_reply.decode(value)
-end
-type ExecutableCapability = {streaming: boolean, read_only_volume: boolean, detail: string}
-local function executable_capability(value: unknown): (ExecutableCapability?, string?)
-    local capabilities = bounds.object(value)
-    if not capabilities then return nil, "capabilities must be an object" end
-    local capability_fields = bounds.fields(capabilities, {"capability", "exit_observation", "stdin_close", "detail", "executable_measurement", "resource_authority",
-        "delegated_resource_grants", "revocation_enforcement", "credential_broker", "credential_projections", "max_chunk_bytes", "gateway", "max_write_bytes",
-        "max_outstanding_chunks", "max_spool_bytes", "max_evidence_page", "canonical"})
-    if capability_fields then return nil, "capabilities: " .. capability_fields end
-    local report = bounds.object(capabilities.executable_measurement)
-    if not report then return nil, "executable_measurement must be an object" end
-    local report_fields = bounds.fields(report, {"streaming", "read_only_volume", "detail"})
-    local detail = bounds.text(report.detail, 4096)
-    if report_fields or type(report.streaming) ~= "boolean" or type(report.read_only_volume) ~= "boolean" or detail == nil then
-        return nil, "executable_measurement is malformed"
-    end
-    return {streaming = report.streaming, read_only_volume = report.read_only_volume, detail = detail}, nil
-end
-local function executable_measurement(value: unknown, expected_path: string): (placement_types.ExecutableMeasurement?, string?)
-    local object = bounds.object(value)
-    if not object then return nil, "measurement must be an object" end
-    local unknown_field = bounds.fields(object, {"revision", "path", "kind", "interpreter", "size", "digest"})
-    local revision, path = bounds.id(object.revision), bounds.text(object.path, bounds.MAX_TEXT_BYTES)
-    local kind = bounds.member(object.kind, {"elf", "script", "other"})
-    local size, digest = bounds.count(object.size), bounds.text(object.digest, 64)
-    local interpreter: string? = nil
-    if object.interpreter ~= nil then interpreter = bounds.text(object.interpreter, 4096) end
-    if unknown_field then return nil, "measurement: " .. unknown_field end
-    if not revision then return nil, "measurement revision is invalid" end
-    if path ~= expected_path then return nil, "measurement names another path" end
-    if not kind then return nil, "measurement kind is invalid" end
-    if size == nil then return nil, "measurement size is invalid" end
-    if not digest then return nil, "measurement digest is invalid" end
-    if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "measurement digest is invalid" end
-    if object.interpreter ~= nil and not interpreter then return nil, "measurement interpreter is invalid" end
-    if (kind == "script") ~= (interpreter ~= nil) then return nil, "measurement interpreter does not match its kind" end
-    local decoded_kind: string
-    if kind == "elf" then decoded_kind = "elf"
-    elseif kind == "script" then decoded_kind = "script"
-    else decoded_kind = "other" end
-    local decoded: placement_types.ExecutableMeasurement = {revision = revision, kind = decoded_kind, digest = digest}
-    return decoded, nil
-end
 type ThreadPage = {records: {record_types.Record}, scanned_through: integer, has_more: boolean}
 local function thread_page(value: unknown, cursor: integer, limit: integer): (ThreadPage?, string?)
     local object = bounds.object(value)
@@ -168,381 +114,6 @@ local function thread_page(value: unknown, cursor: integer, limit: integer): (Th
     if #records > 0 and page_cursor < previous_sequence then return nil, "page cursor precedes its final record" end
     return {records = records, scanned_through = page_cursor, has_more = has_more}, nil
 end
-local function must(io: IO, target: string, request: unknown): (unknown, string?)
-    local raw, call_error = io.call(target, request)
-    local reply, reply_error = reply_of(raw, call_error)
-    if not reply then return nil, target .. ": " .. tostring(reply_error) end
-    if reply.ok == false then return nil, target .. ": " .. reply.error.code .. ": " .. reply.error.message end
-    return reply.value, nil
-end
-local digest_of = canonical.digest
-
--- measure: the binding, profile, policy and, when enabled, the adapter and
--- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_protocol.Request, gateway: placement_types.Gateway?}
--- verify_acceptance: the acceptance record a host declaration names,
--- decoded and matched against this snapshot's binding, profile, adapter
--- and proof fixture. The permission exchange stands on this record type;
--- the label names which check failed.
-type DeclaredAcceptance = {adapter_ref: string, acceptance_ref: string, fixture_digest: string}
-function M.verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAcceptance, binding: classify.Binding, profile: classify.Profile, fixture: boolean, label: string): (Acceptance?, string?)
-    if not fixture and (not profile.permission.eligible or profile.permission.adapter_ref ~= declared.adapter_ref) then
-        return nil, "profile " .. profile.id .. " does not pin permission adapter " .. declared.adapter_ref
-    end
-    local adapter_entry = catalog.entry(pinned, declared.adapter_ref)
-    if not adapter_entry then return nil, "permission adapter " .. declared.adapter_ref .. " is not in the registry" end
-    local adapter_meta = bounds.object(adapter_entry.meta)
-    if not adapter_meta then return nil, "permission adapter " .. declared.adapter_ref .. " has invalid metadata" end
-    if adapter_meta.type ~= "harness.permission_adapter" then return nil, declared.adapter_ref .. " is not a harness.permission_adapter" end
-    local adapter_data = bounds.object(adapter_entry.data)
-    if not adapter_data then return nil, "permission adapter " .. declared.adapter_ref .. " has invalid data" end
-    local adapter, adapter_error = permission.decode(declared.adapter_ref, adapter_data.adapter)
-    if not adapter then return nil, "permission adapter " .. declared.adapter_ref .. ": " .. tostring(adapter_error) end
-    local record_entry = catalog.entry(pinned, declared.acceptance_ref)
-    if not record_entry then return nil, "acceptance record " .. declared.acceptance_ref .. " is not in the registry" end
-    local record_meta = bounds.object(record_entry.meta)
-    if not record_meta then return nil, "acceptance record " .. declared.acceptance_ref .. " has invalid metadata" end
-    if record_meta.type ~= acceptance.ENTRY_TYPE then return nil, declared.acceptance_ref .. " is not a " .. acceptance.ENTRY_TYPE end
-    local record_data = bounds.object(record_entry.data)
-    if not record_data then return nil, "acceptance record " .. declared.acceptance_ref .. " has invalid data" end
-    local record, record_error = acceptance.decode(declared.acceptance_ref, record_data.acceptance)
-    if not record then return nil, "acceptance record " .. declared.acceptance_ref .. ": " .. tostring(record_error) end
-    local mismatch = acceptance.matches(record, {binding_id = binding.binding_id, profile_id = profile.id, binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry,
-        adapter_ref = declared.adapter_ref, adapter_digest = adapter.digest, fixture_digest = declared.fixture_digest})
-    if mismatch then return nil, label .. " acceptance: " .. mismatch end
-    return {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest}, nil
-end
-local function measure(request: Request): (Measured?, string?)
-    local pinned, pin_error = catalog.pin()
-    if not pinned then return nil, pin_error end
-    local snapshot, snapshot_error = catalog.read(pinned, nil, request.binding_ref)
-    if not snapshot then return nil, snapshot_error end
-    local usable, usable_error = catalog.usable(snapshot)
-    if not usable then return nil, usable_error end
-    local binding: classify.Binding? = nil
-    for _, candidate in ipairs(usable) do
-        if candidate.binding_id == request.binding_ref then binding = candidate end
-    end
-    if not binding then return nil, "binding " .. request.binding_ref .. " is not usable on this host" end
-    local profile: classify.Profile? = nil
-    for _, candidate in ipairs(binding.profiles) do
-        if candidate.id == request.profile_id then profile = candidate end
-    end
-    if not profile or not profile.supported then return nil, "profile " .. request.profile_id .. " is not supported by " .. request.binding_ref end
-    local policy_entry = catalog.entry(pinned, request.policy_ref)
-    if not policy_entry then return nil, "launch policy " .. request.policy_ref .. " is not in the registry" end
-    local option_descriptor, _, schema_error = profile_values.schema(request.binding_ref)
-    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, option_descriptor, request.placement_profile_ref)
-    if not launch_policy then return nil, policy_error end
-    -- The policy is host-owned and decoded from this pinned snapshot. It is
-    -- the source of placement selection; request fields only prove that the
-    -- carrier received the same measured choice from admission.
-    local placement_binding_ref = launch_policy.placement_binding
-    if request.placement_profile_ref then
-        if not bounds.member(request.placement_profile_ref, launch_policy.placement_profiles) then return nil, "launch policy does not admit this placement profile" end
-        local selected, profile_error = placement_profiles.resolve(pinned, request.placement_profile_ref)
-        if not selected then return nil, profile_error end
-        local tuned, tune_error = placement_profiles.tune(selected, request.preferences and request.preferences.docker_overrides)
-        if not tuned then return nil, tune_error end
-        selected = tuned
-        if selected.digest ~= request.placement_profile_digest then return nil, "placement profile changed since admission" end
-        placement_binding_ref = selected.profile.placement_binding
-    end
-    local selected_placement, placement_error = placement_resolver.resolve(pinned, placement_binding_ref)
-    if not selected_placement then return nil, placement_error end
-    if (request.placement_binding_ref and request.placement_binding_ref ~= selected_placement.binding_id)
-        or (request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest) then
-        return nil, "placement binding changed since admission"
-    end
-    local exchange: Exchange? = nil
-    local declared = launch_policy.permission_exchange
-    if declared then
-        if not request.workspace_id then return nil, "a permission exchange needs the request's workspace" end
-        local verified, verify_error = M.verify_acceptance(pinned, declared, binding, profile, launch_policy.fixture, "permission exchange")
-        if not verified then return nil, verify_error end
-        local transport = "stdio"
-        if not launch_policy.fixture then
-            local capability, capability_error = descriptor.find_provider(pinned, binding.driver_id)
-            if not capability then return nil, capability_error end
-            local context = profile.mode == "window" and "window" or "first_turn"
-            local answer = descriptor.permission_answer(capability, context)
-            if answer.transport == "provider" then return nil, answer.reason end
-            if answer.adapter_ref ~= declared.adapter_ref then return nil, "host permission adapter differs from the driver's declared transport" end
-            transport = answer.transport
-        end
-        exchange = {transport = transport, answer_mode = launch_policy.permission_answers, adapter = verified.adapter, acceptance_ref = verified.acceptance_ref, acceptance_digest = verified.acceptance_digest,
-            executable_revision = verified.executable_revision, executable_kind = verified.executable_kind, executable_digest = verified.executable_digest,
-            approver_policy = declared.approver_policy, poll_ms = declared.poll_ms, ttl_ms = declared.ttl_ms}
-    end
-    -- The carrier carries only host-selected configuration inputs. Placement
-    -- renders and freezes the driver's final delivery with its own HOME path.
-    local gateway: placement_types.Gateway? = nil
-    local gateway_input: configuration_protocol.GatewayInput? = nil
-    local selected, selected_error = driver_resolver.profile(pinned, request.binding_ref, request.profile_id)
-    if selected_error then return nil, selected_error end
-    local selected_hooks = driver_resolver.select_hooks(selected, launch_policy.gateway_hooks)
-    if #launch_policy.gateway_tools > 0 or #selected_hooks > 0 then
-        local address, endpoint_error = gateway_configuration.endpoint()
-        if not address then return nil, "gateway: " .. tostring(endpoint_error) end
-        local hook_destination: string? = nil
-        if #selected_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
-        gateway = {endpoint = address, tools = launch_policy.gateway_tools, destination = gateway_configuration.DESTINATION,
-            hooks = selected_hooks, hook_destination = hook_destination}
-        local hook_command: string? = nil
-        local command_error: string? = nil
-        if #selected_hooks > 0 then hook_command, command_error = gateway_configuration.hook_command(launch_policy.hook_command_ref) end
-        if command_error then return nil, command_error end
-        gateway_input = {hook_command = hook_command, endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
-            token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
-    end
-    if not launch_policy.fixture then
-        local descriptor = option_descriptor
-        if request.preferences and not descriptor then return nil, schema_error or "Driver option schema is unavailable" end
-        if descriptor then
-            local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref)
-            local capabilities = probed.result and probed.result.capabilities or {}
-            local values: Object = {}
-            if request.preferences then
-                for name, value in pairs(request.preferences.options) do values[name] = value end
-                if request.preferences.instructions ~= "" then values.system_prompt_append = request.preferences.instructions end
-            end
-            local _, invalid = effective_schema.compile(descriptor, bounds.object(policy_entry.data), capabilities, values, nil, nil, nil, request.placement_profile_ref)
-            if invalid then return nil, invalid end
-        end
-    end
-    if not binding.methods.configure then return nil, "binding " .. request.binding_ref .. " binds no configure" end
-    local provider_entry: Object? = nil
-    if launch_policy.provider_ref then
-        provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
-        if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
-    end
-    local configuration: configuration_protocol.Request = {provider_ref = launch_policy.provider_ref,
-        placement_profile_ref = request.placement_profile_ref, option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
-        gateway = gateway_input, fixture = launch_policy.fixture}
-    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
-        configuration = configuration, gateway = gateway}
-end
--- A launch may declare a host file it needs before it starts. Bee never
--- copies the owner's configuration or credentials into a private home, so a
--- launch that needs one is only available where the profile inherits the
--- host user's home. The refusal names the declared file without assuming a
--- provider-specific configuration format.
-function M.required_file_refusal(launch: driver_types.Launch, private_home: boolean): string?
-    if not private_home or not launch.required_files or #launch.required_files == 0 then return nil end
-    local file = launch.required_files[1]
-    if not file then return nil end
-    return "the required host file " .. file.path ..
-        " is only available where Bee inherits the user's home; a private home does not carry it"
-end
--- plan: pin the usable binding and profile, take the driver's declarative
--- launch, bind executables and requirements from the host policy. A window
--- may start its agent with a prompt: the message waiting for it, which is
--- not the admitted brief.
-function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
-    local measured, measure_error = measure(request)
-    if not measured then return nil, measure_error end
-    local binding, profile, launch_policy, placement_binding, exchange, configuration, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration, measured.gateway
-    local prepare_target, normalize_target = binding.methods.prepare, binding.methods.normalize
-    if not prepare_target or not normalize_target then return nil, "binding " .. request.binding_ref .. " binds no prepare or normalize" end
-    local resume_ref: string? = nil
-    local previous_private_home: boolean? = nil
-    if request.reauthorize == true and (not request.previous_attempt_id or profile.mode ~= "window") then
-        return nil, "reauthorization requires a saved window"
-    end
-    if request.previous_attempt_id then
-        if not request.session_ref then return nil, "continuation needs a retained session" end
-        if profile.mode == "window" and request.brief ~= "" then return nil, "window continuation cannot replay a brief" end
-        local resolver = profile.mode == "window" and continuation.resolve_window or continuation.resolve
-        local resumed, resume_error, private_home = resolver(io.call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
-            owner_id = request.owner_id, previous_attempt_id = request.previous_attempt_id, session_ref = request.session_ref,
-            binding_ref = binding.binding_id, binding_digest = binding.binding_digest.entry, profile_id = profile.id, profile_digest = binding.profile_digest.entry,
-            placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods, reauthorize = request.reauthorize})
-        -- A window whose previous agent began no conversation starts a new
-        -- one in the same session and its home.
-        if not resumed and not (profile.mode == "window" and resume_error == continuation.NO_CONVERSATION) then return nil, resume_error end
-        previous_private_home = private_home
-        if resumed then
-            resume_ref = resumed
-            local dispatch = binding.methods.dispatch
-            if not dispatch then return nil, "driver has no continuation method" end
-            prepare_target = dispatch
-        end
-    end
-    local configuration_context = profile.mode == "window" and "window" or (resume_ref and "resume" or "first_turn")
-    configuration.context = configuration_context
-    local configuration_digest, configuration_error = configuration_protocol.digest(request.binding_ref, configuration, assert(binding.methods.configure))
-    if not configuration_digest then return nil, configuration_error end
-    local private_home = previous_private_home
-    if private_home == nil then private_home = profile.private_home end
-    if request.preferences and request.preferences.home and previous_private_home == nil then private_home = request.preferences.home == "private" end
-    if placement_binding.placement_kind == "docker" then private_home = true end
-    if launch_policy.provider_ref and not private_home then
-        return nil, "selected provider configuration requires a private-home profile"
-    end
-    if not private_home and not launch_policy.allow_host_home then
-        return nil, "launch policy does not authorize host HOME"
-    end
-    local prepare_request: {[string]: unknown} = {}
-    prepare_request.placement_profile_ref = request.placement_profile_ref
-    prepare_request.option_provenance = launch_policy.option_provenance
-    for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
-    prepare_request.profile_id = request.profile_id
-    prepare_request.brief = request.brief
-    if prompt then
-        if profile.mode ~= "window" then return nil, "only a window starts its agent with a prompt" end
-        prepare_request.brief = prompt
-    end
-    prepare_request.resume_ref = resume_ref
-    -- The host enabled an interactive permission exchange: the driver
-    -- prepares the launch shape that keeps stdin open for the responses.
-    if exchange and (exchange.transport == nil or exchange.transport == "stdio") then prepare_request.permission_exchange = true end
-    -- The driver shapes its launch to reach the admitted gateway tools and
-    -- to load the hook adapter the runner writes.
-    if gateway then
-        prepare_request.gateway_tools = gateway.tools
-        if #gateway.hooks > 0 then prepare_request.gateway_hooks = gateway.hooks end
-    end
-    local prepared, prepare_error = io.call(prepare_target, prepare_request)
-    if prepare_error or type(prepared) ~= "table" then return nil, "driver prepare: " .. tostring(prepare_error) end
-    local prepared_reply = bounds.object(prepared)
-    if not prepared_reply then return nil, "driver prepare: reply must be an object" end
-    local unexpected = bounds.fields(prepared_reply, {"ok", "error", "launch"})
-    if unexpected then return nil, "driver prepare: " .. unexpected end
-    if prepared_reply.ok ~= true then return nil, "driver prepare: " .. tostring(prepared_reply.error or "driver refused launch") end
-    local decoded_launch, launch_error = launch_request.launch(prepared_reply.launch)
-    if not decoded_launch then return nil, "driver prepare: " .. tostring(launch_error) end
-    local launch: driver_types.Launch = decoded_launch
-    -- The carrier selected HOME from the profile (or preserved it from the
-    -- resumed attempt). A driver's provider-home declaration describes its
-    -- files and variable, but must follow that same selection: leaving this
-    -- private after choosing host HOME makes placement redirect
-    -- CLAUDE_CONFIG_DIR into an empty attempt home.
-    if launch.provider_home then launch.provider_home.private = private_home end
-    local required_refusal = M.required_file_refusal(launch, private_home)
-    if required_refusal then return nil, required_refusal end
-    if request.session_ref then
-        if not bounds.id(request.session_ref) then return nil, "session_ref is not an identifier" end
-        local home: string? = nil
-        for _, resource in ipairs(request.resources) do
-            if resource.purpose == "session" and resource.access == "write" then
-                if home then return nil, "retained session needs exactly one home resource" end
-                home = resource.name
-            end
-        end
-        if not home then return nil, "retained session needs a writable session resource" end
-        launch.home_ref = home
-    end
-    local runtime_name = launch.executable
-    local bound = launch_policy.executables[runtime_name]
-    if bound then launch.executable = bound end
-    if placement_binding.placement_kind == "docker" then
-        local name = runtime_name:match("^([A-Za-z0-9_.%-]+)$")
-        if not name or not name:match("^[A-Za-z0-9_.%-]+$") then return nil, "Docker executable has no runtime name" end
-        launch.executable = "/usr/local/bin/" .. name
-    end
-    -- The host-selected executable is measured by placement, read-only,
-    -- and the measurement is part of the plan: the runner verifies it
-    -- again before exec. An enabled exchange stands on an acceptance record
-    -- that names that measurement, so it needs a bound absolute path and a
-    -- runtime that can measure it; a fixture policy proceeds without.
-    local measurement: placement_types.ExecutableMeasurement? = nil
-    local exchange_refusal: string? = nil
-    local function refuse_exchange(reason: string)
-        if not exchange_refusal then exchange_refusal = reason end
-    end
-    -- capabilities_refusal: the placement's executable-measurement proof
-    -- under the label that needs it, or the hard error when the
-    -- capabilities call itself fails. A production channel needs a runtime
-    -- that measures a stream and a measurement volume proven read-only;
-    -- the report is measured, never declared.
-    local function capabilities_refusal(label: string): (string?, string?)
-        local capabilities_target = placement_binding.methods.capabilities
-        if not capabilities_target then
-            return label .. ": selected placement cannot measure an executable", nil
-        end
-        local capabilities_value, capabilities_error = must(io, capabilities_target, {})
-        if capabilities_error then return nil, capabilities_error end
-        local reported, report_error = executable_capability(capabilities_value)
-        if not reported then return nil, "placement returned malformed executable capabilities: " .. tostring(report_error) end
-        if not reported.streaming then return label .. ": this runtime cannot measure an executable as a stream", nil end
-        if not reported.read_only_volume then return label .. ": the measurement volume is not proven read-only on this runtime: " .. reported.detail, nil end
-        return nil, nil
-    end
-    if exchange and not launch_policy.fixture then
-        local refusal, capabilities_error = capabilities_refusal("production exchange")
-        if capabilities_error then return nil, capabilities_error end
-        if refusal then refuse_exchange(refusal) end
-    end
-    if launch.executable:sub(1, 1) == "/" then
-        local measure_target = placement_binding.methods.measure_executable
-        if measure_target then
-            local raw, measure_call_error = io.call(measure_target, {path = launch.executable})
-            local reply, reply_error = reply_of(raw, measure_call_error)
-            if not reply then return nil, "measure executable: " .. tostring(reply_error) end
-            if reply.ok then
-                local measured, measured_error = executable_measurement(reply.value, launch.executable)
-                if not measured then return nil, "measure executable returned an invalid measurement: " .. tostring(measured_error) end
-                measurement = measured
-            elseif exchange and not launch_policy.fixture then
-                local fault = reply.error or {code = "UNAVAILABLE", message = "measurement failed"}
-                refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message)
-            end
-        elseif exchange and not launch_policy.fixture then
-            refuse_exchange("production exchange: selected placement cannot measure the executable")
-        end
-    elseif exchange and not launch_policy.fixture then
-        refuse_exchange("production exchange: the launch policy binds no absolute executable to measure")
-    end
-    if exchange and measurement then
-        -- A production exchange covers a measured native image only: a
-        -- script's digest pins neither its interpreter nor what it starts.
-        if not launch_policy.fixture and measurement.kind ~= "elf" then
-            refuse_exchange("production exchange: the executable is a " .. measurement.kind .. ", whose measurement does not cover what runs; a production exchange needs a native image")
-        end
-        if exchange.executable_revision ~= measurement.revision then refuse_exchange("permission exchange acceptance: executable measurement revision changed since acceptance") end
-        if exchange.executable_kind ~= measurement.kind then refuse_exchange("permission exchange acceptance: executable kind changed since acceptance") end
-        if exchange.executable_digest ~= measurement.digest then refuse_exchange("permission exchange acceptance: executable measurement changed since acceptance") end
-    end
-    local environment: {[string]: string} = {}
-    for name, value in pairs(request.environment) do environment[name] = value end
-    for name, value in pairs(launch_policy.environment) do
-        -- A resumed session keeps the configuration root in which its provider
-        -- recorded the conversation. Fresh sessions still inherit every
-        -- host-selected override from the current profile.
-        if previous_private_home ~= true or launch_policy.host_environment[name] == nil then environment[name] = value end
-    end
-    if placement_binding.placement_kind == "docker" then
-        environment.HOME = nil
-        local home = launch.provider_home
-        if home then
-            if home.variable then environment[home.variable] = nil end
-            for _, item in ipairs(home.extra_variables or {}) do environment[item.variable] = nil end
-        end
-    end
-    if request.working_directory then launch.working_directory_ref = request.working_directory end
-    local measured_exchange: {[string]: unknown}? = nil
-    if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
-    local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry,
-        placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods,
-        launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, reauthorize = request.reauthorize,
-        environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
-    if not plan_digest then return nil, digest_error end
-    local placement_request: placement_types.LaunchRequest = {
-        workspace_id = request.workspace_id,
-        preferences = request.preferences,
-        idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
-        action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
-        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_profile_ref = request.placement_profile_ref, placement_profile_digest = request.placement_profile_digest, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_context = configuration_context, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
-        environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
-        required_exit_observation = launch_policy.required_exit_observation, timeouts = {stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
-        options = request.options,
-    }
-    if not private_home then
-        placement_request.environment_refs.HOME = "bee.env:machine_home"
-    end
-    return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
-        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
-end
 -- Thread operations of the open sequence key on the attempt and the step,
 -- so a start retried after an ambiguous failure replays the same records
 -- instead of creating a second action, attempt or turn.
@@ -560,16 +131,6 @@ local function placement_observation(io: IO, session: Session, attempt: placemen
         data = {type = "extension", event_name = "bee.placement.attempt", event_revision = "1", payload_json = payload}}}
     return M.commit(io, session, {record})
 end
--- commit: records and the current checkpoint in one thread transaction.
-function M.commit(io: IO, session: Session, records: {{[string]: unknown}}): (boolean, string?)
-    local value, err = must(io, M.CARRIER_OPS .. ":commit", {thread_id = session.plan.request.thread_id, idempotency_key = io.key(), attempt_id = session.plan.request.attempt_id,
-        carrier_epoch = session.epoch, expected_revision = session.revision, checkpoint = session.checkpoint, records = records})
-    if err then return false, err end
-    local revision, decode_error = checkpoint.decode_commit(value, session.plan.request.attempt_id, session.epoch)
-    if not revision then return false, "carrier commit returned an invalid revision: " .. tostring(decode_error) end
-    session.revision = revision
-    return true, nil
-end
 local function new_session(plan: Plan, turn_id: string, epoch: integer, revision: integer, point: checkpoint.Checkpoint): Session
     local decoder = stream_json.new(M.MAX_FRAME_BYTES)
     decoder.framer.carry = point.carry.stdout
@@ -581,38 +142,6 @@ local function new_session(plan: Plan, turn_id: string, epoch: integer, revision
         terminal = terminal, stream_ended = point.stream_ended == true, exit = nil, eof = {stdout = point.output == "complete", stderr = point.output == "complete"}, runner = nil, settled = nil, recovered = false, output = output, pending_hint = nil, placement_evidence = 0, stderr_sequence = 0,
         last_sequence = {stdout = point.consumed.stdout, stderr = point.consumed.stderr}, held_from = nil,
         dropping_stdout = point.dropping_stdout == true}
-end
--- A provider may echo an entire tool input or result in one JSONL status
--- frame. Keep a bounded prefix, record one omission, then drain through the
--- newline. A checkpoint records the drain state for carrier replacement.
-type FrameProblem = {index: integer, message: string, sample: string}
-type FrameEnvelope = {index: integer, value: {[string]: unknown}}
-local function feed_stdout(session: Session, chunk: string, exhausted: boolean): ({FrameEnvelope}, {FrameProblem}, string?)
-    local data = chunk
-    if session.dropping_stdout then
-        local newline = data:find("\n", 1, true)
-        if not newline then return {}, {}, nil end
-        data = data:sub(newline + 1)
-        session.dropping_stdout = false
-    end
-    local newline = data:find("\n", 1, true)
-    local first_length = #session.decoder.framer.carry + (newline or (#data + 1)) - 1
-    if first_length > M.MAX_FRAME_BYTES
-        or (exhausted and not newline and first_length > checkpoint.MAX_CARRY_BYTES) then
-        session.decoder.framer.carry = ""
-        session.decoder.index = session.decoder.index + 1
-        local problem: FrameProblem = {index = session.decoder.index,
-            message = "oversized frame omitted after the bounded runner window", sample = ""}
-        if not newline then
-            session.dropping_stdout = true
-            return {}, {problem}, nil
-        end
-        local envelopes, rest, feed_error = stream_json.feed(session.decoder, data:sub(newline + 1))
-        table.insert(rest, 1, problem)
-        return envelopes, rest, feed_error
-    end
-    local envelopes, problems, feed_error = stream_json.feed(session.decoder, data)
-    return envelopes, problems, feed_error
 end
 -- The gateway binding of an attempt under a carrier epoch: admitted after
 -- the durable action and attempt preparation, superseding whatever an
@@ -734,17 +263,6 @@ local function prepare_notice(value: unknown): (placement_types.LoginNotice?, st
     if not attempt then return nil, "placement prepare returned an invalid attempt: " .. tostring(attempt_error) end
     return attempt.notice, nil
 end
--- Every placement operation is selected once in the measured plan. Persisted
--- and admitted plans always carry the concrete binding and its targets.
-function M.placement_target(plan: Plan, method: string): string?
-    return plan.placement_binding.methods[method]
-end
--- attach_action: a fresh sequential attempt on an action an earlier attempt
--- already admitted. The admit call reports the action exists; this verifies
--- the existing action is the requester's own and discovers its latest
--- settled attempt to chain, so two starters cannot prepare concurrently.
--- Anything unverified fails closed with the admit refusal. The owner still
--- enforces the chain, the open thread and the single live attempt.
 M.ATTACH_SCAN_PAGES = 8
 M.ATTACH_PAGE_RECORDS = hints.DELIVERY_PAGE_RECORDS
 function M.attach_action(io: IO, request: Request): (string?, boolean, string?)
@@ -1115,84 +633,6 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     step(io, "reattached")
     return session, nil
 end
-local function snapshot_object(value: unknown, label: string, maximum: integer): (Object?, string?)
-    if value == nil then return nil, nil end
-    local object = bounds.object(value)
-    if not object then return nil, label .. " must be an object" end
-    local encoded, encode_error = canonical.encode(object)
-    if not encoded then return nil, label .. " is not valid JSON: " .. tostring(encode_error) end
-    if #encoded > maximum then return nil, label .. " exceeds " .. tostring(maximum) .. " bytes" end
-    local decoded, decode_error = json.decode(encoded)
-    if decode_error then return nil, label .. " could not be copied: " .. tostring(decode_error) end
-    local copied = bounds.object(decoded)
-    if not copied then return nil, label .. " did not decode as an object" end
-    return copied, nil
-end
-local function snapshot_state(value: unknown): (Object?, string?)
-    if value == nil then return nil, nil end
-    local state, state_error = checkpoint.normalizer_state(value)
-    if not state then return nil, state_error end
-    return snapshot_object(state, "normalizer_state", checkpoint.MAX_NORMALIZER_STATE_BYTES)
-end
-local function snapshot_terminal(value: driver_types.Terminal?): (driver_types.Terminal?, string?)
-    if value == nil then return nil, nil end
-    local copied, copy_error = snapshot_object(value, "terminal", checkpoint.MAX_TERMINAL_BYTES)
-    if not copied then return nil, copy_error end
-    return checkpoint.decode_terminal(copied)
-end
-type Normalized = {state: Object, observations: {record_types.Observation}, terminal: driver_types.Terminal?, writes: {string}}
-local function decode_normalized(value: unknown): (Normalized?, string?)
-    local object = bounds.object(value)
-    if not object then return nil, "reply must be an object" end
-    local unknown_field = bounds.fields(object, {"ok", "error", "state", "observations", "terminal", "writes"})
-    if unknown_field then return nil, "reply: " .. unknown_field end
-    if object.ok == false then
-        if object.state ~= nil or object.observations ~= nil or object.terminal ~= nil or object.writes ~= nil then return nil, "failed reply carries successful result fields" end
-        local message = bounds.text(object.error, 4096)
-        if not message or message == "" then return nil, "failure has no bounded error" end
-        return nil, message
-    end
-    if object.ok ~= true or object.error ~= nil then return nil, "reply status is invalid" end
-    if object.state == nil then return nil, "successful reply has no normalizer state" end
-    local state, state_error = checkpoint.normalizer_state(object.state)
-    if not state then return nil, "normalizer state: " .. tostring(state_error) end
-    local raw_observations, array_error = bounds.array(object.observations, bounds.MAX_ARRAY_ITEMS)
-    if not raw_observations then return nil, "normalizer observations must be a bounded dense list: " .. tostring(array_error) end
-    local observations: {record_types.Observation} = {}
-    for index, raw in ipairs(raw_observations) do
-        local item, observation_error = observation_decode.decode(raw)
-        if not item then return nil, "normalizer observations[" .. tostring(index) .. "]: " .. tostring(observation_error) end
-        observations[index] = item
-    end
-    local terminal: driver_types.Terminal? = nil
-    if object.terminal ~= nil then
-        terminal, state_error = checkpoint.decode_terminal(object.terminal)
-        if not terminal then return nil, "normalizer terminal: " .. tostring(state_error) end
-    end
-    local raw_writes, writes_error = bounds.array(object.writes or {}, checkpoint.MAX_PENDING_WRITES)
-    if not raw_writes then return nil, "normalizer writes: " .. tostring(writes_error) end
-    local writes: {string} = {}
-    for _, raw_write in ipairs(raw_writes) do
-        local line = bounds.text(raw_write, checkpoint.MAX_PENDING_WRITE_BYTES)
-        if not line or line == "" then return nil, "normalizer write is not bounded text" end
-        writes[#writes + 1] = line
-    end
-    if terminal and #writes > 0 then return nil, "terminal normalizer result carries writes" end
-    return {state = state, observations = observations, terminal = terminal, writes = writes}, nil
-end
-local function normalize(io: IO, session: Session, index: integer, envelope: {[string]: unknown}?, eof: boolean): ({record_types.Observation}?, driver_types.Terminal?, string?, {string}?)
-    local input: Object = {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false}
-    if session.plan.exchange and session.plan.exchange.transport == "stdio" then
-        input.context = {permission_exchange = true, brief = session.plan.request.brief, resume_ref = session.plan.resume_ref,
-            options = session.plan.policy.prepare_options}
-    end
-    local reply, err = io.call(session.plan.normalize_target, input)
-    if err then return nil, nil, "driver normalize: " .. err end
-    local result, decode_error = decode_normalized(reply)
-    if not result then return nil, nil, "driver normalize: " .. tostring(decode_error) end
-    session.normalizer = result.state
-    return result.observations, result.terminal, nil, result.writes
-end
 -- One output chunk: frame, normalize, commit in bounded batches, then
 -- acknowledge. A chunk the carrier cannot checkpoint is never acknowledged.
 -- attached: the runner names itself to the recipient of the current
@@ -1201,68 +641,6 @@ function M.on_attached(session: Session, sender: string, message: placement_prot
     if message.generation ~= session.epoch or message.attempt_id ~= session.plan.request.attempt_id then return false end
     session.runner = sender
     return true
-end
-local function from_runner(session: Session, sender: string, generation: integer): boolean
-    return session.runner ~= nil and sender == session.runner and generation == session.epoch
-end
--- Permission exchange. Every key is derived once from owner, attempt and
--- the request's event key and kept in the checkpoint; the thread carries
--- one control record per phase under a deterministic key.
-local function acknowledged_through(session: Session, sequence: integer): integer
-    local held = session.held_from
-    if held and held - 1 < sequence then return held - 1 end
-    return sequence
-end
-local function revalidate_permission(io: IO, session: Session): string?
-    local exchange = session.plan.exchange
-    if not exchange then return "permission exchange no longer enabled" end
-    if session.terminal or session.settled or not session.runner then return "attempt no longer waiting" end
-    local recorded = session.checkpoint.plan_digest
-    if not recorded then return "the checkpoint records no plan digest" end
-    local fresh, plan_error = M.plan(io, session.plan.request)
-    if not fresh then return "measurements unavailable: " .. tostring(plan_error) end
-    if fresh.exchange_refusal then return fresh.exchange_refusal end
-    if fresh.plan_digest ~= recorded then return "plan measurements changed since the checkpoint" end
-    local current = fresh.exchange
-    if not current then return "permission exchange no longer enabled" end
-    if current.adapter.digest ~= exchange.adapter.digest then return "permission adapter changed" end
-    if current.acceptance_digest ~= exchange.acceptance_digest then return "acceptance record changed" end
-    for _, state in ipairs(session.checkpoint.permissions) do
-        local found: permission.Request = {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id,
-            acknowledgment_id = state.acknowledgment_id or state.correlation_id, tool_name = state.tool_name,
-            input_digest = state.input_digest, input = {}, prompt = state.prompt}
-        local proposal_digest = digest_of(permission.proposal(exchange.adapter, {action_id = session.plan.request.action_id,
-            attempt_id = session.plan.request.attempt_id, plan_digest = session.plan.plan_digest}, found))
-        if proposal_digest ~= state.proposal_digest then return "proposal no longer digests as recorded" end
-    end
-    local reconcile_target = M.placement_target(session.plan, "reconcile")
-    if not reconcile_target then return "selected placement binds no reconcile" end
-    local reconciled, reconcile_error = must(io, reconcile_target, {attempt_id = session.plan.request.attempt_id})
-    if reconcile_error then return "placement reconcile: " .. reconcile_error end
-    local attempt, attempt_decode_error = placement_decode.attempt(reconciled)
-    if not attempt then return "placement reconcile returned an invalid attempt: " .. tostring(attempt_decode_error) end
-    if attempt.execution_state ~= "running" then return "placement is " .. tostring(attempt.execution_state) .. " under its grants and projections" end
-    return nil
-end
-local function permission_context(io: IO, session: Session): permission_exchange.Context
-    return {state = {binding_id = session.checkpoint.gateway_binding, request = session.plan.request, plan_digest = session.plan.plan_digest, exchange = session.plan.exchange,
-            permissions = session.checkpoint.permissions, epoch = session.epoch, turn_id = session.turn_open and session.turn_id or nil},
-        now_ms = io.now_ms, approvals = M.APPROVALS, max_consume_attempts = permission_exchange.MAX_CONSUME_ATTEMPTS,
-        commit = function(records: {Object}): (boolean, string?) return M.commit(io, session, records) end,
-        call = io.call, digest_of = digest_of,
-        step = function(name: string) step(io, name) end,
-        write = function(write_id: string, line: string): (boolean, string?)
-            if session.plan.exchange and session.plan.exchange.transport == "hook_http" then
-                return M.commit(io, session, {{source = "bee", body = {type = "extension", event_key = "write:" .. write_id .. ":prepared",
-                    data = {type = "extension", event_name = "bee.carrier.write", event_revision = "1",
-                        payload_json = canonical.encode({write_id = write_id, phase = "prepared", delivery = "hook", acknowledgment = "unproven"})}}}})
-            end
-            return M.write(io, session, write_id, line)
-        end,
-        revalidate = function(): string? return revalidate_permission(io, session) end,
-        recovered = session.recovered,
-        waiting = function(): boolean return not session.terminal and not session.eof.stdout and session.runner ~= nil end,
-        settled = function(): boolean return session.settled ~= nil or session.terminal ~= nil end}
 end
 function M.permission_hook(io: IO, session: Session, raw: unknown): (Object?, string?)
     local input = bounds.object(raw)
@@ -1333,202 +711,6 @@ function M.extension_hook(io: IO, session: Session, raw: unknown): (Object?, str
         input = tool_input, output = payload.tool_response, text = payload.prompt})
     if not response then return nil, err end
     return {extension_response = response, hook_driver = session.plan.binding.driver_id}, nil
-end
-function M.on_output(io: IO, session: Session, sender: string, message: placement_protocol.Output): (boolean, string?)
-    if not from_runner(session, sender, message.generation) then return true, nil end
-    if message.sequence <= session.last_sequence[message.stream] then
-        if message.eof and not session.eof[message.stream] then
-            session.eof[message.stream] = true
-            if message.truncated then mark_output(session, "truncated")
-            elseif session.eof.stdout and session.eof.stderr and session.output == "open" then mark_output(session, "complete") end
-            local committed, commit_error = M.commit(io, session, {})
-            if not committed then return false, commit_error end
-            step(io, message.stream .. "_ended")
-        end
-        io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
-        return true, nil
-    end
-    local protocol_writes: {checkpoint.PendingWrite} = {}
-    local protocol_records: {Object} = {}
-    local prior_writes = #session.checkpoint.pending_writes
-    local before_state, before_state_error = snapshot_state(session.normalizer)
-    if session.normalizer ~= nil and before_state == nil then return false, "normalizer state cannot be checkpointed: " .. tostring(before_state_error) end
-    local before_terminal, before_terminal_error = snapshot_terminal(session.terminal)
-    if session.terminal ~= nil and before_terminal == nil then return false, "terminal cannot be checkpointed: " .. tostring(before_terminal_error) end
-    local was_held = session.held_from ~= nil
-    local before = {carry = session.decoder.framer.carry, index = session.decoder.index, state = before_state,
-        terminal = before_terminal, stream_ended = session.stream_ended, dropping_stdout = session.dropping_stdout,
-        output = session.output, checkpoint_output = session.checkpoint.output, eof_stdout = session.eof.stdout,
-        eof_stderr = session.eof.stderr, held_from = session.held_from, stderr_sequence = session.stderr_sequence}
-    local function refuse(reason: string): (boolean, string?)
-        session.decoder.framer.carry = before.carry
-        session.decoder.index = before.index
-        session.normalizer = before.state
-        session.terminal = before.terminal
-        session.stream_ended = before.stream_ended
-        session.dropping_stdout = before.dropping_stdout
-        session.output = before.output
-        session.checkpoint.output = before.checkpoint_output
-        session.eof.stdout = before.eof_stdout
-        session.eof.stderr = before.eof_stderr
-        session.held_from = before.held_from
-        session.stderr_sequence = before.stderr_sequence
-        while #session.checkpoint.pending_writes > prior_writes do table.remove(session.checkpoint.pending_writes) end
-        return false, reason
-    end
-    local records: {{[string]: unknown}} = {}
-    local consumed = acknowledged_through(session, math.max(session.checkpoint.consumed.stdout, session.checkpoint.consumed.stderr))
-    local exhausted = message.sequence - consumed >= placement_protocol.MAX_OUTSTANDING_CHUNKS
-    if message.stream ~= "stdout" and exhausted and #session.decoder.framer.carry > checkpoint.MAX_CARRY_BYTES then
-        local _, problems = feed_stdout(session, "", true)
-        for _, problem in ipairs(problems) do
-            records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = session.checkpoint.consumed.stdout + 1,
-                source_last_sequence = session.last_sequence.stdout, envelope_index = problem.index, event_index = 0},
-                body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "warning", code = "oversized_frame", content = {text = problem.message}}}}
-        end
-    end
-    if message.eof then
-        session.eof[message.stream] = true
-        if message.truncated then
-            mark_output(session, "truncated")
-            local truncation: {[string]: unknown} = {source = "bee", body = {type = "extension", event_key = "output:" .. session.plan.request.attempt_id .. ":" .. message.stream .. ":truncated",
-                data = {type = "extension", event_name = "bee.carrier.output", event_revision = "1", payload_json = json.encode({attempt_id = session.plan.request.attempt_id, stream = message.stream, state = "truncated", attachment_generation = session.epoch})}}}
-            records[#records + 1] = truncation
-        elseif session.eof.stdout and session.eof.stderr and session.output == "open" then
-            mark_output(session, "complete")
-        end
-        if message.stream == "stdout" then
-            local observations, terminal, err = normalize(io, session, session.decoder.index + 1, nil, true)
-            if not observations then return refuse(err or "driver normalize failed") end
-            for event_index, item in ipairs(observations) do
-                records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence,
-                    source_last_sequence = message.sequence, envelope_index = session.decoder.index + 1, event_index = event_index - 1}, body = item}
-            end
-            if terminal and not session.terminal then
-                session.terminal = terminal
-                session.stream_ended = true
-            end
-        end
-    elseif message.stream == "stdout" then
-        -- The runner stops sending once its unacknowledged window is full.
-        -- Count from the last durable acknowledgment, not from the chunk
-        -- where the partial frame first exceeded the checkpoint carry. The
-        -- runner cannot send chunk 17 until all 16 unacknowledged chunks move.
-        local envelopes, problems, framing_error = feed_stdout(session, message.data or "", exhausted)
-        if framing_error then
-            local fault = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence, source_last_sequence = message.sequence,
-                envelope_index = session.decoder.index + 1, event_index = 0}, body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "error", code = "framing", content = {text = framing_error}}}}
-            session.terminal = {outcome = "uncertain", answer = nil, resume_ref = nil, usage = nil, error = {code = "framing", message = framing_error, retryable = false}}
-            records[#records + 1] = fault
-        else
-            for _, problem in ipairs(problems) do
-                local code = problem.message:find("oversized frame omitted", 1, true) and "oversized_frame" or "undecodable_frame"
-                records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence, source_last_sequence = message.sequence,
-                    envelope_index = problem.index, event_index = 0}, body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "warning", code = code, content = {text = problem.message}}}}
-            end
-            for _, envelope in ipairs(envelopes) do
-                local observations, terminal, err, writes = normalize(io, session, envelope.index, envelope.value, false)
-                if not observations then return refuse(err or "driver normalize failed") end
-                for event_index, item in ipairs(observations) do
-                    records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stdout", source_first_sequence = message.sequence,
-                        source_last_sequence = message.sequence, envelope_index = envelope.index, event_index = event_index - 1}, body = item}
-                end
-                if terminal and not session.terminal then session.terminal = terminal end
-                for write_index, line in ipairs(writes or {}) do
-                    if not session.plan.exchange or session.plan.exchange.transport ~= "stdio" or session.plan.launch.stdin_eof == true then
-                        return refuse("normalizer writes require an admitted duplex channel")
-                    end
-                    local write_id = "protocol:" .. tostring(envelope.index) .. ":" .. tostring(write_index)
-                    local digest = assert(digest_of(line))
-                    local existing: checkpoint.PendingWrite? = nil
-                    for _, item in ipairs(session.checkpoint.pending_writes) do
-                        if item.write_id == write_id then existing = item end
-                    end
-                    if existing and (existing.input_digest ~= digest or existing.data ~= line) then return refuse("protocol write identity changed on replay") end
-                    if not existing then
-                        if #session.checkpoint.pending_writes + #protocol_writes >= checkpoint.MAX_PENDING_WRITES then return refuse("too many protocol writes await acknowledgment") end
-                        local pending: checkpoint.PendingWrite = {write_id = write_id, input_digest = digest, data = line, dispatched = false}
-                        protocol_writes[#protocol_writes + 1] = pending
-                    end
-                    protocol_records[#protocol_records + 1] = {source = "bee", body = {type = "extension", event_key = "write:" .. write_id .. ":intended",
-                        data = {type = "extension", event_name = "bee.carrier.write", event_revision = "1",
-                            payload_json = canonical.encode({write_id = write_id, input_digest = digest, phase = "intended"})}}}
-                end
-            end
-        end
-    else
-        session.stderr_sequence = session.stderr_sequence + 1
-        records[#records + 1] = {source = "stream", provenance = {schema_revision = provenance.REVISION, stream_id = "stderr", source_first_sequence = message.sequence, source_last_sequence = message.sequence,
-            envelope_index = message.sequence, event_index = 0}, body = {type = "notice", event_key = "ignored", data = {type = "notice", level = "info", code = "stderr", content = {text = message.data or ""}}}}
-    end
-    if session.turn_open then
-        for _, record in ipairs(records) do record.turn_id = session.turn_id end
-    end
-    if #session.decoder.framer.carry <= checkpoint.MAX_CARRY_BYTES then
-        session.held_from = nil
-    elseif message.stream == "stdout" then
-        session.held_from = session.held_from or message.sequence
-    end
-    -- Only a boundary whose partial frame fits the checkpoint moves the
-    -- stdout position; records committed beyond it replay idempotently from
-    -- the chunks the runner still holds.
-    local at_boundary = session.held_from == nil
-    if #protocol_writes > 0 and not at_boundary then return refuse("protocol input requires a complete checkpoint boundary") end
-    local detected, detect_error = permission_exchange.detect(permission_context(io, session), records)
-    if detect_error then return refuse(detect_error) end
-    permission_exchange.acknowledge(permission_context(io, session), records)
-    local total = #records
-    local offset = 0
-    while true do
-        local batch: {{[string]: unknown}} = {}
-        local batch_limit = M.MAX_RECORDS_PER_COMMIT - #protocol_records
-        for index = offset + 1, math.min(offset + batch_limit, total) do batch[#batch + 1] = records[index] end
-        local observations_in_batch = #batch
-        local final = offset + observations_in_batch >= total
-        if final then
-            for _, record in ipairs(protocol_records) do batch[#batch + 1] = record end
-            for _, pending in ipairs(protocol_writes) do session.checkpoint.pending_writes[#session.checkpoint.pending_writes + 1] = pending end
-        end
-        if final and at_boundary then
-            local state, state_error = snapshot_state(session.normalizer)
-            if session.normalizer ~= nil and state == nil then return refuse("normalizer state cannot be checkpointed: " .. tostring(state_error)) end
-            local terminal, terminal_error = snapshot_terminal(session.terminal)
-            if session.terminal ~= nil and terminal == nil then return refuse("terminal cannot be checkpointed: " .. tostring(terminal_error)) end
-            session.checkpoint.consumed[message.stream] = message.sequence
-            session.checkpoint.carry.stdout = session.decoder.framer.carry
-            session.checkpoint.dropping_stdout = session.dropping_stdout
-            session.checkpoint.envelope_index = session.decoder.index
-            session.checkpoint.normalizer_state = state
-            session.checkpoint.event_cursor = nil
-            session.checkpoint.terminal = terminal
-            session.checkpoint.stream_ended = session.stream_ended
-        elseif final and message.stream == "stderr" then
-            session.checkpoint.consumed.stderr = message.sequence
-        elseif not final and not was_held and at_boundary then
-            session.checkpoint.carry.stdout = before.carry
-            session.checkpoint.dropping_stdout = before.dropping_stdout
-            session.checkpoint.envelope_index = before.index
-            session.checkpoint.normalizer_state = before.state
-            session.checkpoint.event_cursor = {envelope_index = before.index + 1, events_committed = offset + #batch}
-        end
-        local committed, commit_error = M.commit(io, session, batch)
-        if not committed then return false, commit_error end
-        if final then break end
-        offset = offset + observations_in_batch
-        step(io, "partial_commit")
-    end
-    if #protocol_writes > 0 then step(io, "protocol_prepared") end
-    for _, pending in ipairs(protocol_writes) do
-        io.send(sender, placement_protocol.TOPIC_INPUT, {write_id = pending.write_id, generation = session.epoch, data = pending.data})
-        pending.dispatched = true
-    end
-    session.last_sequence[message.stream] = message.sequence
-    step(io, "committed")
-    if message.eof then step(io, message.stream .. "_ended") end
-    if detected > 0 then step(io, "permission_intended") end
-    io.send(sender, placement_protocol.TOPIC_ACK, {generation = session.epoch, consumed_through = acknowledged_through(session, message.sequence)})
-    step(io, "acknowledged")
-    return true, nil
 end
 type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
 -- Wakeup hints: a durable subscription to the thread's approval
@@ -1683,53 +865,6 @@ function M.close(io: IO, session: Session): (placement_types.Attempt?, string?)
         end
     end
     return attempt, nil
-end
-local function control_record(session: Session, write_id: string, phase: string, extra: {[string]: unknown}): {[string]: unknown}
-    local payload: {[string]: unknown} = {write_id = write_id, attempt_id = session.plan.request.attempt_id, turn_id = session.turn_id, attachment_generation = session.epoch, phase = phase}
-    for key, value in pairs(extra) do payload[key] = value end
-    return {source = "bee", body = {type = "extension", event_key = "write:" .. write_id .. ":" .. phase, data = {type = "extension", event_name = "bee.carrier.write", event_revision = "1", payload_json = json.encode(payload)}}}
-end
-local function forget_write(session: Session, write_id: string)
-    local kept: {checkpoint.PendingWrite} = {}
-    for _, pending in ipairs(session.checkpoint.pending_writes) do
-        if pending.write_id ~= write_id then kept[#kept + 1] = pending end
-    end
-    session.checkpoint.pending_writes = kept
-end
--- write: intent is committed with the write held in the checkpoint before
--- any dispatch; acceptance or uncertainty is committed after. A write is
--- refused once the runner is not bound or the intent cannot be committed,
--- so a fenced carrier never dispatches.
-function M.write(io: IO, session: Session, write_id: string, data: string): (boolean, string?)
-    if not session.runner then return false, "no runner is bound" end
-    if session.plan.launch.stdin_eof == true then
-        -- The launch closed stdin after its initial input; a later write is
-        -- refused on record rather than dispatched or dropped silently.
-        local digest = digest_of(data) or ""
-        return M.commit(io, session, {control_record(session, write_id, "refused", {input_digest = digest, reason = "stdin closed after the initial input"})})
-    end
-    if session.checkpoint.input_closed then
-        local digest = digest_of(data) or ""
-        return M.commit(io, session, {control_record(session, write_id, "refused", {input_digest = digest, reason = "stdin closed after settlement"})})
-    end
-    if #data > checkpoint.MAX_PENDING_WRITE_BYTES then return false, "write exceeds " .. tostring(checkpoint.MAX_PENDING_WRITE_BYTES) .. " bytes" end
-    if #session.checkpoint.pending_writes >= checkpoint.MAX_PENDING_WRITES then return false, "too many writes await acknowledgment" end
-    local digest, digest_error = digest_of(data)
-    if not digest then return false, digest_error end
-    local pending: checkpoint.PendingWrite = {write_id = write_id, input_digest = digest, data = data, dispatched = false}
-    session.checkpoint.pending_writes[#session.checkpoint.pending_writes + 1] = pending
-    local intended, intended_error = M.commit(io, session, {control_record(session, write_id, "intended", {input_digest = digest})})
-    if not intended then
-        forget_write(session, write_id)
-        return false, intended_error
-    end
-    step(io, "write_intended")
-    local runner = session.runner
-    if not runner then return false, "no runner is bound" end
-    io.send(runner, placement_protocol.TOPIC_INPUT, {write_id = write_id, generation = session.epoch, data = data})
-    pending.dispatched = true
-    step(io, "write_dispatched")
-    return true, nil
 end
 local function pending_write(session: Session, write_id: string): checkpoint.PendingWrite?
     for _, pending in ipairs(session.checkpoint.pending_writes) do

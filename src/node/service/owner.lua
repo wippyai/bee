@@ -35,7 +35,6 @@ local settings = require("settings")
 local appearance = require("appearance")
 local client = require("client")
 local eventbus = require("events")
-local descriptor = require("descriptor")
 local application = require("application")
 local broker = require("broker")
 local command = require("command")
@@ -47,208 +46,32 @@ local funcs = require("funcs")
 local bounds = require("bounds")
 local app_identity = require("app_identity")
 
--- terminal marks an app that renders a terminal emulator, which takes the
--- theme's terminal page colors.
--- A dialog an app asks the display to show: request_id is the owner's, the
--- app's own id comes back in its answer; closing marks the confirmation an
--- app asked for before it closes.
-type Dialog = {request_id: string, client_request_id: string, kind: string, title: string, message: string,
-    accept: string, initial: string, closing: boolean, target: {[string]: unknown}?, confirmation: confirmation.Pending?}
--- token is the launch token the app's broker messages carry; negotiate marks
--- an app that answers close requests; closing is the close request it is
--- answering; args are what it was opened with, kept with its checkpoint.
-type AppAlias = {stable: string, instance: string, workspace_id: string, definition_id: string}
-type Instance = {review: client.Review?, id: string, app: string, title: string, desktop: string, workspace: string, view: tty.Viewport, pid: string, terminal: boolean,
-    execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
-    singleton: boolean, revision: string?, relaunch: boolean?, alias: AppAlias}
-type SavedInstance = {review: client.Review?, id: string, app: string, title: string, desktop: string, workspace: string, handle: string, pid: string, terminal: boolean,
-    execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
-    singleton: boolean, revision: string?, relaunch: boolean?, alias: AppAlias?}
-type SavedWatcher = {pid: string, desktop: string}
-type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: integer, alerts: {client.Alert}}
+local part_catalog = require("part_catalog")
+local part_handover = require("part_handover")
+type Dialog = part_handover.Dialog
+type AppAlias = part_handover.AppAlias
+type Instance = part_handover.Instance
+type SavedInstance = part_handover.SavedInstance
+type SavedWatcher = part_handover.SavedWatcher
+type Saved = part_handover.Saved
+local words = part_handover.words
+local saved_dialog = part_handover.saved_dialog
+type Menu = part_catalog.Menu
+type CatalogApp = part_catalog.CatalogApp
+type Theme = part_catalog.Theme
+local role_app = part_catalog.role_app
+local catalog = part_catalog.catalog
+local themes = part_catalog.themes
+local stored_appearance = part_catalog.stored_appearance
+local signature = part_catalog.signature
+local same_palette = part_catalog.same_palette
 type Definition = application.Definition
--- A menu an app names and an installed app, as the catalog lists them.
-type Menu = {id: string, title: string, location: string, order: integer}
-type CatalogApp = {id: string, title: string, menus: {Menu}, singleton: boolean}
-type Theme = appearance.Theme
-
 local NAME = "bee.node"
 -- Bee components announce what needs the person on this event system: a
 -- request waiting for a decision, or an application the person approved.
 local ATTENTION = "bee.attention"
 local APPROVALS_ROLE = "approvals"
-local MENU_TYPE = "bee.menu"
 local DEFAULT_WIDTH, DEFAULT_HEIGHT = 80, 24
-
--- role_app is the installed app declaring role, the first by id.
-local function role_app(role: string): (string?, string?)
-    local entries, find_error = registry.find({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
-    if not entries then return nil, "installed apps cannot be read: " .. tostring(find_error) end
-    local found: string? = nil
-    for _, entry in ipairs(entries) do
-        local declared = descriptor.decode(entry.id, entry.meta.application)
-        if declared and declared.role == role and (found == nil or entry.id < found) then found = entry.id end
-    end
-    return found, nil
-end
-
--- words are the string arguments an open passed, in order.
-local function words(app_args: {[string]: unknown}): {string}
-    local found: {string} = {}
-    local given = app_args.arguments
-    if type(given) == "table" then
-        for _, word in ipairs(given) do
-            if type(word) == "string" then found[#found + 1] = word end
-        end
-    end
-    return found
-end
-
--- menus returns the installed menus, registry entries of type MENU_TYPE whose
--- data names a title, the place the menu shows (the Start panel or the
--- desktop's context menu) and its order there, by id.
-local function menus(): ({[string]: Menu}?, string?)
-    local entries, find_error = registry.find({["meta.type"] = MENU_TYPE})
-    if not entries then return nil, "installed menus cannot be read: " .. tostring(find_error) end
-    local found: {[string]: Menu} = {}
-    for _, entry in ipairs(entries) do
-        local data: unknown = entry.data
-        local order = type(data) == "table" and type(data.order) == "number" and math.tointeger(data.order) or nil
-        if type(data) == "table" and type(data.title) == "string" and (data.location == "start" or data.location == "desktop") and order then
-            found[entry.id] = {id = entry.id, title = data.title, location = data.location, order = order}
-        else
-            logger:warn("Menu entry names no title, location and order", {id = entry.id})
-        end
-    end
-    return found, nil
-end
-
--- catalog lists the installed apps: process entries of type bee.app whose
--- meta.application declares them, each with the installed menus it names.
-local function catalog(): ({CatalogApp}?, string?)
-    local installed, menus_error = menus()
-    if not installed then return nil, menus_error end
-    local entries, find_error = registry.find({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
-    if not entries then return nil, "installed apps cannot be read: " .. tostring(find_error) end
-    local apps: {CatalogApp} = {}
-    for _, entry in ipairs(entries) do
-        local declared = descriptor.decode(entry.id, entry.meta.application)
-        if declared then
-            local placed: {Menu} = {}
-            for _, id in ipairs(declared.menus) do
-                local menu = installed[id]
-                if menu then placed[#placed + 1] = menu
-                else logger:warn("App names a menu that is not installed", {id = entry.id, menu = id}) end
-            end
-            apps[#apps + 1] = {id = entry.id, title = declared.title, menus = placed, singleton = declared.singleton}
-        else
-            logger:warn("App entry declares no valid application", {id = entry.id})
-        end
-    end
-    table.sort(apps, function(a: CatalogApp, b: CatalogApp): boolean return a.title < b.title end)
-    return apps, nil
-end
-
--- themes returns the installed themes, registry entries of type
--- appearance.TYPE whose data is a palette, ordered by title, and the id of
--- the one marked meta.default.
-local function themes(): ({Theme}?, string?, string?)
-    local entries, find_error = registry.find({["meta.type"] = appearance.TYPE})
-    if not entries then return nil, nil, "installed themes cannot be read: " .. tostring(find_error) end
-    local found: {Theme} = {}
-    local default_id: string? = nil
-    for _, entry in ipairs(entries) do
-        local palette: {[string]: unknown} = {}
-        local data: unknown = entry.data
-        if type(data) == "table" then
-            for key, value in pairs(data) do palette[key] = value end
-        end
-        palette.id = entry.id
-        local decoded = appearance.decode_theme(palette)
-        if decoded then
-            found[#found + 1] = decoded
-            if entry.meta.default == true then default_id = entry.id end
-        else
-            logger:warn("Theme entry is not a palette", {id = entry.id})
-        end
-    end
-    table.sort(found, function(a: Theme, b: Theme): boolean return a.title < b.title end)
-    return found, default_id, nil
-end
-
--- stored_appearance returns the node's appearance settings: the installed
--- theme its setting names (else the default theme entry, else the built-in
--- palette), its background and its taskbar style.
-local function stored_appearance(installed: {Theme}, default_id: string?): appearance.Preferences
-    local defaults = appearance.defaults()
-    local chosen: appearance.Theme? = nil
-    local id = settings.get("theme")
-    for _, item in ipairs(installed) do
-        if item.id == id then chosen = item end
-    end
-    if not chosen then
-        for _, item in ipairs(installed) do
-            if item.id == default_id then chosen = item end
-        end
-    end
-    local background = settings.get("background") or defaults.background
-    if not appearance.background_known(background) then background = defaults.background end
-    local taskbar = settings.get("taskbar") or defaults.taskbar
-    if taskbar ~= "labels" and taskbar ~= "icons" then taskbar = defaults.taskbar end
-    return {theme = chosen or defaults.theme, background = background, taskbar = taskbar}
-end
-
--- signature identifies an app catalog, so the owner announces real changes only.
-local function signature(apps: {CatalogApp}): string
-    local parts: {string} = {}
-    for _, app in ipairs(apps) do
-        local placed: {string} = {}
-        for _, menu in ipairs(app.menus) do
-            placed[#placed + 1] = menu.id .. ":" .. menu.title .. ":" .. menu.location .. ":" .. tostring(menu.order)
-        end
-        parts[#parts + 1] = app.id .. "=" .. app.title .. "/" .. table.concat(placed, ",")
-    end
-    return table.concat(parts, "\n")
-end
-
-local function same_palette(a: Theme, b: Theme): boolean
-    local left: {[string]: unknown} = a
-    local right: {[string]: unknown} = b
-    for _, role in ipairs(appearance.ROLES) do
-        if left[role] ~= right[role] then return false end
-    end
-    for _, role in ipairs(appearance.OPTIONAL_ROLES) do
-        if left[role] ~= right[role] then return false end
-    end
-    return a.id == b.id and a.title == b.title
-end
-
-local function saved_confirmation(value: unknown): (confirmation.Pending?, boolean)
-    if value == nil then return nil, true end
-    if type(value) ~= "table" or type(value.view) ~= "table" or type(value.target) ~= "string"
-        or type(value.action) ~= "string" or type(value.presentation) ~= "string" then
-        return nil, false
-    end
-    return {view = value.view, target = value.target, action = value.action, presentation = value.presentation}, true
-end
-
--- saved_dialog decodes the dialog a predecessor handed over; ok is false when
--- the record is malformed.
-local function saved_dialog(value: unknown): (Dialog?, boolean)
-    if value == nil then return nil, true end
-    if type(value) ~= "table" or type(value.request_id) ~= "string" or type(value.client_request_id) ~= "string"
-        or type(value.kind) ~= "string" or type(value.title) ~= "string" or type(value.message) ~= "string"
-        or type(value.accept) ~= "string" or type(value.initial) ~= "string" or type(value.closing) ~= "boolean" then
-        return nil, false
-    end
-    local target = value.target
-    if target ~= nil and type(target) ~= "table" then return nil, false end
-    local pending, pending_ok = saved_confirmation(value.confirmation)
-    if not pending_ok then return nil, false end
-    return {request_id = value.request_id, client_request_id = value.client_request_id, kind = value.kind,
-        title = value.title, message = value.message, accept = value.accept, initial = value.initial,
-        closing = value.closing, target = target, confirmation = pending}, true
-end
 
 -- idle keeps a client's owner service without serving: an in-memory client
 -- displays another node and has no desktops of its own.

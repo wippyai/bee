@@ -6,19 +6,18 @@ entries:
   source: file://owner.lua
   method: main
   modules:
-  - process
   - channel
-  - system
+  - env
+  - events
+  - funcs
+  - logger
+  - process
   - registry
+  - system
   - tty
   - uuid
-  - logger
-  - events
-  - env
-  - funcs
   imports:
     protocol: bee.hive:protocol
-    descriptor: bee.app:descriptor
     application: bee.node:application
     broker: bee.node:broker
     command: bee.node:command
@@ -32,6 +31,8 @@ entries:
     bounds: bee.values:bounds
     app_identity: bee.threads.records:app_identity
     worker: bee.process:worker
+    part_catalog: bee.node.service:catalog
+    part_handover: bee.node.service:handover
 - name: owner_service
   meta:
     title: "Node \xB7 owner"
@@ -106,3 +107,21 @@ entries:
       - bee.process:backlog_policy
     restart:
       max_attempts: 10
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules:
+  - logger
+  - registry
+  imports:
+    descriptor: bee.app:descriptor
+    settings: bee.node:settings
+    appearance: bee.ui:appearance
+- name: handover
+  kind: library.lua
+  source: file://handover.lua
+  modules:
+  - tty
+  imports:
+    client: bee.node:client
+    confirmation: bee.approvals.app:confirmation

@@ -93,6 +93,8 @@ entries:
     selection: bee.shell:selection
     workspace_menu: bee.shell:workspace_menu
     render: bee.shell:render
+    part_handover: bee.shell:handover
+    jobs: bee.shell:jobs
   meta:
     command:
       name: bee
@@ -120,6 +122,8 @@ entries:
     selection: bee.shell:selection
     workspace_menu: bee.shell:workspace_menu
     render: bee.shell:render
+    part_handover: bee.shell:handover
+    jobs: bee.shell:jobs
   meta:
     command:
       name: client
@@ -171,3 +175,23 @@ entries:
     title: Desktop
     location: desktop
     order: 10
+- name: handover
+  kind: library.lua
+  source: file://handover.lua
+  modules:
+  - channel
+  - tty
+  imports:
+    appearance: bee.ui:appearance
+    client: bee.node:client
+    model: bee.shell:model
+- name: jobs
+  kind: library.lua
+  source: file://jobs.lua
+  modules:
+  - channel
+  - process
+  - tty
+  imports:
+    client: bee.node:client
+    part_handover: bee.shell:handover

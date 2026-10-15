@@ -33,12 +33,11 @@ entries:
   source: file://owner.lua
   method: open
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -49,10 +48,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: &id001
@@ -206,12 +203,11 @@ entries:
   source: file://owner.lua
   method: run
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -222,10 +218,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -391,12 +385,11 @@ entries:
   source: file://owner.lua
   method: send
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -407,10 +400,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -542,12 +533,11 @@ entries:
   source: file://owner.lua
   method: await
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -558,10 +548,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: &id002
@@ -683,12 +671,11 @@ entries:
   source: file://owner.lua
   method: join
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -699,10 +686,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -845,12 +830,11 @@ entries:
   source: file://owner.lua
   method: get
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -861,10 +845,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
@@ -1113,12 +1095,11 @@ entries:
   source: file://owner.lua
   method: history
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -1129,10 +1110,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -1239,12 +1218,11 @@ entries:
   source: file://owner.lua
   method: cancel
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -1255,10 +1233,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
@@ -1374,12 +1350,11 @@ entries:
   source: file://owner.lua
   method: close
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -1390,10 +1365,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
@@ -1506,12 +1479,11 @@ entries:
   source: file://owner.lua
   method: catalog
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -1522,10 +1494,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies:
@@ -1661,20 +1631,17 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
 - name: restore
   kind: function.lua
@@ -1689,20 +1656,17 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
 - name: launch_prompt
   kind: function.lua
@@ -1717,20 +1681,17 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
 - name: idle_check
   kind: function.lua
@@ -1745,20 +1706,17 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
 - name: hook_boundary
   kind: function.lua
@@ -1773,32 +1731,28 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
 - name: detach
   kind: function.lua
   source: file://owner.lua
   method: detach
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -1809,10 +1763,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -1953,12 +1905,11 @@ entries:
   source: file://owner.lua
   method: source_identity
   modules:
-  - logger
-  - json
-  - security
-  - hash
   - funcs
-  - time
+  - hash
+  - json
+  - logger
+  - security
   - system
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
@@ -1969,10 +1920,8 @@ entries:
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
-    budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
-    session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
     policies:
@@ -1998,3 +1947,17 @@ entries:
     journal: bee.threads.sessions.binding:threads_journal
     snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
+- name: observation
+  kind: library.lua
+  source: file://observation.lua
+  modules:
+  - hash
+  - security
+  - time
+  imports:
+    snapshot: bee.threads.sessions.binding:snapshot
+    bounds: bee.values:bounds
+    journal: bee.threads.sessions.binding:threads_journal
+    cancellation: bee.threads.sessions.binding:cancellation
+    session_protocol: bee.threads.sessions.types:protocol
+    record_values: bee.threads.records:values

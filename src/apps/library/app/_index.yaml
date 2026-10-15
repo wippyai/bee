@@ -78,13 +78,12 @@ entries:
   source: file://app.lua
   method: main
   modules:
-  - json
-  - tty
-  - process
-  - channel
-  - uuid
-  - funcs
   - cdc
+  - channel
+  - funcs
+  - json
+  - process
+  - tty
   imports:
     confirmation: bee.approvals.app:confirmation
     frame: bee.ui:frame
@@ -95,6 +94,7 @@ entries:
     hub: bee.apps.library.app:hub
     view: bee.apps.library.app:view
     contents: bee.apps.library.app:contents
+    delivery_actions: bee.apps.library.app:delivery_actions
   security:
     policies:
     - bee.security.approvals:confirmation_client
@@ -116,3 +116,14 @@ entries:
     title: Library
     location: start
     order: 30
+- name: delivery_actions
+  kind: library.lua
+  source: file://delivery_actions.lua
+  modules:
+  - funcs
+  - uuid
+  imports:
+    confirmation: bee.approvals.app:confirmation
+    model: bee.apps.library.app:model
+    governed: bee.gov.client:governed
+    hub: bee.apps.library.app:hub

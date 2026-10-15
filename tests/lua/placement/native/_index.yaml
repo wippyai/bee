@@ -562,10 +562,10 @@ entries:
     suite: bee
     timeout: 120s
   modules:
-  - time
-  - registry
   - hash
   - json
+  - registry
+  - time
   - toml
   security:
     policies:
@@ -595,6 +595,9 @@ entries:
     homes: bee.placement.native.service:homes
     quote: bee.driver.binding:quote
     native_fixture: bee.tests.placement.native:native_fixture
+    native_trust_cases: bee.tests.placement.native:native_trust_cases
+    native_retained_configuration_cases: bee.tests.placement.native:native_retained_configuration_cases
+    native_login_cases: bee.tests.placement.native:native_login_cases
 - name: native_output_test
   kind: function.lua
   source: file://native_output_test.lua
@@ -991,3 +994,54 @@ entries:
   modules: [process]
   meta: {type: test, suite: bee}
   imports: {test: 'wippy.test:test', completion: 'bee.tests.placement.native:completion'}
+- name: native_trust_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://native_trust_cases.lua
+  modules:
+  - json
+  - registry
+  - toml
+  imports:
+    grants: bee.approvals.grants:store
+    authority: bee.harness.profiles.persist:grants
+    trust: bee.driver.descriptor:trust
+    descriptors: bee.driver.descriptor:descriptor
+    resources: bee.placement.native.env:resources
+    bounds: bee.values:bounds
+    principals: bee.tests.support.principals:bound
+    configuration: bee.driver.codex.binding:configuration
+    configuration_protocol: bee.driver.binding:configuration
+    preferences: bee.driver.descriptor:effective
+    test: wippy.test:test
+    store: bee.placement.native.persist:store
+    homes: bee.placement.native.service:homes
+    quote: bee.driver.binding:quote
+    native_fixture: bee.tests.placement.native:native_fixture
+- name: native_retained_configuration_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://native_retained_configuration_cases.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    homes: bee.placement.native.service:homes
+    quote: bee.driver.binding:quote
+    native_fixture: bee.tests.placement.native:native_fixture
+- name: native_login_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://native_login_cases.lua
+  modules:
+  - hash
+  imports:
+    test: wippy.test:test
+    store: bee.placement.native.persist:store
+    homes: bee.placement.native.service:homes
+    quote: bee.driver.binding:quote
+    native_fixture: bee.tests.placement.native:native_fixture

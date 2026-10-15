@@ -190,29 +190,20 @@ entries:
   kind: library.lua
   source: file://work_store.lua
   modules:
-  - sql
-  - json
-  - hash
-  - uuid
-  - system
-  - time
   - ctx
+  - sql
   imports:
     usage: bee.threads.service:usage
     journal: bee.threads.persist:journal
     budget_values: bee.threads.records:budgets
     access: bee.threads.service:access
     transaction: bee.threads.persist:transaction
-    thread_owner: bee.threads.persist:owner
-    reader: bee.threads.persist:reader
-    record: bee.threads.records:record
     observation: bee.threads.records:observation
-    record_types: bee.threads:record_types
     bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    record_bounds: bee.threads.records:bounds
-    commits: bee.threads.delivery:commits
     inbox: bee.threads.service:inbox
+    part_work_records: bee.threads.service:work_records
+    part_session_store: bee.threads.service:session_store
+    part_work_queries: bee.threads.service:work_queries
 - name: pump_sender
   kind: library.lua
   source: file://pump_sender.lua
@@ -266,3 +257,50 @@ entries:
   imports:
     access: bee.threads.service:access
     transaction: bee.threads.persist:transaction
+- name: work_records
+  kind: library.lua
+  source: file://work_records.lua
+  modules:
+  - hash
+  - json
+  - sql
+  - system
+  - time
+  - uuid
+  imports:
+    journal: bee.threads.persist:journal
+    budget_values: bee.threads.records:budgets
+    access: bee.threads.service:access
+    transaction: bee.threads.persist:transaction
+    thread_owner: bee.threads.persist:owner
+    record: bee.threads.records:record
+    observation: bee.threads.records:observation
+    record_types: bee.threads:record_types
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    record_bounds: bee.threads.records:bounds
+- name: session_store
+  kind: library.lua
+  source: file://session_store.lua
+  modules:
+  - sql
+  imports:
+    journal: bee.threads.persist:journal
+    access: bee.threads.service:access
+    transaction: bee.threads.persist:transaction
+    reader: bee.threads.persist:reader
+    part_work_records: bee.threads.service:work_records
+- name: work_queries
+  kind: library.lua
+  source: file://work_queries.lua
+  modules:
+  - json
+  - sql
+  imports:
+    journal: bee.threads.persist:journal
+    transaction: bee.threads.persist:transaction
+    record: bee.threads.records:record
+    bounds: bee.values:bounds
+    commits: bee.threads.delivery:commits
+    part_work_records: bee.threads.service:work_records
+    part_session_store: bee.threads.service:session_store

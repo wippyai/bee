@@ -601,30 +601,15 @@ entries:
     type: test
     suite: bee
     timeout: 240s
-  modules:
-  - funcs
-  - security
-  - process
-  - registry
-  - env
-  - time
-  - channel
-  - json
-  - sql
   security:
     policies:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
   imports:
-    memory_host: bee.tests.memory:host
-    harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
-    principals: bee.tests.support.principals:bound
-    test: wippy.test:test
-    placement_fixture: bee.tests.harness:placement_fixture
-    shared_fixtures: bee.tests.support:fixtures
-    shared_executables: bee.tests.harness:executables
-    shared_authority: bee.tests.support:authority
+    gateway_carrier_flow_cases: bee.tests.harness:gateway_carrier_flow_cases
+    gateway_carrier_extension_cases: bee.tests.harness:gateway_carrier_extension_cases
+    gateway_carrier_fencing_cases: bee.tests.harness:gateway_carrier_fencing_cases
+    support: bee.tests.harness:gateway_carrier_fixture
 - name: gateway_fencing_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -633,30 +618,15 @@ entries:
     type: test
     suite: bee
     timeout: 240s
-  modules:
-  - funcs
-  - security
-  - process
-  - registry
-  - env
-  - time
-  - channel
-  - json
-  - sql
   security:
     policies:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
   imports:
-    memory_host: bee.tests.memory:host
-    harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
-    principals: bee.tests.support.principals:bound
-    test: wippy.test:test
-    placement_fixture: bee.tests.harness:placement_fixture
-    shared_fixtures: bee.tests.support:fixtures
-    shared_executables: bee.tests.harness:executables
-    shared_authority: bee.tests.support:authority
+    gateway_carrier_flow_cases: bee.tests.harness:gateway_carrier_flow_cases
+    gateway_carrier_extension_cases: bee.tests.harness:gateway_carrier_extension_cases
+    gateway_carrier_fencing_cases: bee.tests.harness:gateway_carrier_fencing_cases
+    support: bee.tests.harness:gateway_carrier_fixture
 - name: extension_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -665,16 +635,6 @@ entries:
     type: test
     suite: bee
     timeout: 240s
-  modules:
-  - funcs
-  - security
-  - process
-  - registry
-  - env
-  - time
-  - channel
-  - json
-  - sql
   security:
     policies:
     - bee.tests.memory:host_policy
@@ -682,15 +642,10 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
   imports:
-    memory_host: bee.tests.memory:host
-    harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
-    principals: bee.tests.support.principals:bound
-    test: wippy.test:test
-    placement_fixture: bee.tests.harness:placement_fixture
-    shared_fixtures: bee.tests.support:fixtures
-    shared_executables: bee.tests.harness:executables
-    shared_authority: bee.tests.support:authority
+    gateway_carrier_flow_cases: bee.tests.harness:gateway_carrier_flow_cases
+    gateway_carrier_extension_cases: bee.tests.harness:gateway_carrier_extension_cases
+    gateway_carrier_fencing_cases: bee.tests.harness:gateway_carrier_fencing_cases
+    support: bee.tests.harness:gateway_carrier_fixture
 - name: project_fixture
   kind: fs.directory
   meta:
@@ -2971,3 +2926,73 @@ entries:
   source: file://streams.lua
   meta:
     type: test_support
+- name: gateway_carrier_fixture
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://gateway_carrier_fixture.lua
+  modules:
+  - channel
+  - env
+  - funcs
+  - json
+  - process
+  - registry
+  - security
+  - sql
+  - time
+  imports:
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+    principals: bee.tests.support.principals:bound
+    test: wippy.test:test
+    placement_fixture: bee.tests.harness:placement_fixture
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_authority: bee.tests.support:authority
+- name: gateway_carrier_flow_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://gateway_carrier_flow_cases.lua
+  modules:
+  - funcs
+  - json
+  - process
+  - registry
+  - security
+  - sql
+  - time
+  imports:
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+    principals: bee.tests.support.principals:bound
+    test: wippy.test:test
+    support: bee.tests.harness:gateway_carrier_fixture
+- name: gateway_carrier_extension_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://gateway_carrier_extension_cases.lua
+  modules:
+  - json
+  - process
+  imports:
+    memory_host: bee.tests.memory:host
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
+    principals: bee.tests.support.principals:bound
+    test: wippy.test:test
+    support: bee.tests.harness:gateway_carrier_fixture
+- name: gateway_carrier_fencing_cases
+  kind: library.lua
+  meta:
+    type: test_support
+  source: file://gateway_carrier_fencing_cases.lua
+  modules:
+  - channel
+  - process
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    support: bee.tests.harness:gateway_carrier_fixture

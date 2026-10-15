@@ -17,9 +17,9 @@ entries:
   source: file://admission.lua
   modules:
   - ctx
-  - registry
   - funcs
   - process
+  - registry
   - security
   - time
   imports:
@@ -39,8 +39,8 @@ entries:
     effective_schema: bee.driver.descriptor:effective
     descriptors: bee.driver.descriptor:descriptor
     placement_profiles: bee.placement.profiles:profiles
-    record_bounds: bee.threads.records:bounds
     identity: bee.security.identity:identity
+    part_request: bee.harness.launch:request
 - name: agent_resolver
   kind: library.lua
   source: file://agent_resolver.lua
@@ -297,3 +297,12 @@ entries:
       == "bee.placement.native.env:placement_executor")
     resources: '*'
     effect: allow
+- name: request
+  kind: library.lua
+  source: file://request.lua
+  imports:
+    bounds: bee.values:bounds
+    definition: bee.harness.launch:definitions
+    continuation: bee.harness.carrier:continuation
+    profiles: bee.harness.profiles:protocol
+    record_bounds: bee.threads.records:bounds

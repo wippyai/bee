@@ -36,122 +36,15 @@ local selection = require("selection")
 local workspace_menu = require("workspace_menu")
 local render = require("render")
 
-type Binding = {ok: boolean, problem: string?}
--- generation is the connection a result belongs to; a result from an earlier
--- connection (another node, or before the owner came back) is dropped.
-type Result = {kind: string, problem: string?, state: client.State?, id: string?, title: string?,
-    view: tty.Viewport?, desktop: string?, node: string?, generation: integer?, fullscreen: boolean?,
-    following: string?, bound: channel.Channel<Binding>?}
--- A command bee runs with: the app command name and the words after it.
-type Launch = {name: string, arguments: {string}}
-type SavedWindow = {id: string, handle: string}
-type Saved = {target: string, origin: string, owner: string?, supervisor: string?, desktop: string,
-    scenes: {[string]: model.Scene}, orders: {[string]: {string}}, windows: {SavedWindow}, welcomed: boolean,
-    appearance: appearance.Preferences?}
+local part_handover = require("part_handover")
+local jobs = require("jobs")
+type Binding = part_handover.Binding
+type Result = part_handover.Result
+type Launch = part_handover.Launch
+type SavedWindow = part_handover.SavedWindow
+type Saved = part_handover.Saved
+local saved_handover = part_handover.saved_handover
 type TabHit = {id: string, x: integer, width: integer, action: string?, y: integer?, height: integer?}
-
-local function window_mode(value: unknown): model.Mode?
-    if value == "floating" then return "floating" end
-    if value == "fullscreen" then return "fullscreen" end
-    if value == "minimized" then return "minimized" end
-    if value == "collapsed" then return "collapsed" end
-    return nil
-end
-
-local function restore_mode(value: unknown): model.RestoreMode?
-    if value == "floating" then return "floating" end
-    if value == "fullscreen" then return "fullscreen" end
-    if value == "collapsed" then return "collapsed" end
-    return nil
-end
-
-local function whole(value: unknown): integer?
-    if type(value) ~= "number" then return nil end
-    return math.tointeger(value)
-end
-
-local function optional_string(value: unknown): (string?, boolean)
-    if value == nil then return nil, true end
-    if type(value) ~= "string" then return nil, false end
-    return value, true
-end
-
-local function saved_rect(value: unknown): model.Rect?
-    if type(value) ~= "table" then return nil end
-    local x, y, width, height = whole(value.x), whole(value.y), whole(value.width), whole(value.height)
-    if not x or not y or not width or not height then return nil end
-    return {x = x, y = y, width = width, height = height}
-end
-
-local function saved_window(value: unknown): model.Window?
-    if type(value) ~= "table" or type(value.id) ~= "string" or type(value.instance_id) ~= "string"
-        or type(value.title) ~= "string" then
-        return nil
-    end
-    local mode, restore = window_mode(value.mode), restore_mode(value.restore_mode)
-    if not mode or not restore then return nil end
-    local bounds, normal_bounds = saved_rect(value.bounds), saved_rect(value.normal_bounds)
-    if not bounds or not normal_bounds then return nil end
-    local workspace_id, workspace_ok = optional_string(value.workspace_id)
-    local user_title, user_title_ok = optional_string(value.user_title)
-    local accent, accent_ok = optional_string(value.accent)
-    local icon, icon_ok = optional_string(value.icon)
-    local snap_side, snap_side_ok = optional_string(value.snap_side)
-    if not workspace_ok or not user_title_ok or not accent_ok or not icon_ok or not snap_side_ok then return nil end
-    local snap_ratio = value.snap_ratio
-    if snap_ratio ~= nil and type(snap_ratio) ~= "number" then return nil end
-    return {id = value.id, instance_id = value.instance_id, workspace_id = workspace_id, title = value.title,
-        user_title = user_title, accent = accent, icon = icon, bounds = bounds, normal_bounds = normal_bounds,
-        mode = mode, restore_mode = restore, snap_side = snap_side, snap_ratio = snap_ratio}
-end
-
-local function saved_scene(value: unknown): model.Scene?
-    if type(value) ~= "table" or type(value.focus) ~= "string" or type(value.windows) ~= "table" then return nil end
-    local width, height, revision = whole(value.width), whole(value.height), whole(value.revision)
-    if not width or not height or not revision then return nil end
-    local windows: {model.Window} = {}
-    for _, item in ipairs(value.windows) do
-        local window = saved_window(item)
-        if not window then return nil end
-        windows[#windows + 1] = window
-    end
-    return {width = width, height = height, revision = revision, focus = value.focus, windows = windows}
-end
-
-local function saved_handover(value: unknown): Saved?
-    if type(value) ~= "table" or type(value.target) ~= "string" or type(value.origin) ~= "string"
-        or type(value.desktop) ~= "string" or type(value.scenes) ~= "table" or type(value.orders) ~= "table"
-        or type(value.windows) ~= "table" or type(value.welcomed) ~= "boolean" then
-        return nil
-    end
-    local owner, owner_ok = optional_string(value.owner)
-    local supervisor, supervisor_ok = optional_string(value.supervisor)
-    if not owner_ok or not supervisor_ok then return nil end
-    local scenes: {[string]: model.Scene} = {}
-    for desktop, item in pairs(value.scenes) do
-        local scene = type(desktop) == "string" and saved_scene(item) or nil
-        if not scene then return nil end
-        scenes[desktop] = scene
-    end
-    local orders: {[string]: {string}} = {}
-    for desktop, item in pairs(value.orders) do
-        if type(desktop) ~= "string" or type(item) ~= "table" then return nil end
-        local order: {string} = {}
-        for _, id in ipairs(item) do
-            if type(id) ~= "string" then return nil end
-            order[#order + 1] = id
-        end
-        orders[desktop] = order
-    end
-    local windows: {SavedWindow} = {}
-    for _, item in ipairs(value.windows) do
-        if type(item) ~= "table" or type(item.id) ~= "string" or type(item.handle) ~= "string" then return nil end
-        windows[#windows + 1] = {id = item.id, handle = item.handle}
-    end
-    return {target = value.target, origin = value.origin, owner = owner, supervisor = supervisor, desktop = value.desktop,
-        scenes = scenes, orders = orders, windows = windows, welcomed = value.welcomed,
-        appearance = appearance.decode(value.appearance)}
-end
 
 -- display shows target's desktops on this terminal until Ctrl+Q. saved is
 -- the handover of an upgraded predecessor.
@@ -295,65 +188,10 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     -- app once however many reasons it has to.
     local attaching: {[string]: boolean} = {}
 
-    local function reconcile(id: string, problem: string?): Result
-        local value = client.call(target, "list", {})
-        local snapshot = value and client.state(value)
-        if snapshot then
-            local live = false
-            for _, instance in ipairs(snapshot.running) do
-                if instance.id == id then live = true end
-            end
-            if not live then return {kind = "retired", id = id, state = snapshot} end
-        end
-        if problem then return {kind = "failed", id = id, problem = problem} end
-        return {kind = "done"}
-    end
-
-    local function attach_job(id: string, shown: string): Result
-        local attached = client.call(target, "attach", {id = id})
-        if not attached then return reconcile(id, "Cannot show this app.") end
-        if type(attached.ref) ~= "string" then return reconcile(id, "Cannot show this app.") end
-        local view = tty.attach(attached.ref)
-        if not view then return reconcile(id, "Cannot show this app.") end
-        local title = id
-        if type(attached.title) == "string" then title = attached.title end
-        return {kind = "attached", id = id, title = title, view = view, desktop = shown}
-    end
-
-    local function call_job(op: string, args: {[string]: unknown}): Result
-        local _, err = client.call(target, op, args)
-        local id = args.id
-        if type(id) == "string" and (op == "close" or op == "move" or op == "answer") then
-            local problem = err and (op == "close" and "Cannot close this app."
-                or op == "move" and "Cannot move this app." or "Cannot answer this app.")
-            if err or op == "close" then return reconcile(id, problem) end
-        end
-        if err then return {kind = "failed", problem = "The request could not be completed."} end
-        return {kind = "done"}
-    end
-
-    -- watch_job watches target once its owner serves. A node without a
-    -- serving owner reports "away", and the display waits for it again.
-    local function watch_job(node: string, requested: string, stamp: integer): Result
-        local holder = process.registry.lookup(client.DIRECTORY .. node, process.registry.EVENTUAL, {timeout = client.TIMEOUT})
-        if not holder then return {kind = "away", desktop = requested} end
-        local bound: channel.Channel<Binding> = channel.new(1)
-        results:send({kind = "following", following = tostring(holder), bound = bound, generation = stamp})
-        local binding = assert((bound:receive()))
-        if binding.problem then return {kind = "failed", problem = binding.problem} end
-        if not binding.ok then return {kind = "away", desktop = requested} end
-        local args: {[string]: unknown} = {}
-        if requested ~= "" then args.desktop = requested end
-        local value, watch_error = client.call(node, "watch", args)
-        if not value then
-            if not client.serving(node) then return {kind = "away", desktop = requested} end
-            return {kind = "failed", problem = "Cannot reach " .. node .. ": " .. tostring(watch_error)}
-        end
-        local decoded = client.state(value)
-        if not decoded then return {kind = "failed", problem = "malformed state from " .. node} end
-        return {kind = "watched", state = decoded}
-    end
-
+    local jobs = jobs.new(function(): string return target end, results)
+    local attach_job = jobs.attach_job
+    local call_job = jobs.call_job
+    local watch_job = jobs.watch_job
     local function input_focus(): string return scene().focus end
 
     -- focus raises window id; the display that focuses an app sizes it.

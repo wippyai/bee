@@ -16,9 +16,8 @@ entries:
   kind: library.lua
   source: file://activation_store.lua
   modules:
-  - sql
-  - hash
   - json
+  - sql
   imports:
     catalog_revision: bee.gov.persist:catalog_revision
     bounds: bee.values:bounds
@@ -26,6 +25,8 @@ entries:
     transaction: bee.persist:transaction
     lease_store: bee.gov.persist:lease_store
     migration_work: bee.gov.types:migration_work
+    part_activation_decode: bee.gov.persist:activation_decode
+    part_activation_queries: bee.gov.persist:activation_queries
 - name: lease_store
   kind: library.lua
   source: file://lease_store.lua
@@ -76,3 +77,24 @@ entries:
   imports:
     bounds: bee.values:bounds
     transaction: bee.persist:transaction
+- name: activation_decode
+  kind: library.lua
+  source: file://activation_decode.lua
+  modules:
+  - hash
+  - sql
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    transaction: bee.persist:transaction
+    migration_work: bee.gov.types:migration_work
+- name: activation_queries
+  kind: library.lua
+  source: file://activation_queries.lua
+  modules:
+  - sql
+  imports:
+    bounds: bee.values:bounds
+    transaction: bee.persist:transaction
+    migration_work: bee.gov.types:migration_work
+    part_activation_decode: bee.gov.persist:activation_decode

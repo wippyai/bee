@@ -16,3 +16,6 @@ __pycache__/
 /tests/lua/process/demand_owner.lua
 
 /tests/lua/hub/root_pack_data.lua
+
+/tests/lua/threads/recovery.lua
+/tests/lua/threads/recovery_worker.lua

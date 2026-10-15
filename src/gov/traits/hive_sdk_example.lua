@@ -2,11 +2,11 @@
 local json = require("json")
 local M = {}
 type Object = {[string]: unknown}
-M.OVERLAY = "test_sdk"
-M.APP = "app.test_sdk:app"
-M.RUN = "app.test_sdk:run"
-M.PEER = "app.test_sdk:peer"
-M.TEST = "app.test_sdk:configuration_test"
+M.OVERLAY = "testsdk"
+M.APP = "app.testsdk:app"
+M.RUN = "app.testsdk:run"
+M.PEER = "app.testsdk:peer"
+M.TEST = "app.testsdk:configuration_test"
 M.RUN_SOURCE = [=[local process = require("process")
 type Object = {[string]: unknown}
 local function run(args: Object): Object
@@ -21,7 +21,7 @@ M.PEER_SOURCE = [=[local hive = require("hive")
 local process = require("process")
 type Object = {[string]: unknown}
 local function run(args: Object): Object
-    local result, err = hive.call({node = args.node, application = "app.test_sdk:app", service = "test-sdk",
+    local result, err = hive.call({node = args.node, application = "app.testsdk:app", service = "test-sdk",
         operation = "run", arguments = {configuration = args.configuration, inputs = args.inputs}, timeout = "10s"})
     if err then return {ok = false, error = {code = "PEER_FAILED", message = err}} end
     return {ok = true, value = {source_pid = tostring(process.pid()), remote = result}}
@@ -30,7 +30,7 @@ return {run = run}]=]
 M.TEST_SOURCE = [=[local funcs = require("funcs")
 type Object = {[string]: unknown}
 local function run(): boolean
-    local result, err = funcs.call("app.test_sdk:run", {configuration = "ci", inputs = {1, 2, 3}})
+    local result, err = funcs.call("app.testsdk:run", {configuration = "ci", inputs = {1, 2, 3}})
     if err or type(result) ~= "table" then return false end
     local reply = result :: Object
     local value = type(reply.value) == "table" and reply.value :: Object or nil
@@ -47,7 +47,7 @@ function M.entries(node: string, workspace: string, audience: string): {Object}
         properties = {node = {type = "string", maxLength = 160}, configuration = input.properties.configuration,
             inputs = input.properties.inputs}}
     local function requirement(name: string, capability: string, parameters: Object, target: string): Object
-        return {id = "app.test_sdk:" .. name, kind = "ns.requirement",
+        return {id = "app.testsdk:" .. name, kind = "ns.requirement",
             meta = {value_kind = "security.policy", capability = capability, parameters = parameters,
                 reason = "Run the configured test SDK on the approved peer"},
             data = {targets = {{entry = target, path = ".security.policies +="}}}}
@@ -71,7 +71,7 @@ function M.entries(node: string, workspace: string, audience: string): {Object}
             suite = "project-sdk", hive = "open", hive_service = "test-sdk",
             hive_operation = {name = "configuration_test", revision = "1", effect = "read", input = {type = "object"}, output = {type = "boolean"}}},
             data = {source = M.TEST_SOURCE, method = "run", modules = {"funcs"}}},
-        {id = "app.test_sdk:trait", kind = "registry.entry", meta = {type = "agent.trait", application_ref = M.APP, title = "Project test SDK"},
+        {id = "app.testsdk:trait", kind = "registry.entry", meta = {type = "agent.trait", application_ref = M.APP, title = "Project test SDK"},
             data = {prompt = "Use test_sdk_run for the local configuration. Use test_sdk_peer with the approved node for a peer call. app_tools with node lists exposed peer tools; tests with node lists/runs the associated suite and reads its run_id on that node. Retry remote mutations with the same request and idempotency_key. A timeout means outcome unknown.",
                 tools = {M.RUN, M.PEER}}},
         requirement("agent_tools", "agent.tools", {tools = {M.RUN, M.PEER}}, M.APP),

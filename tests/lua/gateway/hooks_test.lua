@@ -1,7 +1,7 @@
-local configuration_types = require("configuration_types")
 -- MIT. The pure hook rules: occurrence identity per event and its
 -- ambiguity, what a normalized submission keeps and drops, and the
 -- classification of Codex request metadata.
+local configuration_types = require("configuration_types")
 local test = require("test")
 local principals = require("principals")
 local bounds = require("bounds")

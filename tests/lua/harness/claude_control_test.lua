@@ -1,4 +1,3 @@
-local adapter_types = require("adapter_types")
 -- MIT. The carrier's permission exchange against the real Claude
 -- executable: the harness runs through placement with the driver's
 -- exchange launch, a scripted loopback endpoint answers one Bash tool_use,
@@ -8,6 +7,7 @@ local adapter_types = require("adapter_types")
 -- runs nothing and is acknowledged by the correlated failed tool result,
 -- and an approval left to expire is answered as a deny. Without the
 -- executable the gate is reported open.
+local adapter_types = require("adapter_types")
 local shared_streams = require("shared_streams")
 local shared_executables = require("shared_executables")
 local shared_fixtures = require("shared_fixtures")

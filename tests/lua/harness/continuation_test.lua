@@ -1,5 +1,5 @@
-local checkpoint_types = require("checkpoint_types")
 -- MIT. Continuation comes from a successful owner receipt and native session.
+local checkpoint_types = require("checkpoint_types")
 local test = require("test")
 local configuration = require("configuration")
 local bounds = require("bounds")

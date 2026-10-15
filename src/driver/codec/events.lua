@@ -1,7 +1,7 @@
-local vocabulary = require("vocabulary")
 -- MIT. Builders for the observations a normalizer emits. Each builder
 -- returns a table that bee.threads.records:observation decodes; the caller
 -- supplies the event key so repeats deduplicate at the authority.
+local vocabulary = require("vocabulary")
 local bounds = require("bounds")
 local record_types = require("record_types")
 local M = {}

@@ -1,6 +1,6 @@
-local configuration_types = require("configuration_types")
 -- MIT. One external driver implementation; provider behavior is selected by
 -- a strictly decoded registry descriptor.
+local configuration_types = require("configuration_types")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local descriptor_reader = require("descriptor")

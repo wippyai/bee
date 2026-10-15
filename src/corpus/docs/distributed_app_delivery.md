@@ -368,12 +368,12 @@ identity and alias mappings as
   "meta": {"type": "bee.hive.application_address"},
   "data": {
     "workspace_id": "destination-workspace",
-    "application": "app.project_sdk:app",
+    "application": "app.projectsdk:app",
     "overlay_owner": "destination-approved-installation-owner",
     "identity": {
       "source_node": "author-node",
-      "source_workspace": "project_sdk",
-      "component": "app.project_sdk"
+      "source_workspace": "projectsdk",
+      "component": "app.projectsdk"
     },
     "aliases": ["project-sdk"]
   }

@@ -1,7 +1,7 @@
-local vocabulary = require("vocabulary")
 -- MIT. Line framing for JSONL streams: chunks arrive fragmented, lines are
 -- reassembled, and a line that outgrows the bound is an error, not a
 -- silently truncated frame.
+local vocabulary = require("vocabulary")
 local M = {}
 M.MAX_FRAME_BYTES = 1048576
 -- A framer bounds its frames; a caller that must checkpoint the carry

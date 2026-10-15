@@ -1,10 +1,10 @@
-local settle_types = require("settle_types")
-local checkpoint_types = require("checkpoint_types")
 -- MIT. The carrier machine: one attempt from plan to receipt, expressed as
 -- steps over an injected IO so the same code runs in the production
 -- process and under a test harness that stops it between steps. Every
 -- durable fact lives in thread records, placement receipts and the
 -- checkpoint; the machine keeps only what the checkpoint holds.
+local settle_types = require("settle_types")
+local checkpoint_types = require("checkpoint_types")
 local json = require("json")
 local bounds = require("bounds")
 local record_bounds = require("record_bounds")

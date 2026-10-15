@@ -1,4 +1,3 @@
-
 type File = {kind: "file_exists", paths: {string}, variable: string?, directory: string?}
 type Environment = {kind: "env_present", names: {string}}
 type Status = {kind: "auth_status", argv: {string}, success_exit_code: integer, timeout_ms: integer}

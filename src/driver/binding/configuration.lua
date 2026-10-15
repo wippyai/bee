@@ -1,5 +1,5 @@
-local vocabulary = require("vocabulary")
 -- MIT. Typed driver configuration delivery under an empty callee scope.
+local vocabulary = require("vocabulary")
 local hash = require("hash")
 local json = require("json")
 local toml = require("toml")

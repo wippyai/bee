@@ -14,15 +14,15 @@ Read the overlay guide section `hive_sdk`:
 {"operation":"guide","section":"hive_sdk"}
 ```
 
-That section includes the complete `entries.json` for overlay `test_sdk`, with
-namespace `app.test_sdk`. Copy its JSON list into the overlay before freezing.
+That section includes the complete `entries.json` for overlay `testsdk`, with
+namespace `app.testsdk`. Copy its JSON list into the overlay before freezing.
 The shared manifest defines:
 
-- `app.test_sdk:app`, the admitted application;
-- `app.test_sdk:trait`, an `agent.trait` that teaches the local and peer tools;
-- `app.test_sdk:run`, the `test_sdk_run` agent tool and exposed `test-sdk.run`;
-- `app.test_sdk:peer`, the `test_sdk_peer` agent tool whose app code calls its copy;
-- `app.test_sdk:configuration_test`, an associated, exposed application test;
+- `app.testsdk:app`, the admitted application;
+- `app.testsdk:trait`, an `agent.trait` that teaches the local and peer tools;
+- `app.testsdk:run`, the `test_sdk_run` agent tool and exposed `test-sdk.run`;
+- `app.testsdk:peer`, the `test_sdk_peer` agent tool whose app code calls its copy;
+- `app.testsdk:configuration_test`, an associated, exposed application test;
 - four `ns.requirement` entries requesting `agent.tools`, bounded `hive.call`,
   and separate `hive.expose` grants for the worker and test.
 
@@ -82,7 +82,7 @@ The example's peer function imports `hive = bee.hive:hive` and calls:
 local result, err = hive.call({
     node = "runner-node",
     workspace_id = "destination-workspace",
-    application = "app.test_sdk:app",
+    application = "app.testsdk:app",
     service = "test-sdk",
     operation = "run",
     arguments = {configuration = "ci", inputs = {1, 2, 3}},
@@ -102,12 +102,12 @@ If the copies have different definition IDs, use the immutable source address:
 ```lua
 application = {
     source_node = "author-node",
-    source_workspace = "test_sdk",
-    component = "app.test_sdk",
+    source_workspace = "testsdk",
+    component = "app.testsdk",
 }
 ```
 
-Grant that address as `author-node/test_sdk/app.test_sdk` in the `applications`
+Grant that address as `author-node/testsdk/app.testsdk` in the `applications`
 parameter. The destination resolves it through its live governed admission and
 host-selected activation profile. An approved alias is another option; an
 artifact cannot approve its own alias. Versions do not form part of the address.
@@ -131,8 +131,8 @@ sending node, with their input/output schemas. Invoke a listed tool explicitly:
 Use MCP `tests` on the same node for the associated, exposed suite:
 
 ```json
-{"operation":"list","node":"runner-node","application":"app.test_sdk:app"}
-{"operation":"run","node":"runner-node","application":"app.test_sdk:app","idempotency_key":"ci-suite-1"}
+{"operation":"list","node":"runner-node","application":"app.testsdk:app"}
+{"operation":"run","node":"runner-node","application":"app.testsdk:app","idempotency_key":"ci-suite-1"}
 {"operation":"status","node":"runner-node","run_id":"<run_id returned by run>"}
 ```
 

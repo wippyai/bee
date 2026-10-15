@@ -1,10 +1,10 @@
-local adapter_types = require("adapter_types")
 -- MIT. Interactive acceptance of a permission exchange over the live
 -- fixture runner: the request is observed before any response is sent, the
 -- input-write boundary is recorded, and the correlated continuation is
 -- verified after it. Allow, deny, a wrong correlation and no response are
 -- each exercised. This is the proof an acceptance record stands on; the
 -- transcript checker alone is not.
+local adapter_types = require("adapter_types")
 local test = require("test")
 local bounds = require("bounds")
 local exec = require("exec")

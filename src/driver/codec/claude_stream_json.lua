@@ -1,7 +1,7 @@
-local events_types = require("events_types")
 -- MIT. Claude Code stream-json (protocol revision stream-json-2) into thread
 -- observations. The only terminal report is the result envelope; a stream
 -- that ends without one is uncertain, whatever the process exit says.
+local events_types = require("events_types")
 local json = require("json")
 local events = require("events")
 local types = require("types")

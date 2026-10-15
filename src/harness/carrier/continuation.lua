@@ -1,5 +1,5 @@
-local checkpoint_types = require("checkpoint_types")
 -- MIT. Resolve native harness continuation from committed owner state.
+local checkpoint_types = require("checkpoint_types")
 local bounds = require("bounds")
 local record_bounds = require("record_bounds")
 local checkpoint = require("checkpoint")

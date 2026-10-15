@@ -542,7 +542,7 @@ end
 
 function M.hive_sdk(): string
     return "Build a project test SDK as an admitted app, an agent.trait, local tools and explicit Hive operations."
-        .. " The complete entries.json below uses overlay test_sdk and namespace app.test_sdk. Replace runner-node,"
+        .. " The complete entries.json below uses overlay testsdk and namespace app.testsdk. Replace runner-node,"
         .. " destination-workspace and author-node with the actual authenticated nodes and destination workspace"
         .. " the person approves. agent.tools offers only the named functions. hive.expose requests destination-local"
         .. " approval for each operation and authenticated peer audience; open still requires live admission and"
@@ -552,7 +552,7 @@ function M.hive_sdk(): string
         .. " The facade bounds its own calls. The peer tool runs as the source application; run executes as the"
         .. " destination copy with its own grants."
         .. "\n\nUse a source identity"
-        .. ' {source_node = "author-node", source_workspace = "test_sdk", component = "app.test_sdk"}'
+        .. ' {source_node = "author-node", source_workspace = "testsdk", component = "app.testsdk"}'
         .. " or an approved alias when copies use different definition IDs. Grant that exact address in hive.call"
         .. " too. A version is not part of the application address. Discovery uses live metadata and ownership."
         .. "\n\napp_tools with node lists only peer agent tools exposed to this node. Call a listed peer tool with"

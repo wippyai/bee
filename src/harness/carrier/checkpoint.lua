@@ -1,6 +1,6 @@
-local vocabulary = require("vocabulary")
 -- MIT. The carrier checkpoint: everything a replacement carrier needs to
 -- continue from acknowledged output without a second look at the bytes.
+local vocabulary = require("vocabulary")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local driver_types = require("driver_types")
@@ -18,14 +18,6 @@ M.MAX_TERMINAL_BYTES = 8192
 -- consumed: an approved effect consumed at the owner; declined: a denial or
 -- expiry answered without any effect, never an authorization to act.
 M.PERMISSION_PHASES = {"intended", "requested", "decided", "consumed", "declined", "written", "acknowledged", "closed"}
--- Where a partly committed envelope stands: events before events_committed
--- are in the thread; the rest are re-derived from the carry on resume.
--- A write whose intent is committed and whose acceptance is not yet
--- recorded; a resuming carrier asks the runner before deciding.
--- One permission exchange from the request the harness emitted to the
--- response the carrier wrote: every key is derived once and kept, so a
--- replacement asks the approval owner and the runner about the same
--- request, effect and write rather than inventing new ones.
 local function bounded_json_object(value: unknown, label: string, maximum: integer): ({[string]: unknown}?, string?)
     local object = bounds.object(value)
     if not object then return nil, label .. " must be an object" end

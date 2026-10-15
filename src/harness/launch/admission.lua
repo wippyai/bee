@@ -1,9 +1,9 @@
-local policy_types = require("policy_types")
 -- MIT. Launch admission: resolve a definition into a measured plan with no
 -- effects, then admit a request for the authenticated requester, obtaining
 -- attempt-bound grants and credential projections in that requester's own
 -- authority, and start the carrier with a durable identity so a retry
 -- after an ambiguous start recovers the same attempt.
+local policy_types = require("policy_types")
 local ctx = require("ctx")
 local registry = require("registry")
 local funcs = require("funcs")

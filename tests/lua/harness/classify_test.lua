@@ -1,7 +1,7 @@
-local classify_types = require("classify_types")
 -- MIT. Classification is pure: a binding with its resolved declaration and
 -- methods is compatible only when every rule holds, and each broken rule
 -- names itself once.
+local classify_types = require("classify_types")
 local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local principals = require("principals")

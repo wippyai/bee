@@ -1,7 +1,7 @@
-local checkpoint_types = require("checkpoint_types")
-local permission_types = require("permission_types")
 -- SPDX-License-Identifier: MIT
 -- Durable permission decisions shared by stream carriers, executor turns and hooks.
+local checkpoint_types = require("checkpoint_types")
+local permission_types = require("permission_types")
 local json = require("json")
 local canonical = require("canonical")
 local bounds = require("bounds")

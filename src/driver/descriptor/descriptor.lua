@@ -1,5 +1,5 @@
-local login_evidence_types = require("login_evidence_types")
 -- MIT. Strict decoder and registry reader for declarative external CLI drivers.
+local login_evidence_types = require("login_evidence_types")
 local bounds = require("bounds")
 local registry = require("registry")
 local login_evidence = require("login_evidence")

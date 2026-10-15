@@ -1,4 +1,3 @@
-local shared_configuration_types = require("shared_configuration_types")
 -- MIT. The generated Codex provider configuration: the one file the
 -- private CODEX_HOME needs for the selected login method. A host-owned provider
 -- entry selects the endpoint, model and optional developer instructions; this
@@ -8,6 +7,7 @@ local shared_configuration_types = require("shared_configuration_types")
 -- caller-selected destination ever pass through here, and the key itself
 -- stays in the credential broker. ChatGPT uses the built-in OpenAI provider
 -- and a separately admitted login file, never a custom credential endpoint.
+local shared_configuration_types = require("shared_configuration_types")
 local hash = require("hash")
 local hook_limits = require("hook_limits")
 local bounds = require("bounds")

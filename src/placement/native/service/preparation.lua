@@ -1,5 +1,5 @@
-local configuration_types = require("configuration_types")
 -- MIT. Native launch admission, resources and configuration preparation.
+local configuration_types = require("configuration_types")
 local funcs = require("funcs")
 local json = require("json")
 local bounds = require("bounds")

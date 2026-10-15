@@ -1,7 +1,7 @@
-local vocabulary = require("vocabulary")
 -- MIT. The launch policy: a host-selected protected entry that decides
 -- what a managed launch requires of its placement and binds executables.
 -- The caller and the driver never choose it; the owner pins its digest.
+local vocabulary = require("vocabulary")
 local hash = require("hash")
 local registry = require("registry")
 local env = require("env")
@@ -26,9 +26,6 @@ M.TYPE = placement_types.LAUNCH_POLICY_TYPE
 -- The launch overrides a host policy may admit. A request override takes
 -- effect only when the definition allows it and its policy admits it too.
 M.OVERRIDES = {"workdir", "thread", "placement"}
--- The host enables a permission exchange by naming the adapter, the
--- acceptance record and the proven fixture digest here; a production
--- policy may only name the adapter the profile itself pins.
 local function decode_map(value: unknown, name: string, empty: boolean?): ({[string]: string}?, string?)
     local result: {[string]: string} = {}
     if value == nil then return result, nil end

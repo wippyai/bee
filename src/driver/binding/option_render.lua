@@ -1,5 +1,5 @@
-local configuration_types = require("configuration_types")
 -- SPDX-License-Identifier: MIT
+local configuration_types = require("configuration_types")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local json = require("json")

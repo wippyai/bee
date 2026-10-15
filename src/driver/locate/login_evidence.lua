@@ -1,8 +1,7 @@
-local vocabulary = require("vocabulary")
 -- MIT. Bounded declarations and observations of alternative login sources.
+local vocabulary = require("vocabulary")
 local bounds = require("bounds")
 local M = {}
-
 
 local function array(raw: unknown, limit: integer): {unknown}?
     if type(raw) ~= "table" then return nil end

@@ -1,5 +1,5 @@
-local login_evidence_types = require("login_evidence_types")
 -- MIT. Normalize host-probed driver availability without touching credentials.
+local login_evidence_types = require("login_evidence_types")
 local bounds = require("bounds")
 local login_evidence = require("login_evidence")
 local M = {}

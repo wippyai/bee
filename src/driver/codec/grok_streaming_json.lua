@@ -1,7 +1,7 @@
-local events_types = require("events_types")
 -- MIT. Grok CLI streaming-json into thread observations.
 -- The only terminal report is the end envelope; a stream
 -- that ends without one is uncertain, whatever the process exit says.
+local events_types = require("events_types")
 local json = require("json")
 local events = require("events")
 local types = require("types")

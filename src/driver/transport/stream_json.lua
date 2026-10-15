@@ -1,6 +1,6 @@
-local vocabulary = require("vocabulary")
 -- MIT. The stream-json transport adapter: bytes to frames to envelopes. A
 -- frame that is not a JSON object is reported, never skipped silently.
+local vocabulary = require("vocabulary")
 local json = require("json")
 local framing = require("framing")
 local M = {}

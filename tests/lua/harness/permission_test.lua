@@ -1,4 +1,3 @@
-local adapter_types = require("adapter_types")
 -- MIT. The permission exchange adapter, pure: a definition decodes and
 -- measures, a profile enables it only under the exact digest, a request
 -- event yields a durable identity, the proposal binds the plan rather than
@@ -6,6 +5,7 @@ local adapter_types = require("adapter_types")
 -- responses take the adapter's shape, a transcript is checked for
 -- consistency, a host acceptance record names what changed, and a
 -- decision after settlement sends nothing.
+local adapter_types = require("adapter_types")
 local test = require("test")
 local bounds = require("bounds")
 local json = require("json")

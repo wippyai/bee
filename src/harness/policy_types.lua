@@ -1,6 +1,9 @@
 local placement_types = require("placement_types")
 local configuration = require("configuration")
 
+-- The host enables a permission exchange by naming the adapter, the
+-- acceptance record and the proven fixture digest here; a production
+-- policy may only name the adapter the profile itself pins.
 type PermissionExchange = {adapter_ref: string, acceptance_ref: string, fixture_digest: string, approver_policy: string, poll_ms: integer, ttl_ms: integer}
 type EnvironmentResolver = (string) -> (string?, string?)
 type Policy = {

@@ -1,5 +1,5 @@
-local configure_protocol_types = require("configure_protocol_types")
 -- SPDX-License-Identifier: MIT
+local configure_protocol_types = require("configure_protocol_types")
 local hash = require("hash")
 local canonical = require("canonical")
 local configure_protocol = require("configure_protocol")

@@ -1,4 +1,3 @@
-local configuration_types = require("configuration_types")
 -- MIT. The gateway against the real harnesses through placement: the
 -- version-recorded Claude Code and Codex executables launch under a policy
 -- that admits gateway tools, find the host-approved configuration in
@@ -10,6 +9,7 @@ local configuration_types = require("configuration_types")
 -- and configuration measurements are on record, and no token reaches
 -- evidence, records, output or the endpoint. Without an executable the
 -- gate is reported open.
+local configuration_types = require("configuration_types")
 local shared_authority = require("shared_authority")
 local shared_streams = require("shared_streams")
 local shared_executables = require("shared_executables")

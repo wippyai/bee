@@ -1,7 +1,7 @@
-local events_types = require("events_types")
 -- MIT. Codex CLI exec --json (protocol revision exec-json-1) into thread
 -- observations. turn.completed and turn.failed are the only terminal
 -- reports; the answer is the last agent_message of the turn.
+local events_types = require("events_types")
 local json = require("json")
 local events = require("events")
 local types = require("types")

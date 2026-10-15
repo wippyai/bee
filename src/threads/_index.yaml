@@ -247,91 +247,91 @@ entries:
   - name: claim
     description: Claim the caller's pending messages as one batch
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Claim the caller's pending messages as one batch"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Claim the caller's pending messages as one batch","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"consumer_id":{"type":"string"},"limit":{"type":"integer"},"channel":{"type":"string"},"turn_id":{"type":"string"},"attempt_id":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: dispatch
     description: Record dispatch intent and any transport acceptance for a claim
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Record dispatch intent and any transport acceptance for a claim"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Record dispatch intent and any transport acceptance for a claim","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"delivery_id":{"type":"string"},"accepted":{"type":"boolean"},"evidence_ref":{"type":"string"}},"required":["thread_id","idempotency_key","delivery_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: ack
     description: Acknowledge a claimed delivery
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Acknowledge a claimed delivery"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Acknowledge a claimed delivery","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"delivery_id":{"type":"string"},"evidence_ref":{"type":"string"}},"required":["thread_id","idempotency_key","delivery_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: release
     description: Release a claim that was never dispatched
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Release a claim that was never dispatched"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Release a claim that was never dispatched","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"delivery_id":{"type":"string"},"reason":{"type":"string"}},"required":["thread_id","idempotency_key","delivery_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: expire
     description: Mark an expired claim uncertain
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Mark an expired claim uncertain"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Mark an expired claim uncertain","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"delivery_id":{"type":"string"}},"required":["thread_id","idempotency_key","delivery_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: reconcile
     description: Decide an uncertain delivery
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Decide an uncertain delivery"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Decide an uncertain delivery","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"delivery_id":{"type":"string"},"decision":{"type":"string"},"evidence_ref":{"type":"string"}},"required":["thread_id","idempotency_key","delivery_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: subscribe
     description: Open a consumer cursor on the thread
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Open a consumer cursor on the thread"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Open a consumer cursor on the thread","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"consumer_id":{"type":"string"},"after_sequence":{"type":"integer"},"filter":{"type":"object"},"durability":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: page
     description: Return the outstanding page or open the next one
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Return the outstanding page or open the next one"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Return the outstanding page or open the next one","properties":{"thread_id":{"type":"string"},"subscription_id":{"type":"string"},"limit":{"type":"integer"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: ack_page
     description: Acknowledge the outstanding page by identity and extent
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Acknowledge the outstanding page by identity and extent"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Acknowledge the outstanding page by identity and extent","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"subscription_id":{"type":"string"},"page_id":{"type":"string"},"scanned_through":{"type":"integer"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: unsubscribe
     description: Stop delivery on a subscription
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Stop delivery on a subscription"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Stop delivery on a subscription","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"subscription_id":{"type":"string"}},"required":["thread_id","idempotency_key","subscription_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: resume
     description: Rebind a retained durable subscription under a new lease
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Rebind a retained durable subscription under a new lease"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Rebind a retained durable subscription under a new lease","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"subscription_id":{"type":"string"}},"required":["thread_id","idempotency_key","subscription_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: close_subscription
     description: The thread owner stops delivery on any subscription, preserving its durable cursor
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"The thread owner stops delivery on any subscription, preserving its durable cursor"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"The thread owner stops delivery on any subscription, preserving its durable cursor","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"subscription_id":{"type":"string"}},"required":["thread_id","idempotency_key","subscription_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: forget_subscription
     description: The thread owner forgets a closed subscription, reclaiming retained metadata
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"The thread owner forgets a closed subscription, reclaiming retained metadata"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"The thread owner forgets a closed subscription, reclaiming retained metadata","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"subscription_id":{"type":"string"}},"required":["thread_id","idempotency_key","subscription_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: wait
     description: Claim what is pending or wait, bounded, for the thread to move
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Claim what is pending or wait, bounded, for the thread to move"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Claim what is pending or wait, bounded, for the thread to move","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"consumer_id":{"type":"string"},"after_sequence":{"type":"integer"},"limit":{"type":"integer"},"wait_ms":{"type":"integer"},"transport_budget_ms":{"type":"integer"},"turn_id":{"type":"string"},"attempt_id":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: watch
     description: Wait, bounded and read-only, for the thread to move past a cursor; claims nothing
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Wait, bounded and read-only, for the thread to move past a cursor; claims nothing"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Wait, bounded and read-only, for the thread to move past a cursor; claims nothing","properties":{"thread_id":{"type":"string"},"after_sequence":{"type":"integer"},"wait_ms":{"type":"integer"},"transport_budget_ms":{"type":"integer"},"caller_node_id":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
 - name: projection
@@ -340,37 +340,37 @@ entries:
   - name: recap_read
     description: Read the stored recap checkpoint
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Read the stored recap checkpoint"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Read the stored recap checkpoint","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: recap_update
     description: Fold new records into the recap
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Fold new records into the recap"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Fold new records into the recap","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: recap_rebuild
     description: Drop the recap and fold it again from the first record
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Drop the recap and fold it again from the first record"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Drop the recap and fold it again from the first record","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: status_read
     description: Read the status projection with the caller's waiting relationship derived
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Read the status projection with the caller's waiting relationship derived"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Read the status projection with the caller's waiting relationship derived","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: status_update
     description: Fold new records into the status projection
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Fold new records into the status projection"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Fold new records into the status projection","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: status_rebuild
     description: Drop the status projection and fold it again from the first record
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Drop the status projection and fold it again from the first record"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Drop the status projection and fold it again from the first record","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
 - name: lifecycle
@@ -379,37 +379,37 @@ entries:
   - name: admit_action
     description: Commit an admitted action
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Commit an admitted action"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Commit an admitted action","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"correlation_id":{"type":"string"},"causation":{"type":"object"},"action_id":{"type":"string"},"admitted":{"type":"object"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: prepare_attempt
     description: Commit a prepared attempt with its pinned execution plan before anything external exists
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Commit a prepared attempt with its pinned execution plan before anything external exists"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Commit a prepared attempt with its pinned execution plan before anything external exists","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"correlation_id":{"type":"string"},"causation":{"type":"object"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"prepared":{"type":"object"},"expected_previous_attempt_id":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: start_attempt
     description: Commit the start of a prepared attempt under a new owner epoch
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Commit the start of a prepared attempt under a new owner epoch"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Commit the start of a prepared attempt under a new owner epoch","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"correlation_id":{"type":"string"},"causation":{"type":"object"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"started":{"type":"object"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: request_turn
     description: Commit a turn request on a running attempt
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Commit a turn request on a running attempt"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Commit a turn request on a running attempt","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"correlation_id":{"type":"string"},"causation":{"type":"object"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"turn_id":{"type":"string"},"turn":{"type":"object"},"carrier_epoch":{"type":"integer"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: end_turn
     description: Commit the end of an open turn
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Commit the end of an open turn"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Commit the end of an open turn","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"correlation_id":{"type":"string"},"causation":{"type":"object"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"turn_id":{"type":"string"},"turn_end":{"type":"object"},"carrier_epoch":{"type":"integer"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: receipt
     description: Commit the single terminal receipt of an attempt or action
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Commit the single terminal receipt of an attempt or action"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Commit the single terminal receipt of an attempt or action","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"correlation_id":{"type":"string"},"causation":{"type":"object"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"receipt":{"type":"object"},"carrier_epoch":{"type":"integer"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
 - name: carrier
@@ -418,31 +418,31 @@ entries:
   - name: claim
     description: Acquire a new carrier epoch on a live attempt; earlier carriers are fenced out
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Acquire a new carrier epoch on a live attempt; earlier carriers are fenced out"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Acquire a new carrier epoch on a live attempt; earlier carriers are fenced out","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"attempt_id":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: commit
     description: Commit derived records and the next checkpoint in one transaction under the current epoch and revision
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Commit derived records and the next checkpoint in one transaction under the current epoch and revision"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Commit derived records and the next checkpoint in one transaction under the current epoch and revision","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"expected_revision":{"type":"integer"},"checkpoint":{},"records":{"type":"array"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: checkpoint
     description: Read the stored carrier checkpoint, revision and epoch of an attempt
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Read the stored carrier checkpoint, revision and epoch of an attempt"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Read the stored carrier checkpoint, revision and epoch of an attempt","properties":{"thread_id":{"type":"string"},"attempt_id":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: cancel_intent
     description: Record the durable, idempotent cancel intent of an attempt, reconciled against its terminal carrier record
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Record the durable, idempotent cancel intent of an attempt, reconciled against its terminal carrier record"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Record the durable, idempotent cancel intent of an attempt, reconciled against its terminal carrier record","properties":{"thread_id":{"type":"string"},"attempt_id":{"type":"string"},"idempotency_key":{"type":"string"},"state":{"type":"string"},"outcome":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: cancel_status
     description: Read the durable cancel intent of an attempt, for a caller reconciling a cancel across restart
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Read the durable cancel intent of an attempt, for a caller reconciling a cancel across restart"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Read the durable cancel intent of an attempt, for a caller reconciling a cancel across restart","properties":{"thread_id":{"type":"string"},"attempt_id":{"type":"string"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
 - name: approvals
@@ -451,7 +451,7 @@ entries:
   - name: append
     description: Append one approval projection record under the approval owner's event id; the authority alone holds this
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"thread_id":{"type":"string"},"action_id":{"type":"string"},"attempt_id":{"type":"string"},"carrier_epoch":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Append one approval projection record under the approval owner's event id; the authority alone holds this"}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Append one approval projection record under the approval owner's event id; the authority alone holds this","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"owner_event_id":{"type":"string"},"kind":{},"body":{"type":"object"},"context":{"type":"object"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
 - name: record_types

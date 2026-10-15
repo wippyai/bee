@@ -1,4 +1,3 @@
-local vocabulary = require("vocabulary")
 -- MIT. The permission exchange adapter: a pinned typed description of how
 -- one harness asks for permission mid-run, how the answer is encoded, how
 -- the harness acknowledges it and what happens on cancellation. Pure: it
@@ -6,6 +5,7 @@ local vocabulary = require("vocabulary")
 -- identities the approval owner and the carrier key on, encodes responses
 -- and proves from a capture that the harness keeps waiting. Nothing here
 -- talks to a thread, an approval owner or a runner.
+local vocabulary = require("vocabulary")
 local hash = require("hash")
 local json = require("json")
 local bounds = require("bounds")
@@ -18,14 +18,6 @@ M.MAX_PATH_SEGMENTS = 8
 M.ACKNOWLEDGMENTS = {"correlation_echo", "continued_output"}
 M.DENY_ACKNOWLEDGMENTS = {"terminal_denial", "unproven"}
 M.CANCELLATIONS = {"deny_before_close", "unsupported"}
--- acknowledgment names the request field the harness echoes back when
--- it acts, where that differs from the response correlation.
--- correlation_echo names the observation type and the field that carries
--- the request's correlation back; continued_output claims only that the
--- harness produced something afterwards.
--- A denial is acknowledged only by a terminal denial the adapter names; an
--- adapter that cannot name one reports denial dispatch as accepted by the
--- input transport with harness acknowledgment unproven.
 local digest_of = canonical.digest
 
 local function segments_of(path: string): {string}

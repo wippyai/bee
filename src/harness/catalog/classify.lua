@@ -1,7 +1,7 @@
-local vocabulary = require("vocabulary")
 -- MIT. Pure classification of driver bindings and their profile
 -- declarations. No registry, no time: the catalog hands in what it read and
 -- gets back what is compatible, what is not, and why.
+local vocabulary = require("vocabulary")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local profile = require("profile")
@@ -12,9 +12,6 @@ local M = {}
 M.CONTRACT = "bee.driver:driver"
 M.METHODS = {"prepare", "dispatch", "normalize", "configure"}
 M.OPTIONAL_METHODS = {"locate"}
--- permission reports proof eligibility apart from compatibility: eligible
--- means the profile pins an adapter the snapshot measures; acceptance is a
--- host record checked at admission, never inferred from a fixture name.
 type Input = {binding: vocabulary.Entry, declaration: vocabulary.Entry?, methods: {[string]: vocabulary.Entry?}, adapters: {[string]: vocabulary.Entry?}?, activated: boolean, observers: observers.Measurements?}
 local digest = canonical.digest
 

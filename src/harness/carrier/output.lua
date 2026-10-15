@@ -1,6 +1,6 @@
+-- MIT. Carrier output framing, normalization and permission intake.
 local checkpoint_types = require("checkpoint_types")
 local permission_types = require("permission_types")
--- MIT. Carrier output framing, normalization and permission intake.
 local json = require("json")
 local permission = require("permission")
 local bounds = require("bounds")

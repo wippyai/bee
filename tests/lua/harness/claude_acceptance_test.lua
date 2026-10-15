@@ -1,4 +1,3 @@
-local adapter_types = require("adapter_types")
 -- MIT. Interactive acceptance of the real Claude permission exchange: the
 -- version-recorded executable runs with the driver's exchange launch
 -- shape against a scripted loopback endpoint that answers one Bash
@@ -8,6 +7,7 @@ local adapter_types = require("adapter_types")
 -- acknowledged by a correlated failed tool result; a wrong correlation and
 -- silence authorize nothing and leave the harness waiting. Without the
 -- executable the gate is reported open.
+local adapter_types = require("adapter_types")
 local shared_streams = require("shared_streams")
 local shared_executables = require("shared_executables")
 local test = require("test")

@@ -1,6 +1,6 @@
-local checkpoint_types = require("checkpoint_types")
 -- MIT. One ordered hook batch per window. Commit requests survive lost
 -- replies; only owner-confirmed commits may be acknowledged at the gateway.
+local checkpoint_types = require("checkpoint_types")
 local checkpoint = require("checkpoint")
 local bounds = require("bounds")
 local M = {}

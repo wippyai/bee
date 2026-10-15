@@ -1,8 +1,8 @@
-local configure_protocol_types = require("configure_protocol_types")
 -- MIT. Typed Antigravity CLI (agy) configuration delivery under an empty callee scope.
 -- Agy accepts no host provider configuration. Gateway tools are rendered as
 -- safe-relative configuration files. Command hooks use the host-selected Bee
 -- executable and return admitted permission gate decisions.
+local configure_protocol_types = require("configure_protocol_types")
 local hash = require("hash")
 local canonical = require("canonical")
 local quote = require("quote")

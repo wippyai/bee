@@ -1,8 +1,8 @@
-local login_evidence_types = require("login_evidence_types")
 -- MIT. Launch request decoding: exact shapes, bounded sizes, every reference
 -- an identifier, every resource named once, the launch's directory
 -- references resolved against the grants. The digest covers the canonical
 -- request so a retry with different content is a conflict, not a replay.
+local login_evidence_types = require("login_evidence_types")
 local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")

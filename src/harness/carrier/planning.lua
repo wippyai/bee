@@ -1,6 +1,6 @@
+-- MIT. Carrier plan measurement and admission.
 local configuration_types = require("configuration_types")
 local policy_types = require("policy_types")
--- MIT. Carrier plan measurement and admission.
 local registry = require("registry")
 local permission = require("permission")
 local acceptance = require("acceptance")

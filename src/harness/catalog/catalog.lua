@@ -1,9 +1,9 @@
-local classify_types = require("classify_types")
 -- MIT. The harness catalog: one immutable registry snapshot, every driver
 -- binding with its profiles and methods read from that same snapshot,
 -- classified as compatible or not, and marked activated only when the
 -- host's activation entry in the same snapshot names it. Discovery proves
 -- neither activation nor launch permission.
+local classify_types = require("classify_types")
 local registry = require("registry")
 local bounds = require("bounds")
 local classify = require("classify")

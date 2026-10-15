@@ -1,4 +1,3 @@
-local adapter_types = require("adapter_types")
 -- MIT. The real Claude permission adapter, pure: it decodes from its
 -- entry, the Claude profiles pin its exact digest, the captured control
 -- request is recognized with the request id as the response correlation
@@ -6,6 +5,7 @@ local adapter_types = require("adapter_types")
 -- control_response shape the executable reads, a correlated tool result
 -- acknowledges an allow and a correlated failed tool result acknowledges
 -- a deny, and the capture is consistent with a continuing exchange.
+local adapter_types = require("adapter_types")
 local test = require("test")
 local bounds = require("bounds")
 local exec = require("exec")

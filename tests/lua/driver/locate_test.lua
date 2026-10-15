@@ -1,5 +1,5 @@
-local login_evidence_types = require("login_evidence_types")
 -- MIT. Locate keeps executable and login evidence separate from driver policy.
+local login_evidence_types = require("login_evidence_types")
 local test = require("test")
 local locate = require("locate")
 local claude = require("claude")

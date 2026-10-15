@@ -1,8 +1,8 @@
-local adapter_types = require("adapter_types")
 -- MIT. Executor permission tests: a Claude control_request observed during
 -- a session turn becomes one approval naming session, workspace, tool and
 -- effect; an approved decision is consumed and answered allow, a denied or
 -- expired one is answered deny, and a timeout never means consent.
+local adapter_types = require("adapter_types")
 local test = require("test")
 local json = require("json")
 local hash = require("hash")

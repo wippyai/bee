@@ -12,7 +12,7 @@ local function define_tests()
             for _, phrase in ipairs({"hive.call", "hive.expose", "agent.tools", "app_tools", "idempotency_key", "outcome unknown", "follow_source"}) do
                 test.contains(section, phrase)
             end
-            test.contains(section, '"app.test_sdk:app"')
+            test.contains(section, '"app.testsdk:app"')
             test.contains(section, "entries.json")
         end)
         test.it("admits the exact SDK manifest through the production frozen delivery preflight", function()
@@ -23,7 +23,7 @@ local function define_tests()
             local start = assert((section:find(marker, 1, true)))
             local decoded = assert(json.decode(section:sub(start + #marker))) :: {Object}
             test.eq(#decoded, 9)
-            local result = harness.value(harness.deliver(writer, "test_sdk", workspace, decoded, "1.0.0"))
+            local result = harness.value(harness.deliver(writer, "testsdk", workspace, decoded, "1.0.0"))
             local diagnostics = assert(json.encode(result.diagnostics))
             test.is_true(result.ready == true, diagnostics)
             test.eq(result.pending_migrations, 0)

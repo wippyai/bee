@@ -1,10 +1,10 @@
-local adapter_types = require("adapter_types")
 -- MIT. The carrier's permission exchange against the fixture harness: the
 -- request becomes a checkpointed intent, the approval is asked under its
 -- idempotency key, the decision is consumed under the current authority
 -- and answered through one deterministic write, and every crash boundary
 -- recovers without a second approval, a second response or an invented
 -- resend. Fixture only: the shipped profiles stay none.
+local adapter_types = require("adapter_types")
 local shared_authority = require("shared_authority")
 local shared_fixtures = require("shared_fixtures")
 local test = require("test")

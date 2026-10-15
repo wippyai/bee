@@ -1,10 +1,10 @@
-local configure_protocol_types = require("configure_protocol_types")
 -- MIT. The Muse settings file: the one file the private config home needs
 -- for the admitted gateway. Muse offers no argv delivery for MCP servers,
 -- hooks or instructions, so configure renders settings.json under the
 -- private HOME. Hook handlers are commands: the host-selected
 -- hook executable receives each event as JSON on stdin. Token bytes never
 -- enter the content; placement injects them through secret_fields.
+local configure_protocol_types = require("configure_protocol_types")
 local hash = require("hash")
 local canonical = require("canonical")
 local quote = require("quote")

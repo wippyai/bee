@@ -1,5 +1,5 @@
-local events_types = require("events_types")
 -- SPDX-License-Identifier: MIT
+local events_types = require("events_types")
 local json = require("json")
 local events = require("events")
 local types = require("types")

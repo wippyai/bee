@@ -1,5 +1,5 @@
-local configuration_types = require("configuration_types")
 -- MIT. Provider-independent configuration delivery boundaries.
+local configuration_types = require("configuration_types")
 local test = require("test")
 local hash = require("hash")
 local json = require("json")

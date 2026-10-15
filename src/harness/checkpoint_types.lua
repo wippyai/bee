@@ -2,12 +2,20 @@ local driver_types = require("driver_types")
 
 type Positions = {stdout: integer, stderr: integer}
 type Carry = {stdout: string, stderr: string}
+-- Where a partly committed envelope stands: events before events_committed
+-- are in the thread; the rest are re-derived from the carry on resume.
 type EventCursor = {envelope_index: integer, events_committed: integer}
+-- A write whose intent is committed and whose acceptance is not yet
+-- recorded; a resuming carrier asks the runner before deciding.
 type PendingWrite = {write_id: string, input_digest: string, data: string, dispatched: boolean}
 type PermissionPhase = "intended" | "requested" | "decided" | "consumed" | "declined" | "written" | "acknowledged" | "closed"
 type PermissionDecision = "approved" | "denied" | "expired" | "withdrawn"
 type AttemptState = "prepared" | "running" | "ended"
 type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
+-- One permission exchange from the request the harness emitted to the
+-- response the carrier wrote: every key is derived once and kept, so a
+-- replacement asks the approval owner and the runner about the same
+-- request, effect and write rather than inventing new ones.
 type Permission = {lease_ref: string?,
     permission_request_id: string,
     correlation_id: string,

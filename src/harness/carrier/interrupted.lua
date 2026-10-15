@@ -1,6 +1,6 @@
-local checkpoint_types = require("checkpoint_types")
 -- MIT. Settle an interrupted window only after native exit is observed and
 -- recoverable hook deliveries have drained under a fresh carrier epoch.
+local checkpoint_types = require("checkpoint_types")
 local continuation = require("continuation")
 local checkpoint = require("checkpoint")
 local bounds = require("bounds")

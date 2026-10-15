@@ -1,6 +1,6 @@
-local configure_protocol_types = require("configure_protocol_types")
 -- MIT. Grok configuration: one scoped MCP subtree inserted into the
 -- host-approved private configuration snapshot at materialization.
+local configure_protocol_types = require("configure_protocol_types")
 local hash = require("hash")
 local canonical = require("canonical")
 local quote = require("quote")

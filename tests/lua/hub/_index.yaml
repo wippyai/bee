@@ -58,11 +58,15 @@ entries:
     library: bee.apps.library.app:model
     view: bee.apps.library.app:view
     fixture: bee.tests.hub:catalog_fixture
+- name: root_pack_data
+  kind: library.lua
+  source: file://root_pack_data.lua
 - name: root_pack_fixture
   kind: library.lua
   source: file://root_pack_fixture.lua
   modules: [json]
   imports:
+    root_pack_data: bee.tests.hub:root_pack_data
     bounds: bee.values:bounds
     inspection: bee.hub.package:inspection
 - name: migration_runner_db

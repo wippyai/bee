@@ -1,6 +1,7 @@
 """Compose isolated application fixtures with explicit fault and scheduling seams."""
 from pathlib import Path
 import fcntl
+import gzip
 import re
 import shutil
 import socket
@@ -898,7 +899,16 @@ def hold_inbox_review(src):
     add_modules(src / "approvals/inbox/app/_index.yaml", "app", ["ctx"])
 
 
+def compose_root_pack():
+    """Expand the immutable published package snapshot for the Lua inspection suites."""
+    encoded = gzip.decompress((TESTS / "fixtures/hub/root_pack.json.gz").read_bytes()).decode()
+    assert "]====]" not in encoded
+    (TESTS / "lua/hub/root_pack_data.lua").write_text(
+        "return {encoded = [====[" + encoded + "]====]}\n")
+
+
 def compose():
+    compose_root_pack()
     shutil.rmtree(COMPOSITION, ignore_errors=True)
     src = COMPOSITION / "src"
     shutil.copytree(ROOT / "src", src)

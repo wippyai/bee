@@ -30,7 +30,6 @@ end
 return {run = run}
 ]]
 local TEST = [[
-local test = require("test")
 local access = require("access")
 local function define_tests()
     test.describe("progress database", function()

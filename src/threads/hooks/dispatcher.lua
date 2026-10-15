@@ -1,7 +1,6 @@
 local sql = require("sql")
 local json = require("json")
 local registry = require("registry")
-local funcs = require("funcs")
 local security = require("security")
 local uuid = require("uuid")
 local hash = require("hash")

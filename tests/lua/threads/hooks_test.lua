@@ -6,10 +6,6 @@ local capabilities = require("capabilities")
 local response = require("response")
 local funcs = require("funcs")
 local supervisor = require("supervisor")
-local process = require("process")
-local events = require("events")
-local channel = require("channel")
-local security = require("security")
 local function dispatch(session: host.Session, point: string, input: unknown?, output: unknown?, occurrence: string?): {[string]: unknown}
     return host.call("bee.threads.hooks:dispatch", {session_ref = session.session, thread_id = session.thread,
         workspace_id = host.WORKSPACE, point = point, occurrence_id = occurrence or harness.key(), input = input, output = output})

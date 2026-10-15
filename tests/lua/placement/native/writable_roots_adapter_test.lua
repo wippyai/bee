@@ -2,7 +2,6 @@
 local test = require("test")
 local bounds = require("bounds")
 local writable_roots_adapter = require("writable_roots_adapter")
-local driver_types = require("driver_types")
 
 local function define_tests()
     test.describe("Writable roots adapter", function()

@@ -1,7 +1,6 @@
 -- MIT. Retained presentation enters the fixed host scope through a trusted function boundary.
 local test = require("test")
 local bounds = require("bounds")
-local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
 local process = require("process")

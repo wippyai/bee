@@ -7,7 +7,6 @@ local registry = require("registry")
 local funcs = require("funcs")
 local machine = require("machine")
 local materialization = require("materialization")
-local admission = require("admission")
 local json = require("json")
 
 type Object = {[string]: unknown}

@@ -88,8 +88,8 @@ entries:
 - name: opencode_hooks
   kind: library.lua
   source: file://opencode_hooks.lua
-  meta: {type: test_support}
+  meta:
+    type: test_support
   imports:
     mapper: bee.driver.opencode.observer:events
     delivery: bee.driver.opencode.observer:delivery
-    bounds: bee.values:bounds

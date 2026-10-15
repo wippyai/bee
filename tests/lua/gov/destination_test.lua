@@ -5,8 +5,6 @@ local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, en
     {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
 local destination = require("destination")
 local store = require("plan_store")
-local canonical = require("canonical")
-local hash = require("hash")
 local base64 = require("base64")
 local replicas = require("replicas")
 local delivery = require("delivery")

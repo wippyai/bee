@@ -1,5 +1,4 @@
 local test = require("test")
-local sql = require("sql")
 local json = require("json")
 local funcs = require("funcs")
 local schema = require("schema")

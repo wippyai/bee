@@ -1,7 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local mapper = require("mapper")
 local delivery = require("delivery")
-local bounds = require("bounds")
 local M = {}
 function M.capture(fixture: {[string]: unknown}): {[string]: unknown}
     local state = mapper.new()

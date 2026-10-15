@@ -54,7 +54,7 @@ local function listener_of(db: sql.DB): (Row?, string?)
     local opened_at = row and bounds.text(row.opened_at, 64)
     local opened, opened_error = time.parse(FORMAT, opened_at or "")
     local deadline_at, deadline_valid = optional_timestamp(row and row.drain_deadline_at)
-    local native_key, native_valid = optional_text(row and row.native_key, 160)
+    local _, native_valid = optional_text(row and row.native_key, 160)
     if not row or epoch == nil or epoch == 0 or not address or not configuration.valid_address(address, false)
         or not secret or secret == "" or (drained ~= 0 and drained ~= 1) or not opened_at or opened_error or not opened
         or not deadline_valid or not native_valid then

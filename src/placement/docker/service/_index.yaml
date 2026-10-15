@@ -134,7 +134,6 @@ entries:
   - events
   imports:
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
     canonical: bee.values:canonical
     bounds: bee.values:bounds
     environment: bee.placement.docker.env:environment

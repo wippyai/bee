@@ -9,7 +9,6 @@ local time = require("time")
 local bounds = require("bounds")
 local admission = require("admission")
 local catalog = require("catalog")
-local harness = require("harness")
 local adapter = require("adapter")
 local configuration = require("configuration")
 type Object = {[string]: unknown}

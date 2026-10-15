@@ -5,8 +5,11 @@ entries:
   kind: function.lua
   source: file://profile_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [registry]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - registry
   imports:
     test: wippy.test:test
     profile: bee.driver.profiles:profile
@@ -28,9 +31,17 @@ entries:
   kind: function.lua
   source: file://option_render_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [json, toml, hash, registry]
-  security: {policies: [bee.tests.harness.profiles:repair_policy]}
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - json
+  - toml
+  - hash
+  - registry
+  security:
+    policies:
+    - bee.tests.harness.profiles:repair_policy
   imports:
     universal: bee.driver.binding:universal
     test: wippy.test:test
@@ -49,7 +60,6 @@ entries:
     timeout: 60s
   modules:
   - fs
-  - json
   - funcs
   imports:
     driver_types: bee.driver:types
@@ -67,14 +77,18 @@ entries:
     quote: bee.driver.binding:quote
 - name: fixtures
   kind: fs.directory
-  meta: {type: test_support}
+  meta:
+    type: test_support
   directory: ./fixtures/drivers
 - name: login_evidence_test
   kind: function.lua
   source: file://login_evidence_test.lua
   method: run
-  modules: [registry]
-  meta: {type: test, suite: bee}
+  modules:
+  - registry
+  meta:
+    type: test
+    suite: bee
   imports:
     principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
@@ -95,7 +109,9 @@ entries:
   kind: function.lua
   source: file://locate_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     locate: bee.driver.locate:locate
@@ -109,23 +125,38 @@ entries:
     muse: bee.driver.muse.binding:locate
 - name: descriptor_discovery_policy
   kind: security.policy
-  meta: {type: test_support}
-  policy: {actions: [registry.apply, registry.overlay.get, registry.overlay.apply], resources: '*', effect: allow}
+  meta:
+    type: test_support
+  policy:
+    actions:
+    - registry.apply
+    - registry.overlay.get
+    - registry.overlay.apply
+    resources: '*'
+    effect: allow
 - name: active_probe
   kind: function.lua
   source: file://active_probe.lua
   method: run
-  meta: {type: test_support}
-  modules: [registry]
+  meta:
+    type: test_support
+  modules:
+  - registry
   imports:
     resolver: bee.driver.binding:resolver
 - name: descriptor_test
   kind: function.lua
   source: file://descriptor_test.lua
-  security: {policies: [bee.tests.driver:descriptor_discovery_policy]}
+  security:
+    policies:
+    - bee.tests.driver:descriptor_discovery_policy
   method: run
-  meta: {type: test, suite: bee}
-  modules: [registry, funcs]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - registry
+  - funcs
   imports:
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
@@ -137,9 +168,16 @@ entries:
   kind: function.lua
   source: file://universal_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [registry, security, funcs]
-  security: {policies: [bee.tests.driver:descriptor_discovery_policy]}
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - registry
+  - security
+  - funcs
+  security:
+    policies:
+    - bee.tests.driver:descriptor_discovery_policy
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -151,20 +189,27 @@ entries:
   kind: function.lua
   source: file://normalize_probe.lua
   method: handle
-  meta: {type: test_support}
-  imports: {universal: bee.driver.binding:universal}
+  meta:
+    type: test_support
+  imports:
+    universal: bee.driver.binding:universal
 - name: descriptor_denied
   kind: security.policy
   policy:
-    actions: [registry.get]
-    resources: ['bee.driver.claude.descriptor:cli']
+    actions:
+    - registry.get
+    resources:
+    - bee.driver.claude.descriptor:cli
     effect: deny
 - name: muse_config_test
   kind: function.lua
   source: file://muse_config_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [json]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - json
   imports:
     principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
@@ -175,54 +220,95 @@ entries:
     configure: bee.driver.muse.binding:configure
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
-
 - name: docker_probe_test
   kind: function.lua
   source: file://docker_probe_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [registry, json]
-  security: {policies: [bee.tests.driver:docker_probe_policy, bee.harness.security:launch_locate_probe_policy]}
-  imports: {test: wippy.test:test, probe: bee.placement.docker.service:runtime_probe, bounds: bee.values:bounds, locate: bee.harness.launch:locate}
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - registry
+  - json
+  security:
+    policies:
+    - bee.tests.driver:docker_probe_policy
+    - bee.harness.security:launch_locate_probe_policy
+  imports:
+    test: wippy.test:test
+    probe: bee.placement.docker.service:runtime_probe
+    bounds: bee.values:bounds
+    locate: bee.harness.launch:locate
 - name: docker_probe_policy
   kind: security.policy
-  meta: {type: test_support}
-  policy: {actions: [registry.get, registry.snapshot, registry.apply, funcs.call], resources: '*', effect: allow}
+  meta:
+    type: test_support
+  policy:
+    actions:
+    - registry.get
+    - registry.snapshot
+    - registry.apply
+    - funcs.call
+    resources: '*'
+    effect: allow
 - name: docker_probe_facts
   kind: registry.entry
-  meta: {type: test_support}
-  data: {present: true, calls: 0, digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, help: '--model --permission-mode --allowedTools --disallowedTools --append-system-prompt-file'}
+  meta:
+    type: test_support
+  data:
+    present: true
+    calls: 0
+    digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    help: --model --permission-mode --allowedTools --disallowedTools --append-system-prompt-file
 - name: docker_capabilities_fixture
   kind: function.lua
   source: file://docker_capabilities_fixture.lua
   method: handle
-  meta: {type: test_support}
-  modules: [registry]
-  security: {policies: [bee.tests.driver:docker_probe_policy]}
-  imports: {bounds: bee.values:bounds}
+  meta:
+    type: test_support
+  modules:
+  - registry
+  security:
+    policies:
+    - bee.tests.driver:docker_probe_policy
+  imports:
+    bounds: bee.values:bounds
 - name: host_values_test
   kind: function.lua
   source: file://host_values_test.lua
   method: run
-  modules: [env]
-  meta: {type: test, suite: bee}
+  modules:
+  - env
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
   security:
-    policies: [bee.tests.driver:host_values_policy]
+    policies:
+    - bee.tests.driver:host_values_policy
 - name: host_values_policy
   kind: security.policy
-  meta: {comment: The host values test reads the driver override variables}
+  meta:
+    comment: The host values test reads the driver override variables
   policy:
-    actions: [env.get]
-    resources: [bee.driver.claude.env:config_home, bee.driver.claude.env:api_key, bee.driver.codex.env:config_home]
+    actions:
+    - env.get
+    resources:
+    - bee.driver.claude.env:config_home
+    - bee.driver.claude.env:api_key
+    - bee.driver.codex.env:config_home
     effect: allow
 - name: effective_test
-  modules: [registry, json]
+  modules:
+  - registry
+  - json
   kind: function.lua
   source: file://effective_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     descriptors: bee.driver.descriptor:descriptor
@@ -237,9 +323,17 @@ entries:
   kind: function.lua
   source: file://option_coverage_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: 60s}
-  modules: [registry, json, toml]
-  security: {policies: [bee.tests.harness.profiles:repair_policy]}
+  meta:
+    type: test
+    suite: bee
+    timeout: 60s
+  modules:
+  - registry
+  - json
+  - toml
+  security:
+    policies:
+    - bee.tests.harness.profiles:repair_policy
   imports:
     test: wippy.test:test
     cases: bee.tests.driver:option_coverage_cases
@@ -252,13 +346,15 @@ entries:
     protocol: bee.harness.profiles:protocol
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-
 - name: option_cleanup_test
   kind: function.lua
   source: file://option_cleanup_test.lua
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   method: run
-  modules: [json]
+  modules:
+  - json
   imports:
     test: wippy.test:test
     descriptors: bee.driver.descriptor:descriptor

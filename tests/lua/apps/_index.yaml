@@ -5,7 +5,9 @@ entries:
   kind: function.lua
   source: file://help_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     view: bee.apps.help.app:view
@@ -15,7 +17,9 @@ entries:
   kind: function.lua
   source: file://settings_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     choice: bee.apps.settings.app:choice
@@ -24,8 +28,14 @@ entries:
   kind: function.lua
   source: file://terminal_test.lua
   method: run
-  modules: [process, channel, system, time, tty]
-  meta: {type: test, suite: bee}
+  modules:
+  - process
+  - channel
+  - system
+  - tty
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     client: bee.node:client
@@ -34,8 +44,11 @@ entries:
   kind: function.lua
   source: file://settings_about_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [tty]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - tty
   imports:
     test: wippy.test:test
     view: bee.apps.settings.app:view
@@ -45,16 +58,25 @@ entries:
   kind: function.lua
   source: file://settings_app_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [process, channel, time, tty]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - process
+  - channel
+  - time
+  - tty
   imports:
     test: wippy.test:test
 - name: settings_edit_test
   kind: function.lua
   source: file://settings_edit_test.lua
   method: run
-  modules: [tty]
-  meta: {type: test, suite: bee}
+  modules:
+  - tty
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     appearance: bee.ui:appearance
@@ -67,8 +89,16 @@ entries:
   kind: function.lua
   source: file://native_theme_test.lua
   method: run
-  modules: [process, system, channel, time, tty, sql]
-  meta: {type: test, suite: bee}
+  modules:
+  - process
+  - system
+  - channel
+  - time
+  - tty
+  - sql
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     client: bee.node:client
@@ -100,30 +130,52 @@ entries:
   kind: function.lua
   source: file://help_app_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [tty, process, system, time, channel, fs]
-  security: {policies: [bee.security.docs:docs_policy, bee.tests.apps:capture_policy]}
+  meta:
+    type: test
+    suite: bee
+    timeout: 60s
+  modules:
+  - tty
+  - system
+  - time
+  - channel
+  - fs
+  security:
+    policies:
+    - bee.security.docs:docs_policy
+    - bee.tests.apps:capture_policy
   imports:
     test: wippy.test:test
     client: bee.node:client
     manuals: bee.apps.help.app:manuals
 - name: captures
   kind: fs.directory
-  meta: {type: test_support}
+  meta:
+    type: test_support
   directory: .wippy/docsui-screens
   auto_init: true
 - name: capture_policy
   kind: security.policy
   policy:
-    actions: [fs.get]
-    resources: [bee.tests.apps:captures]
+    actions:
+    - fs.get
+    resources:
+    - bee.tests.apps:captures
     effect: allow
 - name: agent_picker_test
   kind: function.lua
   source: file://agent_picker_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [tty, system, time, channel, registry]
+  meta:
+    type: test
+    suite: bee
+    timeout: 60s
+  modules:
+  - tty
+  - system
+  - time
+  - channel
+  - registry
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test

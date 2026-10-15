@@ -5,7 +5,6 @@
 -- hook executable receives each event as JSON on stdin. Token bytes never
 -- enter the content; placement injects them through secret_fields.
 local hash = require("hash")
-local bounds = require("bounds")
 local canonical = require("canonical")
 local quote = require("quote")
 local configure_protocol = require("configure_protocol")

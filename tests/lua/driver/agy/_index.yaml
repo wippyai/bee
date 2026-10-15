@@ -10,7 +10,6 @@ entries:
     suite: bee
     timeout: 60s
   modules:
-  - json
   - hash
   - registry
   - funcs
@@ -20,7 +19,6 @@ entries:
     profile: bee.driver.profiles:profile
     launch: bee.tests.support.driver:agy_launch
     protocol: bee.tests.support.driver:agy_protocol
-    configuration: bee.driver.agy.binding:configuration
     configure_protocol: bee.driver.binding:configuration
     observation: bee.threads.records:observation
     stream_json: bee.driver.transport:stream_json

@@ -46,14 +46,14 @@ entries:
     - funcs.call
     resources:
     - '*'
-    expression: (action == "registry.get" && resource == "bee.driver.agy.descriptor:cli") || action == "registry.snapshot" || (action == "funcs.call" && resource == "bee.placement.profiles:context")
+    expression: (action == "registry.get" && resource == "bee.driver.agy.descriptor:cli") || action == "registry.snapshot"
+      || (action == "funcs.call" && resource == "bee.placement.profiles:context")
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
     canonical: bee.values:canonical
     configure_protocol: bee.driver.binding:configuration
     quote: bee.driver.binding:quote

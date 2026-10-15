@@ -371,7 +371,6 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     -- cleanup. Only the persisted host-generated delivery files are replaced.
     local selected_home_path = home_path
     local retained_home = false
-    local provider_home = request.launch.provider_home
     if request.session_ref then
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
@@ -423,8 +422,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 return refused("attempt no longer owns configuration materialization")
             end
             local checked_reply: service_reply.Reply? = nil
-            local checked_error: string? = nil
-            if not check_error then checked_reply, checked_error = service_reply.decode(checked_raw) end
+            if not check_error then checked_reply = service_reply.decode(checked_raw) end
             if check_error or not checked_reply then
                 local code = "UNAVAILABLE"
                 evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code)
@@ -465,8 +463,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             return refused("attempt no longer owns configuration materialization")
         end
         local reply: service_reply.Reply? = nil
-        local reply_error: string? = nil
-        if not call_error then reply, reply_error = service_reply.decode(raw) end
+        if not call_error then reply = service_reply.decode(raw) end
         if call_error or not reply then
             local code = "UNAVAILABLE"
             evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code)

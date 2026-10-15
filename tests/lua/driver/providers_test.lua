@@ -4,7 +4,6 @@
 local test = require("test")
 local bounds = require("bounds")
 local fs = require("fs")
-local json = require("json")
 local funcs = require("funcs")
 local stream_json = require("stream_json")
 local claude = require("claude")

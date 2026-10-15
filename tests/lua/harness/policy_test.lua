@@ -2,7 +2,6 @@
 -- boundary, fences their values in its digest, and refuses unavailable names.
 local test = require("test")
 local policy = require("policy")
-local preferences = require("preferences")
 local bounds = require("bounds")
 
 type Entry = {[string]: unknown}

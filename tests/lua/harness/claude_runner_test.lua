@@ -19,7 +19,6 @@ local json = require("json")
 local exec = require("exec")
 local catalog = require("catalog")
 local policy = require("policy")
-local launch = require("launch")
 local placement_fixture = require("placement_fixture")
 local principals = require("principals")
 local ACTOR = "bee.test.claude_carrier"

@@ -2,7 +2,6 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local hash = require("hash")
 local grants = require("grants")
-local clock = require("clock")
 local model = require("lease_model")
 local capability = require("capability_model")
 local M = {}

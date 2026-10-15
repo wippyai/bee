@@ -364,7 +364,7 @@ end
 function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
-    local caller = assert(caller)
+    assert(caller)
     local input = object(request)
     local session_ref = input and has_only(input, {session = true}) and ref(input.session) or nil
     if not session_ref then return missing_request() end
@@ -874,7 +874,7 @@ end
 function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
-    local caller = assert(caller)
+    assert(caller)
     local input = object(request)
     local limit = input and has_only(input, {limit = true, include_hooks = true}) and (input.limit == nil and MAX_FEED_PAGE or integer(input.limit)) or nil
     if not limit or not input or (input.include_hooks ~= nil and type(input.include_hooks) ~= "boolean") or limit < 1 or limit > MAX_FEED_PAGE then return failure("INVALID_ARGUMENT", "work scan limit is outside its bound") end
@@ -1039,7 +1039,7 @@ end
 function M.feed_read(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
-    local caller = assert(caller)
+    assert(caller)
     local workspace = assert(workspace)
     local input = object(request)
     if not input or not has_only(input, {session = true, after_sequence = true, limit = true}) then return missing_request() end
@@ -1269,7 +1269,7 @@ end
 function M.turn_pull(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
-    local caller = assert(caller)
+    assert(caller)
     local input = object(request)
     if not input or not has_only(input, {turn = true, claim = true}) then return missing_request() end
     local turn_ref, claim_token = ref(input.turn), text(input.claim, 128)

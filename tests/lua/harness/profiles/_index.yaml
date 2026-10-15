@@ -5,49 +5,79 @@ entries:
   kind: function.lua
   source: file://preferences_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     preferences: bee.driver.descriptor:effective
 - name: test_call
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [funcs.call]
-    resources: [bee.harness.binding:call, bee.tests.harness.profiles:context_probe, bee.approvals.binding:grant, bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:effect, bee.tests.harness.profiles:folder_consent_write]
+    actions:
+    - funcs.call
+    resources:
+    - bee.harness.binding:call
+    - bee.tests.harness.profiles:context_probe
+    - bee.approvals.binding:grant
+    - bee.approvals.binding:request
+    - bee.approvals.binding:decide
+    - bee.approvals.binding:effect
+    - bee.tests.harness.profiles:folder_consent_write
     effect: allow
 - name: test_read
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [bee.harness.profiles.read]
-    resources: [saved-profile-workspace]
+    actions:
+    - bee.harness.profiles.read
+    resources:
+    - saved-profile-workspace
     effect: allow
 - name: test_write
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [bee.harness.profiles.write, bee.approvals.decide, bee.approvals.request, bee.approvals.consume]
-    resources: [saved-profile-workspace]
+    actions:
+    - bee.harness.profiles.write
+    - bee.approvals.decide
+    - bee.approvals.request
+    - bee.approvals.consume
+    resources:
+    - saved-profile-workspace
     effect: allow
 - name: service_test
   kind: function.lua
   source: file://service_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, security, uuid]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - security
+  - uuid
   imports:
     editor: bee.harness.app:profile_editor
     protocol: bee.harness.profiles:protocol
     test: wippy.test:test
     bounds: bee.values:bounds
     host: bee.tests.memory:host
-  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
+  security:
+    policies:
+    - bee.tests.memory:host_policy
+    - bee.tests.memory:read_policy
 - name: selection_test
   kind: function.lua
   source: file://selection_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     protocol: bee.threads.sessions.types:protocol
     fixtures: bee.tests.threads.sessions:fixtures
@@ -55,19 +85,21 @@ entries:
     test: wippy.test:test
     agents: bee.harness.app:agents
     sessions: bee.threads.sessions.client:sessions
-
 - name: context_probe
   kind: function.lua
   source: file://context_probe.lua
   method: handle
-  meta: {type: test_support}
-  modules: [funcs]
-
+  meta:
+    type: test_support
+  modules:
+  - funcs
 - name: editor_test
   kind: function.lua
   source: file://editor_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     profile_editor: bee.harness.app:profile_editor
@@ -76,8 +108,12 @@ entries:
   kind: function.lua
   source: file://form_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, registry]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - registry
   imports:
     view: bee.harness.app:profile_view
     appearance: bee.ui:appearance
@@ -89,7 +125,9 @@ entries:
   kind: function.lua
   source: file://agents_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
@@ -104,8 +142,12 @@ entries:
   kind: function.lua
   source: file://observations_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, security]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - funcs
+  - security
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
@@ -117,8 +159,11 @@ entries:
   kind: function.lua
   source: file://observations_test.lua
   method: probe
-  meta: {type: test_support}
-  modules: [funcs, security]
+  meta:
+    type: test_support
+  modules:
+  - funcs
+  - security
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
@@ -130,8 +175,11 @@ entries:
   kind: function.lua
   source: file://agent_view_test.lua
   method: run
-  modules: [tty]
-  meta: {type: test, suite: bee}
+  modules:
+  - tty
+  meta:
+    type: test
+    suite: bee
   imports:
     fixtures: bee.tests.threads.sessions:fixtures
     test: wippy.test:test
@@ -146,7 +194,9 @@ entries:
   kind: function.lua
   source: file://view_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     confirmation: bee.approvals.app:confirmation
     confirmation_fixture: bee.tests.approvals:confirmation_fixture
@@ -160,7 +210,9 @@ entries:
   kind: function.lua
   source: file://codex_effort_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     launch: bee.tests.support.driver:codex_launch
@@ -168,8 +220,11 @@ entries:
   kind: function.lua
   source: file://migration_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [uuid]
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - uuid
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
@@ -178,21 +233,38 @@ entries:
     sync: bee.sync.persist:store
 - name: repair_policy
   kind: security.policy
-  meta: {type: test_support}
-  policy: {actions: [registry.apply], resources: '*', effect: allow}
+  meta:
+    type: test_support
+  policy:
+    actions:
+    - registry.apply
+    resources: '*'
+    effect: allow
 - name: repair_test
   kind: function.lua
   source: file://repair_test.lua
   method: run
-  meta: {type: test, suite: bee}
-  modules: [registry, json]
-  security: {policies: [bee.tests.harness.profiles:repair_policy]}
-  imports: {test: wippy.test:test, form: bee.harness.app:profile_form, editor: bee.harness.app:profile_editor, bounds: bee.values:bounds}
+  meta:
+    type: test
+    suite: bee
+  modules:
+  - registry
+  - json
+  security:
+    policies:
+    - bee.tests.harness.profiles:repair_policy
+  imports:
+    test: wippy.test:test
+    form: bee.harness.app:profile_form
+    editor: bee.harness.app:profile_editor
+    bounds: bee.values:bounds
 - name: reopen_test
   kind: function.lua
   source: file://reopen_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     agents: bee.harness.app:agents
@@ -201,37 +273,56 @@ entries:
 - name: grants_migration_db
   kind: db.sql.sqlite
   file: .wippy/profile-grants-migration.db
-  lifecycle: {auto_start: true}
-  meta: {type: test_support}
+  lifecycle:
+    auto_start: true
+  meta:
+    type: test_support
 - name: grants_migration_policy
   kind: security.policy
-  policy: {actions: [db.get], resources: ['bee.tests.harness.profiles:grants_migration_db'], effect: allow}
+  policy:
+    actions:
+    - db.get
+    resources:
+    - bee.tests.harness.profiles:grants_migration_db
+    effect: allow
 - name: grants_migration_test
   kind: function.lua
   source: file://grants_migration_test.lua
   method: run
-  modules: [sql, hash, json, funcs]
-  meta: {type: test, suite: bee}
-  security: {policies: ['bee.tests.harness.profiles:grants_migration_policy', 'bee.tests.support:schema_policy']}
+  modules:
+  - hash
+  - json
+  - funcs
+  meta:
+    type: test
+    suite: bee
+  security:
+    policies:
+    - bee.tests.harness.profiles:grants_migration_policy
+    - bee.tests.support:schema_policy
   imports:
     test: wippy.test:test
     schema: bee.tests.support:schema
     grants: bee.approvals.grants:store
     authority: bee.harness.profiles.persist:grants
     bounds: bee.values:bounds
-
 - name: test_delegated_write
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [bee.harness.profiles.write]
-    resources: [saved-profile-workspace]
+    actions:
+    - bee.harness.profiles.write
+    resources:
+    - saved-profile-workspace
     effect: allow
 - name: option_controls_test
   kind: function.lua
   source: file://option_controls_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     controls: bee.harness.app:option_controls
@@ -240,21 +331,24 @@ entries:
   kind: function.lua
   source: file://spawn_form_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     form: bee.harness.app:spawn_form
     appearance: bee.ui:appearance
-
 - name: folder_consent_write
   kind: function.lua
   source: file://folder_consent_write.lua
   method: handle
-  meta: {type: test_support}
+  meta:
+    type: test_support
   imports:
     database: bee.persist:database
     grants: bee.approvals.grants:store
     authority: bee.harness.profiles.persist:grants
     bounds: bee.values:bounds
   security:
-    policies: [bee.security.approvals:approval_store_policy]
+    policies:
+    - bee.security.approvals:approval_store_policy

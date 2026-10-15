@@ -158,7 +158,6 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
-    driver_types: bee.driver:types
 - name: preparer_owner
   kind: process.lua
   source: file://preparer_owner.lua
@@ -238,7 +237,6 @@ entries:
   - exec
   - json
   - funcs
-  - sql
   - registry
   - env
   - process
@@ -347,8 +345,7 @@ entries:
   meta:
     type: bee.launch_policy
     test_support: true
-    comment: The host launch policy the placement suite's requests name; it selects
-      the test provider
+    comment: The host launch policy the placement suite's requests name; it selects the test provider
   data:
     schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
@@ -366,8 +363,7 @@ entries:
   meta:
     type: bee.launch_policy
     test_support: true
-    comment: The same policy selecting no provider, for the unauthorized-provider
-      refusal
+    comment: The same policy selecting no provider, for the unauthorized-provider refusal
   data:
     schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
@@ -381,7 +377,9 @@ entries:
     environment: {}
 - name: trust_launch_policy
   kind: registry.entry
-  meta: {type: bee.launch_policy, test_support: true}
+  meta:
+    type: bee.launch_policy
+    test_support: true
   data:
     schema_revision: bee.launch-policy@3
     required_cleanup: direct_process
@@ -393,7 +391,8 @@ entries:
     provider_ref: bee.tests.placement.native:codex_test_provider
     prepare_options: {}
     profile_restrictions:
-      provider.options.folder_trust: {kind: declared}
+      provider.options.folder_trust:
+        kind: declared
     executables: {}
     environment: {}
 - name: test_non_native_launch_policy
@@ -769,10 +768,14 @@ entries:
     types: bee.placement:types
 - name: fixture_retirement_policy
   kind: security.policy
-  meta: {type: test_support}
+  meta:
+    type: test_support
   policy:
-    actions: [process.registry.register, process.registry.unregister]
-    resources: [bee.test.materialization.wake]
+    actions:
+    - process.registry.register
+    - process.registry.unregister
+    resources:
+    - bee.test.materialization.wake
     effect: allow
 - name: fixture_builder_read_policy
   kind: security.policy
@@ -874,7 +877,6 @@ entries:
   - security
   - registry
   - json
-  - hash
   - time
   - exec
   - ctx
@@ -976,18 +978,26 @@ entries:
     decode: bee.placement:decode
     principals: bee.tests.support.principals:bound
     completion: bee.tests.placement.native:completion
-
 - name: retirement_fixture
   kind: process.lua
   source: file://retirement_test.lua
   method: main
-  modules: [process]
-  meta: {type: test_support}
-  imports: {test: 'wippy.test:test', completion: 'bee.tests.placement.native:completion'}
+  modules:
+  - process
+  meta:
+    type: test_support
+  imports:
+    test: wippy.test:test
+    completion: bee.tests.placement.native:completion
 - name: retirement_test
   kind: function.lua
   source: file://retirement_test.lua
   method: run
-  modules: [process]
-  meta: {type: test, suite: bee}
-  imports: {test: 'wippy.test:test', completion: 'bee.tests.placement.native:completion'}
+  modules:
+  - process
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    completion: bee.tests.placement.native:completion

@@ -1,7 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
 local tty = require("tty")
-local process = require("process")
 local system = require("system")
 local time = require("time")
 local channel = require("channel")

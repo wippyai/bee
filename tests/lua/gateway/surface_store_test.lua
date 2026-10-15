@@ -3,7 +3,6 @@ local test = require("test")
 local schema = require("schema")
 local store = require("store")
 local grants = require("grants")
-local grant_schema = require("grant_schema")
 local clock = require("clock")
 local bounds = require("bounds")
 local function open(): sql.DB

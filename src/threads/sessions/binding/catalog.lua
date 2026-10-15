@@ -107,7 +107,6 @@ local function decode_profile_page(workspace: string, raw: unknown, expected_cur
     local raw_rows = dense_rows(page.items)
     if not raw_rows or #raw_rows > 64 then return nil, "profile snapshot rows exceed their bound" end
     local rows: {ProfileRow} = {}
-    local previous = after_key
     for _, raw_row in ipairs(raw_rows) do
         local row, row_error = decode_profile_row(workspace, raw_row)
         if not row then return nil, row_error end

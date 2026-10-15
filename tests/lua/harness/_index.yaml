@@ -143,7 +143,6 @@ entries:
     test: wippy.test:test
     bounds: bee.values:bounds
     policy: bee.harness.carrier:policy
-    preferences: bee.driver.descriptor:effective
 - name: authoring_policy_test
   kind: function.lua
   source: file://authoring_policy_test.lua
@@ -1498,7 +1497,6 @@ entries:
     bounds: bee.values:bounds
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
-    admission: bee.harness.launch:admission
 - name: permission_test
   kind: function.lua
   source: file://permission_test.lua
@@ -2013,7 +2011,6 @@ entries:
     principals: bee.tests.support.principals:bound
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
-    launch: bee.tests.support.driver:claude_launch
     driver_types: bee.driver:types
     placement_fixture: bee.tests.harness:placement_fixture
 - name: claude_adapter_test
@@ -2101,7 +2098,6 @@ entries:
     adapter: bee.harness.permission:adapter
     approvals: bee.approvals.binding:service
     policy: bee.harness.carrier:policy
-    launch: bee.tests.support.driver:claude_launch
     driver_types: bee.driver:types
     placement_fixture: bee.tests.harness:placement_fixture
 - name: claude_acceptance_test
@@ -2172,7 +2168,6 @@ entries:
     principals: bee.tests.support.principals:bound
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
-    launch: bee.tests.support.driver:codex_launch
     driver_types: bee.driver:types
     placement: bee.placement.native.service:service
     placement_fixture: bee.tests.harness:placement_fixture

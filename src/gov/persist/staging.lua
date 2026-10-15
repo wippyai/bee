@@ -90,7 +90,6 @@ local function digest(content: string): (string?, Result?)
     return result, nil
 end
 local function request_identity(input: protocol.Request): (string?, Result?)
-    local path = input.path
     local content_digest: string? = nil
     if input.operation == "put" or input.operation == "append" then
         if type(input.content) ~= "string" then return nil, failure("INVALID", "put content is missing or exceeds the workspace limit") end

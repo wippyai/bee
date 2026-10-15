@@ -1,7 +1,6 @@
 -- MIT. Tests for workdir preparers extension point, discovery, setup, and cleanup.
 local test = require("test")
 local registry = require("registry")
-local sql = require("sql")
 local service = require("service")
 local time = require("time")
 local exec = require("exec")

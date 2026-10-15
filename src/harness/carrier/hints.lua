@@ -1,8 +1,5 @@
 -- MIT. Approval-transition hint subscription: one checkpointed delivery subscription paged on wake or tick.
 local bounds = require("bounds")
-local canonical = require("canonical")
-local record_types = require("record_types")
-local record_values = require("record_values")
 local thread_record = require("thread_record")
 local checkpoint = require("checkpoint")
 local service_reply = require("service_reply")

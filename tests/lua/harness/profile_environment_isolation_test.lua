@@ -13,7 +13,6 @@ local time = require("time")
 local process = require("process")
 local channel = require("channel")
 local json = require("json")
-local admission = require("admission")
 
 local ACTOR = "bee.test.profile_environment"
 local ROOT = "bee.tests.harness:project_fixture"

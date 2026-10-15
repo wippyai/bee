@@ -17,16 +17,22 @@ entries:
     type: agent.trait
     title: Overlay authoring
     comment: Caller-owned durable staging only; no registry writer or approval capability
-  prompt: 'Read the guide operation first for this destination''s component contract and one minimal working application example; it names the exact file to freeze. Use BeeComponents to inspect installed
-    components and exact Hub package entries, documentation and examples before inventing a pattern. Use BeeOverlay to author packs and changes as files. `overlay_id` names the authored overlay and is distinct
-    from the agent''s runtime workspace. Create with revision zero; list before editing to obtain the current revision. Put replaces one whole file; append adds a bounded chunk at offset equal to its current
-    byte length and verifies result_digest, the SHA-256 of the complete result; remove deletes one file. MCP put/append content is at most 65,536 decoded bytes per call, while a file may reach 4 MiB. Writes
-    need expected_revision and a stable idempotency_key. Retry an uncertain write with the identical request and key; a changed request needs a new key. On conflict, reread and reconcile first. Use content
-    for source text or content_base64 for binary assets. Read returns base64 content and a digest. Staged file paths are relative to the virtual overlay. The source operation separately reads a bounded
-    non-private CLI/source file in your authenticated workdir, with no overlay_id; see the drivers guide section. Freeze with expected_revision and a retry key to retain an exact candidate. Freeze is not
-    approval, installation or execution. For a component candidate, write entries.json as a JSON list of complete registry entries before freezing. Governance canonicalizes it during the separately authorized
-    preparation step; do not construct registry.json. Pass snapshot_digest to list/read to inspect that retained candidate instead of current files; the returned revision is the frozen revision. Host policy
-    admits each overlay operation; this trait grants no authority.
+  prompt: 'Read the guide operation first for this destination''s component contract and one minimal working application example;
+    it names the exact file to freeze. Use BeeComponents to inspect installed components and exact Hub package entries, documentation
+    and examples before inventing a pattern. Use BeeOverlay to author packs and changes as files. `overlay_id` names the authored
+    overlay and is distinct from the agent''s runtime workspace. Create with revision zero; list before editing to obtain
+    the current revision. Put replaces one whole file; append adds a bounded chunk at offset equal to its current byte length
+    and verifies result_digest, the SHA-256 of the complete result; remove deletes one file. MCP put/append content is at
+    most 65,536 decoded bytes per call, while a file may reach 4 MiB. Writes need expected_revision and a stable idempotency_key.
+    Retry an uncertain write with the identical request and key; a changed request needs a new key. On conflict, reread and
+    reconcile first. Use content for source text or content_base64 for binary assets. Read returns base64 content and a digest.
+    Staged file paths are relative to the virtual overlay. The source operation separately reads a bounded non-private CLI/source
+    file in your authenticated workdir, with no overlay_id; see the drivers guide section. Freeze with expected_revision and
+    a retry key to retain an exact candidate. Freeze is not approval, installation or execution. For a component candidate,
+    write entries.json as a JSON list of complete registry entries before freezing. Governance canonicalizes it during the
+    separately authorized preparation step; do not construct registry.json. Pass snapshot_digest to list/read to inspect that
+    retained candidate instead of current files; the returned revision is the frozen revision. Host policy admits each overlay
+    operation; this trait grants no authority.
 
     '
   tools:
@@ -36,14 +42,20 @@ entries:
   meta:
     type: agent.trait
     title: Application delivery
-    comment: Request delivery and activation of a frozen application and read its status; the person's one approval applies it, and publishing the applied version is separately gated
-  prompt: 'Use the delivery tool to request delivery of an application or custom driver you froze (read the drivers guide for driver.<name> overlays): pass operation request with your source `source_overlay_id`,
-    the version and the frozen `snapshot_digest`; `workspace_id` defaults to your own workspace, the only destination you may name. Name the overlay and its entries by the guide''s workspace-application
-    rule (overlay `todo` holds namespace `app.todo` and the application `app.todo:app`) so this workspace''s host profile admits it. It publishes your frozen artifact as immutable content, stages that exact
-    version at this destination and returns the destination''s own preflight verdict, with a diagnostic code, target, message and remedy for each finding. Repair a refusal and freeze again. When the verdict
-    is ready the same request prepares the activation and returns its intent_id and approval_id: Needs you opens on the person''s desktop with that one approval, and approving it applies the overlay;
-    nothing else is asked of the person. activation_refusal states why a ready plan was not prepared. Read the status operation with the same identities and the intent_id to see the activation outcome.
-    You cannot approve, and you never write an overlay. Publishing the exact applied version is a separate, host-requested capability; ask for it, and publish only after the apply succeeds.
+    comment: Request delivery and activation of a frozen application and read its status; the person's one approval applies
+      it, and publishing the applied version is separately gated
+  prompt: 'Use the delivery tool to request delivery of an application or custom driver you froze (read the drivers guide
+    for driver.<name> overlays): pass operation request with your source `source_overlay_id`, the version and the frozen `snapshot_digest`;
+    `workspace_id` defaults to your own workspace, the only destination you may name. Name the overlay and its entries by
+    the guide''s workspace-application rule (overlay `todo` holds namespace `app.todo` and the application `app.todo:app`)
+    so this workspace''s host profile admits it. It publishes your frozen artifact as immutable content, stages that exact
+    version at this destination and returns the destination''s own preflight verdict, with a diagnostic code, target, message
+    and remedy for each finding. Repair a refusal and freeze again. When the verdict is ready the same request prepares the
+    activation and returns its intent_id and approval_id: Needs you opens on the person''s desktop with that one approval,
+    and approving it applies the overlay; nothing else is asked of the person. activation_refusal states why a ready plan
+    was not prepared. Read the status operation with the same identities and the intent_id to see the activation outcome.
+    You cannot approve, and you never write an overlay. Publishing the exact applied version is a separate, host-requested
+    capability; ask for it, and publish only after the apply succeeds.
 
     '
   tools:
@@ -53,11 +65,15 @@ entries:
   meta:
     type: agent.trait
     title: Application tests
-    comment: Run and read the tests an application you delivered carries, inside the node and as the application; the tests run with the authority the person approved for it and no more
-  prompt: 'Ship tests with the application: a function.lua entry of meta.type test in its pack (the overlay guide''s tests section shows one). After the person approved the delivery, use the tests tool: list
-    names the application''s tests, run starts a run and returns its run_id at once, and status with that run_id returns progress and, when complete, each test''s cases with pass, fail or skip, the error and
-    the duration. Name the application by its overlay id or its definition id; it must be delivered from an overlay you own. A test runs as the application with the scope its approval gave it, so a case
-    that needs authority the application lacks fails with a denial: change the application and deliver again, you cannot widen it here.
+    comment: Run and read the tests an application you delivered carries, inside the node and as the application; the tests
+      run with the authority the person approved for it and no more
+  prompt: 'Ship tests with the application: a function.lua entry of meta.type test in its pack (the overlay guide''s tests
+    section shows one). After the person approved the delivery, use the tests tool: list names the application''s tests, run
+    starts a run and returns its run_id at once, and status with that run_id returns progress and, when complete, each test''s
+    cases with pass, fail or skip, the error and the duration. Name the application by its overlay id or its definition id;
+    it must be delivered from an overlay you own. A test runs as the application with the scope its approval gave it, so a
+    case that needs authority the application lacks fails with a denial: change the application and deliver again, you cannot
+    widen it here.
 
     '
   tools:
@@ -68,8 +84,9 @@ entries:
     type: agent.trait
     title: Application publish
     comment: Publish the exact locally reviewed and applied version; never review, approve or apply
-  prompt: 'Use BeePublish only after the person approved and Bee applied the exact version you delivered. It publishes that one version to this destination''s
-    publication feed and refuses any version that is not the locally reviewed and applied one. It grants no review, selection, approval, activation or overlay authority.
+  prompt: 'Use BeePublish only after the person approved and Bee applied the exact version you delivered. It publishes that
+    one version to this destination''s publication feed and refuses any version that is not the locally reviewed and applied
+    one. It grants no review, selection, approval, activation or overlay authority.
 
     '
   tools:
@@ -77,4 +94,5 @@ entries:
 - name: hive_sdk_example
   kind: library.lua
   source: file://hive_sdk_example.lua
-  modules: [json]
+  modules:
+  - json

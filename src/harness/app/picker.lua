@@ -101,8 +101,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local open_key, open_target = "", ""
     local close_key: string? = nil
     local reload_pending = false
-    local request_id: string? = nil
-    local request_definition, request_plan = "", ""
     local editing: profile_view.State? = nil
     local edit_frame: profile_view.Frame = {rows = {}, hits = {}}
     local attachment_error: string? = nil

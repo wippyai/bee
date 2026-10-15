@@ -7,7 +7,6 @@ local corpus = require("corpus")
 local web = require("web")
 local resources = require("resources")
 local transaction = require("transaction")
-local bounds = require("bounds")
 type Result = transaction.Result
 local function descriptor(document: corpus.Document): {[string]: unknown}
     return {id = document.id, topic = document.topic, title = document.title,

@@ -7,7 +7,6 @@ local message = require("message")
 local lifecycle = require("lifecycle")
 local delivery = require("delivery")
 local bounds = require("bounds")
-local types = require("types")
 local function base(kind: string, body: {[string]: unknown}, extra: {[string]: unknown}?): {[string]: unknown}
     local value: {[string]: unknown} = {schema_revision = "bee.thread-record@1", record_id = "r1", thread_id = "t1",
         sequence = 1, recorded_at = "2026-09-08T10:00:00.000Z", kind = kind, producer_id = "p1", source = "bee", body = body}

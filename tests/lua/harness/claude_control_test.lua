@@ -22,7 +22,6 @@ local hash = require("hash")
 local catalog = require("catalog")
 local adapter = require("adapter")
 local approvals = require("approvals")
-local launch = require("launch")
 local placement_fixture = require("placement_fixture")
 local principals = require("principals")
 local ACTOR = "bee.test.claude_control"

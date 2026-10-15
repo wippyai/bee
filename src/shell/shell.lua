@@ -172,7 +172,6 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     local themed = false
     if saved and saved.appearance then preferences, themed = saved.appearance, true end
     local catalog: {menu.Descriptor} = {}
-    local catalog_ready = false
     -- catalog_problem is why the node's app list is out of date, shown in the status line until it refreshes.
     local catalog_problem: string? = nil
     local workspaces: {client.Workspace} = {}
@@ -460,7 +459,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         owner, supervisor = nil, nil
         detach()
         revision = 0
-        running, catalog, catalog_ready, workspaces, desktops = {}, {}, false, {}, {}
+        running, catalog, workspaces, desktops = {}, {}, {}, {}
         catalog_problem = nil
         desktop = ""
         target = node
@@ -848,7 +847,6 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             desktops = node_state.desktops
             running = node_state.running
             catalog = descriptors(node_state.apps)
-            catalog_ready = true
             catalog_problem = node_state.problem
             alerts = {}
             for _, alert in ipairs(node_state.alerts or {}) do alerts[alert.id] = alert end

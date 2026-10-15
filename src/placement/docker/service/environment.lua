@@ -16,7 +16,6 @@ local canonical = require("canonical")
 local events = require("events")
 local system = require("system")
 local grants = require("grants")
-local clock = require("clock")
 local uuid = require("uuid")
 local M = {}
 type Channel = channel.Channel

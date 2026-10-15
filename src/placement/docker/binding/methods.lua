@@ -382,7 +382,7 @@ function M.cleanup_loaded(loaded: Loaded): Reply
         if not verified.ok then return verified end
         local removed, remove_error = daemon.command({"docker", "--host", "unix:///var/run/docker.sock", "rm", found.backend_ref})
         if not removed then return fail("UNAVAILABLE", remove_error or "Docker removal returned no result") end
-        local remaining, verify_error, missing = M.find(loaded)
+        local _, verify_error, missing = M.find(loaded)
         if verify_error or not missing then return fail("UNAVAILABLE", verify_error or "container removal is unproven") end
         local recorded = M.change(loaded.attempt.attempt_id, {evidence = {kind = "docker.removed", detail = "removed container " .. found.backend_ref .. " after exit evidence"}})
         if not recorded.ok then return recorded end

@@ -23,7 +23,6 @@ entries:
     appearance: bee.ui:appearance
     windows: bee.approvals.types:windows
     grants: bee.approvals.grants:store
-    canonical: bee.values:canonical
     bounds: bee.values:bounds
     clock: bee.values:clock
     model: bee.approvals.inbox.app:model
@@ -81,7 +80,9 @@ entries:
 - name: leases
   kind: library.lua
   source: file://leases.lua
-  modules: [json, hash]
+  modules:
+  - json
+  - hash
   imports:
     grants: bee.approvals.grants:store
     clock: bee.values:clock
@@ -143,14 +144,15 @@ entries:
   kind: registry.entry
   meta:
     type: bee.approvals.inbox.workspaces
-    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still decides eligibility per request
+    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still
+      decides eligibility per request
   data:
     workspaces: []
-
 - name: question_form
   kind: library.lua
   source: file://question_form.lua
-  modules: [tty]
+  modules:
+  - tty
   imports:
     appearance: bee.ui:appearance
     frame: bee.ui:frame
@@ -160,7 +162,8 @@ entries:
     lease_form: bee.approvals.inbox.app:lease_form
 - name: start_menu
   kind: registry.entry
-  meta: {type: bee.menu}
+  meta:
+    type: bee.menu
   data:
     title: Needs you
     location: start

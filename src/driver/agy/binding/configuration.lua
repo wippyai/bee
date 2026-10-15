@@ -3,7 +3,6 @@
 -- safe-relative configuration files. Command hooks use the host-selected Bee
 -- executable and return admitted permission gate decisions.
 local hash = require("hash")
-local bounds = require("bounds")
 local canonical = require("canonical")
 local quote = require("quote")
 local configure_protocol = require("configure_protocol")

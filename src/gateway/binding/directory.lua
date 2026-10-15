@@ -10,7 +10,6 @@ type Reply = part_model.Reply
 type Object = part_model.Object
 local fail = part_values.fail
 local succeed = part_values.succeed
-local open = part_values.open
 local function directory(value: unknown, fields: {string}): ({Object}?, Object?, Reply?)
     local request = bounds.object(value)
     if not request or bounds.fields(request, fields) then return nil, nil, fail("INVALID", "invalid workspace directory request") end

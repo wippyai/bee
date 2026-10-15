@@ -45,7 +45,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [db.get]
-    resources: [bee.tests.approvals:test_db]
+    resources: [bee.tests.approvals:test_db, bee.tests.approvals:service_authority_db, bee.tests.approvals:service_requests_db, bee.tests.approvals:service_decisions_db, bee.tests.approvals:service_effects_db, bee.tests.approvals:service_notifications_db, bee.tests.approvals:service_worker_db]
     effect: allow
 - name: attention_test_policy
   kind: security.policy
@@ -68,27 +68,141 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     protocol: bee.hive:protocol
-- name: service_test
-  kind: function.lua
-  source: file://service_test.lua
-  method: run
-  meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [funcs, security, registry, time, sql, process, channel, json, events]
-  security:
-    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+- name: service_fixture
+  kind: library.lua
+  source: file://service_fixture.lua
+  meta: {type: test_support}
+  modules: [funcs, registry, time, sql, process, channel]
   imports:
     support: bee.tests.approvals:test_principals
     principals: bee.tests.support.principals:bound
     bounds: bee.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
-    worker: bee.approvals.service:worker
-    resources: bee.approvals.env:resources
-    outbox: bee.approvals.persist:outbox
-    dispatch: bee.approvals.persist:dispatch
     schema: bee.tests.support:schema
     demand: bee.process:demand
     thread_harness: bee.tests.threads:harness
+- name: service_authority_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-service-authority-test.db
+  lifecycle: {auto_start: true}
+- name: service_authority_test
+  kind: function.lua
+  source: file://service_authority_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  security:
+    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+  modules: [registry, process, events]
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    service: bee.approvals.binding:service
+    fixture: bee.tests.approvals:service_fixture
+- name: service_requests_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-service-requests-test.db
+  lifecycle: {auto_start: true}
+- name: service_requests_test
+  kind: function.lua
+  source: file://service_requests_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  security:
+    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+  modules: [funcs, security, registry, time, json, events]
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    service: bee.approvals.binding:service
+    resources: bee.approvals.env:resources
+    schema: bee.tests.support:schema
+    fixture: bee.tests.approvals:service_fixture
+- name: service_decisions_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-service-decisions-test.db
+  lifecycle: {auto_start: true}
+- name: service_decisions_test
+  kind: function.lua
+  source: file://service_decisions_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  security:
+    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+  modules: [time, channel, json, events]
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    service: bee.approvals.binding:service
+    fixture: bee.tests.approvals:service_fixture
+- name: service_effects_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-service-effects-test.db
+  lifecycle: {auto_start: true}
+- name: service_effects_test
+  kind: function.lua
+  source: file://service_effects_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  security:
+    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+  modules: [time, events]
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    service: bee.approvals.binding:service
+    worker: bee.approvals.service:worker
+    dispatch: bee.approvals.persist:dispatch
+    fixture: bee.tests.approvals:service_fixture
+- name: service_notifications_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-service-notifications-test.db
+  lifecycle: {auto_start: true}
+- name: service_notifications_test
+  kind: function.lua
+  source: file://service_notifications_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  security:
+    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+  modules: [time, channel, events]
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    service: bee.approvals.binding:service
+    dispatch: bee.approvals.persist:dispatch
+    thread_harness: bee.tests.threads:harness
+    fixture: bee.tests.approvals:service_fixture
+- name: service_worker_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-service-worker-test.db
+  lifecycle: {auto_start: true}
+- name: service_worker_test
+  kind: function.lua
+  source: file://service_worker_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  security:
+    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+  modules: [registry, process]
+  imports:
+    principals: bee.tests.support.principals:bound
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    service: bee.approvals.binding:service
+    worker: bee.approvals.service:worker
+    outbox: bee.approvals.persist:outbox
+    thread_harness: bee.tests.threads:harness
+    fixture: bee.tests.approvals:service_fixture
 - name: lease_flow_test_policy
   kind: security.policy
   meta: {type: test_support}

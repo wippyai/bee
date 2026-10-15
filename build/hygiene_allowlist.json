@@ -278,10 +278,5 @@
     "path": "tests/lua/gateway/address_test.lua",
     "text": "for _, address in ipairs({\"127.0.0.1:0\", \"127.0.0.1:1\", \"127.0.0.1:65535\", \"127.0.0.2:0\", \"172.17.0.1:0\", \"10.0.0.1:80\", \"192.168.1.2:65535\"}) do",
     "reason": "Synthetic RFC 1918 addresses exercise acceptance of both private IPv4 ranges."
-  },
-  {
-    "path": "tests/lua/approvals/service_test.lua",
-    "text": "source-size",
-    "reason": "approvals lane in flight"
   }
 ]

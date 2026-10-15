@@ -179,9 +179,6 @@ ci-tools: tools
 ci-tools-outputs:
 	@python3 build/ci.py tools-outputs --target $(TARGET)
 
-ci-application-key:
-	@python3 build/ci.py application-key
-
 ci-prepare: tools
 	python3 build/ci.py record-inputs
 	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --fixtures --revision prepared
@@ -230,6 +227,6 @@ release-publish:
 release-package:
 	python3 build/ci.py package --target $(TARGET) --version $(VERSION)
 
-.PHONY: builder-version test-prepare test-shard release-prepare release-compile ci-tools ci-tools-outputs ci-application-key ci-prepare ci-import ci-stamp ci-require ci-warm ci-gate ci-plan release-package release-rosetta release-verify release-publish
+.PHONY: builder-version test-prepare test-shard release-prepare release-compile ci-tools ci-tools-outputs ci-prepare ci-import ci-stamp ci-require ci-warm ci-gate ci-plan release-package release-rosetta release-verify release-publish
 
 .PHONY: fixture-install ci-profile ci-assemble ci-lint

@@ -319,13 +319,13 @@ end
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local operation = bounds.member(object.operation, {"get", "list", "put", "remove"})
+    local operation = bounds.member(object.operation, {"get", "list", "put", "remove", "reset_home"})
     if not operation then return nil, "unknown profile operation" end
     local fields: {string}
     if operation == "get" then fields = {"operation", "workspace_id", "profile_id"}
     elseif operation == "list" then fields = {"operation", "workspace_id", "after_key", "expected_cursor", "limit", "definition_ref", "query", "sort"}
     elseif operation == "put" then fields = {"operation", "workspace_id", "profile_id", "expected_revision", "idempotency_key", "profile"}
-    elseif operation == "remove" then fields = {"operation", "workspace_id", "profile_id", "expected_revision", "idempotency_key"}
+    elseif operation == "remove" or operation == "reset_home" then fields = {"operation", "workspace_id", "profile_id", "expected_revision", "idempotency_key"}
     else return nil, "unknown profile operation" end
     local extra = bounds.fields(object, fields)
     if extra then return nil, extra end

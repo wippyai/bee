@@ -227,7 +227,7 @@ local function remove(store: sync.Store, tx: sql.Transaction, input: Request, no
     return transaction.success(reply(input, input.profile_id, revision, nil, true), result.replayed)
 end
 
-function M.call(input: Request, node: string, actor: string, pinned: registry.Snapshot, validate: (registry.Snapshot, Profile) -> string?): Result
+function M.call(input: Request, node: string, actor: string, pinned: registry.Snapshot, validate: (registry.Snapshot, Profile) -> string?, home: ((sql.Transaction, boolean) -> string?)?): Result
     local feed_name, feed_error = feed(input.workspace_id)
     if not feed_name then return failure("INTERNAL", feed_error or "profile feed failed") end
     local owner: string = node
@@ -252,7 +252,25 @@ function M.call(input: Request, node: string, actor: string, pinned: registry.Sn
     elseif input.operation == "put" then
         result = transaction.write(store.db, "profiles", function(tx: sql.Transaction): Result return put(store, tx, request, owner, caller, selected_feed) end)
     else
-        result = transaction.write(store.db, "profiles", function(tx: sql.Transaction): Result return remove(store, tx, request, owner, caller, selected_feed) end)
+        result = transaction.write(store.db, "profiles", function(tx: sql.Transaction): Result
+            local changed: Result
+            if input.operation == "reset_home" then
+                if not home then return failure("UNAVAILABLE", "Profile home lifecycle unavailable") end
+                local current = get(store, tx, request, selected_feed, owner)
+                local value = current.ok and bounds.object(current.value)
+                local profile = value and value.tombstone == false and protocol.profile(value.profile)
+                if not profile or not profile.placement or profile.placement.kind ~= "docker" then return failure("INVALID_ARGUMENT", "Select a saved Docker profile") end
+                request.profile = profile
+                changed = put(store, tx, request, owner, caller, selected_feed)
+            else
+                changed = remove(store, tx, request, owner, caller, selected_feed)
+            end
+            if changed.ok and not changed.replayed and home then
+                local err = home(tx, input.operation == "reset_home")
+                if err then return failure("UNAVAILABLE", err) end
+            end
+            return changed
+        end)
     end
     store:close()
     return result

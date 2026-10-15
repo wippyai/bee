@@ -378,7 +378,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             evidence(db, attempt_id, "session.failed", session_key_error or "session directory")
             return refused("session directory")
         end
-        if request.launch.home_ref then
+        if request.launch.home_ref and not (guest_home and request.preferences and request.preferences.authority_grant_id) then
             selected_home_path = session_path
             retained_home = true
         end

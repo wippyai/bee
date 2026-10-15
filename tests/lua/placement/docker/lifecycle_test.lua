@@ -20,6 +20,8 @@ local service = require("service")
 local materialization = require("materialization")
 local prestart = require("prestart")
 local bounds = require("bounds")
+local profile_home = require("profile_home")
+local daemon = require("daemon")
 local OWNER = "bee.test.docker"
 local PROFILE = "bee.tests.placement.docker:profile"
 local REFUSED_PROFILE = "bee.tests.placement.docker:refused_profile"
@@ -391,12 +393,128 @@ local function readiness_tests()
         end)
     end)
 end
+local function home_tests()
+    test.describe("Saved Docker profile homes", function()
+        configure()
+        test.it("persists across launches, isolates profiles, excludes launch secrets, resets and deletes", function()
+            local workspace = "saved-profile-workspace"
+            local client = funcs.new():with_actor(security.new_actor("dockerhome-person")):with_scope(security.new_scope({
+                assert(security.policy("bee.tests.harness.profiles:test_call")), assert(security.policy("bee.tests.harness.profiles:test_read")),
+                assert(security.policy("bee.tests.harness.profiles:test_write"))}))
+            local function profile_call(operation: string, id: string, revision: integer): {[string]: unknown}
+                local input: {[string]: unknown} = {operation = operation, workspace_id = workspace, profile_id = id,
+                    expected_revision = revision, idempotency_key = id .. ":" .. operation .. ":" .. tostring(revision)}
+                if operation == "put" then input.profile = {schema_revision = "bee.agent-profile@3", name = "Docker home fixture",
+                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding",
+                    provider = {}, bee = {mcp = {}}, placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}} end
+                local raw, err = client:call("bee.harness.binding:call", input)
+                test.is_nil(err)
+                local reply = assert(bounds.object(raw))
+                test.is_true(reply.ok == true, tostring(reply.message or (bounds.object(reply.error) or {}).message))
+                return assert(bounds.object(reply.value))
+            end
+            local prefix = "dockerhome-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
+            local alpha, beta = prefix .. "-a", prefix .. "-b"
+            local first, second = profile_call("put", alpha, 0), profile_call("put", beta, 0)
+            local source = "bee.tests.credentials:codex_login_fixture"
+            local sources = assert(registry.get("bee.credentials.env:credential_sources"))
+            local rows = principals.objects(sources.data.sources)
+            rows[#rows + 1] = {ref = source, workspace_id = workspace, audience = OWNER, provider = "codex", projection_kinds = {"file"}, path = ".codex/auth.json", write_back = true}
+            sources.data.sources = rows
+            local changes = registry.snapshot():changes()
+            changes:update(sources)
+            local format = assert(registry.get("bee.driver.codex.credentials:credential_format"))
+            format.data.file.initialize = {{path = ".codex/state.json", content = '{"theme":"light"}'}}
+            changes:update(format)
+            for _, ref in ipairs({"bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy"}) do
+                local entry = assert(registry.get(ref))
+                entry.data.policy.resources = {source}
+                changes:update(entry)
+            end
+            assert(changes:apply())
+            local seeded, seed_error = daemon.command({"/bin/sh", "-c", [[mkdir -p .wippy/codex-login-fixture/.codex; printf '%s' '{"fixture":"fixture-broker-token"}' > .wippy/codex-login-fixture/.codex/auth.json]]})
+            test.is_nil(seed_error); test.not_nil(seeded)
+            local credential_client = funcs.new():with_actor(principals.actor(OWNER, workspace)):with_scope(security.new_scope({
+                assert(security.policy("bee.tests.placement.native:client_test_policy")),
+                assert(security.policy("bee.credentials.security:credential_manage_policy")), assert(security.policy("bee.credentials.security:credential_issue_policy"))}))
+            local function credential(method: string, input: {[string]: unknown}): {[string]: unknown}
+                local raw, err = credential_client:call("bee.credentials.binding:" .. method, input)
+                test.is_nil(err)
+                local reply = principals.reply(raw)
+                test.is_true(reply.ok, tostring(reply.error and reply.error.message))
+                return assert(bounds.object(reply.value))
+            end
+            credential("define", {workspace_id = workspace, name = "dockerhome-login", provider = "codex", source = {kind = "fs_directory", ref = source}})
+            local index = 0
+            local function launch(saved: {[string]: unknown}, script: string): (string, string)
+                index = index + 1
+                local id = prefix .. "-launch-" .. tostring(index)
+                local selected = request(id)
+                selected.workspace_id = workspace
+                local projection = credential("issue_projection", {workspace_id = workspace, name = "dockerhome-login", audience = OWNER,
+                    attempt_id = id, profile_id = "batch", profile_digest = selected.profile_digest, binding_digest = selected.binding_digest,
+                    launch_policy_digest = string.rep("a", 64), idempotency_key = id})
+                selected.projections = {assert(bounds.id(projection.projection_id))}
+                selected.preferences = {options = {}, mcp_tools = {}, authority_grant_id = assert(bounds.id(saved.grant_id))}
+                selected.launch.argv = {"-c", "set -eu; grep -q fixture-broker-token \"$HOME/.codex/auth.json\"; " .. script}
+                selected.launch.stdin, selected.launch.stdin_eof = "fixture-broker-token", true
+                selected.launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
+                    files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
+                        {path = ".codex/state.json", kind = "state", optional = false, write_back = false}}}
+                local db = assert(store.open())
+                local name = assert(profile_home.selected(db, selected))
+                db:release()
+                local watch = completion.listen()
+                local output = ""
+                local ok, failure = pcall(function()
+                    value(call("prepare", selected))
+                    local blocked = client:call("bee.harness.binding:call", {operation = "reset_home", workspace_id = workspace,
+                        profile_id = saved.profile_id, expected_revision = saved.revision, idempotency_key = id .. ":busy-reset"})
+                    local refusal = assert(bounds.object(blocked))
+                    test.eq(refusal.ok, false)
+                    test.eq(refusal.code, "UNAVAILABLE")
+                    completion.attach(watch, placement_call, id)
+                    value(call("start", {attempt_id = id}))
+                    completion.wait(watch, placement_call, id, true, function(item: protocol.Output)
+                        if item.stream == "stdout" then output = output .. (item.data or "") end
+                    end)
+                end)
+                local cleaned, cleanup_error = pcall(function() completion.cleanup(placement_call, id) end)
+                completion.close(watch)
+                if not ok then error(tostring(failure)) end
+                if not cleaned then error(tostring(cleanup_error)) end
+                return output, name
+            end
+            local output, name = launch(first, [[test "$(cat)" = fixture-broker-token; grep -q light "$HOME/.codex/state.json"; printf dark > "$HOME/.codex/state.json"; printf history > "$HOME/history"; mkdir "$HOME/sessions"; printf session > "$HOME/sessions/one"; printf settings > "$HOME/settings"; if printf forbidden > "$HOME/.codex/auth.json" 2>/dev/null; then exit 9; fi; printf FIRST]])
+            test.eq(output, "FIRST")
+            local again, same = launch(first, [[grep -q dark "$HOME/.codex/state.json"; cat "$HOME/history" "$HOME/sessions/one" "$HOME/settings"]])
+            test.eq(again, "historysessionsettings"); test.eq(name, same)
+            local isolated, other = launch(second, [[test ! -e "$HOME/history"; test ! -e "$HOME/settings"; printf ISOLATED]])
+            test.eq(isolated, "ISOLATED"); test.is_true(name ~= other)
+            local image = assert(profiles.resolve(registry.snapshot(), PROFILE)).profile.image_ref
+            local checked, check_error = daemon.command({"docker", "--host", "unix:///var/run/docker.sock", "run", "--rm", "--network", "none", "--read-only",
+                "--mount", "type=volume,source=" .. name .. ",target=/state,readonly", "--entrypoint", "/bin/sh", assert(image), "-c",
+                "test ! -s /state/.codex/auth.json && test ! -s /state/.bee-stdin && ! grep -R -l fixture-broker-token /state && printf CLEAN"})
+            test.is_nil(check_error); test.eq(checked, "CLEAN")
+            first = profile_call("reset_home", alpha, 1)
+            local empty, reset_name = launch(first, [[test ! -e "$HOME/history"; test ! -e "$HOME/sessions"; test ! -e "$HOME/settings"; printf EMPTY]])
+            test.eq(empty, "EMPTY"); test.eq(reset_name, name)
+            profile_call("remove", alpha, 2)
+            local _, _, absent = daemon.request("GET", "/volumes/" .. name)
+            test.eq(absent, true)
+            profile_call("remove", beta, 1)
+            local _, _, other_absent = daemon.request("GET", "/volumes/" .. other)
+            test.eq(other_absent, true)
+        end)
+    end)
+end
 local function isolated_cases(definition: () -> ())
     local cases = test.run_cases(definition)
     return function(options)
         local originals: {[string]: unknown} = {}
         for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots",
-            POLICY, "bee.harness.launch:harness_activation", "bee.tests.placement.docker:executor"}) do
+            POLICY, "bee.harness.launch:harness_activation", "bee.tests.placement.docker:executor", "bee.credentials.env:credential_sources",
+            "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.driver.codex.credentials:credential_format"}) do
             originals[ref] = assert(registry.get(ref)).data
         end
         local ok, result = pcall(cases, options)
@@ -411,4 +529,4 @@ local function isolated_cases(definition: () -> ())
         return result
     end
 end
-return {run = isolated_cases(run), boundary = isolated_cases(boundary), input = isolated_cases(input_tests), cleanup = isolated_cases(cleanup_tests), readiness = isolated_cases(readiness_tests), creator = creator}
+return {home = isolated_cases(home_tests), run = isolated_cases(run), boundary = isolated_cases(boundary), input = isolated_cases(input_tests), cleanup = isolated_cases(cleanup_tests), readiness = isolated_cases(readiness_tests), creator = creator}

@@ -10,16 +10,21 @@ entries:
   - ctx
   - system
   - registry
+  - sql
   imports:
     bounds: bee.values:bounds
     protocol: bee.harness.profiles:protocol
     validation: bee.harness.profiles.binding:validation
     store: bee.harness.profiles.persist:store
     transaction: bee.persist:transaction
+    profile_home: bee.placement.docker.service:profile_home
   security:
     policies:
     - bee.harness.security:profile_store_policy
     - bee.harness.security:consumed_decision_policy
+    - bee.placement.docker.security:home_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_store_policy
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua

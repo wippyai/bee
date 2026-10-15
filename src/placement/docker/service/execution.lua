@@ -9,6 +9,7 @@ local materialization = require("materialization")
 local process_backend = require("process_backend")
 local resources = require("resources")
 local homes = require("homes")
+local profile_home = require("profile_home")
 local service = require("service")
 local spec_codec = require("spec")
 local paths = require("paths")
@@ -72,7 +73,6 @@ function M.prepare(_db: sql.DB, request: types.LaunchRequest, prepared: material
     if not raw_home then return nil, nil, nil, raw_home_error end
     local home, home_error = paths.resolve(raw_home, host_executor)
     if not home then return nil, nil, nil, home_error end
-    mounts[#mounts + 1] = {source = home, target = spec_codec.HOME, read_only = false}
     mappings[#mappings + 1] = {host = home, guest = spec_codec.HOME}
     local function translate(path: string): string?
         for _, mapping in ipairs(mappings) do
@@ -96,6 +96,37 @@ function M.prepare(_db: sql.DB, request: types.LaunchRequest, prepared: material
             input = spec_codec.HOME .. "/.bee-stdin"
         end
         argv = {"/bin/sh", "-c", "exec " .. quote.line(argv) .. " < " .. quote.posix(input)}
+    end
+    local name = loaded.spec.home_volume
+    if name then
+        local selected, selected_error = profile_home.selected(_db, request)
+        if selected ~= name then return nil, nil, nil, selected_error or "Saved profile home changed" end
+        local failure = profile_home.ensure(name)
+        if failure then return nil, nil, nil, failure end
+        local logins: {string} = {}
+        local states: {string} = {}
+        for _, file in ipairs(request.launch.provider_home and request.launch.provider_home.files or {}) do
+            if file.kind == "login" then logins[#logins + 1] = file.path
+            elseif file.kind == "state" and not file.source_path and not file.write_back then
+                local delivered = false
+                for _, generated in ipairs(loaded.request.delivery and loaded.request.delivery.files or {}) do
+                    if generated.path == file.path then delivered = true end
+                end
+                if not delivered then states[#states + 1] = file.path end
+            end
+        end
+        local files, files_error, seeds = profile_home.files(prepared.home_path, logins, states)
+        if not files then return nil, nil, nil, files_error end
+        local initialized = profile_home.initialize(name, loaded.spec.image, loaded.spec.user, files, seeds or {})
+        if initialized then return nil, nil, nil, initialized end
+        for _, path in ipairs(files) do
+            mounts[#mounts + 1] = {source = home .. "/" .. path, target = spec_codec.HOME .. "/" .. path, read_only = true}
+        end
+        local selected_ref, select_error = profile_home.executor(ref, name)
+        if not selected_ref then return nil, nil, nil, select_error end
+        ref = selected_ref
+    else
+        mounts[#mounts + 1] = {source = home, target = spec_codec.HOME, read_only = false}
     end
     local executor, executor_error = exec.get(ref)
     if not executor then return nil, nil, nil, "Docker executor unavailable: " .. tostring(executor_error) end

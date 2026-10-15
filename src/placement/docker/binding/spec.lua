@@ -7,7 +7,7 @@ local M = {}
 M.BINDING = "bee.placement.docker.binding:binding"
 M.HOME = "/home/bee"
 type Spec = {profile_ref: string, profile_digest: string, image: string, user: string, network: string, limits: profiles.Limits,
-    mounts: {profiles.Mount}, interactive_route_ref: string?, attempt_id: string}
+    home_volume: string?, mounts: {profiles.Mount}, interactive_route_ref: string?, attempt_id: string}
 type Observation = {backend_ref: string, state: string, attempt_id: string, home_source: string, observed_image_digest: string, exit_code: integer?}
 function M.admit(profile: profiles.Resolved, request: types.LaunchRequest): string?
     local value = profile.profile
@@ -56,7 +56,7 @@ function M.resolve(profile: profiles.Resolved, request: types.LaunchRequest, adm
 end
 function M.decode(value: unknown, request: types.LaunchRequest, admitted_digest: string?): (Spec?, string?)
     local raw = bounds.object(value)
-    if not raw or bounds.fields(raw, {"profile_ref", "profile_digest", "image", "user", "network", "limits", "mounts", "interactive_route_ref", "attempt_id"}) then return nil, "stored Docker specification is malformed" end
+    if not raw or bounds.fields(raw, {"profile_ref", "profile_digest", "image", "user", "network", "limits", "mounts", "interactive_route_ref", "attempt_id", "home_volume"}) then return nil, "stored Docker specification is malformed" end
     local profile, profile_error = profiles.decode({schema_revision = profiles.SCHEMA, placement_binding = M.BINDING,
         image_ref = raw.image, user = raw.user, network = raw.network, limits = raw.limits, mounts = raw.mounts, interactive_route_ref = raw.interactive_route_ref})
     if not profile then return nil, profile_error end
@@ -65,6 +65,11 @@ function M.decode(value: unknown, request: types.LaunchRequest, admitted_digest:
     local decoded, decode_error = M.resolve({ref = ref, digest = digest, profile = profile}, request, admitted_digest)
     if not decoded then return nil, decode_error end
     if raw.attempt_id ~= request.attempt_id then return nil, "stored Docker attempt has another identity" end
+    if raw.home_volume ~= nil then
+        local name = bounds.line(raw.home_volume, 73)
+        if not name or #name ~= 73 or not name:match("^bee%-home%-[0-9a-f]+$") then return nil, "Invalid profile home volume" end
+        decoded.home_volume = name
+    end
     return decoded, nil
 end
 function M.container_id(value: unknown): string?
@@ -106,7 +111,9 @@ function M.inspect(value: unknown, spec: Spec, home_source: string, image_id: st
         local mount = bounds.object(value)
         if not mount then return nil, "container mount is malformed" end
         if mount.Destination == M.HOME then
-            if found or mount.Type ~= "bind" or mount.Source ~= home_source or mount.RW ~= true then
+            local matches = home_source:match("^bee%-home%-") and mount.Type == "volume" and mount.Name == home_source
+                or not home_source:match("^bee%-home%-") and mount.Type == "bind" and mount.Source == home_source
+            if found or not matches or mount.RW ~= true then
                 return nil, "container has another provider home mount"
             end
             found = true

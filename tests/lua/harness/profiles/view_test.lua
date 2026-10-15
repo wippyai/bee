@@ -219,6 +219,32 @@ local function define_tests()
             test.is_true(confirmation.matches(current.confirmation, "docker.revoke"))
         end)
 
+        test.it("confirms a saved Docker home reset before submitting its fenced identity", function()
+            local s = state()
+            s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
+            local resets = 0
+            s.ask = function(target: string, request: Object): caller.Reply
+                local approval = confirmation_fixture.ask(confirmations, target, request)
+                if approval then return approval end
+                test.eq(target, "bee.harness.binding:call")
+                test.eq(request.operation, "reset_home")
+                test.eq(request.profile_id, "profile")
+                test.eq(request.expected_revision, 1)
+                test.eq(request.workspace_id, "workspace")
+                resets = resets + 1
+                return ok({})
+            end
+            local drawn = view.draw(100, 24, appearance.defaults(), s)
+            test.contains(drawn.rows[24], "Reset agent home")
+            view.action(s, "reset_home")
+            test.eq(resets, 0)
+            view.action(s, "cancel")
+            test.eq(resets, 0)
+            view.action(s, "reset_home")
+            test.eq(view.input(s, key("enter"), drawn), "reload")
+            test.eq(resets, 1)
+        end)
+
         test.it("requires confirmation before the person revokes Docker access", function()
             local s = state()
             local before = #confirmations.decisions

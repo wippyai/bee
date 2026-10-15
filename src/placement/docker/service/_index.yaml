@@ -16,6 +16,7 @@ entries:
     process_backend: bee.placement.native.binding:process_backend
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
+    profile_home: bee.placement.docker.service:profile_home
     service: bee.placement.docker.binding:methods
     spec: bee.placement.docker.binding:spec
     paths: bee.placement.profiles:paths
@@ -35,6 +36,7 @@ entries:
     - bee.credentials.security:credential_materialize_policy
     - bee.security.gateway:gateway_materialize_policy
     - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:home_policy
     - bee.placement.docker.security:host_user_policy
     - bee.placement.docker.security:docker_socket_policy
     - bee.process:client_policy
@@ -165,3 +167,16 @@ entries:
   method: pending
   imports:
     service: bee.placement.docker.binding:methods
+- name: profile_home
+  kind: library.lua
+  source: file://profile_home.lua
+  modules: [hash, fs, sql, registry]
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    grants: bee.approvals.grants:store
+    profile_grants: bee.harness.profiles:grants
+    resources: bee.placement.native.env:resources
+    daemon: bee.placement.docker.service:daemon
+    quote: bee.driver.binding:quote
+    types: bee.placement:types

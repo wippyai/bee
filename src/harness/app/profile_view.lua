@@ -227,6 +227,21 @@ function M.action(state: State, action: string, gesture: "enter" | "space" | "cl
         state.status = opened and "Revoke Docker network and gateway access? Enter confirms; Esc keeps it." or err or "Confirmation is unavailable"
         return nil
     end
+    if action == "reset_home" and state.form.revision > 0 and not state.form.pending then
+        if confirmation.matches(state.confirmation, "profile.reset_home") then
+            local accepted, err = confirmation.accept(state.confirmation, confirm_target(state, "profile.reset_home"), gesture or "click")
+            if not accepted then state.status = err or "Confirmation is unavailable"; return nil end
+            local reply = state.ask("bee.harness.binding:call", {operation = "reset_home", workspace_id = state.form.workspace_id,
+                profile_id = state.form.profile_id, expected_revision = state.form.revision, idempotency_key = state.form.remove_key .. ":home"})
+            if reply.ok then return "reload" end
+            state.status = reply.error and reply.error.message or "Agent home reset failed"
+            return nil
+        end
+        local opened, err = confirmation.open(state.confirmation, "profile.reset_home", confirm_target(state, "profile.reset_home"), "inline",
+            "Reset agent home?", "Delete this profile's CLI history, sessions and settings?")
+        state.status = opened and "Reset agent home? Enter confirms; Esc keeps it." or err or "Confirmation is unavailable"
+        return nil
+    end
     if action == "cancel" then
         state.credential_text = {}
         if confirmation.active(state.confirmation) then
@@ -411,6 +426,10 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         elseif hit then return M.action(state, hit.kind, "click") end
     elseif event.type == "key" and event.action == "press" then
         if event.key_type == "escape" or event.key_type == "esc" then return M.action(state, "cancel") end
+        if confirmation.matches(state.confirmation, "profile.reset_home") then
+            if event.key_type == "enter" then return M.action(state, "reset_home", "enter") end
+            return nil
+        end
         if confirmation.matches(state.confirmation, "docker.revoke") then
             if event.key_type == "enter" then
                 local accepted, err = confirmation.accept(state.confirmation, confirm_target(state, "docker.revoke"), "enter")
@@ -657,6 +676,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local buttons: {frame.Button} = {{kind = "save", key = "Ctrl+S", label = "Save", enabled = not confirmation.matches(state.confirmation, "profile.remove") and state.form.pending ~= "remove", primary = true}}
         if state.advanced and editor.placement_ref(state.form.draft) == "bee.placement.docker.profiles:coding" then
             buttons[#buttons + 1] = {kind = "revoke_docker", key = "Ctrl+R", label = "Revoke Docker access", enabled = not state.form.pending}
+        end
+        if state.form.revision > 0 and state.form.draft.placement and state.form.draft.placement.kind == "docker" then
+            buttons[#buttons + 1] = {kind = "reset_home", key = "", label = "Reset agent home", enabled = not state.form.pending}
         end
         if state.form.revision > 0 then
             buttons[#buttons + 1] = {kind = "remove", key = "Ctrl+D", label = confirmation.matches(state.confirmation, "profile.remove") and "Confirm" or "Remove",

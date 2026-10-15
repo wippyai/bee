@@ -8,6 +8,8 @@ local protocol = require("protocol")
 local validation = require("validation")
 local store = require("store")
 local transaction = require("transaction")
+local profile_home = require("profile_home")
+local sql = require("sql")
 type Result = transaction.Result
 type Request = protocol.Request
 local READ = "bee.harness.profiles.read"
@@ -41,6 +43,9 @@ local function handle(raw: unknown): Result
     if not input then return failure("INVALID_ARGUMENT", invalid or "invalid profile request") end
     local node, actor, denied = authority(input)
     if not node or not actor then return denied or failure("DENIED", "profile operation refused") end
+    if input.operation == "reset_home" and (ctx.get("bee.gateway.binding") ~= nil or not security.can("bee.approvals.decide", input.workspace_id)) then
+        return failure("DENIED", "Only the person may reset an agent home")
+    end
     local pinned, pin_error = registry.snapshot()
     if not pinned then return failure("UNAVAILABLE", tostring(pin_error or "profile registry unavailable")) end
     if input.profile then
@@ -49,6 +54,8 @@ local function handle(raw: unknown): Result
         local ceiling_error = validation.ceiling(pinned, input.profile, bounds.ids(ctx.get("bee.agent.trait_ceiling"), true), ctx.get("bee.agent.profile_write") ~= true)
         if ceiling_error then return failure("DENIED", ceiling_error) end
     end
-    return store.call(input, node, actor, pinned, validation.check)
+    return store.call(input, node, actor, pinned, validation.check, function(tx: sql.Transaction, reset: boolean): string?
+        return profile_home.destroy(tx, node, input.workspace_id, input.profile_id, reset)
+    end)
 end
 return {handle = handle}

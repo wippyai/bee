@@ -130,3 +130,9 @@ entries:
     actions: [fs.get, registry.get, registry.find, system.read]
     resources: ['bee.placement.native.env:root_ref', 'bee.placement.native.env:root', node, '*']
     effect: allow
+- name: home_policy
+  kind: security.policy
+  policy:
+    actions: [registry.overlay.get, registry.overlay.apply, registry.overlay.create.exec.docker, registry.overlay.delete.exec.docker]
+    resources: ['bee.placement.docker:homes', 'bee.placement.docker:home-*']
+    effect: allow

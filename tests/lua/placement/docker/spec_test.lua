@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
 local spec = require("spec")
+local profile_home = require("profile_home")
 local HOME = "/placement/attempts/owned/home"
 local IMAGE_ID = "sha256:" .. string.rep("e", 64)
 local function admitted(): spec.Spec
@@ -25,6 +26,23 @@ local function run()
             raw = inspect(value)
             raw.Mounts = {{Type = "bind", Source = "/foreign/home", Destination = "/home/bee", RW = true}}
             test.is_nil(spec.inspect(raw, value, HOME, IMAGE_ID))
+        end)
+        test.it("keys homes by saved identity, independent of launch and profile revisions", function()
+            local name = profile_home.name("node", "workspace", "profile")
+            test.eq(name, profile_home.name("node", "workspace", "profile"))
+            test.is_true(name ~= profile_home.name("node", "workspace", "other"))
+            test.is_true(name ~= profile_home.name("node", "other", "profile"))
+            test.is_true(name ~= profile_home.name("other", "workspace", "profile"))
+            test.is_true(name:match("^bee%-home%-[0-9a-f]+$") ~= nil)
+        end)
+        test.it("recognizes a named profile home by volume name, never its daemon path", function()
+            local value = admitted()
+            local raw = inspect(value)
+            local name = "bee-home-" .. string.rep("a", 64)
+            raw.Mounts = {{Type = "volume", Name = name, Source = "/var/lib/docker/volumes/private/_data", Destination = "/home/bee", RW = true}}
+            test.not_nil(spec.inspect(raw, value, name, IMAGE_ID))
+            raw.Mounts = {{Type = "volume", Name = "foreign", Destination = "/home/bee", RW = true}}
+            test.is_nil(spec.inspect(raw, value, name, IMAGE_ID))
         end)
         test.it("runs a host-user profile as the node's own uid and gid, never as root", function()
             test.eq(spec.container_user("host", 501, 20), "501:20")

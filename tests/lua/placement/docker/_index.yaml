@@ -21,6 +21,7 @@ entries:
   imports:
     test: wippy.test:test
     spec: bee.placement.docker.binding:spec
+    profile_home: bee.placement.docker.service:profile_home
 - name: profile
   kind: registry.entry
   meta:
@@ -109,6 +110,8 @@ entries:
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
     completion: bee.tests.placement.native:completion
+    profile_home: bee.placement.docker.service:profile_home
+    daemon: bee.placement.docker.service:daemon
   security:
     policies:
     - bee.tests.placement.native:apply_test_policy
@@ -146,6 +149,8 @@ entries:
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
     completion: bee.tests.placement.native:completion
+    profile_home: bee.placement.docker.service:profile_home
+    daemon: bee.placement.docker.service:daemon
   security:
     policies:
     - bee.tests.placement.native:apply_test_policy
@@ -184,6 +189,8 @@ entries:
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
     completion: bee.tests.placement.native:completion
+    profile_home: bee.placement.docker.service:profile_home
+    daemon: bee.placement.docker.service:daemon
   security:
     policies:
     - bee.tests.placement.native:apply_test_policy
@@ -222,6 +229,8 @@ entries:
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
     completion: bee.tests.placement.native:completion
+    profile_home: bee.placement.docker.service:profile_home
+    daemon: bee.placement.docker.service:daemon
   security:
     policies:
     - bee.tests.placement.native:apply_test_policy
@@ -310,6 +319,8 @@ entries:
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
     completion: bee.tests.placement.native:completion
+    profile_home: bee.placement.docker.service:profile_home
+    daemon: bee.placement.docker.service:daemon
 - name: boundary_test
   kind: function.lua
   source: file://lifecycle_test.lua
@@ -341,6 +352,8 @@ entries:
     prestart: bee.harness.carrier:prestart
     bounds: bee.values:bounds
     completion: bee.tests.placement.native:completion
+    profile_home: bee.placement.docker.service:profile_home
+    daemon: bee.placement.docker.service:daemon
   security:
     policies:
     - bee.tests.placement.native:apply_test_policy
@@ -399,3 +412,45 @@ entries:
     actions: [process.registry.register, process.registry.unregister, cdc.subscribe]
     resources: ["bee.test.docker.cleanup", "bee.test.docker.cleanup.outcome", "bee:changes"]
     effect: allow
+- name: home_test
+  kind: function.lua
+  source: file://lifecycle_test.lua
+  method: home
+  meta:
+    type: test
+    suite: bee_docker
+    resources: [docker_daemon]
+    timeout: 180s
+  modules:
+  - funcs
+  - registry
+  - security
+  - process
+  - channel
+  - cdc
+  imports:
+    placement_decode: bee.placement:decode
+    test: wippy.test:test
+    principals: bee.tests.support.principals:bound
+    profiles: bee.placement.profiles:profiles
+    request_codec: bee.placement:request
+    store: bee.placement.native.persist:store
+    spec: bee.placement.docker.binding:spec
+    types: bee.placement:types
+    service: bee.placement.docker.binding:methods
+    placement_resolver: bee.placement.binding:resolver
+    protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    prestart: bee.harness.carrier:prestart
+    bounds: bee.values:bounds
+    completion: bee.tests.placement.native:completion
+    profile_home: bee.placement.docker.service:profile_home
+    daemon: bee.placement.docker.service:daemon
+  security:
+    policies:
+    - bee.tests.placement.native:apply_test_policy
+    - bee.tests.placement.docker:creator_policy
+    - bee.tests.placement.docker:cleanup_test_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.docker.security:host_user_policy

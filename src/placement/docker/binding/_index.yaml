@@ -33,6 +33,7 @@ entries:
     store: bee.placement.native.persist:store
     local_attempts: bee.placement.native.service:service
     homes: bee.placement.native.service:homes
+    profile_home: bee.placement.docker.service:profile_home
     types: bee.placement:types
     workdir_preparers: bee.placement.native.service:workdir_preparers
     daemon: bee.placement.docker.service:daemon

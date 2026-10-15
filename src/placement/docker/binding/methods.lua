@@ -12,6 +12,7 @@ local spec_codec = require("spec")
 local store = require("store")
 local local_attempts = require("local_attempts")
 local homes = require("homes")
+local profile_home = require("profile_home")
 local types = require("types")
 local workdir_preparers = require("workdir_preparers")
 local daemon = require("daemon")
@@ -77,6 +78,7 @@ function M.ensure_image(spec: spec_codec.Spec): (boolean, string?)
     return fetched.ok, fetched.error and fetched.error.message or nil
 end
 local function provider_home(loaded: Loaded): (string?, string?)
+    if loaded.spec.home_volume then return loaded.spec.home_volume, nil end
     local request = loaded.request
     local key, key_error = homes.attempt_key(request.owner_id, request.attempt_id)
     local parent = homes.ATTEMPTS
@@ -188,6 +190,12 @@ function M.prepare(value: unknown): Reply
     if image_error then return fail("UNAVAILABLE", image_error) end
     local spec, spec_error = spec_codec.resolve(profile, request, nil, image, route)
     if not spec then return fail("DENIED", spec_error or "Docker specification refused") end
+    local db, open_error = store.open()
+    if not db then return fail("STORAGE", open_error or "Profile home store unavailable") end
+    local home_volume, home_error = profile_home.selected(db, request)
+    db:release()
+    if home_error then return fail("DENIED", home_error) end
+    spec.home_volume = home_volume
     local encoded, encode_error = json.encode(spec)
     if not encoded then return fail("INVALID", tostring(encode_error)) end
     return local_attempts.prepare_local(request, {binding = spec_codec.BINDING, kind = "docker", spec_json = encoded,

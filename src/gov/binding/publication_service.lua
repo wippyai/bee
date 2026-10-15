@@ -223,7 +223,7 @@ function M.call(raw: unknown): Result
     local activation_store, activation_error = activations.open(governance_resource, node_id, workspace_id)
     if not activation_store then return failure("UNAVAILABLE", activation_error or "open application activation state") end
     local active: Profile = chosen
-    local identity = workspace_applications.identity(workspace_id, chosen.source_workspace)
+    local identity = workspace_applications.identity(workspace_id, chosen.source_workspace, true)
     local prior_owner = workspace_applications.prior_owner(workspace_id, chosen.source_workspace)
     if identity and prior_owner and chosen.overlay_owner == identity.overlay_owner then
         local prior = activations.desired(activation_store, prior_owner)

@@ -168,7 +168,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     if namespace_count == 0 or namespace_count > 64 then return nil, nil, "private artifact namespace count exceeds its bound" end
 
     if policy.workspace_application then
-        local identity = workspace_applications.identity(spec.workspace_id, source_workspace)
+        local identity = workspace_applications.identity(spec.workspace_id, source_workspace, true)
         if identity and policy.namespaces[identity.namespace] == true then
             local allowed: {[string]: boolean} = {}
             for name, admitted in pairs(policy.namespaces) do allowed[name] = admitted end

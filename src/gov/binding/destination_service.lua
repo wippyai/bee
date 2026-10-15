@@ -143,7 +143,7 @@ local RECOVERY_ATTEMPTS = 4
 -- holding a desired version, else the application's own owner.
 local function application_owner(activation_store: activations.Store, workspace_id: string, source_workspace: string): string?
     local identity = activation_profiles.hub_identity(workspace_id, source_workspace)
-        or workspace_applications.identity(workspace_id, source_workspace)
+        or workspace_applications.identity(workspace_id, source_workspace, true)
     if not identity then return nil end
     for _, candidate in ipairs({workspace_applications.prior_owner(workspace_id, source_workspace), identity.overlay_owner}) do
         if activations.desired(activation_store, candidate).ok then return candidate end
@@ -182,7 +182,7 @@ local function revert_application(request: Object, workspace_id: string, actor_i
     if exact(request, {"source_workspace", "receipt_key", "expected_intent_id"}) then return failure("INVALID", "revert has unknown fields") end
     local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
     local identity = source_workspace and (activation_profiles.hub_identity(workspace_id, source_workspace)
-        or workspace_applications.identity(workspace_id, source_workspace)) or nil
+        or workspace_applications.identity(workspace_id, source_workspace, true)) or nil
     if not source_workspace or not key or not identity then return failure("INVALID", "revert names no application") end
     local overlay_owner = application_owner(activation_store, workspace_id, source_workspace)
     if not overlay_owner or not activations.desired(activation_store, overlay_owner).ok then
@@ -232,7 +232,7 @@ end
 -- application: a lease can only be proposed over something already installed.
 local function installed_envelope(profile_value: Profile): (capability_model.Vocabulary?, {capability_model.Grant}?, string?)
     local identity = activation_profiles.hub_identity(profile_value.workspace_id, profile_value.source_workspace)
-        or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
+        or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace, true)
     local prior_owner = workspace_applications.prior_owner(profile_value.workspace_id, profile_value.source_workspace)
     local uses_prior = prior_owner ~= nil and prior_owner == profile_value.overlay_owner
     if not identity or (identity.overlay_owner ~= profile_value.overlay_owner and not uses_prior)

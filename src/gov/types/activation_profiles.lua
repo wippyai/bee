@@ -363,7 +363,7 @@ end
 local function instantiate(rule: Template, workspace_id: string, source_node: string,
     source_workspace: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
     owner_hint: string?): (DecodedProfile?, Object?, string?)
-    local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace)
+    local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace, installed_raw ~= nil)
     local hub_identity = M.hub_identity(workspace_id, source_workspace)
     identity = hub_identity or identity
     if not identity then

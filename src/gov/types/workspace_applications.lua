@@ -12,20 +12,22 @@ M.MAX_NAME = 48
 
 type Identity = {name: string, namespace: string, component: string, overlay_owner: string}
 
-M.RULE = "name the overlay with lowercase letters, digits and underscores, starting with a letter (at most "
+M.RULE = "name the overlay with lowercase letters and digits, starting with a letter (at most "
     .. tostring(M.MAX_NAME) .. " characters); put every entry in namespace " .. M.NAMESPACE_ROOT
     .. ".<overlay_id> or its child namespaces and declare exactly one process.lua application with meta.type bee.app"
 
 -- The overlay name, when it can name a workspace application.
 function M.name(raw: unknown): string?
-    if type(raw) ~= "string" or #raw == 0 or #raw > M.MAX_NAME or not raw:match("^[a-z][a-z0-9_]*$") then
+    if type(raw) ~= "string" or #raw == 0 or #raw > M.MAX_NAME or not raw:match("^[a-z][a-z0-9]*$") then
         return nil
     end
     return raw
 end
 
-function M.identity(workspace_raw: unknown, source_workspace: unknown): (Identity?, string?)
+function M.identity(workspace_raw: unknown, source_workspace: unknown, stored: boolean?): (Identity?, string?)
     local name = M.name(source_workspace)
+    if stored == true and type(source_workspace) == "string" and #source_workspace <= M.MAX_NAME
+        and source_workspace:match("^[a-z][a-z0-9_]*$") then name = source_workspace end
     if not name then
         return nil, "overlay " .. tostring(source_workspace) .. " cannot name a workspace application: " .. M.RULE
     end
@@ -57,7 +59,7 @@ function M.application(raw: unknown): (string?, string?)
 end
 
 function M.prior_owner(workspace_raw: unknown, source_workspace: unknown): string?
-    local identity = M.identity(workspace_raw, source_workspace)
+    local identity = M.identity(workspace_raw, source_workspace, true)
     return identity and PRIOR_OWNER_PREFIX .. (workspace_raw) .. "." .. identity.name or nil
 end
 

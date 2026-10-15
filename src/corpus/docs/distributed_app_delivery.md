@@ -237,8 +237,8 @@ the person, as `bee.security.approvals:approver_policies` ships it), the admitte
 native modules, and the admission policies and thread access of the one
 application entry.
 
-The rule applies to an overlay whose name is lowercase letters, digits and
-underscores starting with a letter, authored on this node or, while the rule's
+The rule applies to an overlay whose name is lowercase letters and digits
+starting with a letter, authored on this node or, while the rule's
 `hive` flag is `true` (the shipped value), received over Hive from another
 node. A Hive-received overlay is admitted the same way on its destination: the
 destination instantiates its own profile and capability catalog, its own

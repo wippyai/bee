@@ -19,14 +19,14 @@ entries:
   source: file://owner.lua
   method: main
   modules: [system, registry, process, sql, events, exec, json, channel, time]
-  imports: {bounds: bee.values:bounds, supervision: bee.placement.native.persist:supervision, boot_gate: bee.process:boot_gate}
+  imports: {bounds: bee.values:bounds, supervision: bee.placement.native.persist:supervision}
 - name: service
   kind: process.service
   process: bee.tests.support.hygiene:owner
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires: [wippy.bootloader:bootloader.service, bee.hive.service:supervisor_service, bee:changes, bee.tests.support.hygiene:db]
+    requires: [bee.gov.service:recovery_service, wippy.bootloader:bootloader.service, bee.hive.service:supervisor_service, bee:changes, bee.tests.support.hygiene:db]
     security:
       actor: {id: bee.test.hygiene}
       policies: [bee.tests.support.hygiene:inspection_policy]
@@ -34,7 +34,7 @@ entries:
   kind: library.lua
   source: file://owner.lua
   modules: [system, registry, process, sql, events, exec, json, channel, time]
-  imports: {bounds: bee.values:bounds, supervision: bee.placement.native.persist:supervision, boot_gate: bee.process:boot_gate}
+  imports: {bounds: bee.values:bounds, supervision: bee.placement.native.persist:supervision}
 - name: compare_test
   kind: function.lua
   source: file://compare_test.lua

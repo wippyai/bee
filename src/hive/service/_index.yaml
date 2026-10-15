@@ -20,7 +20,6 @@ entries:
     remote: bee.hive:remote
     demand: bee.process:demand
     demand_owner: bee.process:demand_owner
-    boot_gate: bee.process:boot_gate
     route_catalog: bee.hive.service:routing
 - name: routing
   kind: library.lua
@@ -37,7 +36,7 @@ entries:
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires: [wippy.bootloader:bootloader.service, bee:changes]
+    requires: [wippy.bootloader:bootloader.service, bee.gov.service:recovery_service, bee:changes]
     security:
       actor:
         id: bee.hive.supervisor

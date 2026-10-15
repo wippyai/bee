@@ -145,14 +145,26 @@ local function define_tests()
             local migration = assert(registry.get("wippy.migration:migration_bootloader"))
             test.is_true(entry.meta.order < migration.meta.order)
         end)
-        test.it("completes its startup check before the bootloader starts", function()
-            local gate = assert(registry.get("bee.persist.service:state_guard_service"))
+        test.it("uses one pre-migration guard without changing the dependency bootloader", function()
+            test.is_nil((registry.get("bee.persist.service:state_guard_service")))
+            test.is_nil((registry.get("bee.persist.service:state_guard_startup")))
+            test.is_nil((registry.get("bee.persist:guarded_bootloader")))
             local bootloader = assert(registry.get("wippy.bootloader:bootloader.service"))
-            test.eq(gate.data.process, "bee.persist.service:state_guard_startup")
-            test.eq(gate.data.lifecycle.startup, "complete")
-            test.eq(gate.data.host, "bee:workers")
-            test.eq(gate.data.lifecycle.restart.max_attempts, 1)
-            test.eq(bootloader.data.lifecycle.requires[1], "bee.persist.service:state_guard_service")
+            test.eq(bootloader.data.lifecycle.startup, "complete")
+            for _, required in ipairs(bootloader.data.lifecycle.requires or {}) do
+                test.is_true(required ~= "bee.persist.service:state_guard_service")
+            end
+        end)
+        test.it("orders state owners after recovery and migration completion", function()
+            local recovery = assert(registry.get("bee.gov.service:recovery_service"))
+            test.eq(recovery.data.lifecycle.startup, "complete")
+            test.eq(recovery.data.lifecycle.requires[1], "wippy.bootloader:bootloader.service")
+            for _, id in ipairs({"bee.threads.service:service", "bee.node.service:owner_service", "bee.hive.service:supervisor_service"}) do
+                local entry = assert(registry.get(id))
+                local requires = {}
+                for _, required in ipairs(entry.data.lifecycle.requires) do requires[required] = true end
+                test.is_true(requires["bee.gov.service:recovery_service"] == true, id)
+            end
         end)
     end)
 end

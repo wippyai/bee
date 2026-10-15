@@ -31,7 +31,6 @@ entries:
 - name: recovery_service
   meta:
     title: Library · boot recovery
-    type: bee.process.boot_gate
   kind: process.service
   process: bee.gov.service:recovery
   host: bee:workers

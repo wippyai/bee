@@ -158,3 +158,26 @@ entries:
   method: ready_deferred
   meta: {type: test, suite: bee, timeout: 60s}
   imports: *demand_model_imports
+- name: boot_lifecycle_test
+  kind: function.lua
+  source: file://boot_lifecycle_test.lua
+  method: run
+  meta: {type: boot_test, suite: bee, timeout: 10s}
+  modules: [process, system, sql]
+  imports: &boot_lifecycle_imports
+    test: wippy.test:test
+    recovery: bee.gov.service:recovery
+- name: lifecycle_gate
+  kind: process.lua
+  source: file://boot_lifecycle_test.lua
+  method: complete
+  meta: {type: test_support}
+  modules: [process, system, sql]
+  imports: *boot_lifecycle_imports
+- name: lifecycle_observer
+  kind: process.lua
+  source: file://boot_lifecycle_test.lua
+  method: observe
+  meta: {type: test_support}
+  modules: [process, system, sql]
+  imports: *boot_lifecycle_imports

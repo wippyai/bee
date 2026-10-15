@@ -24,7 +24,6 @@ local cdc = require("cdc")
 local demand = require("demand")
 local demand_owner = require("demand_owner")
 local route_catalog = require("route_catalog")
-local boot_gate = require("boot_gate")
 
 type Saved = {parked: {[string]: {protocol.Forwarded}}, supervised_callers: {[string]: integer},
     applications: {protocol.Forwarded}, services: {[string]: string}, names: {[string]: string}, demanded: demand_owner.Owners}
@@ -242,11 +241,6 @@ local function main(saved: Saved?)
         backlog = backlog_stream:channel()
         demand_owner.recover(demanded, nil)
     end
-    if not boot_gate.wait(function(): boolean
-        local selected = channel.select({supervised:case_receive(), events:case_receive()})
-        if not selected.ok then return false end
-        return selected.channel ~= events or selected.value.kind ~= process.event.CANCEL
-    end) then return end
     demand_owner.recover(demanded, nil)
     while active < receiver.MAX_ACTIVE and #applications > 0 do
         application_call(assert(table.remove(applications, 1)))

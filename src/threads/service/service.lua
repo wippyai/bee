@@ -16,7 +16,6 @@
 -- reaches only the forwarded operations; the thread's own membership decides
 -- what that actor may do.
 local process = require("process")
-local boot_gate = require("boot_gate")
 local sql = require("sql")
 local channel = require("channel")
 local system = require("system")
@@ -134,14 +133,6 @@ end
 local idle = worker.idle
 
 local function run(active: () -> boolean, stopped: channel.Channel<boolean>)
-    local startup = assert(eventbus.subscribe("supervisor", "service.update"))
-    local waited, complete = pcall(boot_gate.wait, function(): boolean
-        local selected = channel.select({startup:channel():case_receive(), stopped:case_receive()})
-        return selected.ok and selected.channel ~= stopped
-    end)
-    startup:close()
-    if not waited then error(complete) end
-    if not complete or not active() then return end
     local node = assert(system.node.id())
     local registered, register_error = process.registry.register(NAME)
     if not registered then error("register threads service: " .. tostring(register_error)) end

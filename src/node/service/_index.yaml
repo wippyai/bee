@@ -26,7 +26,6 @@ entries:
     settings: bee.node.persist:settings
     appearance: bee.ui:appearance
     client: bee.node:client
-    boot_gate: bee.process:boot_gate
     confirmation: bee.approvals.app:confirmation
     bounds: bee.values:bounds
     app_identity: bee.threads.records:app_identity
@@ -42,6 +41,7 @@ entries:
   lifecycle:
     auto_start: true
     requires:
+    - bee.gov.service:recovery_service
     - bee.hive.service:supervisor_service
     security:
       actor:
@@ -59,7 +59,6 @@ entries:
       - bee.node.security:owner_role
       - bee.node.security:owner_app_alias
       - bee.node.security:owner_launch
-      - bee.process:boot_gate_policy
       - bee.hive.security:messaging
     restart:
       max_attempts: 10

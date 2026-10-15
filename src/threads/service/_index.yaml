@@ -104,7 +104,6 @@ entries:
   - cdc
   - time
   imports:
-    boot_gate: bee.process:boot_gate
     pump_config: bee.threads.service:pump_config
     protocol: bee.hive:protocol
     database: bee.threads.persist:database
@@ -125,13 +124,13 @@ entries:
   lifecycle:
     auto_start: true
     requires:
+    - bee.gov.service:recovery_service
     - wippy.bootloader:bootloader.service
     - bee:changes
     security:
       actor:
         id: bee.threads
       policies:
-      - bee.process:boot_gate_policy
       - bee.threads.security:store
       - bee.threads.security:changes
       - bee.threads.security:announce

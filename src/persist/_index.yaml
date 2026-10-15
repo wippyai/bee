@@ -38,9 +38,3 @@ entries:
   source: file://state_refusal.lua
   method: main
   modules: [io]
-- name: guarded_bootloader
-  kind: ns.requirement
-  default: [bee.persist.service:state_guard_service]
-  targets:
-  - entry: wippy.bootloader:bootloader.service
-    path: .lifecycle.requires

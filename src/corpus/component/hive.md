@@ -66,11 +66,11 @@ Hive serializes demand for an explicit allowlist of host owners declared with
 for the registered owner to acknowledge readiness, and delivers a generation
 with its requests. Quiet stop accepts only that owner's current generation.
 Demand arriving during stop starts the owner after the supervised stop
-completes. Hive waits for registered `bee.process.boot_gate` services to complete
-before probing durable backlogs or delivering demand. Supervisor events advance
-that startup wait. The gates are startup barriers; restarting a completed gate
-does not stop Hive. Node also waits at that startup barrier. Node and transient owners depend on
-resident Hive, so later starts do not rerun the bootloader or restoration.
+completes. Hive and Node declare `lifecycle.requires` on the boot recovery service, a
+`startup: complete` process the runtime runs after the bootloader; they start
+only once it completes, and a failed completion fails boot. Node and transient
+owners depend on resident Hive, so later starts do not rerun the bootloader or
+restoration.
 
 Contract 2 discovers approval effect consumers through registry metadata and
 dispatches their durable terminal events to each registered demand owner.

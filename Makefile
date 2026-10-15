@@ -140,6 +140,7 @@ SHARDS ?= $(shell python3 -c 'import os; print(min(4, max(1, len(os.sched_getaff
 TEST_CACHE_MODE ?= readwrite
 
 boot-check: test-prepare
+	python3 -m tests.runner.boot_lifecycle $(abspath $(WIPPY))
 	python3 -m tests.runner.boot $(abspath $(WIPPY)) $(LUA_CACHE) $(TEST_CACHE_MODE)
 
 test-python: .wippy/build/lua-parse .wippy/build/test-migration

@@ -68,9 +68,9 @@ local function main(value: unknown)
         function(source: FeedSource, target: string, request: unknown): (unknown, string?)
             if source.local_owner then return funcs.new():call(target, request) end
             if type(request) ~= "table" then return nil, "invalid owner request" end
-            local operation = target:match("^bee%.approvals%.binding:(.+)$")
+            local operation = source_config.operation(source_entry and source_entry.data.routes, target)
             if not operation then return nil, "invalid owner operation" end
-            local answer, call_error = protocol.call(source.node_id, "approvals." .. operation, request, "5s")
+            local answer, call_error = protocol.call(source.node_id, operation, request, "5s")
             if not answer then answer = {ok = false, value = nil, error = call_error} end
             if not answer.ok then
                 -- Transport failure cannot say whether an owner mutation committed.

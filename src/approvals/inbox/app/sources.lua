@@ -50,4 +50,20 @@ function M.configure(local_node: string, local_workspaces: {string}, raw_sources
     end
     return configured, nil
 end
+function M.operation(raw: unknown, target: string): (string?, string?)
+    local routes = bounds.dense_list(raw, 32, "inbox routes")
+    if not routes then return nil, "inbox routes are unavailable" end
+    local found: string? = nil
+    local seen: {[string]: boolean} = {}
+    for _, raw_route in ipairs(routes) do
+        local route = bounds.object(raw_route)
+        local entry = route and bounds.id(route.target)
+        local operation = route and bounds.id(route.operation)
+        if not entry or not operation or seen[entry] then return nil, "inbox routes are invalid" end
+        seen[entry] = true
+        if entry == target then found = operation end
+    end
+    if not found then return nil, "owner operation is not admitted" end
+    return found, nil
+end
 return M

@@ -138,6 +138,14 @@ entries:
     comment: Host-selected remote owner/workspace sources; discovery grants no reading or approval authority
   data:
     sources: []
+    routes:
+    - {target: 'bee.approvals.binding:feed_snapshot', operation: approvals.feed_snapshot}
+    - {target: 'bee.approvals.binding:feed_read_after', operation: approvals.feed_read_after}
+    - {target: 'bee.approvals.binding:read', operation: approvals.read}
+    - {target: 'bee.approvals.binding:decide', operation: approvals.decide}
+    - {target: 'bee.approvals.binding:decide_batch', operation: approvals.decide_batch}
+    - {target: 'bee.approvals.binding:withdraw', operation: approvals.withdraw}
+    - {target: 'bee.approvals.binding:grant_window', operation: approvals.grant_window}
 - name: workspaces
   kind: registry.entry
   meta:

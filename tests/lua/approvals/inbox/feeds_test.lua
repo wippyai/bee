@@ -32,6 +32,13 @@ local function projection(source: Source, value: Object, sequence: integer): Obj
 end
 local function define_tests()
     test.describe("Inbox sync feed adapter", function()
+        test.it("routes only exact targets in the host declaration regardless of namespace", function()
+            local routes = {{target = "vendor.other:lookup", operation = "approvals.read"}}
+            test.eq(source_config.operation(routes, "vendor.other:lookup"), "approvals.read")
+            test.is_nil(source_config.operation(routes, "bee.approvals.binding:read"))
+            test.is_nil(source_config.operation(nil, "vendor.other:lookup"))
+            test.is_nil(source_config.operation({routes[1], routes[1]}, "vendor.other:lookup"))
+        end)
         test.it("routes grant inspection and revocation only to the local authority", function()
             local configured = assert(source_config.configure("node-a", {"ws"}))
             local calls = 0

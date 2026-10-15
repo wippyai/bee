@@ -177,14 +177,16 @@ def observe_hook_cancellation(src):
 def fixture_clock(src):
     """The gateway reads the time from a fixture instant a suite may pin."""
     shutil.copytree(TESTS / "fixtures/gateway_clock", src / "gateway_clock")
-    gateway = src / "gateway/binding/gateway.lua"
-    replace_once(gateway, 'local time = require("time")',
-                 'local time = require("time")\nlocal fixture_clock = require("fixture_clock")')
-    gateway.write_text(gateway.read_text().replace("time.now()", "fixture_clock.now()"))
-
-    def import_clock(entries):
-        entries["gateway"]["imports"]["fixture_clock"] = "bee.gateway:fixture_clock"
-    update_entries(src / "gateway/binding/_index.yaml", import_clock)
+    for name in ("values", "listener", "capabilities", "credentials"):
+        gateway = src / "gateway/binding" / (name + ".lua")
+        if "time.now()" not in gateway.read_text():
+            continue
+        replace_once(gateway, 'local time = require("time")',
+                     'local time = require("time")\nlocal fixture_clock = require("fixture_clock")')
+        gateway.write_text(gateway.read_text().replace("time.now()", "fixture_clock.now()"))
+        update_entries(src / "gateway/binding/_index.yaml",
+                       lambda entries: entries[name]["imports"].update(
+                           {"fixture_clock": "bee.gateway:fixture_clock"}))
 
     hooks = src / "threads/hooks/supervisor.lua"
     text = hooks.read_text()

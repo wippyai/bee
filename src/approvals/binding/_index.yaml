@@ -396,35 +396,6 @@ entries:
     service: bee.approvals.binding:service
   security:
     policies: *id001
-- name: service
-  kind: library.lua
-  source: file://service.lua
-  modules:
-  - sql
-  - hash
-  - uuid
-  - json
-  - security
-  - system
-  - process
-  - events
-  - logger
-  - funcs
-  imports:
-    lifecycle: bee.approvals.persist:lifecycle
-    dispatch: bee.approvals.persist:dispatch
-    grants: bee.approvals.grants:store
-    windows: bee.approvals.types:windows
-    runtime_lease: bee.approvals.types:runtime_lease
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    values: bee.threads.records:values
-    clock: bee.values:clock
-    node_database: bee.persist:database
-    transaction: bee.persist:transaction
-    resources: bee.approvals.env:resources
-    store: bee.approvals.persist:store
-    outbox: bee.approvals.persist:outbox
 - name: effect_queue
   kind: function.lua
   source: file://effect_queue_method.lua
@@ -435,7 +406,6 @@ entries:
     policies:
     - bee.security.approvals:approval_store_policy
     - bee.security.approvals:approval_announce_policy
-
 - name: withdraw_origin
   kind: function.lua
   source: file://withdraw_origin_method.lua
@@ -444,3 +414,207 @@ entries:
     service: bee.approvals.binding:service
   security:
     policies: *id001
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules:
+  - sql
+  - funcs
+  imports:
+    transaction: bee.persist:transaction
+    windows: bee.approvals.types:windows
+- name: values
+  kind: library.lua
+  source: file://values.lua
+  modules:
+  - hash
+  - system
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    transaction: bee.persist:transaction
+    clock: bee.values:clock
+    part_model: bee.approvals.binding:model
+- name: requests
+  kind: library.lua
+  source: file://requests.lua
+  modules:
+  - sql
+  - funcs
+  - uuid
+  - security
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    values: bee.threads.records:values
+    resources: bee.approvals.env:resources
+    store: bee.approvals.persist:store
+    runtime_lease: bee.approvals.types:runtime_lease
+    windows: bee.approvals.types:windows
+    grants: bee.approvals.grants:store
+    lifecycle: bee.approvals.persist:lifecycle
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+    part_records: bee.approvals.binding:records
+    part_authority: bee.approvals.binding:authority
+    part_projections: bee.approvals.binding:projections
+- name: service
+  kind: library.lua
+  source: file://service.lua
+  modules:
+  - sql
+  - funcs
+  - json
+  - security
+  - process
+  - events
+  - logger
+  imports:
+    bounds: bee.values:bounds
+    node_database: bee.persist:database
+    transaction: bee.persist:transaction
+    store: bee.approvals.persist:store
+    runtime_lease: bee.approvals.types:runtime_lease
+    lifecycle: bee.approvals.persist:lifecycle
+    dispatch: bee.approvals.persist:dispatch
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+    part_requests: bee.approvals.binding:requests
+    part_decisions: bee.approvals.binding:decisions
+    part_effects: bee.approvals.binding:effects
+    part_queries: bee.approvals.binding:queries
+    part_retention: bee.approvals.binding:retention
+    part_leases: bee.approvals.binding:leases
+    part_records: bee.approvals.binding:records
+    part_authority: bee.approvals.binding:authority
+- name: records
+  kind: library.lua
+  source: file://records.lua
+  modules:
+  - sql
+  - hash
+  - json
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    values: bee.threads.records:values
+    resources: bee.approvals.env:resources
+    store: bee.approvals.persist:store
+    windows: bee.approvals.types:windows
+    lifecycle: bee.approvals.persist:lifecycle
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+- name: authority
+  kind: library.lua
+  source: file://authority.lua
+  modules:
+  - sql
+  - security
+  imports:
+    bounds: bee.values:bounds
+    transaction: bee.persist:transaction
+    resources: bee.approvals.env:resources
+    store: bee.approvals.persist:store
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+- name: projections
+  kind: library.lua
+  source: file://projections.lua
+  modules:
+  - sql
+  imports:
+    canonical: bee.values:canonical
+    store: bee.approvals.persist:store
+    outbox: bee.approvals.persist:outbox
+    lifecycle: bee.approvals.persist:lifecycle
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+    part_records: bee.approvals.binding:records
+- name: decisions
+  kind: library.lua
+  source: file://decisions.lua
+  modules:
+  - sql
+  - json
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    resources: bee.approvals.env:resources
+    store: bee.approvals.persist:store
+    windows: bee.approvals.types:windows
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+    part_records: bee.approvals.binding:records
+    part_authority: bee.approvals.binding:authority
+    part_projections: bee.approvals.binding:projections
+- name: effects
+  kind: library.lua
+  source: file://effects.lua
+  modules:
+  - sql
+  - hash
+  - security
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    resources: bee.approvals.env:resources
+    store: bee.approvals.persist:store
+    grants: bee.approvals.grants:store
+    lifecycle: bee.approvals.persist:lifecycle
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+    part_records: bee.approvals.binding:records
+    part_authority: bee.approvals.binding:authority
+    part_projections: bee.approvals.binding:projections
+- name: queries
+  kind: library.lua
+  source: file://queries.lua
+  modules:
+  - sql
+  - hash
+  - json
+  - security
+  - events
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    resources: bee.approvals.env:resources
+    store: bee.approvals.persist:store
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+    part_records: bee.approvals.binding:records
+    part_authority: bee.approvals.binding:authority
+    part_projections: bee.approvals.binding:projections
+- name: retention
+  kind: library.lua
+  source: file://retention.lua
+  modules:
+  - sql
+  - security
+  imports:
+    bounds: bee.values:bounds
+    store: bee.approvals.persist:store
+    lifecycle: bee.approvals.persist:lifecycle
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+    part_records: bee.approvals.binding:records
+    part_projections: bee.approvals.binding:projections
+- name: leases
+  kind: library.lua
+  source: file://leases.lua
+  modules:
+  - sql
+  - hash
+  - security
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    store: bee.approvals.persist:store
+    runtime_lease: bee.approvals.types:runtime_lease
+    windows: bee.approvals.types:windows
+    grants: bee.approvals.grants:store
+    part_model: bee.approvals.binding:model
+    part_values: bee.approvals.binding:values
+    part_records: bee.approvals.binding:records
+    part_authority: bee.approvals.binding:authority
+    part_effects: bee.approvals.binding:effects

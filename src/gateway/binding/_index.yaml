@@ -1,48 +1,6 @@
 version: '1.0'
 namespace: bee.gateway.binding
 entries:
-- name: gateway
-  kind: library.lua
-  source: file://gateway.lua
-  modules:
-  - sql
-  - hash
-  - time
-  - uuid
-  - json
-  - security
-  - contract
-  - system
-  - crypto
-  - base64
-  - http_client
-  - registry
-  imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    capability_model: bee.capability:model
-    node_database: bee.persist:database
-    configuration: bee.gateway.env:configuration
-    hooks: bee.gateway.hooks:hooks
-    mcp: bee.gateway.api:mcp
-    sessions: bee.gateway.catalog:sessions
-    catalog: bee.gateway.catalog:catalog
-    surface: bee.gateway.catalog:surface
-    trait_access: bee.gateway.security:traits
-    agent_trait: bee.values:agent_trait
-    session_traits: bee.threads.delivery:traits
-    surface_store: bee.gateway.persist:surface_store
-    grant_store: bee.approvals.grants:store
-    binding_store: bee.gateway.persist:binding_store
-    credential_store: bee.gateway.persist:credential_store
-    external_store: bee.gateway.persist:external_store
-    subject_call: bee.gateway.security:subject_call
-    hook_store: bee.gateway.persist:hook_store
-    listener_store: bee.gateway.persist:listener_store
-    access: bee.gateway.security:access
-    elevation: bee.gateway.security:elevation
-    installation: bee.gateway.security:installation
-    capability_use: bee.gateway.security:capability_use
 - name: open
   kind: function.lua
   source: file://open_method.lua
@@ -486,7 +444,9 @@ entries:
 - name: external
   kind: library.lua
   source: file://external.lua
-  modules: [uuid, security]
+  modules:
+  - uuid
+  - security
   imports:
     bounds: bee.values:bounds
     database: bee.persist:database
@@ -498,16 +458,224 @@ entries:
   kind: function.lua
   source: file://external_call_method.lua
   method: handle
-  modules: [security, funcs]
+  modules:
+  - security
+  - funcs
   imports:
     bounds: bee.values:bounds
   security:
-    policies: [bee.gateway.security:external_facade_policy]
+    policies:
+    - bee.gateway.security:external_facade_policy
 - name: external_backend
   kind: function.lua
   source: file://external_backend.lua
   method: handle
-  modules: [security]
+  modules:
+  - security
   imports:
     bounds: bee.values:bounds
     external: bee.gateway.binding:external
+- name: listener
+  kind: library.lua
+  source: file://listener.lua
+  modules:
+  - sql
+  - time
+  - json
+  - security
+  - system
+  - crypto
+  - http_client
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    configuration: bee.gateway.env:configuration
+    listener_store: bee.gateway.persist:listener_store
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+    part_records: bee.gateway.binding:records
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  imports:
+    configuration: bee.gateway.env:configuration
+    hooks: bee.gateway.hooks:hooks
+    surface: bee.gateway.catalog:surface
+- name: values
+  kind: library.lua
+  source: file://values.lua
+  modules:
+  - sql
+  - hash
+  - time
+  - security
+  - crypto
+  - base64
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    node_database: bee.persist:database
+    part_model: bee.gateway.binding:model
+- name: records
+  kind: library.lua
+  source: file://records.lua
+  modules:
+  - sql
+  - time
+  - json
+  imports:
+    bounds: bee.values:bounds
+    hooks: bee.gateway.hooks:hooks
+    binding_store: bee.gateway.persist:binding_store
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+- name: hook_intake
+  kind: library.lua
+  source: file://hook_intake.lua
+  modules:
+  - sql
+  - time
+  - uuid
+  - json
+  - security
+  imports:
+    bounds: bee.values:bounds
+    hooks: bee.gateway.hooks:hooks
+    binding_store: bee.gateway.persist:binding_store
+    hook_store: bee.gateway.persist:hook_store
+    listener_store: bee.gateway.persist:listener_store
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+    part_records: bee.gateway.binding:records
+    part_listener: bee.gateway.binding:listener
+- name: admission
+  kind: library.lua
+  source: file://admission.lua
+  modules:
+  - uuid
+  - json
+  - security
+  - system
+  imports:
+    bounds: bee.values:bounds
+    hooks: bee.gateway.hooks:hooks
+    mcp: bee.gateway.api:mcp
+    surface: bee.gateway.catalog:surface
+    trait_access: bee.gateway.security:traits
+    session_traits: bee.threads.delivery:traits
+    surface_store: bee.gateway.persist:surface_store
+    binding_store: bee.gateway.persist:binding_store
+    hook_store: bee.gateway.persist:hook_store
+    access: bee.gateway.security:access
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+    part_records: bee.gateway.binding:records
+    part_listener: bee.gateway.binding:listener
+    part_surfaces: bee.gateway.binding:surfaces
+- name: credentials
+  kind: library.lua
+  source: file://credentials.lua
+  modules:
+  - time
+  - uuid
+  - security
+  imports:
+    bounds: bee.values:bounds
+    capability_model: bee.capability:model
+    hooks: bee.gateway.hooks:hooks
+    binding_store: bee.gateway.persist:binding_store
+    credential_store: bee.gateway.persist:credential_store
+    subject_call: bee.gateway.security:subject_call
+    hook_store: bee.gateway.persist:hook_store
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+    part_records: bee.gateway.binding:records
+    part_listener: bee.gateway.binding:listener
+- name: surfaces
+  kind: library.lua
+  source: file://surfaces.lua
+  modules:
+  - hash
+  - json
+  - security
+  imports:
+    bounds: bee.values:bounds
+    configuration: bee.gateway.env:configuration
+    hooks: bee.gateway.hooks:hooks
+    mcp: bee.gateway.api:mcp
+    surface: bee.gateway.catalog:surface
+    catalog: bee.gateway.catalog:catalog
+    trait_access: bee.gateway.security:traits
+    agent_trait: bee.values:agent_trait
+    session_traits: bee.threads.delivery:traits
+    surface_store: bee.gateway.persist:surface_store
+    binding_store: bee.gateway.persist:binding_store
+    access: bee.gateway.security:access
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+- name: capabilities
+  kind: library.lua
+  source: file://capabilities.lua
+  modules:
+  - time
+  imports:
+    bounds: bee.values:bounds
+    configuration: bee.gateway.env:configuration
+    surface: bee.gateway.catalog:surface
+    access: bee.gateway.security:access
+    elevation: bee.gateway.security:elevation
+    capability_use: bee.gateway.security:capability_use
+    installation: bee.gateway.security:installation
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+    part_records: bee.gateway.binding:records
+    part_surfaces: bee.gateway.binding:surfaces
+- name: directory
+  kind: library.lua
+  source: file://directory.lua
+  modules:
+  - security
+  - contract
+  imports:
+    bounds: bee.values:bounds
+    sessions: bee.gateway.catalog:sessions
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+- name: calls
+  kind: library.lua
+  source: file://calls.lua
+  modules:
+  - sql
+  - hash
+  - uuid
+  - json
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    configuration: bee.gateway.env:configuration
+    mcp: bee.gateway.api:mcp
+    surface: bee.gateway.catalog:surface
+    catalog: bee.gateway.catalog:catalog
+    surface_store: bee.gateway.persist:surface_store
+    grant_store: bee.approvals.grants:store
+    binding_store: bee.gateway.persist:binding_store
+    external_store: bee.gateway.persist:external_store
+    subject_call: bee.gateway.security:subject_call
+    access: bee.gateway.security:access
+    part_model: bee.gateway.binding:model
+    part_values: bee.gateway.binding:values
+    part_surfaces: bee.gateway.binding:surfaces
+- name: gateway
+  kind: library.lua
+  source: file://gateway.lua
+  imports:
+    part_listener: bee.gateway.binding:listener
+    part_model: bee.gateway.binding:model
+    part_admission: bee.gateway.binding:admission
+    part_credentials: bee.gateway.binding:credentials
+    part_surfaces: bee.gateway.binding:surfaces
+    part_capabilities: bee.gateway.binding:capabilities
+    part_directory: bee.gateway.binding:directory
+    part_hook_intake: bee.gateway.binding:hook_intake
+    part_calls: bee.gateway.binding:calls

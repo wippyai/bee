@@ -603,7 +603,7 @@ local function define_tests()
             process.unlisten(paused)
             await_presented(attempt_id, 1, 3)
             local replacement = spawn_carrier(launch, "resume", nil, nil)
-            -- Once the runner has installed generation 2 it no longer monitors
+            -- The runner monitors generation 2 rather than
             -- the old carrier, whose exit then revokes nothing.
             await_evidence(attempt_id, "attach.fenced", "runner installed generation 2")
             assert(process.terminate(old), "terminate old carrier")

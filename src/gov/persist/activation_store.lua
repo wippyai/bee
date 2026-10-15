@@ -921,7 +921,7 @@ function M.record_outcome(store: Store, actor: string, input: OutcomeRequest): R
             and not (row.migrations_completed == true or tonumber(row.migrations_completed) == 1) then
             return failure("CONFLICT", "activation migrations are not complete")
         end
-        -- An applied generation the person went back to is final but no longer
+        -- A rolled-back applied generation is final but is not
         -- observed; once its overlay is restored the slot observes it again.
         local before_slot, before_error = slot(tx, store, row.overlay_owner, false)
         if before_error then return before_error end
@@ -943,7 +943,7 @@ function M.record_outcome(store: Store, actor: string, input: OutcomeRequest): R
         local result_slot: Object? = current_slot
         if input.outcome == "applied" then
             if not current_slot or current_slot.desired_intent_id ~= row.intent_id then return failure("CONFLICT", "activation is no longer the desired slot") end
-            -- Retain the previously observed complete generation as the last
+            -- Retain the observed complete generation as the last
             -- good baseline before this one replaces it. Only an applied
             -- observation is a revert target; a failed or uncertain attempt
             -- is never promoted to baseline.

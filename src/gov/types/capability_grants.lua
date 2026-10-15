@@ -10,7 +10,7 @@ local gateway = require("capability_gateway")
 local M = {}
 M.SCHEMA = "bee.governance-capability-grants@1"
 M.PREFIX = "bee.gov.grants:"
--- Previously activated overlays retain their measured policy and record IDs.
+-- Active overlays retain their measured policy and record IDs.
 -- Decode those exact IDs without rewriting approval-bound policy bytes.
 local PRIOR_PREFIX = "bee.governance.grants:"
 type Object = {[string]: unknown}

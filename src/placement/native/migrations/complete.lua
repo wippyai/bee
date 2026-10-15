@@ -1,4 +1,4 @@
--- MIT. Complete the native placement store to its full schema: attempts take their full definition and session files are added.
+-- MIT. Native placement attempt definitions and session file storage.
 -- A table whose definition changes is renamed aside, created again and given
 -- its rows back; foreign keys are checked when the migration commits.
 local STATEMENTS = {

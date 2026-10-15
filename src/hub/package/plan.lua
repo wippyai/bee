@@ -302,7 +302,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
                     end
                 end
                 -- The captured installed artifact remains available even if its
-                -- release is no longer listed by the Hub.
+                -- release is absent from the Hub listing.
                 if page == 1 then allowed[#allowed + 1] = current end
                 return allowed, more, nil
             end,

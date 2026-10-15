@@ -1313,7 +1313,7 @@ end
 -- bound to it until it settles. The approval is the person's; this only
 -- executes it.
 -- close_ended settles the activation whose approval request ended without
--- approval, so its application is no longer waiting and can be installed
+-- approval, so its application is ready and can be installed
 -- again; an approval no activation is bound to only leaves the queue.
 function M.close_ended(raw: unknown): Result
     local ended = bounds.object(raw)
@@ -1442,8 +1442,8 @@ end
 
 -- Boot recovery follows only already-authorized desired intents. It never
 -- reviews, selects or creates an approval request. A slot whose source the
--- host no longer selects for that owner stays unrestored.
--- Governance refuses a restoration whose approval no longer covers the host
+-- host does not select for that owner stays unrestored.
+-- Governance refuses a restoration whose approval does not cover the host
 -- state; that overlay stays unrestored and its intent stays for the person to
 -- review again. Only such refusals let recovery continue.
 local REFUSALS: {[string]: boolean} = {CONFLICT = true, DENIED = true}

@@ -982,7 +982,7 @@ local function completion_observed(attempt: types.Attempt): (boolean, string)
     return false, "runtime exit not observed"
 end
 -- A live attempt keeps the authority it still holds: its leases are renewed.
--- One whose grant no longer resolves is stopped; enforcement stays pending
+-- One whose grant does not resolve is stopped; enforcement stays pending
 -- until the exit is proven.
 function M.supervise_grants(attempt: types.Attempt): Reply?
     local db = store.open()

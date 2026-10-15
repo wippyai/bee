@@ -101,7 +101,7 @@ local function define_tests()
             test.eq(#page.records, 1)
             local recipients = (assert(bounds.object(page.records[1].body))).recipient_ids
             test.eq(assert(bounds.ids(recipients))[1], "member")
-            -- But nothing owes a delivery to someone who can no longer be held to one.
+            -- An inactive recipient has no delivery obligation.
             local db = harness.open()
             local rows = harness.query(db, "SELECT recipient_id FROM bee_thread_obligations WHERE thread_id = ?", {thread_id})
             db:release()

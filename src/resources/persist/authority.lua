@@ -128,7 +128,7 @@ local function grant_of(db: sql.DB, grant_id: string): (Row?, string?)
 end
 -- associate: a workspace manager binds a name to an admitted root; a
 -- second association under the same name replaces it at the next revision
--- and existing grants no longer resolve.
+-- and existing grants fail resolution.
 function M.associate(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end

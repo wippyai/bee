@@ -28,7 +28,7 @@ local function screen(view: tty.Viewport): string
     return (table.concat(snapshot.rows, "\n"):gsub("\27%[[0-9;]*m", ""))
 end
 
--- shows waits until the viewport shows text, or until it no longer does.
+-- shows waits until the viewport shows text, or until the viewport is empty.
 local function shows(view: tty.Viewport, text: string, present: boolean): boolean
     local updates = assert(view:updates())
     local deadline = time.after("8s")

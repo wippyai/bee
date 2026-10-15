@@ -1033,7 +1033,7 @@ function M.resume(io: IO, plan: Plan): (Session?, string?)
     if not status then return nil, "placement status is malformed: " .. tostring(status_decode_error) end
     local attempt = status.attempt
     if attempt.start_failure then return nil, "failed start: " .. attempt.start_failure end
-    -- Before placement starts, a plan that no longer digests as recorded
+    -- Before placement starts, a plan whose digest differs from its record
     -- refuses: nothing was materialized under it. A started attempt is
     -- still carried, and revalidation refuses any dispatch under it.
     if attempt.execution_state == "intended" and point.plan_digest and point.plan_digest ~= plan.plan_digest then

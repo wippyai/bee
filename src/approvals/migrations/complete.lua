@@ -1,4 +1,4 @@
--- MIT. Complete the approval owner store to its full schema: requests, the outbox and approval windows take their full definitions, and runtime leases and their uses are added.
+-- MIT. Approval requests, projection outbox, windows and runtime lease storage.
 -- A table whose definition changes is renamed aside, created again and given
 -- its rows back; foreign keys are checked when the migration commits.
 local STATEMENTS = {

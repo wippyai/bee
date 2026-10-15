@@ -129,7 +129,7 @@ end
 
 -- update replaces node's catalog with its latest answer, keeping the
 -- selection on the same row when it still exists; an answer from a node the
--- menu no longer browses is dropped.
+-- menu does not browse is dropped.
 function M.update(menu: Menu, node: string, desktops: {Desktop}, workspaces: {Workspace}, counts: {[string]: integer})
     if node ~= menu.tab then return end
     local keep = row_key(menu.rows[menu.selected])

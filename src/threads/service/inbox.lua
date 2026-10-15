@@ -74,7 +74,7 @@ local function delivery_status(item: InboxRow): string
     return type(item.delivery_block) == "string" and item.delivery_block or state
 end
 -- Lifecycle receipts and inbox status commit in the same owner transaction.
--- A late carrier can no longer claim a settled attempt; an unacknowledged
+-- A late carrier cannot claim a settled attempt; an unacknowledged
 -- item keeps its receipt state but tells senders what delivery needs.
 function M.attempt_ended(tx: sql.Transaction, thread_id: string, action_id: string): Result?
     return execute(tx, "UPDATE bee_thread_inbox_items SET delivery_block = 'waiting_for_restart' " ..

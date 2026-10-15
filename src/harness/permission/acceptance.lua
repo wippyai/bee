@@ -80,7 +80,7 @@ function M.decode(acceptance_id: string, value: unknown): (Acceptance?, string?)
     return {acceptance_id = acceptance_id, schema_revision = M.REVISION, binding_id = binding_id, profile_id = profile_id, binding_digest = binding_digest, profile_digest = profile_digest,
         adapter_ref = adapter_ref, adapter_digest = adapter_digest, fixture_digest = fixture_digest, executable_revision = executable_revision, executable_kind = executable_kind, executable_digest = executable_digest, proof_revision = M.PROOF_REVISION, accepted_by = accepted_by, accepted_at = accepted_at, digest = sum}, nil
 end
--- matches: names the first measurement the record no longer covers.
+-- matches: names the first measurement outside the record.
 function M.matches(acceptance: Acceptance, measured: Measurements): string?
     if acceptance.binding_id ~= measured.binding_id then return "acceptance covers binding " .. acceptance.binding_id .. ", not " .. measured.binding_id end
     if acceptance.profile_id ~= measured.profile_id then return "acceptance covers profile " .. acceptance.profile_id .. ", not " .. measured.profile_id end

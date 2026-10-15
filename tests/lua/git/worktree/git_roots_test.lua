@@ -1,4 +1,4 @@
--- MIT. Git metadata discovery without a Git process, plus the boundary that keeps added roots under writable grants.
+-- MIT. Git metadata discovery without a Git process, plus the boundary that keeps registered roots under writable grants.
 local test = require("test")
 local git_roots = require("git_roots")
 

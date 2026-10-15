@@ -417,7 +417,7 @@ end
 -- record commits and written after it lands. The commitment is the caller's
 -- own family and key, so a member's message and an authority's projection share
 -- the rule: a replay commits nothing and owes nothing again. Only recipients
--- handed in are obliged, so a notice to a recipient who can no longer be held
+-- handed in are obliged, so a notice to a recipient who cannot be held
 -- to a delivery records without owing one.
 local function commit_message(tx: sql.Transaction, head: reader.Head, decoded: record_types.Message, recipients: {string}, commit: (integer) -> Result): Result
     -- A recipient action addresses one session of this thread; an action the

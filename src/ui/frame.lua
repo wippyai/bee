@@ -185,7 +185,7 @@ function M.tabs(painter: Painter, y: integer, tabs: {Tab}, selected: string): in
     for _, tab in ipairs(tabs) do
         painter.controls.buttons[#painter.controls.buttons + 1] = {kind = tab.kind, label = tab.label, enabled = true}
     end
-    -- The active tab keeps its full label and inactive tabs that no longer
+    -- The active tab keeps its full label and inactive tabs that do not
     -- fit are left out, so the pane shown stays named at any width.
     local full = 1
     for _, tab in ipairs(tabs) do full = full + tty.text.width(" " .. tab.label .. " ") + 1 end

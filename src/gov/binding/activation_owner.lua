@@ -103,7 +103,7 @@ local function measured(config: Config, spec: Object): (Object?, Result?)
     if candidate == nil or context == nil then
         return nil, failure("BLOCKED", tostring(resolve_error or "resolve activation on this node"))
     end
-    -- A refusal means the host no longer admits what was approved.
+    -- A refusal means the approval does not cover the current host policy.
     if not config.measurement then config.measurement = {} end
     local result, measurement_error, refused = measure.measure(spec, candidate, context, config.measurement)
     if not result then return nil, failure(refused and "CONFLICT" or "BLOCKED", tostring(measurement_error)) end

@@ -72,7 +72,7 @@ function M.notice(event_key: string, level: string, code: string, text: string):
     return {type = "notice", event_key = event_key, data = {type = "notice", level = level, code = code, content = content(bounded(text, M.MAX_ESCAPED_BYTES))}}
 end
 -- A payload beyond the record bound is replaced by a JSON object naming its
--- size; a cut payload would no longer be JSON.
+-- size; truncating a payload invalidates its JSON.
 function M.extension(event_key: string, event_name: string, event_revision: string, payload_json: string): Observation
     local payload = payload_json
     if segment_end(payload, 1, M.MAX_ESCAPED_BYTES) < #payload then payload = '{"omitted_bytes":' .. tostring(#payload_json) .. '}' end

@@ -1,6 +1,6 @@
 -- MIT. The resource authority: associations under the host ceiling,
 -- grants bound to the authenticated subject and their exact selection,
--- and resolve refusing everything that no longer holds.
+-- and resolve refusing invalid authority.
 local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")

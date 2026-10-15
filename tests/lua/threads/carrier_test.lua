@@ -185,7 +185,7 @@ local function define_tests()
             test.eq(read.idempotency_key, "pre-key")
             test.eq(harness.code(carrier:call("carrier_cancel_status", {thread_id = thread_id, attempt_id = "t9"})), "NOT_FOUND")
             test.eq(harness.code(runner:call("carrier_cancel_status", {thread_id = thread_id, attempt_id = "t0"})), "DENIED")
-            -- A late carrier boot no longer opens an attempt settled before start.
+            -- A late carrier boot cannot open an attempt settled before start.
             harness.value(carrier:call("admit_action", {thread_id = thread_id, idempotency_key = harness.key(), action_id = "a0", admitted = harness.admitted()}))
             test.eq(harness.code(carrier:call("prepare_attempt", {thread_id = thread_id, idempotency_key = harness.key(), action_id = "a0", attempt_id = "t0", prepared = harness.prepared()})), "CONFLICT")
             local kept = harness.value(carrier:call("carrier_cancel_status", {thread_id = thread_id, attempt_id = "t0"}))

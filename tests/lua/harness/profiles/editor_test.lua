@@ -97,7 +97,7 @@ local function define_tests()
             test.is_false(refused)
             test.eq(refusal, "this launch does not allow choosing a folder")
             test.is_false(editor.set_thread(closed, "thread-1"))
-            -- A saved choice the launch no longer allows is refused, not dropped.
+            -- A saved choice outside the launch policy is refused, not dropped.
             local saved = protocol.profile({schema_revision = "bee.agent-profile@3", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}} , workdir = {root_ref = "bee.env:workspace_root", path = "legacy"}})
             if not saved then error("saved profile with a folder") end
             test.is_nil(editor.new(saved, {options = {}, mcp_tools = {}, instructions = false}))

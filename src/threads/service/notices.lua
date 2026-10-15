@@ -2,7 +2,7 @@
 -- thread, when an action it may read ends a turn or an attempt. The owner
 -- commits that notification after the ending record lands, under the
 -- watcher's own identity and the notice's key, so a repeated check or a
--- replayed registration never tells twice. A watcher that can no longer
+-- replayed registration never tells twice. A watcher that cannot
 -- receive on its thread has its notice cancelled rather than delivered.
 local sql = require("sql")
 local uuid = require("uuid")
@@ -52,7 +52,7 @@ local function text_of(action_id: string, ending: Ending): string
     return "Action " .. action_id .. " exited."
 end
 -- Commits the notification on the watcher's thread, or cancels the notice
--- when the watcher can no longer receive there. Returns the watcher thread
+-- when the watcher cannot receive there. Returns the watcher thread
 -- when a record was committed.
 local function deliver(tx: sql.Transaction, notice: reader.Notice, cause: record_types.Record, ending: Ending): (string?, Result?)
     local head, head_err = reader.head(tx, notice.watcher_thread_id)

@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/stretchr/testify v1.12.1
+	github.com/wippyai/go-lua v1.6.8
 	github.com/wippyai/runtime v0.1.14-0.20261014213131-4caad4761a0c
 	golang.org/x/sys v0.49.0
 )
@@ -163,7 +164,6 @@ require (
 	github.com/tree-sitter/tree-sitter-php v0.25.1 // indirect
 	github.com/tree-sitter/tree-sitter-python v0.25.0 // indirect
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2 // indirect
-	github.com/wippyai/go-lua v1.6.8 // indirect
 	github.com/wippyai/module-registry-proto-go v0.0.2-0.20260908140534-f6e2910c835f // indirect
 	github.com/wippyai/tree-sitter-markdown v0.0.3 // indirect
 	github.com/wippyai/tree-sitter-sql v0.0.4 // indirect

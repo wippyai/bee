@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from lupa.lua54 import LuaRuntime
 from build import hygiene
 
 
@@ -22,13 +21,11 @@ def home(user):
 
 
 class HygieneTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.lua = LuaRuntime()
-
     def findings(self, path, text, allowed=()):
         data = text.encode() if isinstance(text, str) else text
-        return hygiene.check_file(path, data, set(allowed), self.lua)
+        lua = hygiene.lua_statements(comment for _, comment in hygiene.comments(
+            path, data.decode('utf-8', errors='replace'))) if path.endswith('.lua') else set()
+        return hygiene.check_file(path, data, set(allowed), lua)
 
     def test_editorial_words_in_each_comment_language(self):
         for path, marker in [('a.lua', '--'), ('a.py', '#'), ('a.go', '//'),
@@ -183,6 +180,25 @@ class HygieneTests(unittest.TestCase):
             self.assertIn('Hygiene:', output.getvalue())
             if findings:
                 self.assertIn(findings[0], output.getvalue())
+
+    def test_lua_comments_across_files_use_one_parser_batch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'build').mkdir()
+            (root / hygiene.ALLOWLIST).write_text('[]')
+            (root / 'a.lua').write_text('-- call()\n-- Validate input.\n')
+            (root / 'b.lua').write_text('-- error("must not execute")\n-- end\n')
+            subprocess.run(['git', 'init', '-q', str(root)], check=True)
+            subprocess.run(['git', 'add', '.'], cwd=root, check=True)
+            with patch.object(hygiene.subprocess, 'run', wraps=subprocess.run) as run:
+                findings = hygiene.scan(root)
+            parser_calls = [call for call in run.call_args_list
+                            if call.args[0] == [str(hygiene.ROOT / '.wippy/build/lua-parse')]]
+            self.assertEqual(len(parser_calls), 1)
+            self.assertEqual(json.loads(parser_calls[0].kwargs['input']),
+                             ['call()', 'Validate input.', 'error("must not execute")'])
+            self.assertEqual(len(findings), 2)
+            self.assertTrue(all('commented-code' in finding for finding in findings))
 
     def test_local_and_existing_ci_lint_include_hygiene(self):
         for target in ('lint', 'ci-lint'):

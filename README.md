@@ -267,7 +267,9 @@ files have explicit `source-size` entries with reason `approvals lane in flight`
 until that lane completes; no other source-size exceptions are accepted. Domain exceptions
 in `build/hygiene_allowlist.json` require a literal path, exact comment or line,
 and a one-line reason; unused entries fail the check. Lua comment statements
-are compiled without execution using the pinned Lupa dependency. The existing
+are parsed without execution in one batch by a Go helper using the toolchain's
+pinned `github.com/wippyai/go-lua` parser. `make tools` and `make hygiene` build
+the helper from `native/`. The existing
 CI lint stage runs this same check through `make ci-lint`.
 
 The Lua suites live in `tests/lua/`, the packaged harness in `tests/runner/`,

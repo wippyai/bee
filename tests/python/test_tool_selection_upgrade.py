@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import sqlite3
 import unittest
-from lupa.lua54 import LuaRuntime
+import subprocess
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -50,39 +50,29 @@ class ToolSelectionUpgradeTests(unittest.TestCase):
         db.execute('INSERT INTO bee_sessions VALUES (?,?)', ('session', json.dumps({'effective_profile': profile, 'profile_digest': 'before', 'note': OLD})))
         for table in ('bee_session_traits', 'bee_session_trait_intervals'):
             db.execute(f'INSERT INTO {table} VALUES (?,?)', ('session', json.dumps(declaration)))
-        lua = LuaRuntime(unpack_returned_tuples=True)
-
         def encode(value):
-            def unpack(item):
-                if hasattr(item, 'items'):
-                    pairs = dict(item.items())
-                    if pairs and all(isinstance(key, int) for key in pairs):
-                        return [unpack(pairs[k]) for k in sorted(pairs)]
-                    return {key: unpack(v) for key, v in pairs.items()}
-                return item
-            return json.dumps(unpack(value), sort_keys=True, separators=(',', ':'))
+            return json.dumps(value, sort_keys=True, separators=(',', ':'))
 
-        def arguments(args):
-            return tuple(args.values()) if args is not None else ()
+        def run_migration(path):
+            methods = {
+                'query': lambda sql, args: [dict(row) for row in db.execute(sql, args or ())],
+                'execute': lambda sql, args: db.execute(sql, args or ()).rowcount,
+                'decode': json.loads,
+                'encode': encode,
+                'digest': lambda value: hashlib.sha256(encode(value).encode()).hexdigest(),
+                'sha256': lambda value: hashlib.sha256(value.encode()).hexdigest(),
+            }
+            command = [str(ROOT / '.wippy/build/test-migration'), str(path)]
+            with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, text=True) as process:
+                for line in process.stdout:
+                    request = json.loads(line)
+                    result = methods[request['method']](*request['args'])
+                    process.stdin.write(json.dumps(result) + '\n')
+                    process.stdin.flush()
+                error = process.stderr.read()
+                self.assertEqual(process.wait(), 0, error)
 
-        database = lua.table_from({
-            'query': lambda _, sql, args=None: lua.table_from([lua.table_from(dict(row)) for row in db.execute(sql, arguments(args))]),
-            'execute': lambda _, sql, args=None: db.execute(sql, arguments(args)).rowcount,
-        })
-        modules = lua.table_from({
-            'json': lua.table_from({'decode': lambda value: lua.table_from(json.loads(value), recursive=True)}),
-            'canonical': lua.table_from({'encode': encode, 'digest': lambda value: hashlib.sha256(encode(value).encode()).hexdigest()}),
-            'hash': lua.table_from({'sha256': lambda value: hashlib.sha256(value.encode()).hexdigest()}),
-        })
-        lua.globals().modules = modules
-        lua.globals().db = database
-        lua.execute('''
-            function migration(_, body) body() end
-            function database(_, body) body() end
-            function up(body) body(db) end
-            modules.migration = {define = function(body) return body end}
-            function require(name) return assert(modules[name], name) end
-        ''')
         migrations = []
         for owner in ('harness', 'approvals', 'threads'):
             directory = ROOT / f'src/{owner}/migrations'
@@ -97,12 +87,12 @@ class ToolSelectionUpgradeTests(unittest.TestCase):
         feed_updates = 0
         for path in migrations:
             before = json.loads(db.execute('SELECT value_json FROM bee_sync_projections').fetchone()[0])
-            lua.execute(path.read_text())()
+            run_migration(path)
             after = json.loads(db.execute('SELECT value_json FROM bee_sync_projections').fetchone()[0])
             feed_updates += before != after
         first = list(db.iterdump())
         for path in migrations:
-            lua.execute(path.read_text())()
+            run_migration(path)
         self.assertEqual(list(db.iterdump()), first)
         upgraded = json.loads(db.execute('SELECT value_json FROM bee_sync_projections').fetchone()[0])
         self.assertEqual(upgraded['bee']['mcp'][0]['tool'], NEW)

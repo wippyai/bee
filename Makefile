@@ -50,8 +50,14 @@ LINT_FLAGS := --memory-limit 1G --set lua.cache.dir=$(LUA_CACHE) --set lua.cache
 
 .PHONY: tools-key check boot-check fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test build release-pack install binary-identity hub-publish test-python
 
-tools:
+tools: .wippy/build/lua-parse
 	python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --bin $(BIN)
+
+.wippy/build/lua-parse: native/cmd/lua-parse/main.go native/go.mod native/go.sum
+	cd native && go build -o ../$@ ./cmd/lua-parse
+
+.wippy/build/test-migration: native/cmd/test-migration/main.go native/go.mod native/go.sum
+	cd native && go build -o ../$@ ./cmd/test-migration
 
 tools-key:
 	@python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --key
@@ -97,7 +103,7 @@ fixture-install: compose
 fixture-lint: fixture-install
 	python3 -m tests.runner.locked --cwd tests shared tests/.wippy/composition.lock $(abspath $(WIPPY)) lint $(LINT_FLAGS)
 
-hygiene:
+hygiene: .wippy/build/lua-parse
 	python3 -m build.hygiene
 
 lint: hygiene binary-identity fixture-lint
@@ -136,7 +142,7 @@ TEST_CACHE_MODE ?= readwrite
 boot-check: test-prepare
 	python3 -m tests.runner.boot $(abspath $(WIPPY)) $(LUA_CACHE) $(TEST_CACHE_MODE)
 
-test-python:
+test-python: .wippy/build/lua-parse .wippy/build/test-migration
 	python3 -m unittest discover -s tests/python -t .
 
 test-prepare: $(if $(CI_TESTS),fixture-install,fixture-lint test-python) $(TEST_FIXTURES)/harness/bin/gateway-client

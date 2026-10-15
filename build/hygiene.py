@@ -10,7 +10,6 @@ import sys
 import time
 import tokenize
 
-from lupa.lua54 import LuaRuntime, LuaSyntaxError
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,17 +103,28 @@ def comments(path, text):
             yield line + offset, part.strip()
 
 
-def lua_statement(text, lua):
-    """Compile a whole comment line without running it or accepting prose tails."""
+def lua_body(text):
+    """Extract a whole comment line without accepting empty or nested comments."""
     body = re.sub(r'^--(?:\[=*\[)?\s*', '', text).strip()
     body = re.sub(r'\]=*\]$', '', body).strip()
     if not body or body.startswith('--') or body in (';', 'end', 'else', 'do', 'repeat'):
-        return False
-    try:
-        lua.compile(body)
-        return True
-    except LuaSyntaxError:
-        return False
+        return ''
+    return body
+
+
+def lua_statements(candidates):
+    """Parse all candidate comments in one process, without executing source."""
+    bodies = {comment: body for comment in candidates if (body := lua_body(comment))}
+    if not bodies:
+        return set()
+    result = subprocess.run([str(ROOT / '.wippy/build/lua-parse')],
+                            input=json.dumps(list(bodies.values())), text=True,
+                            capture_output=True, check=True)
+    parsed = json.loads(result.stdout)
+    if (not isinstance(parsed, list) or len(parsed) != len(bodies)
+            or any(type(value) is not bool for value in parsed)):
+        raise ValueError('Lua parser returned an invalid batch result')
+    return {comment for comment, valid in zip(bodies, parsed) if valid}
 
 
 def private_names():
@@ -186,7 +196,7 @@ def check_file(path, data, allowed, lua):
         for number, comment in comments(path, text):
             if EDITORIAL.search(comment):
                 report(number, 'editorial-comment', comment)
-            if path.endswith('.lua') and lua_statement(comment, lua):
+            if path.endswith('.lua') and comment in lua:
                 report(number, 'commented-code', comment)
     return findings
 
@@ -194,13 +204,16 @@ def check_file(path, data, allowed, lua):
 def scan(root):
     allowed = load_allowlist(root)
     paths = subprocess.check_output(['git', 'ls-files', '-z'], cwd=root).decode().split('\0')
-    lua = LuaRuntime()
-    findings = []
+    files = {}
     for path in filter(None, paths):
         file = root / path
         if not file.exists() and not file.is_symlink():
             continue
-        data = file.readlink().as_posix().encode() if file.is_symlink() else file.read_bytes()
+        files[path] = file.readlink().as_posix().encode() if file.is_symlink() else file.read_bytes()
+    lua = lua_statements(comment for path, data in files.items() if path.endswith('.lua')
+                         for _, comment in comments(path, data.decode('utf-8', errors='replace')))
+    findings = []
+    for path, data in files.items():
         findings.extend(check_file(path, data, allowed, lua))
     for path, exact in sorted(allowed):
         file = root / path
@@ -224,7 +237,7 @@ def main():
     started = time.monotonic()
     try:
         findings = scan(ROOT)
-    except (OSError, ValueError, yaml.YAMLError) as error:
+    except (OSError, ValueError, subprocess.CalledProcessError, yaml.YAMLError) as error:
         print(f'{ALLOWLIST}:1: hygiene-configuration: {error}', file=sys.stderr)
         return 1
     for finding in findings:

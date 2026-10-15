@@ -11,61 +11,149 @@ entries:
   - name: feed_snapshot
     description: Snapshot authorized inbox projections with an owner cursor and visibility
       revision
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"required":["workspace_id"],"properties":{"workspace_id":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":64},"after_key":{"type":"string"},"expected_cursor":{"type":"integer","minimum":0},"expected_scope_revision":{"type":"string"}},"description":"Snapshot authorized inbox projections with an owner cursor and visibility revision"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"properties":{"ok":{"type":"boolean"},"error":{"type":"object"},"value":{},"replayed":{"type":"boolean"}}}}
   - name: feed_read_after
     description: Catch up authorized approval changes using the shared sync envelope
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"required":["workspace_id","cursor","expected_scope_revision"],"properties":{"workspace_id":{"type":"string"},"cursor":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":64},"expected_scope_revision":{"type":"string"}},"description":"Catch up authorized approval changes using the shared sync envelope"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"properties":{"ok":{"type":"boolean"},"error":{"type":"object"},"value":{},"replayed":{"type":"boolean"}}}}
   - name: grant_window
     description: List the caller's active approval windows or revoke one immediately
       on its authoritative node
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"operation":{"type":"string"},"workspace_id":{"type":"string"},"after_id":{"type":"string"},"grant_id":{"type":"string"}},"additionalProperties":true,"description":"List the caller's active approval windows or revoke one immediately on its authoritative node"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: runtime_lease
     description: Grant an approved exact runtime lease, check references, consume
       one effect idempotently, list or revoke
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"operation":{"type":"string"},"workspace_id":{"type":"string"},"lease_ref":{"type":"string"},"tool":{"type":"string"},"input_digest":{"type":"string"},"effect_key":{"type":"string"},"after_id":{"type":"string"},"grant_id":{"type":"string"}},"additionalProperties":true,"description":"Grant an approved exact runtime lease, check references, consume one effect idempotently, list or revoke"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: effect
     description: Read, claim, start, complete or reconcile one stable effect with
       receipt replay and authority incarnation fencing
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"operation":{"type":"string"},"workspace_id":{"type":"string"},"approval_id":{"type":"string"},"effect_key":{"type":"string"},"incarnation":{"type":"integer"},"result":{"type":"object"}},"additionalProperties":true,"description":"Read, claim, start, complete or reconcile one stable effect with receipt replay and authority incarnation fencing"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: events
     description: Read durable requester or registered consumer events after a cursor
       and acknowledge stable event IDs
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"operation":{"type":"string"},"workspace_id":{"type":"string"},"after_sequence":{"type":"integer"},"limit":{"type":"integer"},"event_ids":{"type":"array"},"consumer_id":{"type":"string"}},"additionalProperties":true,"description":"Read durable requester or registered consumer events after a cursor and acknowledge stable event IDs"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: end_request
     description: Supersede or invalidate a pending request with revision and digest
       checks, returning any outcome that already committed
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"approval_id":{"type":"string"},"expected_revision":{"type":"integer"},"proposal_digest":{"type":"string"},"reason":{"type":"string"}},"additionalProperties":true,"description":"Supersede or invalidate a pending request with revision and digest checks, returning any outcome that already committed"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: grant
     description: Check, reserve, admit, release or revoke exact decision authority
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"operation":{"type":"string"},"workspace_id":{"type":"string"},"approval_id":{"type":"string"},"grant_id":{"type":"string"},"effect_key":{"type":"string"}},"additionalProperties":true,"description":"Check, reserve, admit, release or revoke exact decision authority"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: request
     description: Ask for a decision on one exact proposal under a host approver policy;
       the same key replays and a different request under it conflicts
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"idempotency_key":{"type":"string"},"request_kind":{"type":"string"},"policy":{"type":"string"},"proposal":{"type":"object"},"prompt":{"type":"object"},"response_schema":{"type":"object"},"ttl_ms":{"type":"integer"},"origin":{"type":"object"},"thread_id":{"type":"string"},"reviewed_required":{"type":"boolean"}},"additionalProperties":true,"description":"Ask for a decision on one exact proposal under a host approver policy; the same key replays and a different request under it conflicts"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: decide
     description: Settle the pending revision for the recorded proposal and reviewed digests; an
       identical retry replays and any other decision conflicts
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"required":["approval_id","expected_revision","decision","proposal_digest"],"properties":{"approval_id":{"type":"string"},"expected_revision":{"type":"integer","minimum":1},"decision":{"type":"string","enum":["approved","denied"]},"proposal_digest":{"type":"string"},"reviewed_digest":{"type":"string"},"window_ttl_ms":{"type":"integer","minimum":1},"window_permanent":{"type":"boolean"},"response":{}},"description":"Settle the pending revision for the recorded proposal and reviewed digests; an identical retry replays and any other decision conflicts"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"properties":{"ok":{"type":"boolean"},"error":{"type":"object"},"value":{},"replayed":{"type":"boolean"}}}}
   - name: decide_batch
     description: Settle several pending requests of one requester in one workspace
       in one transaction; each item is a full decide and one failing item rolls the
       batch back
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"decisions":{"type":"array"}},"additionalProperties":true,"description":"Settle several pending requests of one requester in one workspace in one transaction; each item is a full decide and one failing item rolls the batch back"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: withdraw_origin
     description: Close the caller's transport instance, withdraw its pending requests and fence later requests from that instance
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"origin":{"type":"object"}},"additionalProperties":true,"description":"Close the caller's transport instance, withdraw its pending requests and fence later requests from that instance"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: withdraw
     description: Withdraw the caller's pending revision with proposal and reviewed
       digest checks, or learn the outcome that already committed
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"required":["approval_id","expected_revision","proposal_digest"],"properties":{"approval_id":{"type":"string"},"expected_revision":{"type":"integer","minimum":1},"proposal_digest":{"type":"string"},"reviewed_digest":{"type":"string"}},"description":"Withdraw the caller's pending revision with proposal and reviewed digest checks, or learn the outcome that already committed"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"properties":{"ok":{"type":"boolean"},"error":{"type":"object"},"value":{},"replayed":{"type":"boolean"}}}}
   - name: consume
     description: The effect owner binds an approved decision to one effect identity
       under the authority incarnation it observed; it revalidates policy, attempt
       state and authority itself before acting
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"approval_id":{"type":"string"},"effect_key":{"type":"string"},"expected_revision":{"type":"integer"},"proposal_digest":{"type":"string"},"reviewed_digest":{"type":"string"},"incarnation":{"type":"integer"}},"additionalProperties":true,"description":"The effect owner binds an approved decision to one effect identity under the authority incarnation it observed; it revalidates policy, attempt state and authority itself before acting"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: revalidate
     description: After an authority restart, the effect owner records that an approved
       decision still holds under the current incarnation
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"approval_id":{"type":"string"},"incarnation":{"type":"integer"},"proposal_digest":{"type":"string"}},"additionalProperties":true,"description":"After an authority restart, the effect owner records that an approved decision still holds under the current incarnation"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: read
     description: One request, for its requester, an eligible approver or a workspace
       manager
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"required":["approval_id"],"properties":{"approval_id":{"type":"string"}},"description":"One request, for its requester, an eligible approver or a workspace manager"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"properties":{"ok":{"type":"boolean"},"error":{"type":"object"},"value":{},"replayed":{"type":"boolean"}}}}
   - name: inbox
     description: An approver's bounded catch-up over one workspace's changes
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"after_sequence":{"type":"integer"},"limit":{"type":"integer"}},"additionalProperties":true,"description":"An approver's bounded catch-up over one workspace's changes"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: list
     description: The caller's own requests
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"after_id":{"type":"string"},"limit":{"type":"integer"}},"additionalProperties":true,"description":"The caller's own requests"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: deliveries
     description: Thread projection deliveries for one request; a manager may return
       an exhausted one to the queue
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"approval_id":{"type":"string"},"redeliver":{"type":"boolean"}},"additionalProperties":true,"description":"Thread projection deliveries for one request; a manager may return an exhausted one to the queue"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: reconcile
     description: The owner expires due requests and forgets settled ones past retention
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"limit":{"type":"integer"}},"additionalProperties":true,"description":"The owner expires due requests and forgets settled ones past retention"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: capabilities
     description: States, bounds and delivery guarantees of this owner
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{},"additionalProperties":true,"description":"States, bounds and delivery guarantees of this owner"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: effect_queue
     description: Read uncompleted terminal effects for a registered destination under
       its owner policy
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"after_id":{"type":"string"},"limit":{"type":"integer"}},"additionalProperties":true,"description":"Read uncompleted terminal effects for a registered destination under its owner policy"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}

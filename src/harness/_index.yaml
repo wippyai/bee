@@ -20,7 +20,10 @@ entries:
   methods:
   - name: call
     description: Read or compare-and-set a typed saved agent profile owned by the host node
-
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"operation":{"type":"string"},"workspace_id":{"type":"string"},"profile_id":{"type":"string"},"profile":{"type":"object"},"expected_revision":{"type":"integer"},"idempotency_key":{"type":"string"},"limit":{"type":"integer"},"after_id":{"type":"string"}},"additionalProperties":true,"description":"Read or compare-and-set a typed saved agent profile owned by the host node"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"code":{"type":"string"},"message":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["ok","code","message"]}]}}
 - name: request
   kind: library.lua
   source: file://request.lua

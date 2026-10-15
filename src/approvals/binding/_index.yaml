@@ -341,6 +341,7 @@ entries:
   kind: contract.binding
   contracts:
   - contract: bee.approvals:contract
+    default: true
     methods:
       feed_snapshot: bee.approvals.binding:feed_snapshot
       feed_read_after: bee.approvals.binding:feed_read_after

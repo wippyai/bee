@@ -8,20 +8,56 @@ entries:
   methods:
   - name: associate
     description: Bind a workspace name to an admitted root under the host ceiling; optional expected_revision supports atomic create or CAS replacement
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"name":{"type":"string"},"root_ref":{"type":"string"},"path":{"type":"string"},"expected_revision":{"type":"integer"}},"additionalProperties":true,"description":"Bind a workspace name to an admitted root under the host ceiling; optional expected_revision supports atomic create or CAS replacement"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: grant
     description: Issue a grant to the authenticated subject for an audience, pinned to the association revision and root digest; a caller admitted to grant_thread may name a thread-bound subject with its
       thread instead
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"name":{"type":"string"},"audience":{"type":"string"},"attempt_id":{"type":"string"},"thread_id":{"type":"string"},"ttl_ms":{"type":"integer"},"idempotency_key":{"type":"string"}},"additionalProperties":true,"description":"Issue a grant to the authenticated subject for an audience, pinned to the association revision and root digest; a caller admitted to grant_thread may name a thread-bound subject with its thread instead"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: revoke
     description: End one grant and ask placement to recheck and stop its fenced attempt
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"grant_id":{"type":"string"}},"additionalProperties":true,"description":"End one grant and ask placement to recheck and stop its fenced attempt"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: revoke_all
     description: Advance the workspace authorization epoch so every earlier grant stops resolving, then ask placement to recheck and stop the fenced live attempts
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"}},"additionalProperties":true,"description":"Advance the workspace authorization epoch so every earlier grant stops resolving, then ask placement to recheck and stop the fenced live attempts"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: resolve
     description: Re-check a grant for the placement that admitted the subject and audience, and return the exact resource scope
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"grant_id":{"type":"string"},"subject":{"type":"string"},"audience":{"type":"string"},"attempt_id":{"type":"string"}},"additionalProperties":true,"description":"Re-check a grant for the placement that admitted the subject and audience, and return the exact resource scope"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: renew_attempt
     description: Extend the leases a live attempt holds by their recorded term, for the placement that supervises the attempt
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"},"subject":{"type":"string"},"audience":{"type":"string"}},"additionalProperties":true,"description":"Extend the leases a live attempt holds by their recorded term, for the placement that supervises the attempt"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: list
     description: A manager's view of associations and live grants
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"}},"additionalProperties":true,"description":"A manager's view of associations and live grants"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: describe
     description: One workspace's associations as a titled list, for a caller that may read the workspace; the shape of a workspace catalog extension
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"}},"additionalProperties":true,"description":"One workspace's associations as a titled list, for a caller that may read the workspace; the shape of a workspace catalog extension"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: search
     description: One workspace's associations whose name starts with text, for a caller that may read the workspace
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"text":{"type":"string"}},"additionalProperties":true,"description":"One workspace's associations whose name starts with text, for a caller that may read the workspace"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}

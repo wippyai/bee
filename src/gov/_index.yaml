@@ -6,11 +6,19 @@ entries:
   methods:
   - name: call
     description: Discover, stage, review, select and locally activate overlay versions for one destination workspace
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"operation":{"type":"string"},"workspace_id":{"type":"string"},"source_workspace":{"type":"string"},"source_node":{"type":"string"},"version":{"type":"string"},"snapshot_digest":{"type":"string"},"intent_id":{"type":"string"},"expected_revision":{"type":"integer"},"receipt_key":{"type":"string"}},"additionalProperties":true,"description":"Discover, stage, review, select and locally activate overlay versions for one destination workspace"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
 - name: overlay_contract
   kind: contract.definition
   methods:
   - name: call
     description: Author a caller-owned overlay with revision checks; freeze content without executing or approving it
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["guide","source","create","list","read","put","append","remove","freeze"]},"overlay_id":{"type":"string","minLength":1,"maxLength":160},"expected_revision":{"type":"integer","minimum":0,"maximum":9007199254740990},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","minLength":1,"maxLength":240},"offset":{"type":"integer","minimum":0,"maximum":4194304},"limit":{"type":"integer","minimum":1,"maximum":16384},"result_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"content":{"type":"string","maxLength":4194304},"content_base64":{"type":"string","maxLength":5592408},"snapshot_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"description":"Author a caller-owned overlay with revision checks; freeze content without executing or approving it"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"code":{"type":"string"},"message":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["ok","code","message"]}]}}
 - name: activation_profiles
   kind: registry.entry
   meta:

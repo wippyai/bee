@@ -118,6 +118,7 @@ entries:
   kind: contract.binding
   contracts:
   - contract: bee.harness:profiles
+    default: true
     methods:
       call: bee.harness.binding:call
 - name: windows

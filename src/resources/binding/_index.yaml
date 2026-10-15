@@ -123,6 +123,7 @@ entries:
   kind: contract.binding
   contracts:
   - contract: bee.resources:contract
+    default: true
     methods:
       associate: bee.resources.binding:associate
       grant: bee.resources.binding:grant

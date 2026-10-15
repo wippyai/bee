@@ -392,12 +392,14 @@ entries:
   kind: contract.binding
   contracts:
   - contract: bee.gov:delivery_contract
+    default: true
     methods:
       call: bee.gov.binding:destination_call
 - name: overlay_local
   kind: contract.binding
   contracts:
   - contract: bee.gov:overlay_contract
+    default: true
     methods:
       call: bee.gov.binding:overlay_call
 - name: driver_bindings

@@ -40,28 +40,76 @@ entries:
   methods:
   - name: prepare
     description: Validate an admitted launch request against this placement and record intent; idempotent by key and digest
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"schema_revision":{"type":"string"},"attempt_id":{"type":"string"},"action_id":{"type":"string"},"workspace_id":{"type":"string"},"binding_ref":{"type":"string"},"profile_id":{"type":"string"},"plan_digest":{"type":"string"},"idempotency_key":{"type":"string"},"launch":{"type":"object"}},"additionalProperties":true,"description":"Validate an admitted launch request against this placement and record intent; idempotent by key and digest"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: start
     description: Spawn the attempt runner, which materializes resources and starts the child; idempotent
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"}},"additionalProperties":true,"description":"Spawn the attempt runner, which materializes resources and starts the child; idempotent"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: status
     description: Recorded execution and cleanup state plus one separately labelled liveness observation
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"}},"additionalProperties":true,"description":"Recorded execution and cleanup state plus one separately labelled liveness observation"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: stop
     description: Cooperative or forced stop under the admitted grace; signal evidence is recorded, exit is proven separately
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"},"force":{"type":"boolean"},"reason":{"type":"string"}},"additionalProperties":true,"description":"Cooperative or forced stop under the admitted grace; signal evidence is recorded, exit is proven separately"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: reconcile
     description: After a restart, prove the attempt gone or alive from evidence; keep uncertainty when it cannot be proven
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"}},"additionalProperties":true,"description":"After a restart, prove the attempt gone or alive from evidence; keep uncertainty when it cannot be proven"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: cleanup
     description: Remove the attempt home once execution absence is proven; retained session state is untouched
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"}},"additionalProperties":true,"description":"Remove the attempt home once execution absence is proven; retained session state is untouched"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: evidence
     description: A bounded page of the attempt's transition evidence
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"},"after_sequence":{"type":"integer"},"limit":{"type":"integer"}},"additionalProperties":true,"description":"A bounded page of the attempt's transition evidence"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: attach
     description: Bind the recipient that receives output and may write input; advances the attachment generation
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"},"recipient":{"type":"string"},"expected_generation":{"type":"integer"}},"additionalProperties":true,"description":"Bind the recipient that receives output and may write input; advances the attachment generation"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: capabilities
     description: Report the selected placement's measured executable and cleanup capabilities
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{},"additionalProperties":true,"description":"Report the selected placement's measured executable and cleanup capabilities"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: measure_executable
     description: Measure an absolute executable path under the selected placement's host rules
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"executable":{"type":"string"}},"additionalProperties":true,"description":"Measure an absolute executable path under the selected placement's host rules"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: close_stdin
     description: Close the admitted attempt's stdin when its driver declares session end on stdin closure
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"}},"additionalProperties":true,"description":"Close the admitted attempt's stdin when its driver declares session end on stdin closure"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: activity
     description: Whether a live attempt's process still runs work of its own, as the count of processes descending from it
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"}},"additionalProperties":true,"description":"Whether a live attempt's process still runs work of its own, as the count of processes descending from it"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
 - name: workdir_preparer
   kind: contract.definition
   meta:
@@ -70,8 +118,20 @@ entries:
   methods:
   - name: plan
     description: Plan setup without mutations; placement persists the returned state before setup
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"},"working_directory":{"type":"string"},"write_roots":{"type":"array"},"options":{"type":"object"},"state":{"type":"object"}},"additionalProperties":true,"description":"Plan setup without mutations; placement persists the returned state before setup"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: setup
     description: Run setup before the child starts, optionally returning modified working_directory, extra writable roots,
       and state
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"},"working_directory":{"type":"string"},"write_roots":{"type":"array"},"options":{"type":"object"},"state":{"type":"object"}},"additionalProperties":true,"description":"Run setup before the child starts, optionally returning modified working_directory, extra writable roots, and state"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: cleanup
     description: Run cleanup after the child ends, using state recorded from setup
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"},"working_directory":{"type":"string"},"write_roots":{"type":"array"},"options":{"type":"object"},"state":{"type":"object"}},"additionalProperties":true,"description":"Run cleanup after the child ends, using state recorded from setup"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}

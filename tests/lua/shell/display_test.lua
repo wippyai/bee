@@ -442,7 +442,7 @@ local function define_tests()
             assert(process.registry.register(failure))
             local changes = assert(registry.snapshot()):changes()
             assert(changes:create({id = installed, kind = "process.lua",
-                meta = {type = "bee.app", application = {api_version = 1, title = "Stale", lifetime = "view",
+                meta = {type = "bee.application", application = {api_version = 1, title = "Stale", lifetime = "view",
                     revision = "1", instance_policy = "singleton"}},
                 data = {source = "return {main = function() end}", method = "main"}}))
             assert(changes:apply())

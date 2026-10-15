@@ -6,21 +6,6 @@
 -- one by one, owning their placement. Operations arrive only from this node's Hive supervisor,
 -- which supplies the caller's authenticated PID; mounts are bound to that
 -- exact PID.
---
--- An app process starts with {appearance, owner, args, workspace, desktop}:
--- the node's appearance, this owner's PID (the only sender of appearance
--- changes on appearance.TOPIC), what its opener passed, the workspace its
--- desktop works in and the desktop id.
---
--- Displays that watch the node receive its events (apps opened, moved
--- between desktops and closed, the app catalog when installed apps change,
--- appearance and workspace changes) on client.EVENTS. The owner monitors
--- watchers, knows the desktop each shows, and forgets them when they exit.
---
--- App instances are kept with their desktop, so a starting node reopens its
--- desktops' apps. The owner is upgradable: when its code changes it hands its
--- instances (with their viewport handles) and its watchers to the new code,
--- which reattaches them, so running apps and attached displays survive.
 local worker = require("worker")
 local process = require("process")
 local channel = require("channel")
@@ -63,7 +48,6 @@ local role_app = part_catalog.role_app
 local catalog = part_catalog.catalog
 local themes = part_catalog.themes
 local stored_appearance = part_catalog.stored_appearance
-local signature = part_catalog.signature
 local same_palette = part_catalog.same_palette
 type Definition = application.Definition
 local NAME = "bee.node"
@@ -148,7 +132,15 @@ local function main(saved: unknown)
     local function broadcast(event: {[string]: unknown})
         revision = revision + 1
         event.revision = revision
-        for pid in pairs(watchers) do process.send(pid, client.EVENTS, event) end
+        for pid, desktop_id in pairs(watchers) do
+            local outgoing = event
+            if event.kind == "catalog" then
+                local desktop = workspaces.desktop(desktop_id)
+                local apps, err = part_catalog.admitted(installed_apps, desktop and desktop.workspace_id or home_id)
+                outgoing = {kind = "catalog", revision = revision, apps = apps or {}, problem = event.problem or err}
+            end
+            process.send(pid, client.EVENTS, outgoing)
+        end
     end
 
     -- restyle applies the current appearance to every app and display.
@@ -204,17 +196,19 @@ local function main(saved: unknown)
         return found
     end
 
-    local function state(): {[string]: unknown}
+    local function state(caller: string?): {[string]: unknown}
         local running: {{[string]: unknown}} = {}
         for _, instance in pairs(instances) do running[#running + 1] = describe(instance) end
         table.sort(running, function(a, b) return tostring(a.id) < tostring(b.id) end)
         local listed = workspace_catalog() or {}
+        local desktop = caller and watchers[caller] and workspaces.desktop(watchers[caller]) or nil
+        local visible_apps, visible_error = part_catalog.admitted(installed_apps, desktop and desktop.workspace_id or home_id)
         local pending_alerts: {client.Alert} = {}
         for _, alert in pairs(alerts) do if alert.count > 0 or alert.failed or alert.installed then pending_alerts[#pending_alerts + 1] = alert end end
         return {node = node, owner = tostring(process.pid()), supervisor = protocol.supervisor_pid() or "",
             revision = revision, home = home_id, appearance = current, running = running,
-            apps = installed_apps, workspaces = listed.workspaces, desktops = listed.desktops, dialogs = dialogs(), alerts = pending_alerts,
-            problem = catalog_problem}
+            apps = visible_apps or {}, workspaces = listed.workspaces, desktops = listed.desktops, dialogs = dialogs(), alerts = pending_alerts,
+            problem = visible_error or catalog_problem}
     end
 
     local function register_alias(alias: AppAlias): (AppAlias?, string?)
@@ -276,8 +270,6 @@ local function main(saved: unknown)
         local version = assert(registry.current_version())
         local token = tostring(uuid.v7())
         local execution_id = tostring(uuid.v7())
-        -- The launch carries the node's options and the bee.app launch an app
-        -- built on the bee.app SDK reads; the node owner is its broker.
         local options: {[string]: unknown} = {appearance = current, owner = owner_pid, args = app_args, desktop = desktop.id,
             workspace = {id = workspace.id, path = workspace.path, label = workspace.label},
             version = 1, broker_pid = owner_pid, workspace_pid = owner_pid, workspace_id = workspace.id, instance_id = id, view_id = id,
@@ -286,13 +278,24 @@ local function main(saved: unknown)
             resume_state = type(app_args.resume_state) == "string" and app_args.resume_state or "", arguments = words(app_args)}
         -- The host context names the workspace; the functions an app calls
         -- authorize workspace-bound operations by it, never by the request.
-        local pid, spawn_error = process.with_options({terminal = grant}):with_context({["bee.workspace_id"] = workspace.id})
-            :with_actor(actor):with_scope(scope)
-            :spawn_linked_monitored(definition.process, "bee:workers", options)
+        local launched, call_error = funcs.new():with_actor(actor):call("bee.node.service:launch", {terminal = grant, options = options})
+        local launch_result = bounds.object(launched)
+        local pid = launch_result and bounds.id(launch_result.pid)
+        local spawn_error = call_error or (launch_result and launch_result.error)
         if not pid then
             retire(alias)
             view:close()
             return nil, "start " .. app .. ": " .. tostring(spawn_error)
+        end
+        local monitored, monitor_error = process.monitor(pid)
+        local linked, link_error = false, nil
+        if monitored then linked, link_error = process.link(pid) end
+        if not monitored or not linked then
+            process.cancel(pid)
+            if monitored then process.unmonitor(pid) end
+            retire(alias)
+            view:close()
+            return nil, "attach application ownership: " .. tostring(monitor_error or link_error)
         end
         local instance: Instance = {id = id, app = app, title = definition.title, desktop = desktop.id, workspace = workspace.id,
             view = view, pid = tostring(pid),
@@ -411,7 +414,7 @@ local function main(saved: unknown)
         end
         watchers[caller] = chosen or ""
         announce_workspaces()
-        local value = state()
+        local value = state(caller)
         value.desktop = chosen
         return protocol.ok(value)
     end
@@ -431,6 +434,7 @@ local function main(saved: unknown)
         if type(desktop) ~= "string" or not workspaces.desktop(desktop) then return protocol.fail("no such desktop") end
         if shown_elsewhere(desktop, caller) then return protocol.fail("that desktop is shown on another display") end
         watchers[caller] = desktop
+        broadcast({kind = "catalog"})
         announce_workspaces()
         return protocol.ok({desktop = desktop})
     end
@@ -651,12 +655,15 @@ local function main(saved: unknown)
 
     -- resolve_command finds the installed app a `bee NAME` command opens and
     -- the arguments it opens with.
-    local function resolve_command(name: unknown, tail: unknown): protocol.Reply
+    local function resolve_command(name: unknown, tail: unknown, caller: string): protocol.Reply
         if type(name) ~= "string" then return protocol.fail("command needs a name") end
         local words_given = arguments.decode(tail)
         if not words_given then return protocol.fail("command arguments must be a list of words") end
         local installed: {[string]: boolean} = {}
-        for _, app in ipairs(installed_apps) do installed[tostring(app.id)] = true end
+        local desktop = watchers[caller] and workspaces.desktop(watchers[caller]) or nil
+        local apps, err = part_catalog.admitted(installed_apps, desktop and desktop.workspace_id or home_id)
+        if not apps then return protocol.fail(err or "application admission unavailable") end
+        for _, app in ipairs(apps) do installed[tostring(app.id)] = true end
         local launch, problem = command.resolve(name, words_given, installed)
         if not launch then return protocol.fail(problem or "Unknown Bee command: " .. name) end
         return protocol.ok({app = launch.definition_id, arguments = launch.arguments, fullscreen = launch.fullscreen})
@@ -802,6 +809,7 @@ local function main(saved: unknown)
         if type(workspace_id) ~= "string" or not workspaces.workspace(workspace_id) then return protocol.fail("no such workspace") end
         local used, err = workspaces.use_workspace(id, workspace_id)
         if not used then return protocol.fail(err or "workspace not used") end
+        broadcast({kind = "catalog"})
         announce_workspaces()
         return protocol.ok({desktop = id, workspace = workspace_id})
     end
@@ -891,11 +899,9 @@ local function main(saved: unknown)
             end
             return
         end
-        if signature(apps) ~= signature(installed_apps) or catalog_problem then
-            installed_apps = apps
-            catalog_problem = nil
-            broadcast({kind = "catalog", apps = apps})
-        end
+        installed_apps = apps
+        catalog_problem = nil
+        broadcast({kind = "catalog", apps = apps})
         installed_themes, default_theme = found_themes, found_default
         local next_value = stored_appearance(installed_themes, default_theme)
         if not same_palette(next_value.theme, current.theme) then
@@ -937,7 +943,7 @@ local function main(saved: unknown)
         if type(event.path) ~= "string" or type(data) ~= "table" then return end
         local workspace_id: string = event.path
         if event.kind == "approval.requested" or event.kind == "approval.failed" then
-            local inbox, inbox_error = role_app(APPROVALS_ROLE)
+            local inbox, inbox_error = role_app(APPROVALS_ROLE, workspace_id)
             if inbox_error then
                 logger:error("Approvals app not resolved", {error = inbox_error})
                 return
@@ -992,7 +998,7 @@ local function main(saved: unknown)
 
     local function handle(request: protocol.Forwarded): protocol.Reply
         local op, args = request.op, request.args
-        if op == "list" then return protocol.ok(state()) end
+        if op == "list" then return protocol.ok(state(request.caller)) end
         if op == "watch" then return watch(request.caller, args.desktop) end
         if op == "show" then return show(request.caller, args.desktop) end
         if op == "leave" then return leave(request.caller) end
@@ -1000,7 +1006,7 @@ local function main(saved: unknown)
         if op == "attach" then return attach(request.caller, args.id) end
         if op == "close" then return close(args.id, args.force, args.execution_id) end
         if op == "answer" then return answer(args) end
-        if op == "command" then return resolve_command(args.name, args.arguments) end
+        if op == "command" then return resolve_command(args.name, args.arguments, request.caller) end
         if op == "stats" then return stats() end
         if op == "move" then return move(args.id, args.desktop) end
         if op == "themes" then return theme_list() end

@@ -7,7 +7,7 @@ entries:
   method: main
   modules: [process]
   meta:
-    type: bee.app
+    type: bee.application
     application: {api_version: 1, title: Package tests, lifetime: view, revision: '1', instance_policy: multiple, menus: [bee.tests.gov:unplaced_menu]}
 - name: admission
   kind: registry.entry

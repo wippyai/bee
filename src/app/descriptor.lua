@@ -4,7 +4,7 @@
 -- it is placed in, and whether it runs a terminal page.
 local M = {}
 
-M.TYPE = "bee.app"
+M.TYPE = "bee.application"
 
 type Descriptor = {definition_id: string, definition_revision: string, title: string, icon: string,
     group: string, role: string, singleton: boolean, resume_schema: string, restart_policy: string,

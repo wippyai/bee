@@ -140,7 +140,7 @@ local function define_tests()
                     meta = {value_kind = "security.policy", capability = "app.database",
                         parameters = {name = "progress"}, reason = "Keep tasks"},
                     data = {targets = {{entry = "app.progress:app", path = ".security.policies +="}}}},
-                {id = "app.progress:app", kind = "process.lua", meta = {type = "bee.app"}, data = {}},
+                {id = "app.progress:app", kind = "process.lua", meta = {type = "bee.application"}, data = {}},
             }
             local made = assert(artifact.create(entries))
             spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest

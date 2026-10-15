@@ -8,7 +8,7 @@ entries:
   modules: [funcs, security, hash]
   imports: {bounds: bee.values:bounds}
   meta:
-    type: bee.app
+    type: bee.application
     application:
       api_version: 1
       lifetime: view

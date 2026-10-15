@@ -4,6 +4,7 @@ local logger = require("logger")
 local settings = require("settings")
 local appearance = require("appearance")
 local descriptor = require("descriptor")
+local application = require("application")
 local M = {}
 -- A menu an app names and an installed app, as the catalog lists them.
 type Menu = {id: string, title: string, location: string, order: integer}
@@ -12,13 +13,17 @@ type Theme = appearance.Theme
 
 local MENU_TYPE = "bee.menu"
 -- role_app is the installed app declaring role, the first by id.
-local function role_app(role: string): (string?, string?)
+local function role_app(role: string, workspace_id: string): (string?, string?)
     local entries, find_error = registry.find({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
     if not entries then return nil, "installed apps cannot be read: " .. tostring(find_error) end
     local found: string? = nil
     for _, entry in ipairs(entries) do
         local declared = descriptor.decode(entry.id, entry.meta.application)
-        if declared and declared.role == role and (found == nil or entry.id < found) then found = entry.id end
+        if declared and declared.role == role then
+            local binding, _, err = application.admission(entry.id, workspace_id)
+            if err then return nil, err end
+            if binding and (found == nil or entry.id < found) then found = entry.id end
+        end
     end
     return found, nil
 end
@@ -42,9 +47,9 @@ local function menus(): ({[string]: Menu}?, string?)
     return found, nil
 end
 
--- catalog lists the installed apps: process entries of type bee.app whose
+-- catalog lists the installed apps: process entries of type bee.application whose
 -- meta.application declares them, each with the installed menus it names.
-local function catalog(): ({CatalogApp}?, string?)
+local function catalog(workspace_id: string?): ({CatalogApp}?, string?)
     local installed, menus_error = menus()
     if not installed then return nil, menus_error end
     local entries, find_error = registry.find({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
@@ -52,7 +57,13 @@ local function catalog(): ({CatalogApp}?, string?)
     local apps: {CatalogApp} = {}
     for _, entry in ipairs(entries) do
         local declared = descriptor.decode(entry.id, entry.meta.application)
-        if declared then
+        local admitted = true
+        if workspace_id then
+            local binding, _, err = application.admission(entry.id, workspace_id)
+            if err then return nil, err end
+            admitted = binding ~= nil
+        end
+        if declared and admitted then
             local placed: {Menu} = {}
             for _, id in ipairs(declared.menus) do
                 local menu = installed[id]
@@ -60,12 +71,22 @@ local function catalog(): ({CatalogApp}?, string?)
                 else logger:warn("App names a menu that is not installed", {id = entry.id, menu = id}) end
             end
             apps[#apps + 1] = {id = entry.id, title = declared.title, menus = placed, singleton = declared.singleton}
-        else
+        elseif not declared then
             logger:warn("App entry declares no valid application", {id = entry.id})
         end
     end
     table.sort(apps, function(a: CatalogApp, b: CatalogApp): boolean return a.title < b.title end)
     return apps, nil
+end
+
+local function admitted(apps: {CatalogApp}, workspace_id: string): ({CatalogApp}?, string?)
+    local visible: {CatalogApp} = {}
+    for _, app in ipairs(apps) do
+        local binding, _, err = application.admission(app.id, workspace_id)
+        if err then return nil, err end
+        if binding then visible[#visible + 1] = app end
+    end
+    return visible, nil
 end
 
 -- themes returns the installed themes, registry entries of type
@@ -146,6 +167,7 @@ M.MENU_TYPE = MENU_TYPE
 M.role_app = role_app
 M.menus = menus
 M.catalog = catalog
+M.admitted = admitted
 M.themes = themes
 M.stored_appearance = stored_appearance
 M.signature = signature

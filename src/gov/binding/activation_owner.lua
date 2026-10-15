@@ -219,7 +219,7 @@ local function presentation(config: Config, intent: Object, plan: Object): appro
         local id = entry and bounds.id(entry.id) or nil
         local alias = meta and meta.type == "tool" and bounds.line(meta.llm_alias, 80) or nil
         if id and alias and shown.tools then shown.tools[id] = alias end
-        local declared = meta and meta.type == "bee.app" and object(meta.application) or nil
+        local declared = meta and meta.type == "bee.application" and object(meta.application) or nil
         local title = declared and bounds.line(declared.title, 80) or nil
         if title and title ~= "" then shown.title = title end
     end

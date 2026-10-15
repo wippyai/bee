@@ -187,7 +187,7 @@ function M.application(metadata: unknown, entries: unknown): boolean
     for _, raw in ipairs(bounds.array(entries, limits.MAX_PACKAGE_ENTRIES) or {}) do
         local entry = bounds.object(raw)
         local declaration = entry and bounds.object(entry.meta)
-        if declaration and declaration.type == "bee.app" then return true end
+        if declaration and declaration.type == "bee.application" then return true end
     end
     return false
 end
@@ -253,7 +253,7 @@ function M.browse(raw: unknown): (Browse?, string?)
         local name = module and component(module.name) or nil
         if name then application[name] = false end
     end
-    local entries, find_error = snapshot:find({["meta.type"] = "bee.app"})
+    local entries, find_error = snapshot:find({["meta.type"] = "bee.application"})
     if find_error then return nil, tostring(find_error) end
     local definitions: {[string]: boolean} = {}
     for _, entry in ipairs(entries) do definitions[entry.id] = true end

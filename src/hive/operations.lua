@@ -58,7 +58,7 @@ function M.validate(entries: {Object}): string?
         if operation then
             local app = indexed[operation.application_ref]
             local meta = app and bounds.object(app.meta) or nil
-            if not app or app.kind ~= "process.lua" or not meta or meta.type ~= "bee.app" then
+            if not app or app.kind ~= "process.lua" or not meta or meta.type ~= "bee.application" then
                 return operation.ref .. ": Hive application_ref is not an application in this artifact"
             end
             local key = operation.application_ref .. "\n" .. operation.service .. "\n" .. operation.name

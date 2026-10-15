@@ -184,7 +184,7 @@ function M.scope(definition: Definition, workspace_id: string): (security.Scope?
     if admission_error then return nil, "admission: " .. admission_error end
     local scope, scope_error = security.named_scope(M.SCOPE)
     if not scope then return nil, "application scope: " .. tostring(scope_error) end
-    if not binding then return scope, nil end
+    if not binding then return nil, "application has no admission: " .. definition.process end
     if binding.scope_management then
         local managing, managing_error = security.named_scope(M.MANAGING_SCOPE)
         if not managing then return nil, "scope-managing application scope: " .. tostring(managing_error) end

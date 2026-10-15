@@ -62,7 +62,7 @@ end
 function M.entries(): {inspection.Entry}
     local entries: {inspection.Entry} = {
         {id = NS .. ":definition", kind = "ns.definition", meta = {title = "Progress"}, data = {}},
-        {id = NS .. ":app", kind = "process.lua", meta = {type = "bee.app", application = {
+        {id = NS .. ":app", kind = "process.lua", meta = {type = "bee.application", application = {
             api_version = 1, title = "Progress", lifetime = "view", revision = "1", instance_policy = "singleton",
             restart_policy = "never", menus = {"bee.shell:apps_menu"}}},
             data = {source = 'local process = require("process")\nlocal function main() process.events():receive() end\nreturn {main = main}',

@@ -401,7 +401,7 @@ local function define_tests()
             local snapshot = assert(registry.snapshot())
             local changes = snapshot:changes()
             assert(changes:create({id = "bee.tests.node:installed_app", kind = "process.lua",
-                meta = {type = "bee.app", application = {api_version = 1, title = "Installed", lifetime = "view",
+                meta = {type = "bee.application", application = {api_version = 1, title = "Installed", lifetime = "view",
                     revision = "1", instance_policy = "singleton"}},
                 data = {source = "return {main = function() end}", method = "main"}}))
             assert(changes:apply())
@@ -442,7 +442,7 @@ local function define_tests()
             local passed, problem = pcall(function()
                 local changes = assert(registry.snapshot()):changes()
                 assert(changes:create({id = INSTALLED, kind = "process.lua",
-                    meta = {type = "bee.app", application = {api_version = 1, title = "Refresh", lifetime = "view",
+                    meta = {type = "bee.application", application = {api_version = 1, title = "Refresh", lifetime = "view",
                         revision = "1", instance_policy = "singleton"}},
                     data = {source = "return {main = function() end}", method = "main"}}))
                 assert(changes:apply())

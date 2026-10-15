@@ -27,7 +27,7 @@ function M.define()
     test.it("blocks checkpoint metadata the application catalog cannot open", function()
         local deps, spec = fixture(nil)
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.app", application = {restart_policy = "automatic"}},
+            meta = {type = "bee.application", application = {restart_policy = "automatic"}},
             data = {source = "return true"}}})
         local facts = resolve(deps, spec)
         local measured = (principals.objects(facts.candidate.entries))[1]
@@ -90,7 +90,7 @@ function M.define()
                 text = "Read workspace files under {subpath}",
                 policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
                 resources = {}}}}}
-        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.app"},
+        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
             data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
         local request: Entry = {id = "private.app:files", kind = "ns.requirement",
             meta = {value_kind = "security.policy", capability = "workspace.files.read",
@@ -188,7 +188,7 @@ function M.define()
             registry = {owner = "bee/host"}}
         captured.entries[#captured.entries + 1] = {id = "bee.host:private_callable", kind = "function.lua",
             data = {source = "return true"}, registry = {owner = "bee/host"}}
-        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.app"},
+        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
             data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
         local request: Entry = {id = "private.app:launch", kind = "ns.requirement",
             meta = {value_kind = "security.policy", capability = "agents.launch",
@@ -217,7 +217,7 @@ function M.define()
         captured.entries[#captured.entries + 1] = {id = "bee.host:helper", kind = "function.lua",
             meta = {type = "tool", llm_alias = "helper", llm_description = "Host helper",
                 input_schema = '{"type":"object"}'}, data = {source = "return true"}, registry = {owner = "bee/host"}}
-        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.app"},
+        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
             data = {source = "return true"}}
         local function tool(name: string, alias: string, data: Entry?): Entry
             return {id = "private.app:" .. name, kind = "function.lua",
@@ -277,7 +277,7 @@ function M.define()
                 policies = {"bee:ordinary-policy"}, thread_access = "observe_post"}}}
         local deps, spec = fixture(policy)
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.app"}, data = {source = "return true"}}})
+            meta = {type = "bee.application"}, data = {source = "return true"}}})
         local captured = (deps.capture)()
         captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
             data = {},
@@ -321,7 +321,7 @@ function M.define()
                 text = "Read owned threads", policies = {{operation = "threads.read",
                     resource = "threads", scope = {scope = "$scope"}}}, resources = {}}}}}
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.app"}, data = {source = "return true"}},
+            meta = {type = "bee.application"}, data = {source = "return true"}},
             {id = "private.app:threads", kind = "ns.requirement",
                 meta = {value_kind = "security.policy", capability = "threads.read",
                     parameters = {scope = "owned"}, reason = "Show threads"},
@@ -365,7 +365,7 @@ function M.define()
                 text = "Read owned threads", policies = {{operation = "threads.read",
                     resource = "threads", scope = {scope = "$scope"}}}, resources = {}}}}}
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.app"}, data = {source = "return true"}},
+            meta = {type = "bee.application"}, data = {source = "return true"}},
             {id = "private.app:threads", kind = "ns.requirement",
                 meta = {value_kind = "security.policy", capability = "threads.read",
                     parameters = {scope = "owned"}, reason = "Show threads"},
@@ -404,7 +404,7 @@ function M.define()
                 policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
                 resources = {}}}}}
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.app"}, data = {source = "return true"}},
+            meta = {type = "bee.application"}, data = {source = "return true"}},
             {id = "private.app:files", kind = "ns.requirement",
                 meta = {value_kind = "security.policy", capability = "workspace.files.read",
                     parameters = {subpath = "docs"}, reason = "Render documentation"},
@@ -447,7 +447,7 @@ function M.define()
                 return {root_ref = "bee.env:workspace_root", directory = ".", base = "project", subpath = "alpha"}, nil
             end
             local entries: {Entry} = {{id = "private.app:main", kind = "process.lua",
-                meta = {type = "bee.app"}, data = {source = "return true", modules = {"exec", "json"}}}}
+                meta = {type = "bee.application"}, data = {source = "return true", modules = {"exec", "json"}}}}
             if requested then
                 entries[#entries + 1] = {id = "private.app:run", kind = "ns.requirement",
                     meta = {value_kind = "security.policy", capability = "process.exec",
@@ -503,7 +503,7 @@ function M.define()
                 policies = {{operation = "database.use", resource = "$name",
                     scope = {name = "$name"}}}, resources = {}}}}}
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.app"}, data = {source = "return true"}},
+            meta = {type = "bee.application"}, data = {source = "return true"}},
             {id = "private.app:db", kind = "ns.requirement",
                 meta = {value_kind = "security.policy", capability = "app.database",
                     parameters = {name = "journal"}, reason = "Persist rows"},

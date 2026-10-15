@@ -212,7 +212,7 @@ function M.example(): {{[string]: unknown}}
             modules = {"tty", "process", "channel", "json"},
             imports = {client = "bee.app:client", appearance = "bee.ui:appearance",
                 frame = "bee.ui:frame"}},
-        meta = {type = "bee.app", application = {api_version = 1, lifetime = "view",
+        meta = {type = "bee.application", application = {api_version = 1, lifetime = "view",
             revision = "1", title = M.TITLE, instance_policy = "multiple",
             resume_schema = "guide-counter.v1", restart_policy = "automatic",
             menus = {"bee.shell:apps_menu"}}}}}
@@ -371,7 +371,7 @@ function M.pack_contents(): string
         .. " native modules, policy grants and resource bindings during preflight, and the activation owner alone"
         .. " applies the reviewed overlay. Use the read-only components tool to inspect the effective installed"
         .. " registry and exact Hub package entries, documentation and examples before authoring."
-        .. " Hub packages of type application, declaring bee.app or requesting capabilities install through the"
+        .. " Hub packages of type application, declaring bee.application or requesting capabilities install through the"
         .. " Library's governed stage, preflight, person approval and activation path. Their app.database grants"
         .. " provision dedicated databases, their migrations run against those databases, and agent.tools grants"
         .. " expose their tools. ns.definition is package metadata admitted by the package ceiling."
@@ -382,7 +382,7 @@ function M.pack_contents(): string
         .. " command) or http_request with that approval_id until it expires."
 end
 function M.application_shape(): string
-    return "An application is one process.lua entry with meta.type bee.app and a"
+    return "An application is one process.lua entry with meta.type bee.application and a"
         .. " meta.application record declaring api_version 1, lifetime view, a nonempty revision and title,"
         .. " and instance_policy singleton or multiple, and menus listing the bee.menu entries it appears in:"
         .. " bee.shell:apps_menu places it in the Start panel's Apps menu, the way the person opens it."

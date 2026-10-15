@@ -22,7 +22,7 @@ entries:
     confirmation: bee.approvals.app:confirmation
     manuals: bee.docs:manuals
   meta:
-    type: bee.app
+    type: bee.application
     application:
       api_version: 1
       title: MCP clients

@@ -89,7 +89,7 @@ local function define_tests()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local policy_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.app"}, data = {source = "return true"}},
+                meta = {type = "bee.application"}, data = {source = "return true"}},
                 {id = "app.notes:exposure", kind = "ns.requirement",
                     meta = {capability = "hive.expose", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:run", path = ".security.policies +="}}}}}
@@ -170,7 +170,7 @@ local function define_tests()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local policy_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.app"}, data = {source = "return true"}},
+                meta = {type = "bee.application"}, data = {source = "return true"}},
                 {id = "app.notes:threads", kind = "ns.requirement",
                     meta = {capability = "threads.read", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
@@ -201,7 +201,7 @@ local function define_tests()
             local volume_id = "bee.gov.grants:volume." .. string.rep("b", 64)
             local database_id = "bee.gov.grants:database." .. string.rep("c", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.app"}, data = {source = "return true"}},
+                meta = {type = "bee.application"}, data = {source = "return true"}},
                 {id = "app.notes:files", kind = "ns.requirement",
                     meta = {capability = "workspace.files.read", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
@@ -236,7 +236,7 @@ local function define_tests()
             local call_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local web_id = "bee.gov.grants:policy." .. string.rep("b", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.app"}, data = {source = "return true"}},
+                meta = {type = "bee.application"}, data = {source = "return true"}},
                 {id = "app.notes:call", kind = "ns.requirement",
                     meta = {capability = "contract.call", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}},
@@ -276,7 +276,7 @@ local function define_tests()
             local agents_id = "bee.gov.grants:policy." .. string.rep("b", 64)
             local executor_id = "bee.gov.grants:executor." .. string.rep("c", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.app"}, data = {source = "return true"}},
+                meta = {type = "bee.application"}, data = {source = "return true"}},
                 {id = "app.notes:run", kind = "ns.requirement",
                     meta = {capability = "process.exec", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}},
@@ -323,7 +323,7 @@ local function define_tests()
 
         test.it("keeps an application's databases when it is removed and takes everything else off", function()
             local state: State = {entries = {
-                ["app.notes:app"] = {id = "app.notes:app", kind = "process.lua", meta = {type = "bee.app"}, data = {source = "return true"}},
+                ["app.notes:app"] = {id = "app.notes:app", kind = "process.lua", meta = {type = "bee.application"}, data = {source = "return true"}},
                 ["bee.gov.grants:notes_db"] = {id = "bee.gov.grants:notes_db", kind = "db.sql.sqlite", meta = {}, data = {file = "notes.db"}},
                 ["bee.gov.grants:notes_policy"] = {id = "bee.gov.grants:notes_policy", kind = "security.policy", meta = {}, data = {}},
             }, generation = 1, conflicts = 0}
@@ -342,7 +342,7 @@ local function define_tests()
             -- runtime's boot migration runner.
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.app"}, data = {source = "return true"}},
+                meta = {type = "bee.application"}, data = {source = "return true"}},
                 {id = "app.notes:create_notes", kind = "function.lua",
                     meta = {type = "migration", target_db = "notes", ordinal = 1},
                     data = {source = "return true", method = "run"}}}

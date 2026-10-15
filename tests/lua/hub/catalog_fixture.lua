@@ -30,7 +30,7 @@ local function open(component: string, version: string, options: unknown): (Pack
                 assert(opts and opts.include_data == false and opts.kind == "process.lua")
                 record("decodes", M.count() + 1)
                 if record("mode") == "library" then return {}, nil end
-                return {{id = "fixture:app", kind = "process.lua", meta = {type = "bee.app"}}}, nil
+                return {{id = "fixture:app", kind = "process.lua", meta = {type = "bee.application"}}}, nil
             end,
             close = function(_self: Package): (boolean, string?) return true, nil end}, nil
     end

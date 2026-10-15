@@ -4,7 +4,7 @@ entries:
 - name: app
   kind: process.lua
   meta:
-    type: bee.app
+    type: bee.application
     application:
       api_version: 1
       title: Processes

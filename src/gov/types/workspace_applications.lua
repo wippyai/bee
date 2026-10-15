@@ -14,7 +14,7 @@ type Identity = {name: string, namespace: string, component: string, overlay_own
 
 M.RULE = "name the overlay with lowercase letters and digits, starting with a letter (at most "
     .. tostring(M.MAX_NAME) .. " characters); put every entry in namespace " .. M.NAMESPACE_ROOT
-    .. ".<overlay_id> or its child namespaces and declare exactly one process.lua application with meta.type bee.app"
+    .. ".<overlay_id> or its child namespaces and declare exactly one process.lua application with meta.type bee.application"
 
 -- The overlay name, when it can name a workspace application.
 function M.name(raw: unknown): string?
@@ -46,7 +46,7 @@ function M.application(raw: unknown): (string?, string?)
     for _, raw_entry in ipairs(entries) do
         local entry = bounds.object(raw_entry)
         local meta = entry and bounds.object(entry.meta)
-        if entry and meta and meta.type == "bee.app" then
+        if entry and meta and meta.type == "bee.application" then
             if entry.kind ~= "process.lua" then return nil, "workspace application is not a process.lua entry" end
             local id = bounds.id(entry.id)
             if not id then return nil, "workspace application identity is invalid" end

@@ -38,10 +38,10 @@ local function define_tests()
             local identity = assert(naming.identity(WORKSPACE, "tally_2", true))
             test.eq(identity.namespace, "app.tally_2")
             test.eq(identity.component, "app.tally_2")
-            test.eq(naming.application({{id = "app.tally_2:window", kind = "process.lua", meta = {type = "bee.app"}}}), "app.tally_2:window")
+            test.eq(naming.application({{id = "app.tally_2:window", kind = "process.lua", meta = {type = "bee.application"}}}), "app.tally_2:window")
             test.is_nil(naming.application({{id = "app.tally_2:app", kind = "process.lua", meta = {type = "helper"}}}))
-            test.is_nil(naming.application({{id = "app.tally_2:first", kind = "process.lua", meta = {type = "bee.app"}},
-                {id = "app.tally_2:second", kind = "process.lua", meta = {type = "bee.app"}}}))
+            test.is_nil(naming.application({{id = "app.tally_2:first", kind = "process.lua", meta = {type = "bee.application"}},
+                {id = "app.tally_2:second", kind = "process.lua", meta = {type = "bee.application"}}}))
             test.eq(identity.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".tally_2")
             test.eq(naming.prior_owner(WORKSPACE, "tally_2"),
                 "bee.governance.workspace_applications:" .. WORKSPACE .. ".tally_2")

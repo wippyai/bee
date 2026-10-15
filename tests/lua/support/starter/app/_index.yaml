@@ -12,7 +12,7 @@ entries:
     frame: bee.ui:frame
     greeting: bee.tests.support.starter.model:greeting
   meta:
-    type: bee.app
+    type: bee.application
     application:
       api_version: 1
       lifetime: view

@@ -45,7 +45,7 @@ local function define_tests()
             local workspace = harness.isolated("lifecycle")
             local person = harness.person(workspace)
             local exact = assert(artifact.create({{id = application, kind = "process.lua",
-                meta = {type = "bee.app", application = {api_version = 1, title = "Lifecycle", lifetime = "view",
+                meta = {type = "bee.application", application = {api_version = 1, title = "Lifecycle", lifetime = "view",
                     revision = "1", instance_policy = "singleton", menus = {"bee.shell:apps_menu"}}},
                 data = {source = "return {main = function() end}", method = "main"}},
                 {id = namespace .. ":trait", kind = "registry.entry", meta = {type = "agent.trait", title = "Overlay hook", application_ref = application},

@@ -2,6 +2,7 @@
 -- definition, admission, actor and scope for an app.
 local test = require("test")
 local application = require("application")
+local catalog = require("catalog")
 
 local WORKSPACE = string.rep("e", 32)
 local APPLICATION = "bee.tests.node.runner.fixture:app"
@@ -26,6 +27,24 @@ local function define_tests()
             local none, _, none_error = application.admission("bee.tests.node.runner.fixture:unadmitted", WORKSPACE)
             test.is_nil(none)
             test.is_nil(none_error)
+        end)
+
+        test.it("rejects a valid process definition without host admission", function()
+            local definition = assert(application.definition(APPLICATION))
+            definition.process = "unadmitted.vendor:app"
+            local scope, err = application.scope(definition, WORKSPACE)
+            test.is_nil(scope)
+            test.not_nil(err)
+        end)
+
+        test.it("lists only applications admitted in the launch workspace", function()
+            local apps = assert(catalog.catalog(WORKSPACE))
+            local found = false
+            for _, app in ipairs(apps) do
+                test.neq(app.id, "bee.tests.node:tools_app")
+                if app.id == APPLICATION then found = true end
+            end
+            test.is_true(found)
         end)
 
         test.it("names an instance actor by workspace and definition", function()

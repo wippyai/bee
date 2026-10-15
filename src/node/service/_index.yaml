@@ -58,6 +58,7 @@ entries:
       - bee.security.approvals:confirmation_authority
       - bee.node.security:owner_role
       - bee.node.security:owner_app_alias
+      - bee.node.security:owner_launch
       - bee.process:boot_gate_policy
       - bee.hive.security:messaging
     restart:
@@ -114,6 +115,7 @@ entries:
   - logger
   - registry
   imports:
+    application: bee.node:application
     descriptor: bee.app:descriptor
     settings: bee.node.persist:settings
     appearance: bee.ui:appearance
@@ -125,3 +127,13 @@ entries:
   imports:
     client: bee.node:client
     confirmation: bee.approvals.app:confirmation
+
+- name: launch
+  kind: function.lua
+  source: file://launch.lua
+  method: handle
+  modules: [process, security]
+  imports:
+    principal: bee.node:principal
+    application: bee.node:application
+    bounds: bee.values:bounds

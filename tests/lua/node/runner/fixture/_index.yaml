@@ -7,7 +7,7 @@ entries:
   method: main
   modules: [process]
   meta:
-    type: bee.app
+    type: bee.application
     test_overlay: runner_fixture
     application: {api_version: 1, title: Runner fixture, lifetime: view, revision: '1', instance_policy: multiple, menus: [bee.shell:apps_menu]}
 - name: admission

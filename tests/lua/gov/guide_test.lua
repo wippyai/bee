@@ -45,7 +45,7 @@ local function define_tests()
             local document = guide.document()
             test.not_nil((string.find(document, "entries.json", 1, true)))
             test.not_nil((string.find(document, "process.lua", 1, true)))
-            test.not_nil((string.find(document, "bee.app", 1, true)))
+            test.not_nil((string.find(document, "bee.application", 1, true)))
             test.not_nil((string.find(document, "freeze", 1, true)))
             test.not_nil((string.find(document, "Needs you", 1, true)))
             test.not_nil((string.find(document, "append migration functions", 1, true)))
@@ -245,7 +245,7 @@ local function define_tests()
             test.eq(measured.entries[1].kind, "process.lua")
             local metadata = measured.entries[1].meta
             if type(metadata) ~= "table" then error("example metadata is not an object") end
-            test.eq(metadata.type, "bee.app")
+            test.eq(metadata.type, "bee.application")
             local data = assert(bounds.object(measured.entries[1].data))
             local source = data.source
             local modules = principals.strings(data.modules)

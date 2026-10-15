@@ -80,6 +80,20 @@ entries:
     comment: The node's admissions for its own apps; Agents builds call scopes for the agents it runs and takes a minute to close them
   data:
     bindings:
+    - definition_id: bee.approvals.inbox.app:app
+      policies: []
+    - definition_id: bee.apps.help.app:app
+      policies: []
+    - definition_id: bee.apps.library.app:app
+      policies: []
+    - definition_id: bee.apps.processes.app:app
+      policies: []
+    - definition_id: bee.apps.settings.app:app
+      policies: []
+    - definition_id: bee.apps.terminal.app:app
+      policies: []
+    - definition_id: bee.gateway.app:app
+      policies: []
     - definition_id: bee.harness.app:app
       policies: []
       scope_management: true

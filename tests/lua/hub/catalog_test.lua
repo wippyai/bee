@@ -57,8 +57,15 @@ local function define_tests()
                 test.eq(library.decodes, 3)
             end
         end)
-        test.it("finds application declarations in the whole published Bee pack", function()
-            test.is_true(catalog.application({}, root_pack.entries()))
+        test.it("finds current application declarations throughout a whole pack and rejects legacy metadata", function()
+            local entries = root_pack.entries()
+            test.is_false(catalog.application({}, entries))
+            for _, entry in ipairs(entries) do
+                if entry.kind == "process.lua" and entry.meta.type == "bee.app" then
+                    entry.meta.type = "bee.application"
+                end
+            end
+            test.is_true(catalog.application({}, entries))
         end)
         test.it("classifies applications from Hub metadata without matching package names", function()
             local app, library = module("unrelated/tasks"), module("bee/app-lookalike")
@@ -66,7 +73,7 @@ local function define_tests()
             local result = assert(catalog.decode_browse(browse({app, library})))
             test.eq(result.items[1].application, true)
             test.eq(result.items[2].application, false)
-            test.is_true(catalog.application({}, {{id = "arbitrary:entry", kind = "process.lua", meta = {type = "bee.app"}}}))
+            test.is_true(catalog.application({}, {{id = "arbitrary:entry", kind = "process.lua", meta = {type = "bee.application"}}}))
             test.is_false(catalog.application({}, {{id = "bee:app", kind = "library.lua", meta = {title = "Application"}}}))
         end)
         test.it("decodes only bounded browse query and page input", function()

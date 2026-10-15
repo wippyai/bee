@@ -53,7 +53,7 @@ function M.entries(node: string, workspace: string, audience: string): {Object}
             data = {targets = {{entry = target, path = ".security.policies +="}}}}
     end
     return {
-        {id = M.APP, kind = "process.lua", meta = {type = "bee.app", application = {api_version = 1,
+        {id = M.APP, kind = "process.lua", meta = {type = "bee.application", application = {api_version = 1,
             title = "Project test SDK", menus = {"bee.shell:apps_menu"}, lifetime = "view", revision = "1", instance_policy = "multiple"}},
             data = {source = 'local client = require("client")\nlocal process = require("process")\nlocal function main(value: unknown)\n    local launch = assert(client.launch(value))\n    client.ready(launch)\n    assert(process.events()):receive()\nend\nreturn {main = main}',
                 method = "main", modules = {"process"}, imports = {client = "bee.app:client"}}},

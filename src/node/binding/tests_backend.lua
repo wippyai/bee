@@ -20,7 +20,7 @@ local function plan(workspace_id: string, selector: string, owned: {[string]: bo
     local associated: {[string]: boolean} = {}
     for _, entry in ipairs(state.entries) do
         local meta = bounds.object(entry.meta)
-        if entry.kind == "process.lua" and meta and meta.type == "bee.app" then
+        if entry.kind == "process.lua" and meta and meta.type == "bee.application" then
             local binding, record, admission_error = application.admission(entry.id, workspace_id)
             if admission_error then return nil, tests.fail("UNAVAILABLE", admission_error) end
             local alias = record and record.source_workspace or bounds.id(meta.test_overlay)

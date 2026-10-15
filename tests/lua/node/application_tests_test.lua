@@ -4,7 +4,7 @@ local application_tests = require("application_tests")
 type Object = {[string]: unknown}
 local APP = "app.progress:app"
 local function app(id: string, owner: string): Object
-    return {id = id, kind = "process.lua", meta = {type = "bee.app"}, registry = {owner = owner}}
+    return {id = id, kind = "process.lua", meta = {type = "bee.application"}, registry = {owner = owner}}
 end
 local function entry(id: string, owner: string, association: string?): Object
     return {id = id, kind = "function.lua", meta = {type = "app_test", application = association}, registry = {owner = owner}}

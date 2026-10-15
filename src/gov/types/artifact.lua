@@ -190,7 +190,7 @@ function M.application_checkpoint_invalid(value: unknown): boolean
     local entry = object(value)
     local meta = entry and object(entry.meta) or nil
     local application = meta and object(meta.application) or nil
-    if not meta or meta.type ~= "bee.app" or not application then return false end
+    if not meta or meta.type ~= "bee.application" or not application then return false end
     local restart = application.restart_policy or "never"
     local schema = application.resume_schema or ""
     return (restart ~= "never" and restart ~= "automatic" and restart ~= "manual")
@@ -204,7 +204,7 @@ function M.application_unplaced(value: unknown): boolean
     local entry = object(value)
     local meta = entry and object(entry.meta) or nil
     local application = meta and object(meta.application) or nil
-    if not meta or meta.type ~= "bee.app" or not application then return false end
+    if not meta or meta.type ~= "bee.application" or not application then return false end
     local menus = application.menus
     return type(menus) ~= "table" or menus[1] == nil
 end

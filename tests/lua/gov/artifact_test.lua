@@ -14,7 +14,7 @@ end
 
 local function sdk(): {{[string]: unknown}}
     return {
-        {id = "private.sdk:app", kind = "process.lua", meta = {type = "bee.app",
+        {id = "private.sdk:app", kind = "process.lua", meta = {type = "bee.application",
             application = {title = "Project SDK", revision = "1", menus = {"bee.shell:apps_menu"}}},
             data = {source = "return {main = function() end}", method = "main"}},
         {id = "unrelated.tools:execute", kind = "function.lua", meta = {application_ref = "private.sdk:app",
@@ -111,7 +111,7 @@ local function define_tests()
         end)
         test.it("measures the desktop checkpoint metadata invariant", function()
             local function invalid(restart: unknown, schema: unknown): boolean
-                return artifact.application_checkpoint_invalid({meta = {type = "bee.app",
+                return artifact.application_checkpoint_invalid({meta = {type = "bee.application",
                     application = {restart_policy = restart, resume_schema = schema}}})
             end
             test.is_false(invalid(nil, nil))

@@ -63,7 +63,7 @@ local function install(audience: string, mode: string?, blocked: boolean?, calli
     assert(proposal, tostring(proposal_error) .. "; audience=" .. audience)
     local record = assert(grants.record(OWNER, WORKSPACE, APP, proposal, "receiver-approval", 1))
     local entries: {Object} = {
-        {id = APP, kind = "process.lua", meta = {type = "bee.app", application = {api_version = 1,
+        {id = APP, kind = "process.lua", meta = {type = "bee.application", application = {api_version = 1,
             title = "Receiver SDK", lifetime = "view", revision = "1", instance_policy = "multiple"}},
             data = {source = "return {main = function() end}", method = "main"}},
         {id = RUN, kind = "function.lua", meta = {application_ref = APP, hive = mode or "open", hive_service = "test-sdk",

@@ -26,7 +26,7 @@ function M.select(raw: unknown, application_id: string, owned: {[string]: boolea
         local meta = bounds.object(entry.meta)
         local same_source = owned[application_id] and owned[entry.id]
             or (not owned[application_id] and package and provenance and provenance.owner == package)
-        if same_source and entry.kind == "process.lua" and meta and meta.type == "bee.app" then
+        if same_source and entry.kind == "process.lua" and meta and meta.type == "bee.application" then
             applications = applications + 1
         end
     end

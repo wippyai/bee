@@ -228,7 +228,7 @@ function M.resolve(entry: Entry, package: string, final: {[string]: Entry}, owne
             else
                 local target_meta = object(destination.meta)
                 if target.path ~= ".security.policies +=" or not owned[target_id]
-                    or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.app" then
+                    or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.application" then
                     return nil, "capability requirement must append policies to its own application"
                 end
             end

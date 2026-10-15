@@ -75,7 +75,7 @@ entries:
   imports:
     client: bee.app:client
   meta:
-    type: bee.app
+    type: bee.application
     application:
       menus:
       - bee.harness.app:start_menu

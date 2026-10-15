@@ -1,4 +1,4 @@
--- MIT. One-shot boot gate: restore authorized destination intents before a
+-- MIT. One-shot startup service: restore authorized destination intents before a
 -- workspace host can build its first application catalog. A restoration
 -- governance refuses leaves that overlay out and is reported; the node boots.
 local logger = require("logger")

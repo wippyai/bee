@@ -15,6 +15,8 @@ operating system user's authority.
 
 External MCP clients pair with `bee mcp connect [--name NAME]`; use the existing trait approval and gateway token paths described in [External MCP clients](docs/external_mcp).
 
+For person-saved Local and Docker permission choices, see [All-allowed profiles](component/harness#all-allowed-profiles). That shared profile help lists each driver control and the in-process Wippy limitation. Agents cannot mint consent for these choices.
+
 ## Layout
 
 Each component is one folder `src/<component>/` that holds its own

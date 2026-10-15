@@ -171,8 +171,8 @@ function M.resolve(pinned: registry.Snapshot, requested: string?): (Resolved?, s
         return nil, "placement isolation disagrees with its binding or credential reach"
     end
     local ceilings = bounds.object(meta.option_ceilings) or {}
-    if meta.option_ceilings ~= nil and (not declared or kind ~= "container" or not bounds.object(meta.option_ceilings)) then
-        return nil, "placement option ceilings require declared container isolation"
+    if meta.option_ceilings ~= nil and (not declared or not bounds.object(meta.option_ceilings)) then
+        return nil, "placement option ceilings require declared isolation"
     end
     for _, raw in pairs(ceilings) do
         local options = bounds.object(raw)
@@ -207,8 +207,7 @@ function M.decode_isolation(value: unknown): (Isolation?, string?)
     return {kind = kind, credentials = credentials, mounted_roots = mounted, network = network, option_ceilings = ceilings}, nil
 end
 function M.context(ref: string?): (Isolation?, string?)
-    if not ref then return nil, nil end
-    local raw, err = funcs.call("bee.placement.profiles:context", ref)
+    local raw, err = funcs.call("bee.placement.profiles:context", ref or M.DEFAULT)
     if err then return nil, tostring(err) end
     local reply = bounds.object(raw)
     if not reply then return nil, "Placement context returned no answer" end

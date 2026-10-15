@@ -143,6 +143,9 @@ entries:
             path:
             - permissions
             - defaultMode
+          person_values:
+          - bypassPermissions
+          consent_message: 'All allowed: Claude bypasses tool permission checks.'
         model:
           invalid: model is not one bounded model identifier
           path: provider.model
@@ -742,7 +745,7 @@ entries:
           capabilities:
             'false': []
             'true':
-            - profile-option
+            - bypass
           ceiling: []
           render:
           - kind: argv
@@ -754,6 +757,9 @@ entries:
             - if: permission_bypass
               then:
               - --dangerously-skip-permissions
+          person_values:
+          - true
+          consent_message: 'All allowed: Claude bypasses tool permission checks.'
         allow_permission_bypass:
           id: allow_permission_bypass
           path: provider.options.allow_permission_bypass
@@ -778,7 +784,7 @@ entries:
           capabilities:
             'false': []
             'true':
-            - profile-option
+            - bypass
           ceiling: []
           render:
           - kind: argv
@@ -790,6 +796,9 @@ entries:
             - if: allow_permission_bypass
               then:
               - --allow-dangerously-skip-permissions
+          person_values:
+          - true
+          consent_message: Enables switching to permission bypass during the session.
         permission_prompts:
           id: permission_prompts
           path: provider.options.permission_prompts

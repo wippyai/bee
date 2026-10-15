@@ -20,6 +20,16 @@ local function conversation(activity: string, turns: {agents.Turn}, ref: string?
 end
 local function define_tests()
     test.describe("Permission ownership", function()
+        test.it("shows all-allowed saved permissions on the session screen", function()
+            local conv = conversation("idle", {})
+            conv.session.snapshot.effective_profile = {
+                schema_revision = "bee.agent-profile@3", name = "All allowed",
+                definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.driver.claude.binding:binding",
+                provider = {permission_mode = "bypassPermissions"}, bee = {},
+            }
+            conv.details = true
+            test.contains(screen(session_view.draw(100, 25, appearance.defaults(), conv, "", "").rows), "All allowed")
+        end)
         test.it("reports provider-owned contexts on the session screen", function()
             local conv = conversation("idle", {})
             conv.session.snapshot.provider = "codex"

@@ -3,6 +3,8 @@
 local tty = require("tty")
 local registry = require("registry")
 local descriptor = require("descriptor")
+local preferences = require("preferences")
+local profile_protocol = require("profile_protocol")
 local appearance = require("appearance")
 local frame = require("frame")
 local text = require("text")
@@ -20,6 +22,9 @@ function M.permission_status(snapshot: protocol.SessionSnapshot): string
     if not provider then return "Permission answers: provider context unavailable" end
     local declared = descriptor.find_provider(registry.snapshot(), provider)
     if not declared then return "Permission answers: provider context unavailable" end
+    local saved = profile and profile_protocol.preferences(profile)
+    local summary = saved and preferences.permission_summary(declared, saved.options)
+    if summary then return summary end
     local selected = descriptor.permission_answer(declared, snapshot.terminal == true and "window" or "first_turn")
     if selected.transport == "provider" or mode == "provider" then
         return "Permission answers: Provider-owned" .. (selected.reason and " · " .. selected.reason or "")

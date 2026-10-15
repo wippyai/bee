@@ -53,6 +53,9 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.permission_mode: {kind: declared}
+      provider.options.permission_bypass: {kind: declared}
+      provider.options.allow_permission_bypass: {kind: declared}
       provider.effort:
       - low
       - medium
@@ -134,6 +137,8 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.options.permission_bypass: {kind: declared}
+      provider.options.allow_permission_bypass: {kind: declared}
       provider.model:
         kind: declared
       provider.permission_mode:

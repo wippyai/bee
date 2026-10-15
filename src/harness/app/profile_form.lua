@@ -26,6 +26,18 @@ type Form = {traits: {TraitRow}?,permission_transport: boolean?, driver_name: st
     fields: {[string]: {label: string, section: string, order: integer, group: string?, default: unknown, default_source: string?, value_schema: {[string]: unknown}?}}?, unsupported: {string}?,
     migration_diagnostic: {[string]: unknown}?, repair_json: string?}
 
+function M.permission_summary(form: Form): string?
+    local profile = form.draft
+    local pinned = catalog.pin()
+    if not pinned then return nil end
+    local binding = catalog.entry(pinned, profile.driver_binding_ref)
+    local meta = binding and bounds.object(binding.meta)
+    local ref = meta and bounds.id(meta.descriptor_ref)
+    local descriptor = ref and descriptors.load_from(pinned, ref)
+    local selected = protocol.preferences(profile)
+    return descriptor and selected and preferences.permission_summary(descriptor, selected.options) or nil
+end
+
 function M.review(form: Form): (string?, string?)
     local profile, invalid = editor.result(form.draft)
     if not profile then return nil, invalid end
@@ -45,7 +57,7 @@ function M.review(form: Form): (string?, string?)
     if not entry then return nil, "Agent definition is missing" end
     local declared, definition_error = definition.decode(profile.definition_ref, entry)
     if not declared then return nil, definition_error end
-    local credentials = profile.bee.credential_refs or definition.credential_names(declared, "docker", true)
+    local credentials = profile.bee.credential_refs or definition.credential_names(declared, profile.placement and profile.placement.kind or "native", true)
     review = review .. "\nSelected credentials: " .. (#credentials == 0 and "none" or table.concat(credentials, ", "))
     if profile.workdir then review = review .. "\nLaunch folder: " .. profile.workdir.root_ref .. "/" .. profile.workdir.path end
     return review, nil

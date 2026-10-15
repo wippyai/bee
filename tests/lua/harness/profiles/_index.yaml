@@ -258,3 +258,16 @@ entries:
     bounds: bee.values:bounds
   security:
     policies: [bee.security.approvals:approval_store_policy, bee.harness.security:consumed_decision_policy]
+- name: allowall_service_test
+  kind: function.lua
+  source: file://service_test.lua
+  method: allowall
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, uuid]
+  imports:
+    editor: bee.harness.app:profile_editor
+    protocol: bee.harness.profiles:protocol
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    host: bee.tests.memory:host
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}

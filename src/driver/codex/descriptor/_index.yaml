@@ -106,7 +106,7 @@ entries:
             - --sandbox
             - field: sandbox
           person_values: [danger-full-access]
-          consent_message: The CLI sandbox is disabled inside the container.
+          consent_message: The CLI sandbox is disabled.
           id: sandbox
           group: access/trust
           security_class: host-ceiling
@@ -156,7 +156,7 @@ entries:
               - -c
               - format: approval_policy="{approval_policy}"
           person_values: [never]
-          consent_message: Runs without approvals inside the container.
+          consent_message: Runs without tool approval prompts.
           capabilities:
             on-request: [request-approval]
             never: [no-approvals]
@@ -174,11 +174,11 @@ entries:
           value_schema: {type: boolean}
           default: false
           label: Bypass approvals and sandbox
-          description: Run without approvals or the CLI sandbox inside an admitted container
+          description: Run without approvals or the CLI sandbox in Local or Docker placement
           group: access/trust
           security_class: host-ceiling
           person_values: [true]
-          consent_message: Runs without approvals inside the container; the CLI sandbox is disabled.
+          consent_message: "All allowed: Codex runs without approvals or the CLI sandbox."
           capabilities: {"false": [], "true": [bypass]}
           ceiling: []
           section: advanced

@@ -604,20 +604,36 @@ function M.apply(policy_data: Object, raw: unknown, descriptor: descriptors.Desc
     return result, nil
 end
 
-function M.review(descriptor: descriptors.Descriptor, values: Object, placement_ref: string?): (string?, string?)
+function M.permission_summary(descriptor: descriptors.Descriptor, values: Object): string?
     local lines: {string} = {}
+    local rights: {[string]: boolean} = {}
     for name, raw in pairs(bounds.object(descriptor.options.fields) or {}) do
         local field = bounds.object(raw) or {}
         for _, value in ipairs(bounds.array(field.person_values, 64) or {}) do
-            if values[name] == value then lines[#lines + 1] = bounds.text(field.consent_message, 512) or (name .. ": " .. tostring(value)) end
+            if values[name] == value then
+                lines[#lines + 1] = bounds.text(field.consent_message, 512) or (name .. ": " .. tostring(value))
+                local capabilities = bounds.object(field.capabilities) or {}
+                for _, right in ipairs(bounds.ids(capabilities[tostring(value)], true) or {}) do rights[right] = true end
+            end
         end
     end
-    if #lines == 0 then return nil, nil end
+    if #lines == 0 then return nil end
+    table.sort(lines)
+    if rights["no-approvals"] and rights["write-anywhere"] and not rights.bypass then
+        table.insert(lines, 1, "All allowed: tool approvals and the CLI sandbox are disabled.")
+    end
+    return table.concat(lines, "\n")
+end
+
+function M.review(descriptor: descriptors.Descriptor, values: Object, placement_ref: string?): (string?, string?)
+    local summary = M.permission_summary(descriptor, values)
+    if not summary then return nil, nil end
+    local lines: {string} = {summary}
     local compiled, invalid = M.compile(descriptor, nil, nil, values, "person", nil, nil, placement_ref)
     if not compiled then return nil, invalid end
-    table.sort(lines)
     local isolation, isolation_error = placements.context(placement_ref)
     if not isolation then return nil, isolation_error or "Placement isolation is unavailable" end
+    lines[#lines + 1] = "Placement: " .. (isolation.kind == "native" and "Local (native host access)" or "Docker (container isolation remains active)")
     lines[#lines + 1] = "Mounted roots:"
     for _, mount in ipairs(isolation.mounted_roots) do
         lines[#lines + 1] = mount.resource .. " → " .. mount.target .. " (" .. mount.access .. ")"

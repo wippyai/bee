@@ -89,12 +89,13 @@ local function define_tests()
                     if type(card) == "table" then prompt = tostring(card.text) end
                     return ask(target, request)
                 end)
+            test.is_true(table.concat(view.draw(120, 45, appearance.defaults(), s).rows, "\n"):find("All allowed", 1, true) ~= nil)
             test.is_nil(view.action(s, "save"))
-            for _, phrase in ipairs({"without approvals inside the container", "project", "/workspace", "write", "bee-coding", "credentials", "gateway", "codex_login", "codex_api_key"}) do
+            for _, phrase in ipairs({"All allowed", "project", "/workspace", "write", "bee-coding", "credentials", "gateway", "codex_login", "codex_api_key"}) do
                 test.is_true(prompt:find(phrase, 1, true) ~= nil, phrase .. " is absent from the approval card")
             end
             local rendered = table.concat(view.draw(120, 45, appearance.defaults(), s).rows, "\n")
-            test.is_true(rendered:find("without approvals inside the container", 1, true) ~= nil)
+            test.is_true(rendered:find("All allowed", 1, true) ~= nil)
             test.is_true(rendered:find("/workspace", 1, true) ~= nil)
             test.eq(view.action(s, "save", "enter"), "save")
         end)

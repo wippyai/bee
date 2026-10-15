@@ -78,6 +78,45 @@ entries:
       - batch
       unknown_prefix: ''
       fields:
+        auto:
+          id: auto
+          path: provider.options.auto
+          value_schema:
+            type: boolean
+          label: All allowed
+          description: 'All allowed except explicit denies: OpenCode auto-approves tool permissions.'
+          group: access/trust
+          security_class: host-ceiling
+          person_values:
+          - true
+          consent_message: 'All allowed except explicit denies: OpenCode auto-approves tool permissions.'
+          capabilities:
+            'false': []
+            'true':
+            - bypass
+          ceiling: []
+          section: advanced
+          order: 10
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            version_range: '>=1.18.32'
+            help_probe:
+              argv:
+              - --help
+              flag: --auto
+          render:
+          - kind: argv
+            contexts:
+            - window
+            - first_turn
+            - resume
+            tokens:
+            - if: auto
+              then:
+              - --auto
         resume_ref:
           type: id
           forbid_option: true

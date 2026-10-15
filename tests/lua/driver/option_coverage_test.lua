@@ -38,7 +38,7 @@ local function with_ceiling(run: () -> ())
     for _, raw in ipairs(cases) do
         local case = object(raw)
         if case.security_class == "host-ceiling" then
-            object(ceilings[tostring(case.driver)])[tostring(case.id)] = {"profile-option"}
+            object(ceilings[tostring(case.driver)])[tostring(case.id)] = case.ceiling or {"profile-option"}
         end
     end
     local changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())
@@ -155,7 +155,11 @@ local function define_tests()
                         local denied = effective.compile(cli, policy, nil, {[id] = case.value}, "person", nil, nil, placement)
                         if case.baseline ~= true and case.safe ~= case.value then test.is_nil(denied) end
                         if case.baseline ~= true and case.safe ~= case.value then
-                            test.is_nil(effective.compile(cli, nil, nil, {[id] = case.value}, "person", nil, nil, "bee.placement.profiles:native"))
+                            local native = effective.compile(cli, nil, nil, {[id] = case.value}, "person", nil, nil, "bee.placement.profiles:native")
+                            if case.native_allowed then
+                                test.not_nil(native)
+                                test.is_nil(effective.compile(cli, nil, nil, {[id] = case.value}, "agent", nil, nil, "bee.placement.profiles:native"))
+                            else test.is_nil(native) end
                         end
                         policy.option_constraints[id] = {locked = true, reason = "Host lock"}
                         test.is_nil(effective.compile(cli, policy, nil, {[id] = case.value}, "person", nil, nil, placement))
@@ -233,6 +237,11 @@ local function define_tests()
                 end
             end)
         end)
+
+    end)
+end
+local function define_profiles_tests()
+    test.describe("Installed option profile round trips", function()
         test.it("round trips the editor and schema storage in every group for each driver", function()
             with_ceiling(function()
                 local groups: {[string]: boolean} = {}
@@ -261,4 +270,9 @@ local function define_tests()
         end)
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+local profiles_cases = test.run_cases(define_profiles_tests)
+return {
+    run = function(options: unknown) return cases(options) end,
+    profiles = function(options: unknown) return profiles_cases(options) end,
+}

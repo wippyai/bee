@@ -18,7 +18,7 @@ local function field(format: string, path: {string}, merge: string): Object
 end
 local function define_tests()
     test.describe("Descriptor option delivery", function()
-        test.it("captures Codex container configuration and rejects the same options on native", function()
+        test.it("captures the same person-selected Codex configuration in Docker and native", function()
             local options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true, model_provider = "openai"}
             local request: configuration_types.Request = {fixture = true, private_home = true, context = "first_turn", option_values = options,
                 placement_profile_ref = "bee.placement.docker.profiles:coding"}
@@ -30,9 +30,9 @@ local function define_tests()
             end
             test.eq(assert(captured).model_provider, "openai")
             request.placement_profile_ref = "bee.placement.profiles:native"
-            local refused, reason = configuration.call("bee.driver.codex.binding:binding", "bee.driver.codex.binding:configure", request)
-            test.is_nil(refused)
-            test.is_true(tostring(reason):find("ceiling", 1, true) ~= nil)
+            local native, reason = configuration.call("bee.driver.codex.binding:binding", "bee.driver.codex.binding:configure", request)
+            assert(native, tostring(reason))
+            test.eq(native.files[1].content, delivery.files[1].content)
         end)
         test.it("renders installed custom-provider schemas with environment references only", function()
             local endpoint = "https://models.example.test/v1"

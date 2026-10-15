@@ -45,6 +45,7 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.options.auto: {kind: declared}
       provider.model:
         kind: declared
       provider.options.providers:
@@ -124,6 +125,7 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.options.auto: {kind: declared}
       provider.model:
         kind: declared
       provider.options.providers:

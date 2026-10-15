@@ -56,6 +56,34 @@ locator never reads login contents, and catalog results grant no launch
 authority. Opening a session performs admission again under the caller's
 host-selected policy.
 
+## All-allowed profiles
+
+In Profiles, choose Local or Docker, expand Advanced, and save the driver's
+permission selection below as the person. The profile and permission review
+show **All allowed** and identify the placement. These choices never become
+implicit host defaults. Agents and delegated callers cannot create consent;
+using an existing person-approved profile preserves its recorded authority.
+Host option constraints, Bee tool grants, explicit provider denies, and Docker
+mount/network isolation still apply.
+
+| Driver | Saved option | Native CLI control |
+| --- | --- | --- |
+| Claude | `permission_mode=bypassPermissions` or `permission_bypass=true` | `--permission-mode bypassPermissions` or `--dangerously-skip-permissions` |
+| Codex | `dangerously_bypass_approvals_and_sandbox=true` | `--dangerously-bypass-approvals-and-sandbox` |
+| Codex | `sandbox=danger-full-access`, `approval_policy=never` | `--sandbox danger-full-access -c 'approval_policy="never"'` |
+| Agy | `dangerously_skip_permissions=true`, `sandbox=false` | `--dangerously-skip-permissions` without `--sandbox` |
+| Grok | `permission_mode=bypassPermissions` | `--permission-mode bypassPermissions` |
+| Muse | `yolo=true` | `--yolo` (also trusts this workspace for the run) |
+| OpenCode | `auto=true` | `--auto` (auto-approves except explicit denies) |
+| Wippy | No CLI permission option | In-process driver; placement launches, including Docker, are unsupported |
+
+Claude's `dontAsk` denies unapproved tools; it is not an all-allowed mode.
+`allow_permission_bypass=true` enables Claude's bypass switch without selecting
+it. Muse's `approval_mode=never` suppresses approval prompts but does not disable
+its sandbox. The full-permission controls above are available in both supplied
+placement profiles; a custom placement must declare its own option ceilings.
+CLI help evidence and supported versions live in `tests/fixtures/driver-options`.
+
 ## Saved profiles
 
 Saved profiles use `bee.agent-profile@3`, stored in the Sync feed

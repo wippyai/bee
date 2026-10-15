@@ -120,6 +120,18 @@ entries:
           id: permission_mode
           group: access/trust
           security_class: host-ceiling
+          person_values:
+          - bypassPermissions
+          consent_message: 'All allowed: Grok bypasses tool permission checks.'
+          capabilities:
+            default: []
+            acceptEdits: []
+            auto: []
+            dontAsk: []
+            bypassPermissions:
+            - bypass
+            plan: []
+          ceiling: []
         model:
           invalid: model is not one bounded model identifier
           path: provider.model

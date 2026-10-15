@@ -40,6 +40,8 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("subscribes before the prompt, delivers captured hooks and permissions, and stops with its window", function()
+            for _, case in ipairs({{auto = false, brief = "Fixture peer request"}, {auto = true, brief = "Fixture peer request"}, {auto = false, brief = "--auto"}}) do
+            local auto = case.auto
             local fixtures = assert(env.get("BEE_FIXTURE_STREAMS")) .. "/opencode/"
             local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
             local server = assert(executor:exec(quote.line({"/usr/bin/python3", fixtures .. "http-server.py", fixtures .. "http-events-1"}), {process_group = true}))
@@ -52,7 +54,7 @@ local function define_tests()
             local child = assert(process.spawn("bee.driver.opencode.observer:subscriber", "bee:workers", {
                 endpoint = endpoint, hook_endpoint = endpoint .. "/hook/action-1", hook_token = "fixture-hook",
                 hooks = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop", "SessionEnd"},
-                argv = {"--prompt", "Fixture peer request"}, working_directory = fixtures, owner = process.pid(), topic = topic,
+                argv = auto and {"--auto", "--prompt", case.brief} or {"--prompt", case.brief}, working_directory = fixtures, owner = process.pid(), topic = topic,
             }))
             local function receive(): {[string]: unknown}
                 local selected = channel.select({replies:case_receive(), time.after("30s"):case_receive()})
@@ -75,8 +77,10 @@ local function define_tests()
                 local stops = 0
                 local starts = 0
                 local tool_events: {string} = {}
+                local permission_hooks = 0
                 for _, raw in ipairs(assert(bounds.array(captured.hooks, 64))) do
                     local row = assert(bounds.object(raw))
+                    if row.hook_event_name == "PermissionRequest" then permission_hooks = permission_hooks + 1 end
                     if row.hook_event_name == "SessionStart" then starts = starts + 1 end
                     if row.hook_event_name == "PreToolUse" or row.hook_event_name == "PostToolUse" then tool_events[#tool_events + 1] = tostring(row.hook_event_name) end
                     if row.hook_event_name == "Stop" then
@@ -84,6 +88,7 @@ local function define_tests()
                         test.eq(row.last_assistant_message, "Acknowledged fixture peer request")
                     end
                 end
+                test.eq(permission_hooks, auto and 0 or 1)
                 test.eq(starts, 1)
                 test.eq(stops, 1)
                 test.eq(table.concat(tool_events, ","), "PreToolUse,PostToolUse")
@@ -96,6 +101,7 @@ local function define_tests()
             stdout:close()
             executor:release()
             if not ok then error(tostring(failure)) end
+            end
         end)
     end)
 end

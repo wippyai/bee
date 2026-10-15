@@ -305,6 +305,14 @@ entries:
           id: dangerously_skip_permissions
           group: access/trust
           security_class: host-ceiling
+          person_values:
+          - true
+          consent_message: 'All allowed: Agy auto-approves all tool permission requests.'
+          capabilities:
+            'false': []
+            'true':
+            - bypass
+          ceiling: []
         agent:
           forbid_option: true
           invalid: agent must not be a command-line option

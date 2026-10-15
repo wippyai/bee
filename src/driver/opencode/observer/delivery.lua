@@ -3,8 +3,12 @@ local bounds = require("bounds")
 local M = {}
 type Object = {[string]: unknown}
 type IO = {submit: (Object) -> Object?, permission: (string, Object) -> (), record: (string) -> ()}
-function M.send(io: IO, row: Object): boolean
+function M.send(io: IO, row: Object, auto: boolean?): boolean
     local ok = pcall(function()
+        if auto and row.hook_event_name == "PermissionRequest" then
+            io.permission(tostring(row.permission_id), {reply = "once"})
+            return
+        end
         local response = io.submit(row)
         if row.hook_event_name ~= "PermissionRequest" or not response then return end
         local output = bounds.object(response.hookSpecificOutput) or {}

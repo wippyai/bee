@@ -63,6 +63,45 @@ entries:
       - window
       - batch
       fields:
+        yolo:
+          id: yolo
+          path: provider.options.yolo
+          value_schema:
+            type: boolean
+          label: All allowed
+          description: 'All allowed: Muse disables tool approvals and sandboxing and trusts the workspace for this run.'
+          group: access/trust
+          security_class: host-ceiling
+          person_values:
+          - true
+          consent_message: 'All allowed: Muse disables tool approvals and sandboxing and trusts the workspace for this run.'
+          capabilities:
+            'false': []
+            'true':
+            - bypass
+          ceiling: []
+          section: advanced
+          order: 10
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            version_range: '>=1.4.8'
+            help_probe:
+              argv:
+              - --help
+              flag: --yolo
+          render:
+          - kind: argv
+            contexts:
+            - window
+            - first_turn
+            - resume
+            tokens:
+            - if: yolo
+              then:
+              - --yolo
         approval_mode:
           default: on-request
           invalid: approval_mode is not one Bee admits
@@ -103,6 +142,15 @@ entries:
           id: approval_mode
           group: access/trust
           security_class: host-ceiling
+          person_values:
+          - never
+          consent_message: Muse runs without tool approval prompts; the CLI sandbox remains a separate setting.
+          capabilities:
+            untrusted: []
+            on-request: []
+            never:
+            - no-approvals
+          ceiling: []
         model:
           invalid: model is not one bounded model identifier
           path: provider.model

@@ -307,6 +307,10 @@
     "kind": "switch",
     "argv": [
       "--dangerously-skip-permissions"
+    ],
+    "native_allowed": true,
+    "ceiling": [
+      "bypass"
     ]
   },
   {
@@ -328,6 +332,10 @@
     "kind": "switch",
     "argv": [
       "--allow-dangerously-skip-permissions"
+    ],
+    "native_allowed": true,
+    "ceiling": [
+      "bypass"
     ]
   },
   {

@@ -42,12 +42,17 @@ local function define_tests()
         end)
         test.it("keeps a refused placement draft editable and reserves repair for stored profiles", function()
             local entry = assert(registry.get("bee.driver.codex.security:launch_policy_codex_batch"))
+            local native = assert(registry.get("bee.placement.profiles:native"))
+            local meta = assert(bounds.object(native.meta))
+            local ceilings = assert(bounds.object(meta.option_ceilings))
+            local original_ceiling = ceilings.codex
+            ceilings.codex = {sandbox = {"read", "write-admitted", "write-anywhere", "network"}, approval_policy = {"request-approval", "no-approvals"}, dangerously_bypass_approvals_and_sandbox = {}}
             local original = entry.data
             local policy: {[string]: unknown} = {}
             for name, value in pairs(assert(bounds.object(original))) do policy[name] = value end
             policy.fixture = true; entry.data = policy
             local changes = registry.snapshot():changes()
-            assert(changes:update(entry)); assert(changes:apply())
+            assert(changes:update(native)); assert(changes:update(entry)); assert(changes:apply())
             local ok, failure = pcall(function()
                 local opened = assert(form.load("profile-placement-draft", {definition_ref = "bee.driver.codex.profiles:research_batch", title = "Placement draft"}, true))
                 opened.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
@@ -100,11 +105,13 @@ local function define_tests()
                 test.not_nil(repair.repair_json)
                 test.not_nil(repair.migration_diagnostic)
             end)
+            ceilings.codex = original_ceiling
+            changes = registry.snapshot():changes(); assert(changes:update(native)); assert(changes:apply())
             entry.data = original
             changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())
             assert(ok, tostring(failure))
         end)
-        test.it("round trips a container Codex bypass and refuses changing it to native", function()
+        test.it("round trips a container Codex bypass and changes it to native with person consent", function()
             local entry = assert(registry.get("bee.driver.codex.security:launch_policy_codex_batch"))
             local original = entry.data
             local data: {[string]: unknown} = {}
@@ -128,8 +135,10 @@ local function define_tests()
                 test.eq(assert(restored.draft.provider.options).dangerously_bypass_approvals_and_sandbox, true)
                 restored.draft.placement = {kind = "native", home = "private"}
                 local accepted, reason = form.save(restored)
-                test.is_false(accepted)
-                test.is_true(tostring(reason):find("ceiling", 1, true) ~= nil)
+                assert(accepted, tostring(reason))
+                local local_profile = assert(form.reload(restored))
+                test.eq(assert(local_profile.draft.placement).kind, "native")
+                test.eq(assert(local_profile.draft.provider.options).dangerously_bypass_approvals_and_sandbox, true)
             end)
             entry.data = original
             changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())

@@ -91,6 +91,12 @@ end
 local function fields(state: State): {Field}
     local result: {Field} = {{kind = "title", name = "", label = "Name"},
         {kind = "driver", name = "", label = "Driver: " .. (state.form.driver_name or state.form.draft.driver_binding_ref)}}
+    local permission_summary = forms.permission_summary(state.form)
+    if permission_summary then
+        for line in permission_summary:gmatch("[^\n]+") do
+            result[#result + 1] = {kind = "permission_summary", name = "", label = line}
+        end
+    end
     result[#result + 1] = {kind = "role", name = "", label = "Role"}
     for _, trait in ipairs(state.form.traits or {}) do
         local selection = bounds.member(trait.id, state.form.draft.active_traits or {}) and "active"
@@ -190,7 +196,7 @@ local function fields(state: State): {Field}
         for _, field in ipairs(result) do
             if field.kind == "title" or field.kind == "role" or field.kind == "workdir"
                 or field.kind == "option" and (field.name == "model" or field.name == "model_provider")
-                or field.kind == "unsupported" or field.kind == "repair" then
+                or field.kind == "unsupported" or field.kind == "repair" or field.kind == "permission_summary" then
                 basic[#basic + 1] = field
             end
         end
@@ -286,7 +292,7 @@ function M.action(state: State, action: string, gesture: "enter" | "space" | "cl
                 if not accepted then state.status = err or "Confirmation is unavailable"; return nil end
                 state.status = ""
             else
-                local opened, err = confirmation.open(state.confirmation, "profile.consent", target, "inline", "Approve container profile", review)
+                local opened, err = confirmation.open(state.confirmation, "profile.consent", target, "inline", "Approve profile permissions", review)
                 state.status = opened and (review .. "\nEnter confirms; Esc cancels.") or err or "Confirmation is unavailable"
                 return nil
             end
@@ -435,7 +441,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     end
     if state.form.pending or confirmation.matches(state.confirmation, "profile.remove") then return nil end
     local field = listed[state.selected]
-    if not field or field.kind == "unsupported" or field.kind == "info" then return nil end
+    if not field or field.kind == "unsupported" or field.kind == "info" or field.kind == "permission_summary" then return nil end
     if field.kind == "structured" and field.control then
         local control = field.control
         if control.kind == "text" or control.kind == "key" then
@@ -609,7 +615,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local threads = state.threads
     if threads then return draw_threads(painter, state, threads) end
     if confirmation.matches(state.confirmation, "profile.consent") then
-        frame.header(painter, "APPROVE CONTAINER PROFILE", "Person consent")
+        frame.header(painter, "APPROVE PROFILE PERMISSIONS", "Person consent")
         local row = 3
         for line in state.status:gmatch("[^\n]+") do
             frame.line(painter, row, line, painter.theme.text)

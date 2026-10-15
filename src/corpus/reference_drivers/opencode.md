@@ -115,6 +115,45 @@ entries:
       - batch
       unknown_prefix: ''
       fields:
+        auto:
+          id: auto
+          path: provider.options.auto
+          value_schema:
+            type: boolean
+          label: All allowed
+          description: 'All allowed except explicit denies: OpenCode auto-approves tool permissions.'
+          group: access/trust
+          security_class: host-ceiling
+          person_values:
+          - true
+          consent_message: 'All allowed except explicit denies: OpenCode auto-approves tool permissions.'
+          capabilities:
+            'false': []
+            'true':
+            - bypass
+          ceiling: []
+          section: advanced
+          order: 10
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            version_range: '>=1.18.32'
+            help_probe:
+              argv:
+              - --help
+              flag: --auto
+          render:
+          - kind: argv
+            contexts:
+            - window
+            - first_turn
+            - resume
+            tokens:
+            - if: auto
+              then:
+              - --auto
         resume_ref:
           type: id
           forbid_option: true
@@ -711,6 +750,7 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.options.auto: {kind: declared}
       provider.model:
         kind: declared
       provider.options.providers:
@@ -790,6 +830,7 @@ entries:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding
     profile_restrictions:
+      provider.options.auto: {kind: declared}
       provider.model:
         kind: declared
       provider.options.providers:
@@ -1061,8 +1102,12 @@ local bounds = require("bounds")
 local M = {}
 type Object = {[string]: unknown}
 type IO = {submit: (Object) -> Object?, permission: (string, Object) -> (), record: (string) -> ()}
-function M.send(io: IO, row: Object): boolean
+function M.send(io: IO, row: Object, auto: boolean?): boolean
     local ok = pcall(function()
+        if auto and row.hook_event_name == "PermissionRequest" then
+            io.permission(tostring(row.permission_id), {reply = "once"})
+            return
+        end
         local response = io.submit(row)
         if row.hook_event_name ~= "PermissionRequest" or not response then return end
         local output = bounds.object(response.hookSpecificOutput) or {}
@@ -1290,10 +1335,24 @@ local function main(input: observer_types.Input)
         if not reply or reply.status_code < 200 or reply.status_code >= 300 then error("OpenCode write failed: " .. path) end
         return reply.body and reply.body ~= "" and json.decode(reply.body) or nil
     end
+    local auto = false
+    local prompt: string? = nil
+    local model: string? = nil
+    local index = 1
+    while index <= #input.argv do
+        local arg = input.argv[index]
+        if arg == "--" then break end
+        if arg == "--auto" then auto = true
+        elseif arg == "--session" or arg == "-s" then session_id = input.argv[index + 1]; index = index + 1
+        elseif arg == "--prompt" then prompt = input.argv[index + 1]; index = index + 1
+        elseif arg == "--model" or arg == "-m" then model = input.argv[index + 1]; index = index + 1
+        elseif arg == "--variant" then index = index + 1 end
+        index = index + 1
+    end
     local admitted: {[string]: boolean} = {}
     for _, name in ipairs(input.hooks) do admitted[name] = true end
     local function deliver(row: {[string]: unknown})
-        if not admitted[tostring(row.hook_event_name)] then return end
+        if not admitted[tostring(row.hook_event_name)] and not (auto and row.hook_event_name == "PermissionRequest") then return end
         delivery.send({
             submit = function(payload: {[string]: unknown}): {[string]: unknown}?
                 local reply = http.post(input.hook_endpoint, {timeout = payload.hook_event_name == "PermissionRequest" and "240s" or "10s",
@@ -1303,7 +1362,7 @@ local function main(input: observer_types.Input)
             end,
             permission = function(id: string, decision: {[string]: unknown}) post("/permission/" .. id .. "/reply", decision) end,
             record = function(detail: string) report("delivery_failed", detail) end,
-        }, row)
+        }, row, auto)
     end
     local function deliver_all(rows: {{[string]: unknown}})
         for _, row in ipairs(rows) do
@@ -1328,13 +1387,6 @@ local function main(input: observer_types.Input)
             local permission = bounds.object(raw)
             if permission then deliver_all(events.event(state, {type = "permission.asked", properties = permission})) end
         end
-    end
-    local prompt: string? = nil
-    local model: string? = nil
-    for i, arg in ipairs(input.argv) do
-        if arg == "--session" or arg == "-s" then session_id = input.argv[i + 1]
-        elseif arg == "--prompt" then prompt = input.argv[i + 1]
-        elseif arg == "--model" or arg == "-m" then model = input.argv[i + 1] end
     end
     coroutine.spawn(function()
         while not stopping do

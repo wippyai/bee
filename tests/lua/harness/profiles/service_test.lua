@@ -60,6 +60,7 @@ local function define_tests()
                 test.is_true(tostring(denied.message):find("person write", 1, true) ~= nil)
             end
         end)
+
         test.it("rejects delegated writes of person-only folder trust even under an exact grant", function()
             local id = fresh()
             local request = put(id, 0, fresh(), "Trusted folder")
@@ -308,4 +309,44 @@ local function define_tests()
         end)
     end)
 end
-return test.run_cases(define_tests)
+local function define_allowall_tests()
+    test.describe("All-allowed profile persistence", function()
+        test.after_all(host.close_all)
+        test.it("saves each all-allowed CLI profile only for the person in both placements", function()
+            local cases: {{driver: string, provider: {[string]: unknown}}} = {
+                {driver = "claude", provider = {permission_mode = "bypassPermissions"}},
+                {driver = "claude", provider = {options = {permission_bypass = true}}},
+                {driver = "codex", provider = {options = {dangerously_bypass_approvals_and_sandbox = true}}},
+                {driver = "agy", provider = {options = {dangerously_skip_permissions = true, sandbox = false}}},
+                {driver = "grok", provider = {permission_mode = "bypassPermissions"}},
+                {driver = "muse", provider = {options = {yolo = true}}},
+                {driver = "opencode", provider = {options = {auto = true}}},
+            }
+            for _, placement in ipairs({"native", "docker"}) do
+                for _, case in ipairs(cases) do
+                    local request = put(fresh(), 0, fresh(), "All allowed")
+                    local profile = assert(bounds.object(request.profile))
+                    profile.definition_ref = "bee.driver." .. case.driver .. ".profiles:default_window"
+                    profile.driver_binding_ref = "bee.driver." .. case.driver .. ".binding:binding"
+                    profile.provider = case.provider
+                    profile.placement = placement == "native" and {kind = "native", home = "private"} or {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
+                    local agent = caller("profile-agent", "bee.tests.harness.profiles:test_delegated_write"):with_actor(security.new_actor("profile-agent", {definition_id = "fixture:agent"}))
+                    test.eq(call(agent, request).ok, false)
+                    local approved = value(call(caller("profile-authority", "bee.tests.harness.profiles:test_write"), request))
+                    test.not_nil(approved.grant_id)
+                    agent = assert(agent:with_context({["bee.gateway.binding"] = {subject = "profile-agent", approving_grant_id = approved.grant_id}}))
+                    request.expected_revision, request.idempotency_key = 1, fresh()
+                    local denied = call(agent, request)
+                    test.eq(denied.ok, false)
+                    test.is_true(tostring(denied.message):find("person write", 1, true) ~= nil)
+                end
+            end
+        end)
+    end)
+end
+local cases = test.run_cases(define_tests)
+local allowall_cases = test.run_cases(define_allowall_tests)
+return {
+    run = function(options: unknown) return cases(options) end,
+    allowall = function(options: unknown) return allowall_cases(options) end,
+}

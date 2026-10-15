@@ -24,6 +24,24 @@ entries:
     type: bee.placement_profile
     title: Local
     isolation: {kind: native, credentials: [admitted launch credentials]}
+    option_ceilings:
+      claude:
+        permission_mode: [prompt, edit, automatic, deny-unapproved, read, bypass]
+        permission_bypass: [bypass]
+        allow_permission_bypass: [bypass]
+      codex:
+        sandbox: [read, write-admitted, write-anywhere, network]
+        approval_policy: [request-approval, no-approvals]
+        dangerously_bypass_approvals_and_sandbox: [bypass]
+      agy:
+        dangerously_skip_permissions: [bypass]
+      grok:
+        permission_mode: [bypass]
+      muse:
+        approval_mode: [no-approvals]
+        yolo: [bypass]
+      opencode:
+        auto: [bypass]
   data:
     schema_revision: bee.placement-profile@1
     placement_binding: bee.placement.native.binding:binding

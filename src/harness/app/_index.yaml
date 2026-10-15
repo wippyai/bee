@@ -154,6 +154,8 @@ entries:
   - registry
   imports:
     descriptor: bee.driver.descriptor:descriptor
+    preferences: bee.driver.descriptor:effective
+    profile_protocol: bee.harness.profiles:protocol
     frame: bee.ui:frame
     appearance: bee.ui:appearance
     text: bee.ui:text

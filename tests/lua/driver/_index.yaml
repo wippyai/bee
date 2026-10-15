@@ -266,3 +266,36 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     universal: bee.driver.binding:universal
+- name: allowall_test
+  modules: [registry]
+  kind: function.lua
+  source: file://allowall_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    descriptors: bee.driver.descriptor:descriptor
+    effective: bee.driver.descriptor:effective
+    universal: bee.driver.binding:universal
+    profiles: bee.harness.profiles:protocol
+    profile_values: bee.driver.descriptor:profile_values
+    bounds: bee.values:bounds
+- name: option_profile_coverage_test
+  kind: function.lua
+  source: file://option_coverage_test.lua
+  method: profiles
+  meta: {type: test, suite: bee, timeout: 60s}
+  modules: [registry, json, toml]
+  security: {policies: [bee.tests.harness.profiles:repair_policy]}
+  imports:
+    test: wippy.test:test
+    cases: bee.tests.driver:option_coverage_cases
+    descriptors: bee.driver.descriptor:descriptor
+    effective: bee.driver.descriptor:effective
+    universal: bee.driver.binding:universal
+    configuration: bee.driver.binding:configuration
+    controls: bee.harness.app:option_controls
+    profiles: bee.driver.descriptor:profile_values
+    protocol: bee.harness.profiles:protocol
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical

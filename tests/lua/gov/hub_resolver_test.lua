@@ -4,8 +4,8 @@
 -- writer or an execution capability.
 local test = require("test")
 local bounds = require("bounds")
-local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
-    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+local KERNEL: {revision: integer, super_edit: {string}, entries: {string}} =
+    {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
 local artifact = require("artifact")
 local resolver = require("hub_resolver")
 local preflight = require("preflight")

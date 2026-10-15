@@ -9,9 +9,9 @@ local artifact = require("artifact")
 local hash = require("hash")
 local SHA = string.rep("a", 64)
 local EMPTY_STRINGS: {string} = {}
-type Manifest = {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}}
-local KERNEL: Manifest = {revision = 1, namespaces = {"bee.gov", "bee.security"}, super_edit = {},
-    entries = {"bee.security.approvals:approver_policies", "bee.gov:protected_kernel"}}
+type Manifest = {revision: integer, super_edit: {string}, entries: {string}}
+local KERNEL: Manifest = {revision = 1, super_edit = {},
+    entries = {"bee.security.approvals:approver_policies", "bee.gov:protected_kernel", "bee.gov.binding:preflight", "bee.gov.extra:shadow"}}
 local function candidate_entry(id: string, kind: string, package: string, digest: string,
     references: {string}): preflight.Entry
     return {id = id, kind = kind, package = package, digest = digest, references = references,
@@ -178,6 +178,11 @@ local function define_tests()
             transitive.entries = {entry("shared.util:bounds", "bee/shared", {})}
             transitive.requirements, transitive.migrations = {}, {}
             test.is_true(has(checked(transitive, context), "PROTECTED_KERNEL"))
+            context.installed_entries = {["bee.gov.binding:preflight"] = entry("bee.gov.binding:preflight", "bee/gov", {"other:missing"})}
+            local incomplete, incomplete_error = preflight.check(candidate, context)
+            test.is_nil(incomplete)
+            test.not_nil(incomplete_error)
+            context.installed_entries = nil
             -- A host record composed into the application's own overlay.
             context.installed_entries = {["bee.gov:admission.demo"] = {id = "bee.gov:admission.demo",
                 kind = "registry.entry", package = "example/demo", digest = SHA, references = {"demo:run"},
@@ -196,58 +201,27 @@ local function define_tests()
             test.is_nil(missing)
             test.not_nil(missing_error)
             local open_map, open_error = preflight.check(candidate, with_kernel(context,
-                {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.security.approvals:approver_policies"}}))
+                {revision = 1, super_edit = {}, entries = {"bee.security.approvals:approver_policies"}}))
             test.is_nil(open_map)
             test.not_nil((string.find(tostring(open_error), "protect itself", 1, true)))
         end)
-        test.it("protects every shipped namespace the host has not opened for super edit", function()
-            -- The shipped trust map itself, not a fixture: each namespace a
-            -- host-selected scope lives in is refused, and only the explicit
-            -- super-edit set can open one.
-            local entry = assert(registry.get("bee.gov:protected_kernel"))
-            local manifest = assert(protected_kernel.decode(entry))
-            for _, namespace in ipairs(manifest.namespaces) do
-                local shadowed: preflight.Candidate, shadow_context: preflight.Context = fixture()
-                shadow_context.protected = manifest
-                shadowed.artifacts[1].namespaces = {"demo", namespace}
-                shadow_context.namespaces[namespace] = true
-                shadow_context.packages["example/demo"] = true
-                shadow_context.kinds["library.lua"] = true
-                shadowed.requirements = {}
-                shadowed.migrations = {}
-                shadowed.entries = {entry_of(namespace .. ":shadow")}
-                local report = checked(shadowed, shadow_context)
-                if protected_kernel.namespace(manifest, namespace) then
-                    test.is_false(report.ready)
-                    test.is_true(has(report, "PROTECTED_KERNEL"), "namespace " .. namespace .. " was not protected")
-                else test.is_true(report.ready) end
-            end
-            -- Every kernel namespace is a prefix-free root; a namespace the
-            -- host did not name stays open to an ordinary profile.
-            test.is_false(protected_kernel.namespace(manifest, "bee.settings.app"))
-            test.is_false(protected_kernel.namespace(manifest, "bee.desktop"))
-            test.is_true(protected_kernel.namespace(manifest, "bee.security"))
-            test.is_true(protected_kernel.namespace(manifest, "bee.gateway.api"))
-            test.is_false(protected_kernel.namespace(manifest, "app.tally"))
-            local opened = {revision = manifest.revision, namespaces = manifest.namespaces,
-                super_edit = {"bee.gateway"}, entries = manifest.entries}
-            test.is_false(protected_kernel.namespace(opened, "bee.gateway"))
-            test.is_false(protected_kernel.namespace(opened, "bee.gateway.api"))
-            test.is_true(protected_kernel.namespace(opened, "bee.harness"))
-            local open_candidate: preflight.Candidate, open_context: preflight.Context = fixture()
-            open_context.protected = opened
-            open_candidate.artifacts[1].namespaces = {"demo", "bee.gateway"}
-            open_context.namespaces["bee.gateway"] = true
-            open_context.kinds["library.lua"] = true
-            open_candidate.requirements = {}
-            open_candidate.migrations = {}
-            open_candidate.entries = {entry_of("bee.gateway:shadow")}
-            test.is_true(checked(open_candidate, open_context).ready)
+        test.it("protects exact shipped entries without reserving their namespace", function()
+            local manifest = assert(protected_kernel.decode(assert(registry.get("bee.gov:protected_kernel"))))
+            test.is_true(protected_kernel.names(manifest, "bee.gov.binding:preflight"))
+            test.is_false(protected_kernel.names(manifest, "bee.gov.binding:unadmitted_shadow"))
+            test.is_false(protected_kernel.opened(manifest, "bee.shell.unknown:entry"))
+            local candidate, context = fixture()
+            local exact: Manifest = {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel", "foreign:authority"}}
+            context.protected = exact
+            context.entries["foreign:authority"] = candidate_entry("foreign:authority", "library.lua", "host", SHA, {"vendor:missing"})
+            local result, err = preflight.check(candidate, context)
+            test.is_nil(result)
+            test.not_nil(err)
         end)
         test.it("honors an exact host carve-out for a transitive kernel dependency", function()
             local candidate, context = fixture()
-            local opened = {revision = 1, namespaces = {"host.kernel", "demo"},
-                super_edit = {"demo"}, entries = {"bee.gov:protected_kernel"}}
+            local opened = {revision = 1,
+                super_edit = {"demo:layout"}, entries = {"bee.gov:protected_kernel", "host.kernel:presenter"}}
             context.protected = opened
             context.super_edit = true
             context.kinds["library.lua"] = true
@@ -270,19 +244,19 @@ local function define_tests()
             test.is_true(has(checked(candidate, context), "PROTECTED_KERNEL"))
         end)
         test.it("decodes the super-edit set as an optional exact list", function()
-            local base = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+            local base = {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
             test.eq(#assert(protected_kernel.decode(base)).super_edit, 0)
-            local empty = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+            local empty = {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
             test.eq(#assert(protected_kernel.decode(empty)).super_edit, 0)
-            local opened = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"bee.gov"},
+            local opened = {revision = 1, super_edit = {"bee.gov:editable"},
                 entries = {"bee.gov:protected_kernel"}}
-            test.eq(assert(protected_kernel.decode(opened)).super_edit[1], "bee.gov")
-            local bad = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"bee.gov", "bee.gov"},
+            test.eq(assert(protected_kernel.decode(opened)).super_edit[1], "bee.gov:editable")
+            local bad = {revision = 1, super_edit = {"bee.gov:editable", "bee.gov:editable"},
                 entries = {"bee.gov:protected_kernel"}}
             test.is_nil(protected_kernel.decode(bad))
-            local unknown = {revision = 1, namespaces = {"bee.gov"}, super_edit = {"Bee"}, entries = {"bee.gov:protected_kernel"}}
+            local unknown = {revision = 1, super_edit = {"Bee"}, entries = {"bee.gov:protected_kernel"}}
             test.is_nil(protected_kernel.decode(unknown))
-            local extra = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}, note = "x"}
+            local extra = {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}, note = "x"}
             test.is_nil(protected_kernel.decode(extra))
         end)
         test.it("refuses app-shipped actor and group selectors on every entry kind", function()

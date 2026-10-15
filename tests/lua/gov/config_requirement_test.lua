@@ -3,6 +3,19 @@ local test = require("test")
 local requirement = require("requirement")
 local function define_tests()
     test.describe("governed configuration", function()
+        test.it("measures exact security group members and excludes operation vocabulary", function()
+            local entry = {id = "host:service", kind = "process.service", meta = {operation_ref = "domain:operation"},
+                data = {process = "other:process", lifecycle = {security = {groups = {"host:workers"}}}}}
+            local captured: {{[string]: unknown}} = {
+                {id = "vendor:policy", kind = "security.policy", data = {groups = {"host:workers"}}},
+                {id = "vendor:unrelated", kind = "security.policy", data = {groups = {"host:workers.extra"}}},
+            }
+            local refs = assert(requirement.references(entry, captured))
+            test.eq(#refs, 2)
+            test.eq(refs[1], "other:process")
+            test.eq(refs[2], "vendor:policy")
+            test.is_nil(requirement.references(entry, {}))
+        end)
         test.it("measures an integer default without interpreting it as a registry binding", function()
             local resolved, problem = requirement.resolve({id = "app:count", kind = "ns.requirement",
                 meta = {schema = {type = "integer", minimum = 1}},

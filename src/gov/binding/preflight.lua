@@ -441,6 +441,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     if not manifest then return nil, manifest_error end
     local kernel: {[string]: boolean} = {}
     local pending_kernel: {string} = {}
+    local missing_dependency: string? = nil
     local function state(id: string): StateEntry?
         return context.entries[id] or (context.installed_entries and context.installed_entries[id]) or nil
     end
@@ -448,7 +449,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if kernel[id] or not state(id) then return end
         local namespace = id:match("^([^:]+):")
         if context.super_edit == true and namespace and context.namespaces[namespace] == true
-            and protected_kernel.opened(manifest, namespace)
+            and protected_kernel.opened(manifest, id)
             and not protected_kernel.names(manifest, id) then return end
         kernel[id] = true
         pending_kernel[#pending_kernel + 1] = id
@@ -458,11 +459,18 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
     while #pending_kernel > 0 do
         local id = pending_kernel[#pending_kernel]
         pending_kernel[#pending_kernel] = nil
-        local item = state(id)
-        if item and protected_kernel.follows(item.kind) then
-            for _, reference in ipairs(item.references) do protect(reference) end
+        local function follow(item: StateEntry?)
+            if item and protected_kernel.follows(item.kind) then
+                for _, reference in ipairs(item.references) do
+                    if not state(reference) then missing_dependency = reference end
+                    protect(reference)
+                end
+            end
         end
+        follow(context.entries[id])
+        follow(context.installed_entries and context.installed_entries[id])
     end
+    if missing_dependency then return nil, "protected kernel dependency is unavailable: " .. missing_dependency end
     local function guarded(id: string): boolean
         return kernel[id] == true or protected_kernel.names(manifest, id)
     end
@@ -498,9 +506,6 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             if not identifier(namespace) or namespace:find(":", 1, true) then return nil, "invalid owned namespace" end
             if namespace_owners[namespace] then issue("NAMESPACE_COLLISION", namespace, "namespace has duplicate ownership declarations", "declare each namespace under exactly one package") end
             namespace_owners[namespace] = item.component
-            if protected_kernel.namespace(manifest, namespace) then
-                issue("PROTECTED_KERNEL", namespace, "namespace belongs to the protected kernel", PROTECTED_REMEDY)
-            end
             if not context.namespaces[namespace] then issue("NAMESPACE_DENIED", namespace, "declared namespace is outside host policy", "use app.<overlay> and its child namespaces; ask the person for host policy review for host-owned code") end
         end
     end

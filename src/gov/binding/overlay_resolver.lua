@@ -39,7 +39,7 @@ end
 
 local sha = bounds.digest_hex
 
-local function measured_entry(entry: Entry, package: string, registry_default_metadata: boolean?): (preflight.Entry?, string?)
+local function measured_entry(entry: Entry, package: string, registry_default_metadata: boolean?, snapshot_entries: {Entry}?): (preflight.Entry?, string?)
     local clean: Entry = {}
     -- `registry` is runtime provenance. It is not part of an incoming private
     -- artifact's authority or materialized definition.
@@ -58,7 +58,7 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
     if not encoded then return nil, "encode private overlay entry: " .. tostring(encode_error or "unknown error") end
     local digest, digest_error = hash.sha256(encoded)
     if not digest then return nil, tostring(digest_error or "measure private overlay entry") end
-    local refs, refs_error = requirement.references(clean)
+    local refs, refs_error = requirement.references(clean, snapshot_entries)
     if not refs then return nil, refs_error end
     local data = object(clean.data)
     if not data then return nil, "registry entry configuration data is missing" end
@@ -194,7 +194,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             -- The selected overlay is intentionally absent from the approval
             -- base, but callers still need its measured package-owned view to
             -- compare the staged complete replacement with what is installed.
-            local measured, measured_error = measured_entry(entry, component, true)
+            local measured, measured_error = measured_entry(entry, component, true, captured.entries)
             if not measured then return nil, nil, measured_error end
             installed[id] = measured
             -- Native shadows retain their claimed durable module ownership;
@@ -208,7 +208,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 end
                 local package, package_error = captured.owner(entry)
                 if not package then return nil, nil, package_error or "captured shadow has no trusted durable owner" end
-                local claimed, claimed_error = measured_entry(entry, package, true)
+                local claimed, claimed_error = measured_entry(entry, package, true, captured.entries)
                 if not claimed then return nil, nil, claimed_error end
                 current[id] = claimed
                 local namespace = id:match("^([^:]+):")
@@ -219,7 +219,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             if not package then return nil, nil, package_error or "captured registry entry has no trusted local owner" end
             local kind = bounds.id(entry.kind)
             if not kind then return nil, nil, "captured entry identity is invalid" end
-            local refs, refs_error = requirement.references(entry)
+            local refs, refs_error = requirement.references(entry, captured.entries)
             if not refs then return nil, nil, refs_error end
             current[id] = {id = id, kind = kind, package = package, references = refs}
             local namespace = id:match("^([^:]+):")
@@ -361,7 +361,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             -- native shadow application without duplicating native owner state.
             replaced[#replaced + 1] = {id = id, kind = raw.kind, package = raw.package}
         elseif relevant_ids[id] or (namespace and namespace_set[namespace]) then
-            local measured, measured_error = measured_entry(assert(current_raw[id]), raw.package, true)
+            local measured, measured_error = measured_entry(assert(current_raw[id]), raw.package, true, captured.entries)
             if not measured then return nil, nil, measured_error end
             current[id] = measured
             relevant[#relevant + 1] = measured

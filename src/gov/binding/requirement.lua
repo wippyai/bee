@@ -9,14 +9,14 @@ local hash = require("hash")
 local M = {}
 type Entry = {[string]: unknown}
 -- Bounded dependency references for Hub and private overlay entries.
-function M.references(entry: Entry): ({string}?, string?)
+function M.references(entry: Entry, captured: {Entry}?): ({string}?, string?)
     local found: {[string]: boolean} = {}
     -- Registry dependency fields contain qualified entry IDs.
     local scalar: {[string]: boolean} = {parent = true, config = true, fs = true, func = true,
         env = true, set = true, store = true, storage = true, bucket = true, host = true,
         process = true, driver = true, queue = true, client = true, server = true,
         router = true, network = true, token_store = true, contract = true}
-    local collection: {[string]: boolean} = {depends_on = true, requires = true, groups = true,
+    local collection: {[string]: boolean} = {depends_on = true, requires = true,
         imports = true, middleware = true, post_middleware = true, policies = true, methods = true}
     local function add(raw: unknown)
         if type(raw) ~= "string" then return end
@@ -36,7 +36,7 @@ function M.references(entry: Entry): ({string}?, string?)
     end
     local function scan(value: unknown, key: string?): string?
         if type(value) ~= "table" then
-            if key and (scalar[key] or key:match("_ref$") or key:match("_env$")) then add(value) end
+            if key and key ~= "operation_ref" and (scalar[key] or key:match("_ref$") or key:match("_env$")) then add(value) end
             return nil
         end
         for child_key, child in pairs(value) do
@@ -54,6 +54,32 @@ function M.references(entry: Entry): ({string}?, string?)
     end
     local problem = scan(entry, nil)
     if problem then return nil, problem end
+    local function group_dependencies(raw: unknown): string?
+        local security = bounds.object(raw)
+        if not security or security.groups == nil or not captured then return nil end
+        local groups = bounds.dense_list(security.groups, 64, "security groups")
+        if not groups then return "security groups are malformed" end
+        for _, group in ipairs(groups) do
+            if type(group) ~= "string" then return "security group identity is malformed" end
+            local matched = false
+            for _, member in ipairs(captured) do
+                if member.kind == "security.policy" or member.kind == "security.policy.expr" then
+                    local data = bounds.object(member.data) or member
+                    if type(data.groups) == "table" then
+                        for _, declared in ipairs(data.groups) do
+                            if declared == group then add(member.id); matched = true end
+                        end
+                    end
+                end
+            end
+            if not matched then return "security group has no measured policies: " .. group end
+        end
+        return nil
+    end
+    local data = bounds.object(entry.data) or entry
+    local lifecycle = bounds.object(data.lifecycle)
+    local group_error = group_dependencies(data.security) or group_dependencies(lifecycle and lifecycle.security)
+    if group_error then return nil, group_error end
     local result: {string} = {}
     for reference in pairs(found) do result[#result + 1] = reference end
     table.sort(result)

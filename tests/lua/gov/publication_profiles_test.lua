@@ -22,7 +22,7 @@ local function define_tests()
         end)
         test.it("publishes from the existing Settings edit grant and withdraws it on expiry", function()
             local grant = assert(super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"bee.settings.app"},
-                "2050-01-01T00:00:00.000Z", {revision = 1, namespaces = {"bee.gov"}, super_edit = {},
+                "2050-01-01T00:00:00.000Z", {revision = 1, super_edit = {},
                     entries = {"bee.gov:protected_kernel"}}))
             local activation = assert(activation_profiles.decode(grant))
             local config = assert(profiles.configuration({profiles = {}}, activation, "node-local"))
@@ -38,7 +38,7 @@ local function define_tests()
         end)
         test.it("retains host-enabled application and driver publication alongside a Settings edit grant", function()
             local grant = assert(super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"bee.settings.app"},
-                "2050-01-01T00:00:00.000Z", {revision = 1, namespaces = {"bee.gov"}, super_edit = {},
+                "2050-01-01T00:00:00.000Z", {revision = 1, super_edit = {},
                     entries = {"bee.gov:protected_kernel"}}))
             local activation = assert(activation_profiles.decode(grant))
             local config = assert(profiles.configuration({profiles = {}, workspace_applications = true,
@@ -89,14 +89,15 @@ local function define_tests()
             local kernel = assert(protected_kernel.decode(assert(registry.get("bee.gov:protected_kernel")).data))
             for _, core in ipairs({"bee.driver.binding", "bee.driver.codec", "bee.driver.descriptor", "bee.driver.locate",
                 "bee.driver.permission", "bee.driver.profiles", "bee.driver.transport"}) do
-                test.is_true(protected_kernel.namespace(kernel, core), core)
+                local entries = assert(registry.find({[".ns"] = core}))
+                for _, entry in ipairs(entries) do test.is_true(protected_kernel.names(kernel, entry.id), entry.id) end
             end
             test.is_true(protected_kernel.names(kernel, "bee.driver:types"))
             test.is_true(protected_kernel.names(kernel, "bee.driver:driver"))
             test.is_true(protected_kernel.names(kernel, "bee.driver:locate_facet"))
             for _, own in ipairs({"bee.driver.gemini.binding", "bee.driver.gemini.descriptor", "bee.driver.gemini.profiles",
                 "bee.driver.gemini.security", "bee.driver.gemini.types", "bee.driver.gemini.env"}) do
-                test.is_false(protected_kernel.namespace(kernel, own), own)
+                test.is_false(protected_kernel.names(kernel, own .. ":unadmitted"), own)
             end
         end)
         test.it("selects a discovered driver overlay only when the host enables driver publication", function()

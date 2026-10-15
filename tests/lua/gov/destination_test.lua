@@ -1,8 +1,8 @@
 -- MIT. Destination coordination asks local Approvals only after review and selection.
 local test = require("test")
 local bounds = require("bounds")
-local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
-    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+local KERNEL: {revision: integer, super_edit: {string}, entries: {string}} =
+    {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
 local destination = require("destination")
 local store = require("plan_store")
 local base64 = require("base64")

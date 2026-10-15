@@ -3,8 +3,8 @@
 local test = require("test")
 local principals = require("principals")
 local bounds = require("bounds")
-local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
-    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+local KERNEL: {revision: integer, super_edit: {string}, entries: {string}} =
+    {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
 local hash = require("hash")
 local canonical = require("canonical")
 local artifact = require("artifact")

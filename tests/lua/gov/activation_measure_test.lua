@@ -1,8 +1,8 @@
 -- MIT. Trusted local measurements replace transferred readiness claims.
 local test = require("test")
 local bounds = require("bounds")
-local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
-    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+local KERNEL: {revision: integer, super_edit: {string}, entries: {string}} =
+    {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
 local measure = require("activation_measure")
 local artifact = require("artifact")
 local preflight = require("preflight")

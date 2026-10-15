@@ -24,16 +24,13 @@ function M.load(state: State, workspace: string, apps: unknown, configuration: u
         if not super_edit.is_kernel(id, manifest) then names[id] = title end
     end
     for _, opened in ipairs(manifest.super_edit) do
-        if opened == "bee.shell" then offer(opened, "Desktop") end
+        if opened == "bee.shell:main" then offer("bee.shell", "Desktop") end
     end
     for _, raw in ipairs(installed) do
         local app = bounds.object(raw)
         local id = app and bounds.id(app.id)
         local namespace = id and id:match("^([^:]+):")
         if namespace then
-            for _, opened in ipairs(manifest.super_edit) do
-                if namespace == opened or namespace:sub(1, #opened + 1) == opened .. "." then namespace = opened; break end
-            end
             offer(namespace, app and bounds.text(app.title, 160) or namespace)
         end
     end

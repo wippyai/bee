@@ -8,7 +8,7 @@ local funcs = require("funcs")
 local principal = require("principal")
 local registry = require("registry")
 
-local KERNEL = {revision = 1, namespaces = {"bee.gov", "bee.security"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+local KERNEL = {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel", "bee.security:policy"}}
 local WORKSPACE = "0123456789abcdef0123456789abcdef"
 local function settings_scope(): security.Scope
     return app_scope.scope("bee.apps.settings.app:app")
@@ -159,8 +159,8 @@ local function define_tests()
             test.eq(changed.workspace_applications, true)
         end)
 
-        test.it("refuses kernel namespaces and ancestors that would contain them", function()
-            for _, namespace in ipairs({"bee.gov", "bee.gov.binding", "bee"}) do
+        test.it("refuses areas containing exact protected entries", function()
+            for _, namespace in ipairs({"bee.gov", "bee.security"}) do
                 local changed, err = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {namespace},
                     "2030-01-01T00:00:00.000Z", KERNEL)
                 test.is_nil(changed)
@@ -169,8 +169,8 @@ local function define_tests()
         end)
 
         test.it("honors exact host carve-outs while refusing their protected parents", function()
-            local opened = {revision = 1, namespaces = {"bee.settings", "bee.desktop", "bee.gov"},
-                super_edit = {"bee.settings.app", "bee.desktop"}, entries = {"bee.gov:protected_kernel"}}
+            local opened = {revision = 1,
+                super_edit = {"bee.settings.app:app", "bee.desktop:main"}, entries = {"bee.gov:protected_kernel", "bee.settings:private", "bee:db"}}
             for _, namespace in ipairs({"bee.settings.app", "bee.desktop"}) do
                 local changed, err = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {namespace},
                     "2030-01-01T00:00:00.000Z", opened)

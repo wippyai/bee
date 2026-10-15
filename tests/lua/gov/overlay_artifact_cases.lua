@@ -680,7 +680,7 @@ function M.define()
         test.is_false(assert(preflight.check(changed_kind.candidate, changed_kind.context)).ready)
         state.captured.entries[2].kind = "function.lua"
         local kernel = assert(bounds.object(state.captured.entries[3].data))
-        kernel.namespaces = {"bee.gov", "private.app"}
+        kernel.entries = {"bee.gov:protected_kernel", "private.app:main"}
         local protected = resolve(deps, spec)
         local protected_report = assert(preflight.check(protected.candidate, protected.context))
         test.is_false(protected_report.ready)
@@ -689,7 +689,7 @@ function M.define()
             if diagnostic.code == "PROTECTED_KERNEL" then guarded = true end
         end
         test.is_true(guarded)
-        kernel.namespaces = {"bee.gov"}
+        kernel.entries = {"bee.gov:protected_kernel"}
         policy.namespaces["private.app"] = false
         local denied, _, denied_error = resolver.resolve_with(deps, spec)
         test.is_nil(denied)

@@ -79,9 +79,8 @@ function M.is_kernel(namespace_raw: unknown, kernel_raw: unknown): boolean
     local requested = namespace(namespace_raw)
     local manifest = protected_kernel.decode(kernel_raw)
     if not requested or not manifest then return true end
-    if protected_kernel.namespace(manifest, requested) then return true end
-    for _, protected in ipairs(manifest.namespaces) do
-        if protected:sub(1, #requested + 1) == requested .. "." then return true end
+    for _, id in ipairs(manifest.entries) do
+        if id:match("^([^:]+):") == requested then return true end
     end
     return false
 end

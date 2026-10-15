@@ -45,7 +45,7 @@ local function fixture(policy_raw: Policy?): (Deps, Object, {captured: Captured,
             {id = "bee.host:db", kind = "db.sql.sqlite", data = {}, registry = {owner = "bee/host"}},
             {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"}},
             {id = "bee.gov:protected_kernel", kind = "registry.entry", meta = {type = "bee.protected_kernel"},
-                data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}},
+                data = {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}},
                 registry = {owner = "bee/host"}},
         },
         overlay_ids = { ["private.app:old-overlay"] = true },
@@ -111,7 +111,7 @@ local function driver_fixture(target_path: string?, action: string?, base: strin
         data = {bindings = {"bee.driver.claude.binding:binding"}}, registry = {owner = "bee/host"}}
     for _, entry in ipairs(facts.captured.entries) do
         if entry.id == "bee.gov:protected_kernel" then
-            entry.data = {revision = 1, namespaces = {"bee.gov"}, super_edit = {},
+            entry.data = {revision = 1, super_edit = {},
                 entries = {"bee.gov:protected_kernel", "bee.harness.launch:harness_activation"}}
         end
     end

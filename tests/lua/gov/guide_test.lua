@@ -223,7 +223,7 @@ local function define_tests()
                     ["bee.app:client"] = base, ["bee.ui:appearance"] = base, ["bee.ui:frame"] = base, ["bee.shell:apps_menu"] = base},
                 installed_entries = nil, applied = {}, grants = {}, modules = {tty = true, process = true, channel = true, json = true},
                 exact_expansion = true, migration_barrier = false, auto_start = false,
-                protected = {revision = 1, namespaces = {"bee.gov", "bee.security"}, super_edit = {},
+                protected = {revision = 1, super_edit = {},
                     entries = {"bee.security.approvals:approver_policies", "bee.gov:protected_kernel"}},
                 host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
             local report, check_error = preflight.check(candidate, context)

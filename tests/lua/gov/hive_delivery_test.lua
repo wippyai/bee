@@ -21,8 +21,8 @@ local preflight = require("preflight")
 local governed = require("governed")
 local library = require("library")
 
-local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
-    {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
+local KERNEL: {revision: integer, super_edit: {string}, entries: {string}} =
+    {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}}
 local SHA = string.rep("a", 64)
 local EMPTY_STRINGS: {string} = {}
 

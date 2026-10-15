@@ -159,7 +159,7 @@ local function closure(root: string, edges: {[string]: {[string]: boolean}}, mod
 end
 
 
-local function measured_entry(entry: Entry, package: string, installed: boolean?): (preflight.Entry?, string?)
+local function measured_entry(entry: Entry, package: string, installed: boolean?, snapshot_entries: {Entry}?): (preflight.Entry?, string?)
     local clean: Entry = {}
     for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
     local id, kind = bounds.id(clean.id), bounds.id(clean.kind)
@@ -168,7 +168,7 @@ local function measured_entry(entry: Entry, package: string, installed: boolean?
     if not encoded then return nil, "encode resolved entry: " .. tostring(encode_error or "unknown error") end
     local digest, digest_error = hash.sha256(encoded)
     if not digest then return nil, tostring(digest_error or "measure resolved entry") end
-    local refs, references_error = requirement.references(clean)
+    local refs, references_error = requirement.references(clean, snapshot_entries)
     if not refs then return nil, id .. ": " .. tostring(references_error) end
     local modules, modules_error = lists.strings(clean.modules, "entry modules", 32)
     if not modules then return nil, modules_error end
@@ -371,7 +371,7 @@ local function prepare(captured: Captured, root: Root, spec: Object, expected: {
             if package == nil then return nil, "captured registry entry has no registry-owned module" end
             local id, kind = bounds.id(entry.id), bounds.id(entry.kind)
             if not id or not kind then return nil, "captured entry identity is invalid" end
-            local refs, references_error = requirement.references(entry)
+            local refs, references_error = requirement.references(entry, captured.entries)
             if not refs then return nil, id .. ": " .. tostring(references_error) end
             current[id] = {id = id, kind = kind, package = package, references = refs}
         end
@@ -472,7 +472,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         if relevant_ids[id] or (namespace and owned_namespaces[namespace]) then
             local measured = raw.digest and raw or nil
             if not measured then
-                local value, measured_error = measured_entry(assert(current_raw[id]), raw.package)
+                local value, measured_error = measured_entry(assert(current_raw[id]), raw.package, true, captured.entries)
                 if not value then return nil, nil, measured_error end
                 measured, current[id] = value, value
             end

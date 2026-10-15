@@ -57,7 +57,6 @@ local function scope(extra: {string}?): security.Scope
     end
     return security.new_scope(policies)
 end
-local actor = security.new_actor(REQUESTER)
 local function call(target: string, request: unknown): admission.Reply
     local result, err = funcs.new():with_actor(principals.actor(REQUESTER, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
@@ -105,7 +104,7 @@ local function open_gateway()
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
     end
-    local reply, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call("bee.gateway.binding:open",
+    local reply, err = funcs.new():with_actor(security.new_actor(REQUESTER)):with_scope(security.new_scope(policies)):call("bee.gateway.binding:open",
         {address = tostring((assert(bounds.object(endpoint.data))).address)})
     if err then error("bee.gateway.binding:open: " .. tostring(err)) end
     value(principals.reply(reply))

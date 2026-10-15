@@ -3,6 +3,7 @@
 -- far past the record the gateway keeps. The gateway accepts it up to its
 -- transport ceiling and queues the bounded normalized fact: sizes and digests
 -- of the content, never the content.
+local shared_authority = require("shared_authority")
 local test = require("test")
 local bounds = require("bounds")
 local funcs = require("funcs")
@@ -23,14 +24,9 @@ end
 local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.tests.harness:gateway_client_policy", "bee.harness.security:carrier_policy", "bee.threads.security:create", "bee.threads.security:observe",
     "bee.tests.support:gateway_manage_policy", "bee.tests.support:gateway_admit_policy", "bee.security.gateway:gateway_materialize_policy"}
 local function scope(): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(scope_names) do
-        local found, err = security.policy(name)
-        if err or not found then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = found
-    end
-    return security.new_scope(policies)
+    return shared_authority.scope(scope_names)
 end
+
 local function call(target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end

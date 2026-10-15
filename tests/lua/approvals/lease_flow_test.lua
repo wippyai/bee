@@ -1,5 +1,6 @@
 -- MIT. A lease is proposed, decided as an ordinary approval, granted once and
 -- then bounds later authorizations, through the real Approvals bindings.
+local shared_authority = require("shared_authority")
 local test = require("test")
 local principals = require("principals")
 local funcs = require("funcs")
@@ -15,15 +16,8 @@ local service = require("service")
 type Object = {[string]: unknown}
 local ALICE, POLICY, ACTOR = "bee.test.lease_alice", "lease-flow-test", "bee.gov.activation"
 
-local function scope(names: {string}): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
-end
+local scope = shared_authority.scope
+
 local activation = funcs.new():with_actor(security.new_actor(ACTOR))
     :with_scope(scope({"bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}))
 local alice = funcs.new():with_actor(security.new_actor(ALICE))

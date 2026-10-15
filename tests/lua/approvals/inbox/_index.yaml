@@ -74,6 +74,7 @@ entries:
     caller: bee.app:caller
     view: bee.approvals.inbox.app:view
     appearance: bee.ui:appearance
+    shared_authority: bee.tests.support:authority
 - name: admission_probe
   kind: process.lua
   source: file://admission_probe.lua
@@ -117,6 +118,7 @@ entries:
     model: bee.approvals.inbox.app:model
     caller: bee.app:caller
     thread_harness: bee.tests.threads:harness
+    shared_authority: bee.tests.support:authority
 - name: changed_proposal_test
   kind: function.lua
   source: file://changed_proposal_test.lua
@@ -131,6 +133,7 @@ entries:
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
     caller: bee.app:caller
+    shared_authority: bee.tests.support:authority
 - name: leases_test
   kind: function.lua
   source: file://leases_test.lua

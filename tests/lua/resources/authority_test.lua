@@ -1,11 +1,11 @@
 -- MIT. The resource authority: associations under the host ceiling,
 -- grants bound to the authenticated subject and their exact selection,
 -- and resolve refusing invalid authority.
+local shared_authority = require("shared_authority")
 local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
-local security = require("security")
 local registry = require("registry")
 local time = require("time")
 local authority = require("authority")
@@ -35,15 +35,8 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local function scope(names: {string}): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
-end
+local scope = shared_authority.scope
+
 type Principal = {id: string, names: {string}}
 local function caller(id: string, grants: {string}): Principal
     local names: {string} = {"bee.tests.resources:client_test_policy"}

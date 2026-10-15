@@ -7,6 +7,9 @@
 -- runs nothing and is acknowledged by the correlated failed tool result,
 -- and an approval left to expire is answered as a deny. Without the
 -- executable the gate is reported open.
+local shared_streams = require("shared_streams")
+local shared_executables = require("shared_executables")
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local bounds = require("bounds")
 local funcs = require("funcs")
@@ -68,15 +71,8 @@ local function approve_call(target: string, request: unknown): Object
     local result, err = approver:call(target, request)
     return reply_value(target, result, err)
 end
-local function read_all(stream): string
-    local content = ""
-    while true do
-        local chunk: unknown = stream:read(65536)
-        if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk)
-    end
-    return content
-end
+local read_all = shared_streams.read_all
+
 local function shell(command: string): string
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
@@ -95,16 +91,10 @@ local function apply(entry: Object)
     local applied, err = changes:apply()
     if not applied then error("apply " .. tostring(entry.id) .. ": " .. tostring(err)) end
 end
-local function claude_bin(): string?
-    local bin, err = env.get("bee.tests.harness:claude_bin")
-    if err or type(bin) ~= "string" or bin == "" then return nil end
-    return bin
-end
-local function fixture_bin(): string
-    local bin, err = env.get("bee.tests.harness:fixture_bin")
-    if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
-    return bin
-end
+local claude_bin = shared_executables.claude_bin
+
+local fixture_bin = shared_executables.fixture_bin
+
 local function capture_digest(): string
     local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
     if streams_error or type(streams) ~= "string" or streams == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
@@ -307,13 +297,8 @@ local function approvals_in(workspace: string): integer
     local listed = call("bee.approvals.binding:list", {workspace_id = workspace})
     return #(principals.items(listed.requests))
 end
-local function count(list: {string}, wanted: string): integer
-    local total = 0
-    for _, item in ipairs(list) do
-        if item == wanted then total = total + 1 end
-    end
-    return total
-end
+local count = shared_fixtures.count
+
 local function tool_results(records: {Object}, outcome: string): integer
     local total = 0
     for _, item in ipairs(records) do

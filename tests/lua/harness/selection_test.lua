@@ -1,5 +1,6 @@
 -- MIT. Command selection resolves only one definition reference; the Agent
 -- window discovers ready and unavailable candidates through session_catalog.
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local registry = require("registry")
 local selection = require("selection")
@@ -9,18 +10,7 @@ local PREFIX = "bee.harness.catalog:selection_"
 local POLICY = "bee.tests.harness:selection_policy"
 
 
-type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
-local function registry_input(value: {[string]: unknown}): RegistryInput
-    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
-    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
-    local metadata: {[string]: unknown} = {}
-    if meta ~= nil then
-        assert(type(meta) == "table", "fixture registry metadata")
-        for key, item in pairs(meta) do metadata[key] = item end
-    end
-    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
-    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
-end
+local registry_input = shared_fixtures.registry_input
 
 local function definition(id: string, command: string, mode: string, fullscreen: boolean?): Entry
     return {id = PREFIX .. id, kind = "registry.entry", meta = {type = "bee.launch_definition", test_support = true}, data = {

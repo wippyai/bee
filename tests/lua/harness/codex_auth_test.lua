@@ -4,6 +4,8 @@
 -- controlled local endpoint that records the authorization header. The
 -- admitted profile's launch is run as prepared by the driver. Without the
 -- executable the gate stays open and the capability says so.
+local shared_streams = require("shared_streams")
+local shared_executables = require("shared_executables")
 local test = require("test")
 local bounds = require("bounds")
 local exec = require("exec")
@@ -12,15 +14,8 @@ local time = require("time")
 local launch = require("launch")
 local quote = require("quote")
 local SENTINEL = "sk-sentinel-bee-000"
-local function read_all(stream): string
-    local content = ""
-    while true do
-        local chunk: unknown = stream:read(65536)
-        if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk)
-    end
-    return content
-end
+local read_all = shared_streams.read_all
+
 -- Runs one shell command line; the command carries no single quotes, and
 -- values that might are passed through the environment.
 local function shell(command: string, environment: {[string]: string}?): (string, integer)
@@ -36,16 +31,10 @@ local function shell(command: string, environment: {[string]: string}?): (string
     executor:release()
     return output, math.floor(tonumber(code) or -1)
 end
-local function fixture_bin(): string
-    local bin, err = env.get("bee.tests.harness:fixture_bin")
-    if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
-    return bin
-end
-local function codex_bin(): string?
-    local bin, err = env.get("bee.tests.harness:codex_bin")
-    if err or type(bin) ~= "string" or bin == "" then return nil end
-    return bin
-end
+local fixture_bin = shared_executables.fixture_bin
+
+local codex_bin = shared_executables.codex_bin
+
 local function define_tests()
     test.describe("Codex authentication path", function()
         test.it("sends the projected API key to the configured endpoint from an isolated home, when the executable is available", function()

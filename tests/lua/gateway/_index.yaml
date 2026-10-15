@@ -145,6 +145,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
+    shared_fixtures: bee.tests.support:fixtures
 - name: sessions_test
   kind: function.lua
   source: file://sessions_test.lua

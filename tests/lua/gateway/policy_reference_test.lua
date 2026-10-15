@@ -3,6 +3,7 @@
 -- retains the compiled policy object it was given. The gateway resolves
 -- references afresh for each tool call, so this is characterization, not a
 -- binding-level policy pinning test.
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local bounds = require("bounds")
 local registry = require("registry")
@@ -15,18 +16,7 @@ local RESOURCE = "bee.gateway.probe:policy_reference_sentinel"
 type Object = {[string]: unknown}
 
 
-type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
-local function registry_input(value: {[string]: unknown}): RegistryInput
-    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
-    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
-    local metadata: {[string]: unknown} = {}
-    if meta ~= nil then
-        assert(type(meta) == "table", "fixture registry metadata")
-        for key, item in pairs(meta) do metadata[key] = item end
-    end
-    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
-    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
-end
+local registry_input = shared_fixtures.registry_input
 
 local function entry(): Object
     local value, err = registry.get(POLICY)

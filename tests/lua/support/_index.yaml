@@ -86,3 +86,11 @@ entries:
   modules: [process, events, system, channel, uuid]
   imports: {demand: 'bee.process:demand'}
   meta: {type: test_support}
+
+- name: authority
+  kind: library.lua
+  source: file://authority.lua
+  meta:
+    type: test_support
+  modules:
+  - security

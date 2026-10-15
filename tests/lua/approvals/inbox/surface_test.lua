@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
 
+local shared_authority = require("shared_authority")
 local test = require("test")
 local principals = require("principals")
 local funcs = require("funcs")
@@ -25,15 +26,8 @@ local function key(): string
     if err or not id then error("uuid: " .. tostring(err)) end
     return id
 end
-local function scope(names: {string}): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
-end
+local scope = shared_authority.scope
+
 local function caller(id: string, grants: {string}): funcs.Executor
     local names: {string} = {"bee.tests.approvals.inbox:client_test_policy"}
     for _, grant in ipairs(grants) do names[#names + 1] = grant end

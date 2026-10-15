@@ -48,7 +48,7 @@ entries:
   source: file://authority_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [funcs, security, registry, time, sql]
+  modules: [funcs, registry, time, sql]
   security:
     policies: [bee.tests.resources:apply_test_policy, bee.resources.security:resource_store_policy]
   imports:
@@ -58,3 +58,4 @@ entries:
     authority: bee.resources.persist:authority
     capability_model: bee.capability:model
     persist: bee.persist:database
+    shared_authority: bee.tests.support:authority

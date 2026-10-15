@@ -1,4 +1,5 @@
 -- MIT. Launch fixture authority, host setup and carrier observation.
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local completion = require("completion")
 local principals = require("principals")
@@ -364,13 +365,7 @@ local function kinds(thread_id: string): {string}
     for index, item in ipairs(principals.objects(page.records)) do list[index] = tostring(item.kind) end
     return list
 end
-local function count(list: {string}, wanted: string): integer
-    local total = 0
-    for _, item in ipairs(list) do
-        if item == wanted then total = total + 1 end
-    end
-    return total
-end
+local count = shared_fixtures.count
 
 function M.prepare(): string
         local before: {[string]: boolean} = {}

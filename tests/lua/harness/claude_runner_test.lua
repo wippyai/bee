@@ -6,6 +6,9 @@
 -- endpoint answers 400, so a passing run proves path selection only, never
 -- provider acceptance or a completed turn. Without the executable the gate
 -- is reported open.
+local shared_authority = require("shared_authority")
+local shared_streams = require("shared_streams")
+local shared_executables = require("shared_executables")
 local test = require("test")
 local bounds = require("bounds")
 local funcs = require("funcs")
@@ -37,14 +40,9 @@ end
 local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
     "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.tests.harness:codex_credential_client_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy"}
 local function scope(): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(scope_names) do
-        local found, err = security.policy(name)
-        if err or not found then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = found
-    end
-    return security.new_scope(policies)
+    return shared_authority.scope(scope_names)
 end
+
 local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
@@ -53,15 +51,8 @@ local function call(target: string, request: unknown): Object
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return assert(bounds.object(reply.value))
 end
-local function read_all(stream): string
-    local content = ""
-    while true do
-        local chunk: unknown = stream:read(65536)
-        if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk)
-    end
-    return content
-end
+local read_all = shared_streams.read_all
+
 local function shell(command: string): string
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")
@@ -91,16 +82,10 @@ local function admit(entry_id: string, list_key: string, item: Object, matches: 
     list[#list + 1] = item
     apply(entry)
 end
-local function claude_bin(): string?
-    local bin, err = env.get("bee.tests.harness:claude_bin")
-    if err or type(bin) ~= "string" or bin == "" then return nil end
-    return bin
-end
-local function fixture_bin(): string
-    local bin, err = env.get("bee.tests.harness:fixture_bin")
-    if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
-    return bin
-end
+local claude_bin = shared_executables.claude_bin
+
+local fixture_bin = shared_executables.fixture_bin
+
 local endpoint_handle: exec.Process? = nil
 local endpoint_executor: exec.Executor? = nil
 local function start_endpoint(record: string, text: string?): string

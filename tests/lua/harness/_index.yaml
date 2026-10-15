@@ -94,6 +94,7 @@ entries:
     test: wippy.test:test
     classify: bee.harness.catalog:classify
     permission: bee.harness.permission:adapter
+    shared_fixtures: bee.tests.support:fixtures
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua
@@ -112,6 +113,7 @@ entries:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
     classify: bee.harness.catalog:classify
+    shared_fixtures: bee.tests.support:fixtures
 - name: carrier_pure_test
   kind: function.lua
   source: file://carrier_pure_test.lua
@@ -563,6 +565,10 @@ entries:
     placement_fixture: bee.tests.harness:placement_fixture
     configuration: bee.driver.binding:configuration
     quote: bee.driver.binding:quote
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_streams: bee.tests.harness:streams
+    shared_authority: bee.tests.support:authority
 - name: gateway_client_policy
   kind: security.policy
   meta:
@@ -616,6 +622,9 @@ entries:
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
     placement_fixture: bee.tests.harness:placement_fixture
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_authority: bee.tests.support:authority
 - name: gateway_fencing_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -645,6 +654,9 @@ entries:
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
     placement_fixture: bee.tests.harness:placement_fixture
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_authority: bee.tests.support:authority
 - name: extension_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -676,6 +688,9 @@ entries:
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
     placement_fixture: bee.tests.harness:placement_fixture
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_authority: bee.tests.support:authority
 - name: project_fixture
   kind: fs.directory
   meta:
@@ -865,6 +880,9 @@ entries:
     placement_fixture: bee.tests.harness:placement_fixture
     exits: bee.tests.harness:exits
     orphan_gate: bee.tests.harness:orphan_gate
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_authority: bee.tests.support:authority
 - name: orphan_gate
   kind: library.lua
   source: file://orphan_gate.lua
@@ -907,6 +925,9 @@ entries:
     placement_fixture: bee.tests.harness:placement_fixture
     exits: bee.tests.harness:exits
     orphan_gate: bee.tests.harness:orphan_gate
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_authority: bee.tests.support:authority
 - name: carrier_stream_test
   kind: function.lua
   source: file://carrier_test.lua
@@ -939,6 +960,9 @@ entries:
     placement_fixture: bee.tests.harness:placement_fixture
     exits: bee.tests.harness:exits
     orphan_gate: bee.tests.harness:orphan_gate
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_authority: bee.tests.support:authority
 - name: launch_sentinel_storage
   kind: env.storage.memory
   meta:
@@ -1452,6 +1476,7 @@ entries:
   imports:
     test: wippy.test:test
     selection: bee.harness.launch:selection
+    shared_fixtures: bee.tests.support:fixtures
 - name: locate_probe_test
   kind: function.lua
   source: file://locate_probe_test.lua
@@ -1497,6 +1522,8 @@ entries:
     bounds: bee.values:bounds
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
+    shared_fixtures: bee.tests.support:fixtures
+    shared_authority: bee.tests.support:authority
 - name: permission_test
   kind: function.lua
   source: file://permission_test.lua
@@ -1746,6 +1773,7 @@ entries:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
     installation: bee.gateway.security:installation
+    shared_authority: bee.tests.support:authority
 - name: publication_client_policy
   kind: security.policy
   meta:
@@ -1792,6 +1820,7 @@ entries:
     principals: bee.tests.support.principals:bound
     publish: bee.gateway.security:publish
     publishing: bee.hub.publication:publishing
+    shared_authority: bee.tests.support:authority
 - name: capability_elevation_test
   kind: function.lua
   source: file://capability_elevation_test.lua
@@ -1818,6 +1847,7 @@ entries:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
     client: bee.node:client
+    shared_authority: bee.tests.support:authority
 - name: permission_carrier_test
   kind: function.lua
   source: file://permission_carrier_test.lua
@@ -1857,6 +1887,8 @@ entries:
     carrier_fixtures: bee.tests.harness:carrier_fixtures
     approvals: bee.approvals.binding:service
     placement_fixture: bee.tests.harness:placement_fixture
+    shared_fixtures: bee.tests.support:fixtures
+    shared_authority: bee.tests.support:authority
 - name: codex_auth_test
   kind: function.lua
   source: file://codex_auth_test.lua
@@ -1878,6 +1910,8 @@ entries:
     launch: bee.tests.support.driver:codex_launch
     driver_types: bee.driver:types
     quote: bee.driver.binding:quote
+    shared_executables: bee.tests.harness:executables
+    shared_streams: bee.tests.harness:streams
 - name: codex_sentinel_storage
   kind: env.storage.memory
   meta:
@@ -2013,6 +2047,9 @@ entries:
     policy: bee.harness.carrier:policy
     driver_types: bee.driver:types
     placement_fixture: bee.tests.harness:placement_fixture
+    shared_executables: bee.tests.harness:executables
+    shared_streams: bee.tests.harness:streams
+    shared_authority: bee.tests.support:authority
 - name: claude_adapter_test
   kind: function.lua
   source: file://claude_adapter_test.lua
@@ -2100,6 +2137,9 @@ entries:
     policy: bee.harness.carrier:policy
     driver_types: bee.driver:types
     placement_fixture: bee.tests.harness:placement_fixture
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_streams: bee.tests.harness:streams
 - name: claude_acceptance_test
   kind: function.lua
   source: file://claude_acceptance_test.lua
@@ -2126,6 +2166,8 @@ entries:
     adapter: bee.harness.permission:adapter
     launch: bee.tests.support.driver:claude_launch
     driver_types: bee.driver:types
+    shared_executables: bee.tests.harness:executables
+    shared_streams: bee.tests.harness:streams
 - name: codex_credential_client_policy
   kind: security.policy
   meta:
@@ -2171,6 +2213,10 @@ entries:
     driver_types: bee.driver:types
     placement: bee.placement.native.service:service
     placement_fixture: bee.tests.harness:placement_fixture
+    shared_fixtures: bee.tests.support:fixtures
+    shared_executables: bee.tests.harness:executables
+    shared_streams: bee.tests.harness:streams
+    shared_authority: bee.tests.support:authority
 - name: continuation_test
   kind: function.lua
   source: file://continuation_test.lua
@@ -2560,6 +2606,7 @@ entries:
     test: wippy.test:test
     hooks: bee.gateway.hooks:hooks
     principals: bee.tests.support.principals:bound
+    shared_authority: bee.tests.support:authority
 - name: permission_hook_test
   kind: function.lua
   source: file://permission_hook_test.lua
@@ -2910,3 +2957,17 @@ entries:
     checkpoint: bee.harness.carrier:checkpoint
     bounds: bee.values:bounds
     node_client: bee.node:client
+    shared_fixtures: bee.tests.support:fixtures
+
+- name: executables
+  kind: library.lua
+  source: file://executables.lua
+  meta:
+    type: test_support
+  modules:
+  - env
+- name: streams
+  kind: library.lua
+  source: file://streams.lua
+  meta:
+    type: test_support

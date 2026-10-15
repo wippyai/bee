@@ -7,6 +7,8 @@
 -- acknowledged by a correlated failed tool result; a wrong correlation and
 -- silence authorize nothing and leave the harness waiting. Without the
 -- executable the gate is reported open.
+local shared_streams = require("shared_streams")
+local shared_executables = require("shared_executables")
 local test = require("test")
 local bounds = require("bounds")
 local exec = require("exec")
@@ -28,25 +30,12 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
-local function claude_bin(): string?
-    local bin, err = env.get("bee.tests.harness:claude_bin")
-    if err or type(bin) ~= "string" or bin == "" then return nil end
-    return bin
-end
-local function fixture_bin(): string
-    local bin, err = env.get("bee.tests.harness:fixture_bin")
-    if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
-    return bin
-end
-local function read_all(stream): string
-    local content = ""
-    while true do
-        local chunk: unknown = stream:read(65536)
-        if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk)
-    end
-    return content
-end
+local claude_bin = shared_executables.claude_bin
+
+local fixture_bin = shared_executables.fixture_bin
+
+local read_all = shared_streams.read_all
+
 local function shell(command: string): string
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, exec_error = executor:exec("sh -c '" .. command .. "'")

@@ -3,6 +3,9 @@
 -- provenance, settlement from the terminal envelope only, placement states
 -- as observations, and recovery from real crash points without duplicate
 -- records or duplicate settlement.
+local shared_authority = require("shared_authority")
+local shared_executables = require("shared_executables")
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local processes = require("processes")
 local principals = require("principals")
@@ -24,18 +27,7 @@ local ROOT = "bee.tests.harness:project_fixture"
 local BINDING = "bee.driver.claude.binding:binding"
 local counter = 0
 
-type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
-local function registry_input(value: {[string]: unknown}): RegistryInput
-    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
-    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
-    local metadata: {[string]: unknown} = {}
-    if meta ~= nil then
-        assert(type(meta) == "table", "fixture registry metadata")
-        for key, item in pairs(meta) do metadata[key] = item end
-    end
-    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
-    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
-end
+local registry_input = shared_fixtures.registry_input
 
 local function fresh(prefix: string): string
     counter = counter + 1
@@ -44,14 +36,9 @@ end
 local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
     "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy"}
 local function scope(): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(scope_names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
+    return shared_authority.scope(scope_names)
 end
+
 local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): {[string]: unknown}
     local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
@@ -60,11 +47,8 @@ local function call(target: string, request: unknown): {[string]: unknown}
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return assert(bounds.object(reply.value))
 end
-local function fixture_bin(): string
-    local bin, err = env.get("bee.tests.harness:fixture_bin")
-    if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
-    return bin
-end
+local fixture_bin = shared_executables.fixture_bin
+
 local function command(argv: {string})
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local child = assert(executor:exec(quote.line(argv)))
@@ -169,13 +153,8 @@ local function kinds(thread_id: string): ({string}, {{[string]: unknown}})
     end
     return list, records
 end
-local function count(list: {string}, wanted: string): integer
-    local total = 0
-    for _, item in ipairs(list) do
-        if item == wanted then total = total + 1 end
-    end
-    return total
-end
+local count = shared_fixtures.count
+
 local function observations(records: {{[string]: unknown}}, event_name: string?): {{[string]: unknown}}
     local out: {{[string]: unknown}} = {}
     for _, item in ipairs(records) do

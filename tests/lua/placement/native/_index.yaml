@@ -446,6 +446,7 @@ entries:
     homes: bee.placement.native.service:homes
     quote: bee.driver.binding:quote
     types: bee.placement:types
+    shared_fixtures: bee.tests.support:fixtures
 - name: native_test
   kind: function.lua
   source: file://native_test.lua

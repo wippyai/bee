@@ -1,6 +1,7 @@
 -- MIT. Classification is pure: a binding with its resolved declaration and
 -- methods is compatible only when every rule holds, and each broken rule
 -- names itself once.
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local principals = require("principals")
 local bounds = require("bounds")
@@ -44,12 +45,8 @@ end
 local function driver_of(entry: Entry): {[string]: unknown}
     return assert(bounds.object(data_of(entry).driver))
 end
-local function has(list: {string}, wanted: string): boolean
-    for _, item in ipairs(list) do
-        if item == wanted then return true end
-    end
-    return false
-end
+local has = shared_fixtures.contains
+
 local function adapter_entry(): Entry
     return {id = "fake:permission", kind = "registry.entry", meta = {type = "harness.permission_adapter"},
         data = {adapter = {schema_revision = "bee.permission-adapter@2", event_name = "permission_request", event_revision = "fake-1",

@@ -4,6 +4,9 @@
 -- the private home's host-approved configuration and the environment
 -- destination, and revocation on child exit, failed startup, carrier
 -- loss, listener change, drain and revocation during use.
+local shared_authority = require("shared_authority")
+local shared_executables = require("shared_executables")
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
@@ -37,14 +40,9 @@ end
 local scope_names = {"bee.tests.harness:carrier_client_policy", "bee.tests.harness:gateway_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
     "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.tests.support:gateway_manage_policy", "bee.tests.support:gateway_admit_policy"}
 local function scope(): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(scope_names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
+    return shared_authority.scope(scope_names)
 end
+
 local function raw_call(target: string, request: unknown, workspace_id: string?): Object
     local selected_workspace = workspace_id or principals.workspace(request)
     local result, err = funcs.new():with_actor(principals.actor(ACTOR, selected_workspace)):with_scope(scope()):call(target, request)
@@ -64,11 +62,8 @@ local function code(target: string, request: unknown): string
     if reply.ok then return "OK" end
     return tostring((assert(bounds.object(reply.error))).code)
 end
-local function fixture_bin(): string
-    local bin, err = env.get("bee.tests.harness:fixture_bin")
-    if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
-    return bin
-end
+local fixture_bin = shared_executables.fixture_bin
+
 local function stream(name: string): string
     local base, err = env.get("bee.tests.harness:fixture_streams")
     if err or type(base) ~= "string" or base == "" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
@@ -239,12 +234,8 @@ local function evidence_kinds(attempt_id: string): ({string}, {string})
     end
     return names, details
 end
-local function has(list: {string}, wanted: string): boolean
-    for _, item in ipairs(list) do
-        if item == wanted then return true end
-    end
-    return false
-end
+local has = shared_fixtures.contains
+
 local function detail_with(details: {string}, marker: string): string?
     for _, item in ipairs(details) do
         if item:find(marker, 1, true) then return item end

@@ -3,6 +3,7 @@
 -- and only an approved request is consumed once and applied by digest. The
 -- Hub facade is a recorded fixture; the approvals owner, thread binding and
 -- gateway authority are the real ones.
+local shared_authority = require("shared_authority")
 local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
@@ -33,14 +34,9 @@ local scope_names = {"bee.tests.harness:installation_client_policy", "bee.tests.
     "bee.tests.harness:approver_client_policy", "bee.security.approvals:approval_decide_policy",
     "bee.security.approvals:approval_consume_policy"}
 local function scope(): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(scope_names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
+    return shared_authority.scope(scope_names)
 end
+
 local function raw_call(actor_id: string, workspace: string, target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(actor_id, workspace)):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end

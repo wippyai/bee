@@ -112,6 +112,7 @@ entries:
     lease_grants: bee.gov.binding:lease_grants
     lease_store: bee.gov.persist:lease_store
     service: bee.approvals.binding:service
+    shared_authority: bee.tests.support:authority
 - name: runtime_lease_test
   kind: function.lua
   source: file://runtime_lease_test.lua

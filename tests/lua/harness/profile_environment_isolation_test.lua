@@ -2,6 +2,8 @@
 -- different host policies. This fixture proof starts both definitions before
 -- either is awaited; each real child silently checks its own policy-only
 -- environment and broker projection before replaying the standard JSONL run.
+local shared_authority = require("shared_authority")
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
@@ -24,18 +26,7 @@ local BETA_POLICY = "bee.tests.harness:profile_beta_policy"
 local counter = 0
 
 
-type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
-local function registry_input(value: {[string]: unknown}): RegistryInput
-    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
-    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
-    local metadata: {[string]: unknown} = {}
-    if meta ~= nil then
-        assert(type(meta) == "table", "fixture registry metadata")
-        for key, item in pairs(meta) do metadata[key] = item end
-    end
-    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
-    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
-end
+local registry_input = shared_fixtures.registry_input
 
 local function fresh(prefix: string): string
     counter = counter + 1
@@ -46,13 +37,7 @@ local scope_names = {"bee.tests.harness:launch_client_policy", "bee.tests.harnes
     "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
     "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy"}
 local function scope(): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(scope_names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
+    return shared_authority.scope(scope_names)
 end
 
 local function call(target: string, request: unknown): {[string]: unknown}
@@ -98,11 +83,7 @@ local function receipt_outcome(thread_id: string): string
     error("profile attempt has no durable receipt")
 end
 
-local function count(list: {string}, wanted: string): integer
-    local total = 0
-    for _, item in ipairs(list) do if item == wanted then total = total + 1 end end
-    return total
-end
+local count = shared_fixtures.count
 
 local function await_receipt(thread_id: string, attempt_id: string): {[string]: unknown}
     local guard_ms = math.floor(time.now():unix_nano() / 1000000) + 120000

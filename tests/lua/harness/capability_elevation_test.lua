@@ -5,6 +5,7 @@
 -- attempt only. A child attempt resolves nothing. A capability exercised
 -- through gateway tools is held as its consumed approval, and only that
 -- attempt's tool calls run the approved command.
+local shared_authority = require("shared_authority")
 local test = require("test")
 local bounds = require("bounds")
 local principals = require("principals")
@@ -34,14 +35,9 @@ local scope_names = {"bee.tests.harness:elevation_client_policy", "bee.tests.sup
     "bee.resources.security:resource_manage_policy", "bee.resources.security:resource_grant_policy",
     "bee.resources.security:resource_resolve_policy", "bee.security.approvals:approval_decide_policy"}
 local function scope(): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(scope_names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
+    return shared_authority.scope(scope_names)
 end
+
 local function raw_call(actor_id: string, workspace: string, target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(actor_id, workspace)):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end

@@ -4,6 +4,8 @@
 -- and answered through one deterministic write, and every crash boundary
 -- recovers without a second approval, a second response or an invented
 -- resend. Fixture only: the shipped profiles stay none.
+local shared_authority = require("shared_authority")
+local shared_fixtures = require("shared_fixtures")
 local test = require("test")
 local processes = require("processes")
 local principals = require("principals")
@@ -49,15 +51,8 @@ local function fresh(prefix: string): string
 end
 local carrier_scope = {"bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe", "bee.threads.security:lifecycle",
     "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.security.approvals:approval_request_policy", "bee.security.approvals:approval_consume_policy"}
-local function scope(names: {string}): security.Scope
-    local policies: {security.Policy} = {}
-    for index, name in ipairs(names) do
-        local policy, err = security.policy(name)
-        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
-        policies[index] = policy
-    end
-    return security.new_scope(policies)
-end
+local scope = shared_authority.scope
+
 local actor = security.new_actor(ACTOR)
 local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.tests.harness:approver_client_policy", "bee.security.approvals:approval_decide_policy"}))
 local function reply_value(target: string, result: unknown, err: unknown): Object
@@ -355,13 +350,8 @@ local function writes(records: {Object}): {string}
     for _, payload in ipairs(payloads(records, "bee.carrier.write")) do list[#list + 1] = tostring(payload.phase) end
     return list
 end
-local function count(list: {string}, wanted: string): integer
-    local total = 0
-    for _, item in ipairs(list) do
-        if item == wanted then total = total + 1 end
-    end
-    return total
-end
+local count = shared_fixtures.count
+
 local function tool_results(records: {Object}): integer
     local total = 0
     for _, item in ipairs(records) do

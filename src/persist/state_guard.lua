@@ -5,7 +5,6 @@ local json = require("json")
 local bounds = require("bounds")
 local writer_version = require("writer_version")
 local ledger = require("ledger")
-local process = require("process")
 local activations = require("activations")
 local system = require("system")
 local M = {}
@@ -195,14 +194,6 @@ local function inspect(selected: {Target}, version: string): string?
 end
 function M.inspect(): string?
     return inspect(targets(), writer_version.version)
-end
-function M.main()
-    local problem = M.inspect()
-    if problem then
-        local reporter, report_error = process.spawn("bee.persist:state_refusal", "bee:terminal", problem)
-        assert(reporter, tostring(report_error))
-        error("Bee state version is incompatible")
-    end
 end
 function M.run(): Result
     local version, build = writer_version.version, writer_version.build

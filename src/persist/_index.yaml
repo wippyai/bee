@@ -12,7 +12,7 @@ entries:
 - name: state_guard
   kind: library.lua
   source: file://state_guard.lua
-  modules: [sql, registry, json, process, system]
+  modules: [sql, registry, json, system]
   imports:
     ledger: wippy.migration:repository
     writer_version: bee.env.identity:state_writer_version
@@ -22,7 +22,7 @@ entries:
   kind: function.lua
   source: file://state_guard.lua
   method: run
-  modules: [sql, registry, json, process, system]
+  modules: [sql, registry, json, system]
   imports:
     ledger: wippy.migration:repository
     writer_version: bee.env.identity:state_writer_version
@@ -33,29 +33,6 @@ entries:
     order: 5
     description: Refuse unsupported state schema before migrations
     requires: [bee:db, bee:terminal]
-- name: state_guard_startup
-  kind: process.lua
-  source: file://state_guard.lua
-  method: main
-  modules: [sql, registry, json, process, system]
-  imports:
-    ledger: wippy.migration:repository
-    writer_version: bee.env.identity:state_writer_version
-    activations: bee.gov.persist:activation_store
-    bounds: bee.values:bounds
-- name: state_guard_service
-  kind: process.service
-  process: bee.persist:state_guard_startup
-  host: bee:workers
-  meta:
-    type: bee.process.boot_gate
-  lifecycle:
-    auto_start: true
-    startup: complete
-    requires: [bee:db, bee:terminal]
-    restart: {max_attempts: 1}
-    security:
-      groups: [wippy.security:process]
 - name: state_refusal
   kind: process.lua
   source: file://state_refusal.lua
@@ -63,7 +40,7 @@ entries:
   modules: [io]
 - name: guarded_bootloader
   kind: ns.requirement
-  default: [bee.persist:state_guard_service]
+  default: [bee.persist.service:state_guard_service]
   targets:
   - entry: wippy.bootloader:bootloader.service
     path: .lifecycle.requires

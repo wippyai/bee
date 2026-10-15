@@ -1,0 +1,23 @@
+version: '1.0'
+namespace: bee.persist.service
+entries:
+- name: state_guard_startup
+  kind: process.lua
+  source: file://state_guard.lua
+  method: main
+  modules: [process]
+  imports:
+    guard: bee.persist:state_guard
+- name: state_guard_service
+  kind: process.service
+  process: bee.persist.service:state_guard_startup
+  host: bee:workers
+  meta:
+    type: bee.process.boot_gate
+  lifecycle:
+    auto_start: true
+    startup: complete
+    requires: [bee:db, bee:terminal]
+    restart: {max_attempts: 1}
+    security:
+      groups: [wippy.security:process]

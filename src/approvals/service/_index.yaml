@@ -51,6 +51,8 @@ entries:
   process: bee.approvals.service:authority
   lifecycle:
     auto_start: true
+    restart:
+      max_attempts: 10
     requires:
     - wippy.bootloader:bootloader.service
     security:
@@ -86,6 +88,8 @@ entries:
   process: bee.approvals.service:worker
   lifecycle:
     auto_start: true
+    restart:
+      max_attempts: 10
     requires:
     - wippy.bootloader:bootloader.service
     security:

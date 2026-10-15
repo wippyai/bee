@@ -639,19 +639,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         end
                         definition, profile = saved.definition_ref, {id = entry.ref, revision = revision}
                     end
-                    if profile then
-                        local raw, prepare_error = funcs.call("bee.harness.app:prepare_profile", {
-                            definition_ref = definition, workspace_id = launch.workspace_id,
-                            profile_id = profile.id, profile_revision = profile.revision, overrides = options})
-                        local prepared = bounds.object(raw)
-                        if prepare_error or not prepared or prepared.ok ~= true then
-                            if running and serial == open_serial then
-                                opens:send({serial = serial, error = tostring(prepare_error or (prepared and prepared.error)
-                                    or "Folder approval is unavailable")})
-                            end
-                            return
-                        end
-                    end
                     local opened, open_error = agents.open(sessions.client(), definition, profile, key, launch.workspace_id, options)
                     if running and serial == open_serial then
                         local reply: Opened = {serial = serial, conversation = opened, error = open_error}

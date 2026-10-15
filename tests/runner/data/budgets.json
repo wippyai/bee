@@ -210,7 +210,6 @@
   "bee.tests.harness:gateway_harness_test": 0.882,
   "bee.tests.harness:hook_transport_test": 2.0549999999999997,
   "bee.tests.harness:installation_request_test": 1.949,
-  "bee.tests.harness:launch_test": 57.21,
   "bee.tests.harness:locate_probe_test": 0.869,
   "bee.tests.harness:permission_carrier_test": 55.187000000000005,
   "bee.tests.harness:permission_contexts_test": 1.1,

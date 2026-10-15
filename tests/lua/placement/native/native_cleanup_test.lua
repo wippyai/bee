@@ -82,6 +82,8 @@ local function cleanup_tests()
                 -- A stored state without its runtime completion source cannot authorize cleanup.
                 local db = store.open()
                 if not db then error("store") end
+                local completion_source = assert(store.attempt(db, prepared.attempt_id)).exit_source
+                test.not_nil(completion_source)
                 local _, clear_error = db:execute("UPDATE bee_placement_attempts SET exit_source = NULL WHERE attempt_id = ?", {prepared.attempt_id})
                 db:release()
                 if clear_error then error("clear completion source: " .. tostring(clear_error)) end
@@ -97,6 +99,12 @@ local function cleanup_tests()
                 test.is_true(recorded, table.concat(native_fixture.kinds(prepared.attempt_id), ","))
                 local after = native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt
                 test.eq(after.cleanup_state, "pending")
+                -- Restore the observed proof after the missing-proof assertion so preparers can retire.
+                db = assert(store.open())
+                assert(db:execute("UPDATE bee_placement_attempts SET exit_source = ? WHERE attempt_id = ?", {completion_source, prepared.attempt_id}))
+                db:release()
+                local cleaned = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+                test.eq(cleaned.cleanup_state, "complete")
             end)
             test.it("keeps lost owner outcomes uncertain without reconstructing PID authority", function()
                 local request = native_fixture.launch({"sh", "-c", "sleep 8"}, "process_group")

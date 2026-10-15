@@ -546,6 +546,8 @@ entries:
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
+    supervision: bee.placement.native.persist:supervision
+    materialization: bee.placement.native.service:materialization
     protocol: bee.placement.native:protocol
     executable_stream: bee.placement.native.service:executable_stream
     homes: bee.placement.native.service:homes

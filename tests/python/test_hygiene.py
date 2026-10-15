@@ -1,4 +1,5 @@
 """Repository hygiene rules distinguish comments, program data and domain exceptions."""
+import os
 import contextlib
 import io
 import json
@@ -104,15 +105,16 @@ class HygieneTests(unittest.TestCase):
         self.assertEqual(self.findings('note.md', '10.0.0\n999.999.999.999'), [])
 
     def test_personal_paths_names_repositories_and_binary_content(self):
-        names = ['tower' + 's', 'wolf' + 'den', 'kick' + 'side',
-                 'bee-' + 'briefs', 'bee-' + 'e2e', 'bee-site-' + 'private', 'wolfy-' + 'j']
+        names = ['acme-build', 'example-private']
+        os.environ['BEE_HYGIENE_PRIVATE_TERMS'] = ','.join(names)
+        self.addCleanup(os.environ.pop, 'BEE_HYGIENE_PRIVATE_TERMS', None)
         for name in names:
             for text in (name, 'https://github.com/example/' + name + '.git', name.upper()):
                 self.assertIn('private-reference', self.findings('note.md', text)[0])
         self.assertIn('private-reference', self.findings('note.md', home('user'))[0])
         self.assertIn('private-reference', self.findings('fixture.bin', b'\x00' + home('user').encode())[0])
         self.assertIn('private-reference', self.findings(names[0] + '/note.md', '')[0])
-        self.assertEqual(self.findings('note.md', '/work/project\nhttps://example.org\nflower towerscape'), [])
+        self.assertEqual(self.findings('note.md', '/work/project\nhttps://example.org\nacme-buildings'), [])
 
     def test_size_boundaries_and_the_single_asset_exception(self):
         for suffix in ('lua', 'py', 'go'):

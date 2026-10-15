@@ -131,7 +131,7 @@
   },
   {
     "path": "src/ui/viz/viz.lua",
-    "text": "-- optional muted \"│\" at now, and the from and to labels on the last row.",
+    "text": "-- optional muted \"\u2502\" at now, and the from and to labels on the last row.",
     "reason": "Names the current-time marker on the timeline."
   },
   {
@@ -273,11 +273,6 @@
     "path": "src/corpus/runtime/lua/http/client.md",
     "text": "-- Error: not allowed: private IP 192.168.1.1",
     "reason": "RFC 1918 example demonstrates private-address rejection, not a deployment endpoint."
-  },
-  {
-    "path": "build/hygiene.py",
-    "text": "PRIVATE_TERMS = ('towers', 'wolfden', 'kickside', 'bee-briefs', 'bee-e2e', 'bee-site-private', 'wolfy-j')",
-    "reason": "Literal policy vocabulary identifies forbidden infrastructure and private repository names."
   },
   {
     "path": "tests/lua/gateway/address_test.lua",

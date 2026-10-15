@@ -3,6 +3,7 @@ import io
 import ipaddress
 import json
 from pathlib import Path
+import os
 import re
 import subprocess
 import sys
@@ -20,8 +21,9 @@ LARGE_ASSETS = {'assets/bee.gif'}
 EDITORIAL = re.compile(
     r'\b(?:now|previously|no\s+longer|fixed|added|workaround|temporary|'
     r'for\s+now|hack|TODO|FIXME|XXX|legacy)\b', re.IGNORECASE)
-PRIVATE_TERMS = ('towers', 'wolfden', 'kickside', 'bee-briefs', 'bee-e2e', 'bee-site-private', 'wolfy-j')
-PRIVATE_NAMES = re.compile(r'(?<![\w])(?:' + '|'.join(map(re.escape, PRIVATE_TERMS)) + r')(?![\w])', re.IGNORECASE)
+# Private host and repository names stay outside the public tree: maintainers
+# supply them through BEE_HYGIENE_PRIVATE_TERMS (comma-separated).
+PRIVATE_TERMS_ENV = 'BEE_HYGIENE_PRIVATE_TERMS'
 HOME = re.compile(r'/home/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*(?:/|\b)')
 IPV4 = re.compile(r'(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])')
 PRIVATE_NETS = tuple(ipaddress.ip_network(value) for value in
@@ -115,8 +117,16 @@ def lua_statement(text, lua):
         return False
 
 
+def private_names():
+    terms = [term.strip() for term in os.environ.get(PRIVATE_TERMS_ENV, '').split(',') if term.strip()]
+    if not terms:
+        return None
+    return re.compile(r'(?<![\w])(?:' + '|'.join(map(re.escape, terms)) + r')(?![\w])', re.IGNORECASE)
+
+
 def private_reference(text):
-    if PRIVATE_NAMES.search(text) or HOME.search(text):
+    names = private_names()
+    if (names and names.search(text)) or HOME.search(text):
         return True
     for match in IPV4.finditer(text):
         try:

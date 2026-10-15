@@ -196,6 +196,11 @@ Within a feature, `app` owns its UI, `binding` its entry adapters, `service`
 its orchestration, `persist` its storage, and `migrations` its historical schema
 steps. Applied migration IDs and persisted registry IDs remain stable when
 organizing files.
+The approval binding composes request, decision, effect, query, retention and
+lease owners through `bee.approvals.binding:service`. The gateway binding
+composes listener, admission, credential, surface, capability and hook intake
+owners through `bee.gateway.binding:gateway`. Their method entries retain the
+same IDs; internal libraries own the implementation and shared record types.
 
 Root `wippy.yaml`, `.wippy.yaml`, `wippy.lock` and `wippy.build.json` describe
 the package, workspace, dependency lock and pinned build respectively.
@@ -261,7 +266,12 @@ live in `tests/runner/data/`. `python3 -m tests.runner.compose` creates a
 copy of the application with test-only seams. Each shard has its own state,
 fixture executables, databases, home and gateway port. The harness pulls
 required digest-pinned Docker images before starting suite deadlines and
-records that preparation time separately. Each entry checks for leaked actors,
+records that preparation time separately. Launch suites separate admission,
+profiles, credentials, provider configuration, recovery, sessions and agent
+specification boundaries; `launch_fixture.lua` owns their shared host setup.
+Hub inspection loads its published package snapshot from
+`tests/fixtures/hub/root_pack.json.gz`; composition expands the data into an
+ignored Lua library, preserving independence from the live registry. Each entry checks for leaked actors,
 owned OS children, registry entries, durable work, subscriptions and demand
 owners. Run `go test ./...` in `native/` when changing Go code.
 

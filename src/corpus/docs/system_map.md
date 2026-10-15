@@ -49,7 +49,7 @@ Aggregates and caches are projections an owner can rebuild.
 | `harness` | `bee.harness` | Agent profiles, launch admission, hooks, the carrier of a running attempt and the Agents app (`bee.harness.app`) |
 | `driver` | `bee.driver` | Agent drivers: `claude`, `codex`, `agy`, `grok`, `muse`, `opencode` and the native `wippy` driver, over shared descriptors, profiles, codec, permission and transport |
 | `placement` | `bee.placement` | Launch plans and attempts; `native` and `docker` place them |
-| `executor/external` | `bee.executor.external` | Running a driver's external process under a placement |
+| `harness/permission/external` | `bee.harness.permission.external` | Running a driver's external process under a placement |
 | `git/worktree` | `bee.git.worktree` | The Git worktree a launch can prepare and clean up |
 | `gateway` | `bee.gateway` | The scoped MCP gateway agents reach Bee through: sessions, bindings, hooks, tool surfaces and publication |
 | `docs` | `bee.docs` | The offline corpus and its read-only `docs` tool |

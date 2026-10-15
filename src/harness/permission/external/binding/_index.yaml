@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.executor.external.binding
+namespace: bee.harness.permission.external.binding
 entries:
 - name: answer_hook
   kind: function.lua
@@ -12,9 +12,9 @@ entries:
   - hash
   security:
     policies:
-    - bee.executor.external.security:driver_placement_calls
-    - bee.executor.external.security:placement_stream
-    - bee.executor.external.security:runner_observation
+    - bee.harness.permission.external.security:driver_placement_calls
+    - bee.harness.permission.external.security:placement_stream
+    - bee.harness.permission.external.security:runner_observation
     - bee.security.approvals:approval_request_policy
     - bee.security.approvals:approval_consume_policy
     - bee.threads.security:sessions_owner

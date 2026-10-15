@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.executor.external.security
+namespace: bee.harness.permission.external.security
 entries:
 - name: driver_placement_calls
   kind: security.policy

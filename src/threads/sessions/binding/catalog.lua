@@ -171,7 +171,7 @@ local function measured_candidate(cache: locate.Cache, readiness_cache: readines
     local profile_digest = plan_object and bounds.id(plan_object.profile_digest) or nil
     local route_generation = plan_object and bounds.count(plan_object.catalog_generation) or nil
     local input: locate.CandidateInput = {ref = ref, kind = kind, title = title, revision = revision,
-        target = "bee.executor.external", binding_ref = selected.binding_ref,
+        target = "bee.harness.permission.external", binding_ref = selected.binding_ref,
         binding_digest = binding_digest or "unresolved", profile_digest = profile_digest or plan_digest,
         runtime_identity = "local", availability_revision = tostring(route_generation or generation)}
     local value, locate_error = locate.locate(cache, input, function(_: locate.CandidateInput): (locate.LocateObservation?, string?)
@@ -212,7 +212,7 @@ end
 local function unavailable_candidate(cache: locate.Cache, kind: Kind, ref: string, title: string,
     revision: integer?, status: Status, reason: string, generation: integer): (locate.Candidate?, string?)
     return locate.locate(cache, {ref = ref, kind = kind, title = title, revision = revision,
-        target = "bee.executor.external", binding_ref = "bee.driver.unavailable:binding", binding_digest = "unresolved",
+        target = "bee.harness.permission.external", binding_ref = "bee.driver.unavailable:binding", binding_digest = "unresolved",
         runtime_identity = "local", availability_revision = tostring(generation)}, function(_: locate.CandidateInput): (locate.LocateObservation?, string?)
         return {status = status, reasons = {reason}, features = {}, actions = {}}, nil
     end)

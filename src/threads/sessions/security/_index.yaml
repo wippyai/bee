@@ -13,7 +13,7 @@ entries:
     - bee.harness.permission.answer
     resources:
     - bee.gov.binding:driver_bindings
-    - bee.executor.external.binding:answer_hook
+    - bee.harness.permission.external.binding:answer_hook
     - bs:*
     - bee.threads.sessions.binding:open
     - bee.threads.sessions.env:threads_journal_ref

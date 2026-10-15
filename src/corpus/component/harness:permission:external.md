@@ -1,7 +1,7 @@
-# bee.executor.external
+# bee.harness.permission.external
 
 The permission answer hook for external CLI windows. The namespace holds one
-function, `bee.executor.external.binding:answer_hook`, which the Threads
+function, `bee.harness.permission.external.binding:answer_hook`, which the Threads
 sessions owner calls when a window's CLI delivers a `PermissionRequest` hook
 (`hook_http` or `hook_mcp` transport).
 

@@ -588,7 +588,7 @@ function M.hook_boundary(raw_request: unknown): Reply
             attempt_id = attempt, thread_id = stored.thread_ref, action_id = permission.action_id, binding_id = permission.binding_id,
             turn = active.turn, claim = active.claim, event_id = event_key, payload = permission.payload,
             saved_profile_id = route.saved_profile_id, saved_profile_revision = route.saved_profile_revision, transport = permission.transport}
-        local response, response_error = funcs.call("bee.executor.external.binding:answer_hook", fields)
+        local response, response_error = funcs.call("bee.harness.permission.external.binding:answer_hook", fields)
         if response_error then return unavailable(tostring(response_error), event_key) end
         local reply = bounds.object(response)
         if not reply or type(reply.ok) ~= "boolean" then return unavailable("invalid permission hook reply", event_key) end

@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.tests.harness.permission.external.binding
+entries:
+- name: answer_hook_test
+  kind: function.lua
+  source: file://answer_hook_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds

@@ -152,7 +152,7 @@ local function define_tests()
         end)
         test.it("lets each owning launch scope read admitted drivers", function()
             local probe_policy = assert(security.policy("bee.tests.gov:admission_probe_call"))
-            for _, id in ipairs({"bee.threads.sessions.security:owner_admission_policy", "bee.executor.external.security:driver_placement_calls",
+            for _, id in ipairs({"bee.threads.sessions.security:owner_admission_policy", "bee.harness.permission.external.security:driver_placement_calls",
                 "bee.placement.native.security:placement_store_policy", "bee.harness.security:launch_locate_probe_policy",
                 "bee.harness.security:harness_setup_policy", "bee.harness.security:profile_store_policy"}) do
                 local policy = assert(security.policy(id))

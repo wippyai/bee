@@ -183,7 +183,7 @@ the authored and generated content they serve, and is not a registry namespace.
 | --- | --- |
 | root, `deps`, `env`, `security` | Host composition, boot dependencies, environment resources and host policies |
 | `approvals`, `capability`, `resources`, `credentials` | Approval decisions and inbox, capability vocabulary, resource grants and credential lifecycle |
-| `driver`, `harness`, `executor.external` | Provider adapters; agent launch, carrier, profiles and permissions; external permission answers |
+| `driver`, `harness`, `harness.permission.external` | Provider adapters; agent launch, carrier, profiles and permissions; external permission answers |
 | `placement`, `git.worktree`, `process` | Native/Docker placement, worktree lifecycle and shared process infrastructure |
 | `threads` | Durable records, sessions, delivery, hooks and orchestration |
 | `gateway` | Agent tools, external interfaces, authorization and publication |

@@ -72,9 +72,7 @@ entries:
   - registry
   - json
   - funcs
-  - hash
   imports:
-    canonical: bee.values:canonical
     bounds: bee.values:bounds
     descriptor: bee.driver.descriptor:descriptor
     driver_resolver: bee.driver.binding:resolver

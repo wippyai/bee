@@ -19,8 +19,6 @@ local login_evidence = require("login_evidence")
 local funcs = require("funcs")
 local placement_profiles = require("placement_profiles")
 local placement_resolver = require("placement_resolver")
-local canonical = require("canonical")
-local hash = require("hash")
 local M = {}
 local LOGIN_SOURCE = "bee.env:machine_login_source"
 
@@ -188,7 +186,6 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
         end
         return nil
     end
-    cache_key = cache_key .. "\n" .. assert(hash.sha256(assert(canonical.encode(selected))))
     if not placement_profile_ref and cache.drivers[cache_key] then return cache.drivers[cache_key] end
     if not has_locate_facet(pinned, binding) then
         local result = unsupported(selected, "the active driver does not bind bee.driver:locate_facet", nil)

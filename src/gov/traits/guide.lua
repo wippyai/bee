@@ -66,9 +66,12 @@ local CONFIG_SHAPE_RULE = M.config_shape_rule()
 -- shared application frame, with keyboard/mouse parity and honest
 -- checkpoint feedback.
 M.SOURCE = [==[local tty = require("tty")
+local client = require("client")
 local process = require("process")
 local channel = require("channel")
 local json = require("json")
+local appearance = require("appearance")
+local frame = require("frame")
 
 local HINTS = frame.hints({{key = "Enter", verb = "add one"}, {key = "Esc", verb = "exit"}})
 

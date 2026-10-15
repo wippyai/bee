@@ -17,7 +17,7 @@ Driver packages own provider arguments, codecs and readiness descriptors.
 | `bee.harness.binding` | Functions `call` (the profiles facade), `capabilities`, `resolve`, `admit`, `start`, `locate_probe`, `setup`, `present`, `present_restore`, `present_type`, `present_activity`; the `profiles_local` binding of `bee.harness:profiles`; `windows`, the window constructor for each admitted placement binding |
 | `bee.harness.profiles` | The typed saved-profile protocol (`bee.agent-profile@3`) |
 | `bee.harness.profiles.binding`, `.persist` | Profile validation against pinned driver definitions and descriptors, and the Sync profile feed with CAS revisions, tombstones and receipt replay |
-| `bee.harness.service` | `presentation` and its owner and executor processes, and the `open`, `restore`, `type`, `activity` functions through which Agents drives a window; `carrier` process; `session_idle_stop` |
+| `bee.harness.service` | `presentation_service` supervises window owner and executor processes; `presentation` exposes the `open`, `restore`, `type`, `activity` functions through which Agents drives a window; `carrier` process; `session_idle_stop` |
 | `bee.harness.api` | HTTP endpoints for gateway hooks: `POST /hook/:action`, `GET /hook/:action/:event`, `POST /hook/:action/mcp` |
 | `bee.harness.app` | The Agents application (`bee.harness.app:app`, command `agent`) |
 | `bee.harness.migrations` | Probe output cache table |
@@ -29,6 +29,17 @@ Agents app and the `bee claude`, `bee codex`, `bee agy`, `bee grok`,
 `bee muse` and `bee opencode` commands (`bee.app_command` entries naming
 `bee.harness.app:app` with the driver's `default_window` profile) pass the selected
 definition back through admission before execution.
+
+`bee.harness.service:presentation_service` runs on the workers host after Bootloader
+and Threads, with a ten-attempt restart budget. The trusted presentation functions
+send admitted opens and restores to that service using a launch registration that
+viewer permissions cannot create. The service keeps each window's principal,
+workspace and trait ceiling and monitors its linked owner; each owner links its
+executor. A service failure stops those children and releases their live aliases.
+The next open or restore reads the existing Threads continuation and restores the
+session under the same principal. Session IDs, operation keys and durable thread
+records survive the process failure; terminal contents belong to the stopped
+processes.
 
 `BEE_SESSION_IDLE_STOP` (default `24h`) is how long an agent nobody uses keeps
 running after its last turn ended with nothing waiting; empty keeps agents running

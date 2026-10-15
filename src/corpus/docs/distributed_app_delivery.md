@@ -118,7 +118,7 @@ The host-owned `bee.gov:protected_kernel` entry is the trust map no activation
 profile can open, however permissive. It names every shipped namespace a
 host-selected security scope lives in or is reached from (`bee.app`,
 `bee.approvals`, `bee.apps`, `bee.capability`, `bee.credentials`, `bee.deps`,
-`bee.docs`, `bee.env`, `bee.executor`, `bee.gateway`, `bee.git`, `bee.gov`,
+`bee.docs`, `bee.env`, `bee.gateway`, `bee.git`, `bee.gov`,
 `bee.harness`, `bee.hive`, `bee.hub`, `bee.node`, `bee.persist`,
 `bee.placement`, `bee.resources`, `bee.security`, `bee.shell`, `bee.sync`,
 `bee.threads`, `bee.ui`, `bee.values` and the shared driver namespaces

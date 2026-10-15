@@ -334,7 +334,7 @@ Preflight also refuses edits to the host `bee.security.gov:protected_kernel` tru
 transitive code dependencies and requirement selectors aimed at it. That map
 names every shipped namespace a host-selected scope lives in or is reached from
 (`bee.app`, `bee.approvals`, `bee.apps`, `bee.capability`, `bee.credentials`,
-`bee.deps`, `bee.docs`, the shared `bee.driver` core, `bee.env`, `bee.executor`,
+`bee.deps`, `bee.docs`, the shared `bee.driver` core, `bee.env`,
 `bee.gateway`, `bee.git`, `bee.gov`, `bee.harness`, `bee.hive`, `bee.hub`,
 `bee.node`, `bee.persist`, `bee.placement`, `bee.resources`, `bee.security`,
 `bee.shell`, `bee.sync`, `bee.threads`, `bee.ui`, `bee.values`), and its

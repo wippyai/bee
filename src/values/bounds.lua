@@ -158,4 +158,9 @@ function M.subpath(value: unknown, maximum: integer?, options: RelativePathOptio
     return value, nil
 end
 
+function M.digest_hex(value: unknown): string?
+    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
+    return value
+end
+
 return M

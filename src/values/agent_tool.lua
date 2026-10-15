@@ -3,7 +3,6 @@
 -- an optional output schema and MCP annotations. Framework agents and
 -- workspace applications declare tools in this one shape; this module is the
 -- single decoder for it and for the JSON Schema subset Bee advertises.
-local hash = require("hash")
 local json = require("json")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -123,13 +122,7 @@ function M.name(raw: unknown): string?
     return name
 end
 
-local function digest_of(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest_of = canonical.digest
 
 -- decode reads the tool entry ref names.
 function M.decode(ref: string, entry: Object): (Tool?, string?)

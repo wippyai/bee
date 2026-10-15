@@ -75,10 +75,8 @@ local function digest(value: string): string?
     if err or not result then return nil end
     return result
 end
-local function hex_digest(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local hex_digest = bounds.digest_hex
+
 local function checked_blob(value: unknown, limit: integer, label: string): (Blob?, string?)
     local object = bounds.object(value)
     if not object or type(object.bytes) ~= "string" or #object.bytes == 0 or #object.bytes > limit then return nil, label .. " bytes are invalid" end

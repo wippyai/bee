@@ -25,12 +25,7 @@ type Envelope = {schema_revision: string, source_node: string,
 type Delivery = {value: Envelope, bytes: string, digest: string,
     manifest: {[string]: unknown}, key: string, slot: string}
 
-local function sha(value: unknown): string?
-    if type(value) ~= "string" then return nil end
-    if #value ~= 64 then return nil end
-    if not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local sha = bounds.digest_hex
 
 local function blob(raw: unknown): (Blob?, string?)
     local value = bounds.object(raw)

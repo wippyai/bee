@@ -2,6 +2,7 @@
 -- an optional byte budget enforced before each encoded fragment is allocated.
 -- Empty tables retain the runtime JSON module's list-or-map shape.
 local json = require("json")
+local hash = require("hash")
 local M = {}
 M.MAX_DEPTH = 32
 
@@ -128,4 +129,11 @@ function M.encode(value: unknown, maximum_bytes: integer?, maximum_depth: intege
     return table.concat(output.chunks), nil
 end
 
+function M.digest(value: unknown): (string?, string?)
+    local encoded, encode_error = M.encode(value)
+    if not encoded then return nil, encode_error end
+    local sum, hash_error = hash.sha256(encoded)
+    if hash_error or not sum then return nil, "digest failed" end
+    return sum, nil
+end
 return M

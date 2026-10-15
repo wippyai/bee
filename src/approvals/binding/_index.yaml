@@ -465,7 +465,6 @@ entries:
   - sql
   - funcs
   - json
-  - security
   - process
   - events
   - logger
@@ -487,6 +486,7 @@ entries:
     part_leases: bee.approvals.binding:leases
     part_records: bee.approvals.binding:records
     part_authority: bee.approvals.binding:authority
+    identity: bee.security.identity:identity
 - name: records
   kind: library.lua
   source: file://records.lua

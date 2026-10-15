@@ -35,6 +35,7 @@ entries:
   - logger
   imports:
     protocol: bee.hive:protocol
+    worker: bee.process:worker
 - name: hive_route
   kind: registry.entry
   meta:
@@ -45,12 +46,13 @@ entries:
     name: bee.approvals
 - name: authority_service
   meta:
-    title: Approvals · authority
+    title: "Approvals \xB7 authority"
   kind: process.service
   process: bee.approvals.service:authority
   lifecycle:
     auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
+    requires:
+    - wippy.bootloader:bootloader.service
     security:
       actor:
         id: bee.approvals.authority
@@ -60,12 +62,13 @@ entries:
   host: bee:workers
 - name: hive_service
   meta:
-    title: Approvals · hive
+    title: "Approvals \xB7 hive"
   kind: process.service
   process: bee.approvals.service:hive
   lifecycle:
     auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
+    requires:
+    - wippy.bootloader:bootloader.service
     security:
       actor:
         id: bee.approvals.hive
@@ -78,12 +81,13 @@ entries:
   host: bee:workers
 - name: worker_service
   meta:
-    title: Approvals · delivery
+    title: "Approvals \xB7 delivery"
   kind: process.service
   process: bee.approvals.service:worker
   lifecycle:
     auto_start: true
-    requires: [wippy.bootloader:bootloader.service]
+    requires:
+    - wippy.bootloader:bootloader.service
     security:
       actor:
         id: bee.approvals.outbox

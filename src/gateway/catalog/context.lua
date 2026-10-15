@@ -39,11 +39,7 @@ function M.resource_grants(value: unknown): ({ResourceGrant}?, string?)
     return grants, nil
 end
 
-local function digest(value: unknown): string?
-    local text = bounds.text(value, 64)
-    if not text or #text ~= 64 or not text:match("^[0-9a-f]+$") then return nil end
-    return text
-end
+local digest = bounds.digest_hex
 
 local function copy_value(value: unknown, parent_depth: integer, state: CopyState): (unknown, string?)
     if value == nil or type(value) == "boolean" or type(value) == "string" then return value, nil end

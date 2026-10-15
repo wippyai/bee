@@ -15,6 +15,7 @@
 -- receiver holds its hive-wide name; until it does, the worker waits for that
 -- name. Each run is announced on the event bus as DISTRIBUTED with the cursor
 -- the destination reached.
+local worker = require("worker")
 local process = require("process")
 local channel = require("channel")
 local system = require("system")
@@ -74,13 +75,7 @@ end
 
 -- idle keeps an in-memory client's Sync service without serving: a client keeps
 -- no feeds and no store of its own.
-local function idle()
-    local events = assert(process.events())
-    while true do
-        local selected = channel.select({events:case_receive()})
-        if not selected.ok or selected.value.kind == process.event.CANCEL then return end
-    end
-end
+local idle = worker.idle
 
 local function main()
     if env.get("bee:role") == "client" then return idle() end

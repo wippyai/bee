@@ -36,10 +36,7 @@ local function fields(value: Entry, allowed: {string}): string?
     return nil
 end
 
-local function digest_hex(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local digest_hex = bounds.digest_hex
 
 local function identifier(value: unknown): string?
     -- Registry IDs have a namespace and local name.  The character set is

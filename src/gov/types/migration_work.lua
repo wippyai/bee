@@ -75,12 +75,7 @@ local function target(value: unknown): string?
     return name
 end
 
-local function sha(value: unknown): string?
-    if type(value) ~= "string" then return nil end
-    if #value ~= 64 then return nil end
-    if not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local sha = bounds.digest_hex
 
 local function database_kind(value: unknown): DatabaseKind?
     if value == "db.sql.sqlite" then return "db.sql.sqlite" end
@@ -480,7 +475,7 @@ function M.decode(bytes_raw: unknown, digest_raw: unknown): (Work?, string?)
 end
 
 -- Resolve one logical target from already validated immutable work. Legacy
--- work used one `id` for both sides and never carried a prefix.
+-- work uses one `id` for both sides and carries no prefix.
 function M.database(work: Work, target_raw: unknown): (Database?, string?)
     local wanted = target(target_raw)
     if not wanted then

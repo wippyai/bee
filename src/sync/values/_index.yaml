@@ -9,7 +9,8 @@ entries:
 - name: version
   kind: library.lua
   source: file://version.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     limits: bee.sync.values:limits
     bounds: bee.values:bounds

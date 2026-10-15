@@ -4,17 +4,16 @@
 -- an expiry; resolve re-checks all of it for the placement that asks.
 -- Replacing an association or changing a root never retargets a grant.
 local sql = require("sql")
-local hash = require("hash")
 local clock = require("clock")
 local uuid = require("uuid")
 local security = require("security")
-local system = require("system")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local node_database = require("node_database")
 local transaction = require("transaction")
 local resources = require("resources")
 local capability_model = require("capability_model")
+local identity = require("identity")
 local M = {}
 M.MANAGE = "bee.resources.manage"
 M.GRANT = "bee.resources.grant"
@@ -35,30 +34,17 @@ end
 local function succeed(value: unknown): Reply
     return {ok = true, error = nil, value = value}
 end
-local function actor(): string?
-    local current = security.actor()
-    if not current then return nil end
-    return bounds.id(current:id())
-end
-local function node(): (string?, string?)
-    local id, err = system.node.id()
-    if err then return nil, "node identity is unavailable" end
-    local decoded = bounds.id(id)
-    if not decoded then return nil, "node identity is invalid" end
-    return decoded, nil
-end
+local actor = identity.actor
+
+local node = identity.node
+
 local function open(): (sql.DB?, Reply?)
     local db, open_error = node_database.open()
     if not db then return nil, fail("STORAGE", open_error or "open resource store") end
     return db, nil
 end
-local function digest_of(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest_of = canonical.digest
+
 local function text(value: unknown): string?
     if type(value) ~= "string" then return nil end
     return value

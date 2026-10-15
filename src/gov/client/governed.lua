@@ -82,10 +82,8 @@ local OUTCOMES: {[string]: boolean} = {applied = true, blocked = true, failed = 
 local function object(value: unknown): Object?
     return bounds.object(value)
 end
-local function digest(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local digest = bounds.digest_hex
+
 local function optional_id(value: unknown): string?
     if value == nil then return nil end
     return bounds.id(value)

@@ -25,13 +25,8 @@ type Request = {capability: string, template_revision: integer, parameters: capa
     ttl_ms: integer, idempotency_key: string?, operations: {capability_model.Grant}, wording: string,
     thread_id: string, attempt_id: string, action_id: string, grant_source: string?, grant_access: string?,
     tools: {string}}
-local function digest_of(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest_of = canonical.digest
+
 local identifier = capability_model.identity
 -- decode: the wire shape only; the catalog decides whether the capability
 -- exists and what its parameters mean.

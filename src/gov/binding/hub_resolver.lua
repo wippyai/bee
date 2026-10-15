@@ -18,6 +18,7 @@ local hub_package = require("hub_package")
 local graph = require("graph")
 
 local source_check = require("source_check")
+local comparison = require("comparison")
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
@@ -43,10 +44,7 @@ local function object(value: unknown): Object?
     return bounds.object(value)
 end
 
-local function sha(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local sha = bounds.digest_hex
 
 local function module_sha(value: unknown): string?
     if type(value) == "string" and value:sub(1, 7) == "sha256:" then value = value:sub(8) end
@@ -234,20 +232,9 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
     return context, nil
 end
 
-local function copy(value: unknown): unknown
-    if type(value) ~= "table" then return value end
-    local result: Object = {}
-    for key, item in pairs(value) do result[key] = copy(item) end
-    return result
-end
+local copy = comparison.copy
 
-local function equal(left: unknown, right: unknown): boolean
-    if left == right then return true end
-    if type(left) ~= "table" or type(right) ~= "table" then return false end
-    for key, value in pairs(left) do if not equal(value, right[key]) then return false end end
-    for key in pairs(right) do if left[key] == nil then return false end end
-    return true
-end
+local equal = comparison.equal
 
 -- A revision does not fence overlays. Compare fresh external definitions and
 -- module resolution directly; the selected overlay is excluded from the base

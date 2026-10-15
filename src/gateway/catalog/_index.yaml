@@ -64,7 +64,9 @@ entries:
 - name: external
   kind: library.lua
   source: file://external.lua
-  modules: [registry, hash]
+  modules:
+  - registry
+  - hash
   imports:
     bounds: bee.values:bounds
     surface: bee.gateway.catalog:surface

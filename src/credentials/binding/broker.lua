@@ -4,7 +4,6 @@ local hash = require("hash")
 local time = require("time")
 local uuid = require("uuid")
 local security = require("security")
-local system = require("system")
 local env = require("env")
 local fs = require("fs")
 local json = require("json")
@@ -18,6 +17,7 @@ local sources = require("sources")
 local formats = require("formats")
 local funcs = require("funcs")
 local configuration_admission = require("configuration_admission")
+local identity = require("identity")
 local M = {}
 M.MANAGE = "bee.credentials.manage"
 M.ISSUE = "bee.credentials.issue"
@@ -40,30 +40,17 @@ end
 local function succeed(value: unknown): credential_protocol.Reply
     return {ok = true, error = nil, value = value}
 end
-local function actor(): string?
-    local current = security.actor()
-    if not current then return nil end
-    return bounds.id(current:id())
-end
-local function node(): (string?, string?)
-    local id, err = system.node.id()
-    if err then return nil, "node identity is unavailable" end
-    local decoded = bounds.id(id)
-    if not decoded then return nil, "node identity is invalid" end
-    return decoded, nil
-end
+local actor = identity.actor
+
+local node = identity.node
+
 local function open(): (sql.DB?, credential_protocol.Reply?)
     local db, open_error = store.open()
     if not db then return nil, fail("STORAGE", open_error or "open credential store") end
     return db, nil
 end
-local function digest_of(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest_of = canonical.digest
+
 local function text(value: unknown): string?
     if type(value) ~= "string" then return nil end
     return value

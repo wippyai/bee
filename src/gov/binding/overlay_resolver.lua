@@ -37,11 +37,7 @@ local function object(value: unknown): Object?
     return bounds.object(value)
 end
 
-local function sha(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
-
+local sha = bounds.digest_hex
 
 local function measured_entry(entry: Entry, package: string, registry_default_metadata: boolean?): (preflight.Entry?, string?)
     local clean: Entry = {}
@@ -149,8 +145,6 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     -- target, and remains authoritative for the context returned below.
     local policy: Policy?, policy_error: string? = deps.policy(spec, captured, root)
     if not policy then return nil, nil, policy_error or "read destination private-overlay policy" end
-    local original_policy: Policy = policy
-    local database_bindings = policy.database_bindings
     if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
 
     local incoming: {Entry} = {}

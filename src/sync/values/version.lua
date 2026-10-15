@@ -33,10 +33,7 @@ local function digest(value: unknown): (string?, string?)
     if not measured then return nil, tostring(measure_error) end
     return measured, nil
 end
-local function sha(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local sha = bounds.digest_hex
 
 -- Decode verifies the descriptor's self-measurement but does not trust it as
 -- proof that bytes arrived. A receiver verifies content separately before its

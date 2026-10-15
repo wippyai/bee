@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.security.identity
+entries:
+- name: identity
+  kind: library.lua
+  source: file://identity.lua
+  modules:
+  - security
+  - system
+  imports:
+    bounds: bee.values:bounds

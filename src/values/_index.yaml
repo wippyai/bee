@@ -4,7 +4,8 @@ entries:
 - name: clock
   kind: library.lua
   source: file://clock.lua
-  modules: [time]
+  modules:
+  - time
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
@@ -13,24 +14,27 @@ entries:
 - name: agent_tool
   kind: library.lua
   source: file://agent_tool.lua
-  modules: [hash, json]
+  modules:
+  - json
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
 - name: canonical
   kind: library.lua
   source: file://canonical.lua
-  modules: [json]
+  modules:
+  - json
+  - hash
 - name: reply
   kind: library.lua
   source: file://reply.lua
   imports:
     bounds: bee.values:bounds
-
 - name: agent_trait
   kind: library.lua
   source: file://agent_trait.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical

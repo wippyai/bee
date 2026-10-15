@@ -56,7 +56,10 @@ entries:
 - name: follow_store
   kind: library.lua
   source: file://follow_store.lua
-  modules: [sql, json, hash]
+  modules:
+  - sql
+  - json
+  - hash
   imports:
     grants: bee.approvals.grants:store
     clock: bee.values:clock
@@ -65,11 +68,11 @@ entries:
     transaction: bee.persist:transaction
     semver: bee.hub.package:semver
     version: bee.sync.values:version
-
 - name: catalog_revision
   kind: library.lua
   source: file://catalog_revision.lua
-  modules: [sql]
+  modules:
+  - sql
   imports:
     bounds: bee.values:bounds
     transaction: bee.persist:transaction

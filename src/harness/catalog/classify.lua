@@ -1,7 +1,6 @@
 -- MIT. Pure classification of driver bindings and their profile
 -- declarations. No registry, no time: the catalog hands in what it read and
 -- gets back what is compatible, what is not, and why.
-local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local profile = require("profile")
@@ -35,13 +34,8 @@ type Binding = {
     diagnostics: {string},
 }
 type Input = {binding: Entry, declaration: Entry?, methods: {[string]: Entry?}, adapters: {[string]: Entry?}?, activated: boolean, observers: observers.Measurements?}
-local function digest(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest = canonical.digest
+
 -- Compatibility follows the actual execution paths. Activation and authority
 -- remain host-selected; test metadata cannot add a transport capability.
 local function supported(mode: string, protocol: string): boolean

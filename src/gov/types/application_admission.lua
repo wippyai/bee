@@ -30,10 +30,7 @@ type Record = {identity_generation: string?, schema_revision: string, workspace_
 type Measurement = {id: string, record: Record, bytes: string, digest: string}
 type Entry = {id: string, kind: string, meta: {type: string, identity_generation: string}, data: Record}
 
-local function sha(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local sha = bounds.digest_hex
 
 local function registry_id(value: unknown): string?
     local id = bounds.id(value)

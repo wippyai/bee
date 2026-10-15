@@ -4,8 +4,7 @@ entries:
 - name: classify
   kind: library.lua
   source: file://classify.lua
-  modules:
-  - hash
+  modules: []
   imports:
     bounds: bee.values:bounds
     observers: bee.driver:window_observer

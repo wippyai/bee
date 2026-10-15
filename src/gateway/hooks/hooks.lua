@@ -4,7 +4,6 @@
 -- the content fields it never keeps, and the classification of a Codex
 -- MCP call's request metadata. Nothing here reads a store or answers a
 -- harness.
-local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local M = {}
@@ -55,13 +54,8 @@ end
 function M.known(event: string): boolean
     return member(M.EVENTS, event)
 end
-local function sha(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local sha = canonical.digest
+
 -- The occurrence identity an event carries, from the captures: a tool call
 -- by its tool_use_id, a prompt submission by prompt_id (Claude Code) or
 -- turn_id (Codex) with its prompt's digest, since a message queued during a

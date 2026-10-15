@@ -27,10 +27,8 @@ type Result = {policy: Policy, proposal: capability_grants.Proposal?, installed:
 local function object(value: unknown): Object?
     return bounds.object(value)
 end
-local function sha(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local sha = bounds.digest_hex
+
 function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requirements: {preflight.Requirement},
     current_raw: {[string]: Entry}, folder_fn: (() -> (unknown?, string?))?): (Result?, string?)
     local original_policy = policy

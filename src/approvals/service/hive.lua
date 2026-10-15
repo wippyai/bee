@@ -1,4 +1,5 @@
 -- MIT
+local worker = require("worker")
 local process = require("process")
 local channel = require("channel")
 local system = require("system")
@@ -40,13 +41,7 @@ local function serve(request: protocol.Forwarded, node: string): protocol.Reply
     return protocol.ok(reply)
 end
 
-local function idle()
-    local events = assert(process.events())
-    while true do
-        local selected = channel.select({events:case_receive()})
-        if not selected.ok or selected.value.kind == process.event.CANCEL then return end
-    end
-end
+local idle = worker.idle
 
 local function main()
     if env.get("bee:role") == "client" then return idle() end

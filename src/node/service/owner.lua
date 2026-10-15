@@ -21,6 +21,7 @@
 -- desktops' apps. The owner is upgradable: when its code changes it hands its
 -- instances (with their viewport handles) and its watchers to the new code,
 -- which reattaches them, so running apps and attached displays survive.
+local worker = require("worker")
 local process = require("process")
 local channel = require("channel")
 local system = require("system")
@@ -251,13 +252,7 @@ end
 
 -- idle keeps a client's owner service without serving: an in-memory client
 -- displays another node and has no desktops of its own.
-local function idle()
-    local events = assert(process.events())
-    while true do
-        local selected = channel.select({events:case_receive()})
-        if not selected.ok or selected.value.kind == process.event.CANCEL then return end
-    end
-end
+local idle = worker.idle
 
 local function main(saved: unknown)
     if env.get("bee:role") == "client" then return idle() end

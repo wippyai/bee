@@ -34,10 +34,8 @@ local function safe_relative(value: string): boolean
     local path = bounds.subpath(value, nil, {nonempty = true, no_control = true})
     return path ~= nil
 end
-local function digest_hex(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local digest_hex = bounds.digest_hex
+
 function M.subpath(value: unknown): (string?, string?)
     return bounds.subpath(value)
 end

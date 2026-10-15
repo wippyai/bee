@@ -3,7 +3,8 @@ namespace: bee.hub.publication
 entries:
 - name: publish_executor
   kind: exec.native
-  meta: {comment: Native executor for the Hub uploader command only}
+  meta:
+    comment: Native executor for the Hub uploader command only
   default_env:
     PATH: /usr/local/bin:/usr/bin:/bin
 - name: publishing

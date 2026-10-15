@@ -4,10 +4,7 @@
 -- durable fact lives in thread records, placement receipts and the
 -- checkpoint; the machine keeps only what the checkpoint holds.
 local json = require("json")
-local hash = require("hash")
 local registry = require("registry")
-local funcs = require("funcs")
-local security = require("security")
 local permission = require("permission")
 local acceptance = require("acceptance")
 local gateway_configuration = require("gateway_configuration")
@@ -31,7 +28,6 @@ local placement_protocol = require("placement_protocol")
 local placement_decode = require("placement_decode")
 local record_types = require("record_types")
 local thread_record = require("thread_record")
-local record_values = require("record_values")
 local observation_decode = require("observation_decode")
 local launch_request = require("launch_request")
 local configuration_protocol = require("configuration")
@@ -179,13 +175,8 @@ local function must(io: IO, target: string, request: unknown): (unknown, string?
     if reply.ok == false then return nil, target .. ": " .. reply.error.code .. ": " .. reply.error.message end
     return reply.value, nil
 end
-local function digest_of(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest_of = canonical.digest
+
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
 type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_protocol.Request, gateway: placement_types.Gateway?}

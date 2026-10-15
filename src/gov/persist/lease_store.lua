@@ -51,10 +51,8 @@ local function count(value: unknown, positive: boolean): integer?
     if positive and value < 1 then return nil end
     return math.floor(value)
 end
-local function hex_digest(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local hex_digest = bounds.digest_hex
+
 local function digest(value: string): string?
     local result, err = hash.sha256(value)
     if err or not result then return nil end

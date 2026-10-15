@@ -4,7 +4,6 @@
 -- authority, and start the carrier with a durable identity so a retry
 -- after an ambiguous start recovers the same attempt.
 local ctx = require("ctx")
-local hash = require("hash")
 local registry = require("registry")
 local funcs = require("funcs")
 local process = require("process")
@@ -27,6 +26,7 @@ local profiles = require("profiles")
 local profile_validation = require("profile_validation")
 local descriptors = require("descriptors")
 local effective_schema = require("effective_schema")
+local identity = require("identity")
 local M = {}
 M.CARRIER = "bee.harness.service:carrier"
 M.CARRIER_HOST_REF = "bee.harness.env:carrier_host_ref"
@@ -118,11 +118,8 @@ end
 local function succeed(value: unknown): Reply
     return {ok = true, error = nil, value = value}
 end
-local function actor(): string?
-    local current = security.actor()
-    if not current then return nil end
-    return bounds.id(current:id())
-end
+local actor = identity.actor
+
 local function call(target: string, request: unknown): ({[string]: unknown}?, Reply?)
     local raw, err = funcs.call(target, request)
     if err or type(raw) ~= "table" then return nil, fail("UNAVAILABLE", target .. " did not answer") end
@@ -137,13 +134,8 @@ local function call(target: string, request: unknown): ({[string]: unknown}?, Re
     if type(value) ~= "table" then return {}, nil end
     return value, nil
 end
-local function digest_of(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest_of = canonical.digest
+
 local function resource_grant(value: {[string]: unknown}, workspace_id: string, name: string, purpose: placement_types.Purpose, audience: string, attempt_id: string): (placement_types.ResourceGrant?, string?)
     local grant_id, returned_workspace, returned_name = bounds.id(value.grant_id), bounds.id(value.workspace_id), bounds.id(value.name)
     local root_ref, returned_subject, returned_audience = bounds.id(value.root_ref), bounds.id(value.subject), bounds.id(value.audience)

@@ -84,10 +84,7 @@ local function version(value: unknown): string?
     return value
 end
 
-local function digest(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local digest = bounds.digest_hex
 
 local function object_list(raw: unknown, label: string, maximum: integer): ({Object}?, string?)
     local rows, rows_error = bounds.dense_list(raw, maximum, label)
@@ -639,7 +636,6 @@ function M.cycle_field(state: State, name: string, step: integer): string?
         if row.id == name and field then
             if field.readonly then return field.root .. ": supplied by the host" end
             if #field.choices > 0 then
-                local index = step > 0 and 0 or 1
                 for position, value in ipairs(field.choices) do
                     if canonical.encode(value) == canonical.encode(field.value) then index = position end
                 end

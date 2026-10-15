@@ -508,7 +508,6 @@ entries:
   - sql
   - hash
   - time
-  - security
   - crypto
   - base64
   - registry
@@ -517,6 +516,7 @@ entries:
     canonical: bee.values:canonical
     node_database: bee.persist:database
     part_model: bee.gateway.binding:model
+    identity: bee.security.identity:identity
 - name: records
   kind: library.lua
   source: file://records.lua

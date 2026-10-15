@@ -4,7 +4,9 @@ entries:
 - name: sender
   kind: library.lua
   source: file://sender.lua
-  modules: [hash, base64]
+  modules:
+  - hash
+  - base64
   imports:
     hive: bee.hive:protocol
     version: bee.sync.values:version
@@ -13,7 +15,8 @@ entries:
 - name: distributor
   kind: library.lua
   source: file://distributor.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.values:bounds
     version: bee.sync.values:version
@@ -26,11 +29,21 @@ entries:
   kind: process.lua
   source: file://service.lua
   method: main
-  modules: [process, channel, system, env, funcs, security, logger, events, cdc]
+  modules:
+  - process
+  - channel
+  - system
+  - env
+  - funcs
+  - security
+  - logger
+  - events
+  - cdc
   imports:
     protocol: bee.hive:protocol
     distributor: bee.sync.service:distributor
     replica_protocol: bee.sync:replica_protocol
+    worker: bee.process:worker
 - name: service
   meta:
     title: Sync
@@ -39,11 +52,20 @@ entries:
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires: [wippy.bootloader:bootloader.service, bee:changes]
+    requires:
+    - wippy.bootloader:bootloader.service
+    - bee:changes
     security:
-      actor: {id: bee.sync}
-      policies: [bee.sync.security:store, bee.sync.security:distribution_changes, bee.sync.security:distribution_events,
-        bee.sync.security:distribution_routing, bee.sync.security:receiver_names, bee.sync.security:receiver_admission,
-        bee.sync.security:node, bee.hive.security:messaging]
+      actor:
+        id: bee.sync
+      policies:
+      - bee.sync.security:store
+      - bee.sync.security:distribution_changes
+      - bee.sync.security:distribution_events
+      - bee.sync.security:distribution_routing
+      - bee.sync.security:receiver_names
+      - bee.sync.security:receiver_admission
+      - bee.sync.security:node
+      - bee.hive.security:messaging
     restart:
       max_attempts: 10

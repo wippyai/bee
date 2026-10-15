@@ -37,10 +37,7 @@ local function exact(value: Object, allowed: {string}): string?
     return nil
 end
 
-local function digest(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local digest = bounds.digest_hex
 
 local function selected_key(value: Object, action: string): (Request?, string?)
     local unexpected = exact(value, {"action", "source_owner", "feed", "version_key", "descriptor_digest"})

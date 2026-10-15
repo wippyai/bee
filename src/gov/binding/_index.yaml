@@ -4,19 +4,23 @@ entries:
 - name: source_check
   kind: library.lua
   source: file://source_check.lua
-  modules: [funcs]
+  modules:
+  - funcs
   imports:
     bounds: bee.values:bounds
 - name: source_load
   kind: function.lua
   source: file://source_load.lua
   method: check
-  modules: [eval_runner]
+  modules:
+  - eval_runner
   imports:
     bounds: bee.values:bounds
   security:
-    policies: [bee.gov.security:source_compile_policy]
-  meta: {type: internal}
+    policies:
+    - bee.gov.security:source_compile_policy
+  meta:
+    type: internal
 - name: delivery_call
   kind: function.lua
   source: file://delivery_method.lua
@@ -24,7 +28,6 @@ entries:
   modules:
   - funcs
   - security
-  - json
   - system
   imports:
     bounds: bee.values:bounds
@@ -194,10 +197,13 @@ entries:
     type: tool
     title: Overlay authoring
     llm_alias: BeeOverlay
-    llm_description: Read this destination's component authoring guide, or create, list, read, put, append, remove or freeze files in your host-admitted private overlay. Put replaces a file; append adds
-      bytes at an exact offset and verifies the complete result_digest. Read returns a base64 window of at most 16,384 bytes; use offset and limit to page. Writes require the current revision and a stable
-      retry key. Freeze stages measured content only; it neither requests approval nor activates it. Use BeeComponents to inspect installed and Hub components for examples. Binary files use canonical base64.
-      There is no host filesystem write or registry access. Source reads a bounded non-private file relative to the authenticated workspace folder; it names no overlay.
+    llm_description: Read this destination's component authoring guide, or create, list, read, put, append, remove or freeze
+      files in your host-admitted private overlay. Put replaces a file; append adds bytes at an exact offset and verifies
+      the complete result_digest. Read returns a base64 window of at most 16,384 bytes; use offset and limit to page. Writes
+      require the current revision and a stable retry key. Freeze stages measured content only; it neither requests approval
+      nor activates it. Use BeeComponents to inspect installed and Hub components for examples. Binary files use canonical
+      base64. There is no host filesystem write or registry access. Source reads a bounded non-private file relative to the
+      authenticated workspace folder; it names no overlay.
     input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["guide","source","create","list","read","put","append","remove","freeze"]},"overlay_id":{"type":"string","minLength":1,"maxLength":160},"expected_revision":{"type":"integer","minimum":0,"maximum":9007199254740990},"idempotency_key":{"type":"string","minLength":1,"maxLength":160},"path":{"type":"string","minLength":1,"maxLength":240},"offset":{"type":"integer","minimum":0,"maximum":4194304},"limit":{"type":"integer","minimum":1,"maximum":16384},"result_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"},"content":{"type":"string","maxLength":4194304},"content_base64":{"type":"string","maxLength":5592408},"snapshot_digest":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
 
       '
@@ -540,6 +546,7 @@ entries:
     application_admission: bee.gov.types:governed_application_admission
     canonical: bee.values:canonical
     bounds: bee.values:bounds
+    comparison: bee.gov.binding:comparison
 - name: application_admissions
   kind: library.lua
   source: file://application_admissions.lua
@@ -572,7 +579,8 @@ entries:
 - name: requirement
   kind: library.lua
   source: file://requirement.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     requirements: bee.hub.package:requirements
     canonical: bee.values:canonical
@@ -602,6 +610,7 @@ entries:
     protected_kernel: bee.gov.types:protected_kernel
     preflight: bee.gov.binding:preflight
     lists: bee.gov.types:lists
+    comparison: bee.gov.binding:comparison
 - name: overlay_resolver
   kind: library.lua
   source: file://overlay_resolver.lua
@@ -664,11 +673,11 @@ entries:
     bounds: bee.values:bounds
     protocol: bee.gov.types:workspace_protocol
     transaction: bee.persist:transaction
-
 - name: application_capabilities
   kind: library.lua
   source: file://application_capabilities.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
@@ -677,11 +686,12 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     capability_files: bee.gov.types:capability_files
     preflight: bee.gov.binding:preflight
-
 - name: hub_package
   kind: library.lua
   source: file://hub_package.lua
-  modules: [registry, hash]
+  modules:
+  - registry
+  - hash
   imports:
     requirements: bee.hub.package:requirements
     inspection: bee.hub.package:inspection
@@ -691,7 +701,6 @@ entries:
     artifact_source: bee.hub.binding:artifact_source
     artifact: bee.gov.types:artifact
     canonical: bee.values:canonical
-
 - name: follow_source
   kind: library.lua
   source: file://follow_source.lua
@@ -705,3 +714,6 @@ entries:
     delivery: bee.gov.types:delivery
     preflight: bee.gov.binding:preflight
     transaction: bee.persist:transaction
+- name: comparison
+  kind: library.lua
+  source: file://comparison.lua

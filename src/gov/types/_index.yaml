@@ -181,11 +181,11 @@ entries:
     type: bee.approvals.grant-adapter
     operation_ref: bee.gov:grant-lease
     domain: governance_lease
-  modules: [hash]
+  modules:
+  - hash
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
     lease_model: bee.gov.types:lease_model
     capability_model: bee.capability:model

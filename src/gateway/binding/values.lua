@@ -2,7 +2,6 @@
 local sql = require("sql")
 local hash = require("hash")
 local time = require("time")
-local security = require("security")
 local crypto = require("crypto")
 local base64 = require("base64")
 local bounds = require("bounds")
@@ -10,6 +9,7 @@ local canonical = require("canonical")
 local node_database = require("node_database")
 local registry = require("registry")
 local part_model = require("part_model")
+local identity = require("identity")
 local M = {}
 type Reply = part_model.Reply
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
@@ -25,11 +25,8 @@ end
 local function stamp(ms: integer): string
     return time.unix(math.floor(ms / 1000), (ms % 1000) * 1000000):utc():format(FORMAT)
 end
-local function actor(): string?
-    local current = security.actor()
-    if not current then return nil end
-    return bounds.id(current:id())
-end
+local actor = identity.actor
+
 local function text(value: unknown): string?
     if type(value) ~= "string" then return nil end
     return value

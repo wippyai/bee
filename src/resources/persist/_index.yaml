@@ -6,10 +6,8 @@ entries:
   source: file://authority.lua
   modules:
   - sql
-  - hash
   - uuid
   - security
-  - system
   imports:
     bounds: bee.values:bounds
     clock: bee.values:clock
@@ -18,3 +16,4 @@ entries:
     node_database: bee.persist:database
     transaction: bee.persist:transaction
     resources: bee.resources.env:resources
+    identity: bee.security.identity:identity

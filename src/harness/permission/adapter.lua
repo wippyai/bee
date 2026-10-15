@@ -46,13 +46,8 @@ type Adapter = {
 type Request = {permission_request_id: string, correlation_id: string, acknowledgment_id: string, tool_name: string, input_digest: string, input: Object, prompt: string}
 type Attempt = {action_id: string, attempt_id: string, plan_digest: string}
 type Identity = {owner_id: string, attempt_id: string, permission_request_id: string}
-local function digest_of(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest_of = canonical.digest
+
 local function segments_of(path: string): {string}
     local segments: {string} = {}
     for segment in path:gmatch("[^.]+") do segments[#segments + 1] = segment end

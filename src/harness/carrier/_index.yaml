@@ -27,9 +27,6 @@ entries:
   source: file://hints.lua
   imports:
     bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    record_types: bee.threads:record_types
-    record_values: bee.threads.records:values
     thread_record: bee.threads.records:record
     checkpoint: bee.harness.carrier:checkpoint
     service_reply: bee.values:reply
@@ -86,10 +83,7 @@ entries:
   source: file://machine.lua
   modules:
   - json
-  - hash
   - registry
-  - funcs
-  - security
   imports:
     profile_values: bee.driver.descriptor:profile_values
     effective_schema: bee.driver.descriptor:effective
@@ -118,7 +112,6 @@ entries:
     placement_protocol: bee.placement.native:protocol
     launch_request: bee.placement:request
     thread_record: bee.threads.records:record
-    record_values: bee.threads.records:values
     gateway_protocol: bee.gateway:protocol
     service_reply: bee.values:reply
     carrier_types: bee.harness:types

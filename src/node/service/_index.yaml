@@ -5,7 +5,17 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process, channel, system, registry, tty, uuid, logger, events, env, funcs]
+  modules:
+  - process
+  - channel
+  - system
+  - registry
+  - tty
+  - uuid
+  - logger
+  - events
+  - env
+  - funcs
   imports:
     protocol: bee.hive:protocol
     descriptor: bee.app:descriptor
@@ -21,18 +31,34 @@ entries:
     confirmation: bee.approvals.app:confirmation
     bounds: bee.values:bounds
     app_identity: bee.threads.records:app_identity
+    worker: bee.process:worker
 - name: owner_service
   meta:
-    title: Node · owner
+    title: "Node \xB7 owner"
   kind: process.service
   process: bee.node.service:owner
   host: bee:workers
   lifecycle:
     auto_start: true
-    requires: [bee.hive.service:supervisor_service]
+    requires:
+    - bee.hive.service:supervisor_service
     security:
-      actor: {id: bee.node}
-      policies: [bee.node.security:owner, bee.node.security:owner_store, bee.node.security:owner_host, bee.node.security:owner_names, bee.node.security:owner_system, bee.node.security:owner_registry, bee.node.security:owner_attention, bee.security.approvals:confirmation_client, bee.security.approvals:confirmation_authority, bee.node.security:owner_role, bee.node.security:owner_app_alias, bee.process:boot_gate_policy, bee.hive.security:messaging]
+      actor:
+        id: bee.node
+      policies:
+      - bee.node.security:owner
+      - bee.node.security:owner_store
+      - bee.node.security:owner_host
+      - bee.node.security:owner_names
+      - bee.node.security:owner_system
+      - bee.node.security:owner_registry
+      - bee.node.security:owner_attention
+      - bee.security.approvals:confirmation_client
+      - bee.security.approvals:confirmation_authority
+      - bee.node.security:owner_role
+      - bee.node.security:owner_app_alias
+      - bee.process:boot_gate_policy
+      - bee.hive.security:messaging
     restart:
       max_attempts: 10
 - name: tests

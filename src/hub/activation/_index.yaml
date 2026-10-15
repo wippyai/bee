@@ -10,7 +10,8 @@ entries:
 - name: migration_work
   kind: library.lua
   source: file://migration_work.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     limits: bee.hub.package:limits
     bounds: bee.values:bounds

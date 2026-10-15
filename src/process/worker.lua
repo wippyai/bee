@@ -76,4 +76,12 @@ function M.run(options: Options)
     if wakes then process.unlisten(wakes) end
 end
 
+function M.idle()
+    local events = assert(process.events())
+    while true do
+        local selected = channel.select({events:case_receive()})
+        if not selected.ok or selected.value.kind == process.event.CANCEL then return end
+    end
+end
+
 return M

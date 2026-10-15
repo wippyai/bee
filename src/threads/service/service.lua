@@ -131,13 +131,7 @@ end
 
 -- idle keeps a client's Threads service without serving: a client keeps no
 -- thread store of its own.
-local function idle()
-    local events = assert(process.events())
-    while true do
-        local selected = channel.select({events:case_receive()})
-        if not selected.ok or selected.value.kind == process.event.CANCEL then return end
-    end
-end
+local idle = worker.idle
 
 local function run(active: () -> boolean, stopped: channel.Channel<boolean>)
     local startup = assert(eventbus.subscribe("supervisor", "service.update"))

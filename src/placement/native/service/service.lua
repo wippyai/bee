@@ -7,7 +7,6 @@ local channel = require("channel")
 local time = require("time")
 local sql = require("sql")
 local cdc = require("cdc")
-local security = require("security")
 local uuid = require("uuid")
 local json = require("json")
 local bounds = require("bounds")
@@ -39,6 +38,7 @@ type LocalPreparation = {binding: string, kind: string, spec_json: string, home_
 local supervision = require("supervision")
 local demand = require("demand")
 local profile_values = require("profile_values")
+local identity = require("identity")
 local M = {}
 M.SWEEP_INTERVAL_MS = 30000
 M.RECONCILE_TIMEOUT_MS = 5000
@@ -58,11 +58,8 @@ end
 local function decode_reply(value: unknown): (DecodedReply?, string?)
     return service_reply.decode(value)
 end
-local function actor(): string?
-    local current = security.actor()
-    if not current then return nil end
-    return bounds.id(current:id())
-end
+local actor = identity.actor
+
 local function owned(attempt: types.Attempt): Reply?
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end

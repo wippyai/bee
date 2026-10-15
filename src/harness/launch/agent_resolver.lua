@@ -3,7 +3,6 @@
 -- registry snapshot into a hashed launch spec closure. A CLI harness route
 -- admits the closure only through check_route, which refuses every required
 -- capability the driver cannot prove instead of reducing a trait to its prompt.
-local hash = require("hash")
 local registry = require("registry")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -38,13 +37,8 @@ type Closure = {ref: string, digest: string, agent_digest: string, prompt: strin
     model: string?, tuning: {[string]: Scalar}, declinable: {string}}
 type Route = {driver_id: string, model_map: {[string]: string}, admitted_delegates: {string}}
 type Checked = {model: string?, declined: {string}}
-local function digest_of(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local digest_of = canonical.digest
+
 local function entry_digest(ref: string, entry: {[string]: unknown}): (string?, string?)
     return digest_of({id = ref, kind = entry.kind, meta = entry.meta, data = entry.data})
 end

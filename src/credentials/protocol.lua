@@ -1,6 +1,5 @@
 -- Credential owner replies crossing into the placement materializer.
 local bounds = require("bounds")
-local clock = require("clock")
 local formats = require("formats")
 local M = {}
 M.MAX_SECRET_BYTES = 8192
@@ -33,11 +32,7 @@ type FileMaterialization =
         source_path: string, source_present: false, source_digest: nil, write_back: boolean, present: false, optional: true, value: nil}
 type Materialization = EnvironmentMaterialization | FileMaterialization
 
-local function digest(value: unknown): string?
-    local text = bounds.text(value, 64)
-    if not text or #text ~= 64 or not text:match("^[0-9a-f]+$") then return nil end
-    return text
-end
+local digest = bounds.digest_hex
 
 local function projection_kind(value: unknown): ProjectionKind?
     if value == "environment" then return "environment" end

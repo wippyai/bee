@@ -4,8 +4,7 @@ entries:
 - name: hooks
   kind: library.lua
   source: file://hooks.lua
-  modules:
-  - hash
+  modules: []
   imports:
     bounds: bee.values:bounds
     service_reply: bee.values:reply

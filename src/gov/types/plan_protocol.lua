@@ -32,12 +32,7 @@ local function fields(value: {[string]: unknown}, allowed: {string}): string?
     return bounds.fields(value, allowed)
 end
 
-local function digest(value: unknown): string?
-    if type(value) ~= "string" then return nil end
-    if #value ~= 64 then return nil end
-    if not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local digest = bounds.digest_hex
 
 local function blob(value: unknown, limit: integer, label: string): (Blob?, string?)
     local item = object(value)

@@ -20,10 +20,7 @@ type Request = {action: string, component: string, version: string, migration_po
 type Verified = {request: Request, digest: string}
 type Status = {status: string, code: string?, message: string?, state: string?, replayed: boolean?}
 
-local function hex(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
-    return value
-end
+local hex = bounds.digest_hex
 
 local function component_name(value: unknown): string?
     local name = bounds.line(value, 160)

@@ -44,13 +44,8 @@ local function developer_text(value: unknown): string?
     end
     return declared
 end
-local function measurable(value: unknown): (string?, string?)
-    local encoded, encode_error = canonical.encode(value)
-    if not encoded then return nil, encode_error end
-    local sum, hash_error = hash.sha256(encoded)
-    if hash_error or not sum then return nil, "digest failed" end
-    return sum, nil
-end
+local measurable = canonical.digest
+
 -- The endpoint is a credential destination: https to a named host, or
 -- plain http to the loopback address only for an explicit fixture.
 function M.decode(ref: string, entry: {[string]: unknown}): (Provider?, string?)

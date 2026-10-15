@@ -2,7 +2,6 @@
 local sql = require("sql")
 local funcs = require("funcs")
 local json = require("json")
-local security = require("security")
 local process = require("process")
 local events = require("events")
 local logger = require("logger")
@@ -23,6 +22,7 @@ local part_retention = require("part_retention")
 local part_values = require("part_values")
 local part_records = require("part_records")
 local part_authority = require("part_authority")
+local identity = require("identity")
 local M = {}
 type Reply = part_model.Reply
 type Result = part_model.Result
@@ -66,11 +66,8 @@ type Row = part_model.Row
 function M.open(): (sql.DB?, string?)
     return node_database.open()
 end
-local function actor_id(): string?
-    local current = security.actor()
-    if not current then return nil end
-    return bounds.id(current:id())
-end
+local actor_id = identity.actor
+
 local function wake_worker(name: string)
     local pid, err = process.registry.lookup(name)
     if err or not pid then return end

@@ -221,11 +221,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         fields = identified
     end
     local pid = proc:pid()
-    if not backend and pid then
-        fields.pid = pid
-        if group then fields.pgid = pid end
-        fields.boot_id = service.host_boot()
-    end
+    if not backend and pid then fields = service.child_identity(pid, group) end
     assert(evidence(db, attempt_id, "child.identity_returned", "runtime process handle acquired"))
     local detail = "runtime process handle pid " .. tostring(pid)
     local running = store.transition(db, attempt_id, {expected_execution = "starting", execution = "running", fields = fields, evidence = {kind = "child.started", detail = detail}})

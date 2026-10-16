@@ -318,8 +318,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     end
     local pid, pid_error = started:pid()
     if pid and not backend then
-        fields.pid = pid
-        if execution_options.process_group then fields.pgid = pid end
+        fields = service.child_identity(pid, execution_options.process_group == true)
         identity_detail = "runtime terminal handle pid " .. tostring(pid)
     elseif pid_error then
         identity_detail = "execution identity unavailable: " .. tostring(pid_error)

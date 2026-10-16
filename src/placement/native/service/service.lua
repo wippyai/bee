@@ -101,6 +101,13 @@ function M.host_restart(row: store.Row?): string?
     if not recorded or not current or recorded == current then return nil end
     return "the machine restarted after the child started; boot " .. recorded .. " is now " .. current
 end
+-- The identity a native child is recorded under: its pid, its group when it
+-- leads one, and the boot it runs in.
+function M.child_identity(pid: integer, group: boolean): {[string]: unknown}
+    local fields: {[string]: unknown} = {pid = pid, boot_id = M.host_boot()}
+    if group then fields.pgid = pid end
+    return fields
+end
 local function restarted_exit(attempt: types.Attempt, detail: string): Reply
     M.retire_gateway(attempt, "machine restarted")
     return transition(attempt.attempt_id, {execution = "exited", fields = {exit_source = "reconcile"},

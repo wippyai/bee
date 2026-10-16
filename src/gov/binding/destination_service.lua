@@ -729,8 +729,9 @@ end
 -- reviews, selects or creates an approval request. A slot whose source the
 -- host does not select for that owner stays unrestored.
 -- Governance refuses a restoration whose approval does not cover the host
--- state; that overlay stays unrestored and its intent stays for the person to
--- review again. Only such refusals let recovery continue.
+-- state or whose stored artifact the current host rules reject; that overlay
+-- stays unrestored and its intent stays for the person to review again. Only
+-- such refusals let recovery continue.
 local REFUSALS: {[string]: boolean} = {CONFLICT = true, DENIED = true}
 
 -- An application database the host provisioned is registered only in its

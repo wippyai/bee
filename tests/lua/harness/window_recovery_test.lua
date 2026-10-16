@@ -70,6 +70,12 @@ local function define_tests()
             test.is_true(recovery.acknowledged(launch, "broker", {version = 1, request_id = "request", error_code = "", error = ""}, "request"))
         end)
 
+        test.it("renders a refused restore with its reason and the way to a new session", function()
+            local frame = restore_view.refused(120, 12, appearance.defaults(), "its earlier agent process may still be running on this machine")
+            local rows = table.concat(frame.rows)
+            test.is_true(rows:find("Recovery admission refused: its earlier agent process may still be running on this machine", 1, true) ~= nil)
+            test.is_true(rows:find("Close this session in Agents to start a new one", 1, true) ~= nil)
+        end)
         test.it("renders a login notice with the provider command and a way to continue", function()
             local frame = restore_view.login(80, 12, appearance.defaults(),
                 {code = "LOGIN_REQUIRED", provider = "codex", command = "codex login"})

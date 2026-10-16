@@ -423,6 +423,15 @@ local function define_tests()
                     placement_methods = PLACEMENT_METHODS, reauthorize = true}, fake_call, fake_resume)
             if not recovered then error(tostring(recover_error)) end
             if not captured then error("hooks.resume was not called") end
+            attempt.execution_state = "uncertain"
+            local unproven, unproven_error = interrupted.recover({thread_id = "thread", action_id = "action", attempt_id = "next",
+                    owner_id = "alice", previous_attempt_id = "previous", session_ref = "session", binding_ref = "driver:binding",
+                    binding_digest = "current-binding", profile_id = "window", profile_digest = "current-profile",
+                    placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest,
+                    placement_methods = PLACEMENT_METHODS, reauthorize = true}, fake_call, fake_resume)
+            test.is_false(unproven)
+            test.eq(unproven_error, "its earlier agent process may still be running on this machine")
+            attempt.execution_state = "exited"
             test.eq(captured.binding_ref, "driver:binding")
             test.eq(captured.binding_digest, "historical-binding")
             test.eq(captured.profile_id, "window")

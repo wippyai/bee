@@ -14,6 +14,17 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 
+-- A refused restore names its reason and the way to a new session.
+function M.refused(width: integer, height: integer, preferences: appearance.Preferences, reason: string): frame.View
+    local painter = frame.new(width, height, preferences)
+    frame.header(painter, "AGENT")
+    frame.line(painter, 3, "Restoring Agent", painter.theme.text)
+    frame.line(painter, 5, "Recovery admission refused: " .. reason, painter.theme.text)
+    frame.line(painter, 7, "Close this session in Agents to start a new one.", painter.theme.muted)
+    if height >= 8 then frame.footer(painter, "", "Esc or Ctrl+Q closes") end
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
+end
+
 function M.login(width: integer, height: integer, preferences: appearance.Preferences,
     notice: {code: "LOGIN_REQUIRED", provider: string, command: string}): frame.View
     local painter = frame.new(width, height, preferences)

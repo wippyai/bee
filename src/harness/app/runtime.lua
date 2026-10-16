@@ -71,6 +71,14 @@ local function failure(reply: admission.Reply?): string
     return fault.code .. ": " .. fault.message
 end
 
+-- A person reads why a restore was refused; the reply code stays in the log.
+local function refusal(reply: admission.Reply?): (string, string?)
+    if not reply then return "launch admission did not return a result", nil end
+    local fault = reply.error
+    if not fault then return "launch admission refused", nil end
+    return fault.message, fault.code
+end
+
 local function call(target: string, value: unknown): (boolean, string?)
     local raw, call_error = funcs.call(target, value)
     if call_error then return false, tostring(call_error) end
@@ -454,11 +462,13 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             completed:send(value.serial)
         end
         local phase: string = "initial"
+        local refused_code: string? = nil
         local operation: integer = 0
 
         local function render()
             if not dirty then return end
-            local frame = restore_view.draw(width, height, preferences, status)
+            local frame = phase == "refused" and restore_view.refused(width, height, preferences, status)
+                or restore_view.draw(width, height, preferences, status)
             frame_ui.render(frame, menu, preferences)
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
@@ -546,7 +556,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                         -- confirmation for an unchanged checkpoint.
                         if result.plan.plan_digest == request.expected_plan_digest then
                             if result.admission_refusal then
-                                status = "Recovery admission refused: " .. failure(result.admission_refusal)
+                                status, refused_code = refusal(result.admission_refusal)
                                 phase = "refused"
                             else
                                 start_admission(request)
@@ -557,7 +567,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                             -- the conversation resumes under it.
                             local reauthorized_id, id_error = uuid.v7()
                             if not reauthorized_id then
-                                status = "Recovery admission refused: " .. tostring(id_error)
+                                status = tostring(id_error)
                                 phase = "refused"
                             else
                                 logger:info("Agent terminal resumes under its definition's current launch plan", {definition = request.definition_ref})
@@ -580,13 +590,13 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                         -- resolved once more; an unchanged one is refused.
                         start_resolve(result.refused)
                     else
-                        status = "Recovery admission refused: " .. failure(result.refused)
+                        status, refused_code = refusal(result.refused)
                         phase = "refused"
                     end
                     dirty = true
                 end
                 if phase == "refused" then
-                    logger:warn("Agent terminal cannot resume", {reason = status, definition = request.definition_ref})
+                    logger:warn("Agent terminal cannot resume", {reason = status, code = refused_code, definition = request.definition_ref})
                 end
             else
                 local data = input_event.decode(event.value)

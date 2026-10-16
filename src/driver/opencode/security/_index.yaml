@@ -102,11 +102,13 @@ entries:
     - delivery
     - tests
     - app_tools
+    - application_open
     - publish
     gateway_surface:
       access:
         policy: agent-access
         traits:
+        - bee.app:runtime
         - bee.app:share
         - bee.app:tools
         - bee.hub:library

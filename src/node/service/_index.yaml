@@ -125,6 +125,7 @@ entries:
   source: file://handover.lua
   modules:
   - tty
+  - uuid
   imports:
     client: bee.node:client
     confirmation: bee.approvals.app:confirmation

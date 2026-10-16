@@ -84,7 +84,8 @@ function M.start(id: string, app: string, desktop_id: string, app_args: {[string
         view = view, pid = tostring(pid),
         terminal = definition.terminal, execution_id = execution_id, token = token, negotiate = false, closing = nil, dialog = nil, args = app_args,
         resume_schema = definition.resume_schema, singleton = definition.singleton, revision = definition.revision,
-        definition = digest, update_target = retained and digest or nil, alias = alias}
+        definition = digest, update_target = retained and digest or nil, alias = alias,
+        request = retained and retained.request or nil}
     return instance, nil
 end
 

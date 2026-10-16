@@ -182,6 +182,21 @@ local function define_tests()
             local requestable = assert(policy.decode("test:policy", raw))
             test.eq(table.concat(requestable.gateway_tools, ","), "app_tools,thread_read")
         end)
+        test.it("offers opening apps on the desktop as the built-in runtime access the person approves", function()
+            local raw = entry({claude = "/bin/claude"})
+            local data = assert(bounds.object(raw.data))
+            data.gateway_tools = {"thread_read", "application_open"}
+            data.gateway_surface = {access = {policy = "agent-access", traits = {"bee.app:runtime"}}}
+            local stock, stock_error = policy.decode("test:policy", raw)
+            if not stock then error(tostring(stock_error)) end
+            test.eq(table.concat(stock.gateway_tools, ","), "application_open,thread_read")
+            local surface = assert(stock.gateway_surface)
+            test.eq(table.concat(surface.base_tools :: {string}, ","), "thread_read")
+            test.eq(table.concat((surface.access :: {traits: {string}}).traits, ","), "bee.app:runtime")
+            data.gateway_surface = nil
+            local unoffered = assert(policy.decode("test:policy", raw))
+            test.eq(table.concat(unoffered.gateway_tools, ","), "thread_read")
+        end)
         test.it("offers consent traits as access independent of a saved profile's tool narrowing", function()
             local raw = entry({claude = "/bin/claude"})
             local data = assert(bounds.object(raw.data))

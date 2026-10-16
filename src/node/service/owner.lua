@@ -42,6 +42,9 @@ type SavedWatcher = part_handover.SavedWatcher
 type Saved = part_handover.Saved
 local words = part_handover.words
 local saved_dialog = part_handover.saved_dialog
+local restored = part_handover.restored
+local describe = part_handover.describe
+local dialog_of = part_handover.dialog_of
 type Menu = part_catalog.Menu
 type CatalogApp = part_catalog.CatalogApp
 type Theme = part_catalog.Theme
@@ -111,18 +114,6 @@ local function main(saved: unknown)
         for _, item in pairs(update_problems) do problems[#problems + 1] = item.reason end
         table.sort(problems)
         return #problems > 0 and table.concat(problems, "; ") or nil
-    end
-
-    local function describe(instance: Instance): {[string]: unknown}
-        return {review = instance.review, id = instance.id, app = instance.app, title = instance.title, desktop = instance.desktop, pid = instance.pid, execution_id = instance.execution_id}
-    end
-
-    -- dialog_of is the wire form of an instance's pending dialog.
-    local function dialog_of(instance: Instance): {[string]: unknown}?
-        local dialog = instance.dialog
-        if not dialog then return nil end
-        return {id = instance.id, request_id = dialog.request_id, kind = dialog.kind, title = dialog.title,
-            message = dialog.message, accept = dialog.accept, initial = dialog.initial}
     end
 
     -- revision counts the node's events; a display applies a snapshot and the
@@ -269,19 +260,7 @@ local function main(saved: unknown)
                         local workspace = type(item.workspace) == "string" and item.workspace or ""
                         local alias, alias_error = attest(item.app, workspace, "bee.application:" .. workspace .. ":" .. item.id, item.alias)
                         if not alias then error(alias_error or "restored application membership is unavailable") end
-                        instances[item.id] = {review = client.review(item.review), id = item.id, app = item.app, title = item.title, desktop = item.desktop,
-                            workspace = type(item.workspace) == "string" and item.workspace or "",
-                            view = view, pid = item.pid, terminal = item.terminal == true,
-                            execution_id = type(item.execution_id) == "string" and item.execution_id or tostring(uuid.v7()), token = type(item.token) == "string" and item.token or "", negotiate = item.negotiate == true,
-                            closing = type(item.closing) == "string" and item.closing or nil,
-                            dialog = dialog,
-                            args = type(item.args) == "table" and item.args or {},
-                            resume_schema = type(item.resume_schema) == "string" and item.resume_schema or "",
-                            singleton = item.singleton == true,
-                            revision = type(item.revision) == "string" and item.revision or nil,
-                            definition = type(item.definition) == "string" and item.definition or nil,
-                            update_target = type(item.update_target) == "string" and item.update_target or nil,
-                            relaunch = item.relaunch == true or nil, alias = alias}
+                        instances[item.id] = restored(item, view, alias, dialog)
                         by_pid[item.pid] = item.id
                     else
                         logger:warn("App instance lost across upgrade", {id = item.id, error = tostring(err)})
@@ -404,8 +383,9 @@ local function main(saved: unknown)
     end
 
     -- open starts app on desktop; attention marks an app opened to ask for the
-    -- person, which displays bring forward without taking the keyboard.
-    local function open(app: unknown, desktop: unknown, app_args: unknown, attention: boolean?): protocol.Reply
+    -- person, which displays bring forward without taking the keyboard;
+    -- request names the agent open request that starts it.
+    local function open(app: unknown, desktop: unknown, app_args: unknown, attention: boolean?, request: string?): protocol.Reply
         if type(app) ~= "string" then return protocol.fail("open needs an app id") end
         if type(desktop) ~= "string" then return protocol.fail("open needs a desktop") end
         local opened_args: {[string]: unknown} = {}
@@ -429,6 +409,7 @@ local function main(saved: unknown)
         end
         local instance, problem = start(tostring(uuid.v7()), app, desktop, opened_args)
         if not instance then return protocol.fail(problem or "open failed") end
+        instance.request = request
         local kept, keep_error = workspaces.keep({id = instance.id, desktop_id = instance.desktop, workspace_id = instance.workspace,
             app = instance.app, args = opened_args})
         if not kept then logger:warn("App instance not kept", {id = instance.id, error = keep_error}) end
@@ -904,15 +885,18 @@ local function main(saved: unknown)
     end
 
     -- present opens app with arguments on every desktop a display shows that
-    -- works in workspace_id and asks those displays to bring it forward.
-    local function present(workspace_id: string, app: string, arguments: {string}, pending: {count: integer, title: string, approval_id: string, failed: boolean?, installed: boolean?}?)
+    -- works in workspace_id and asks those displays to bring it forward; it
+    -- returns what it opened and why an open failed.
+    local function present(workspace_id: string, app: string, arguments: {string}, pending: {count: integer, title: string, approval_id: string, failed: boolean?, installed: boolean?}?, request: string?): ({{[string]: unknown}}, string?)
+        local presented: {{[string]: unknown}} = {}
+        local problem: string? = nil
         local seen: {[string]: boolean} = {}
         for _, desktop_id in pairs(watchers) do
             if desktop_id ~= "" and not seen[desktop_id] then
                 seen[desktop_id] = true
                 local desktop = workspaces.desktop(desktop_id)
                 if desktop and desktop.workspace_id == workspace_id then
-                    local opened = open(app, desktop_id, {arguments = arguments}, true)
+                    local opened = open(app, desktop_id, {arguments = arguments}, true, request)
                     local value = opened.value
                     if opened.ok and value then
                         assert(type(value.id) == "string", "Presented app has no instance identity")
@@ -923,10 +907,37 @@ local function main(saved: unknown)
                         end
                         if alert then alerts[value.id] = alert end
                         broadcast({kind = "attention", id = value.id, alert = alert})
-                    else logger:warn("App not presented", {app = app, desktop = desktop_id, error = opened.error}) end
+                        presented[#presented + 1] = value
+                    else
+                        logger:warn("App not presented", {app = app, desktop = desktop_id, error = opened.error})
+                        problem = tostring(opened.error)
+                    end
                 end
             end
         end
+        return presented, problem
+    end
+
+    -- open_requested serves an agent's open request: what an earlier attempt
+    -- started, else app presented on the desktops shown for workspace_id.
+    local function open_requested(workspace_id: unknown, app: unknown, given: unknown, request: unknown): protocol.Reply
+        if type(workspace_id) ~= "string" or type(app) ~= "string" or type(request) ~= "string" then
+            return protocol.fail("present needs a workspace, an app and a request")
+        end
+        local literal = arguments.decode(given)
+        if not literal then return protocol.fail("present arguments must be literal strings") end
+        local earlier: {{[string]: unknown}} = {}
+        for _, instance in pairs(instances) do
+            if instance.request == request and instance.workspace == workspace_id and instance.app == app then
+                local value = describe(instance)
+                value.existing = true
+                earlier[#earlier + 1] = value
+            end
+        end
+        if #earlier > 0 then return protocol.ok({opened = earlier}) end
+        local presented, problem = present(workspace_id, app, literal, nil, request)
+        if #presented > 0 then return protocol.ok({opened = presented}) end
+        return protocol.fail(problem or "no display shows a desktop of workspace " .. workspace_id)
     end
 
     -- A request waiting for the person opens Needs you; an application the
@@ -988,6 +999,7 @@ local function main(saved: unknown)
         if op == "show" then return show(request.caller, args.desktop) end
         if op == "leave" then return leave(request.caller) end
         if op == "open" then return open(args.app, args.desktop, args.args) end
+        if op == "present" then return open_requested(args.workspace, args.app, args.arguments, args.request) end
         if op == "attach" then return attach(request.caller, args.id) end
         if op == "close" then return close(args.id, args.force, args.execution_id) end
         if op == "answer" then return answer(args) end
@@ -1064,7 +1076,7 @@ local function main(saved: unknown)
                 execution_id = instance.execution_id, token = instance.token, negotiate = instance.negotiate, closing = instance.closing, dialog = instance.dialog,
                 args = instance.args, resume_schema = instance.resume_schema, singleton = instance.singleton,
                 revision = instance.revision, definition = instance.definition, update_target = instance.update_target,
-                relaunch = instance.relaunch, alias = instance.alias}
+                relaunch = instance.relaunch, alias = instance.alias, request = instance.request}
         end
         local saved_watchers: {SavedWatcher} = {}
         for pid, desktop in pairs(watchers) do saved_watchers[#saved_watchers + 1] = {pid = pid, desktop = desktop} end

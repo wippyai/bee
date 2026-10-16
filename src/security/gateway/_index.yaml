@@ -34,12 +34,12 @@ entries:
 - name: gateway_tool_application_open_policy
   kind: security.policy
   meta:
-    comment: A binding may open an already applied/admitted application through its own workspace host; this grants no activation, publication or registry write.
+    comment: A binding may open an application admitted in its workspace on the person's desktop through the node owner; this grants no activation, publication or registry write.
   policy:
     actions:
     - funcs.call
     resources:
-    - bee.apps:open_call
+    - bee.node.binding:application_open
     effect: allow
 - name: gateway_tool_app_tools_policy
   kind: security.policy

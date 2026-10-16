@@ -263,7 +263,7 @@ local TOOLS: {Tool} = {
             tool = {type = "string", minLength = 1, maxLength = 64}, arguments = {type = "object"},
             idempotency_key = {type = "string", minLength = 1, maxLength = 128},
         }}},
-    {name = "application_open", description = "Open one application already applied and admitted in this agent's bound workspace through the existing workspace host. Arguments are literal launch strings. Pending retries coalesce; completed retries use the broker's bounded replay cache.", operation = "bee.apps:open_call",
+    {name = "application_open", description = "Open an installed app on the person's desktop: the app opens in a window on the desktop the person shows for this agent's workspace, like an app the person starts. definition_id is the app's definition (an installed app's trait names it as application_ref); only apps applied and admitted in this workspace open. Arguments are literal launch strings the app reads as its arguments. A singleton app already running is brought forward and receives the arguments; a retry with the same idempotency_key returns the window the first attempt opened.", operation = "bee.node.binding:application_open",
         policies = {TOOL_POLICY_REFS.application_open}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"definition_id", "arguments", "idempotency_key"}, properties = {
             definition_id = {type = "string", minLength = 1, maxLength = 160},
@@ -396,8 +396,8 @@ M.OUTPUT_SCHEMAS = OUTPUT_SCHEMAS
 -- Opening a reviewed application is deliberately not a base capability.  The
 -- surface installs this one built-in trait when the binding admits the tool;
 -- an access receipt must then make it selectable.
-M.APPLICATION_RUNTIME_TRAIT = {id = "bee.app:runtime", title = "Application runtime",
-    prompt = "Open only reviewed and admitted workspace applications. They may read and post in this agent's bound thread and continue after the initiating agent finishes under the durable thread lifetime contract.",
+M.APPLICATION_RUNTIME_TRAIT = {id = gateway_protocol.APPLICATION_RUNTIME_TRAIT_ID, title = "Open apps on your desktop",
+    prompt = "Open an installed app on the person's desktop with application_open. Only apps applied and admitted in this workspace open, in a window the person sees like any app they start.",
     tools = {"application_open"}}
 -- The host admission marker expanded into the workspace's application traits.
 M.APPLICATION_TOOLS_TRAIT = {id = gateway_protocol.APPLICATION_TOOLS_TRAIT_ID, title = "Application tools",

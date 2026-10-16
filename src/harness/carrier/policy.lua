@@ -111,7 +111,7 @@ local function access_surface(raw: unknown, tools: {string}, seeds: {string}?): 
         end
         if not seen[id] then return nil, "trait outside launch ceiling: " .. id end
     end
-    local consent: {[string]: boolean} = {}
+    local consent: {[string]: boolean} = {[mcp.APPLICATION_RUNTIME_TRAIT.id] = true}
     for _, trait in ipairs(mcp.CONSENT_TRAITS) do consent[trait.id] = true end
     local extensions: {unknown} = {}
     local offered: {[string]: boolean} = {}

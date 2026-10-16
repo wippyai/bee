@@ -129,6 +129,23 @@ entries:
     policies:
     - bee.node.security:app_tools_runner
     - bee.node.security:identity
+- name: application_open
+  kind: function.lua
+  meta:
+    comment: Opens one application admitted in the caller's workspace on the desktops the person shows for that
+      workspace, for an agent whose gateway binding holds the approved application runtime
+  source: file://application_open.lua
+  method: handle
+  modules: [security, system, ctx]
+  imports:
+    bounds: bee.values:bounds
+    arguments: bee.app:arguments
+    client: bee.node:client
+  security:
+    policies:
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
+    - bee.hive.security:outbound
 - name: names
   kind: function.lua
   meta:

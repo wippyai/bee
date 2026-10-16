@@ -15,7 +15,7 @@ function M.append(entry: Entry, entries: {[string]: Entry}): (string?, string?)
     local binding = binding_id and entries[binding_id] or nil
     local binding_meta = binding and bounds.object(binding.meta) or nil
     if entry.kind ~= "ns.requirement" or not id
-        or not meta or meta.value_kind ~= "contract.binding" or meta.capability ~= nil
+        or not meta or meta.value_kind ~= "contract.binding"
         or not target or bounds.fields(target, {"entry", "path"})
         or target.entry ~= M.TARGET or target.path ~= ".bindings +="
         or not binding_id

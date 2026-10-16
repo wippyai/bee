@@ -16,12 +16,13 @@ type Dialog = {request_id: string, client_request_id: string, kind: string, titl
 type AppAlias = {stable: string, instance: string, workspace_id: string, definition_id: string}
 type Instance = {review: client.Review?, id: string, app: string, title: string, desktop: string, workspace: string, view: tty.Viewport, pid: string, terminal: boolean,
     execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
-    singleton: boolean, revision: string?, relaunch: boolean?, alias: AppAlias}
+    singleton: boolean, revision: string?, definition: string?, update_target: string?, relaunch: boolean?, alias: AppAlias}
 type SavedInstance = {review: client.Review?, id: string, app: string, title: string, desktop: string, workspace: string, handle: string, pid: string, terminal: boolean,
     execution_id: string, token: string, negotiate: boolean, closing: string?, dialog: Dialog?, args: {[string]: unknown}, resume_schema: string,
-    singleton: boolean, revision: string?, relaunch: boolean?, alias: AppAlias?}
+    singleton: boolean, revision: string?, definition: string?, update_target: string?, relaunch: boolean?, alias: AppAlias?}
 type SavedWatcher = {pid: string, desktop: string}
-type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: integer, alerts: {client.Alert}}
+type UpdateProblem = {app: string, definition: string?, reason: string}
+type Saved = {instances: {SavedInstance}, watchers: {SavedWatcher}, revision: integer, alerts: {client.Alert}, update_problems: {[string]: UpdateProblem}}
 -- words are the string arguments an open passed, in order.
 local function words(app_args: {[string]: unknown}): {string}
     local found: {string} = {}

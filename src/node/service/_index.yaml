@@ -32,6 +32,8 @@ entries:
     worker: bee.process:worker
     part_catalog: bee.node.service:catalog
     part_handover: bee.node.service:handover
+    canonical: bee.values:canonical
+    part_instance: bee.node.service:instance
 - name: owner_service
   meta:
     title: "Node \xB7 owner"
@@ -136,3 +138,14 @@ entries:
     principal: bee.node:principal
     application: bee.node:application
     bounds: bee.values:bounds
+- name: instance
+  kind: library.lua
+  source: file://instance.lua
+  modules: [process, registry, tty, uuid, funcs]
+  imports:
+    application: bee.node:application
+    workspaces: bee.node.persist:workspaces
+    appearance: bee.ui:appearance
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    handover: bee.node.service:handover

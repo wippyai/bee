@@ -510,3 +510,12 @@ entries:
     test: wippy.test:test
     guard: bee.persist:state_guard
     ledger: wippy.migration:repository
+- name: application_upgrade_test
+  kind: function.lua
+  source: file://application_upgrade_test.lua
+  method: run
+  modules: [process, channel, system, tty, registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    client: bee.node:client

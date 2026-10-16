@@ -29,7 +29,9 @@ local confirmation = require("confirmation")
 local funcs = require("funcs")
 local bounds = require("bounds")
 local app_identity = require("app_identity")
+local canonical = require("canonical")
 
+local part_instance = require("part_instance")
 local part_catalog = require("part_catalog")
 local part_handover = require("part_handover")
 type Dialog = part_handover.Dialog
@@ -48,13 +50,11 @@ local catalog = part_catalog.catalog
 local themes = part_catalog.themes
 local stored_appearance = part_catalog.stored_appearance
 local same_palette = part_catalog.same_palette
-type Definition = application.Definition
 local NAME = "bee.node"
 -- Bee components announce what needs the person on this event system: a
 -- request waiting for a decision, or an application the person approved.
 local ATTENTION = "bee.attention"
 local APPROVALS_ROLE = "approvals"
-local DEFAULT_WIDTH, DEFAULT_HEIGHT = 80, 24
 
 -- idle keeps a client's owner service without serving: an in-memory client
 -- displays another node and has no desktops of its own.
@@ -103,6 +103,15 @@ local function main(saved: unknown)
     -- watchers maps each watching display to the desktop it shows.
     local watchers: {[string]: string} = {}
     local alerts: {[string]: client.Alert} = {}
+    local update_problems: {[string]: part_handover.UpdateProblem} = {}
+
+    local function problem(): string?
+        local problems: {string} = {}
+        if catalog_problem then problems[#problems + 1] = catalog_problem end
+        for _, item in pairs(update_problems) do problems[#problems + 1] = item.reason end
+        table.sort(problems)
+        return #problems > 0 and table.concat(problems, "; ") or nil
+    end
 
     local function describe(instance: Instance): {[string]: unknown}
         return {review = instance.review, id = instance.id, app = instance.app, title = instance.title, desktop = instance.desktop, pid = instance.pid, execution_id = instance.execution_id}
@@ -132,6 +141,13 @@ local function main(saved: unknown)
             end
             process.send(pid, client.EVENTS, outgoing)
         end
+    end
+
+    local function update_problem(instance: Instance, reason: string?)
+        update_problems[instance.id] = reason and {app = instance.app,
+            definition = instance.update_target or instance.definition, reason = reason} or nil
+        if reason then logger:warn("Application update incomplete", {id = instance.id, app = instance.app, error = reason}) end
+        broadcast({kind = "catalog", apps = installed_apps, problem = problem()})
     end
 
     -- restyle applies the current appearance to every app and display.
@@ -199,7 +215,7 @@ local function main(saved: unknown)
         return {node = node, owner = tostring(process.pid()), supervisor = protocol.supervisor_pid() or "",
             revision = revision, home = home_id, appearance = current, running = running,
             apps = visible_apps or {}, workspaces = listed.workspaces, desktops = listed.desktops, dialogs = dialogs(), alerts = pending_alerts,
-            problem = visible_error or catalog_problem}
+            problem = visible_error or problem()}
     end
 
     local function register_alias(alias: AppAlias): (AppAlias?, string?)
@@ -228,73 +244,13 @@ local function main(saved: unknown)
         if not recorded then logger:error("Application retirement intent not stored", {instance = alias.instance, error = problem}) end
     end
 
-    -- start runs app on desktop as instance id, in the desktop's workspace or
-    -- the one given; a kept instance reopens under its own id in the
-    -- workspace it was opened in.
-    local function start(id: string, app: string, desktop_id: string, app_args: {[string]: unknown}, workspace_id: string?): (Instance?, string?)
-        local definition, problem = application.definition(app)
-        if not definition then return nil, problem end
-        local desktop, desktop_error = workspaces.desktop(desktop_id)
-        if not desktop then return nil, desktop_error end
-        local workspace, workspace_error = workspaces.workspace(workspace_id or desktop.workspace_id)
-        if not workspace then return nil, workspace_error end
-        local view, view_error = tty.viewport({width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT,
-            page = appearance.page(current.theme, definition.terminal)})
-        if not view then return nil, "viewport: " .. tostring(view_error) end
-        local grant = assert(view:grant())
-        local actor, actor_error = application.actor(workspace.id, id, definition, 1)
-        if not actor then
-            view:close()
-            return nil, actor_error
+    local function start(id: string, app: string, desktop: string, args: {[string]: unknown}, workspace: string?, retained: Instance?): (Instance?, string?)
+        local instance, err = part_instance.start(id, app, desktop, args, workspace, retained, current, attest, retire)
+        if instance then
+            instances[id] = instance
+            by_pid[instance.pid] = id
         end
-        local scope, scope_problem = application.scope(definition, workspace.id)
-        if not scope then
-            view:close()
-            return nil, scope_problem
-        end
-        local alias, alias_error = attest(definition.process, workspace.id, actor:id())
-        if not alias then
-            view:close()
-            return nil, alias_error
-        end
-        local owner_pid = tostring(process.pid())
-        local version = assert(registry.current_version())
-        local token = tostring(uuid.v7())
-        local execution_id = tostring(uuid.v7())
-        local options: {[string]: unknown} = {appearance = current, owner = owner_pid, args = app_args, desktop = desktop.id,
-            workspace = {id = workspace.id, path = workspace.path, label = workspace.label},
-            version = 1, broker_pid = owner_pid, workspace_pid = owner_pid, workspace_id = workspace.id, instance_id = id, view_id = id,
-            definition_id = definition.process, execution_generation = 1, execution_id = execution_id, definition_revision = definition.revision,
-            registry_revision = version:string(), launch_token = token, resume_schema = definition.resume_schema,
-            resume_state = type(app_args.resume_state) == "string" and app_args.resume_state or "", arguments = words(app_args)}
-        -- The host context names the workspace; the functions an app calls
-        -- authorize workspace-bound operations by it, never by the request.
-        local launched, call_error = funcs.new():with_actor(actor):call("bee.node.service:launch", {terminal = grant, options = options})
-        local launch_result = bounds.object(launched)
-        local pid = launch_result and bounds.id(launch_result.pid)
-        local spawn_error = call_error or (launch_result and launch_result.error)
-        if not pid then
-            retire(alias)
-            view:close()
-            return nil, "start " .. app .. ": " .. tostring(spawn_error)
-        end
-        local monitored, monitor_error = process.monitor(pid)
-        local linked, link_error = false, nil
-        if monitored then linked, link_error = process.link(pid) end
-        if not monitored or not linked then
-            process.cancel(pid)
-            if monitored then process.unmonitor(pid) end
-            retire(alias)
-            view:close()
-            return nil, "attach application ownership: " .. tostring(monitor_error or link_error)
-        end
-        local instance: Instance = {id = id, app = app, title = definition.title, desktop = desktop.id, workspace = workspace.id,
-            view = view, pid = tostring(pid),
-            terminal = definition.terminal, execution_id = execution_id, token = token, negotiate = false, closing = nil, dialog = nil, args = app_args,
-            resume_schema = definition.resume_schema, singleton = definition.singleton, revision = definition.revision, alias = alias}
-        instances[id] = instance
-        by_pid[instance.pid] = id
-        return instance, nil
+        return instance, err
     end
 
     -- restore reattaches the instances and watchers an upgraded predecessor
@@ -322,7 +278,10 @@ local function main(saved: unknown)
                             args = type(item.args) == "table" and item.args or {},
                             resume_schema = type(item.resume_schema) == "string" and item.resume_schema or "",
                             singleton = item.singleton == true,
-                            revision = type(item.revision) == "string" and item.revision or nil, relaunch = item.relaunch == true or nil, alias = alias}
+                            revision = type(item.revision) == "string" and item.revision or nil,
+                            definition = type(item.definition) == "string" and item.definition or nil,
+                            update_target = type(item.update_target) == "string" and item.update_target or nil,
+                            relaunch = item.relaunch == true or nil, alias = alias}
                         by_pid[item.pid] = item.id
                     else
                         logger:warn("App instance lost across upgrade", {id = item.id, error = tostring(err)})
@@ -337,6 +296,14 @@ local function main(saved: unknown)
             end
         end
         if type(value.revision) == "number" then revision = math.floor(value.revision) end
+        if type(value.update_problems) == "table" then
+            for id, item in pairs(value.update_problems) do
+                if type(id) == "string" and type(item) == "table" and type(item.app) == "string" and type(item.reason) == "string" then
+                    update_problems[id] = {app = item.app, reason = item.reason,
+                        definition = type(item.definition) == "string" and item.definition or nil}
+                end
+            end
+        end
         if type(value.watchers) == "table" then
             for _, item in ipairs(value.watchers) do
                 if type(item) == "table" and type(item.pid) == "string" and type(item.desktop) == "string" then
@@ -546,6 +513,10 @@ local function main(saved: unknown)
         if request_id then
             process.send(instance.pid, broker.CLOSE_RESULT, {version = 1, request_id = request_id, id = instance.id,
                 instance_id = instance.id, action = "cancel"})
+        end
+        if instance.relaunch then
+            instance.relaunch = nil
+            update_problem(instance, instance.title .. " declined its live update")
         end
     end
 
@@ -886,18 +857,49 @@ local function main(saved: unknown)
             logger:error("Installed apps and themes not refreshed", {error = reason})
             if catalog_problem ~= reason then
                 catalog_problem = reason
-                broadcast({kind = "catalog", apps = installed_apps, problem = reason})
+                broadcast({kind = "catalog", apps = installed_apps, problem = problem()})
             end
             return
         end
         installed_apps = apps
         catalog_problem = nil
-        broadcast({kind = "catalog", apps = apps})
+        broadcast({kind = "catalog", apps = apps, problem = problem()})
         installed_themes, default_theme = found_themes, found_default
         local next_value = stored_appearance(installed_themes, default_theme)
         if not same_palette(next_value.theme, current.theme) then
             current = next_value
             restyle()
+        end
+    end
+
+    local function update_instances()
+        local cleared = false
+        for id, item in pairs(update_problems) do
+            if not instances[id] then
+                local entry = registry.get(item.app)
+                local digest = entry and canonical.digest(entry) or nil
+                if digest ~= item.definition then update_problems[id] = nil; cleared = true end
+            end
+        end
+        if cleared then broadcast({kind = "catalog", apps = installed_apps, problem = problem()}) end
+        for _, instance in pairs(instances) do
+            local entry, entry_error = registry.get(instance.app)
+            local digest, digest_error = canonical.digest(entry)
+            if not entry or not digest then
+                update_problem(instance, instance.title .. " could not update: " .. tostring(entry_error or digest_error))
+            elseif digest == instance.definition and instance.update_target ~= digest and not instance.relaunch and update_problems[instance.id] then
+                instance.update_target = nil
+                update_problem(instance, nil)
+            elseif digest ~= instance.definition and digest ~= instance.update_target and not instance.relaunch then
+                instance.update_target = digest
+                instance.relaunch = true
+                update_problem(instance, instance.title .. " is waiting to finish its live update")
+                local stopped = close(instance.id, false, nil)
+                if not stopped.ok then
+                    instance.relaunch = nil
+                    update_problem(instance, instance.title .. " could not update: " .. tostring(stopped.error))
+                end
+            end
         end
     end
 
@@ -959,6 +961,7 @@ local function main(saved: unknown)
             end
         elseif event.kind == "application.applied" and type(data.component) == "string" then
             refresh()
+            update_instances()
             local prefix = tostring(data.component) .. ":"
             -- A window already running an earlier revision of the application
             -- restarts in place on the applied one; the others are presented.
@@ -966,15 +969,6 @@ local function main(saved: unknown)
             for _, instance in pairs(instances) do
                 if instance.workspace == workspace_id and instance.app:sub(1, #prefix) == prefix then
                     running[instance.app] = true
-                    local definition = application.definition(instance.app)
-                    if definition and definition.revision ~= instance.revision and not instance.relaunch then
-                        instance.relaunch = true
-                        local stopped = stop(instance)
-                        if not stopped.ok then
-                            instance.relaunch = nil
-                            logger:warn("App not restarted on its applied revision", {id = instance.id, error = stopped.error})
-                        end
-                    end
                 end
             end
             for _, app in ipairs(installed_apps) do
@@ -1034,25 +1028,31 @@ local function main(saved: unknown)
         if not id then return end
         by_pid[pid] = nil
         local instance = instances[id]
+        if instance and instance.relaunch then
+            drop_dialog(instance)
+            local restarted, restart_error = start(id, instance.app, instance.desktop, instance.args, instance.workspace, instance)
+            if restarted then
+                restarted.view:set_page(appearance.page(current.theme, restarted.terminal))
+                update_problem(restarted, nil)
+                broadcast({kind = "moved", instance = describe(restarted)})
+                if restarted.title ~= instance.title then broadcast({kind = "title", id = id, title = restarted.title}) end
+                return
+            end
+            update_problem(instance, instance.title .. " could not update: " .. tostring(restart_error))
+        end
         local forgotten, forget_error = workspaces.forget(id, instance and instance.alias or nil)
         if not forgotten then logger:error("App close not stored", {id = id, error = forget_error}) end
         if instance then drop_dialog(instance) end
         instances[id] = nil
         if instance then
             if problem and not instance.relaunch then logger:warn("App failed", {id = id, app = instance.app, error = problem}) end
+            if problem and instance.update_target and not instance.relaunch then
+                update_problem(instance, instance.title .. " failed after its live update: " .. problem)
+            elseif not problem and not instance.relaunch and update_problems[id] then
+                update_problem(instance, nil)
+            end
             instance.view:close()
             broadcast({kind = "closed", id = id})
-            if instance.relaunch then
-                local restarted, restart_error = start(id, instance.app, instance.desktop, instance.args, instance.workspace)
-                if not restarted then
-                    logger:warn("App not restarted on its applied revision", {id = id, app = instance.app, error = restart_error})
-                    return
-                end
-                local kept, keep_error = workspaces.keep({id = restarted.id, desktop_id = restarted.desktop,
-                    workspace_id = restarted.workspace, app = restarted.app, args = restarted.args})
-                if not kept then logger:warn("App instance not kept", {id = restarted.id, error = keep_error}) end
-                broadcast({kind = "opened", instance = describe(restarted)})
-            end
         end
     end
 
@@ -1063,13 +1063,14 @@ local function main(saved: unknown)
                 desktop = instance.desktop, workspace = instance.workspace, handle = instance.view:handle(), pid = instance.pid, terminal = instance.terminal,
                 execution_id = instance.execution_id, token = instance.token, negotiate = instance.negotiate, closing = instance.closing, dialog = instance.dialog,
                 args = instance.args, resume_schema = instance.resume_schema, singleton = instance.singleton,
-                revision = instance.revision, relaunch = instance.relaunch, alias = instance.alias}
+                revision = instance.revision, definition = instance.definition, update_target = instance.update_target,
+                relaunch = instance.relaunch, alias = instance.alias}
         end
         local saved_watchers: {SavedWatcher} = {}
         for pid, desktop in pairs(watchers) do saved_watchers[#saved_watchers + 1] = {pid = pid, desktop = desktop} end
         local saved_alerts: {client.Alert} = {}
         for _, alert in pairs(alerts) do saved_alerts[#saved_alerts + 1] = alert end
-        return {instances = saved_instances, watchers = saved_watchers, revision = revision, alerts = saved_alerts}
+        return {instances = saved_instances, watchers = saved_watchers, revision = revision, alerts = saved_alerts, update_problems = update_problems}
     end
 
     if not restore(saved) then
@@ -1077,6 +1078,7 @@ local function main(saved: unknown)
         if not desktops then error("first desktop: " .. tostring(desktops_error)) end
         reopen()
     end
+    update_instances()
     local announced, announce_error = protocol.ready(NAME)
     if not announced then logger:warn("Hive supervisor not told the node is ready", {error = announce_error}) end
     logger:info("Node ready", {node = node, folder = folder, theme = current.theme.id})
@@ -1094,6 +1096,7 @@ local function main(saved: unknown)
             app_message(app_topic, tostring(message:from()), message:payload():data())
         elseif selected.channel == registry_changes then
             refresh()
+            update_instances()
         elseif selected.channel == attention then
             attend(selected.value)
         elseif selected.channel == events then

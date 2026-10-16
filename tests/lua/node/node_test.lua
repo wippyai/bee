@@ -371,15 +371,13 @@ local function define_tests()
             local restored, failure = pcall(function()
                 assert(events_bus.send("bee.attention", "application.applied", home_workspace(state).id, {component = "bee.tests.node"}))
                 local others = installed(state, "bee.tests.node:") - 1
-                local closed, reopened = false, false
+                local reopened = false
                 local presented_ids: {string} = {}
-                while not (closed and reopened and #presented_ids == others) do
+                while not (reopened and #presented_ids == others) do
                     local selected = channel.select({(events :: channel.Channel):case_receive()})
                     assert(selected.ok, "revision restart observation closed")
                     local event = client.event(selected.value:payload():data())
-                    if event and event.kind == "closed" and event.id == id then closed = true end
-                    if event and event.kind == "opened" and event.id == id then
-                        test.is_true(closed)
+                    if event and event.kind == "moved" and event.id == id then
                         test.eq(event.instance and event.instance.app, PROBE)
                         reopened = true
                     end

@@ -72,6 +72,8 @@ local function define_tests()
                 args = {exit_controller = tostring(process.pid())}})
             local id, pid = tostring(opened.id), tostring(opened.pid)
             while next_event(events, "opened").id ~= id do end
+            local view = assert(tty.attach(tostring(call("attach", {id = id}).ref)))
+            test.is_true(rows_until(view, "theme "))
             local original = assert(registry.get(PROBE))
             local owner = assert(registry.get(OWNER))
             local changed = assert(registry.get(PROBE))
@@ -86,15 +88,10 @@ local function define_tests()
                 test.eq(tostring(selected.value:from()), pid)
                 edit_owner()
                 assert(process.send(pid, "bee.test.probe.exit", {}))
-                while next_event(events, "closed").id ~= id do end
-                local reopened = next_event(events, "opened")
+                local reopened = next_event(events, "moved")
                 test.eq(reopened.id, id)
                 test.neq(reopened.instance and reopened.instance.pid, pid)
             end)
-            local restore = assert(registry.snapshot()):changes()
-            assert(restore:update(original))
-            assert(restore:update(owner))
-            assert(restore:apply())
             local after = assert(client.state(call("list", {})))
             local waiting: {[string]: boolean} = {}
             for _, instance in ipairs(after.running) do
@@ -104,6 +101,11 @@ local function define_tests()
                 end
             end
             while next(waiting) do waiting[tostring(next_event(events, "closed").id)] = nil end
+            local restore = assert(registry.snapshot()):changes()
+            assert(restore:update(original))
+            assert(restore:update(owner))
+            assert(restore:apply())
+            view:close()
             process.unlisten(stopping)
             process.unlisten(events)
             if not passed then error(tostring(problem)) end

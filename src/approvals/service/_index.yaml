@@ -98,6 +98,7 @@ entries:
       policies:
       - bee.security.approvals:approval_store_policy
       - bee.security.approvals:approval_owner_policy
+      - bee.security.approvals:approval_announce_policy
       - bee.threads.security:approval
       - bee.threads.security:approval_client
       - bee.security.approvals:delivery_workspace_identity_policy

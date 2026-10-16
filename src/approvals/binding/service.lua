@@ -156,6 +156,44 @@ local function announce(value: unknown, db: sql.DB, requested: boolean)
         {approval_id = approval_id, title = title or "Review request", count = count, failed = failed == true, request = announced_request})
     if not sent then logger:warn("Approval not announced", {approval_id = approval_id, error = tostring(send_error)}) end
 end
+-- announce_changes: the approval owner announces every committed change of
+-- a request once, in the order the store recorded it, from its own process,
+-- and advances its cursor past each change it announced.
+function M.announce_changes(db: sql.DB): string?
+    while true do
+        local read = transaction.read(db, part_model.LABEL, function(tx: sql.Transaction): Result
+            local cursor, cursor_error = store.attention_cursor(tx)
+            if cursor == nil then return storage(cursor_error or "read attention cursor") end
+            local rows, rows_error = store.changes_after(tx, cursor, 64)
+            if not rows then return storage(rows_error or "read approval changes") end
+            local changes: {Object} = {}
+            for _, raw in ipairs(rows) do
+                local change = bounds.object(raw)
+                local approval_id = change and bounds.id(change.approval_id)
+                local seq, revision = change and bounds.count(change.seq), change and bounds.count(change.revision)
+                if not approval_id or not seq or not revision then return storage("approval change is corrupt") end
+                local row, load_error = part_records.load(tx, approval_id)
+                if load_error then return storage(load_error) end
+                changes[#changes + 1] = {seq = seq, revision = revision, view = row and part_records.view(row) or false}
+            end
+            return success(changes, false)
+        end)
+        if not read.ok then return read.message or "read approval changes" end
+        local changes = bounds.array(read.value, 64) or {}
+        if #changes == 0 then return nil end
+        for _, raw in ipairs(changes) do
+            local change = assert(bounds.object(raw))
+            if change.view then announce(change.view, db, change.revision == 1) end
+            local seq = assert(bounds.count(change.seq))
+            local advanced = transaction.write(db, part_model.LABEL, function(tx: sql.Transaction): Result
+                local advance_error = store.set_attention_cursor(tx, seq)
+                if advance_error then return storage(advance_error) end
+                return success(true, false)
+            end)
+            if not advanced.ok then return advanced.message or "advance attention cursor" end
+        end
+    end
+end
 -- Every method authenticates the caller, opens the linked owner store and
 -- executes; a committed mutation wakes the outbox worker.
 local function run(request: unknown, name: string): Reply
@@ -164,21 +202,7 @@ local function run(request: unknown, name: string): Reply
     local db, open_error = M.open()
     if not db then return M.reply(storage(open_error or "open approval store")) end
     local result = M.execute(db, actor, name, request, nil, nil)
-    if mutating[name] and result.ok and not result.replayed then
-        wake(db)
-        local announced: unknown = result.value
-        local envelope = bounds.object(announced)
-        if name == "withdraw" then announced = envelope and envelope.request
-        elseif name == "withdraw_origin" then
-            local requests = envelope and bounds.array(envelope.requests, part_model.MAX_PENDING)
-            for _, current in ipairs(requests or {}) do announce(current, db, false) end
-            announced = nil
-        elseif name == "decide_batch" then
-            local decisions = envelope and bounds.array(envelope.decisions, part_model.MAX_BATCH)
-            announced = decisions and decisions[1]
-        end
-        announce(announced, db, name == "request")
-    end
+    if mutating[name] and result.ok and not result.replayed then wake(db) end
     db:release()
     return M.reply(result)
 end

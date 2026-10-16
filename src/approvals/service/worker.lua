@@ -1,5 +1,6 @@
 -- MIT. The delivery worker: on every tick or wake it expires due requests,
--- forgets what retention allows, and drains the outbox through the thread
+-- forgets what retention allows, announces each committed request change to
+-- the node's attention events and drains the outbox through the thread
 -- ingress under its own lease name. It never touches the authority
 -- incarnation; a worker restart changes delivery ownership only.
 local process = require("process")
@@ -29,11 +30,12 @@ function M.pass(): string?
     end, function(): string?
         local db, open_error = service.open()
         if not db then return "open approval store: " .. tostring(open_error or "unavailable") end
+        local announce_error = service.announce_changes(db)
         local _, drain_error = outbox.drain(db, tostring(process.pid()), outbox.thread_sender())
         local _, dispatch_error = dispatch.deliver(db, nil)
         local notification_error = dispatch.notify_sessions(db)
         db:release()
-        return drain_error or dispatch_error or notification_error
+        return announce_error or drain_error or dispatch_error or notification_error
     end)
 end
 -- A failed pass is reported and runs again on the next tick or wake.

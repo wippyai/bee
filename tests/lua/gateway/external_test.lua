@@ -180,6 +180,37 @@ local function define_tests()
             end
             logs:close()
         end)
+        test.it("announces every access request an agent files over MCP once", function()
+            local requested = assert(events.subscribe("bee.attention", "approval.requested"))
+            local paired = request()
+            decide(paired, "approved")
+            local issued = value(external.complete(assert(bounds.id(paired.client_id)), "fixture-cli"))
+            local endpoint, action, token = assert(bounds.text(issued.endpoint, 256)), assert(bounds.id(issued.action_id)),
+                assert(bounds.text(issued.token, 128))
+            local asked: {[string]: integer} = {}
+            local pending = 0
+            for n = 1, 8 do
+                local reply = rpc(endpoint, action, token, "tools/call", {name = "session", arguments = {operation = "request_access",
+                    idempotency_key = "announced-" .. tostring(n), traits = {"bee.hub:library"}, reason = "Request " .. tostring(n)}})
+                asked[assert(bounds.id(value(assert(bounds.object(reply.result)).structuredContent).approval_id))] = 0
+                pending = pending + 1
+            end
+            local deadline = time.after("5s")
+            while pending > 0 do
+                local selected = channel.select({requested:channel():case_receive(), deadline:case_receive()})
+                if selected.channel == deadline then break end
+                local data = bounds.object(selected.value.data)
+                local id = data and tostring(data.approval_id) or ""
+                if asked[id] then
+                    if asked[id] == 0 then pending = pending - 1 end
+                    asked[id] = asked[id] + 1
+                end
+            end
+            requested:close()
+            value(external.revoke(assert(bounds.id(paired.client_id)), WORKSPACE))
+            test.eq(pending, 0)
+            for _, count in pairs(asked) do test.eq(count, 1) end
+        end)
         test.it("grants Hub Library tools separately from external pairing and application tools", function()
             local paired = request()
             decide(paired, "approved")

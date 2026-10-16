@@ -11,7 +11,6 @@ entries:
     policies: &id001
     - bee.security.approvals:grant_adapters_policy
     - bee.security.approvals:approval_store_policy
-    - bee.security.approvals:approval_announce_policy
 - name: waiting
   kind: function.lua
   source: file://waiting_method.lua
@@ -407,7 +406,6 @@ entries:
   security:
     policies:
     - bee.security.approvals:approval_store_policy
-    - bee.security.approvals:approval_announce_policy
 - name: withdraw_origin
   kind: function.lua
   source: file://withdraw_origin_method.lua

@@ -103,3 +103,10 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-23T00:04:00Z'}
   imports:
     migration: wippy.migration:migration
+- name: attention
+  kind: function.lua
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-24T00:00:00Z'}
+  source: file://attention.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

@@ -127,6 +127,22 @@ function M.inbox_after(tx: sql.Transaction, workspace_id: string, after: integer
         {workspace_id, after, limit})
 end
 
+-- The attention cursor is the last change the approval owner announced.
+function M.attention_cursor(tx: sql.Transaction): (integer?, string?)
+    local found, err = query(tx, "SELECT announced_seq FROM bee_approval_attention WHERE id = 1", {})
+    if err then return nil, err end
+    local row = found and bounds.object(found[1])
+    local seq = row and bounds.count(row.announced_seq)
+    if seq == nil then return nil, "approval attention cursor is missing" end
+    return seq, nil
+end
+function M.set_attention_cursor(tx: sql.Transaction, seq: integer): string?
+    return execute(tx, "UPDATE bee_approval_attention SET announced_seq = ? WHERE id = 1 AND announced_seq < ?", {seq, seq}, "advance attention cursor")
+end
+function M.changes_after(tx: sql.Transaction, after: integer, limit: integer): ({unknown}?, string?)
+    return query(tx, "SELECT seq, approval_id, revision FROM bee_approval_inbox WHERE seq > ? ORDER BY seq LIMIT ?", {after, limit})
+end
+
 function M.inbox_head(tx: sql.Transaction): (unknown?, boolean, string?)
     local found, err = query(tx, "SELECT seq FROM sqlite_sequence WHERE name = 'bee_approval_inbox'", {})
     if err then return nil, false, err end

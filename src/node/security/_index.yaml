@@ -196,6 +196,14 @@ entries:
     - funcs.context
     resources: '*'
     effect: allow
+- name: application_catalog_reader
+  kind: security.policy
+  meta:
+    comment: Reads which applications a workspace admits and the agent traits they offer, from the registry and the governed overlays that install them; it changes nothing
+  policy:
+    actions: [registry.get, registry.version, registry.find, registry.snapshot, registry.overlay.get]
+    resources: '*'
+    effect: allow
 - name: app_tools_runner
   kind: security.policy
   meta:

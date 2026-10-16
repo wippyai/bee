@@ -96,6 +96,25 @@ local function as_application(workspace: string, target: string, arguments: Obje
     return harness.value(harness.reply(funcs.new():with_actor(actor):with_scope(scope):call(target, arguments)))
 end
 
+-- as_agents loads an application trait inside the Agents app, which resolves
+-- the launch plan of a session it restores with the app's own authority.
+local function as_agents(workspace: string, trait: string): Object
+    local definition = assert(application.definition("bee.harness.app:app"))
+    local actor = assert(application.actor(workspace, "notesdb-restore", definition, 1))
+    -- The Agents process runs in its app scope plus the policies its own
+    -- process entry names.
+    local scope = assert(application.scope(definition, workspace))
+    local entry = assert(registry.get("bee.harness.app:app"))
+    local data = assert(bounds.object(entry.data))
+    local declared = assert(bounds.object(data.security))
+    for _, id in ipairs(assert(bounds.array(declared.policies, 64))) do scope = scope:with(assert(security.policy(tostring(id)))) end
+    local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.tests.gov:app_trait_probe", {ref = trait, workspace = workspace})
+    if err then error(tostring(err)) end
+    local reply = assert(bounds.object(raw))
+    if reply.error ~= nil then error(tostring(reply.error)) end
+    return assert(bounds.object(reply.trait))
+end
+
 local function as_agent(workspace: string, tool: string, arguments: Object): Object
     local actor = assert(security.new_actor("bee.tests.notesdb_agent", {workspace_id = workspace}))
     local scope = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_app_tools_policy"))})
@@ -251,6 +270,9 @@ local function define_tests()
             test.eq(#harness.restart({owner}), 0)
             test.is_true(registry.get(APP) ~= nil)
             test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
+            -- Agents resolves the launch plan of a session it restores after
+            -- the restart, with the counter's trait active.
+            test.eq(as_agents(workspace, assert(app_trait)).application_ref, APP)
             test.is_nil(listed(asking).counter_list, "an upgraded app needs approval of its new declaration")
             local returned = harness.value(harness.library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-2"}))
             harness.close_presented(before)

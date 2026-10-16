@@ -1737,3 +1737,13 @@ entries:
     harness: bee.tests.gov:delivery_harness
     stock_session: bee.tests.gov:stock_session
     test_fixtures: bee.tests.support:fixtures
+- name: app_trait_probe
+  kind: function.lua
+  source: file://app_trait_probe.lua
+  method: load
+  meta:
+    type: test_support
+    comment: Loads one application trait with the caller's authority
+  imports:
+    bounds: bee.values:bounds
+    app_traits: bee.node:app_traits

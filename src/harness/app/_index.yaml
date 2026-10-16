@@ -125,6 +125,7 @@ entries:
     - bee.placement.docker.security:environment_revoke_policy
     - bee.threads.sessions.security:person_allowance_policy
     - bee.hive.security:caller
+    - bee.node.security:application_catalog_reader
 - name: agents
   kind: library.lua
   source: file://agents.lua

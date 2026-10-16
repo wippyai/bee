@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/stretchr/testify v1.12.1
 	github.com/wippyai/go-lua v1.6.8
-	github.com/wippyai/runtime v0.1.14-0.20261015223653-bf66ae1e5789
+	github.com/wippyai/runtime v0.1.14-0.20261016171938-548fc38de347
 	golang.org/x/sys v0.49.0
 )
 

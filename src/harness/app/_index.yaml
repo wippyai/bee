@@ -194,6 +194,7 @@ entries:
     forms: bee.harness.app:profile_form
     profile_view: bee.harness.app:profile_view
     terminal_view: bee.harness.app:terminal_view
+    restore_view: bee.harness.app:restore_view
     allowance_form: bee.threads.sessions.app:allowance_form
 - name: profile_editor
   kind: library.lua

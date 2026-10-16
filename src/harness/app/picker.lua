@@ -27,6 +27,7 @@ local spawn_form = require("spawn_form")
 local confirmation = require("confirmation")
 local terminal_view = require("terminal_view")
 local text = require("text")
+local restore_view = require("restore_view")
 local M = {}
 type Channel = channel.Channel
 -- The form's owner calls run as this Agent's own actor.
@@ -95,6 +96,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local menu = frame.menu()
     local ticks = 0
     local opening = false
+    -- The profile a new session is opening for; the window shows its launch
+    -- frame from the keypress until the session's terminal attaches.
+    local launching: string? = nil
     local open_serial = 0
     local opens = channel.new(1)
     local progress = channel.new(1)
@@ -303,6 +307,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 drawn = directory_view.draw(width, height, preferences, directory, selected, status, filtered, workspace_names, show_closed)
                 frame.render(drawn, menu, preferences)
                 rows = drawn.rows
+            elseif opening and launching then
+                local shown = restore_view.draw(width, height, preferences, status, "Starting Agent", "Esc back")
+                frame.render(shown, menu, preferences)
+                rows = shown.rows
             else
                 drawn = view.draw(width, height, preferences, listed, selected, status, opening, show_unavailable, query, sort, searching)
                 frame.render(drawn, menu, preferences)
@@ -380,6 +388,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             local result = event.value
             if result.serial == open_serial then
                 opening = false
+                if launching and not result.conversation then client.title(launch, "Agents") end
+                launching = nil
                 if result.conversation then
                     if result.conversation.session.snapshot.terminal == true and not result.conversation.node then
                         output:close()
@@ -622,8 +632,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 local options = launch_options
                 launch_options = nil
                 opening = true
+                launching = entry.title
                 status = "Opening session…"
                 dirty = true
+                client.title(launch, text.bound(entry.title, 76))
                 coroutine.spawn(function()
                     local definition = entry.ref
                     local profile: {id: string, revision: integer}? = nil

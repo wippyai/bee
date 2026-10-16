@@ -67,7 +67,7 @@ entries:
   source: file://agent_picker_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [tty, system, time, channel, registry]
+  modules: [tty, system, time, channel, registry, process]
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test

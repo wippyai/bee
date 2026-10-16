@@ -138,6 +138,19 @@ entries:
   modules: [security]
   imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.support.principals:bound, bounds: bee.values:bounds}
 
+- name: fake_held_open
+  kind: function.lua
+  source: file://held_open.lua
+  method: open
+  meta: {type: test_support}
+  modules: [process]
+- name: fake_held_catalog
+  kind: function.lua
+  source: file://held_open.lua
+  method: catalog
+  meta: {type: test_support}
+  modules: [process]
+
 - name: fake_run
   kind: function.lua
   source: file://fake_owner.lua

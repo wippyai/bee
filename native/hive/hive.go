@@ -250,6 +250,9 @@ func (h *Host) Plan(_ context.Context, launch app.Launch) (app.Plan, error) {
 // nodePlan runs the folder's node, joining the machine's hive when there is one.
 func (h *Host) nodePlan(dir, state string, hive *Hive) app.Plan {
 	return app.Plan{Prepare: func(context.Context) (boot.Config, func() error, error) {
+		if err := ensureStateIgnore(state); err != nil {
+			return nil, nil, fmt.Errorf("bee state: initialize ignore file: %w", err)
+		}
 		h.watchHive(dir, hive)
 		if hive == nil {
 			return boot.NewConfig(), h.finish, nil

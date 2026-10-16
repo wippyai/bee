@@ -1,18 +1,21 @@
 local process = require("process")
 local system = require("system")
 local M = {}
+function M.vanished(problem: error?): boolean
+    return problem ~= nil and problem:kind() == errors.NOT_FOUND
+end
 local function retire(runner: string?, cancel: boolean)
     if not runner then return end
     local events = assert(process.events())
     process.unmonitor(runner)
     local monitored, monitor_error = process.monitor(runner)
     if not monitored then
-        assert(tostring(monitor_error) == "pid not registered", tostring(monitor_error))
+        assert(M.vanished(monitor_error), tostring(monitor_error))
         return
     end
     if cancel then
         local cancelled, cancel_error = process.cancel(runner, "fixture complete")
-        assert(cancelled or tostring(cancel_error) == "pid not registered", tostring(cancel_error))
+        assert(cancelled or M.vanished(cancel_error), tostring(cancel_error))
     end
     while true do
         local event = assert((events:receive()))

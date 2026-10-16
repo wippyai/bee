@@ -5,7 +5,8 @@ local appearance = require("appearance")
 local client = require("client")
 local model = require("model")
 local M = {}
-type Binding = {ok: boolean, problem: string?}
+-- vanished marks a binding whose owner process is gone.
+type Binding = {ok: boolean, problem: string?, vanished: boolean?}
 -- generation is the connection a result belongs to; a result from an earlier
 -- connection (another node, or before the owner came back) is dropped.
 type Result = {kind: string, problem: string?, state: client.State?, id: string?, title: string?,

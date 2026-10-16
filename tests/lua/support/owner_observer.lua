@@ -4,6 +4,7 @@ local system = require("system")
 local channel = require("channel")
 local uuid = require("uuid")
 local demand = require("demand")
+local processes = require("processes")
 local M = {}
 function M.stopped(service: string, owner: string, subscription: events.Subscription?)
     local updates = subscription or assert(events.subscribe("supervisor", "service.update"))
@@ -27,7 +28,7 @@ function M.stopped(service: string, owner: string, subscription: events.Subscrip
                 if monitored then process.unmonitor(monitored) end
                 monitored = tostring(holder)
                 local observed, problem = process.monitor(monitored)
-                assert(observed or tostring(problem) == "pid not registered", tostring(problem))
+                assert(observed or processes.vanished(problem), tostring(problem))
             end
             local selected = channel.select({updates:channel():case_receive(), lifecycle:case_receive(), replies:case_receive()})
             assert(selected.ok, owner .. " did not retire: " .. state.status .. "/" .. state.desired)

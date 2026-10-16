@@ -80,11 +80,31 @@ entries:
   modules: [process, system]
   meta: {type: test_support}
 
+- name: processes_test
+  kind: function.lua
+  source: file://processes_test.lua
+  method: run
+  modules: [process]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    processes: bee.tests.support:processes
+
+- name: exiting_runner
+  kind: process.lua
+  source: file://processes_test.lua
+  method: exiting_runner
+  modules: [process]
+  meta: {type: test_support}
+  imports:
+    test: wippy.test:test
+    processes: bee.tests.support:processes
+
 - name: owner_observer
   kind: library.lua
   source: file://owner_observer.lua
   modules: [process, events, system, channel, uuid]
-  imports: {demand: 'bee.process:demand'}
+  imports: {demand: 'bee.process:demand', processes: 'bee.tests.support:processes'}
   meta: {type: test_support}
 
 - name: authority

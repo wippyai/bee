@@ -5,6 +5,7 @@ local process = require("process")
 local sql = require("sql")
 local bounds = require("bounds")
 local supervision = require("supervision")
+local processes = require("processes")
 local events = require("events")
 local exec = require("exec")
 local channel = require("channel")
@@ -145,7 +146,7 @@ end
 
 function M.reply(peer: string, leaks: {string})
     local sent, problem = process.send(peer, "bee.test.hygiene.reply", {leaks = leaks})
-    assert(sent or tostring(problem) == "process not found", tostring(problem))
+    assert(sent or processes.vanished(problem), tostring(problem))
 end
 
 function M.main()

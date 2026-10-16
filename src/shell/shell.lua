@@ -179,7 +179,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         if owner then process.unmonitor(owner) end
         owner = nil
         local monitored, monitor_error = process.monitor(pid)
-        if not monitored then return {ok = false, problem = tostring(monitor_error)} end
+        if not monitored then return {ok = false, problem = tostring(monitor_error), vanished = monitor_error:kind() == errors.NOT_FOUND} end
         owner = pid
         return {ok = true}
     end
@@ -657,7 +657,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         if result.id and result.kind ~= "labelled" then attaching[result.id] = nil end
         if result.kind == "following" and result.following and result.bound then
             local binding = follow(result.following)
-            if binding.problem == "pid not registered" then binding.problem = nil
+            if binding.vanished then binding.problem = nil
             elseif binding.problem then binding.problem = "Cannot follow " .. target .. ": " .. binding.problem end
             result.bound:send(binding)
         elseif (result.kind == "watched" or result.kind == "retired") and result.state then

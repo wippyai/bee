@@ -6,20 +6,20 @@ never grants package capabilities, writes registry history, starts code or
 creates an application overlay.
 
 Application packages use the same registry declarations as overlay applications:
-`ns.definition` describes the package, `process.lua` with `meta.type: bee.app`
+`ns.definition` describes the package, `process.lua` with `meta.type: bee.application`
 declares the application and its menus, and `function.lua` entries carry tools,
 migrations and tests. The application and package kind ceilings admit those
 metadata and callable entries.
 
-A requirement with `meta.capability` requests a host grant. Inspection leaves
-it for host review rather than listing it as missing dependency configuration.
-Governance's Hub and overlay resolvers share capability parameter, target and
-owned-tool validation. Admitted package applications run their tests through
+An application requests host grants in its `meta.application.capabilities`;
+inspection leaves them for host review. A requirement that carries
+`meta.capability` is refused with the field to move it to. Governance's Hub and
+overlay resolvers share capability parameter and owned-tool validation. Admitted package applications run their tests through
 `tests` by definition ID, using registry ownership or explicit `meta.application`
 association across namespaces.
 
-The Library routes packages of type `application`, packages declaring a
-`bee.app`, and packages requesting capabilities through governed delivery.
+The Library routes packages of type `application`, and packages declaring a
+`bee.application` through governed delivery.
 `stage_hub` captures verified catalog bytes; `hub_resolver` resolves their exact
 closure and preflights the host's package ceiling. Review, selection and the
 activation owner use the same path as overlay delivery. One person approval
@@ -307,7 +307,7 @@ See [package boundaries](package_boundaries.md),
 
 Package and application discovery uses declared registry metadata and ownership,
 not package names. The Library classifies Hub packages and installed applications from
-`process.lua` entries tagged `meta.type: bee.app` and their registry owner.
+`process.lua` entries tagged `meta.type: bee.application` and their registry owner.
 Remote packages without that information remain visible. Update status reads the
 catalog for each exact host-selected component. Authored application publication
 selects a matching identity from overlays already present in the governance

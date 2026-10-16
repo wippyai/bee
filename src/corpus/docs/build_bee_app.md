@@ -9,8 +9,10 @@ private to your workspace until you request delivery and the person approves.
    Choose a lowercase overlay name such as `hello`. Replace every `app.hello`
    prefix when you rename it, including imports and test IDs. Keep the UI under
    `app.<name>.app`, one `process.lua` app, its Apps menu, and `restart_policy:
-   never` for a view without checkpoints. Read `docs/app_capabilities` before
-   adding access: it lists exact requests, grants and risk classes. Registry
+   never` for a view without checkpoints. To add access, list
+   `{capability, parameters, reason}` items in the app entry's
+   `meta.application.capabilities`; `docs/app_capabilities` lists exact
+   requests, grants, risk classes and the errors preflight names. Registry
    access has no app capability; the agent's `components` tool reads installed
    components instead.
 2. **Write tests.** Keep behaviour in a library and test it through the starter's

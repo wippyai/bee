@@ -1,18 +1,66 @@
 # App capability catalog
 
-Generated from the host catalog, revision 6. Declarations request review; they do not grant access.
+App permissions: an app asks for host access by listing capabilities on its own application entry. Generated from the host catalog, revision 6. A listed capability requests review; it grants nothing until the person approves it.
 
 Use docs search with topic capabilities and a task phrase, or ask `what can an app request to read workspace files`. Read the matching section here for the exact parameters and grants.
 
+## Request shape
+
+List what the app needs in `meta.application.capabilities` of its `process.lua` entry with `meta.type: bee.application`. Each item is `{capability, parameters, reason}`: `capability` is an exact ID below, `parameters` matches its parameter kinds (omit it for a capability that takes none), and `reason` is one line saying why the app needs it. The host generates the policies and attaches them to the application; do not write targets, paths or policies, and do not author an actor.
+
+For example, a database for my app and read access to one workspace folder:
+
+```yaml
+- name: app
+  kind: process.lua
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      lifetime: view
+      title: Notes
+      revision: '1'
+      instance_policy: singleton
+      menus: [bee.shell:apps_menu]
+      capabilities:
+      - capability: app.database
+        parameters: {name: notes}
+        reason: Keep the notes you write
+      - capability: workspace.files.read
+        parameters: {subpath: docs}
+        reason: Show the documents in your docs folder
+```
+
+## How the person approves
+
+Delivering or installing the app files one approval in Needs you. It shows each listed capability in plain words, the catalog text below with your parameters filled in, together with the app's version and pending migrations. Approving installs the generated policies, databases, folders and executors with the app in one step; denying installs nothing. A later version's approval lists what it adds, widens, narrows or removes. Uninstalling removes the grants and keeps the app's databases.
+
 Risk class uses the catalog's confirmation class: standard means ordinary approval; explicit means deliberate confirmation for broader effects. Scope and the grant text describe the actual authority.
+
+## Errors and fixes
+
+Install preflight names the exact field and the value it expects. `<app>` stands for the application entry ID.
+
+- `<app> has meta.application but meta.type bee.app; set meta.type to bee.application`: the application entry carries another meta.type; set `meta.type: bee.application`.
+- `workspace artifact declares no application; declare one process.lua entry with meta.type bee.application and meta.application`: add the application's process.lua entry.
+- `<app> meta.application.capabilities must be a list of at most 8 {capability, parameters, reason} objects`: write `capabilities` as a YAML list with at most eight items.
+- `<app> meta.application.capabilities[1]: unknown field target; it takes capability, parameters and reason`: remove every other field; the host decides where the generated policy goes.
+- `<app> meta.application.capabilities[1].capability: files.read is not a host capability; expected one of ...`: use an exact capability ID from this page.
+- `<app> meta.application.capabilities[1].reason must be one line of 1 to 512 characters saying why the app needs app.database`: add a one-line `reason`.
+- `<app> meta.application.capabilities[1].parameters.subpath must be a relative workspace path such as data/notes, or . for the whole workspace`: give the parameter in the form named after `must be`.
+- `<app> meta.application.capabilities[1].parameters.depth is not a parameter of workspace.files.read; it takes subpath`: remove the parameter or use one the message lists.
+- `<app> meta.application.capabilities[1].parameters.tools: app.notes:search is not a function.lua tool in package app.notes`: list only the package's own tool functions.
+- `<app> meta.application.capabilities[1].parameters.definitions: acme:worker is not a registry.entry with meta.type bee.launch_definition`: name launch definitions only.
+- `<app> meta.application.capabilities[1].parameters.operations: app.notes:run is not a function.lua in package app.notes with meta.hive open`: expose only the package's own functions whose `meta.hive` equals the requested mode.
+- `<app> meta.application.capabilities[2] repeats <app> meta.application.capabilities[1]`: list each capability and parameter set once.
+- `app.notes:database: an ns.requirement has no meta.capability; list {capability, parameters, reason} in the application's meta.application.capabilities`: move the request onto the application; keep `ns.requirement` for configuration and dependency bindings.
+- `installed capability grant record of <app> binds ns.requirement entries this host no longer reads; uninstall the application and install it again`: the installed version used requirement entries for its capabilities; uninstall it in Library, then install the new version.
+- Preflight `APPLICATION_DESCRIPTOR`: `the desktop cannot open this application: meta.application.lifetime must be view`: fix the named `meta.application` field and freeze a new version.
+- Preflight `MODULE_DENIED` naming `request capability process.exec ...`: list the named capability in `meta.application.capabilities`, or remove the module.
 
 ## Registry access and installed components
 
 No app capability grants registry access. Read installed components through the agent's components tool with operation installed, under its host-selected bee.hub.read policy. hub.manage grants an app Hub reads and changes; there is no read-only app capability. Calling an owner also needs its permitted call path; a capability never admits arbitrary funcs calls.
-
-## Request shape
-
-Declare an ns.requirement with meta.value_kind security.policy, meta.capability set to the exact ID below, meta.parameters matching its parameter kinds, and a one-line meta.reason. Its only target appends to the app definition's .security.policies. The host generates the policy; do not refer to a private host policy or author your own actor.
 
 ## workspace.files.read
 

@@ -18,18 +18,18 @@ That section includes the complete `entries.json` for overlay `testsdk`, with
 namespace `app.testsdk`. Copy its JSON list into the overlay before freezing.
 The shared manifest defines:
 
-- `app.testsdk:app`, the admitted application;
+- `app.testsdk:app`, the admitted application, whose
+  `meta.application.capabilities` lists `agent.tools`, bounded `hive.call`,
+  and separate `hive.expose` grants for the worker and test;
 - `app.testsdk:trait`, an `agent.trait` that teaches the local and peer tools;
 - `app.testsdk:run`, the `test_sdk_run` agent tool and exposed `test-sdk.run`;
 - `app.testsdk:peer`, the `test_sdk_peer` agent tool whose app code calls its copy;
-- `app.testsdk:configuration_test`, an associated, exposed application test;
-- four `ns.requirement` entries requesting `agent.tools`, bounded `hive.call`,
-  and separate `hive.expose` grants for the worker and test.
+- `app.testsdk:configuration_test`, an associated, exposed application test.
 
 The guide and two-node fixture use `bee.gov.traits:hive_sdk_example` to produce
-the same nine entries. The guide suite freezes that exact example and sends it
-through production destination preflight, including all four capability
-requirements. It asserts readiness and preparation of destination-local
+the same five entries. The guide suite freezes that exact example and sends it
+through production destination preflight, including all four listed
+capabilities. It asserts readiness and preparation of destination-local
 approval. The e2e fixture installs copies on two independent nodes, runs the
 source application's peer tool and verifies the returned worker PID belongs
 to the destination node.

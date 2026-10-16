@@ -1,6 +1,6 @@
 # Minimal Bee starter app
 
-Copy this complete JSON array to entries.json in overlay hello. Replace all app.hello prefixes if you rename the overlay. The UI lives in .app, behaviour in .model and tests in .tests. It needs no extra capabilities. The source is the typed Lua fixture that Bee lints; the greeting tests exercise the same library the app uses. Follow docs/build_bee_app to freeze, preflight, deliver, approve and run the installed tests.
+Copy this complete JSON array to entries.json in overlay hello. Replace all app.hello prefixes if you rename the overlay. The UI lives in .app, behaviour in .model and tests in .tests. It needs no extra capabilities; an app that needs one lists it on this entry, for example `"capabilities": [{"capability": "app.database", "parameters": {"name": "greetings"}, "reason": "Keep the greetings you save"}]` inside `meta.application`, and the person approves it at install (docs/app_capabilities). The source is the typed Lua fixture that Bee lints; the greeting tests exercise the same library the app uses. Follow docs/build_bee_app to freeze, preflight, deliver, approve and run the installed tests.
 
 ## entries.json
 

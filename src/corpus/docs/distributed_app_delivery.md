@@ -60,8 +60,8 @@ on that destination.
 ## Applications from Hub
 
 The Library stages a Hub application through the same destination plan and
-activation owner as an overlay application. Type `application`, a `bee.app`
-entry or an `ns.requirement` capability request selects governed delivery.
+activation owner as an overlay application. Type `application` or a `bee.application`
+entry selects governed delivery.
 Verified catalog entries supply the immutable artifact; `hub_resolver` resolves
 its closure against the destination registry and host package ceiling.
 
@@ -225,8 +225,9 @@ destination-local.
 
 Use `restart_policy: never` for an application without checkpoints. `automatic`
 or `manual` requires a nonempty `resume_schema` of at most 80 characters without
-control characters. Preflight reports `APPLICATION_CHECKPOINT` when this
-metadata would prevent the desktop from opening the application.
+control characters. Preflight reports `APPLICATION_DESCRIPTOR` naming the
+`meta.application` field that would prevent the desktop from opening the
+application.
 
 A fresh install delivers an application a workspace's own agent authors to
 that workspace without host configuration, and still only after the person
@@ -259,12 +260,13 @@ cover is refused with the rule and the profile entries a host adds.
 Previously installed workspace applications retain their measured overlay
 owner, grant IDs, and activation receipts when Bee resumes them.
 
-The shipped workspace application profile also admits `ns.requirement` entries
-for capability requests. A request declares `meta.value_kind: security.policy`,
-`meta.capability`, bounded `meta.parameters`, and a printable `meta.reason`. Its
-single target must be its own `bee.app` process entry at
-`.security.policies +=`, except a `hive.expose` request, whose target is one of
-the artifact's own Hive operations at the requested mode. A named operation
+An application requests host capabilities by listing them in
+`meta.application.capabilities` of its own `bee.application` process entry.
+Each item is `{capability, parameters, reason}`: an exact catalog ID, bounded
+parameters and a printable one-line reason. The host derives where the
+generated policies go: the application's admission, or the Hive exposure scope
+for a `hive.expose` request naming the artifact's own operations at the
+requested mode. A named operation
 declares an authored `meta.hive_service`, a `meta.hive_operation` containing
 `name`, `revision`, `input` and `output` schemas, and `effect` (`read` or
 `mutation`, defaulting to `mutation`). Its `meta.application_ref`
@@ -276,32 +278,25 @@ the installed grant owner's overlay; namespace spelling grants no routing or
 invocation authority.
 Application and operation targets may occupy different namespaces in the same
 measured artifact. The destination
-resolver checks the request against the host-owned `bee.capability:catalog`, preserves the normalized parameters, reason, target, and catalog/template
+resolver checks the request against the host-owned `bee.capability:catalog`, preserves the application, normalized parameters, reason, and catalog/template
 revisions in the measured candidate, and includes the catalog definition in
 the candidate's external-base digest. The request grants no policy. Preflight
 refuses app-shipped `security.actor` and `security.groups` on every entry with
 `SECURITY_DENIED`.
 
-For the shipped `contract.call` capability, `meta.parameters` contains an exact
+For the shipped `contract.call` capability, `parameters` contains an exact
 `binding` and a nonempty `methods` list. For example, an application requests
-the sessions catalog method with this registry entry in `entries.json`:
+the sessions catalog method with this item in its entry's
+`meta.application.capabilities` in `entries.json`:
 
 ```json
 {
-  "id": "app.example:status_read",
-  "kind": "ns.requirement",
-  "meta": {
-    "value_kind": "security.policy",
-    "capability": "contract.call",
-    "parameters": {
-      "binding": "bee.threads.sessions.binding:catalog_binding",
-      "methods": ["list"]
-    },
-    "reason": "List the launch definitions this node can open."
+  "capability": "contract.call",
+  "parameters": {
+    "binding": "bee.threads.sessions.binding:catalog_binding",
+    "methods": ["list"]
   },
-  "data": {
-    "targets": [{"entry": "app.example:app", "path": ".security.policies +="}]
-  }
+  "reason": "List the launch definitions this node can open."
 }
 ```
 

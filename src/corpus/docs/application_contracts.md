@@ -79,9 +79,10 @@ base group. `scope_management: true` selects
 scopes; the Agents app (`bee.harness.app:app`) holds it. Native execution has
 the operating system user's authority; no binding makes it a sandbox.
 
-An agent-authored app declares capabilities with `ns.requirement` entries
-that name a catalog capability; a request grants nothing until a person
-approves it. See [distributed_app_delivery](distributed_app_delivery.md) and
+An agent-authored app lists the capabilities it needs in
+`meta.application.capabilities` as `{capability, parameters, reason}` items
+naming catalog capabilities; a request grants nothing until a person approves
+it. See [app_capabilities](app_capabilities.md) for the shape and errors. See [distributed_app_delivery](distributed_app_delivery.md) and
 [component/capability](../component/capability.md).
 
 ## Launch and lifecycle
@@ -147,8 +148,8 @@ close stops the app.
 
 An app opts in with `resume_schema` (nonempty, at most 80 bytes, no control
 characters) and `restart_policy: automatic|manual`; the default is `never`.
-Preflight reports `APPLICATION_CHECKPOINT` for an app whose metadata the
-desktop cannot open.
+Preflight reports `APPLICATION_DESCRIPTOR` naming the `meta.application` field
+the desktop cannot open the app with.
 
 `client.checkpoint(launch, json_string)` queues at most 64 KiB of opaque,
 application-owned JSON and returns a request id. The broker replies on

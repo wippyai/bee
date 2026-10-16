@@ -127,3 +127,28 @@ func TestHostEnvironmentOmitsUnverifiableBinaryIdentity(t *testing.T) {
 		require.NotContains(t, facts, "binary_identity")
 	}
 }
+
+func TestHostEnvironmentNamesTheBootItRunsIn(t *testing.T) {
+	booted := resolver()
+	booted.bootID = func() (string, error) { return "9f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f", nil }
+	storage, err := newHostEnvironment(booted)
+	require.NoError(t, err)
+	got, err := storage.Get(context.Background(), "boot_id")
+	require.NoError(t, err)
+	require.Equal(t, "9f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f", got)
+}
+
+func TestHostEnvironmentOmitsAnUnreadableBoot(t *testing.T) {
+	for name, read := range map[string]func() (string, error){
+		"unsupported": nil,
+		"failed":      func() (string, error) { return "", errors.New("boot identity unavailable") },
+		"empty":       func() (string, error) { return "", nil },
+	} {
+		unbooted := resolver()
+		unbooted.bootID = read
+		storage, err := newHostEnvironment(unbooted)
+		require.NoError(t, err, name)
+		_, err = storage.Get(context.Background(), "boot_id")
+		require.ErrorIs(t, err, envapi.ErrVariableNotFound, name)
+	}
+}

@@ -2,10 +2,11 @@
 
 // Package host gives Bee's components a read-only view of nonsecret host
 // facts: the running Bee executable, the home and working folders, the names
-// (never the values) of the environment variables, and the absolute path of
-// an installed executable by its bare name. Drivers locate the harnesses
-// installed on the machine through it, and generated hooks call back into the
-// same Bee instead of finding another one on PATH.
+// (never the values) of the environment variables, the identity of the
+// machine's current boot, and the absolute path of an installed executable by
+// its bare name. Drivers locate the harnesses installed on the machine through
+// it, generated hooks call back into the same Bee instead of finding another
+// one on PATH, and placement proves that a process of an earlier boot is gone.
 package host
 
 import (
@@ -35,6 +36,7 @@ type hostResolver struct {
 	executable       func() (string, error)
 	environmentNames func() []string
 	buildInfo        func() (*debug.BuildInfo, bool)
+	bootID           func() (string, error)
 }
 
 func systemHostResolver() hostResolver {
@@ -45,6 +47,7 @@ func systemHostResolver() hostResolver {
 		executable:       os.Executable,
 		environmentNames: systemEnvironmentNames,
 		buildInfo:        debug.ReadBuildInfo,
+		bootID:           systemBootID,
 	}
 }
 
@@ -97,6 +100,11 @@ func newHostEnvironment(resolver hostResolver) (*hostEnvironment, error) {
 	facts := map[string]string{"home": home, "cwd": cwd, "self": self, "environment_names": string(encodedNames)}
 	if identity := resolvedBinaryIdentity(resolver.buildInfo); identity != "" {
 		facts["binary_identity"] = identity
+	}
+	if resolver.bootID != nil {
+		if boot, err := resolver.bootID(); err == nil && boot != "" {
+			facts["boot_id"] = boot
+		}
 	}
 	return &hostEnvironment{resolver: resolver, facts: facts}, nil
 }

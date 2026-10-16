@@ -1061,6 +1061,7 @@ entries:
     - bee.placement.native.env:configuration
     - bee.placement.native.env:environment
     - bee.placement.native.env:executor_ref
+    - bee.placement.native.env:host_boot_id
     - bee.placement.native.env:host_files_ref
     - bee.placement.native.env:placement_admitted_roots
     - bee.placement.native.env:placement_executor

@@ -8,6 +8,7 @@ local time = require("time")
 local sql = require("sql")
 local cdc = require("cdc")
 local uuid = require("uuid")
+local env = require("env")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
@@ -84,6 +85,27 @@ local function recorded_row(attempt_id: string): (store.Row?, string?)
     return row, row_error
 end
 local runner_status: (store.Row?, types.Attempt) -> (string?, string?)
+-- The machine's current boot, as the host names it; absent where the
+-- platform names none.
+M.HOST_BOOT = "bee.placement.native.env:host_boot_id"
+function M.host_boot(): string?
+    local value = env.get(M.HOST_BOOT)
+    if type(value) ~= "string" or value == "" then return nil end
+    return value
+end
+-- No process outlives its boot: a child recorded under an earlier boot ended
+-- when the machine restarted, whether or not its runtime owner saw the exit.
+function M.host_restart(row: store.Row?): string?
+    local recorded = row and bounds.id(row.boot_id) or nil
+    local current = M.host_boot()
+    if not recorded or not current or recorded == current then return nil end
+    return "the machine restarted after the child started; boot " .. recorded .. " is now " .. current
+end
+local function restarted_exit(attempt: types.Attempt, detail: string): Reply
+    M.retire_gateway(attempt, "machine restarted")
+    return transition(attempt.attempt_id, {execution = "exited", fields = {exit_source = "reconcile"},
+        evidence = {kind = "host.restarted", detail = detail}})
+end
 local function runner_authority(attempt_id: string): (string?, string?)
     local db, open_error = store.open()
     if not db then return nil, open_error or "open placement store" end
@@ -295,6 +317,8 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
             return transition(attempt.attempt_id, {evidence = {kind = "stop.delivery_failed", detail = tostring(send_error) .. "; durable stop remains requested during startup"}})
         end
     end
+    local restarted = M.host_restart(row)
+    if restarted then return restarted_exit(attempt, restarted) end
     return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "stop.unproven",
         detail = "runtime process owner unavailable; no recoverable native handle"}})
 
@@ -424,6 +448,10 @@ function M.runner_present(row: store.Row): (boolean?, string?)
     return nil, tostring(problem or "runtime monitor unavailable")
 end
 function M.reconcile_attempt(attempt: types.Attempt): Reply
+    if attempt.execution_state == "uncertain" then
+        local restarted = M.host_restart(recorded_row(attempt.attempt_id))
+        if restarted then return restarted_exit(attempt, restarted) end
+    end
     if not transitions.live(attempt.execution_state) then return succeed(attempt) end
     local row = recorded_row(attempt.attempt_id)
     if attempt.execution_state == "starting" and row then
@@ -458,6 +486,8 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
         if enforcement then return enforcement end
         return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = detail or "runtime owner responds"}})
     end
+    local restarted = M.host_restart(row)
+    if restarted then return restarted_exit(attempt, restarted) end
     M.retire_gateway(attempt, "runtime owner unavailable")
     return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unobserved",
         detail = "runtime owner unavailable; native handle recovery is unsupported"}})
@@ -519,10 +549,12 @@ function M.sweep(): Reply
     end
     return succeed({reconciled = #live, outcomes = outcomes})
 end
-local function completion_observed(attempt: types.Attempt): (boolean, string)
+local function completion_observed(attempt: types.Attempt, row: store.Row): (boolean, string)
     if attempt.exit_source == "runner" or attempt.exit_source == "terminal" then
         return true, "exit observed by the runtime handle"
     end
+    local restarted = M.host_restart(row)
+    if restarted then return true, restarted end
     return false, "runtime exit not observed"
 end
 -- A live attempt keeps the authority it still holds: its leases are renewed.
@@ -578,7 +610,7 @@ function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Re
     local row, row_error = recorded_row(attempt.attempt_id)
     if row_error then return fail("STORAGE", row_error) end
     if not row then return fail("STORAGE", "attempt is not recorded") end
-    local proven, why = completion_observed(attempt)
+    local proven, why = completion_observed(attempt, row)
     -- Materialization can acknowledge a stop before creating any child. Its
     -- completion and child.not_started record authorize cleanup together.
     if not proven and (attempt.start_cancelled or attempt.exit_source == "runner" or attempt.execution_state == "start_failed")

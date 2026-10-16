@@ -65,6 +65,14 @@ entries:
   kind: env.storage.os
   lifecycle:
     auto_start: true
+- name: host_boot_id
+  kind: env.variable
+  meta:
+    comment: The identity of the machine's current boot; a child recorded under another boot ended when the machine restarted
+  storage: bee.harness.host:environment
+  variable: boot_id
+  default: ''
+  readonly: true
 - name: root_path
   kind: env.variable
   storage: bee.placement.native.env:environment

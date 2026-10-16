@@ -224,6 +224,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     if not backend and pid then
         fields.pid = pid
         if group then fields.pgid = pid end
+        fields.boot_id = service.host_boot()
     end
     assert(evidence(db, attempt_id, "child.identity_returned", "runtime process handle acquired"))
     local detail = "runtime process handle pid " .. tostring(pid)

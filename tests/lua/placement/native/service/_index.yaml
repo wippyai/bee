@@ -37,6 +37,7 @@ entries:
     native_fixture: bee.tests.placement.native:native_fixture
     protocol: bee.placement.native:protocol
     store: bee.placement.native.persist:store
+    service: bee.placement.native.service:service
 - name: homes
   kind: library.lua
   source: file://homes.lua

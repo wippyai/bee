@@ -305,6 +305,52 @@ local function output_tests()
             local blocked = native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id})
             test.eq(blocked.error and blocked.error.code, "CONFLICT")
         end)
+        -- The persisted state a machine restart leaves: the child and its
+        -- runner ran under the recorded boot, and no runtime owner remains.
+        local function orphan(execution: string, boot: string, exit_source: string?): string
+            local request = native_fixture.launch({"sh", "-c", "sleep 8"}, "process_group")
+            local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
+            local db = store.open()
+            if not db then error("store") end
+            local _, inject_error = db:execute("UPDATE bee_placement_attempts SET execution_state = ?, runner_pid = NULL, pid = 2147480000, pgid = 2147480000, boot_id = ? WHERE attempt_id = ?",
+                {execution, boot, prepared.attempt_id})
+            if not inject_error and exit_source then
+                _, inject_error = db:execute("UPDATE bee_placement_attempts SET exit_source = ? WHERE attempt_id = ?", {exit_source, prepared.attempt_id})
+            end
+            db:release()
+            if inject_error then error("inject orphan: " .. tostring(inject_error)) end
+            return prepared.attempt_id
+        end
+        test.it("proves the exit of a child recorded under an earlier boot once its runtime owner is gone", function()
+            local current = service.host_boot()
+            test.is_true(current ~= nil and current ~= "", "the host names its boot")
+            local attempt_id = orphan("running", "earlier-boot")
+            local reconciled = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = attempt_id}))
+            test.eq(reconciled.execution_state, "exited")
+            test.eq(reconciled.exit_source, "reconcile")
+            test.is_true(native_fixture.has(native_fixture.kinds(attempt_id), "host.restarted"))
+            local cleaned = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = attempt_id}))
+            test.eq(cleaned.cleanup_state, "complete", "a restart proves the whole group is gone")
+            local stopped_id = orphan("running", "earlier-boot")
+            local stopped = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = stopped_id, mode = "forced"}))
+            test.eq(stopped.execution_state, "exited")
+            local uncertain_id = orphan("uncertain", "earlier-boot")
+            local settled = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = uncertain_id}))
+            test.eq(settled.execution_state, "exited", "an attempt left uncertain is proven once the machine restarted")
+            local legacy_id = orphan("exited", "earlier-boot", "reconcile")
+            test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = legacy_id})).cleanup_state, "complete")
+        end)
+        test.it("keeps uncertainty for a child recorded under the current boot once its runtime owner is gone", function()
+            local current = assert(service.host_boot())
+            local attempt_id = orphan("running", current)
+            test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = attempt_id})).execution_state, "uncertain")
+            test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = attempt_id, mode = "forced"})).execution_state, "uncertain")
+            local blocked = native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = attempt_id})
+            test.eq(blocked.error and blocked.error.code, "CONFLICT")
+            local leader_only = orphan("exited", current, "reconcile")
+            local refused = native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = leader_only})
+            test.eq(refused.error and refused.error.code, "CONFLICT", "leader absence in this boot does not prove the group is gone")
+        end)
         test.it("keeps a starting attempt whose runner is present while it prepares the child", function()
             local request = native_fixture.launch({"sh", "-c", "sleep 8"}, "direct_process")
             local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))

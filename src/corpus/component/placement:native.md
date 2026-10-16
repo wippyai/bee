@@ -340,21 +340,18 @@ code or exit source. Reconciliation never guesses a startup result from runner
 absence while its monitor is recording the outcome.
 
 Signal evidence is not exit evidence; the runner records exit only from
-`wait`. Without a live runner, `stop` signals the group only after the
-leader is identified alive by pid, start stamp and boot identity; otherwise
-the attempt becomes `uncertain`. Linux reads the start stamp in clock ticks
-from `/proc` and the boot id from the kernel; macOS reads the start second
-from the process table and `kern.bootsessionuuid`. Both read the process
-group with `ps`. A group signal succeeds only when the OS command
-exits with status zero. Command refusal leaves stop unproven and records
-`stop.unproven`, rather than claiming `signal.group` evidence.
+`wait` on its runtime process handle. The runner records the child with the
+host's boot identity (`bee.placement.native.env:host_boot_id`: the kernel boot
+id on Linux, `kern.bootsessionuuid` on macOS, the boot counter on Windows).
+Without a live runner, `stop` and `reconcile` record `host.restarted` and
+`exited` when the recorded boot differs from the current one, because no
+process outlives its boot; otherwise the attempt becomes `uncertain` and stays
+so until a later boot proves the exit.
 
 Reconciliation treats a starting attempt without an execution identity as
 supervised while its runner process is present on a host: the runner answers
 status probes only once its child exists. A starting attempt whose runner is
-absent becomes `uncertain`.
-`reconcile` proves absence the same way and
-keeps uncertainty where identity is missing. `cleanup` removes the home
+absent becomes `uncertain`. `cleanup` removes the home
 only from `exited`; a cleanup whose scope is not proven gone records
 `cleanup.refused` with its reason before it answers `CONFLICT`.
 

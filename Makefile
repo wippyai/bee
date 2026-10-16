@@ -175,7 +175,7 @@ install: build
 
 # One preparation path supplies CI consumers and the version-stamped release.
 release-prepare: tools
-	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py
+	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) MANIFEST=$(MANIFEST) python3 build/prepare.py
 
 release-compile: ci-tools
 	BEE_RELEASE_SOURCE=$(abspath .wippy/release-module) .wippy/bin/bee-release-builder build $(MANIFEST) -o dist/bee
@@ -191,16 +191,16 @@ ci-tools-outputs:
 
 ci-prepare: tools
 	python3 build/ci.py record-inputs
-	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --fixtures --revision prepared
+	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) MANIFEST=$(MANIFEST) python3 build/prepare.py --fixtures --revision prepared
 	LUA_CACHE=$(LUA_CACHE) python3 build/ci.py export
 
 ci-profile: tools
-	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --profile $(PROFILE) --revision prepared
+	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) MANIFEST=$(MANIFEST) python3 build/prepare.py --profile $(PROFILE) --revision prepared
 
 ci-assemble: tools
 	python3 build/ci.py record-inputs
 	LUA_CACHE=$(LUA_CACHE) python3 build/ci.py merge-profiles
-	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) python3 build/prepare.py --assemble --fixtures --revision prepared
+	LUA_CACHE=$(LUA_CACHE) VERSION=$(VERSION) MANIFEST=$(MANIFEST) python3 build/prepare.py --assemble --fixtures --revision prepared
 	LUA_CACHE=$(LUA_CACHE) python3 build/ci.py export
 
 ci-import:

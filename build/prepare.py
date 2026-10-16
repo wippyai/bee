@@ -10,11 +10,20 @@ import subprocess
 import tarfile
 import time
 import yaml
-import ci
-import lua_seed
+
+if __package__:
+    from . import ci, lua_seed
+else:
+    import ci
+    import lua_seed
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = ('strict', 'nonstrict', 'fixtures')
+
+
+def manifest():
+    """The build manifest the Makefile selected: the release one or a local source build's."""
+    return os.environ.get('MANIFEST', 'wippy.build.json')
 
 
 def make(*targets):
@@ -77,7 +86,7 @@ def export_profile(profile, cache, fingerprint):
         archive.add(record, arcname='.wippy/profile.json')
         archive.add(cache, arcname='.wippy/lua-cache')
         if profile == 'strict':
-            for name in ('dist/bee.wapp', 'wippy.build.json', 'src/env/identity/_index.yaml'):
+            for name in ('dist/bee.wapp', manifest(), 'src/env/identity/_index.yaml'):
                 archive.add(ROOT / name, arcname=name)
 
 
@@ -90,7 +99,7 @@ def assemble(cache, fixtures):
     lua_seed.retain_current(cache, selected)
     subprocess.run(['python3', 'build/release_builder.py'], check=True)
     environment = dict(os.environ, BEE_RELEASE_LUA_CACHE=str(seed), BEE_RELEASE_EXPORT=str(source))
-    subprocess.run([str(ROOT / '.wippy/bin/bee-release-builder'), 'build', 'wippy.build.json',
+    subprocess.run([str(ROOT / '.wippy/bin/bee-release-builder'), 'build', manifest(),
                     '-o', 'dist/bee'], env=environment, check=True)
 
 

@@ -58,7 +58,7 @@ local function resolver(node: string, entry: {[string]: unknown}, component: str
             entries = {{id = entry.id, kind = entry_kind, package = component, digest = entry_digest,
                 references = EMPTY_STRINGS, auto_start = false, grants = EMPTY_STRINGS, modules = EMPTY_STRINGS,
                 config_objects = EMPTY_STRINGS, config_lists = EMPTY_STRINGS, config_empty = EMPTY_STRINGS}},
-            requirements = {}, migrations = {}}
+            capabilities = {}, requirements = {}, migrations = {}}
         local context: preflight.Context = {node_id = node, registry_revision = 4, registry_digest = SHA,
             policy_digest = SHA, packages = {[component] = true}, namespaces = {["app.notes"] = true},
             kinds = {[entry_kind] = true}, databases = {}, grants = {}, modules = {},

@@ -16,10 +16,12 @@ type Entry = {id: string, kind: string, package: string, digest: string, referen
 -- checks. Only definitions used as content evidence carry a digest.
 type StateEntry = {id: string, kind: string, package: string, references: {string}, digest: string?}
 type Artifact = {component: string, version: string, digest: string, dependencies: {string}, namespaces: {string}}
-type CapabilityRequest = {capability: string, parameters: {[string]: string | {string}}, reason: string,
-    target: string, path: string, catalog_revision: integer, template_revision: integer}
+-- One entry of an application's meta.application.capabilities, measured
+-- against the host catalog revision it was resolved with.
+type CapabilityRequest = {application: string, package: string, capability: string,
+    parameters: {[string]: string | {string}}, reason: string, catalog_revision: integer, template_revision: integer}
 type Requirement = {id: string, package: string, value: string?, expected_kind: string?, targets: {string},
-    capability_request: CapabilityRequest?, configuration_digest: string?}
+    configuration_digest: string?}
 type DriverRequirement = {binding: string, digest: string}
 type Migration = {id: string, target_db: string, checksum: string, ordinal: integer}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
@@ -31,7 +33,8 @@ type CapabilityEvidence = {kind: "absent"} |
         review: capability_grants.Review}
 type HostEvidence = {application_admission: AdmissionEvidence, capability: CapabilityEvidence}
 type Candidate = {destination_node: string, source_node: string, base_revision: integer, base_digest: string,
-    artifacts: {Artifact}, entries: {Entry}, requirements: {Requirement}, migrations: {Migration}}
+    artifacts: {Artifact}, entries: {Entry}, requirements: {Requirement}, capabilities: {CapabilityRequest},
+    migrations: {Migration}}
 type Context = {registry_preparation: unknown?, node_id: string, registry_revision: integer, registry_digest: string, policy_digest: string,
     packages: {[string]: boolean}, namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
     grants: {[string]: boolean}, modules: {[string]: boolean},
@@ -296,7 +299,7 @@ local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
     local count, count_error = dense_count(raw, "candidate requirements", 128)
     if not count then return nil, count_error end
     local allowed: {[string]: boolean} = {id = true, package = true, value = true,
-        expected_kind = true, targets = true, capability_request = true, configuration_digest = true}
+        expected_kind = true, targets = true, configuration_digest = true}
     local result: {Requirement} = {}
     for index = 1, count do
         local row = (raw)[index]
@@ -312,38 +315,44 @@ local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
             or (item.expected_kind ~= nil and (type(item.expected_kind) ~= "string" or not identifier(item.expected_kind))) then
             return nil, "candidate requirement is malformed"
         end
-        local request: CapabilityRequest? = nil
-        if item.capability_request ~= nil then
-            local raw_request = item.capability_request
-            if type(raw_request) ~= "table" then return nil, "capability request is malformed" end
-            local value = raw_request
-            if only(value, {capability = true, parameters = true, reason = true, target = true,
-                path = true, catalog_revision = true, template_revision = true}, "capability request")
-                or type(value.capability) ~= "string" or not (value.capability):match("^[a-z][a-z0-9_.-]*$")
-                or type(value.reason) ~= "string" or #value.reason == 0 or #value.reason > 512
-                or (value.reason):find("%c") or type(value.target) ~= "string"
-                or value.path ~= ".security.policies +=" or value.target ~= targets[1] or #targets ~= 1
-                or item.expected_kind ~= "security.policy" or item.value ~= nil
-                or type(value.catalog_revision) ~= "number" or value.catalog_revision < 1
-                or value.catalog_revision ~= math.floor(value.catalog_revision)
-                or type(value.template_revision) ~= "number" or value.template_revision < 1
-                or value.template_revision ~= math.floor(value.template_revision)
-                or type(value.parameters) ~= "table" then return nil, "capability request is malformed" end
-            local parameters, parameters_error = candidate_parameters(value.parameters)
-            if not parameters then return nil, parameters_error end
-            request = {capability = value.capability, parameters = parameters,
-                reason = value.reason, target = value.target,
-                path = ".security.policies +=", catalog_revision = math.floor(value.catalog_revision),
-                template_revision = math.floor(value.template_revision)}
-        end
         if item.configuration_digest ~= nil and (type(item.configuration_digest) ~= "string"
-            or not digest(item.configuration_digest) or item.value ~= nil or item.expected_kind ~= nil or request ~= nil) then
+            or not digest(item.configuration_digest) or item.value ~= nil or item.expected_kind ~= nil) then
             return nil, "configuration evidence is malformed"
         end
         local requirement: Requirement = {id = item.id, package = item.package,
             value = item.value, expected_kind = item.expected_kind, targets = targets,
-            capability_request = request, configuration_digest = item.configuration_digest}
+            configuration_digest = item.configuration_digest}
         result[index] = requirement
+    end
+    return result, nil
+end
+local function candidate_capabilities(raw: unknown): ({CapabilityRequest}?, string?)
+    local count, count_error = dense_count(raw, "candidate capabilities", 64)
+    if not count then return nil, count_error end
+    local allowed: {[string]: boolean} = {application = true, package = true, capability = true, parameters = true,
+        reason = true, catalog_revision = true, template_revision = true}
+    local result: {CapabilityRequest} = {}
+    for index = 1, count do
+        local row = (raw)[index]
+        if type(row) ~= "table" then return nil, "capability request is malformed" end
+        local value = row
+        local extra = only(value, allowed, "capability request")
+        if extra then return nil, extra end
+        if type(value.application) ~= "string" or not identifier(value.application)
+            or type(value.package) ~= "string" or not identifier(value.package)
+            or type(value.capability) ~= "string" or not (value.capability):match("^[a-z][a-z0-9_.-]*$")
+            or type(value.reason) ~= "string" or #value.reason == 0 or #value.reason > 512
+            or (value.reason):find("%c")
+            or type(value.catalog_revision) ~= "number" or value.catalog_revision < 1
+            or value.catalog_revision ~= math.floor(value.catalog_revision)
+            or type(value.template_revision) ~= "number" or value.template_revision < 1
+            or value.template_revision ~= math.floor(value.template_revision)
+            or type(value.parameters) ~= "table" then return nil, "capability request is malformed" end
+        local parameters, parameters_error = candidate_parameters(value.parameters)
+        if not parameters then return nil, parameters_error end
+        result[index] = {application = value.application, package = value.package, capability = value.capability,
+            parameters = parameters, reason = value.reason, catalog_revision = math.floor(value.catalog_revision),
+            template_revision = math.floor(value.template_revision)}
     end
     return result, nil
 end
@@ -374,7 +383,7 @@ local function normalize_candidate(raw: unknown): (Candidate?, string?)
     if type(raw) ~= "table" then return nil, "candidate must be an object" end
     local value = raw
     local allowed: {[string]: boolean} = {destination_node = true, source_node = true, base_revision = true,
-        base_digest = true, artifacts = true, entries = true, requirements = true, migrations = true}
+        base_digest = true, artifacts = true, entries = true, requirements = true, capabilities = true, migrations = true}
     local extra = only(value, allowed, "candidate")
     if extra then return nil, extra end
     if type(value.destination_node) ~= "string" or type(value.destination_node) ~= "string" or not identifier(value.destination_node)
@@ -390,11 +399,14 @@ local function normalize_candidate(raw: unknown): (Candidate?, string?)
     if not entries then return nil, entries_error end
     local requirements, requirements_error = candidate_requirements(value.requirements)
     if not requirements then return nil, requirements_error end
+    local capabilities, capabilities_error = candidate_capabilities(value.capabilities)
+    if not capabilities then return nil, capabilities_error end
     local migrations, migrations_error = candidate_migrations(value.migrations)
     if not migrations then return nil, migrations_error end
     return {destination_node = value.destination_node, source_node = value.source_node,
         base_revision = math.floor(value.base_revision), base_digest = value.base_digest,
-        artifacts = artifacts, entries = entries, requirements = requirements, migrations = migrations}, nil
+        artifacts = artifacts, entries = entries, requirements = requirements, capabilities = capabilities,
+        migrations = migrations}, nil
 end
 
 -- The stored candidate is review evidence, never authority: this decoder
@@ -418,7 +430,7 @@ end
 -- a remote plan as authority. Every suggested remedy requires a NEW candidate.
 function M.check(candidate: Candidate, context: Context): (Report?, string?)
     if #candidate.artifacts == 0 or #candidate.artifacts > 32 or #candidate.entries > 512
-        or #candidate.requirements > 128 or #candidate.migrations > 128 then return nil, "candidate exceeds preflight bounds" end
+        or #candidate.requirements > 128 or #candidate.capabilities > 64 or #candidate.migrations > 128 then return nil, "candidate exceeds preflight bounds" end
     if not identifier(candidate.destination_node) or not identifier(candidate.source_node)
         or candidate.base_revision < 0 or candidate.base_revision > 9007199254740991
         or not digest(candidate.base_digest) or not digest(context.registry_digest)
@@ -563,7 +575,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
                 "remove security.actor and security.groups; the host selects application identity")
         end
         for _, grant in ipairs(item.grants) do
-            if not context.grants[grant] then issue("GRANT_DENIED", item.id, "unadmitted security policy " .. grant, "remove this direct policy reference; declare the needed capability with an ns.requirement instead (read docs/app_capabilities for exact names)") end
+            if not context.grants[grant] then issue("GRANT_DENIED", item.id, "unadmitted security policy " .. grant, "remove this direct policy reference; list the needed capability in the application's meta.application.capabilities instead (read docs/app_capabilities for exact names)") end
         end
         for _, module in ipairs(item.modules) do
             if not context.modules[module] then
@@ -574,11 +586,11 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
                 elseif module == "env" then
                     remedy = "remove env from data.modules; request workspace.files.read for a bounded workspace folder or app.database for an isolated app database"
                 elseif module == "security" then
-                    remedy = "remove security from data.modules; declare the needed capability in an ns.requirement and let the host assign the app's identity and policies"
+                    remedy = "remove security from data.modules; list the needed capability in the application's meta.application.capabilities and let the host assign the app's identity and policies"
                 end
                 if authorizing and #authorizing > 0 then
                     remedy = "request capability " .. table.concat(authorizing, " or ")
-                        .. " with an ns.requirement whose meta.capability names it and whose target appends to the application's .security.policies, so the person can approve it; or remove the module"
+                        .. " by listing {capability, parameters, reason} in the application's meta.application.capabilities, so the person can approve it; or remove the module"
                 end
                 issue("MODULE_DENIED", item.id, "unadmitted runtime module " .. module, remedy)
             end
@@ -645,35 +657,15 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if requirements[item.id] then issue("DUPLICATE_REQUIREMENT", item.id, "ambiguous requirement identity", "resolve by full requirement identity") end
         requirements[item.id] = true
         if not artifacts[item.package] then issue("UNKNOWN_OWNER", item.id, "requirement is outside measured closure", "repair requirement ownership") end
-        local request = item.capability_request
-        local exposure_target = false
-        if request and request.capability == "hive.expose" then
-            local refs = request.parameters.operations
-            local contains_target, owned_operations = false, type(refs) == "table"
-            for _, ref in ipairs(type(refs) == "table" and refs or {}) do
-                local operation = final[ref]
-                if not operation or operation.kind ~= "function.lua" or operation.package ~= item.package then owned_operations = false end
-                if ref == request.target then contains_target = true end
-            end
-            exposure_target = contains_target and owned_operations
-        end
-        if request and (item.value ~= nil or item.expected_kind ~= "security.policy"
-            or #item.targets ~= 1 or item.targets[1] ~= request.target
-            or request.path ~= ".security.policies +=" or not final[request.target]
-            or (request.capability == "hive.expose" and not exposure_target)
-            or (request.capability ~= "hive.expose" and final[request.target].kind ~= "process.lua")) then
-            issue("CAPABILITY_REQUEST_DENIED", item.id, "capability request does not target its owned policy list",
-                "target the owned application, or a declared owned operation for hive.expose")
-        end
         if item.configuration_digest then
             local measured = final[item.id]
-            if not digest(item.configuration_digest) or item.value or item.expected_kind or request
+            if not digest(item.configuration_digest) or item.value or item.expected_kind
                 or not measured or measured.kind ~= "ns.requirement" or measured.package ~= item.package then
                 issue("CONFIGURATION_DENIED", item.id, "configuration evidence does not match the owned requirement", "resolve the declared configuration again")
             end
         end
         local target = item.value and final[item.value] or nil
-        if not target and not item.capability_request and not item.configuration_digest then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
+        if not target and not item.configuration_digest then issue("MISSING_BINDING", item.id, "requirement has no existing final-state target", "select an explicit destination resource; do not guess from the name")
         elseif target and item.expected_kind and target.kind ~= item.expected_kind then issue("BINDING_KIND", item.id, "resource does not match declared kind", "select a resource of the declared kind") end
         for _, reference in ipairs(item.targets) do
             local append = context.driver_requirements and context.driver_requirements[item.id] or nil
@@ -689,6 +681,26 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
                 issue("CONFIGURATION_DENIED", item.id, "configuration target is outside its package", "target an owned entry")
             end
             if not final[reference] then issue("DANGLING_REQUIREMENT_TARGET", item.id, "missing target entry " .. reference, "repair the package requirement target") end
+        end
+    end
+    for _, request in ipairs(candidate.capabilities) do
+        local application = final[request.application]
+        if not artifacts[request.package] then
+            issue("UNKNOWN_OWNER", request.application, "capability request is outside measured closure", "repair the application's package ownership")
+        elseif not application or application.kind ~= "process.lua" or application.package ~= request.package then
+            issue("CAPABILITY_REQUEST_DENIED", request.application, "capability " .. request.capability
+                .. " is listed by an entry that is not this package's process.lua application",
+                "list capabilities in meta.application.capabilities of the package's own bee.application entry")
+        end
+        if request.capability == "hive.expose" then
+            local refs = request.parameters.operations
+            for _, ref in ipairs(type(refs) == "table" and refs or {}) do
+                local operation = final[ref]
+                if not operation or operation.kind ~= "function.lua" or operation.package ~= request.package then
+                    issue("CAPABILITY_REQUEST_DENIED", request.application, "hive.expose operation " .. ref .. " is not one of this package's function.lua entries",
+                        "expose only the package's own operations")
+                end
+            end
         end
     end
     local migrations: {[string]: Migration} = {}

@@ -43,28 +43,30 @@ end
 local function install(audience: string, mode: string?, blocked: boolean?, calling: boolean?, tooling: boolean?): string
     remove()
     local vocabulary = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
-    local requirement = {id = "receiver.sdk:exposure", value = nil, expected_kind = "security.policy", targets = {RUN},
-        capability_request = {capability = "hive.expose", parameters = {operations = {RUN},
-            mode = mode or "open", audiences = {audience}}, catalog_revision = model.revisions(vocabulary, "hive.expose"),
-            template_revision = 2, target = RUN, path = ".security.policies +="}}
-    local requirements: {Object} = {requirement}
+    local listed: {Object} = {{capability = "hive.expose", parameters = {operations = {RUN},
+        mode = mode or "open", audiences = {audience}}, reason = "Approve the receiver fixture"}}
     if calling then
-        requirements[#requirements + 1] = {id = "receiver.sdk:call", expected_kind = "security.policy", targets = {APP},
-            capability_request = {capability = "hive.call", parameters = {nodes = {audience, "runner"}, workspaces = {WORKSPACE},
-                applications = {APP}, services = {"test-sdk"}, operations = {"run"}},
-                catalog_revision = vocabulary.revision, template_revision = 1, target = APP, path = ".security.policies +="}}
+        listed[#listed + 1] = {capability = "hive.call", parameters = {nodes = {audience, "runner"}, workspaces = {WORKSPACE},
+            applications = {APP}, services = {"test-sdk"}, operations = {"run"}}, reason = "Approve the receiver fixture"}
     end
     if tooling then
-        requirements[#requirements + 1] = {id = "receiver.sdk:agent_tools", expected_kind = "security.policy", targets = {APP},
-            capability_request = {capability = "agent.tools", parameters = {tools = {RUN, "other.runner:run"}},
-                catalog_revision = vocabulary.revision, template_revision = 1, target = APP, path = ".security.policies +="}}
+        listed[#listed + 1] = {capability = "agent.tools", parameters = {tools = {RUN, "other.runner:run"}},
+            reason = "Approve the receiver fixture"}
     end
-    local proposal, proposal_error = grants.propose(vocabulary, OWNER, APP, requirements)
+    local requests: {Object} = {}
+    for _, item in ipairs(listed) do
+        local capability = tostring(item.capability)
+        local catalog_revision, template_revision = model.revisions(vocabulary, capability)
+        requests[#requests + 1] = {application = APP, package = "receiver.sdk", capability = capability,
+            parameters = item.parameters, reason = item.reason, catalog_revision = catalog_revision,
+            template_revision = template_revision}
+    end
+    local proposal, proposal_error = grants.propose(vocabulary, OWNER, APP, requests)
     assert(proposal, tostring(proposal_error) .. "; audience=" .. audience)
     local record = assert(grants.record(OWNER, WORKSPACE, APP, proposal, "receiver-approval", 1))
     local entries: {Object} = {
         {id = APP, kind = "process.lua", meta = {type = "bee.application", application = {api_version = 1,
-            title = "Receiver SDK", lifetime = "view", revision = "1", instance_policy = "multiple"}},
+            title = "Receiver SDK", lifetime = "view", revision = "1", instance_policy = "multiple", capabilities = listed}},
             data = {source = "return {main = function() end}", method = "main"}},
         {id = RUN, kind = "function.lua", meta = {application_ref = APP, hive = mode or "open", hive_service = "test-sdk",
             hive_operation = {name = "run", revision = "1", effect = "read", input = {type = "object", additionalProperties = false,
@@ -98,15 +100,8 @@ return {run = function(args)
     return {configuration = args.configuration}
 end}]]
     end
-    for _, item in ipairs(requirements) do
-        local requested = item.capability_request
-        entries[#entries + 1] = {id = item.id, kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = requested.capability,
-                parameters = requested.parameters, reason = "Approve the receiver fixture"},
-            data = {targets = {{entry = requested.target, path = ".security.policies +="}}}}
-    end
     assert(materializer.reconcile_composed(OWNER, entries, nil,
-        {policies = proposal.policies, bindings = proposal.bindings, record = record}))
+        {policies = proposal.policies, capabilities = proposal.capabilities, record = record}))
     local changes = assert(registry.snapshot()):changes()
     changes:create({id = ADMISSION, kind = "registry.entry", meta = {type = "bee.node.application_admission"},
         data = {bindings = {{definition_id = APP, policies = (function(): {string}
@@ -115,7 +110,10 @@ end}]]
             return ids
         end)()}}}})
     assert(changes:apply())
-    return tostring(proposal.policies[1].id)
+    for index, grant in ipairs(proposal.capabilities) do
+        if grant.capability == "hive.expose" then return tostring(proposal.policies[index].id) end
+    end
+    error("receiver fixture proposes no exposure grant")
 end
 
 local function call(extra: Object?): protocol.Reply

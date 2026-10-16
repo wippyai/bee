@@ -243,9 +243,9 @@ function M.test_example(): {{[string]: unknown}}
         meta = {type = "test", suite = M.OVERLAY_ID}}}
 end
 
--- The example application's own database: the capability request, its first
--- migration, and the tools that keep and list counts in it, so the person's
--- UI and an agent share one table.
+-- The example application's own database: the counter entry listing the
+-- capabilities it needs, its first migration, and the tools that keep and list
+-- counts in it, so the person's UI and an agent share one table.
 M.DATABASE_NAME = "counts"
 M.MIGRATION_SOURCE = [==[return require("migration").define(function()
     migration("Create counts", function()
@@ -296,16 +296,16 @@ return {record = record, list = list}
 ]==]
 
 function M.database_example(): {{[string]: unknown}}
+    local app = M.example()[1]
+    local meta = app.meta :: {[string]: unknown}
+    local application = meta.application :: {[string]: unknown}
+    application.capabilities = {
+        {capability = "app.database", parameters = {name = M.DATABASE_NAME}, reason = "Keep the counts the counter saves"},
+        {capability = "agent.tools", parameters = {tools = {M.NAMESPACE .. ":count_list", M.NAMESPACE .. ":count_record"}},
+            reason = "Let agents read and record counts"},
+    }
     return {
-        {id = M.NAMESPACE .. ":database", kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = "app.database",
-                parameters = {name = M.DATABASE_NAME}, reason = "Keep the counts the counter saves"},
-            data = {targets = {{entry = M.NAMESPACE .. ":app", path = ".security.policies +="}}}},
-        {id = M.NAMESPACE .. ":agent_tools", kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = "agent.tools",
-                parameters = {tools = {M.NAMESPACE .. ":count_list", M.NAMESPACE .. ":count_record"}},
-                reason = "Let agents read and record counts"},
-            data = {targets = {{entry = M.NAMESPACE .. ":app", path = ".security.policies +="}}}},
+        app,
         {id = M.NAMESPACE .. ":create_counts", kind = "function.lua",
             meta = {type = "migration", target_db = M.DATABASE_NAME, ordinal = 1},
             data = {source = M.MIGRATION_SOURCE, method = "run", imports = {migration = "wippy.migration:migration"}}},
@@ -324,9 +324,9 @@ end
 
 -- How an application keeps its own data.
 function M.database(): string
-    return "An application keeps its data in its own database. Request it with an ns.requirement whose meta names"
-        .. " value_kind security.policy, capability app.database, parameters {name = <database name>} and a reason,"
-        .. " targeting the application at .security.policies +=. Create and change its tables with migrations:"
+    return "An application keeps its data in its own database. Request it by listing"
+        .. " {capability = app.database, parameters = {name = <database name>}, reason = <why>} in the application"
+        .. " entry's meta.application.capabilities. Create and change its tables with migrations:"
         .. " each is a function.lua entry with meta.type migration, meta.target_db equal to that database name and"
         .. " meta.ordinal, data.method run and the import migration = wippy.migration:migration; its source returns"
         .. " require(\"migration\").define(function() migration(\"<what it does>\", function() database(\"sqlite\","
@@ -336,8 +336,9 @@ function M.database(): string
         .. " migration a version runs in Needs you; Bee installs the database, runs the migrations once, then opens"
         .. " the application. At run time call bee.gov.binding:granted_resources and open databases[<name>] with"
         .. " sql.get, from the application and from its agent tools alike, so the person and agents work on the same"
-        .. " tables. The example (include_example) carries database_entries_json: the counter's counts database, its"
-        .. " first migration and the agent tools that record and list counts."
+        .. " tables. The example (include_example) carries database_entries_json: the counter entry listing its counts database"
+        .. " and agent tools, which replaces the counter entry of entries_json, its first migration and the agent"
+        .. " tools that record and list counts."
 end
 
 local DELIVERY_STEPS = {"approve it in Needs you, which opens on the person's desktop and lists the permissions and database migrations it adds",
@@ -394,6 +395,7 @@ function M.application_shape(): string
         .. " Use restart_policy never for an app without checkpoints; automatic or manual requires"
         .. " a nonempty resume_schema of at most 80 characters without control characters. Preflight"
         .. " reports APPLICATION_CHECKPOINT when this metadata prevents the desktop from opening it."
+        .. " The capabilities it needs go in meta.application.capabilities as {capability, parameters, reason}."
 end
 function M.rendering(): string
     return "The process entry carries its Lua source inline and renders with the terminal"
@@ -506,9 +508,9 @@ function M.agent_tools(): string
         .. " destructiveHint, idempotentHint, openWorldHint). It declares no security of its own: it runs as the"
         .. " application with exactly the grants the person approved for it, and returns {ok, value, error} where"
         .. " error is {code, message}. Read and write the application's state through its grants, for example the"
-        .. " database bee.gov.binding:granted_resources names, so the UI and the agent see the same data. Request"
-        .. " capability agent.tools with an ns.requirement whose meta.parameters is {tools = {<each tool function id>}},"
-        .. " targeting the application at .security.policies +=; the person approves it in Needs you with the"
+        .. " database bee.gov.binding:granted_resources names, so the UI and the agent see the same data. List"
+        .. " {capability = agent.tools, parameters = {tools = {<each tool function id>}}, reason = <why>} in the"
+        .. " application's meta.application.capabilities; the person approves it in Needs you with the"
         .. " application's other grants. Schemas must stay in the subset Bee advertises (object schemas with typed"
         .. " properties, required, enum, const, bounds, formats, nested objects and arrays, oneOf/allOf/if/then/else/not);"
         .. " preflight refuses a tool that is not this pack's own, uses another schema, declares security or shares an"
@@ -572,7 +574,7 @@ function M.hive_sdk(): string
         .. " mappings exist; this example uses open with exact audiences. Package operations without an installed"
         .. " overlay stay fail-closed. Legacy service routes retain their destination owner authorization and are"
         .. " outside the app facade. To test a real checkout, add separately approved workspace.files.read and"
-        .. " process.exec requirements and use their granted host functions."
+        .. " process.exec capabilities and use their granted host functions."
         .. "\n\nThis project's executable pure Lua configuration multiplies {1,2,3} by three for ci and returns 18"
         .. " from the destination worker, including its PID. The two-node e2e proof verifies that worker runs on"
         .. " beta while the calling application's peer tool runs on alpha."
@@ -680,14 +682,14 @@ function M.workspace_delivery(): string
         .. " preflight with the remedy. Freeze, then call the delivery tool with operation request, your"
         .. " source_overlay_id, a version and the frozen snapshot_digest; workspace_id defaults to your"
         .. " own workspace. A later version is a new freeze and a new delivery request with a higher version."
-        .. " Request a host catalog capability with an ns.requirement entry whose meta names value_kind"
-        .. " security.policy, the capability, its parameters and a reason, targeting your application entry at"
-        .. " .security.policies +=; the person approves it at installation. For contract.call,"
-        .. ' meta.parameters is {binding = "bee.threads.sessions.binding:catalog_binding", methods = {"list"}}'
+        .. " Request a host catalog capability by listing {capability, parameters, reason} in your application"
+        .. " entry's meta.application.capabilities; the host generates the policy and the person approves it at"
+        .. " installation. For contract.call,"
+        .. ' parameters is {binding = "bee.threads.sessions.binding:catalog_binding", methods = {"list"}}'
         .. " when requesting the Sessions catalog binding. The binding and method names are exact;"
         .. " check the destination's bee.capability:catalog with the components tool for its admitted parameters."
         .. " To run a host program, request process.exec with"
-        .. ' meta.parameters {command = "/usr/bin/make test", directory = "."}: command is the executable, an'
+        .. ' parameters {command = "/usr/bin/make test", directory = "."}: command is the executable, an'
         .. " absolute path or a name on the host PATH, followed by any fixed leading arguments, and directory a"
         .. " folder relative to your workspace. The person sees that exact command and folder in Needs you and"
         .. " approves it explicitly; the app may then run the command alone or followed by further arguments, in"

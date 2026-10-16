@@ -109,9 +109,9 @@ local function forward_defaults(packages: {Package}): ({Package}?, string?)
                 fallback, has_default = value.value, true
             end
             selected[#selected + 1] = {id = hole.id, default = fallback, has_default = has_default,
-                targets = hole.targets, selected = hole.selected, has_selected = hole.has_selected, capability = hole.capability,
+                targets = hole.targets, selected = hole.selected, has_selected = hole.has_selected,
                 schema = hole.schema, description = hole.description, schema_default = hole.schema_default}
-            if not hole.capability and not hole.has_selected and not has_default then missing[#missing + 1] = hole.id end
+            if not hole.has_selected and not has_default then missing[#missing + 1] = hole.id end
         end
         bound[#bound + 1] = {component = item.component, version = item.version, digest = item.digest,
             entries = item.entries, dependencies = item.dependencies, requirements = {requirements = selected, missing = missing}}

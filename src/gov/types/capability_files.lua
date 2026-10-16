@@ -102,12 +102,11 @@ local function located(root: Folder, subpath: string): string
     return root.directory .. "/" .. relative
 end
 
--- Whether measured capability requirements ask for workspace files or a
+-- Whether measured capability requests ask for workspace files or a
 -- process, whose grants root in the destination workspace's folder.
-function M.rooted(requirements: {unknown}): boolean
-    for _, raw in ipairs(requirements) do
-        local item = bounds.object(raw)
-        local request = item and bounds.object(item.capability_request) or nil
+function M.rooted(requests: {unknown}): boolean
+    for _, raw in ipairs(requests) do
+        local request = bounds.object(raw)
         local capability = request and request.capability or nil
         if type(capability) == "string" and (capability:sub(1, 16) == "workspace.files."
             or capability == "process.exec") then return true end

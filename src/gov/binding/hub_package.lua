@@ -71,8 +71,7 @@ function M.expand(state: unknown, revision: integer, root: graph.Edge): (Expande
                 if raw.kind ~= "ns.dependency" then
                     entries[#entries + 1] = {id = raw.id, kind = raw.kind, meta = raw.meta, data = raw.data}
                 end
-                if (raw.kind == "ns.requirement" and raw.meta.capability ~= nil)
-                    or raw.meta.type == "bee.application" then governed = true end
+                if raw.meta.type == "bee.application" then governed = true end
             end
         end
     end

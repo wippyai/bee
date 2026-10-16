@@ -43,18 +43,26 @@ function M.application(raw: unknown): (string?, string?)
     local entries, list_error = bounds.dense_list(raw, 512, "workspace application entries")
     if not entries then return nil, list_error end
     local selected: string? = nil
+    local mistyped: string? = nil
     for _, raw_entry in ipairs(entries) do
         local entry = bounds.object(raw_entry)
         local meta = entry and bounds.object(entry.meta)
+        local id = entry and bounds.id(entry.id) or nil
         if entry and meta and meta.type == "bee.application" then
-            if entry.kind ~= "process.lua" then return nil, "workspace application is not a process.lua entry" end
-            local id = bounds.id(entry.id)
+            if entry.kind ~= "process.lua" then
+                return nil, tostring(entry.id) .. " has kind " .. tostring(entry.kind) .. "; an application with meta.type bee.application is a process.lua entry"
+            end
             if not id then return nil, "workspace application identity is invalid" end
-            if selected then return nil, "workspace artifact declares multiple applications" end
+            if selected then return nil, "workspace artifact declares two applications, " .. selected .. " and " .. id .. "; declare exactly one" end
             selected = id
+        elseif entry and meta and meta.application ~= nil and not mistyped then
+            mistyped = tostring(entry.id) .. " has meta.application but meta.type " .. tostring(meta.type)
+                .. "; set meta.type to bee.application"
         end
     end
-    if not selected then return nil, "workspace artifact declares no process.lua application with meta.type bee.application" end
+    if not selected then
+        return nil, mistyped or "workspace artifact declares no application; declare one process.lua entry with meta.type bee.application and meta.application"
+    end
     return selected, nil
 end
 

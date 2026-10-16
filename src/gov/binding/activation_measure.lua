@@ -173,7 +173,7 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     local durable_candidate: preflight.Candidate = {destination_node = candidate.destination_node,
         source_node = candidate.source_node, base_revision = 0, base_digest = candidate.base_digest,
         artifacts = candidate.artifacts, entries = candidate.entries, requirements = candidate.requirements,
-        migrations = candidate.migrations}
+        capabilities = candidate.capabilities, migrations = candidate.migrations}
     local durable_context: preflight.Context = {node_id = context.node_id, registry_revision = 0,
         registry_digest = context.registry_digest, policy_digest = context.policy_digest,
         packages = context.packages, namespaces = context.namespaces, kinds = context.kinds,

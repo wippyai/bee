@@ -173,21 +173,19 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                     local active = first + slot - 1 == selected
                     local field = row.field
                     local declared = field and (" [" .. field.kind .. "]" .. (field.required and " required" or "")) or ""
-                    frame.row(painter, y, row.id .. declared .. (field and field.readonly and "" or " · " .. row.origin), active, "requirement", 0, row.id, nil, nil, 4)
-                    frame.line(painter, y + 1, field and (field.readonly and "Supplied automatically by Bee" or form.label(field.value)) or row.json, theme.text)
+                    frame.row(painter, y, row.id .. declared .. " · " .. row.origin, active, "requirement", 0, row.id, nil, nil, 4)
+                    frame.line(painter, y + 1, field and form.label(field.value) or row.json, theme.text)
                     local choices: {string} = {}
                     if field then for _, value in ipairs(field.choices) do choices[#choices + 1] = form.label(value) end end
-                    local fallback = field and field.readonly and "" or field and field.default ~= nil and ("Default: " .. form.label(field.default)) or "No default"
+                    local fallback = field and field.default ~= nil and ("Default: " .. form.label(field.default)) or "No default"
                     frame.line(painter, y + 2, fallback .. (#choices > 0 and " · Choose: " .. table.concat(choices, " / ") or ""), theme.muted)
                     frame.line(painter, y + 3, field and field.description ~= "" and field.description or table.concat(row.targets, " · "), theme.muted)
                 end
                 if not protected then button("plan", " Review ", state.requirements_digest ~= nil) end
                 local requirement = state.requirements[state.selected_requirement]
-                button("reset_requirement", " Clear override ", requirement ~= nil and not (requirement.field and requirement.field.readonly) and requirement.origin == "Selected")
-                local editable = requirement ~= nil and not (requirement.field and requirement.field.readonly)
-                frame.line(painter, height - 1, editable and "Defaults are used unless you choose a value." or "Bee supplies this value automatically.", theme.muted)
-                frame.footer(painter, status, editable and "↑↓ field · Enter edit · ←→ choose · J advanced JSON · P review · T technical"
-                    or "↑↓ field · P review · T technical", nil, footer_buttons)
+                button("reset_requirement", " Clear override ", requirement ~= nil and requirement.origin == "Selected")
+                frame.line(painter, height - 1, "Defaults are used unless you choose a value.", theme.muted)
+                frame.footer(painter, status, "↑↓ field · Enter edit · ←→ choose · J advanced JSON · P review · T technical", nil, footer_buttons)
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = 0, operation_detail_offset = 0}
             end
             if reading then

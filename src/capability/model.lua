@@ -283,16 +283,56 @@ local function parameter(raw: unknown, kind: string): Parameter?
     return value
 end
 
+-- What each parameter kind accepts, in the words an author fixes it by.
+local EXPECTED: {[string]: string} = {
+    relative_subpath = "a relative workspace path such as data/notes, or . for the whole workspace",
+    command = "an executable name or absolute path followed by fixed arguments, without quotes",
+    url_path_prefix = "an absolute URL path such as /v1",
+    owned_scope = "owned",
+    children_scope = "children",
+    hive_mode = "open or policy",
+    hive_audiences = "a list of audience names or *",
+    definitions = "a list of launch definition ids such as app.example:agent",
+    methods = "a list of method names",
+    http_methods = "a list of GET, POST, PUT, PATCH, DELETE or HEAD",
+    hive_operations = "a list of this package's function ids",
+    own_functions = "a list of this package's function ids",
+    hive_nodes = "a list of node names",
+    hive_targets = "a list of workspace or application ids",
+    hive_names = "a list of service or operation names",
+    https_origin = "an https origin such as https://api.example.com",
+    name = "a name of letters, digits and underscores starting with a letter",
+    binding = "a binding id such as app.example:binding",
+    contract = "a contract id such as app.example:contract",
+}
+
 local function normalize_decoded(catalog: Vocabulary, id_raw: unknown, raw: unknown): (Parameters?, string?)
     local id = identity(id_raw)
     local template = id and catalog.capabilities[id] or nil
+    if not template then
+        local known: {string} = {}
+        for name in pairs(catalog.capabilities) do known[#known + 1] = name end
+        table.sort(known)
+        return nil, tostring(id_raw) .. " is not a host capability; expected one of " .. table.concat(known, ", ")
+    end
     local input = object(raw)
-    if not template or not input then return nil, "unknown capability or malformed parameters" end
+    local names: {string} = {}
+    for name in pairs(template.parameters) do names[#names + 1] = name end
+    table.sort(names)
+    local takes = #names == 0 and "it takes none" or "it takes " .. table.concat(names, ", ")
+    if not input then return nil, "parameters must be an object; " .. takes end
     local result: Parameters = {}
-    for key in pairs(input) do if not template.parameters[key] then return nil, "unknown capability parameter" end end
-    for key, kind in pairs(template.parameters) do
+    for key in pairs(input) do
+        if not template.parameters[key] then
+            return nil, "parameters." .. tostring(key) .. " is not a parameter of " .. template.id .. "; " .. takes
+        end
+    end
+    for _, key in ipairs(names) do
+        local kind: string = template.parameters[key] or ""
         local value = parameter(input[key], kind)
-        if value == nil then return nil, "invalid capability parameter " .. key end
+        if value == nil then
+            return nil, "parameters." .. key .. " must be " .. (EXPECTED[kind] or kind)
+        end
         result[key] = value
     end
     return result, nil

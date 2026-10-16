@@ -385,10 +385,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     if not catalog_entry then return nil, "host capability catalog lookup failed: " .. tostring(catalog_lookup_error) end
     local vocabulary, catalog_error = capability_model.decode(catalog_entry)
     if not vocabulary then return nil, catalog_error end
-    local requested: {Object} = {}
-    for _, requirement in ipairs(candidate.requirements) do
-        if requirement.capability_request then requested[#requested + 1] = requirement end
-    end
+    local requested = candidate.capabilities
     local folder: unknown = nil
     if capability_files.rooted(requested) then
         local resolved, folder_error = resources.workspace_folder(profile_value.workspace_id)
@@ -451,7 +448,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         profile_value.workspace_id, application_id, proposed, approval_id, revision,
         intent.artifact_digest, intent.version, uses_prior)
     if not record then return nil, record_error end
-    return {policies = proposed.policies, bindings = proposed.bindings, record = record,
+    return {policies = proposed.policies, capabilities = proposed.capabilities, record = record,
         volumes = proposed.volumes, databases = proposed.databases, executors = proposed.executors}, nil
 end
 

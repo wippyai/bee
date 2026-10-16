@@ -64,15 +64,13 @@ function M.entries(): {inspection.Entry}
         {id = NS .. ":definition", kind = "ns.definition", meta = {title = "Progress"}, data = {}},
         {id = NS .. ":app", kind = "process.lua", meta = {type = "bee.application", application = {
             api_version = 1, title = "Progress", lifetime = "view", revision = "1", instance_policy = "singleton",
-            restart_policy = "never", menus = {"bee.shell:apps_menu"}}},
+            restart_policy = "never", menus = {"bee.shell:apps_menu"}, capabilities = {
+                {capability = "app.database", parameters = {name = "progress"}, reason = "Keep tasks"}}}},
             data = {source = 'local process = require("process")\nlocal function main() process.events():receive() end\nreturn {main = main}',
                 method = "main", modules = {"process"}}},
         {id = NS .. ":title", kind = "ns.requirement", meta = {schema = {type = "string", minLength = 1, description = "Name in Apps"}},
             data = {default = "Progress", targets = {{entry = NS .. ":app", path = ".meta.application.title"}}}},
         {id = NS .. ":access", kind = "library.lua", meta = {}, data = {source = ACCESS, modules = {"funcs", "sql"}}},
-        {id = NS .. ":database", kind = "ns.requirement", meta = {value_kind = "security.policy", capability = "app.database",
-            parameters = {name = "progress"}, reason = "Keep tasks"},
-            data = {targets = {{entry = NS .. ":app", path = ".security.policies +="}}}},
     }
     local tools: {string} = {}
     for _, name in ipairs({"allocate", "assign", "create", "get", "report", "state", "tree", "updates"}) do
@@ -82,9 +80,8 @@ function M.entries(): {inspection.Entry}
             llm_description = "Read progress migration evidence", input_schema = '{"type":"object","additionalProperties":false}'},
             data = {source = TOOL, method = "run", imports = {access = NS .. ":access"}}}
     end
-    entries[#entries + 1] = {id = NS .. ":agent_tools", kind = "ns.requirement", meta = {value_kind = "security.policy",
-        capability = "agent.tools", parameters = {tools = tools}, reason = "Offer progress tools"},
-        data = {targets = {{entry = NS .. ":app", path = ".security.policies +="}}}}
+    local listed = ((entries[2].meta :: {[string]: unknown}).application :: {[string]: unknown}).capabilities :: {unknown}
+    listed[#listed + 1] = {capability = "agent.tools", parameters = {tools = tools}, reason = "Offer progress tools"}
     for ordinal, sql in ipairs({"CREATE TABLE evidence (version INTEGER NOT NULL)", "INSERT INTO evidence VALUES (1), (2)"}) do
         entries[#entries + 1] = {id = NS .. (ordinal == 1 and ":schema_migration" or ":evidence_migration"), kind = "function.lua",
             meta = {type = "migration", target_db = "progress", ordinal = ordinal,

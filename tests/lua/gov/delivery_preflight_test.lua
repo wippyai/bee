@@ -63,10 +63,9 @@ local function define_tests()
             local author = harness.author(workspace, "bundle")
             local before = harness.running()
             local pack = entries("bundle")
-            pack[#pack + 1] = {id = "app.bundle:files", kind = "ns.requirement",
-                meta = {value_kind = "security.policy", capability = "workspace.files.read",
-                    parameters = {subpath = "testdata"}, reason = "Show fixture status"},
-                data = {targets = {{entry = "app.bundle:app", path = ".security.policies +="}}}}
+            local application = assert(bounds.object((assert(bounds.object(pack[1].meta))).application))
+            application.capabilities = {{capability = "workspace.files.read",
+                parameters = {subpath = "testdata"}, reason = "Show fixture status"}}
             local subscription = assert(events.subscribe("bee.attention", "approval.requested"))
             local digest = harness.freeze(author, "bundle", pack, "1")
             local requested = harness.value(harness.request(author, "bundle", workspace, "1", digest))
@@ -91,8 +90,16 @@ local function define_tests()
             test.eq(#cards, 1)
             db:release()
             test.eq(harness.settle(author, "bundle", workspace, requested, "1").outcome, "applied")
-            local requirement = assert(registry.get("app.bundle:files"))
-            test.not_nil(assert(bounds.object(requirement.data)).default)
+            local granted = false
+            for _, record in ipairs(assert(registry.find({[".kind"] = "registry.entry", ["meta.type"] = "bee.governance-capability-grants@1"}))) do
+                local data = assert(bounds.object(record.data))
+                if data.application == "app.bundle:app" and data.workspace_id == workspace then
+                    for _, grant in ipairs(bounds.array(data.capabilities, 8) or {}) do
+                        if (assert(bounds.object(grant))).capability == "workspace.files.read" then granted = true end
+                    end
+                end
+            end
+            test.is_true(granted)
             harness.value(harness.library(workspace, {operation = "uninstall", source_workspace = "bundle", receipt_key = "bundle-remove"}))
             harness.close_presented(before)
             assert(files:remove(directory .. "/testdata"))

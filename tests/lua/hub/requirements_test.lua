@@ -65,16 +65,15 @@ local function define_tests()
                 test.is_true(tostring(problem):find("demo:options", 1, true) ~= nil)
             end
         end)
-        test.it("leaves application capabilities to host admission rather than dependency parameters", function()
-            local result = assert(requirements.read({
+        test.it("refuses a capability on a requirement and names the application declaration", function()
+            local result, problem = requirements.read({
                 {id = "app.progress:database", kind = "ns.requirement",
-                    meta = {value_kind = "security.policy", capability = "app.database",
-                        parameters = {name = "progress"}, reason = "Keep tasks"},
-                    data = {targets = {{entry = "app.progress:app", path = ".security.policies +="}}}},
-            }, {}))
-            test.eq(#result.missing, 0)
-            test.is_false(result.requirements[1].has_default)
-            test.is_false(result.requirements[1].has_selected)
+                    meta = {capability = "app.database", parameters = {name = "progress"}, reason = "Keep tasks"},
+                    data = {targets = {{entry = "app.progress:app", path = ".x"}}}},
+            }, {})
+            test.is_nil(result)
+            test.contains(tostring(problem), "app.progress:database")
+            test.contains(tostring(problem), "meta.application.capabilities")
         end)
 
         test.it("projects selected migration database holes without changing artifact entries", function()

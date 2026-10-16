@@ -22,7 +22,7 @@ local function define_tests()
             local marker = "entries.json (freeze this complete JSON list):\n"
             local start = assert((section:find(marker, 1, true)))
             local decoded = assert(json.decode(section:sub(start + #marker))) :: {Object}
-            test.eq(#decoded, 9)
+            test.eq(#decoded, 5)
             local result = harness.value(harness.deliver(writer, "testsdk", workspace, decoded, "1.0.0"))
             local diagnostics = assert(json.encode(result.diagnostics))
             test.is_true(result.ready == true, diagnostics)

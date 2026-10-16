@@ -71,12 +71,11 @@ function M.catalog(workspace: string): (Catalog?, string?)
                     description = meta and bounds.text(meta.description, 4096) or nil
                 end
             end
-            if not description then
-                for _, binding in ipairs(record.bindings) do
-                    local requirement = bounds.id(binding.requirement_id)
-                    local entry = requirement and registry.get(requirement)
-                    local meta = entry and bounds.object(entry.meta)
-                    if meta and meta.capability == "agent.tools" then description = bounds.text(meta.reason, 4096) end
+            local declaration = meta and bounds.object(meta.application)
+            if not description and declaration then
+                for _, raw in ipairs(bounds.array(declaration.capabilities, 8) or {}) do
+                    local listed = bounds.object(raw)
+                    if listed and listed.capability == "agent.tools" then description = bounds.text(listed.reason, 4096) end
                 end
             end
             local prompt = (description or ("Use " .. app.title .. ".")) .. "\nTools: " .. table.concat(names, ", ")

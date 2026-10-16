@@ -58,27 +58,6 @@ local function define_tests()
                 test.eq(assert(model.confirm_intent(state)).expected_digest, string.rep("a", 64))
             end
         end)
-        test.it("presents host requirements without editable controls or missing-value labels", function()
-            local state = model.new()
-            model.select(state, "bee/example")
-            model.apply_details(state, {ok = true, replayed = false, value = {component = "bee/example", title = "Example",
-                description = "", readme = "", versions = {{version = "1.0.0", yanked = false}}, page = 1, total_versions = 1}})
-            model.apply_inspect(state, {ok = true, replayed = false, value = {component = "bee/example", version = "1.0.0",
-                digest = string.rep("a", 64), requirements = {requirements = {{id = "app:database", has_default = false,
-                    has_selected = false, capability = "database", targets = {}}}, missing = {}}}})
-            state.requirements_open = true
-            local shown = draw(120, 40, state, 0, "")
-            local rendered = table.concat(shown.rows, "\n")
-            test.contains(rendered, "Supplied automatically by Bee")
-            test.is_nil((rendered:find("Not set", 1, true)))
-            test.is_nil((rendered:find("No default", 1, true)))
-            local controls = assert(shown.controls)
-            for _, hint in ipairs(controls.hints) do
-                test.is_false(hint.key == "Enter" or hint.key == "J" or hint.key == "←→")
-            end
-            for _, hit in ipairs(shown.hits) do test.is_false(hit.kind == "reset_requirement") end
-            test.not_nil(model.set_field(state, "app:database", "other"))
-        end)
         test.it("shows registry-protected packages as updates with Bee without update controls", function()
             local state = model.new()
             model.apply_installed(state, {ok = true, replayed = false, value = {roots = {}, modules = {

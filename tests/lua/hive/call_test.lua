@@ -45,11 +45,10 @@ local function define_tests()
         end)
         test.it("materializes only the host facade permission", function()
             local words = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
-            local proposed = assert(grants.propose(words, "bee.tests.hive:outbound", APP, {{id = "sdk.copy:call",
-                expected_kind = "security.policy", targets = {APP}, capability_request = {capability = "hive.call",
+            local proposed = assert(grants.propose(words, "bee.tests.hive:outbound", APP, {{application = APP, package = "test", capability = "hive.call",
                     parameters = {nodes = {"runner"}, workspaces = {"project"}, applications = {APP},
                         services = {"test-sdk"}, operations = {"run"}}, catalog_revision = words.revision,
-                    template_revision = 1, target = APP, path = ".security.policies +="}}}))
+                    template_revision = 1}}))
             local policy = assert(bounds.object(proposed.policies[1].data.policy))
             test.eq(policy.actions[1], "funcs.call")
             test.eq(#policy.actions, 1)

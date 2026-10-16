@@ -40,7 +40,7 @@ local function facts(): ({[string]: unknown}, preflight.Candidate, preflight.Con
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b",
         base_revision = 4, base_digest = SHA, artifacts = {{component = "demo/app", version = "v1",
             digest = SHA, dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries,
-        requirements = {}, migrations = {}}
+        capabilities = {}, requirements = {}, migrations = {}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 4,
         registry_digest = SHA, policy_digest = SHA, packages = {["demo/app"] = true},
         namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {}, grants = {},
@@ -173,7 +173,7 @@ local function define_tests()
             local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b",
                 base_revision = 4, base_digest = SHA, artifacts = {{component = "demo/app", version = "v1",
                     digest = exact.digest, dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries,
-                requirements = {},
+                capabilities = {}, requirements = {},
                 migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}}
             local database = candidate_entry("host:db", "db.sql.sqlite", "host/base", SHA)
             local context: preflight.Context = {node_id = "node-a", registry_revision = 4,

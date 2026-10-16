@@ -32,11 +32,9 @@ local function define_tests()
             local app_id = "app.steer_probe:app"
             local owner = "bee.gov.apps:" .. workspace .. ".steer_probe"
             local catalog = assert(capability_catalog.decode(assert(registry.get("bee.capability:catalog"))))
-            local grant = {id = "app.steer_probe:message", expected_kind = "security.policy", value = nil,
-                targets = {app_id}, capability_request = {capability = "threads.message",
+            local grant = {application = app_id, package = "test", capability = "threads.message",
                     parameters = {scope = "children"}, catalog_revision = catalog.revision,
-                    template_revision = 1, reason = "Message managed child threads",
-                    target = app_id, path = ".security.policies +="}}
+                    template_revision = 1, reason = "Message managed child threads"}
             local proposed = assert(capability_grants.propose(catalog, owner, app_id, {grant}))
             local changes = registry.snapshot():changes()
             for _, entry in ipairs(proposed.policies) do

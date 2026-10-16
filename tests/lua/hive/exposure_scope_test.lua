@@ -29,10 +29,9 @@ local function define_tests()
         test.it("permits only the approved mode and operation and revokes with its installed policy", function()
             local vocabulary = assert(capability.decode(assert(registry.get("bee.capability:catalog"))))
             local proposal = assert(grants.propose(vocabulary, "bee.tests.hive:scope_owner", "arbitrary.sdk:app", {
-                {id = "arbitrary.sdk:exposure", value = nil, expected_kind = "security.policy", targets = {TARGET},
-                    capability_request = {capability = "hive.expose", parameters = {operations = {TARGET},
+                {application = "arbitrary.sdk:app", package = "test", capability = "hive.expose", parameters = {operations = {TARGET},
                         mode = "open", audiences = {"node-1"}}, catalog_revision = capability.revisions(vocabulary, "hive.expose"),
-                        template_revision = 2, target = TARGET, path = ".security.policies +="}}}))
+                        template_revision = 2}}))
             local generated = proposal.policies[1]
             local changes = assert(registry.snapshot()):changes()
             changes:create({id = assert(bounds.id(generated.id)),

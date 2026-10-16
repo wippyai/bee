@@ -28,7 +28,7 @@ local function fixture(): (preflight.Candidate, preflight.Context)
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7, base_digest = SHA,
         artifacts = {{component = "example/demo", version = "1.0.0", digest = SHA, dependencies = {}, namespaces = {"demo"}}},
         entries = candidate_entries,
-        requirements = {{id = "demo:target_db", package = "example/demo", value = "host:db", expected_kind = "db.sql.sqlite", targets = {"demo:run"}}},
+        capabilities = {}, requirements = {{id = "demo:target_db", package = "example/demo", value = "host:db", expected_kind = "db.sql.sqlite", targets = {"demo:run"}}},
         migrations = {{id = "demo:001", target_db = "host:db", checksum = SHA, ordinal = 1}}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
         packages = {["example/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
@@ -62,19 +62,22 @@ local function has(report: preflight.Report, code: string): boolean
 end
 local function define_tests()
     test.describe("Governance preflight", function()
-        test.it("admits measured Hive exposure on owned functions and confines other capabilities to apps", function()
+        test.it("admits capabilities listed by the package's application and Hive exposure of its own functions", function()
             local candidate, context = fixture()
-            candidate.requirements[1].value = nil
-            candidate.requirements[1].expected_kind = "security.policy"
-            candidate.requirements[1].capability_request = {capability = "hive.expose",
+            candidate.entries[#candidate.entries + 1] = candidate_entry("demo:app", "process.lua", "example/demo", SHA, {})
+            context.kinds["process.lua"] = true
+            candidate.capabilities = {{application = "demo:app", package = "example/demo", capability = "hive.expose",
                 parameters = {operations = {"demo:run"}, mode = "open", audiences = {"node-b"}}, reason = "Expose the SDK",
-                catalog_revision = 6, template_revision = 2, target = "demo:run", path = ".security.policies +="}
+                catalog_revision = 6, template_revision = 2}}
             test.is_true(checked(candidate, context).ready)
-            candidate.requirements[1].capability_request.parameters.operations = {"foreign:run"}
+            candidate.capabilities[1].parameters.operations = {"foreign:run"}
             test.is_true(has(checked(candidate, context), "CAPABILITY_REQUEST_DENIED"))
-            candidate.requirements[1].capability_request.parameters.operations = {"demo:run"}
-            candidate.requirements[1].capability_request.capability = "hive.call"
+            candidate.capabilities[1].parameters.operations = {"demo:run"}
+            candidate.capabilities[1].application = "demo:run"
             test.is_true(has(checked(candidate, context), "CAPABILITY_REQUEST_DENIED"))
+            candidate.capabilities[1].application = "demo:app"
+            candidate.capabilities[1].package = "other/package"
+            test.is_true(has(checked(candidate, context), "UNKNOWN_OWNER"))
         end)
 
         test.it("blocks an application that names no menu, since the person has no way to open it", function()
@@ -273,21 +276,19 @@ local function define_tests()
                 test.is_true(has(checked(candidate, context), "SECURITY_DENIED"))
             end
         end)
-        test.it("preserves capability requests in exact candidate bytes and rejects forged targets", function()
+        test.it("preserves capability requests in exact candidate bytes and rejects malformed ones", function()
             local candidate, context = fixture()
             candidate.entries[1].kind = "process.lua"
             context.kinds["process.lua"] = true
-            candidate.requirements[1].value = nil
-            candidate.requirements[1].expected_kind = "security.policy"
-            candidate.requirements[1].capability_request = {capability = "workspace.files.read",
-                parameters = {subpath = "docs"}, reason = "Show docs", target = "demo:run",
-                path = ".security.policies +=", catalog_revision = 1, template_revision = 1}
+            candidate.capabilities = {{application = "demo:run", package = "example/demo", capability = "workspace.files.read",
+                parameters = {subpath = "docs"}, reason = "Show docs", catalog_revision = 1, template_revision = 1}}
             local bytes = assert(canonical.encode(candidate, 1048576))
             local decoded = assert(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
-            test.eq((decoded.requirements[1].capability_request).reason, "Show docs")
+            test.eq(decoded.capabilities[1].reason, "Show docs")
             test.is_true(checked(decoded, context).ready)
-            candidate.requirements[1].capability_request.target = "other:run"
+            candidate.capabilities[1].application = "other:run"
             test.is_true(has(checked(candidate, context), "CAPABILITY_REQUEST_DENIED"))
+            candidate.capabilities[1].reason = "two\nlines"
             bytes = assert(canonical.encode(candidate, 1048576))
             test.is_nil(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
         end)
@@ -462,7 +463,7 @@ local function define_tests()
             end
             local exec = assert(remedies["App tried " .. candidate.entries[1].id .. ": unadmitted runtime module exec."])
             test.is_true(exec:find("process.exec", 1, true) ~= nil)
-            test.is_true(exec:find("ns.requirement", 1, true) ~= nil)
+            test.is_true(exec:find("meta.application.capabilities", 1, true) ~= nil)
             local os = assert(remedies["App tried " .. candidate.entries[1].id .. ": unadmitted runtime module os."])
             test.is_true(os:find("process.exec", 1, true) == nil)
             context.modules.exec = true

@@ -39,7 +39,6 @@ type Object = {[string]: unknown}
 -- migration and agent tools, exactly as an agent reads it.
 local function first_version(): {Object}
     local entries: {Object} = {}
-    for _, entry in ipairs(guide.example()) do entries[#entries + 1] = entry end
     for _, entry in ipairs(guide.database_example()) do entries[#entries + 1] = entry end
     for _, entry in ipairs(guide.test_example()) do entries[#entries + 1] = entry end
     local encoded = assert(json.encode(entries))

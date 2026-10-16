@@ -32,7 +32,7 @@ type Policy = application_capabilities.Policy
 type Preparation = {artifact_bytes: string, artifact_digest: string, root: Root, captured: Captured,
     expected: {Entry}, preview: RegistryPlan, flattened: {Entry}, selected: {[string]: boolean},
     owned_namespaces: {[string]: boolean}, artifacts: {preflight.Artifact}, candidate_entries: {preflight.Entry},
-    requirements: {preflight.Requirement}, migrations: {preflight.Migration}, current: {[string]: preflight.StateEntry}}
+    requirements: {preflight.Requirement}, capabilities: {preflight.CapabilityRequest}, migrations: {preflight.Migration}, current: {[string]: preflight.StateEntry}}
 type Deps = {prepared: Preparation?, capture: () -> (Captured?, string?), root: (unknown, unknown?) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
 type Resolver = resolution.Resolver
@@ -312,6 +312,7 @@ local function prepare(captured: Captured, root: Root, spec: Object, expected: {
     local artifacts: {preflight.Artifact} = {}
     local candidate_entries: {preflight.Entry} = {}
     local requirements: {preflight.Requirement} = {}
+    local capability_requests: {preflight.CapabilityRequest} = {}
     local migrations: {preflight.Migration} = {}
     local owned_namespaces: {[string]: boolean} = {}
     local names: {string} = {}
@@ -336,7 +337,7 @@ local function prepare(captured: Captured, root: Root, spec: Object, expected: {
             if not measured then return nil, measured_error end
             candidate_entries[#candidate_entries + 1] = measured
             if entry.kind == "ns.requirement" then
-                local item, item_error = requirement.resolve(entry, package, final_by_id, owned, catalog)
+                local item, item_error = requirement.resolve(entry, package, final_by_id, owned)
                 if not item then return nil, item_error, true end
                 requirements[#requirements + 1] = item
             end
@@ -347,6 +348,9 @@ local function prepare(captured: Captured, root: Root, spec: Object, expected: {
                 migrations[#migrations + 1] = item
             end
         end
+        local requested, requested_error, requested_refused = application_capabilities.requests(entries, package, final_by_id, owned, catalog)
+        if not requested then return nil, requested_error, requested_refused end
+        for _, item in ipairs(requested) do capability_requests[#capability_requests + 1] = item end
         table.sort(namespaces)
         local dependencies: {string} = {}
         for dependency in pairs(edges[package] or {}) do if selected[dependency] then dependencies[#dependencies + 1] = dependency end end
@@ -382,7 +386,7 @@ local function prepare(captured: Captured, root: Root, spec: Object, expected: {
     return {artifact_bytes = spec.artifact_bytes, artifact_digest = spec.artifact_digest, root = copy(root),
         captured = captured_copy, expected = expected, preview = preview, flattened = flattened, selected = selected,
         owned_namespaces = owned_namespaces, artifacts = artifacts, candidate_entries = candidate_entries,
-        requirements = requirements, migrations = migrations, current = current}, nil
+        requirements = requirements, capabilities = capability_requests, migrations = migrations, current = current}, nil
 end
 
 function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
@@ -419,6 +423,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local selected, owned_namespaces = prepared.selected, prepared.owned_namespaces
     local artifacts, candidate_entries = prepared.artifacts, prepared.candidate_entries
     local requirements, migrations, current = prepared.requirements, prepared.migrations, prepared.current
+    local requested = prepared.capabilities
 
     local policy, policy_error = deps.policy(spec, captured, preview)
     if not policy then return nil, nil, policy_error or "read destination Hub policy" end
@@ -431,7 +436,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local current_raw: {[string]: Entry} = {}
     for _, entry in ipairs(captured.entries) do current_raw[entry.id] = entry end
     local capabilities, capability_error, capability_refused = application_capabilities.prepare(policy, spec, flattened,
-        requirements, current_raw, deps.folder)
+        requested, current_raw, deps.folder)
     if not capabilities then return nil, nil, capability_error, capability_refused end
     policy = capabilities.policy
     -- Measure only the existing definitions that can affect this closure:
@@ -451,8 +456,8 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     end
     for _, item in ipairs(requirements) do
         for _, target in ipairs(item.targets) do relevant_ids[target] = true end
-        if item.capability_request then relevant_ids["bee.capability:catalog"] = true end
     end
+    if #requested > 0 then relevant_ids["bee.capability:catalog"] = true end
     if policy.database_bindings ~= nil then
         if type(policy.database_bindings) ~= "table" then return nil, nil, "host policy database bindings are malformed" end
         for _, raw in pairs(policy.database_bindings) do
@@ -506,7 +511,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     context.registry_preparation = prepared
     return {destination_node = destination, source_node = source, base_revision = captured.revision,
         base_digest = base_digest, artifacts = artifacts, entries = candidate_entries,
-        requirements = requirements, migrations = migrations}, context, nil
+        requirements = requirements, capabilities = requested, migrations = migrations}, context, nil
 end
 
 type Config = {overlay_owner: string?, root: (unknown, unknown?) -> (Root?, string?), policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}

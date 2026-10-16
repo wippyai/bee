@@ -123,11 +123,8 @@ local function define_tests()
             local vocabulary = decoded_vocabulary
             local catalog_revision, template_revision = capability_model.revisions(vocabulary, "threads.read")
             if not catalog_revision or not template_revision then error("threads.read is absent from the host catalog") end
-            local requested = assert(grants.propose(vocabulary, identity.overlay_owner, "app.tally:app", {{
-                id = "app.tally:threads", expected_kind = "security.policy", targets = {"app.tally:app"},
-                capability_request = {capability = "threads.read", parameters = {scope = "owned"},
-                    catalog_revision = catalog_revision, template_revision = template_revision,
-                    target = "app.tally:app", path = ".security.policies +="}}}))
+            local requested = assert(grants.propose(vocabulary, identity.overlay_owner, "app.tally:app", {{application = "app.tally:app", package = "test", capability = "threads.read", parameters = {scope = "owned"},
+                    catalog_revision = catalog_revision, template_revision = template_revision}}))
             local installed = assert(grants.record(identity.overlay_owner, WORKSPACE,
                 "app.tally:app", requested, "approved-1", 1))
             local configuration = assert(profiles.configuration(configured(), NODE))

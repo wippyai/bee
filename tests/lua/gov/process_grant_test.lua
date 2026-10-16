@@ -23,13 +23,12 @@ type Outcome = {result: Object, stage: string}
 
 -- Proposes one process.exec grant and installs its executor and policy the
 -- way activation composes them.
-local function install(requirement: string, command: string, directory: string, recorded: boolean?): (Object, Object, {string})
+local function install(command: string, directory: string, recorded: boolean?): (Object, Object, {string})
     local vocabulary = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
     local proposal = assert(grants.propose(vocabulary, OWNER, APP, {
-        {id = "app." .. NAME .. ":" .. requirement, expected_kind = "security.policy", targets = {APP},
-            capability_request = {capability = "process.exec", parameters = {command = command, directory = directory},
+        {application = APP, package = "test", capability = "process.exec", parameters = {command = command, directory = directory},
                 template_revision = 1, catalog_revision = model.revisions(vocabulary, "process.exec"),
-                reason = "run the approved command", target = APP, path = ".security.policies +="}}}, nil, FOLDER))
+                reason = "run the approved command"}}, nil, FOLDER))
     local policy = assert(bounds.object(proposal.policies[1]))
     local executor = assert(bounds.object(proposal.executors[1]))
     local changes = assert(registry.snapshot()):changes()
@@ -37,8 +36,6 @@ local function install(requirement: string, command: string, directory: string, 
     local entries: {Object} = {executor, policy}
     if recorded then
         entries[#entries + 1] = assert(grants.record(OWNER, WORKSPACE, APP, proposal, "approval-process", 1))
-        entries[#entries + 1] = {id = proposal.bindings[1].requirement_id, kind = "ns.requirement",
-            meta = {}, data = {default = proposal.bindings[1].policy_id}}
     end
     for _, entry in ipairs(entries) do
         local id = assert(bounds.id(entry.id))
@@ -76,11 +73,11 @@ end
 local function define_tests()
     test.describe("approved process grant", function()
         test.it("runs the approved command with further arguments in the approved folder", function()
-            local policy, executor, created = install("echo", "/bin/echo approved", "lua")
+            local policy, executor, created = install("/bin/echo approved", "lua")
             local executor_id = assert(bounds.id(executor.id))
             local alone = run(policy, executor_id, "/bin/echo approved")
             local extended = run(policy, executor_id, "/bin/echo approved and more")
-            local where_policy, where_executor, where_created = install("pwd", "/bin/pwd", "lua")
+            local where_policy, where_executor, where_created = install("/bin/pwd", "lua")
             local where = run(where_policy, assert(bounds.id(where_executor.id)), "/bin/pwd")
             remove(where_created)
             remove(created)
@@ -92,7 +89,7 @@ local function define_tests()
             test.is_true(tostring(where.output):find("/lua\n$") ~= nil)
         end)
         test.it("refuses another command, a joined argument, a chosen folder, caller environment and other executors", function()
-            local policy, executor, created = install("refusals", "/bin/echo approved", "lua")
+            local policy, executor, created = install("/bin/echo approved", "lua")
             local executor_id = assert(bounds.id(executor.id))
             local outcomes: {Outcome} = {
                 {result = run(policy, executor_id, "/bin/echo other"), stage = "exec"},
@@ -115,7 +112,7 @@ local function define_tests()
             end
         end)
         test.it("names the approved executor to the application by command and folder", function()
-            local policy, executor, created = install("named", "/bin/echo named", "lua", true)
+            local policy, executor, created = install("/bin/echo named", "lua", true)
             local scope = app_scope.boundary({assert(bounds.id(policy.id)), CALL_POLICY})
             local caller = funcs.new():with_actor(actor()):with_scope(scope)
             local raw, err = caller:call("bee.gov.binding:granted_resources", {})

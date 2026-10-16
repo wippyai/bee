@@ -603,7 +603,6 @@ function M.set_parameter(state: State, name: unknown, encoded: unknown): string?
 end
 
 local function write_field(state: State, field: form.Field, value: unknown): string?
-    if field.readonly then return field.root .. ": supplied by the host" end
     local root: unknown = nil
     for _, declaration in ipairs(state.configuration or {}) do
         if declaration.id == field.root then root = configuration_value(state, declaration) end
@@ -634,7 +633,6 @@ function M.cycle_field(state: State, name: string, step: integer): string?
     for _, row in ipairs(state.requirements) do
         local field = row.field
         if row.id == name and field then
-            if field.readonly then return field.root .. ": supplied by the host" end
             if #field.choices > 0 then
                 for position, value in ipairs(field.choices) do
                     if canonical.encode(value) == canonical.encode(field.value) then index = position end

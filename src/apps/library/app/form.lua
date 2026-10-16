@@ -6,9 +6,9 @@ local requirements = require("requirements")
 local M = {}
 type Object = {[string]: unknown}
 type Step = string | integer
-type Declaration = {id: string, schema: Object?, default: unknown, has_default: boolean, capability: string?, description: string?}
+type Declaration = {id: string, schema: Object?, default: unknown, has_default: boolean, description: string?}
 type Field = {id: string, root: string, path: {Step}, schema: Object, kind: string,
-    value: unknown, default: unknown, required: boolean, description: string, readonly: boolean, choices: {unknown}, origin: string}
+    value: unknown, default: unknown, required: boolean, description: string, choices: {unknown}, origin: string}
 
 function M.label(value: unknown): string
     if value == nil then return "Not set" end
@@ -76,10 +76,10 @@ function M.fields(declarations: {Declaration}, selected: {[string]: unknown}): (
         local field_kind = kind(schema, value)
         local choices = bounds.array(schema.enum, 128) or {}
         fields[#fields + 1] = {id = name, root = declaration.id, path = path, schema = schema, kind = field_kind,
-            value = value, default = fallback, required = required, readonly = declaration.capability ~= nil,
+            value = value, default = fallback, required = required,
             choices = choices, description = bounds.text(schema.description, 4096) or declaration.description or "",
-            origin = declaration.capability and "Provided by host" or (chosen ~= nil and "Selected" or (value ~= nil and "Default" or "Required"))}
-        if declaration.capability or #choices > 0 then return end
+            origin = chosen ~= nil and "Selected" or (value ~= nil and "Default" or "Required")}
+        if #choices > 0 then return end
         local properties = bounds.object(schema.properties)
         if field_kind == "object" and properties then
             local names: {string}, needed: {[string]: boolean} = {}, {}
@@ -108,7 +108,7 @@ function M.fields(declarations: {Declaration}, selected: {[string]: unknown}): (
         end
     end
     for _, declaration in ipairs(declarations) do
-        append(declaration, declaration.schema or {}, {}, not declaration.has_default and not declaration.capability, 0)
+        append(declaration, declaration.schema or {}, {}, not declaration.has_default, 0)
     end
     return fields, problem
 end
@@ -169,7 +169,6 @@ function M.parse(field: Field, input: string): (unknown, string?)
 end
 
 function M.validate(declaration: Declaration, value: unknown): string?
-    if declaration.capability then return nil end
     if value == nil then return declaration.id .. " is required" end
     local problem = json_schema.validate(declaration.schema or {}, requirements.defaults(declaration.schema or {}, value))
     return problem and declaration.id .. ": " .. problem or nil

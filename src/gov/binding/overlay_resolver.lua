@@ -294,16 +294,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     for _, entry in ipairs(incoming) do artifact_ids[entry.id] = true end
     for _, entry in ipairs(incoming) do
         if entry.kind == "ns.requirement" then
-            local meta = object(entry.meta)
-            local catalog: capability_model.Vocabulary? = nil
-            if meta and meta.capability ~= nil then
-                local raw_catalog = current_raw["bee.capability:catalog"]
-                if not raw_catalog then return nil, nil, "host capability catalog is absent" end
-                local decoded, catalog_error = capability_model.decode(raw_catalog)
-                if not decoded then return nil, nil, catalog_error end
-                catalog = decoded
-            end
-            local item, item_error = requirement.resolve(entry, component, final, artifact_ids, catalog)
+            local item, item_error = requirement.resolve(entry, component, final, artifact_ids)
             if not item then return nil, nil, item_error, true end
             requirements[#requirements + 1] = item
             if driver_artifact and item.value and #item.targets == 1
@@ -317,8 +308,17 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             end
         end
     end
+    local raw_catalog = current_raw["bee.capability:catalog"]
+    local catalog: capability_model.Vocabulary? = nil
+    if raw_catalog then
+        local decoded, catalog_error = capability_model.decode(raw_catalog)
+        if not decoded then return nil, nil, catalog_error end
+        catalog = decoded
+    end
+    local requested, requested_error, requested_refused = application_capabilities.requests(incoming, component, final, artifact_ids, catalog)
+    if not requested then return nil, nil, requested_error, requested_refused end
     local prepared, capability_error, capability_refused = application_capabilities.prepare(policy, spec, incoming,
-        requirements, current_raw, deps.folder)
+        requested, current_raw, deps.folder)
     if not prepared then return nil, nil, capability_error, capability_refused end
     policy = prepared.policy
     local capability_proposal = prepared.proposal
@@ -333,7 +333,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local kernel, kernel_error = protected_kernel.decode(current_raw[protected_kernel.ID])
     if not kernel then return nil, nil, kernel_error end
     relevant_ids[protected_kernel.ID] = true
-    if capability_proposal then relevant_ids["bee.capability:catalog"] = true end
+    if capability_proposal or #requested > 0 then relevant_ids["bee.capability:catalog"] = true end
     for _, item in ipairs(candidate_entries) do
         for _, reference in ipairs(item.references) do relevant_ids[reference] = true end
     end
@@ -341,7 +341,6 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         for _, target in ipairs(item.targets) do relevant_ids[target] = true end
         local value = bounds.id(item.value)
         if value then relevant_ids[value] = true end
-        if item.capability_request then relevant_ids["bee.capability:catalog"] = true end
     end
     for _, item in ipairs(candidate_migrations) do
         local raw_bindings = policy.database_bindings
@@ -400,7 +399,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         dependencies = dependencies, namespaces = names}}
     local candidate: preflight.Candidate = {destination_node = destination, source_node = source,
         base_revision = captured.revision, base_digest = base_digest, artifacts = artifacts,
-        entries = candidate_entries, requirements = requirements, migrations = candidate_migrations}
+        entries = candidate_entries, requirements = requirements, capabilities = requested, migrations = candidate_migrations}
     return candidate, context, nil
 end
 

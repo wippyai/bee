@@ -555,8 +555,6 @@ entries:
     requirements: bee.hub.package:requirements
     canonical: bee.values:canonical
     bounds: bee.values:bounds
-    capability_model: bee.capability:model
-    agent_tool: bee.values:agent_tool
     driver_admission: bee.gov.types:driver_admission
     preflight: bee.gov.binding:preflight
 - name: hub_resolver
@@ -655,6 +653,7 @@ entries:
     capability_model: bee.capability:model
     capability_grants: bee.gov.types:capability_grants
     capability_files: bee.gov.types:capability_files
+    agent_tool: bee.values:agent_tool
     preflight: bee.gov.binding:preflight
 - name: hub_package
   kind: library.lua

@@ -18,7 +18,6 @@ type Requirement = {
     id: string,
     default: unknown?,
     has_default: boolean,
-    capability: string?,
     targets: {Target},
     selected: unknown?,
     has_selected: boolean,
@@ -49,8 +48,14 @@ function M.defaults(schema: {[string]: unknown}, value: unknown): unknown
     return value
 end
 
+-- Capabilities are listed on the application's own declaration; a
+-- requirement names configuration and dependency bindings only.
+function M.capability_problem(id: unknown, meta: {[string]: unknown}?): string?
+    if not meta or meta.capability == nil then return nil end
+    return tostring(id) .. ": an ns.requirement has no meta.capability; list {capability, parameters, reason} in the application's meta.application.capabilities"
+end
+
 function M.validate(requirement: Requirement, value: unknown): string?
-    if requirement.capability then return requirement.id .. ": capability grants are selected by the host" end
     local problem = json_schema.validate(requirement.schema or {}, value)
     return problem and requirement.id .. ": " .. problem or nil
 end
@@ -167,11 +172,12 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
                     return nil, encode_error or "requirement default exceeds its bound"
                 end
             end
-            local capability = bounds.text(meta.capability, 80)
+            local misplaced = M.capability_problem(id, meta)
+            if misplaced then return nil, misplaced end
             local description = bounds.text(schema.description or meta.description or meta.comment, 4096)
-            local requirement: Requirement = {capability = capability, id = id, default = fallback, has_default = has_default,
+            local requirement: Requirement = {id = id, default = fallback, has_default = has_default,
                 targets = targets, has_selected = false, schema = schema, description = description, schema_default = schema_default}
-            if has_default and not capability then
+            if has_default then
                 local problem = M.validate(requirement, fallback)
                 if problem then return nil, problem end
             end
@@ -200,7 +206,7 @@ function M.read(entries: unknown, parameters: {Parameter}): (Result?, string?)
     end
     local missing: {string} = {}
     for _, requirement in ipairs(requirements) do
-        if not requirement.capability and not requirement.has_selected and not requirement.has_default then missing[#missing + 1] = requirement.id end
+        if not requirement.has_selected and not requirement.has_default then missing[#missing + 1] = requirement.id end
     end
     return {requirements = requirements, missing = missing}, nil
 end
@@ -259,7 +265,7 @@ function M.migration_targets(raw: unknown, selected: Result): ({Entry}?, string?
     for _, requirement in ipairs(selected.requirements) do bindings[requirement.id] = requirement end
     for _, entry in ipairs(entries) do
         local binding = bindings[entry.id]
-        if binding and not binding.capability and (binding.has_selected or binding.schema_default) then
+        if binding and (binding.has_selected or binding.schema_default) then
             local original = bounds.object(entry.data)
             if not original then return nil, "invalid requirement configuration: " .. entry.id end
             local data: {[string]: unknown} = {}
@@ -320,7 +326,7 @@ function M.configuration_targets(entries: {Entry}, selected: Result): ({Entry}?,
     end
     local assigned: {[string]: string} = {}
     for _, requirement in ipairs(selected.requirements) do
-        if not requirement.capability and requirement.schema and next(requirement.schema) ~= nil then
+        if requirement.schema and next(requirement.schema) ~= nil then
             local value = requirement.default
             if requirement.has_selected then value = requirement.selected end
             if value == nil then return nil, requirement.id .. " is required" end
@@ -354,7 +360,7 @@ function M.frozen_parameters(raw: unknown): ({Parameter}?, string?)
     if not declarations then return nil, problem end
     local parameters: {Parameter} = {}
     for _, requirement in ipairs(declarations.requirements) do
-        if not requirement.capability and requirement.has_default then
+        if requirement.has_default then
             parameters[#parameters + 1] = {name = requirement.id, value = requirement.default}
         end
     end

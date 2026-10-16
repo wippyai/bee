@@ -6,8 +6,10 @@ local workspace_applications = require("workspace_applications")
 local capability_model = require("capability_model")
 local capability_grants = require("capability_grants")
 local capability_files = require("capability_files")
+local agent_tool = require("agent_tool")
 local preflight = require("preflight")
 local M = {}
+M.MAX_REQUESTS = 8
 type Object = {[string]: unknown}
 type Entry = Object
 type DatabaseBinding = {database_id: string, table_prefix: string?}
@@ -29,7 +31,94 @@ local function object(value: unknown): Object?
 end
 local sha = bounds.digest_hex
 
-function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requirements: {preflight.Requirement},
+-- The capabilities the package's applications list in
+-- meta.application.capabilities, each {capability, parameters, reason},
+-- measured against the host catalog. Names in the parameters must be the
+-- package's own launch definitions, tools or Hive operations. A declaration
+-- the host rules reject is refused; an absent or malformed catalog is a host
+-- failure.
+function M.requests(entries: {Entry}, package: string, final: {[string]: Entry}, owned: {[string]: boolean},
+    catalog: capability_model.Vocabulary?): ({preflight.CapabilityRequest}?, string?, boolean?)
+    local result: {preflight.CapabilityRequest} = {}
+    for _, entry in ipairs(entries) do
+        local meta = object(entry.meta)
+        local declaration = meta and meta.type == "bee.application" and object(meta.application) or nil
+        local app = bounds.id(entry.id)
+        if declaration and declaration.capabilities ~= nil and app then
+            local field = app .. " meta.application.capabilities"
+            local rows = bounds.dense_list(declaration.capabilities, M.MAX_REQUESTS, field)
+            if not rows then
+                return nil, field .. " must be a list of at most " .. tostring(M.MAX_REQUESTS) .. " {capability, parameters, reason} objects", true
+            end
+            if not catalog then return nil, "host capability catalog bee.capability:catalog is absent" end
+            local seen: {[string]: integer} = {}
+            for index, raw in ipairs(rows) do
+                local at = field .. "[" .. tostring(index) .. "]"
+                local item = object(raw)
+                if not item then return nil, at .. " must be an object with capability, parameters and reason", true end
+                local extra = bounds.fields(item, {"capability", "parameters", "reason"})
+                if extra then return nil, at .. ": " .. extra .. "; it takes capability, parameters and reason", true end
+                if type(item.capability) ~= "string" then return nil, at .. ".capability must name a host capability", true end
+                local capability: string = item.capability
+                local reason = bounds.text(item.reason, 512)
+                if not reason or #reason == 0 or reason:find("%c") then
+                    return nil, at .. ".reason must be one line of 1 to 512 characters saying why the app needs " .. capability, true
+                end
+                local parameters, parameters_error = capability_model.normalize(catalog, capability,
+                    item.parameters == nil and {} or item.parameters)
+                if not parameters then
+                    local prefix = parameters_error and parameters_error:find("^parameters") and at .. "." or at .. ".capability: "
+                    return nil, prefix .. tostring(parameters_error), true
+                end
+                local catalog_revision, template_revision = capability_model.revisions(catalog, capability)
+                if not catalog_revision or not template_revision then return nil, "host capability catalog is malformed" end
+                if capability == "agents.launch" then
+                    for _, ref in ipairs(parameters.definitions) do
+                        local candidate = object(final[ref])
+                        local candidate_meta = candidate and object(candidate.meta) or nil
+                        if not candidate or candidate.kind ~= "registry.entry" or not candidate_meta
+                            or candidate_meta.type ~= "bee.launch_definition" then
+                            return nil, at .. ".parameters.definitions: " .. ref .. " is not a registry.entry with meta.type bee.launch_definition", true
+                        end
+                    end
+                elseif capability == "agent.tools" then
+                    local aliases: {[string]: string} = {}
+                    for _, ref in ipairs(parameters.tools) do
+                        local candidate = object(final[ref])
+                        if not candidate or not owned[ref] then
+                            return nil, at .. ".parameters.tools: " .. ref .. " is not a function.lua tool in package " .. package, true
+                        end
+                        local decoded, decode_error = agent_tool.application(ref, candidate)
+                        if not decoded then return nil, at .. ".parameters.tools: " .. tostring(decode_error), true end
+                        local prior = aliases[decoded.alias]
+                        if prior then return nil, at .. ".parameters.tools: " .. prior .. " and " .. ref .. " share the alias " .. decoded.alias, true end
+                        aliases[decoded.alias] = ref
+                    end
+                elseif capability == "hive.expose" then
+                    for _, ref in ipairs(parameters.operations) do
+                        local candidate = object(final[ref])
+                        local candidate_meta = candidate and object(candidate.meta) or nil
+                        if not candidate or candidate.kind ~= "function.lua" or not owned[ref]
+                            or not candidate_meta or candidate_meta.hive ~= parameters.mode then
+                            return nil, at .. ".parameters.operations: " .. ref .. " is not a function.lua in package "
+                                .. package .. " with meta.hive " .. tostring(parameters.mode), true
+                        end
+                    end
+                end
+                local key = canonical.encode({capability = capability, parameters = parameters})
+                if not key then return nil, at .. " cannot be measured" end
+                if seen[key] then return nil, at .. " repeats " .. field .. "[" .. tostring(seen[key]) .. "]", true end
+                seen[key] = index
+                result[#result + 1] = {application = app, package = package, capability = capability,
+                    parameters = parameters, reason = reason,
+                    catalog_revision = catalog_revision, template_revision = template_revision}
+            end
+        end
+    end
+    return result, nil
+end
+
+function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requested: {preflight.CapabilityRequest},
     current_raw: {[string]: Entry}, folder_fn: (() -> (unknown?, string?))?): (Result?, string?, boolean?)
     local original_policy = policy
     local database_bindings = policy.database_bindings
@@ -50,10 +139,6 @@ function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requirements
             return nil, catalog_error or "workspace application capability profile is invalid"
         end
         local model_vocabulary = vocabulary
-        local requested: {Object} = {}
-        for _, item in ipairs(requirements) do
-            if item.capability_request then requested[#requested + 1] = item end
-        end
         local folder: unknown = nil
         if capability_files.rooted(requested) then
             local resolve_folder = folder_fn

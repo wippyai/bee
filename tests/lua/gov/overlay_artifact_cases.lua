@@ -27,7 +27,8 @@ function M.define()
     test.it("blocks checkpoint metadata the application catalog cannot open", function()
         local deps, spec = fixture(nil)
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.application", application = {restart_policy = "automatic"}},
+            meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main",
+                revision = "1", instance_policy = "singleton", restart_policy = "automatic", menus = {"bee.shell:apps_menu"}}},
             data = {source = "return true"}}})
         local facts = resolve(deps, spec)
         local measured = (principals.objects(facts.candidate.entries))[1]
@@ -80,7 +81,7 @@ function M.define()
         end
         test.is_true(denied)
     end)
-    test.it("retains a capability requirement and validates its app policy append target", function()
+    test.it("measures the application's listed capability and refuses one the catalog rejects", function()
         local deps, spec = fixture(nil)
         local captured = (deps.capture)()
         captured.entries[#captured.entries + 1] = {id = "bee.capability:catalog", kind = "registry.entry",
@@ -90,22 +91,20 @@ function M.define()
                 text = "Read workspace files under {subpath}",
                 policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
                 resources = {}}}}}
-        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
+        local request: Object = {capability = "workspace.files.read", parameters = {subpath = "docs"},
+            reason = "Render documentation"}
+        local app: Entry = {id = "private.app:main", kind = "process.lua",
+            meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main", revision = "1", instance_policy = "singleton",
+                menus = {"bee.shell:apps_menu"}, capabilities = {request}}},
             data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
-        local request: Entry = {id = "private.app:files", kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = "workspace.files.read",
-                parameters = {subpath = "docs"}, reason = "Render documentation"},
-            data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
-        local request_data = assert(bounds.object(request.data))
-        local request_meta = assert(bounds.object(request.meta))
-        changes(spec, {app, request})
+        changes(spec, {app})
         local facts = resolve(deps, spec)
-        local capability = assert(bounds.object((principals.objects(facts.candidate.requirements))[1].capability_request))
+        local capability = assert(bounds.object((principals.objects(facts.candidate.capabilities))[1]))
         test.eq(capability.capability, "workspace.files.read")
         test.eq((assert(bounds.object(capability.parameters))).subpath, "docs")
         test.eq(capability.reason, "Render documentation")
-        test.eq(capability.target, "private.app:main")
-        test.eq(capability.path, ".security.policies +=")
+        test.eq(capability.application, "private.app:main")
+        test.eq(#(principals.items(facts.candidate.requirements)), 0)
         local before_digest = facts.candidate.base_digest
         local captured_state = assert(captured)
         local catalog_entry = captured_state.entries[#captured_state.entries]
@@ -113,22 +112,32 @@ function M.define()
         local catalog_rows = principals.objects(catalog_data.capabilities)
         catalog_rows[1].revision = 2
         test.is_true(resolve(deps, spec).candidate.base_digest ~= before_digest)
-        for _, bad_path in ipairs({".security.policies", ".security.groups +=", ".security.policies += .other"}) do
-            request_data.targets = {{entry = "private.app:main", path = bad_path}}
-            changes(spec, {app, request})
-            local candidate = resolver.resolve_with(deps, spec)
+        local function refused(): string
+            changes(spec, {app})
+            local candidate, _, err = resolver.resolve_with(deps, spec)
             test.is_nil(candidate)
+            return tostring(err)
         end
-        request_data.targets = {{entry = "private.app:main", path = ".security.policies +="}}
-        request_meta.value_kind = "security.actor"
-        changes(spec, {app, request})
-        local wrong_kind = resolver.resolve_with(deps, spec)
-        test.is_nil(wrong_kind)
-        request_meta.value_kind = "security.policy"
-        request_meta.parameters = {subpath = "docs/../private"}
-        changes(spec, {app, request})
-        local wrong_path = resolver.resolve_with(deps, spec)
-        test.is_nil(wrong_path)
+        request.parameters = {subpath = "docs/../private"}
+        test.contains(refused(), "private.app:main meta.application.capabilities[1].parameters.subpath must be a relative workspace path")
+        request.parameters = {subpath = "docs", depth = 2}
+        test.contains(refused(), "parameters.depth is not a parameter of workspace.files.read; it takes subpath")
+        request.parameters = {subpath = "docs"}
+        request.capability = "workspace.files.everything"
+        test.contains(refused(), "capabilities[1].capability: workspace.files.everything is not a host capability; expected one of workspace.files.read")
+        request.capability = "workspace.files.read"
+        request.reason = ""
+        test.contains(refused(), "capabilities[1].reason must be one line")
+        request.reason = "Render documentation"
+        request.target = "private.app:main"
+        test.contains(refused(), "capabilities[1]: ")
+        request.target = nil
+        local legacy: Entry = {id = "private.app:files", kind = "ns.requirement",
+            meta = {value_kind = "security.policy", capability = "workspace.files.read", parameters = {subpath = "docs"}},
+            data = {targets = {{entry = "private.app:main", path = ".x"}}}}
+        changes(spec, {app, legacy})
+        local _, _, legacy_error = resolver.resolve_with(deps, spec)
+        test.contains(tostring(legacy_error), "list {capability, parameters, reason} in the application's meta.application.capabilities")
     end)
     test.it("refuses an artifact the host application rules reject and fails on a missing host catalog", function()
         local deps, spec = fixture(nil)
@@ -173,29 +182,25 @@ function M.define()
             meta = {hive = "open"}, data = {source = "return true"}}
         local other: Entry = {id = "private.app:extra", kind = "function.lua",
             meta = {hive = "open"}, data = {source = "return true"}}
-        local request: Entry = {id = "private.app:exposure", kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = "hive.expose",
-                parameters = {operations = {"private.app:telemetry"}, mode = "open", audiences = {"node-1"}},
-                reason = "Expose telemetry"},
-            data = {targets = {{entry = "private.app:telemetry", path = ".security.policies +="}}}}
-        local request_data = assert(bounds.object(request.data))
-        local request_meta = assert(bounds.object(request.meta))
-        changes(spec, {op, other, request})
+        local request: Object = {capability = "hive.expose",
+            parameters = {operations = {"private.app:telemetry"}, mode = "open", audiences = {"node-1"}},
+            reason = "Expose telemetry"}
+        local app: Entry = {id = "private.app:main", kind = "process.lua",
+            meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main", revision = "1", instance_policy = "singleton",
+                menus = {"bee.shell:apps_menu"}, capabilities = {request}}}, data = {source = "return true"}}
+        changes(spec, {app, op, other})
         local facts = resolve(deps, spec)
-        local capability = assert(bounds.object((principals.objects(facts.candidate.requirements))[1].capability_request))
+        local capability = assert(bounds.object((principals.objects(facts.candidate.capabilities))[1]))
         test.eq(capability.capability, "hive.expose")
-        test.eq(capability.target, "private.app:telemetry")
+        test.eq(capability.application, "private.app:main")
         test.eq((principals.strings((assert(bounds.object(capability.parameters))).operations))[1], "private.app:telemetry")
         test.eq((assert(bounds.object(capability.parameters))).mode, "open")
-        request_data.targets = {{entry = "private.app:extra", path = ".security.policies +="}}
-        changes(spec, {op, other, request})
-        test.is_nil((resolver.resolve_with(deps, spec)))
-        request_data.targets = {{entry = "private.app:telemetry", path = ".security.policies +="}}
-        request_meta.parameters = {operations = {"private.app:telemetry"}, mode = "policy", audiences = {"node-1"}}
-        changes(spec, {op, other, request})
-        test.is_nil((resolver.resolve_with(deps, spec)))
-        request_meta.parameters = {operations = {"bee.host:db"}, mode = "open", audiences = {"node-1"}}
-        changes(spec, {op, other, request})
+        request.parameters = {operations = {"private.app:telemetry"}, mode = "policy", audiences = {"node-1"}}
+        changes(spec, {app, op, other})
+        local _, _, mode_error = resolver.resolve_with(deps, spec)
+        test.contains(tostring(mode_error), "parameters.operations: private.app:telemetry is not a function.lua in package")
+        request.parameters = {operations = {"bee.host:db"}, mode = "open", audiences = {"node-1"}}
+        changes(spec, {app, op, other})
         test.is_nil((resolver.resolve_with(deps, spec)))
     end)
     test.it("requires every agents.launch definition to be a launch definition", function()
@@ -215,21 +220,20 @@ function M.define()
             registry = {owner = "bee/host"}}
         captured.entries[#captured.entries + 1] = {id = "bee.host:private_callable", kind = "function.lua",
             data = {source = "return true"}, registry = {owner = "bee/host"}}
-        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
+        local request: Object = {capability = "agents.launch", parameters = {definitions = {"bee.host:worker"}},
+            reason = "Launch the allow-listed worker"}
+        local app: Entry = {id = "private.app:main", kind = "process.lua",
+            meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main", revision = "1", instance_policy = "singleton",
+                menus = {"bee.shell:apps_menu"}, capabilities = {request}}},
             data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
-        local request: Entry = {id = "private.app:launch", kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = "agents.launch",
-                parameters = {definitions = {"bee.host:worker"}},
-                reason = "Launch the allow-listed worker"},
-            data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
-        local request_meta = assert(bounds.object(request.meta))
-        changes(spec, {app, request})
+        changes(spec, {app})
         test.not_nil((resolver.resolve_with(deps, spec)))
         -- A callable entry named as a definition would widen the generated
         -- funcs.call grant beyond the launch facade, so it is refused.
-        request_meta.parameters = {definitions = {"bee.host:private_callable"}}
-        changes(spec, {app, request})
-        test.is_nil((resolver.resolve_with(deps, spec)))
+        request.parameters = {definitions = {"bee.host:private_callable"}}
+        changes(spec, {app})
+        local _, _, launch_error = resolver.resolve_with(deps, spec)
+        test.contains(tostring(launch_error), "bee.host:private_callable is not a registry.entry with meta.type bee.launch_definition")
     end)
     test.it("requires every agent tool to be one of this artifact's own tool functions with no authority of its own", function()
         local deps, spec = fixture(nil)
@@ -244,19 +248,17 @@ function M.define()
         captured.entries[#captured.entries + 1] = {id = "bee.host:helper", kind = "function.lua",
             meta = {type = "tool", llm_alias = "helper", llm_description = "Host helper",
                 input_schema = '{"type":"object"}'}, data = {source = "return true"}, registry = {owner = "bee/host"}}
-        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
-            data = {source = "return true"}}
+        local function app_listing(tools: {string}): Entry
+            return {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main", revision = "1", instance_policy = "singleton",
+                menus = {"bee.shell:apps_menu"}, 
+                capabilities = {{capability = "agent.tools", parameters = {tools = tools}, reason = "Let agents add notes"}}}},
+                data = {source = "return true"}}
+        end
         local function tool(name: string, alias: string, data: Entry?): Entry
             return {id = "private.app:" .. name, kind = "function.lua",
                 meta = {type = "tool", llm_alias = alias, llm_description = "Adds a note",
                     input_schema = '{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}'},
                 data = data or {source = "return {handle = function() return {ok = true} end}", method = "handle"}}
-        end
-        local function request(tools: {string}): Entry
-            return {id = "private.app:agents", kind = "ns.requirement",
-                meta = {value_kind = "security.policy", capability = "agent.tools",
-                    parameters = {tools = tools}, reason = "Let agents add notes"},
-                data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
         end
         local function refusal(entries: {Entry}): string
             changes(spec, entries)
@@ -264,20 +266,19 @@ function M.define()
             test.is_nil(candidate)
             return tostring(err)
         end
-        changes(spec, {app, tool("add", "add_note"), request({"private.app:add"})})
+        changes(spec, {app_listing({"private.app:add"}), tool("add", "add_note")})
         test.not_nil((resolver.resolve_with(deps, spec)))
-        test.contains(refusal({app, tool("add", "add_note"), request({"bee.host:helper"})}),
-            "agent tool bee.host:helper is not this artifact's own tool function")
+        test.contains(refusal({app_listing({"bee.host:helper"}), tool("add", "add_note")}),
+            "parameters.tools: bee.host:helper is not a function.lua tool in package")
         local plain: Entry = {id = "private.app:plain", kind = "function.lua", data = {source = "return true"}}
-        test.contains(refusal({app, plain, request({"private.app:plain"})}), "is not a function tool")
-        test.contains(refusal({app, tool("add", "add_note", {source = "return true", security = {policies = {"bee.host:read_policy"}}}),
-            request({"private.app:add"})}), "declares its own security")
-        test.contains(refusal({app, tool("add", "notes"), tool("list", "notes"), request({"private.app:add", "private.app:list"})}),
+        test.contains(refusal({app_listing({"private.app:plain"}), plain}), "is not a function tool")
+        test.contains(refusal({app_listing({"private.app:add"}), tool("add", "add_note", {source = "return true", security = {policies = {"bee.host:read_policy"}}})}), "declares its own security")
+        test.contains(refusal({app_listing({"private.app:add", "private.app:list"}), tool("add", "notes"), tool("list", "notes")}),
             "share the alias notes")
         local wide = tool("add", "add_note")
         local wide_meta = assert(bounds.object(wide.meta))
         wide_meta.input_schema = '{"type":"object","$ref":"#/x"}'
-        test.contains(refusal({app, wide, request({"private.app:add"})}), "schema Bee does not advertise")
+        test.contains(refusal({app_listing({"private.app:add"}), wide}), "schema Bee does not advertise")
     end)
     test.it("accepts the runtime's initial registry revision", function()
         local deps, spec = fixture(nil)
@@ -348,11 +349,9 @@ function M.define()
                 text = "Read owned threads", policies = {{operation = "threads.read",
                     resource = "threads", scope = {scope = "$scope"}}}, resources = {}}}}}
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.application"}, data = {source = "return true"}},
-            {id = "private.app:threads", kind = "ns.requirement",
-                meta = {value_kind = "security.policy", capability = "threads.read",
-                    parameters = {scope = "owned"}, reason = "Show threads"},
-                data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}})
+            meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main", revision = "1", instance_policy = "singleton",
+                menus = {"bee.shell:apps_menu"}, capabilities = {{capability = "threads.read",
+                parameters = {scope = "owned"}, reason = "Show threads"}}}}, data = {source = "return true"}}})
         local facts = resolve(deps, spec)
         local capability_proposal = proposal(facts.context)
         test.eq(#capability_proposal.policies, 1)
@@ -392,11 +391,9 @@ function M.define()
                 text = "Read owned threads", policies = {{operation = "threads.read",
                     resource = "threads", scope = {scope = "$scope"}}}, resources = {}}}}}
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.application"}, data = {source = "return true"}},
-            {id = "private.app:threads", kind = "ns.requirement",
-                meta = {value_kind = "security.policy", capability = "threads.read",
-                    parameters = {scope = "owned"}, reason = "Show threads"},
-                data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}})
+            meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main", revision = "1", instance_policy = "singleton",
+                menus = {"bee.shell:apps_menu"}, capabilities = {{capability = "threads.read",
+                parameters = {scope = "owned"}, reason = "Show threads"}}}}, data = {source = "return true"}}})
         local remote = resolve(deps, spec)
         local capability = remote.context.host_evidence.capability
         if capability.kind ~= "new" then error("new capability review is missing") end
@@ -431,11 +428,9 @@ function M.define()
                 policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
                 resources = {}}}}}
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.application"}, data = {source = "return true"}},
-            {id = "private.app:files", kind = "ns.requirement",
-                meta = {value_kind = "security.policy", capability = "workspace.files.read",
-                    parameters = {subpath = "docs"}, reason = "Render documentation"},
-                data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}})
+            meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main", revision = "1", instance_policy = "singleton",
+                menus = {"bee.shell:apps_menu"}, capabilities = {{capability = "workspace.files.read",
+                parameters = {subpath = "docs"}, reason = "Render documentation"}}}}, data = {source = "return true"}}})
         local unrooted, _, unrooted_error = resolver.resolve_with(deps, spec)
         test.is_nil(unrooted)
         test.not_nil((string.find(tostring(unrooted_error), "workspace folder", 1, true)))
@@ -473,14 +468,15 @@ function M.define()
             deps.folder = function(): (unknown?, string?)
                 return {root_ref = "bee.env:workspace_root", directory = ".", base = "project", subpath = "alpha"}, nil
             end
-            local entries: {Entry} = {{id = "private.app:main", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true", modules = {"exec", "json"}}}}
+            local application: Object = {api_version = 1, lifetime = "view", title = "Main", revision = "1",
+                instance_policy = "singleton", menus = {"bee.shell:apps_menu"}}
             if requested then
-                entries[#entries + 1] = {id = "private.app:run", kind = "ns.requirement",
-                    meta = {value_kind = "security.policy", capability = "process.exec",
-                        parameters = {command = "make test", directory = "."}, reason = "Run the test suite"},
-                    data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
+                application.capabilities = {{capability = "process.exec",
+                    parameters = {command = "make test", directory = "."}, reason = "Run the test suite"}}
             end
+            local entries: {Entry} = {{id = "private.app:main", kind = "process.lua",
+                meta = {type = "bee.application", application = application},
+                data = {source = "return true", modules = {"exec", "json"}}}}
             changes(spec, entries)
             return deps, spec
         end
@@ -530,11 +526,9 @@ function M.define()
                 policies = {{operation = "database.use", resource = "$name",
                     scope = {name = "$name"}}}, resources = {}}}}}
         changes(spec, {{id = "private.app:main", kind = "process.lua",
-            meta = {type = "bee.application"}, data = {source = "return true"}},
-            {id = "private.app:db", kind = "ns.requirement",
-                meta = {value_kind = "security.policy", capability = "app.database",
-                    parameters = {name = "journal"}, reason = "Persist rows"},
-                data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}},
+            meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main", revision = "1", instance_policy = "singleton",
+                menus = {"bee.shell:apps_menu"}, capabilities = {{capability = "app.database",
+                parameters = {name = "journal"}, reason = "Persist rows"}}}}, data = {source = "return true"}},
             {id = "private.app:migration", kind = "function.lua",
                 meta = {type = "migration", target_db = "journal", ordinal = 1},
                 data = {source = "return true"}}})

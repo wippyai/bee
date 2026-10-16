@@ -30,10 +30,9 @@ end
 local function install_grant()
     if registry.get(POLICY) then return end
     local vocabulary = assert(capability_model.decode(assert(registry.get("bee.capability:catalog"))))
-    local proposed = assert(grants.propose(vocabulary, OWNER, APP, {{id = "app.agents:request", expected_kind = "security.policy",
-        targets = {APP}, capability_request = {capability = "agents.launch", parameters = {definitions = {APPROVED}},
+    local proposed = assert(grants.propose(vocabulary, OWNER, APP, {{application = APP, package = "test", capability = "agents.launch", parameters = {definitions = {APPROVED}},
             catalog_revision = capability_model.revisions(vocabulary, "agents.launch"), template_revision = 1,
-            reason = "run agents for the person", target = APP, path = ".security.policies +="}}}))
+            reason = "run agents for the person"}}))
     local generated = assert(bounds.object(proposed.policies[1]))
     local changes = registry.snapshot():changes()
     assert(changes:create({id = POLICY, kind = generated.kind, meta = generated.meta, data = generated.data}))

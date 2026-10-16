@@ -46,15 +46,19 @@ function M.entries(node: string, workspace: string, audience: string): {Object}
     local peer_input: Object = {type = "object", additionalProperties = false, required = {"node", "configuration", "inputs"},
         properties = {node = {type = "string", maxLength = 160}, configuration = input.properties.configuration,
             inputs = input.properties.inputs}}
-    local function requirement(name: string, capability: string, parameters: Object, target: string): Object
-        return {id = "app.testsdk:" .. name, kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = capability, parameters = parameters,
-                reason = "Run the configured test SDK on the approved peer"},
-            data = {targets = {{entry = target, path = ".security.policies +="}}}}
+    local function capability(name: string, parameters: Object): Object
+        return {capability = name, parameters = parameters, reason = "Run the configured test SDK on the approved peer"}
     end
     return {
         {id = M.APP, kind = "process.lua", meta = {type = "bee.application", application = {api_version = 1,
-            title = "Project test SDK", menus = {"bee.shell:apps_menu"}, lifetime = "view", revision = "1", instance_policy = "multiple"}},
+            title = "Project test SDK", menus = {"bee.shell:apps_menu"}, lifetime = "view", revision = "1", instance_policy = "multiple",
+            capabilities = {
+                capability("agent.tools", {tools = {M.RUN, M.PEER}}),
+                capability("hive.call", {nodes = {node}, workspaces = {workspace}, applications = {M.APP},
+                    services = {"test-sdk"}, operations = {"run"}}),
+                capability("hive.expose", {operations = {M.RUN}, mode = "open", audiences = {audience}}),
+                capability("hive.expose", {operations = {M.TEST}, mode = "open", audiences = {audience}}),
+            }}},
             data = {source = 'local client = require("client")\nlocal process = require("process")\nlocal function main(value: unknown)\n    local launch = assert(client.launch(value))\n    client.ready(launch)\n    assert(process.events()):receive()\nend\nreturn {main = main}',
                 method = "main", modules = {"process"}, imports = {client = "bee.app:client"}}},
         {id = M.RUN, kind = "function.lua", meta = {type = "tool", application_ref = M.APP, hive = "open",
@@ -74,11 +78,6 @@ function M.entries(node: string, workspace: string, audience: string): {Object}
         {id = "app.testsdk:trait", kind = "registry.entry", meta = {type = "agent.trait", application_ref = M.APP, title = "Project test SDK"},
             data = {prompt = "Use test_sdk_run for the local configuration. Use test_sdk_peer with the approved node for a peer call. app_tools with node lists exposed peer tools; tests with node lists/runs the associated suite and reads its run_id on that node. Retry remote mutations with the same request and idempotency_key. A timeout means outcome unknown.",
                 tools = {M.RUN, M.PEER}}},
-        requirement("agent_tools", "agent.tools", {tools = {M.RUN, M.PEER}}, M.APP),
-        requirement("peer_call", "hive.call", {nodes = {node}, workspaces = {workspace}, applications = {M.APP},
-            services = {"test-sdk"}, operations = {"run"}}, M.APP),
-        requirement("expose_run", "hive.expose", {operations = {M.RUN}, mode = "open", audiences = {audience}}, M.RUN),
-        requirement("expose_test", "hive.expose", {operations = {M.TEST}, mode = "open", audiences = {audience}}, M.TEST),
     }
 end
 return M

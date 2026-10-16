@@ -136,11 +136,9 @@ local function define_tests()
                     policies = {{operation = "database.use", resource = "$name", scope = {name = "$name"}}},
                     modules = {"sql"}}}}}
             local entries: {Object} = {
-                {id = "app.progress:database", kind = "ns.requirement",
-                    meta = {value_kind = "security.policy", capability = "app.database",
-                        parameters = {name = "progress"}, reason = "Keep tasks"},
-                    data = {targets = {{entry = "app.progress:app", path = ".security.policies +="}}}},
-                {id = "app.progress:app", kind = "process.lua", meta = {type = "bee.application"}, data = {}},
+                {id = "app.progress:app", kind = "process.lua", meta = {type = "bee.application", application = {
+                    capabilities = {{capability = "app.database", parameters = {name = "progress"}, reason = "Keep tasks"}}}},
+                    data = {}},
             }
             local made = assert(artifact.create(entries))
             spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
@@ -172,11 +170,12 @@ local function define_tests()
             test.eq(resolved.context.host_evidence.capability.kind, "new")
             test.not_nil(resolved.context.database_bindings)
             test.not_nil(resolved.context.database_bindings and resolved.context.database_bindings.progress)
-            local request = assert(resolved.candidate.requirements[1].capability_request)
+            local request = assert(resolved.candidate.capabilities[1])
             test.eq(request.capability, "app.database")
             test.eq(request.parameters.name, "progress")
-            test.eq(request.target, "app.progress:app")
-            test.eq(request.path, ".security.policies +=")
+            test.eq(request.application, "app.progress:app")
+            test.eq(request.reason, "Keep tasks")
+            test.eq(#resolved.candidate.requirements, 0)
         end)
 
         test.it("accepts the runtime's initial registry revision", function()

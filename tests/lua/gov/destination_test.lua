@@ -44,7 +44,7 @@ local function resolver(): destination.Resolver
             base_revision = 1, base_digest = string.rep("a", 64),
             artifacts = {{component = "sample/app", version = "v1", digest = digest,
                 dependencies = {}, namespaces = {"sample"}}},
-            entries = {}, requirements = {}, migrations = {}}
+            entries = {}, capabilities = {}, requirements = {}, migrations = {}}
         local context: preflight.Context = {node_id = "node-d", registry_revision = 1,
             registry_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
             packages = {["sample/app"] = true}, namespaces = {sample = true},

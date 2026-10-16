@@ -493,7 +493,6 @@ local function main(options: unknown)
         else
             local row = hubs.requirements[hubs.selected_requirement]
             if hubs.requirements_open and row and row.field then
-                if row.field.readonly then return end
                 local root = row.field.root
                 local buffer = ""
                 for _, parameter in ipairs(hubs.parameters) do if parameter.name == root then buffer = parameter.json end end
@@ -512,7 +511,6 @@ local function main(options: unknown)
         local row = hubs.requirements[hubs.selected_requirement]
         if not row then ui.status = "Select a requirement first"; changed(); return end
         local field = row.field
-        if field and field.readonly then ui.status = "Supplied automatically by Bee"; changed(); return end
         if field and (#field.choices > 0 or field.kind == "boolean") then
             local problem = hub.cycle_field(hubs, row.id, 1)
             ui.status = problem or "Field saved"
@@ -707,7 +705,7 @@ local function main(options: unknown)
         elseif kind == "requirements" then requirements()
         elseif kind == "reset_requirement" then
             local row = hubs.requirements[hubs.selected_requirement]
-            if row and row.origin == "Selected" and not (row.field and row.field.readonly) then
+            if row and row.origin == "Selected" then
                 hub.remove_parameter(hubs, row.field and row.field.root or row.id)
                 invalidate()
                 requirements()

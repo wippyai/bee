@@ -1,5 +1,6 @@
--- MIT. Host-owned capability grant values. Portable requirements remain
--- declarations; only generated policy entries installed by activation grant.
+-- MIT. Host-owned capability grant values. An application's listed
+-- capabilities remain declarations; only generated policy entries installed
+-- by activation grant.
 local bounds = require("bounds")
 local canonical = require("canonical")
 local hash = require("hash")
@@ -14,10 +15,11 @@ M.PREFIX = "bee.gov.grants:"
 -- Decode those exact IDs without rewriting approval-bound policy bytes.
 local PRIOR_PREFIX = "bee.governance.grants:"
 type Object = {[string]: unknown}
-type Proposal = {capabilities: {capability_model.Grant}, policies: {Object}, bindings: {Object},
+-- capabilities and policies are parallel: policies[i] enforces capabilities[i].
+type Proposal = {capabilities: {capability_model.Grant}, policies: {Object},
     volumes: {Object}, databases: {Object}, executors: {Object}, folder: Object?, thread_access: string, digest: string}
 type Installed = {schema_revision: string, overlay_owner: string, workspace_id: string, application: string,
-    capabilities: {capability_model.Grant}, bindings: {Object}, policies: {Object}, thread_access: string, digest: string,
+    capabilities: {capability_model.Grant}, policies: {Object}, thread_access: string, digest: string,
     approval_id: string, revision: integer, artifact_digest: string?, version: string?, volumes: {Object}?,
     databases: {Object}?, executors: {Object}?, folder: Object?, record_digest: string}
 type Change = {before: capability_model.Grant?, after: capability_model.Grant?}
@@ -37,8 +39,9 @@ local function digest(value: unknown): string?
     local bytes = canonical.encode(value)
     return bytes and hash.sha256(bytes) or nil
 end
-local function policy_id(owner: string, requirement: string, prefix: string?): string?
-    local suffix = digest({owner = owner, requirement = requirement})
+local function policy_id(owner: string, application: string, capability: string, parameters: unknown,
+    prefix: string?): string?
+    local suffix = digest({owner = owner, application = application, capability = capability, parameters = parameters})
     return suffix and (prefix or M.PREFIX) .. "policy." .. suffix or nil
 end
 function M.record_id(owner_raw: unknown): string?
@@ -228,9 +231,9 @@ end
 
 -- The workspace folder is part of the measured set whenever a volume is
 -- rooted in it, so a moved workspace cannot reuse a grant for its old tree.
-local function digest_shape(capabilities: {Object}, bindings: {Object}, policies: {Object},
+local function digest_shape(capabilities: {Object}, policies: {Object},
     volumes: {Object}, databases: {Object}, executors: {Object}, folder: unknown): Object
-    local shape: Object = {capabilities = capabilities, bindings = bindings, policies = policies,
+    local shape: Object = {capabilities = capabilities, policies = policies,
         thread_access = "none"}
     if #volumes > 0 then shape.volumes = volumes end
     if #executors > 0 then shape.executors = executors end
@@ -240,46 +243,28 @@ local function digest_shape(capabilities: {Object}, bindings: {Object}, policies
 end
 
 -- folder is the host-resolved workspace folder file grants are rooted in.
+-- Each request is one entry of the application's meta.application.capabilities.
 function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, app_raw: unknown,
-    requirements_raw: unknown, prior: boolean?, folder: unknown?): (Proposal?, string?)
+    requests_raw: unknown, prior: boolean?, folder: unknown?): (Proposal?, string?)
     local owner, app = bounds.id(owner_raw), bounds.id(app_raw)
-    local rows = list(requirements_raw, 8)
+    local rows = list(requests_raw, 8)
     if not owner or not app or not rows then return nil, "capability proposal identity is invalid" end
     local capacity: integer = #rows > 0 and #rows or 1
-    local capabilities: {capability_model.Grant} = table.create(capacity, 0)
-    local policies: {Object} = table.create(capacity, 0)
-    local bindings: {Object} = table.create(capacity, 0)
+    local pairs_by_id: {[string]: {grant: capability_model.Grant, policy: Object}} = {}
+    local ids: {string} = table.create(capacity, 0)
     local volumes: {Object} = table.create(1, 0)
     local databases: {Object} = table.create(1, 0)
     local executors: {Object} = table.create(1, 0)
     local volume_ids: {[string]: boolean} = {}
     local database_ids: {[string]: boolean} = {}
     local executor_ids: {[string]: boolean} = {}
-    local requirement_of: {[capability_model.Grant]: string} = {}
-    local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
-        local item = bounds.object(raw)
-        local request = item and bounds.object(item.capability_request) or nil
-        local requirement_id = item and bounds.id(item.id) or nil
-        local targets = item and list(item.targets, 1) or nil
-        if not item or not request or not requirement_id or seen[requirement_id]
-            or not targets or #targets ~= 1
-            or item.value ~= nil or item.expected_kind ~= "security.policy"
-            or request.path ~= ".security.policies +=" then
-            return nil, "capability requirement is not a measured app policy append"
+        local request = bounds.object(raw)
+        if not request or request.application ~= app then
+            return nil, "capability request does not belong to application " .. app
         end
         local capability = capability_model.identity(request.capability)
         if not capability then return nil, "capability request identity is invalid" end
-        -- A Hive exposure grant joins the supervisor scope instead of an
-        -- application, so its target is one of its own operations. The
-        -- resolver already contained the named operations to the artifact.
-        if capability == "hive.expose" then
-            if request.target ~= targets[1] then
-                return nil, "Hive exposure requirement target differs from its grant"
-            end
-        elseif targets[1] ~= app or request.target ~= app then
-            return nil, "capability requirement is not a measured app policy append"
-        end
         local catalog_revision, template_revision = capability_model.revisions(vocabulary, capability)
         local requested_catalog = bounds.integer(request.catalog_revision)
         if not catalog_revision or not template_revision or not requested_catalog
@@ -291,16 +276,14 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
         if not resolved then return nil, resolve_error end
         local resolved_operations = resolved
         if #resolved_operations ~= 1 then return nil, "capability template needs unsupported policy count" end
-        local id = policy_id(owner, requirement_id, prior and PRIOR_PREFIX or nil)
+        local id = policy_id(owner, app, capability, resolved_operations[1].parameters, prior and PRIOR_PREFIX or nil)
         if not id then return nil, "measure generated policy identity" end
+        if pairs_by_id[id] then return nil, "application " .. app .. " lists capability " .. capability .. " twice with the same parameters" end
         local generated, policy_error = policy(owner, resolved_operations[1], id, folder, app)
         if not generated then return nil, policy_error end
         local volume, database, executor = generated.volume, generated.database, generated.executor
-        seen[requirement_id] = true
-        requirement_of[resolved_operations[1]] = requirement_id
-        capabilities[#capabilities + 1] = resolved_operations[1]
-        policies[#policies + 1] = generated.policy
-        bindings[#bindings + 1] = {requirement_id = requirement_id, policy_id = id}
+        pairs_by_id[id] = {grant = resolved_operations[1], policy = generated.policy}
+        ids[#ids + 1] = id
         if volume then
             local volume_id = (volume).id
             if not volume_ids[volume_id] then
@@ -323,23 +306,21 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
             end
         end
     end
-    -- Capabilities follow their bindings' requirement order, so a record
-    -- pairs each grant with the requirement that asked for it.
-    table.sort(capabilities, function(a: capability_model.Grant, b: capability_model.Grant): boolean
-        return requirement_of[a] < requirement_of[b]
-    end)
-    table.sort(policies, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
-    table.sort(bindings, function(a: Object, b: Object): boolean
-        return tostring(a.requirement_id) < tostring(b.requirement_id)
-    end)
+    table.sort(ids)
+    local capabilities: {capability_model.Grant} = table.create(capacity, 0)
+    local policies: {Object} = table.create(capacity, 0)
+    for index, id in ipairs(ids) do
+        capabilities[index] = pairs_by_id[id].grant
+        policies[index] = pairs_by_id[id].policy
+    end
     table.sort(volumes, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
     table.sort(databases, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
     table.sort(executors, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
     local rooted: Object? = nil
     if #volumes > 0 or #executors > 0 then rooted = bounds.object(folder) end
-    local set_digest = digest(digest_shape(capabilities, bindings, policies, volumes, databases, executors, rooted))
+    local set_digest = digest(digest_shape(capabilities, policies, volumes, databases, executors, rooted))
     if not set_digest then return nil, "measure capability proposal" end
-    return {capabilities = capabilities, policies = policies, bindings = bindings,
+    return {capabilities = capabilities, policies = policies,
         volumes = volumes, databases = databases, executors = executors, folder = rooted,
         thread_access = "none", digest = set_digest}, nil
 end
@@ -358,7 +339,7 @@ function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
         return nil, "capability grant artifact identity is invalid"
     end
     local stored: Object = {schema_revision = M.SCHEMA, overlay_owner = owner, workspace_id = workspace,
-        application = app, capabilities = proposal.capabilities, bindings = proposal.bindings,
+        application = app, capabilities = proposal.capabilities,
         policies = proposal.policies, thread_access = proposal.thread_access,
         digest = proposal.digest, approval_id = approval_id, revision = revision,
         artifact_digest = artifact_digest, version = version}
@@ -396,12 +377,15 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     if not approval_id or revision == nil or revision < 1 or not stored_digest then
         return nil, "installed capability grant record is malformed"
     end
-    local capabilities, bindings, policies = list(data.capabilities, 128), list(data.bindings, 128), list(data.policies, 128)
+    if data.bindings ~= nil then
+        return nil, "installed capability grant record of " .. app .. " binds ns.requirement entries this host no longer reads; uninstall the application and install it again"
+    end
+    local capabilities, policies = list(data.capabilities, 128), list(data.policies, 128)
     local volumes = list(data.volumes or {}, 8)
     local databases = list(data.databases or {}, 8)
     local executors = list(data.executors or {}, 8)
-    if not capabilities or not bindings or not policies or not volumes or not databases or not executors
-        or #capabilities ~= #bindings or #bindings ~= #policies then
+    if not capabilities or not policies or not volumes or not databases or not executors
+        or #capabilities ~= #policies then
         return nil, "installed capability grant set is malformed"
     end
     for _, raw_volume in ipairs(volumes) do
@@ -428,22 +412,17 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
             return nil, "installed capability executor is malformed"
         end
     end
-    local actual = digest(digest_shape(capabilities, bindings,
+    local actual = digest(digest_shape(capabilities,
         policies, volumes, databases, executors, data.folder))
     if actual ~= stored_digest then return nil, "installed capability digest differs from the stored set" end
-    local capacity: integer = #bindings > 0 and #bindings or 1
+    local capacity: integer = #capabilities > 0 and #capabilities or 1
     local reproduced: {Object} = table.create(capacity, 0)
-    for index, raw_binding in ipairs(bindings) do
-        local binding = bounds.object(raw_binding)
-        local grant = bounds.object(capabilities[index])
-        if not binding or not grant or not bounds.id(binding.requirement_id)
-            or not bounds.id(binding.policy_id) then return nil, "installed capability binding is malformed" end
-        reproduced[index] = {id = binding.requirement_id, value = nil,
-            expected_kind = "security.policy", targets = {app_raw}, capability_request = {
-                capability = grant.capability, parameters = grant.parameters,
-                template_revision = grant.template_revision,
-                catalog_revision = capability_model.revisions(vocabulary, grant.capability),
-                target = app_raw, path = ".security.policies +="}}
+    for index, raw_grant in ipairs(capabilities) do
+        local grant = bounds.object(raw_grant)
+        if not grant then return nil, "installed capability grant is malformed" end
+        reproduced[index] = {application = app, capability = grant.capability, parameters = grant.parameters,
+            template_revision = grant.template_revision,
+            catalog_revision = capability_model.revisions(vocabulary, grant.capability)}
     end
     local resolved, resolve_error = M.propose(vocabulary, owner, app, reproduced, item.id == prior_id,
         data.folder)
@@ -461,7 +440,7 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     local measured_record = digest(data)
     if not measured_record then return nil, "measure installed grant record" end
     local installed: Installed = {schema_revision = M.SCHEMA, overlay_owner = owner, workspace_id = workspace,
-        application = stored_application, capabilities = resolved.capabilities, bindings = resolved.bindings,
+        application = stored_application, capabilities = resolved.capabilities,
         policies = resolved.policies, thread_access = "none", digest = stored_digest,
         approval_id = approval_id, revision = revision,
         artifact_digest = artifact_digest, version = version, record_digest = measured_record}
@@ -477,12 +456,12 @@ end
 function M.installed(record_raw: unknown, record: Installed): Object
     local entry: Object = {}
     for key, value in pairs((record_raw)) do if key ~= "registry" then entry[key] = value end end
-    return {policies = record.policies, bindings = record.bindings, volumes = record.volumes,
+    return {policies = record.policies, capabilities = record.capabilities, volumes = record.volumes,
         databases = record.databases, executors = record.executors, record = entry}
 end
 
 -- A registry record is live only while its generated policies, volumes,
--- databases, executors and requirement defaults are installed beside it. An
+-- databases and executors are installed beside it. An
 -- orphaned record cannot authorize reuse.
 function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
     for _, raw_policy in ipairs(record.policies) do
@@ -505,15 +484,6 @@ function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
             if digest(clean) ~= digest(expected) then
                 return false, "installed grant resource differs from approval"
             end
-        end
-    end
-    for _, raw_binding in ipairs(record.bindings) do
-        local binding = bounds.object(raw_binding)
-        local requirement = binding and bounds.object(lookup(binding.requirement_id)) or nil
-        local data = requirement and bounds.object(requirement.data) or nil
-        if not requirement or requirement.kind ~= "ns.requirement" or not data
-            or data.default ~= binding.policy_id then
-            return false, "installed requirement binding differs from approval"
         end
     end
     return true, nil

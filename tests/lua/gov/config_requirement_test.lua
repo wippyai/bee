@@ -21,7 +21,7 @@ local function define_tests()
                 meta = {schema = {type = "integer", minimum = 1}},
                 data = {default = 4, targets = {{entry = "app:settings", path = ".limit"}}}}, "vendor/app",
                 {["app:settings"] = {id = "app:settings", kind = "registry.entry", data = {limit = 0}}},
-                {["app:settings"] = true}, nil)
+                {["app:settings"] = true})
             test.not_nil(resolved, problem)
             test.is_nil(assert(resolved).value)
             test.not_nil(assert(resolved).configuration_digest)
@@ -30,12 +30,12 @@ local function define_tests()
             local entry = {id = "app:count", kind = "ns.requirement", meta = {schema = {type = "integer"}},
                 data = {default = 4, targets = {{entry = "app:settings", path = ".limit"}}}}
             local final = {["app:settings"] = {id = "app:settings", kind = "registry.entry", data = {}}}
-            test.is_nil(requirement.resolve(entry, "vendor/app", final, {}, nil))
+            test.is_nil(requirement.resolve(entry, "vendor/app", final, {}))
             entry.data.targets[1].path = ".security.policies"
-            test.is_nil(requirement.resolve(entry, "vendor/app", final, {["app:settings"] = true}, nil))
+            test.is_nil(requirement.resolve(entry, "vendor/app", final, {["app:settings"] = true}))
             entry.data.targets[1].path = ".limit"
             entry.meta.schema.type = "string"
-            test.is_nil(requirement.resolve(entry, "vendor/app", final, {["app:settings"] = true}, nil))
+            test.is_nil(requirement.resolve(entry, "vendor/app", final, {["app:settings"] = true}))
         end)
     end)
 end

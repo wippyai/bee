@@ -291,76 +291,31 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
     if generated_raw ~= nil then
         local generated = bounds.object(generated_raw)
         local policies = generated and generated.policies
-        local bindings = generated and generated.bindings
+        local capabilities = generated and generated.capabilities
         local record = generated and bounds.object(generated.record) or nil
         local volumes = generated and generated.volumes
         local databases = generated and generated.databases
         local executors = generated and generated.executors
-        if not generated or type(policies) ~= "table" or type(bindings) ~= "table"
+        if not generated or type(policies) ~= "table" or type(capabilities) ~= "table"
             or not record or not capability_grants.reserved(record.id)
-            or record.kind ~= "registry.entry" or #policies ~= #bindings or #policies > 8
+            or record.kind ~= "registry.entry" or #policies ~= #capabilities or #policies > 8
             or (volumes ~= nil and type(volumes) ~= "table")
             or (databases ~= nil and type(databases) ~= "table")
             or (executors ~= nil and type(executors) ~= "table") then
             return nil, nil, nil, "generated capability entries are invalid"
         end
-        -- An expression grant is installable only for a requirement whose
-        -- capability the host enforces through one.
+        -- An expression grant is installable only for a capability the host
+        -- enforces through one; policies[i] enforces capabilities[i].
         local capability_of: {[string]: unknown} = {}
-        for _, raw_binding in ipairs(bindings) do
-            local binding = bounds.object(raw_binding)
-            local policy_id = binding and bounds.id(binding.policy_id) or nil
-            if binding and policy_id then
-                for _, entry in ipairs(complete) do
-                    local meta = entry.id == binding.requirement_id and bounds.object(entry.meta) or nil
-                    if meta then capability_of[policy_id] = meta.capability end
-                end
-            end
+        for index, raw_policy in ipairs(policies) do
+            local policy = bounds.object(raw_policy)
+            local grant = bounds.object(capabilities[index])
+            local policy_id = policy and bounds.id(policy.id) or nil
+            if policy_id and grant then capability_of[policy_id] = grant.capability end
         end
         local provision_error = provision(complete, {volumes = volumes, databases = databases,
             executors = executors, policies = policies}, capability_of)
         if provision_error then return nil, nil, nil, provision_error end
-        local policy_ids: {[string]: boolean} = {}
-        for _, raw_policy in ipairs(policies) do
-            local policy = bounds.object(raw_policy)
-            local id = policy and bounds.id(policy.id) or nil
-            if id then policy_ids[id] = true end
-        end
-        local requirement_ids: {[string]: boolean} = {}
-        for _, raw_binding in ipairs(bindings) do
-            local binding = bounds.object(raw_binding)
-            local requirement_id = binding and bounds.id(binding.requirement_id) or nil
-            local policy_id = binding and bounds.id(binding.policy_id) or nil
-            if not requirement_id or not policy_id or not policy_ids[policy_id]
-                or requirement_ids[requirement_id] then
-                return nil, nil, nil, "generated requirement binding is invalid"
-            end
-            local found = false
-            for index, entry in ipairs(complete) do
-                if entry.id == requirement_id then
-                    if entry.kind ~= "ns.requirement" then
-                        return nil, nil, nil, "capability binding target is not a requirement"
-                    end
-                    local original = bounds.object(entry.data)
-                    if not original or original.default ~= nil then
-                        return nil, nil, nil, "capability requirement already has a default"
-                    end
-                    local next_data: Entry = {}
-                    for key, value in pairs(original) do next_data[key] = value end
-                    next_data.default = policy_id
-                    local meta = bounds.object(entry.meta)
-                    if meta and meta.capability == "hive.expose" then next_data.targets = {} end
-                    local next_entry: Entry = {}
-                    for key, value in pairs(entry) do next_entry[key] = value end
-                    next_entry.data = next_data
-                    complete[index] = next_entry
-                    found = true
-                    break
-                end
-            end
-            if not found then return nil, nil, nil, "generated requirement is absent from artifact" end
-            requirement_ids[requirement_id] = true
-        end
         complete[#complete + 1] = record
     end
     return portable, complete, artifact_digest, nil

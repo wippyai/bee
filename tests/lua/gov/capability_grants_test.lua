@@ -1,4 +1,4 @@
--- MIT. Installed grant records and generated policy bindings are host output.
+-- MIT. Installed grant records and generated policies are host output.
 local test = require("test")
 local principals = require("principals")
 local bounds = require("bounds")
@@ -16,11 +16,9 @@ end
 
 local function request(capability: string, parameters: {[string]: unknown}, template_revision: integer?): {[string]: unknown}
     local catalog_revision = capability_model.revisions(vocabulary(), capability)
-    return {id = "app.notes:request", expected_kind = "security.policy", value = nil,
-        targets = {APP}, capability_request = {capability = capability, parameters = parameters,
-            catalog_revision = catalog_revision,
-            template_revision = template_revision or 1, reason = "show the person's threads",
-            target = APP, path = ".security.policies +="}}
+    return {application = APP, package = "app.notes", capability = capability, parameters = parameters,
+        catalog_revision = catalog_revision, template_revision = template_revision or 1,
+        reason = "show the person's threads"}
 end
 
 local FOLDER = {root_ref = "bee.env:workspace_root", directory = ".", base = "project", subpath = "alpha"}
@@ -34,15 +32,13 @@ local function define_tests()
             test.eq(#proposed.policies, 1)
             test.is_true(proposed.policies[1].id:find("^bee%.gov%.grants:policy%." ) ~= nil)
             test.eq(proposed.policies[1].kind, "security.policy")
-            test.eq(proposed.bindings[1].requirement_id, "app.notes:request")
-            test.eq(proposed.bindings[1].policy_id, proposed.policies[1].id)
             test.eq(proposed.thread_access, "none")
         end)
         test.it("preserves an unchanged capability when unrelated catalog entries advance", function()
             local catalog = vocabulary()
             local item = request("app.database", {name = "notes"})
             local current = assert(grants.propose(catalog, OWNER, APP, {item}))
-            local declared = assert(bounds.object(item.capability_request))
+            local declared = item
             declared.catalog_revision = catalog.revision - 1
             local restored = assert(grants.propose(catalog, OWNER, APP, {item}))
             test.eq(restored.digest, current.digest)
@@ -61,15 +57,13 @@ local function define_tests()
             local malformed: {unknown} = {false, 17, {}, "", "Threads.read", "threads.read\n", string.rep("a", 161)}
             for _, capability in ipairs(malformed) do
                 local item = request("threads.read", {scope = "owned"})
-                item.capability_request = {capability = capability, parameters = {scope = "owned"},
-                    catalog_revision = 1, template_revision = 1, target = APP, path = ".security.policies +="}
+                item.capability = capability
                 local proposed, err = grants.propose(vocabulary(), OWNER, APP, {item})
                 test.is_nil(proposed)
                 test.eq(err, "capability request identity is invalid")
             end
             local missing = request("threads.read", {scope = "owned"})
-            missing.capability_request = {parameters = {scope = "owned"}, catalog_revision = 1,
-                template_revision = 1, target = APP, path = ".security.policies +="}
+            missing.capability = nil
             local proposed, err = grants.propose(vocabulary(), OWNER, APP, {missing})
             test.is_nil(proposed)
             test.eq(err, "capability request identity is invalid")
@@ -82,8 +76,6 @@ local function define_tests()
             local decoded = assert(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
             local installed_entries: {[string]: unknown} = {}
             installed_entries[proposed.policies[1].id] = proposed.policies[1]
-            installed_entries["app.notes:request"] = {kind = "ns.requirement",
-                data = {default = proposed.policies[1].id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
             installed_entries[proposed.policies[1].id] = nil
             test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
@@ -135,19 +127,34 @@ local function define_tests()
             record.id = "bee.governance.grants:record." .. string.rep("0", 64)
             test.is_nil(grants.decode(record, old_owner, "workspace-1", APP, vocabulary()))
         end)
-        test.it("decodes a record whose grants sort differently from their requirements", function()
-            local function named(id: string, capability: string, parameters: {[string]: unknown}): {[string]: unknown}
-                local item = request(capability, parameters)
-                item.id = id
-                return item
-            end
-            local proposed = assert(grants.propose(vocabulary(), OWNER, APP, {
-                named("app.notes:shared_files", "workspace.files.read", {subpath = "docs"}),
-                named("app.notes:store", "app.database", {name = "notes"}),
-                named("app.notes:threads", "threads.read", {scope = "owned"})}, nil, FOLDER))
+        test.it("decodes a record of several capabilities in any listed order", function()
+            local listed = {request("workspace.files.read", {subpath = "docs"}),
+                request("app.database", {name = "notes"}), request("threads.read", {scope = "owned"})}
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP, listed, nil, FOLDER))
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-several", 1))
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
             test.eq(#(principals.items(decoded.capabilities)), 3)
+            local reversed = assert(grants.propose(vocabulary(), OWNER, APP, {listed[3], listed[2], listed[1]}, nil, FOLDER))
+            test.eq(reversed.digest, proposed.digest)
+            for index, policy in ipairs(principals.objects(decoded.policies)) do
+                test.eq(policy.id, proposed.policies[index].id)
+                test.eq(decoded.capabilities[index].capability, proposed.capabilities[index].capability)
+            end
+        end)
+        test.it("names the reinstall a record bound to requirement entries needs", function()
+            local proposed = assert(grants.propose(vocabulary(), OWNER, APP, {request("threads.read", {scope = "owned"})}))
+            local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-bound", 1))
+            local data = assert(bounds.object(record.data))
+            data.bindings = {{requirement_id = "app.notes:request", policy_id = proposed.policies[1].id}}
+            local decoded, problem = grants.decode(record, OWNER, "workspace-1", APP, vocabulary())
+            test.is_nil(decoded)
+            test.contains(tostring(problem), "uninstall the application and install it again")
+        end)
+        test.it("refuses the same capability listed twice with the same parameters", function()
+            local proposed, problem = grants.propose(vocabulary(), OWNER, APP,
+                {request("threads.read", {scope = "owned"}), request("threads.read", {scope = "owned"})})
+            test.is_nil(proposed)
+            test.contains(tostring(problem), "lists capability threads.read twice")
         end)
         test.it("materializes a verified workspace file volume and its policy", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
@@ -168,8 +175,6 @@ local function define_tests()
             local installed_entries: {[string]: unknown} = {}
             installed_entries[proposed.policies[1].id] = proposed.policies[1]
             installed_entries[proposed.volumes[1].id] = proposed.volumes[1]
-            installed_entries["app.notes:request"] = {kind = "ns.requirement",
-                data = {default = proposed.policies[1].id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
             installed_entries[proposed.volumes[1].id] = nil
             test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
@@ -187,11 +192,11 @@ local function define_tests()
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
             test.eq(#(principals.items(decoded.databases)), 1)
         end)
-        test.it("refuses private workspace subroots and foreign app targets", function()
+        test.it("refuses private workspace subroots and another application's requests", function()
             test.is_nil(grants.propose(vocabulary(), OWNER, APP,
                 {request("workspace.files.read", {subpath = ".wippy"})}, nil, FOLDER))
             local foreign = request("threads.read", {scope = "owned"})
-            foreign.targets = {"app.other:app"}
+            foreign.application = "app.other:app"
             test.is_nil(grants.propose(vocabulary(), OWNER, APP, {foreign}))
         end)
         test.it("materializes child thread messaging on its owner verbs", function()
@@ -269,8 +274,6 @@ local function define_tests()
             local installed_entries: {[string]: unknown} = {}
             installed_entries[proposed.policies[1].id] = proposed.policies[1]
             installed_entries[executor.id] = executor
-            installed_entries["app.notes:request"] = {kind = "ns.requirement",
-                data = {default = proposed.policies[1].id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
             installed_entries[executor.id] = nil
             test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
@@ -327,14 +330,10 @@ local function define_tests()
             test.eq(resources[1], "bee.hive.telemetry.binding:presence")
             test.eq(resources[2], "bee.hive.telemetry.binding:stats")
             test.eq(body.effect, "allow")
-            test.eq(proposed.bindings[1].requirement_id, "app.notes:request")
-            test.eq(proposed.bindings[1].policy_id, generated.id)
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-expose", 1))
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
             local installed_entries: {[string]: unknown} = {}
             installed_entries[generated.id] = generated
-            installed_entries["app.notes:request"] = {kind = "ns.requirement",
-                data = {default = generated.id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
             local lines = assert(capability_model.render(vocabulary(), proposed.capabilities))
             test.is_true(table.concat(lines, "\n"):find("Hive operations bee.hive.telemetry.binding:presence", 1, true) ~= nil)
@@ -393,8 +392,6 @@ local function define_tests()
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary_value))
             local installed_entries: {[string]: unknown} = {}
             installed_entries[proposed.policies[1].id] = proposed.policies[1]
-            installed_entries["app.notes:request"] = {kind = "ns.requirement",
-                data = {default = proposed.policies[1].id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
             local compared = assert(grants.diff(vocabulary_value, nil, proposed))
             test.is_true(compared.requires_approval)
@@ -403,10 +400,7 @@ local function define_tests()
         test.it("grants Bee self-update only to the host Library app", function()
             local vocabulary_value = vocabulary()
             local request_value = request("hub.self_update", {})
-            request_value.targets = {"bee.apps.library.app:app"}
-            local cap = request_value.capability_request
-            if type(cap) ~= "table" then error("missing capability request") end
-            cap.target = "bee.apps.library.app:app"
+            request_value.application = "bee.apps.library.app:app"
             local proposed = assert(grants.propose(vocabulary_value, OWNER,
                 "bee.apps.library.app:app", {request_value}))
             local data = proposed.policies[1].data
@@ -418,10 +412,7 @@ local function define_tests()
             test.eq(actions[1], "bee.hub.self_update")
             test.eq(resources[1], "bee/bee")
             local agent_request = request("hub.self_update", {})
-            agent_request.targets = {"app.notes:agent"}
-            local agent_cap = agent_request.capability_request
-            if type(agent_cap) ~= "table" then error("missing capability request") end
-            agent_cap.target = "app.notes:agent"
+            agent_request.application = "app.notes:agent"
             test.is_nil(grants.propose(vocabulary_value, OWNER, "app.notes:agent", {agent_request}))
         end)
     end)

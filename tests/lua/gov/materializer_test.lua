@@ -85,24 +85,18 @@ local function define_tests()
         end)
     end)
     test.describe("Governance overlay materializer", function()
-        test.it("installs exposure policy defaults without attaching the host policy to app functions", function()
+        test.it("installs an exposure policy beside the application without attaching it to app functions", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local policy_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
-                {id = "app.notes:exposure", kind = "ns.requirement",
-                    meta = {capability = "hive.expose", value_kind = "security.policy"},
-                    data = {targets = {{entry = "app.notes:run", path = ".security.policies +="}}}}}
+                meta = {type = "bee.application"}, data = {source = "return true"}}}
             local generated = {policies = {{id = policy_id, kind = "security.policy",
                 data = {groups = {"bee.security.hive:hive_exposure_scope"},
                     policy = {actions = {"hive.expose.open"}, resources = {"app.notes:run"}, effect = "allow"}}}},
-                bindings = {{requirement_id = "app.notes:exposure", policy_id = policy_id}},
+                capabilities = {{capability = "hive.expose"}},
                 record = {id = "bee.gov.grants:record." .. string.rep("b", 64), kind = "registry.entry", data = {}}}
             assert(materializer.reconcile_composed_with(api(state), is_conflict, "bee.gov:overlay", portable, nil, generated))
-            local projected = assert(bounds.object(state.entries["app.notes:exposure"].data))
-            test.eq(projected.default, policy_id)
-            test.eq(#(projected.targets :: {unknown}), 0)
-            test.eq(#portable[2].data.targets, 1)
+            test.is_nil((assert(bounds.object(state.entries["app.notes:app"].data))).security)
             test.not_nil(state.entries[policy_id])
         end)
         test.it("replaces the complete owner overlay with one checked generation", function()
@@ -166,34 +160,30 @@ local function define_tests()
             if not result then error(tostring(result_error)) end
             test.is_false(result.changed == true)
         end)
-        test.it("writes policy, requirement default and grant record in one overlay generation", function()
+        test.it("writes policy and grant record in one overlay generation", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local policy_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
-                {id = "app.notes:threads", kind = "ns.requirement",
-                    meta = {capability = "threads.read", value_kind = "security.policy"},
-                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
+                meta = {type = "bee.application"}, data = {source = "return true"}}}
             local generated = {policies = {{id = policy_id, kind = "security.policy",
                 data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.binding:get"}, effect = "allow"}}}},
-                bindings = {{requirement_id = "app.notes:threads", policy_id = policy_id}},
+                capabilities = {{capability = "threads.read"}},
                 record = {id = "bee.gov.grants:record." .. string.rep("b", 64),
                     kind = "registry.entry", data = {digest = string.rep("c", 64)}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, generated))
-            test.eq(applied.entries, 2)
-            test.eq(applied.overlay_entries, 4)
+            test.eq(applied.entries, 1)
+            test.eq(applied.overlay_entries, 3)
             test.eq(state.generation, 2)
-            test.eq((assert(bounds.object(state.entries["app.notes:threads"].data))).default, policy_id)
             test.not_nil(state.entries[policy_id])
             test.not_nil(state.entries[generated.record.id])
             test.is_true(materializer.matches_composed_with(api(state), "bee.gov:overlay",
                 portable, nil, generated))
-            local narrowed = {policies = {}, bindings = {}, record = generated.record}
+            local narrowed = {policies = {}, capabilities = {}, record = generated.record}
             assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, narrowed))
             test.is_nil(state.entries[policy_id])
-            test.is_nil((assert(bounds.object(state.entries["app.notes:threads"].data))).default)
+            test.not_nil(state.entries["app.notes:app"])
         end)
         test.it("installs host-created file volumes and databases beside generated policies", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
@@ -201,13 +191,10 @@ local function define_tests()
             local volume_id = "bee.gov.grants:volume." .. string.rep("b", 64)
             local database_id = "bee.gov.grants:database." .. string.rep("c", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
-                {id = "app.notes:files", kind = "ns.requirement",
-                    meta = {capability = "workspace.files.read", value_kind = "security.policy"},
-                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
+                meta = {type = "bee.application"}, data = {source = "return true"}}}
             local generated = {policies = {{id = policy_id, kind = "security.policy",
                 data = {policy = {actions = {"fs.get"}, resources = {volume_id}, effect = "allow"}}}},
-                bindings = {{requirement_id = "app.notes:files", policy_id = policy_id}},
+                capabilities = {{capability = "workspace.files.read"}},
                 volumes = {{id = volume_id, kind = "fs.directory", data = {directory = "docs",
                     base = "project", auto_init = false, readonly = true, mode = "0500"}}},
                 databases = {{id = database_id, kind = "db.sql.sqlite",
@@ -216,10 +203,10 @@ local function define_tests()
                     kind = "registry.entry", data = {digest = string.rep("f", 64)}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, generated))
-            test.eq(applied.overlay_entries, 6)
+            test.eq(applied.overlay_entries, 5)
             test.not_nil(state.entries[volume_id])
             test.not_nil(state.entries[database_id])
-            local private = {policies = generated.policies, bindings = generated.bindings,
+            local private = {policies = generated.policies, capabilities = generated.capabilities,
                 volumes = {{id = volume_id, kind = "fs.directory", data = {directory = ".wippy",
                     base = "project", auto_init = false, readonly = true, mode = "0500"}}},
                 record = generated.record}
@@ -227,7 +214,7 @@ local function define_tests()
                 "bee.gov:overlay", portable, nil, private))
             local dangling = {policies = {{id = policy_id, kind = "security.policy",
                 data = {policy = {actions = {"fs.get"}, resources = {"bee.gov.grants:volume." .. string.rep("9", 64)}, effect = "allow"}}}},
-                bindings = generated.bindings, volumes = generated.volumes, record = generated.record}
+                capabilities = generated.capabilities, volumes = generated.volumes, record = generated.record}
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, dangling))
         end)
@@ -236,13 +223,7 @@ local function define_tests()
             local call_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local web_id = "bee.gov.grants:policy." .. string.rep("b", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
-                {id = "app.notes:call", kind = "ns.requirement",
-                    meta = {capability = "contract.call", value_kind = "security.policy"},
-                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}},
-                {id = "app.notes:web", kind = "ns.requirement",
-                    meta = {capability = "http.api", value_kind = "security.policy"},
-                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
+                meta = {type = "bee.application"}, data = {source = "return true"}}}
             local generated = {policies = {
                 {id = call_id, kind = "security.policy",
                     data = {policy = {actions = {"funcs.call"}, resources = {"bee.gov.binding:contract_call"},
@@ -250,13 +231,13 @@ local function define_tests()
                 {id = web_id, kind = "security.policy",
                     data = {policy = {actions = {"funcs.call"}, resources = {"bee.gov.binding:http_request"},
                         effect = "allow"}}}},
-                bindings = {{requirement_id = "app.notes:call", policy_id = call_id},
-                    {requirement_id = "app.notes:web", policy_id = web_id}},
+                capabilities = {{capability = "contract.call"},
+                    {capability = "http.api"}},
                 record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
                     kind = "registry.entry", data = {digest = string.rep("f", 64)}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, generated))
-            test.eq(applied.overlay_entries, 6)
+            test.eq(applied.overlay_entries, 4)
             test.not_nil(state.entries[call_id])
             test.not_nil(state.entries[web_id])
             -- The runtime cannot pair a binding with a method, so a generated
@@ -264,7 +245,7 @@ local function define_tests()
             local direct = {policies = {{id = call_id, kind = "security.policy.expr",
                 data = {policy = {expression = 'action == "contract.call"', actions = {"contract.call"},
                     resources = {"get"}, effect = "allow"}}}},
-                bindings = {{requirement_id = "app.notes:call", policy_id = call_id}},
+                capabilities = {{capability = "contract.call"}},
                 record = generated.record}
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, direct))
@@ -276,13 +257,7 @@ local function define_tests()
             local agents_id = "bee.gov.grants:policy." .. string.rep("b", 64)
             local executor_id = "bee.gov.grants:executor." .. string.rep("c", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
-                {id = "app.notes:run", kind = "ns.requirement",
-                    meta = {capability = "process.exec", value_kind = "security.policy"},
-                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}},
-                {id = "app.notes:agents", kind = "ns.requirement",
-                    meta = {capability = "agents.launch", value_kind = "security.policy"},
-                    data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
+                meta = {type = "bee.application"}, data = {source = "return true"}}}
             local executor = {id = executor_id, kind = "exec.native",
                 data = {default_work_dir = "alpha/src", default_env = {PATH = "${env:bee.capability:exec_path}"}}}
             local function exec_policy(target: string): Entry
@@ -295,29 +270,29 @@ local function define_tests()
                     expression = 'action == "bee.harness.launch" && resource in ["acme:research"]'}}}
             local record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
                 kind = "registry.entry", data = {digest = string.rep("f", 64)}}
-            local bindings = {{requirement_id = "app.notes:run", policy_id = exec_id},
-                {requirement_id = "app.notes:agents", policy_id = agents_id}}
-            local generated = {policies = {exec_policy(executor_id), agents_policy}, bindings = bindings,
+            local capabilities = {{capability = "process.exec"},
+                {capability = "agents.launch"}}
+            local generated = {policies = {exec_policy(executor_id), agents_policy}, capabilities = capabilities,
                 executors = {executor}, record = record}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, generated))
-            test.eq(applied.overlay_entries, 7)
+            test.eq(applied.overlay_entries, 5)
             test.not_nil(state.entries[executor_id])
             test.not_nil(state.entries[exec_id])
             test.not_nil(state.entries[agents_id])
             local dangling = {policies = {exec_policy("bee.gov.grants:executor." .. string.rep("9", 64)), agents_policy},
-                bindings = bindings, executors = {executor}, record = record}
+                capabilities = capabilities, executors = {executor}, record = record}
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, dangling))
             local widened = {id = executor_id, kind = "exec.native",
                 data = {default_work_dir = "alpha/src", default_env = {PATH = "/usr/bin", HOME = "/root"}}}
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
-                "bee.gov:overlay", portable, nil, {policies = generated.policies, bindings = bindings,
+                "bee.gov:overlay", portable, nil, {policies = generated.policies, capabilities = capabilities,
                     executors = {widened}, record = record}))
             local private = {id = executor_id, kind = "exec.native",
                 data = {default_work_dir = "alpha/.wippy", default_env = {PATH = "${env:bee.capability:exec_path}"}}}
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
-                "bee.gov:overlay", portable, nil, {policies = generated.policies, bindings = bindings,
+                "bee.gov:overlay", portable, nil, {policies = generated.policies, capabilities = capabilities,
                     executors = {private}, record = record}))
         end)
 

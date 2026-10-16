@@ -25,11 +25,9 @@ local function vocabulary(): unknown
 end
 
 local function request(capability: string, parameters: {[string]: unknown}): {[string]: unknown}
-    return {id = "app.notes:request", expected_kind = "security.policy", value = nil,
-        targets = {APP}, capability_request = {capability = capability, parameters = parameters,
+    return {application = APP, package = "test", capability = capability, parameters = parameters,
             catalog_revision = assert(vocabulary()).revision,
-            template_revision = 1, reason = "reach the approved service",
-            target = APP, path = ".security.policies +="}}
+            template_revision = 1, reason = "reach the approved service"}
 end
 
 local function issued(capability: string, parameters: {[string]: unknown}): unknown

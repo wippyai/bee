@@ -35,21 +35,19 @@ local function vocabulary(): model.Vocabulary
     return assert(model.decode(assert(registry.get("bee.capability:catalog"))))
 end
 
-local function requirement(app: string, name: string, capability: string, parameters: Object): Object
-    return {id = app .. "_" .. name, expected_kind = "security.policy", targets = {app},
-        capability_request = {capability = capability, parameters = parameters, template_revision = 1,
-            catalog_revision = model.revisions(vocabulary(), capability), reason = "test",
-            target = app, path = ".security.policies +="}}
+local function request(app: string, capability: string, parameters: Object): Object
+    return {application = app, package = "test", capability = capability, parameters = parameters, template_revision = 1,
+            catalog_revision = model.revisions(vocabulary(), capability), reason = "test"}
 end
 
 -- install composes what activation installs for app: its generated policies,
--- database, grant record and requirement defaults, and the admission that
+-- database and grant record, and the admission that
 -- binds the generated policies to the application.
 local function install(app: string, tools: {string}): Installed
     local owner = "bee.gov.apps:" .. WORKSPACE .. "." .. app:gsub("[^%w]", "_")
     local proposal = assert(grants.propose(vocabulary(), owner, app, {
-        requirement(app, "tools", "agent.tools", {tools = tools}),
-        requirement(app, "notes", "app.database", {name = "notes"})}))
+        request(app, "agent.tools", {tools = tools}),
+        request(app, "app.database", {name = "notes"})}))
     local record = assert(grants.record(owner, WORKSPACE, app, proposal, "approval-" .. app, 1))
     local entries: {Object} = {record}
     local policy_ids: {string} = {}
@@ -58,12 +56,9 @@ local function install(app: string, tools: {string}): Installed
         entries[#entries + 1] = policy
         policy_ids[#policy_ids + 1] = tostring(policy.id)
         local grant = proposal.capabilities[index]
-        if grant and grant.capability == "agent.tools" then tools_policy = tostring(proposal.bindings[index].policy_id) end
+        if grant and grant.capability == "agent.tools" then tools_policy = tostring(policy.id) end
     end
     for _, database in ipairs(proposal.databases) do entries[#entries + 1] = database end
-    for _, binding in ipairs(proposal.bindings) do
-        entries[#entries + 1] = {id = binding.requirement_id, kind = "ns.requirement", meta = {}, data = {default = binding.policy_id}}
-    end
     entries[#entries + 1] = {id = app .. "_admission", kind = "registry.entry",
         meta = {type = "bee.node.application_admission"},
         data = {bindings = {{definition_id = app, policies = policy_ids}}}}

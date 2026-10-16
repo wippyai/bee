@@ -18,10 +18,9 @@ local function admitted(binding_id: string, methods: {string}, name: string): (f
     local application = "app." .. name .. ":app"
     local owner = "bee.gov.apps:" .. WORKSPACE .. "." .. name
     local proposal = assert(grants.propose(vocabulary, owner, application, {
-        {id = "app." .. name .. ":request", expected_kind = "security.policy", targets = {application},
-            capability_request = {capability = "contract.call", parameters = {binding = binding_id, methods = methods},
+        {application = application, package = "test", capability = "contract.call", parameters = {binding = binding_id, methods = methods},
                 template_revision = 1, catalog_revision = model.revisions(vocabulary, "contract.call"),
-                reason = "exercise approved call", target = application, path = ".security.policies +="}}
+                reason = "exercise approved call"}
     }))
     local record = assert(grants.record(owner, WORKSPACE, application, proposal, "approval-gateway-test", 1))
     local snapshot = assert(registry.snapshot())
@@ -33,11 +32,6 @@ local function admitted(binding_id: string, methods: {string}, name: string): (f
         created[#created + 1] = assert(bounds.id(policy.id))
         changes:create({id = assert(bounds.id(policy.id)), kind = assert(bounds.text(policy.kind, 160)),
             meta = assert(bounds.object(policy.meta)), data = policy.data})
-    end
-    for _, binding in ipairs(proposal.bindings) do
-        created[#created + 1] = assert(bounds.id(binding.requirement_id))
-        changes:create({id = assert(bounds.id(binding.requirement_id)), kind = "ns.requirement",
-            data = {default = binding.policy_id}})
     end
     assert(changes:apply())
     local actor_id = "bee.application:" .. WORKSPACE .. ":instance-1"

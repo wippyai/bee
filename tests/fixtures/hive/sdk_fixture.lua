@@ -20,23 +20,23 @@ local OWNER = "bee.e2e.sdk:installed"
 local function install(node: string, peer: string)
     local entries = example.entries(peer, WORKSPACE, peer)
     local vocabulary = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
-    local requirements: {Object} = {}
+    local requests: {Object} = {}
     for _, entry in ipairs(entries) do
-        if entry.kind == "ns.requirement" then
-            local meta = assert(bounds.object(entry.meta))
-            local data = assert(bounds.object(entry.data))
-            local target = (data.targets :: {Object})[1]
-            requirements[#requirements + 1] = {id = entry.id, expected_kind = "security.policy", targets = {target.entry},
-                capability_request = {capability = meta.capability, parameters = meta.parameters,
-                    catalog_revision = model.revisions(vocabulary, tostring(meta.capability)),
-                    template_revision = vocabulary.capabilities[tostring(meta.capability)].revision,
-                    target = target.entry, path = target.path}}
+        local meta = assert(bounds.object(entry.meta))
+        local declaration = bounds.object(meta.application)
+        for _, raw in ipairs(declaration and bounds.array(declaration.capabilities, 8) or {}) do
+            local item = assert(bounds.object(raw))
+            local capability = tostring(item.capability)
+            local catalog_revision, template_revision = model.revisions(vocabulary, capability)
+            requests[#requests + 1] = {application = entry.id, package = "app.testsdk", capability = capability,
+                parameters = item.parameters, reason = item.reason, catalog_revision = catalog_revision,
+                template_revision = template_revision}
         end
     end
-    local proposal = assert(grants.propose(vocabulary, OWNER, example.APP, requirements))
+    local proposal = assert(grants.propose(vocabulary, OWNER, example.APP, requests))
     local record = assert(grants.record(OWNER, WORKSPACE, example.APP, proposal, "e2e-local-consent-" .. node, 1))
     assert(materializer.reconcile_composed(OWNER, entries, nil,
-        {policies = proposal.policies, bindings = proposal.bindings, record = record}))
+        {policies = proposal.policies, capabilities = proposal.capabilities, record = record}))
     local policies: {string} = {}
     for _, policy in ipairs(proposal.policies) do policies[#policies + 1] = tostring(policy.id) end
     local changes = assert(registry.snapshot()):changes()

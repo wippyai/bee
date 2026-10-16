@@ -729,9 +729,10 @@ end
 -- reviews, selects or creates an approval request. A slot whose source the
 -- host does not select for that owner stays unrestored.
 -- Governance refuses a restoration whose approval does not cover the host
--- state or whose stored artifact the current host rules reject; that overlay
--- stays unrestored and its intent stays for the person to review again. Only
--- such refusals let recovery continue.
+-- state; that overlay stays unrestored and its intent stays for the person to
+-- review again. A generation whose stored artifact the current host rules
+-- reject settles blocked and is reported once. Only such refusals let
+-- recovery continue.
 local REFUSALS: {[string]: boolean} = {CONFLICT = true, DENIED = true}
 
 -- An application database the host provisioned is registered only in its
@@ -833,7 +834,12 @@ function M.recover_all(): (boolean, string?, {string}?)
             end
             if not recovered.ok then close(plan_store, activation_store, lease_handle); return false, recovered.message end
             local recovered_value = bounds.object(recovered.value)
-            if recovered_value and recovered_value.phase == "settled" then break end
+            if recovered_value and recovered_value.phase == "settled" then
+                if recovered_value.outcome == "blocked" and recovered.replayed ~= true then
+                    refused[#refused + 1] = overlay_owner .. ": " .. tostring(recovered_value.diagnostics)
+                end
+                break
+            end
         end
         close(plan_store, activation_store, lease_handle)
     end

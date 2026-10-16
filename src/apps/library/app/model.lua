@@ -11,7 +11,7 @@ local M = {}
 
 type Tab = "installed" | "shared" | "history"
 -- The only words a row's status uses.
-type Status = "Shared" | "Waiting for your approval" | "Installing" | "Installed" | "Update available" | "Replaced" | "Removed"
+type Status = "Shared" | "Waiting for your approval" | "Installing" | "Installed" | "Update available" | "Left out" | "Replaced" | "Removed"
 type Origin = "governed" | "hub"
 -- What a row stands for: an application or a driver Bee runs for the person,
 -- the one row for Bee's own platform, a Hub package, or the collapsed Hub
@@ -47,6 +47,7 @@ M.STATUS_WAITING = "Waiting for your approval"
 M.STATUS_INSTALLING = "Installing"
 M.STATUS_INSTALLED = "Installed"
 M.STATUS_UPDATE = "Update available"
+M.STATUS_LEFT_OUT = "Left out"
 M.STATUS_REPLACED = "Replaced"
 M.STATUS_REMOVED = "Removed"
 
@@ -124,11 +125,12 @@ function M.sources(state: State): {string}
     return nodes
 end
 
-type App = {name: string, owner: string, installed: governed.Intent?, flight: governed.Intent?}
+type App = {name: string, owner: string, installed: governed.Intent?, flight: governed.Intent?, left_out: governed.Intent?}
 
 -- The applications this workspace holds, newest activity first: an application
--- is installed when its slot observed an applied activation, and on its way
--- while its newest activation has not settled.
+-- is installed when its slot observed an applied activation, on its way while
+-- its newest activation has not settled, and left out when the current host
+-- rules block its newest one.
 local function apps(state: State): {App}
     local order: {string} = {}
     local found: {[string]: App} = {}
@@ -139,6 +141,9 @@ local function apps(state: State): {App}
             found[item.overlay_owner] = entry
             order[#order + 1] = item.overlay_owner
             if item.phase ~= "settled" or item.outcome == "uncertain" then entry.flight = item end
+            if item.phase == "settled" and item.outcome == "blocked" and item.intent_id == item.desired_intent_id then
+                entry.left_out = item
+            end
         end
         if entry.installed == nil and item.observed_outcome == "applied" and item.intent_id == item.observed_intent_id then
             entry.installed = item
@@ -147,7 +152,7 @@ local function apps(state: State): {App}
     local result: {App} = {}
     for _, owner in ipairs(order) do
         local entry = found[owner]
-        if entry.installed or entry.flight then result[#result + 1] = entry end
+        if entry.installed or entry.flight or entry.left_out then result[#result + 1] = entry end
     end
     return result
 end
@@ -159,6 +164,7 @@ local ENDED: {[string]: string} = {
     denied = "Denied",
 }
 local function ended_note(item: governed.Intent): string
+    if item.outcome == "blocked" then return "left out: " .. tostring(item.diagnostics or "this Bee does not run it") end
     return ENDED[tostring(item.outcome)] or (item.diagnostics and ("could not be installed: " .. item.diagnostics) or "could not be installed")
 end
 
@@ -239,8 +245,8 @@ end
 local function installed_rows(state: State): {Row}
     local rows: {Row} = {}
     for _, app in ipairs(apps(state)) do
-        local flight, current = app.flight, app.installed
-        local shown = flight or current
+        local flight, current, left_out = app.flight, app.installed, app.left_out
+        local shown = flight or left_out or current
         if shown then
             local origin_node = (current or shown).source_node
             local row = make({key = "g:app:" .. app.name, origin = "governed",
@@ -259,6 +265,13 @@ local function installed_rows(state: State): {Row}
             end
             if flight then
                 row.status = waiting(flight) and M.STATUS_WAITING or M.STATUS_INSTALLING
+            elseif left_out then
+                row.status, row.note = M.STATUS_LEFT_OUT, tostring(left_out.diagnostics or "")
+                row.application, row.baseline = nil, nil
+                local latest = newest(state, app.name)
+                if latest and M.compare(latest.version, left_out.version) > 0 then
+                    row.update, row.available_key = latest.version, governed.available_key(latest)
+                end
             elseif current then
                 local latest = newest(state, app.name)
                 if latest and M.compare(latest.version, current.version) > 0 then
@@ -479,6 +492,7 @@ function M.status_glyph(status: Status): string
     if status == M.STATUS_INSTALLING then return glyphs.installing end
     if status == M.STATUS_REPLACED then return glyphs.replaced end
     if status == M.STATUS_REMOVED then return glyphs.removed end
+    if status == M.STATUS_LEFT_OUT then return glyphs.warning end
     return glyphs.hive
 end
 
@@ -489,10 +503,15 @@ function M.kind_glyph(kind: RowKind): string
     return glyphs.package
 end
 
--- Whether a row can be removed: any installed application.
+-- Whether a row offers a newer version to install in its place.
+function M.can_update(row: Row?): boolean
+    return row ~= nil and (row.status == M.STATUS_UPDATE or (row.status == M.STATUS_LEFT_OUT and row.update ~= nil))
+end
+
+-- Whether a row can be removed: any installed or left-out application.
 function M.can_remove(row: Row?): boolean
     return row ~= nil and row.origin == "governed" and row.app ~= nil
-        and (row.status == M.STATUS_INSTALLED or row.status == M.STATUS_UPDATE)
+        and (row.status == M.STATUS_INSTALLED or row.status == M.STATUS_UPDATE or row.status == M.STATUS_LEFT_OUT)
 end
 
 -- Whether an installed application made on this bee can be shared with the
@@ -503,12 +522,12 @@ function M.can_follow(row: Row?): boolean
 end
 
 function M.can_share(row: Row?): boolean
-    return M.can_remove(row) and row ~= nil and row.made_here == true
+    return M.can_remove(row) and row ~= nil and row.status ~= M.STATUS_LEFT_OUT and row.made_here == true
 end
 
 -- Whether an installed application has an earlier version to go back to.
 function M.can_go_back(row: Row?): boolean
-    return M.can_remove(row) and row ~= nil and row.baseline ~= nil
+    return M.can_remove(row) and row ~= nil and row.status ~= M.STATUS_LEFT_OUT and row.baseline ~= nil
 end
 
 -- ask_remove opens the confirmation for removing the row's application or,
@@ -594,6 +613,9 @@ function M.version_lines(state: State, row: Row): {Line}
         lines[#lines + 1] = {label = "Next", value = "Approve it in Needs you"}
     elseif row.status == M.STATUS_INSTALLING then
         lines[#lines + 1] = {label = "Next", value = "Approved; installing now"}
+    elseif row.status == M.STATUS_LEFT_OUT then
+        lines[#lines + 1] = {label = "Left out", value = row.note}
+        lines[#lines + 1] = {label = "Next", value = "This Bee does not run this version; install a newer one or remove it"}
     end
     return lines
 end

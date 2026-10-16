@@ -52,6 +52,17 @@ local function key(prefix: string, operation: string): string?
     return bounds.id(prefix .. ":" .. operation)
 end
 
+-- blocked settles a generation whose stored artifact the current host rules
+-- reject; its overlay stays out until the person installs another version or
+-- removes it.
+local function blocked(config: Config, intent: Object, prefix: string, diagnostics: string): Result
+    local blocked_key = key(prefix, "outcome-blocked-" .. tostring(intent.revision))
+    if not blocked_key then return failure("INVALID", "activation receipt key is too long") end
+    return activations.call(config.activations, config.actor_id, {operation = "record_outcome",
+        intent_id = intent.intent_id, expected_revision = intent.revision, idempotency_key = blocked_key,
+        outcome = "blocked", diagnostics = diagnostics})
+end
+
 local function failed_apply(config: Config, intent: Object, prefix: string, diagnostics: string): Result
     local failed_key = key(prefix, "outcome-failed-" .. tostring(intent.revision))
     if not failed_key then return failure("INVALID", "activation receipt key is too long") end
@@ -100,10 +111,12 @@ local function approved_spec(intent: Object): Object
         artifact_digest = intent.artifact_digest}
 end
 
-local function measured(config: Config, spec: Object): (Object?, Result?)
+-- measured answers the activation facts, or the failure and whether the
+-- current host rules reject the stored artifact.
+local function measured(config: Config, spec: Object): (Object?, Result?, boolean?)
     local candidate, context, resolve_error, rejected = config.resolver:resolve(spec)
     if candidate == nil or context == nil then
-        return nil, failure(rejected and "CONFLICT" or "BLOCKED", tostring(resolve_error or "resolve activation on this node"))
+        return nil, failure(rejected and "CONFLICT" or "BLOCKED", tostring(resolve_error or "resolve activation on this node")), rejected
     end
     -- A refusal means the approval does not cover the current host policy.
     if not config.measurement then config.measurement = {} end
@@ -253,7 +266,7 @@ function M.prepare(raw_config: Config, raw: unknown): Result
     local plan, plan_error = selected(config, identity)
     if not plan then return plan_error end
     local facts, facts_error = measured(config, plan)
-    if not facts then return facts_error end
+    if not facts then return assert(facts_error) end
     local admission_error = admission_owner(config, facts)
     if admission_error then return admission_error end
     local prepared = activations.call(config.activations, config.actor_id, {operation = "prepare_activation",
@@ -337,9 +350,9 @@ local function remeasure_selected(config: Config, intent: Object): Result?
     return unchanged(intent, current)
 end
 
-local function remeasure_authorized(config: Config, intent: Object): (Object?, Result?)
-    local current, measurement_error = measured(config, approved_spec(intent))
-    if not current then return nil, measurement_error end
+local function remeasure_authorized(config: Config, intent: Object): (Object?, Result?, boolean?)
+    local current, measurement_error, rejected = measured(config, approved_spec(intent))
+    if not current then return nil, measurement_error, rejected end
     local admission_error = admission_owner(config, current)
     if admission_error then return nil, admission_error end
     local changed = unchanged(intent, current)
@@ -389,9 +402,9 @@ local function remeasure_progress(config: Config, intent: Object): (Object?, Res
     return current, nil
 end
 
-local function remeasure_restoration(config: Config, intent: Object): Result?
-    local current, measurement_error = measured(config, approved_spec(intent))
-    if not current then return measurement_error end
+local function remeasure_restoration(config: Config, intent: Object): (Result?, boolean?)
+    local current, measurement_error, rejected = measured(config, approved_spec(intent))
+    if not current then return measurement_error, rejected end
     local admission_error = admission_owner(config, current)
     if admission_error then return admission_error end
     for _, field in ipairs({"owner_node", "workspace_id", "source_node", "source_workspace", "version",
@@ -450,7 +463,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     if intent.phase == "consuming" then
         if intent.grant_reuse_digest ~= nil then
             local current, current_error = remeasure_authorized(config, intent)
-            if not current then return current_error end
+            if not current then return assert(current_error) end
             local installed = object(current.capability_installed)
             if not installed or installed.record_digest ~= intent.grant_reuse_digest
                 or installed.approval_id ~= intent.approval_id then
@@ -494,8 +507,9 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     end
 
     if intent.phase == "authorized" then
-        local current, measurement_error = remeasure_authorized(config, intent)
-        if not current then return measurement_error end
+        local current, measurement_error, rejected = remeasure_authorized(config, intent)
+        if rejected and measurement_error then return blocked(config, intent, prefix, tostring(measurement_error.message)) end
+        if not current then return assert(measurement_error) end
         if intent.consumed_consumer_id == LEASE_CONSUMER then
             local proof = config.leases and lease_store.authorized(config.leases, intent_id) or nil
             if not proof or proof.approval_id ~= intent.approval_id
@@ -574,7 +588,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             return transaction.success(result, false)
         end
         local spec, measurement_error = remeasure_progress(config, intent)
-        if not spec then return measurement_error end
+        if not spec then return assert(measurement_error) end
         local function uncertain(diagnostics: string): Result
             local outcome_key = key(prefix, "outcome-uncertain-" .. tostring(intent.revision))
             if not outcome_key then return failure("INVALID", "activation receipt key is too long") end
@@ -639,12 +653,14 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             return transaction.success(value or result, false)
         end
         local matches, observe_error, refused = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
-        if matches == nil then return failure(refused and "CONFLICT" or "UNAVAILABLE", tostring(observe_error)) end
+        if refused then return blocked(config, intent, prefix, tostring(observe_error)) end
+        if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
         if matches then
             if intent.observed_intent_id == intent_id then return transaction.success(intent, true) end
             return observed(intent)
         end
-        local restoration_error = remeasure_restoration(config, intent)
+        local restoration_error, rejected = remeasure_restoration(config, intent)
+        if rejected and restoration_error then return blocked(config, intent, prefix, tostring(restoration_error.message)) end
         if restoration_error then return restoration_error end
         local restored, restore_error = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
         if restored then

@@ -569,7 +569,7 @@ local function main(options: unknown)
         else perform(function() install_now(row) end) end
     end
     local function update_row(row: model.Row)
-        if row.status ~= model.STATUS_UPDATE or not row.update then return end
+        if not model.can_update(row) or not row.update then return end
         if row.origin == "hub" then
             if row.component then update_package(row.component, row.update) end
         else perform(function() install_now(row) end) end

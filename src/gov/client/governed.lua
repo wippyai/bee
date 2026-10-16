@@ -32,7 +32,7 @@ type Intent = {owner_node: string, workspace_id: string, intent_id: string, over
     source_node: string, source_workspace: string, version: string, revision: integer,
     phase: string, outcome: string?, diagnostics: string?, approval_id: string?,
     approval_proposal_digest: string?, consumed_proposal_digest: string?,
-    observed_intent_id: string?, observed_artifact_digest: string?, observed_outcome: string?,
+    desired_intent_id: string?, observed_intent_id: string?, observed_artifact_digest: string?, observed_outcome: string?,
     baseline_intent_id: string?, application: string?, title: string?, component: string?,
     follow_state: string?, follow_outcome: string?, follow_message: string?}
 type EntryChange = {id: string, kind: string, digest: string}
@@ -264,7 +264,7 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
         revision = revision, phase = phase, outcome = outcome, diagnostics = diagnostics, approval_id = approval_id,
         approval_proposal_digest = digest(value.approval_proposal_digest),
         consumed_proposal_digest = digest(value.consumed_proposal_digest),
-        observed_intent_id = optional_id(value.observed_intent_id),
+        desired_intent_id = optional_id(value.desired_intent_id), observed_intent_id = optional_id(value.observed_intent_id),
         observed_artifact_digest = digest(value.observed_artifact_digest),
         observed_outcome = observed, baseline_intent_id = optional_id(value.baseline_intent_id),
         application = optional_text(value.application, 256), title = optional_text(value.title, 80), component = component,

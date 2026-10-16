@@ -32,7 +32,7 @@ function M.uninstall(config: Config, receipt_raw: unknown, expected_raw: unknown
         local revision = current and bounds.count(current.slot_revision)
         if not current or revision == nil then return failure("INTERNAL", "desired activation is malformed") end
         if expected and current.intent_id ~= expected then return failure("CONFLICT", "installed activation differs from the approved removal") end
-        if current.phase ~= "settled" or current.outcome ~= "applied" or current.intent_id ~= current.observed_intent_id then
+        if not activations.removable(current) then
             return failure("CONFLICT", "the application has a version on its way; let it settle before removing it")
         end
         local recorded = activations.remove_activation(config.activations, config.actor_id, {

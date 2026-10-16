@@ -65,7 +65,7 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
         local status = row and row.status or ""
         if status == model.STATUS_SHARED then
             buttons[#buttons + 1] = {kind = "install", key = "Enter", label = "Install", enabled = true, primary = true}
-        elseif status == model.STATUS_UPDATE then
+        elseif model.can_update(row) then
             buttons[#buttons + 1] = {kind = "update", key = "Enter", label = "Update", enabled = true, primary = true}
         else
             buttons[#buttons + 1] = {kind = "refresh", key = "Enter", label = "Check", enabled = true, primary = true}
@@ -101,12 +101,12 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
     end
     local tab = state.tab
     if tab == "installed" then
-        if row and row.status == model.STATUS_UPDATE then
+        if model.can_update(row) then
             buttons[#buttons + 1] = {kind = "update", key = "U", label = "Update", enabled = true, primary = true}
         end
         local own = row ~= nil and row.origin == "governed"
         local launchable = own and row ~= nil and row.application ~= nil and state.can_open
-        local updating = row ~= nil and row.status == model.STATUS_UPDATE
+        local updating = model.can_update(row)
         if row ~= nil and row.kind == "platform" then
             buttons[#buttons + 1] = {kind = "platform", key = "Enter", label = "Packages", enabled = true, primary = not updating}
         elseif own then

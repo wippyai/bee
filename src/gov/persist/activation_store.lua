@@ -365,7 +365,12 @@ end
 function M.record_outcome(store: Store, actor: string, input: OutcomeRequest): Result
     local measured, measure_error = request_digest(input)
     if not measured then return assert(measure_error) end
-    return transition(store, actor, input, {approval_bound = true, consuming = true, applying = true, settled = true}, function(tx: sql.Transaction, row: Intent): Result
+    -- Blocked settles an authorized or applied generation whose stored
+    -- artifact the current host rules reject.
+    return transition(store, actor, input, {approval_bound = true, consuming = true, authorized = true, applying = true, settled = true}, function(tx: sql.Transaction, row: Intent): Result
+        if row.phase == "authorized" and input.outcome ~= "blocked" then
+            return failure("CONFLICT", "an authorized activation settles here only as blocked")
+        end
         local waiting = row.phase == "approval_bound" or row.phase == "consuming"
         if (ENDINGS[input.outcome] == true) ~= waiting then
             return failure("CONFLICT", waiting and "an activation waiting for its approval ends only as denied, expired or withdrawn"
@@ -383,7 +388,7 @@ function M.record_outcome(store: Store, actor: string, input: OutcomeRequest): R
             and before_slot ~= nil and before_slot.desired_intent_id == row.intent_id
             and before_slot.observed_intent_id == nil
         if row.phase == "settled" and row.outcome ~= "uncertain" and not restored
-            and not (row.outcome == "applied" and input.outcome == "uncertain") then
+            and not (row.outcome == "applied" and (input.outcome == "uncertain" or input.outcome == "blocked")) then
             return failure("CONFLICT", "activation outcome is already final")
         end
         local next_revision = (row.revision) + 1
@@ -503,6 +508,16 @@ function M.revert_activation(store: Store, actor: string, raw_input: Request): R
         return transaction.success(result, false)
     end)
 end
+-- removable says whether the person can remove the overlay a desired
+-- generation names: it is applied and observed, or it is blocked by the
+-- current host rules.
+function M.removable(desired: {[string]: unknown}): boolean
+    if desired.phase ~= "settled" then return false end
+    if desired.outcome == "blocked" then return true end
+    return desired.outcome == "applied" and desired.intent_id == desired.observed_intent_id
+        and desired.observed_outcome == "applied"
+end
+
 -- remove_activation: the person's removal of an application. The slot forgets
 -- its desired and observed generations, so boot recovery never restores it, and
 -- the receipt records who asked. The intents stay as history.
@@ -532,17 +547,17 @@ function M.remove_activation(store: Store, actor: string, raw_input: Request): R
         end
         local current_slot, slot_error = slot(tx, store, input.overlay_owner, false)
         if slot_error then return slot_error end
-        if not current_slot or current_slot.observed_intent_id == nil or current_slot.observed_outcome ~= "applied" then
-            return failure("CONFLICT", "overlay has no applied generation to remove")
+        if not current_slot or current_slot.desired_intent_id == nil then
+            return failure("CONFLICT", "overlay has no installed generation to remove")
         end
         if count(current_slot.revision, false) ~= input.expected_revision then
             return failure("CONFLICT", "expected_revision does not match the overlay slot")
         end
-        if current_slot.desired_intent_id ~= current_slot.observed_intent_id then
+        local removed, removed_error = load(tx, store, current_slot.desired_intent_id)
+        if removed_error or not removed then return removed_error or failure("INTERNAL", "desired activation intent is missing") end
+        if not M.removable(view(store, removed, current_slot)) then
             return failure("CONFLICT", "the overlay has a newer generation on its way; let it settle first")
         end
-        local removed, removed_error = load(tx, store, current_slot.observed_intent_id)
-        if removed_error or not removed then return removed_error or failure("INTERNAL", "applied activation intent is missing") end
         local slot_updated, slot_write_error = tx:execute("UPDATE bee_governance_activation_slots SET revision = ?, desired_intent_id = NULL, desired_execution_revision = NULL, observed_intent_id = NULL, observed_execution_revision = NULL, observed_artifact_digest = NULL, observed_outcome = NULL, baseline_intent_id = NULL, baseline_execution_revision = NULL, baseline_artifact_digest = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ? AND revision = ?", {input.expected_revision + 1, store.node, store.workspace, input.overlay_owner, current_slot.revision})
         local slot_update_error = cas_result(slot_updated, slot_write_error, "remove activation slot")
         if slot_update_error then return slot_update_error end

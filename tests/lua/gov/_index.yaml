@@ -1215,6 +1215,8 @@ entries:
     harness: bee.tests.gov:delivery_harness
     guide: bee.gov.traits:guide
     test_fixtures: bee.tests.support:fixtures
+    library: bee.apps.library.app:model
+    governed: bee.gov.client:governed
     artifact: bee.gov.types:artifact
     application_admission: bee.gov.types:governed_application_admission
     workspace_applications: bee.gov.types:workspace_applications

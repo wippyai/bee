@@ -290,7 +290,7 @@ local function recovery_tests()
             assert(plan_store.close(again_plans))
         end)
 
-        test.it("refuses an overlay the host rules no longer admit and keeps an unobservable overlay unavailable", function()
+        test.it("blocks an applied overlay the host rules reject and keeps an unobservable overlay unavailable", function()
             local plans = assert(plan_store.open("bee:db", "node-owner", "workspace-stale-rules"))
             local activations = assert(activation_store.open("bee:db", "node-owner", "workspace-stale-rules"))
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
@@ -325,19 +325,25 @@ local function recovery_tests()
             observation = nil
             test.eq(ok(owner.step(config, "intent-stale-rules", "stale-rules")).outcome, "applied")
             test.eq(applications, 1)
-            applied, observation = false, "refused"
-            local restoring = owner.recover(config, "stale-rules")
-            expect_code(restoring, "CONFLICT")
-            test.eq(restoring.message, "artifact breaks a host rule")
-            observation = "unavailable"
+            applied, observation = false, "unavailable"
             expect_code(owner.recover(config, "stale-rules"), "UNAVAILABLE")
-            test.eq(applications, 1)
             test.eq(ok(activation_store.get(activations, "intent-stale-rules")).outcome, "applied")
+            observation = "refused"
+            local blocked = owner.recover(config, "stale-rules")
+            test.is_true(blocked.ok == true and blocked.replayed ~= true, tostring(blocked.message))
+            local recorded = ok(activation_store.get(activations, "intent-stale-rules"))
+            test.eq(recorded.phase, "settled")
+            test.eq(recorded.outcome, "blocked")
+            test.eq(recorded.diagnostics, "artifact breaks a host rule")
+            test.eq(recorded.observed_outcome, "blocked")
+            local again = owner.recover(config, "stale-rules")
+            test.is_true(again.ok == true and again.replayed == true)
+            test.eq(applications, 1)
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
 
-        test.it("refuses an authorized overlay its resolution rejects and keeps a failed resolution blocked", function()
+        test.it("blocks an authorized overlay its resolution rejects and keeps a failed resolution pending", function()
             local plans = assert(plan_store.open("bee:db", "node-owner", "workspace-stale-resolution"))
             local activations = assert(activation_store.open("bee:db", "node-owner", "workspace-stale-resolution"))
             local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
@@ -363,14 +369,15 @@ local function recovery_tests()
                 intent_id = "intent-stale-resolution", receipt_key = "stale-resolution"}))
             test.eq(ok(owner.step(config, "intent-stale-resolution", "stale-resolution")).phase, "consuming")
             test.eq(ok(owner.step(config, "intent-stale-resolution", "stale-resolution")).phase, "authorized")
-            resolution = "refused"
-            local refused = owner.recover(config, "stale-resolution")
-            expect_code(refused, "CONFLICT")
-            test.eq(refused.message, "artifact breaks a host rule")
             resolution = "failed"
             expect_code(owner.recover(config, "stale-resolution"), "BLOCKED")
-            test.eq(applications, 0)
             test.eq(ok(activation_store.get(activations, "intent-stale-resolution")).phase, "authorized")
+            resolution = "refused"
+            local blocked = ok(owner.recover(config, "stale-resolution"))
+            test.eq(blocked.phase, "settled")
+            test.eq(blocked.outcome, "blocked")
+            test.eq(blocked.diagnostics, "artifact breaks a host rule")
+            test.eq(applications, 0)
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)

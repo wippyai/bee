@@ -68,7 +68,7 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
     if not reconcile_target then return false, "placement binding has no reconcile method" end
     local native, native_error = call(raw_call, reconcile_target, {attempt_id = request.previous_attempt_id})
     if not native then return false, native_error end
-    if not matches(native, request) or native.execution_state ~= "exited" then
+    if not matches(native, request) or not continuation.process_gone(native.execution_state) then
         return false, "previous native process exit is not proven"
     end
     local claimed, claim_error = call(raw_call, "bee.threads.binding:claim", {thread_id = request.thread_id,

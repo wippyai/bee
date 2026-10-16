@@ -71,6 +71,11 @@ function M.resolve(call: Call, request: Request): (string?, string?)
     if attempt.execution_state ~= "exited" then return nil, "previous native process has not exited" end
     return resume_ref, nil
 end
+-- A previous native process is gone once it exited, or when its start
+-- failed before any child was created; placement cleanup proves either.
+function M.process_gone(execution_state: unknown): boolean
+    return execution_state == "exited" or execution_state == "start_failed"
+end
 -- Explicit interactive resume is not another successful structured turn.
 -- The old process must be gone; its committed observations identify the
 -- conversation, while the new attempt supplies fresh admission and grants.
@@ -113,7 +118,7 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     if not attempt or attempt.attempt_id ~= request.previous_attempt_id or attempt.action_id ~= request.action_id or attempt.owner_id ~= request.owner_id or attempt.session_ref ~= request.session_ref then
         return nil, "previous native process has another owner or session"
     end
-    if ended and attempt.execution_state ~= "exited" then return nil, "previous native process has not exited" end
+    if ended and not M.process_gone(attempt.execution_state) then return nil, "previous native process has not exited" end
     if attempt.cleanup_state ~= "complete" and attempt.cleanup_state ~= "pending" and attempt.cleanup_state ~= "uncertain" then
         return nil, "previous native process cleanup state is invalid"
     end
@@ -204,7 +209,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
                     or cleaned.owner_id ~= request.owner_id or cleaned.session_ref ~= request.session_ref then
                     return nil, "cleanup reply belongs to another attempt or session"
                 end
-                if cleaned.execution_state ~= "exited" or cleaned.cleanup_state ~= "complete" then
+                if not M.process_gone(cleaned.execution_state) or cleaned.cleanup_state ~= "complete" then
                     return nil, "previous native process cleanup is not complete"
                 end
             end

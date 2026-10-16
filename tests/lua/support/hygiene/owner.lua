@@ -192,8 +192,9 @@ function M.main()
                         if pid or state.status == "running" or state.status == "starting" or state.status == "stopping" then
                             draining = true
                             if pid and not monitored[tostring(pid)] then
-                                assert(process.monitor(tostring(pid)))
-                                monitored[tostring(pid)] = true
+                                local watched, problem = process.monitor(tostring(pid))
+                                assert(watched or processes.vanished(problem), tostring(problem))
+                                if watched then monitored[tostring(pid)] = true end
                             end
                         end
                     end

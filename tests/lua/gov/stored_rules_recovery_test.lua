@@ -1,6 +1,7 @@
 -- MIT. A restarted node restores every installed application its host rules
--- still admit. An application whose stored artifact the current rules refuse
--- stays out and is reported; the node still boots.
+-- admit. An application whose stored artifact the current rules refuse stays
+-- out, is reported once, shows as Left out in the Library and can be removed;
+-- the node still boots.
 local test = require("test")
 local bounds = require("bounds")
 local json = require("json")

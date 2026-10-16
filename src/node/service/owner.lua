@@ -28,6 +28,7 @@ local env = require("env")
 local confirmation = require("confirmation")
 local funcs = require("funcs")
 local bounds = require("bounds")
+local waiting = require("waiting")
 local app_identity = require("app_identity")
 local canonical = require("canonical")
 
@@ -946,6 +947,13 @@ local function main(saved: unknown)
         local data = event.data
         if type(event.path) ~= "string" or type(data) ~= "table" then return end
         local workspace_id: string = event.path
+        local request = bounds.object(data.request)
+        if request and (event.kind == "approval.requested" or event.kind == "approval.changed") then
+            local title = event.kind == "approval.requested" and tostring(data.title or "Review request") or nil
+            for _, id in ipairs(waiting.mark(instances, workspace_id, request, title)) do
+                broadcast({kind = "review", id = id, review = instances[id].review or false})
+            end
+        end
         if event.kind == "approval.requested" or event.kind == "approval.failed" then
             local inbox, inbox_error = role_app(APPROVALS_ROLE, workspace_id)
             if inbox_error then

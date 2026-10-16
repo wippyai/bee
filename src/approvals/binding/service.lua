@@ -119,6 +119,7 @@ local function announce(value: unknown, db: sql.DB, requested: boolean)
     local workspace_id = view and bounds.id(view.workspace_id) or nil
     local approval_id = view and bounds.id(view.approval_id) or nil
     if not view or not workspace_id or not approval_id then return end
+    local announced_request = {approval_id = approval_id, requester_id = bounds.id(view.requester_id), state = view.state}
     local contract = bounds.object(view.contract)
     if contract and contract.presentation ~= "inbox" then return end
     requested = requested and view.state == "pending"
@@ -152,7 +153,7 @@ local function announce(value: unknown, db: sql.DB, requested: boolean)
     if not title and prompt and type(prompt.text) == "string" then title = prompt.text:gsub("%c", " "):sub(1, 160) end
     if failed then title = "Installation failed: " .. tostring(receipt and receipt.error):gsub("%c", " "):sub(1, 138) end
     local sent, send_error = events.send(part_model.ATTENTION, failed and "approval.failed" or (requested and "approval.requested" or "approval.changed"), workspace_id,
-        {approval_id = approval_id, title = title or "Review request", count = count, failed = failed == true})
+        {approval_id = approval_id, title = title or "Review request", count = count, failed = failed == true, request = announced_request})
     if not sent then logger:warn("Approval not announced", {approval_id = approval_id, error = tostring(send_error)}) end
 end
 -- Every method authenticates the caller, opens the linked owner store and

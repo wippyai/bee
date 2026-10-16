@@ -28,6 +28,7 @@ entries:
     client: bee.node:client
     confirmation: bee.approvals.app:confirmation
     bounds: bee.values:bounds
+    waiting: bee.node.service:waiting
     app_identity: bee.threads.records:app_identity
     worker: bee.process:worker
     part_catalog: bee.node.service:catalog
@@ -120,6 +121,13 @@ entries:
     descriptor: bee.app:descriptor
     settings: bee.node.persist:settings
     appearance: bee.ui:appearance
+- name: waiting
+  kind: library.lua
+  source: file://waiting.lua
+  imports:
+    bounds: bee.values:bounds
+    principal: bee.node:principal
+    part_handover: bee.node.service:handover
 - name: handover
   kind: library.lua
   source: file://handover.lua

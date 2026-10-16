@@ -344,6 +344,37 @@ local function define_tests()
             close_all(events, presented(events, desktop, "bee.approvals.inbox.app:", 1))
             process.unlisten(events)
         end)
+        test.it("marks the window of the app waiting on a request until the request settles", function()
+            local events = assert(process.listen(client.EVENTS, {message = true}))
+            local state = watched()
+            local desktop = tostring(state.desktop)
+            local workspace = home_workspace(state).id
+            local id = tostring(call("open", {app = PROBE, desktop = desktop, args = {label = "waiting"}}).id)
+            next_event(events, "opened")
+            local request = {approval_id = "approval-waiting", requester_id = "bee.application:" .. workspace .. ":" .. id, state = "pending"}
+            assert(events_bus.send("bee.attention", "approval.requested", workspace,
+                {approval_id = "approval-waiting", title = "Trust this folder?", count = 1, request = request}))
+            local marked = next_event(events, "review")
+            test.eq(marked.id, id)
+            test.eq((marked.review or {approval_id = ""}).approval_id, "approval-waiting")
+            test.eq((marked.review or {title = ""}).title, "Trust this folder?")
+            local listed = ""
+            for _, instance in ipairs(watched().running) do
+                if instance.id == id and instance.review then listed = instance.review.approval_id end
+            end
+            test.eq(listed, "approval-waiting")
+            request.state = "decided"
+            assert(events_bus.send("bee.attention", "approval.changed", workspace, {approval_id = "approval-waiting", count = 0, request = request}))
+            local cleared = next_event(events, "review")
+            test.eq(cleared.id, id)
+            test.is_nil(cleared.review)
+            local presented_ids: {string} = {id}
+            for _, instance in ipairs(watched().running) do
+                if instance.app:sub(1, #"bee.approvals.inbox.app:") == "bee.approvals.inbox.app:" then presented_ids[#presented_ids + 1] = instance.id end
+            end
+            close_all(events, presented_ids)
+            process.unlisten(events)
+        end)
         test.it("opens an approved component's applications once it is applied", function()
             local events = assert(process.listen(client.EVENTS, {message = true}))
             local state = watched()

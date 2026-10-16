@@ -2,6 +2,7 @@
 local boundary = require("boundary")
 local bounds = require("bounds")
 local subject_call = require("subject_call")
+local time = require("time")
 return {handle = function(value: unknown): {[string]: unknown}
     local input = assert(bounds.object(value))
     local binding = assert(bounds.object(input.binding))
@@ -18,6 +19,7 @@ return {handle = function(value: unknown): {[string]: unknown}
         origin_view = {view_id = view.view_id, instance_id = view.instance_id}
     end
     local identity: subject_call.Binding = {binding_id = binding.binding_id, subject = binding.subject, action_id = binding.action_id, attempt_id = binding.attempt_id, thread_id = binding.thread_id, workspace_id = workspace_id, origin_view = origin_view}
+    local started = time.now():unix_nano()
     local reply, err = boundary.deliver(identity, assert(bounds.object(input.outcome)), bounds.object(input.payload), bounds.text(input.transport, 64))
-    return {ok = reply ~= nil, value = reply, error = err}
+    return {ok = reply ~= nil, value = reply, error = err, elapsed_ms = (time.now():unix_nano() - started) / 1000000}
 end}

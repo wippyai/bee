@@ -277,8 +277,6 @@ local function define_tests()
                 hook("UserPromptSubmit", delivered.text)
                 hook("Stop", nil, "The waited answer.")
                 test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "settled")
-                -- Every accepted turn reports the agent working, and only a
-                -- turn that ends with nothing waiting reports it idle.
                 local reports: {string} = {}
                 local _, barrier_error = funcs.call("bee.tests.threads.sessions:activity_probe", {session = opened.session, state = "barrier"})
                 assert(not barrier_error, tostring(barrier_error))
@@ -288,7 +286,7 @@ local function define_tests()
                     if report.state == "barrier" then break end
                     reports[#reports + 1] = tostring(report.state)
                 end
-                test.eq(table.concat(reports, ","), "working,working,idle")
+                test.eq(table.concat(reports, ","), "idle")
             end)
         end)
         test.it("gives a starting terminal the message waiting for it as its prompt, the same message each time it asks", function()
@@ -337,6 +335,10 @@ local function define_tests()
             test.is_false(idle_check(quiet))
             local reserved = harness.value(journal:call("turn_reserve", {session = quiet, operation_key = harness.key()}))
             test.not_nil(reserved.turn)
+            test.is_false(idle_check(quiet))
+            local input = harness.value(journal:call("turn_pull", {turn = reserved.turn, claim = reserved.claim}))
+            harness.value(journal:call("turn_accept", {turn = reserved.turn, claim = reserved.claim, input_digest = input.input_digest,
+                checkpoint = {attempt_id = "idle-terminal"}, operation_key = harness.key()}))
             test.is_false(idle_check(quiet))
             test.is_false(idle_check(window_session("background")))
             test.is_false(idle_check(window_session(nil)))

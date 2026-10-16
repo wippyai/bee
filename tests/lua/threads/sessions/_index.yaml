@@ -345,12 +345,24 @@ entries:
   source: file://hook_boundary_probe.lua
   method: handle
   meta: {type: test_support}
+  modules: [time]
   imports:
     boundary: bee.gateway.api:session_boundary
     bounds: bee.values:bounds
     subject_call: bee.gateway.security:subject_call
   security:
     policies: [bee.gateway.security:execute_policy, bee.gateway.security:session_boundary_resolver_policy, bee.gateway.security:session_boundary_policy]
+
+- name: hook_latency_test
+  kind: function.lua
+  source: file://hook_latency_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: '90s'}
+  modules: [funcs, security, registry, process, sql]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.values:bounds
 
 - name: attention_test
   kind: function.lua

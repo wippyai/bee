@@ -612,9 +612,6 @@ function M.hook_boundary(raw_request: unknown): Reply
     local accepted, accept_error = journal.invoke("turn_accept", {turn = turn_ref, claim = claim, input_digest = input.input_digest,
         checkpoint = {attempt_id = route.native_attempt_id, hook_event = event_key}, operation_key = "hook-accept:" .. boundary_key})
     if accept_error or not accepted then return unavailable(accept_error or "interactive turn accept unavailable", event_key) end
-    -- A working agent is never stopped for idling, whoever started its turn.
-    local _, activity_error = funcs.call(ACTIVITY, {session = session, state = "working"})
-    if activity_error then return unavailable(tostring(activity_error), event_key) end
     return succeed({extension_response = extension_response, hook_driver = extension_response and route.provider or nil})
 end
 

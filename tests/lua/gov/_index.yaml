@@ -1091,7 +1091,6 @@ entries:
   - system
   - process
   - registry
-  - http_client
   meta:
     type: test
     suite: bee
@@ -1107,8 +1106,7 @@ entries:
     guide: bee.gov.traits:guide
     harness: bee.tests.gov:delivery_harness
     workspace_applications: bee.gov.types:workspace_applications
-    launch_policy: bee.harness.carrier:policy
-    principals: bee.tests.support.principals:bound
+    stock_session: bee.tests.gov:stock_session
     test_fixtures: bee.tests.support:fixtures
 - name: activation_drain_probe
   kind: function.lua
@@ -1414,7 +1412,6 @@ entries:
   - system
   - process
   - registry
-  - http_client
   meta:
     type: test
     suite: bee
@@ -1430,8 +1427,7 @@ entries:
     guide: bee.gov.traits:guide
     harness: bee.tests.gov:delivery_harness
     workspace_applications: bee.gov.types:workspace_applications
-    launch_policy: bee.harness.carrier:policy
-    principals: bee.tests.support.principals:bound
+    stock_session: bee.tests.gov:stock_session
     fixtures: bee.tests.support:fixtures
 - name: activation_fixture
   kind: library.lua

@@ -61,6 +61,9 @@ entries:
     picker: bee.harness.app:picker
     direct: bee.harness.app:direct
     recovery: bee.harness.app:recovery
+    terminal_view: bee.harness.app:terminal_view
+    agents: bee.harness.app:agents
+    sessions: bee.threads.sessions.client:sessions
     hooks: bee.harness.carrier:hooks
     delivery: bee.harness.carrier:delivery
     records: bee.harness.carrier:hook_records

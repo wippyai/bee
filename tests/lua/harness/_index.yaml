@@ -2993,3 +2993,59 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     support: bee.tests.harness:gateway_carrier_fixture
+- name: single_owner_test
+  kind: function.lua
+  source: file://single_owner_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  modules:
+  - security
+  - registry
+  - process
+  - tty
+  - time
+  - channel
+  security:
+    policies:
+    - bee.tests.harness:apply_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    recovery: bee.harness.app:recovery
+    probe: bee.tests.harness:single_owner_probe
+- name: single_owner_probe
+  kind: library.lua
+  source: file://single_owner_probe.lua
+  meta:
+    type: test_support
+  modules:
+  - process
+- name: single_owner_list
+  kind: function.lua
+  source: file://single_owner_probe.lua
+  method: list
+  meta:
+    type: test_support
+  modules:
+  - process
+- name: single_owner_attach
+  kind: function.lua
+  source: file://single_owner_probe.lua
+  method: attach
+  meta:
+    type: test_support
+  modules:
+  - process
+- name: single_owner_contract_policy
+  kind: security.policy
+  meta:
+    type: test_support
+  policy:
+    actions:
+    - contract.open
+    resources:
+    - bee.tests.threads.sessions:fake_owner
+    effect: allow

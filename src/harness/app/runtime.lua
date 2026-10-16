@@ -21,6 +21,9 @@ local machine = require("machine")
 local picker = require("picker")
 local direct_launch = require("direct")
 local recovery = require("recovery")
+local terminal_view = require("terminal_view")
+local agents = require("agents")
+local sessions = require("sessions")
 local hooks = require("hooks")
 local text = require("text")
 local delivery = require("delivery")
@@ -77,6 +80,16 @@ local function refusal(reply: admission.Reply?): (string, string?)
     local fault = reply.error
     if not fault then return "launch admission refused", nil end
     return fault.message, fault.code
+end
+
+-- The open session of the workspace whose thread a saved window continues.
+local function owning_session(workspace: string, thread_id: string): (string?, string?)
+    local rows, list_error = agents.directory(sessions.client(), workspace, false)
+    if not rows then return nil, list_error end
+    for _, row in ipairs(rows) do
+        if row.thread_ref == thread_id then return row.session, nil end
+    end
+    return nil, nil
 end
 
 local function call(target: string, value: unknown): (boolean, string?)
@@ -421,6 +434,25 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             error("Managed window restore: " .. tostring(restore_error or decode_error))
         end
         saved = restored
+        -- A session has one owner, which restores it once for every viewer. A
+        -- desktop window holding a session's checkpoint shows the session
+        -- through that owner instead of admitting a second continuation.
+        if not retained then
+            local session, lookup_error = owning_session(launch.workspace_id, restored.thread_id)
+            if lookup_error then
+                show_failure("Managed window restore: " .. lookup_error)
+                tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+                return
+            end
+            if session then
+                client.ready(launch, {negotiate_close = true})
+                ready_announced = true
+                local closing, view_error = terminal_view.run(launch, session, input, lifecycle, closes, restored.thread_id)
+                if view_error and not closing then show_failure("Managed window restore: " .. view_error) end
+                tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+                return
+            end
+        end
         local request_id, request_error = uuid.v7()
         if not request_id then
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)

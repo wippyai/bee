@@ -204,6 +204,13 @@ local function define_tests()
             local installed = rpc(endpoint, action, token, "tools/call", {name = "components", arguments = {operation = "installed"}})
             test.is_nil(installed.error)
             test.is_false(assert(bounds.object(installed.result)).isError == true)
+            -- A Hub refusal reaches the agent with Hub's own reason.
+            local absent = rpc(endpoint, action, token, "tools/call", {name = "components", arguments = {operation = "installed_source",
+                request = {component = "absent/absent", version = "1.0.0"}}})
+            local refused = assert(bounds.object(assert(bounds.object(absent.result)).structuredContent))
+            local fault = assert(bounds.object(refused.error))
+            test.eq(fault.code, "UNAVAILABLE", tostring(json.encode(refused)))
+            test.is_nil(tostring(fault.message):find("unknown field", 1, true), tostring(fault.message))
             value(external.revoke(assert(bounds.id(paired.client_id)), WORKSPACE))
         end)
         test.it("refuses configuration retrieval by another terminal or workspace", function()

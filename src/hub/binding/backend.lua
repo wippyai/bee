@@ -12,6 +12,7 @@ local publication = require("publication")
 local hub_package = require("hub_package")
 local plan = require("plan")
 local hub_result = require("hub_result")
+local app_catalog = require("app_catalog")
 type Result = hub_result.Result
 
 local WORKER = "bee.hub.service:worker"
@@ -67,7 +68,20 @@ local function handle(raw: unknown): Result
     elseif value.operation == "installed" then
         local result, problem = inventory_reader.read()
         if not result then return hub_result.failure("UNAVAILABLE", problem or "inventory unavailable") end
-        return hub_result.success(result, false)
+        -- A workspace caller also reads the apps its workspace admits, by the
+        -- id application_open takes.
+        local actor = security.actor()
+        local metadata = actor and bounds.object(actor:meta()) or nil
+        local workspace = metadata and bounds.id(metadata.workspace_id) or nil
+        if not workspace then return hub_result.success(result, false) end
+        local apps, catalog_error = app_catalog.catalog(workspace)
+        if not apps then return hub_result.failure("UNAVAILABLE", catalog_error or "applications unavailable") end
+        local applications: {{[string]: unknown}} = {}
+        for _, app in ipairs(apps) do applications[#applications + 1] = {id = app.id, title = app.title, singleton = app.singleton} end
+        local value: {[string]: unknown} = {}
+        for key, item in pairs(result :: {[string]: unknown}) do value[key] = item end
+        value.applications = applications
+        return hub_result.success(value, false)
     elseif value.operation == "updates" then
         local result, problem = updates.read()
         if not result then return hub_result.failure("UNAVAILABLE", problem or "Bee update status unavailable") end

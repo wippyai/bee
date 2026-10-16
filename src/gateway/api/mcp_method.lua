@@ -97,8 +97,10 @@ local function decode_owner_reply(raw: unknown): (OwnerReply?, string?)
         if not fault then return nil, fault_error end
         return {ok = false, value = reply.value, error = fault, replayed = replayed}, nil
     end
+    -- A Hub reply carries its untruncated message as full_message beside the
+    -- bounded message the fault reports.
     if reply.code ~= nil or reply.message ~= nil or reply.commit ~= nil then
-        local extra = bounds.fields(reply, {"ok", "value", "code", "message", "replayed", "commit"})
+        local extra = bounds.fields(reply, {"ok", "value", "code", "message", "full_message", "replayed", "commit"})
         if extra then return nil, extra end
         if replayed == nil then return nil, "transaction reply has no replayed flag" end
         if reply.commit ~= nil and type(reply.commit) ~= "boolean" then return nil, "transaction reply commit flag is malformed" end

@@ -101,7 +101,7 @@ local function define_tests()
             test.eq(refusal(sessions.tool_call(session, "application_open", {definition_id = APP, arguments = {"Ada"},
                 idempotency_key = "greet-early"})), "tool is not admitted for this binding")
             local requested = sessions.structured(sessions.tool_call(session, "session", {operation = "request_access",
-                idempotency_key = "appopen-runtime", traits = {"bee.app:runtime"}, reason = "Start Hello on your desktop"}))
+                idempotency_key = "appopen-runtime", traits = {"bee.hub:library", "bee.app:runtime"}, reason = "Start Hello on your desktop"}))
             local asked = harness.approve(workspace, requested.approval_id)
             test.is_true(tostring(assert(bounds.object(asked.prompt)).text):find("Open apps on your desktop", 1, true) ~= nil,
                 tostring(json.encode(asked.prompt)))
@@ -109,6 +109,14 @@ local function define_tests()
                 approval_id = requested.approval_id}))
             test.eq(granted.status, "granted")
             test.is_true(sessions.listed(session).application_open)
+            -- The agent finds what it can open in the installed inventory.
+            local inventory = sessions.structured(sessions.tool_call(session, "components", {operation = "installed"}))
+            local offered: Object? = nil
+            for _, raw in ipairs(assert(bounds.array(inventory.applications, 256), "installed lists applications")) do
+                local item = assert(bounds.object(raw))
+                if item.id == APP then offered = item end
+            end
+            test.eq(assert(offered, "installed lists the delivered app").title, "Hello Bee")
 
             local opened = sessions.structured(sessions.tool_call(session, "application_open",
                 {definition_id = APP, arguments = {"Ada"}, idempotency_key = "greet-ada"}))

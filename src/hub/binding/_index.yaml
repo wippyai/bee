@@ -90,6 +90,7 @@ entries:
     preview: bee.hub.binding:preview
     publication: bee.hub.binding:publication
     hub_result: bee.hub.package:result
+    app_catalog: bee.node.service:catalog
 - name: call
   kind: function.lua
   source: file://facade.lua

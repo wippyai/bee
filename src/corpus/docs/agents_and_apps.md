@@ -4,7 +4,7 @@ How an agent session works with the apps installed in its workspace: start an
 app on the person's desktop, send it a message while it runs, call its app
 tools, and talk with the person on the bound thread.
 Searches that lead here: start an app, open app, open application window,
-send message to app, talk to running app, app tools.
+list installed apps, send message to app, talk to running app, app tools.
 Every tool below is an MCP tool of your session.
 
 ## Access you request
@@ -15,26 +15,32 @@ names the traits you may ask for, and `tools` lists what is active.
 
 | Trait | Gives | Ask for it when |
 |---|---|---|
+| `bee.hub:library` | `components`, which lists the installed apps | you look for an app to open |
 | `bee.app:runtime` | `application_open` | you start an app or send a running app new arguments |
 | one trait per installed app with tools, e.g. the counter's | that app's tools by name, e.g. `counter_list` | you call an app's tools |
 | `bee.app:tools` | `app_tools` (listing) when no installed app offers tools yet | you look for app tools |
 
 Request and wait:
 
-1. `session` `{operation: "request_access", idempotency_key: "<stable key>", traits: ["bee.app:runtime"], reason: "<what you will do>"}`
+1. `session` `{operation: "request_access", idempotency_key: "<stable key>", traits: ["bee.hub:library", "bee.app:runtime"], reason: "<what you will do>"}`
    returns `approval_id`. The person sees the request in Needs you, with the
-   trait's title (for `bee.app:runtime`, "Open apps on your desktop") and your reason.
+   traits' titles (for `bee.app:runtime`, "Open apps on your desktop") and your reason.
 2. Poll `session` `{operation: "access_status", approval_id}` until `status` is
    `granted`. The trait is then active; call `tools/list` again to see its tools.
 
-## Find the app
+## Find the app (list installed apps)
 
-`application_open` takes the app's definition id: the `process.lua` entry with
-`meta.type: bee.application`. For an app you delivered it is the id in your
-`entries.json`, for example `app.hello.app:app`. An installed app that offers
-tools also appears in `session` read `traits`, with its definition id as
-`application_ref`. No tool lists every installed app; ask the person on the
-thread when you do not know the id.
+`components` `{operation: "installed"}` lists the apps your workspace can
+open in `applications`, each with `id`, `title` and `singleton`:
+
+```json
+{"applications": [{"id": "app.hello.app:app", "title": "Hello Bee", "singleton": true}], "modules": [...], "roots": [...]}
+```
+
+`id` is the definition id `application_open` takes: the `process.lua` entry
+with `meta.type: bee.application`. For an app you delivered it is also the id
+in your `entries.json`. An app that is not listed is not installed in your
+workspace.
 
 ## Start an app (open app)
 

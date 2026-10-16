@@ -11,6 +11,7 @@ local funcs = require("funcs")
 local channel = require("channel")
 local time = require("time")
 local uuid = require("uuid")
+local prestart = require("prestart")
 local M = {}
 type RawCall = (string, unknown) -> (unknown, string?)
 type Resume = (hooks.Config, checkpoint_types.Checkpoint?, integer) -> (hooks.State?, string?)
@@ -37,6 +38,34 @@ local function matches(attempt: {[string]: unknown}, request: continuation.Reque
     return attempt.attempt_id == request.previous_attempt_id and attempt.action_id == request.action_id
         and attempt.owner_id == request.owner_id and attempt.session_ref == request.session_ref
 end
+local MAY_RUN = "its earlier agent process may still be running on this machine"
+-- A window that closed before its process started leaves its attempt
+-- prepared without a checkpoint. A new carrier epoch fences it; placement
+-- proves no child started, and the attempt settles as failed.
+local function settle_unstarted(raw_call: RawCall, request: continuation.Request, stored: {[string]: unknown}): (boolean, string?)
+    local claimed, claim_error = call(raw_call, "bee.threads.binding:claim", {thread_id = request.thread_id,
+        attempt_id = request.previous_attempt_id, idempotency_key = key()})
+    if not claimed then return false, claim_error end
+    local epoch = bounds.integer(claimed.carrier_epoch)
+    if claimed.attempt_id ~= request.previous_attempt_id or not epoch or epoch < 1 then return false, "carrier claim belongs to another attempt" end
+    local inspection = prestart.inspect(raw_call, placement_target(request, "status"), placement_target(request, "stop"),
+        bounds.id(stored.placement_attempt_id) or request.previous_attempt_id, "failed", "the window closed before its process started")
+    if inspection.outcome ~= "failed" then return false, MAY_RUN end
+    local failure = {code = "launch_failed", message = inspection.reason, retryable = false}
+    local turn_id = bounds.id(stored.open_turn_id)
+    if turn_id then
+        local ended, end_error = call(raw_call, "bee.threads.binding:end_turn", {thread_id = request.thread_id, action_id = request.action_id,
+            attempt_id = request.previous_attempt_id, turn_id = turn_id, carrier_epoch = epoch, idempotency_key = key(),
+            turn_end = {outcome = "failed", answer_message_ids = {}, evidence_refs = {}, error = failure}})
+        if not ended then return false, end_error end
+    end
+    local settled, settle_error = call(raw_call, "bee.threads.binding:receipt", {thread_id = request.thread_id,
+        idempotency_key = "launch:" .. request.previous_attempt_id .. ":window:unstarted:" .. tostring(epoch),
+        action_id = request.action_id, attempt_id = request.previous_attempt_id, carrier_epoch = epoch,
+        receipt = {scope = "attempt", outcome = "failed", evidence_refs = {}, error = failure}})
+    if not settled then return false, settle_error end
+    return true, nil
+end
 function M.recover(request: continuation.Request, call_override: RawCall?, resume_override: Resume?): (boolean, string?)
     local raw_call: RawCall
     if call_override then
@@ -54,6 +83,12 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
     else
         resume = hooks.resume
     end
+    local unstarted, unstarted_error = continuation.unstarted(raw_call, request)
+    if unstarted_error then return false, unstarted_error end
+    if unstarted then
+        if unstarted.attempt_state == "ended" then return true, nil end
+        return settle_unstarted(raw_call, request, unstarted)
+    end
     local previous, invalid = continuation.inspect_window(function(target: string, input: unknown): (unknown, string?)
         local raw, err = raw_call(target, input)
         if err then return nil, tostring(err) end
@@ -69,7 +104,7 @@ function M.recover(request: continuation.Request, call_override: RawCall?, resum
     local native, native_error = call(raw_call, reconcile_target, {attempt_id = request.previous_attempt_id})
     if not native then return false, native_error end
     if not matches(native, request) or not continuation.process_gone(native.execution_state) then
-        return false, "its earlier agent process may still be running on this machine"
+        return false, MAY_RUN
     end
     local claimed, claim_error = call(raw_call, "bee.threads.binding:claim", {thread_id = request.thread_id,
         attempt_id = request.previous_attempt_id, idempotency_key = key()})

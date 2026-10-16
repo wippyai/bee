@@ -381,6 +381,85 @@ local function define_tests()
             test.is_nil(refused)
             test.neq(refused_error, continuation.NO_CONVERSATION)
         end)
+        test.it("settles a window attempt that never started and resumes the conversation of the attempt before it", function()
+            local point = checkpoint.new({binding_ref = "driver:binding", binding_digest = "binding-digest", profile_id = "window",
+                profile_digest = "profile-digest", gateway_binding = "old-binding"}, 1)
+            point.retained_session_ref = "session"
+            local earlier: {[string]: unknown} = {attempt_id = "earlier", action_id = "action", attempt_state = "ended", attempt_outcome = "cancelled",
+                placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}
+            local orphan: {[string]: unknown} = {attempt_id = "previous", action_id = "action", attempt_state = "prepared", carrier_epoch = 1,
+                checkpoint_revision = 0, placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest,
+                placement_attempt_id = "previous"}
+            local placed: {[string]: unknown}? = nil
+            local receipts: {{[string]: unknown}} = {}
+            local stops = 0
+            local function receipt_record(sequence: integer, attempt: string): {[string]: unknown}
+                return {schema_revision = "bee.thread-record@1", record_id = "receipt:" .. tostring(sequence), thread_id = "thread",
+                    sequence = sequence, recorded_at = "2026-09-12T10:00:00.000Z", kind = "receipt", producer_id = "alice", source = "bee",
+                    action_id = "action", attempt_id = attempt, body = {scope = "attempt", outcome = "failed", evidence_refs = {},
+                        error = {code = "fixture", message = "settled", retryable = false}}}
+            end
+            local function call(target: string, input: unknown): (unknown, string?)
+                local request = assert(bounds.object(input))
+                if target == "bee.threads.binding:checkpoint" then
+                    return {ok = true, value = request.attempt_id == "earlier" and earlier or orphan}, nil
+                end
+                if target == "bee.threads.binding:claim" then
+                    test.eq(request.attempt_id, "previous")
+                    return {ok = true, value = {attempt_id = "previous", action_id = "action", carrier_epoch = 2, checkpoint_revision = 0}}, nil
+                end
+                if target == "bee.threads.binding:receipt" then
+                    receipts[#receipts + 1] = request
+                    orphan.attempt_state = "ended"
+                    return {ok = true, value = {}}, nil
+                end
+                if target == PLACEMENT_METHODS.status then
+                    if request.attempt_id == "previous" then
+                        if placed then return {ok = true, value = {attempt = placed, liveness = {observed = false, at = "2026-09-12T10:00:00.000Z", detail = "fixture"}}}, nil end
+                        return {ok = false, error = {code = "NOT_FOUND", message = "attempt is not recorded"}}, nil
+                    end
+                    return {ok = true, value = {attempt = {attempt_id = "earlier", action_id = "action", owner_id = "alice", session_ref = "session",
+                        execution_state = "exited", cleanup_state = "complete"}, private_home = false}}, nil
+                end
+                if target == PLACEMENT_METHODS.stop then stops = stops + 1; return {ok = true, value = {}}, nil end
+                if target == "bee.threads.binding:read_after" then
+                    local filter = assert(bounds.object(request.filter))
+                    local kinds = filter.kinds
+                    if type(kinds) == "table" and kinds[1] == "receipt" then
+                        local rows: {unknown} = {receipt_record(5, "earlier")}
+                        if orphan.attempt_state == "ended" then rows[#rows + 1] = receipt_record(9, "previous") end
+                        return {ok = true, value = {records = rows, scanned_through = 9, has_more = false}}, nil
+                    end
+                    return {ok = true, value = {records = {observation(3, "provider-session", "old-binding", false, "earlier")},
+                        scanned_through = 9, has_more = false}}, nil
+                end
+                return nil, "unexpected target " .. target
+            end
+            local request: continuation.Request = {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice",
+                previous_attempt_id = "previous", session_ref = "session", binding_ref = "driver:binding", binding_digest = "binding-digest",
+                profile_id = "window", profile_digest = "profile-digest", placement_binding_ref = PLACEMENT.binding_id,
+                placement_binding_digest = PLACEMENT.binding_digest, placement_methods = PLACEMENT_METHODS}
+            local recovered, recover_error = interrupted.recover(request, call)
+            test.is_true(recovered, tostring(recover_error))
+            test.eq(#receipts, 1)
+            test.eq(receipts[1].attempt_id, "previous")
+            test.eq(receipts[1].carrier_epoch, 2)
+            test.eq((assert(bounds.object(receipts[1].receipt))).outcome, "failed")
+            test.eq(continuation.resolve_window(call, request), "provider-session")
+            test.is_true((interrupted.recover(request, call)))
+            test.eq(#receipts, 1, "a settled attempt is settled once")
+
+            orphan.attempt_state = "prepared"
+            placed = {attempt_id = "previous", action_id = "action", owner_id = "alice", owner_incarnation = 1, request_digest = string.rep("b", 64),
+                execution_state = "running", cleanup_state = "pending", capability = "process_group", required_cleanup = "process_group",
+                exit_observation = "independent", attachment_generation = 1, evidence_count = 1, created_at = "2026-09-12T10:00:00.000Z",
+                updated_at = "2026-09-12T10:00:00.000Z"}
+            local running, running_error = interrupted.recover(request, call)
+            test.is_false(running)
+            test.eq(running_error, "its earlier agent process may still be running on this machine")
+            test.eq(#receipts, 1, "a started placement is never settled as never started")
+            test.eq(stops, 1, "recovery asks a started placement to stop")
+        end)
         test.it("resumes interrupted hooks with historical pins after implementation review", function()
             local point = checkpoint.new({binding_ref = "driver:binding", binding_digest = "historical-binding",
                 profile_id = "window", profile_digest = "historical-profile", plan_digest = "historical-plan",

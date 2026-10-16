@@ -76,6 +76,50 @@ end
 function M.process_gone(execution_state: unknown): boolean
     return execution_state == "exited" or execution_state == "start_failed"
 end
+-- A window attempt whose carrier never committed a checkpoint never started
+-- its process: unstarted reports it, nil when the attempt committed one or was
+-- never recorded.
+function M.unstarted(call: Call, request: Request): ({[string]: unknown}?, string?)
+    local raw, call_error = call("bee.threads.binding:checkpoint", {thread_id = request.thread_id, attempt_id = request.previous_attempt_id})
+    local reply = not call_error and bounds.object(raw) or nil
+    local fault = reply and reply.ok == false and bounds.object(reply.error) or nil
+    if fault and fault.code == "NOT_FOUND" then return nil, nil end
+    local stored, stored_error = reply_value("bee.threads.binding:checkpoint", raw, call_error)
+    if not stored then return nil, stored_error end
+    if stored.checkpoint ~= nil then return nil, nil end
+    if stored.attempt_id ~= request.previous_attempt_id or stored.action_id ~= request.action_id then return nil, "previous attempt belongs to another action" end
+    if stored.placement_binding ~= request.placement_binding_ref then return nil, "previous attempt used another placement binding" end
+    return stored, nil
+end
+-- The attempt of the action settled before the previous one: the attempt an
+-- unstarted window was continuing.
+local function predecessor(call: Call, request: Request): (string?, string?)
+    local cursor = 0
+    local earlier: string? = nil
+    local pages = math.ceil(record_bounds.MAX_THREAD_RECORDS / record_bounds.MAX_PAGE_RECORDS) + 1
+    for _ = 1, pages do
+        local page, page_error = value(call, "bee.threads.binding:read_after", {thread_id = request.thread_id, cursor = cursor,
+            limit = record_bounds.MAX_PAGE_RECORDS, filter = {kinds = {"receipt"}, action_id = request.action_id}})
+        if not page then return nil, page_error end
+        local through = record_bounds.cursor(page.scanned_through)
+        if not through or through < cursor or type(page.has_more) ~= "boolean" or (page.has_more and through == cursor) then
+            return nil, "invalid settlement page cursor"
+        end
+        if type(page.records) ~= "table" then return nil, "settlement records must be a list" end
+        for _, row in ipairs(page.records) do
+            local item, item_error = record.decode(row)
+            if not item then return nil, "settlement record: " .. tostring(item_error) end
+            local body = bounds.object(item.body)
+            if item.kind == "receipt" and body and body.scope == "attempt" and item.attempt_id then
+                if item.attempt_id == request.previous_attempt_id then return earlier, nil end
+                earlier = item.attempt_id
+            end
+        end
+        cursor = through
+        if not page.has_more then return earlier, nil end
+    end
+    return nil, "settlement scan exceeds the thread bound"
+end
 -- Explicit interactive resume is not another successful structured turn.
 -- The old process must be gone; its committed observations identify the
 -- conversation, while the new attempt supplies fresh admission and grants.
@@ -131,6 +175,21 @@ end
 -- same session once the previous process is cleaned up.
 M.NO_CONVERSATION = "previous window recorded no provider conversation"
 function M.resolve_window(call: Call, request: Request): (string?, string?, boolean?)
+    local unstarted, unstarted_error = M.unstarted(call, request)
+    if unstarted_error then return nil, unstarted_error end
+    if unstarted then
+        if unstarted.attempt_state ~= "ended" then return nil, "previous window attempt has not ended" end
+        if unstarted.attempt_outcome == "uncertain" then return nil, "its earlier agent process may still be running on this machine" end
+        -- Nothing ran under it: the conversation is the one it was continuing.
+        local earlier, earlier_error = predecessor(call, request)
+        if earlier_error then return nil, earlier_error end
+        if not earlier then return nil, M.NO_CONVERSATION end
+        return M.resolve_window(call, {thread_id = request.thread_id, action_id = request.action_id, attempt_id = request.attempt_id,
+            owner_id = request.owner_id, previous_attempt_id = earlier, session_ref = request.session_ref, binding_ref = request.binding_ref,
+            binding_digest = request.binding_digest, profile_id = request.profile_id, profile_digest = request.profile_digest,
+            placement_binding_ref = request.placement_binding_ref, placement_binding_digest = request.placement_binding_digest,
+            placement_methods = request.placement_methods, reauthorize = request.reauthorize})
+    end
     local previous, inspect_error = M.inspect_window(call, request, true)
     if inspect_error == M.NEVER_RECORDED then return nil, M.NEVER_RECORDED end
     if not previous then return nil, inspect_error end

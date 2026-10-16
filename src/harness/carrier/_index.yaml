@@ -138,6 +138,7 @@ entries:
   - uuid
   imports:
     continuation: bee.harness.carrier:continuation
+    prestart: bee.harness.carrier:prestart
     checkpoint: bee.harness.carrier:checkpoint
     bounds: bee.values:bounds
     hooks: bee.harness.carrier:hooks

@@ -24,7 +24,7 @@ local resolve = support.resolve
 local changes = support.changes
 local M = {}
 function M.define()
-    test.it("blocks checkpoint metadata the application catalog cannot open", function()
+    test.it("blocks checkpoint metadata the application catalog cannot open and names the field", function()
         local deps, spec = fixture(nil)
         changes(spec, {{id = "private.app:main", kind = "process.lua",
             meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", title = "Main",
@@ -32,11 +32,11 @@ function M.define()
             data = {source = "return true"}}})
         local facts = resolve(deps, spec)
         local measured = (principals.objects(facts.candidate.entries))[1]
-        test.is_true(measured.application_checkpoint_invalid)
+        test.contains(tostring(measured.application_problem), "meta.application.restart_policy automatic needs a nonempty meta.application.resume_schema")
         local report = assert(preflight.check(facts.candidate, facts.context))
         local denied = false
         for _, diagnostic in ipairs(report.diagnostics) do
-            if diagnostic.code == "APPLICATION_CHECKPOINT" then denied = true end
+            if diagnostic.code == "APPLICATION_DESCRIPTOR" then denied = true end
         end
         test.is_true(denied)
     end)

@@ -89,13 +89,14 @@ local function define_tests()
             candidate.entries[1].application_unplaced = false
             test.is_false(has(checked(candidate, context), "APPLICATION_MENU"))
         end)
-        test.it("blocks an application restart policy without a checkpoint schema", function()
+        test.it("blocks an application whose declaration the desktop cannot open and names the field", function()
             local candidate, context = fixture()
-            candidate.entries[1].application_checkpoint_invalid = true
+            candidate.entries[1].application_problem = "meta.application.lifetime must be view"
             local report = checked(candidate, context)
             test.is_false(report.ready)
-            test.is_true(has(report, "APPLICATION_CHECKPOINT"))
-            candidate.entries[1].application_checkpoint_invalid = false
+            test.is_true(has(report, "APPLICATION_DESCRIPTOR"))
+            test.contains(report.diagnostics[1].message, "meta.application.lifetime must be view")
+            candidate.entries[1].application_problem = nil
             test.is_true(checked(candidate, context).ready)
         end)
         test.it("requires explicit child namespace ownership and host admission", function()

@@ -394,7 +394,7 @@ function M.application_shape(): string
         .. " or configuration changes; a revision identifies one exact runnable definition."
         .. " Use restart_policy never for an app without checkpoints; automatic or manual requires"
         .. " a nonempty resume_schema of at most 80 characters without control characters. Preflight"
-        .. " reports APPLICATION_CHECKPOINT when this metadata prevents the desktop from opening it."
+        .. " reports APPLICATION_DESCRIPTOR naming the meta.application field the desktop cannot open it with."
         .. " The capabilities it needs go in meta.application.capabilities as {capability, parameters, reason}."
 end
 function M.rendering(): string

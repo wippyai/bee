@@ -9,6 +9,7 @@ local bounds = require("bounds")
 local hash = require("hash")
 local json = require("json")
 local hive_operations = require("hive_operations")
+local descriptor = require("descriptor")
 
 local M = {}
 
@@ -186,16 +187,13 @@ local function reaching_shape(item: unknown): string
     end
     return "object"
 end
-function M.application_checkpoint_invalid(value: unknown): boolean
+-- The field of an application's meta.application the desktop cannot open it
+-- with, named with the value it expects.
+function M.application_problem(value: unknown): string?
     local entry = object(value)
     local meta = entry and object(entry.meta) or nil
-    local application = meta and object(meta.application) or nil
-    if not meta or meta.type ~= "bee.application" or not application then return false end
-    local restart = application.restart_policy or "never"
-    local schema = application.resume_schema or ""
-    return (restart ~= "never" and restart ~= "automatic" and restart ~= "manual")
-        or type(schema) ~= "string" or #schema > 80 or schema:find("%c") ~= nil
-        or (restart ~= "never" and schema == "")
+    if not meta or meta.type ~= "bee.application" then return nil end
+    return descriptor.problem(meta.application)
 end
 
 -- The desktop opens an application from the menus its declaration names, so

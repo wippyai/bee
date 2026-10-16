@@ -109,22 +109,28 @@ local function define_tests()
             input[2].meta.application_ref = nil
             test.is_nil(artifact.create(input))
         end)
-        test.it("measures the desktop checkpoint metadata invariant", function()
-            local function invalid(restart: unknown, schema: unknown): boolean
-                return artifact.application_checkpoint_invalid({meta = {type = "bee.application",
-                    application = {restart_policy = restart, resume_schema = schema}}})
+        test.it("names the meta.application field the desktop cannot open an application with", function()
+            local function problem(restart: unknown, schema: unknown): string?
+                return artifact.application_problem({meta = {type = "bee.application",
+                    application = {api_version = 1, lifetime = "view", title = "Demo", revision = "1",
+                        instance_policy = "multiple", restart_policy = restart, resume_schema = schema}}})
             end
-            test.is_false(invalid(nil, nil))
-            test.is_false(invalid("never", nil))
-            test.is_false(invalid("automatic", "demo.v1"))
-            test.is_false(invalid("manual", "demo.v1"))
-            test.is_true(invalid("automatic", nil))
-            test.is_true(invalid("manual", ""))
-            test.is_true(invalid("invalid", "demo.v1"))
-            test.is_true(invalid("automatic", 1))
-            test.is_true(invalid("automatic", string.rep("s", 81)))
-            test.is_true(invalid("automatic", "schema\n"))
-            test.is_false(artifact.application_checkpoint_invalid({meta = {type = "other"}}))
+            test.is_nil(problem(nil, nil))
+            test.is_nil(problem("never", nil))
+            test.is_nil(problem("automatic", "demo.v1"))
+            test.is_nil(problem("manual", "demo.v1"))
+            test.contains(tostring(problem("automatic", nil)), "needs a nonempty meta.application.resume_schema")
+            test.contains(tostring(problem("manual", "")), "needs a nonempty meta.application.resume_schema")
+            test.contains(tostring(problem("invalid", "demo.v1")), "meta.application.restart_policy must be never, automatic or manual")
+            test.contains(tostring(problem("automatic", 1)), "meta.application.resume_schema must be at most 80 characters")
+            test.contains(tostring(problem("automatic", string.rep("s", 81))), "meta.application.resume_schema")
+            test.contains(tostring(problem("automatic", "schema\n")), "meta.application.resume_schema")
+            test.eq(artifact.application_problem({meta = {type = "bee.application", application = {api_version = 1}}}),
+                "meta.application.lifetime must be view")
+            test.eq(artifact.application_problem({meta = {type = "bee.application", application = {api_version = 1,
+                lifetime = "view", title = "Demo", revision = "1", instance_policy = "one"}}}),
+                "meta.application.instance_policy must be singleton or multiple")
+            test.is_nil(artifact.application_problem({meta = {type = "other"}}))
         end)
         test.it("requires native configuration data rather than YAML shorthand", function()
             local flat, flat_error = artifact.create({{id = "demo:run", kind = "function.lua", source = "return true"}})

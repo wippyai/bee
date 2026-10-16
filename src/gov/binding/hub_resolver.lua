@@ -181,7 +181,7 @@ local function measured_entry(entry: Entry, package: string, installed: boolean?
     return {id = id, kind = kind, package = package, digest = digest,
         load_error = not installed and source_check.check(clean) or nil,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
-        application_checkpoint_invalid = artifact.application_checkpoint_invalid(clean),
+        application_problem = artifact.application_problem(clean),
         application_unplaced = artifact.application_unplaced(clean),
         grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
         config_empty = config_empty}, nil

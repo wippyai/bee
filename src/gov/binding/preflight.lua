@@ -10,7 +10,7 @@ local driver_admission = require("driver_admission")
 local M = {}
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
-    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?, application_checkpoint_invalid: boolean?,
+    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?, application_problem: string?,
     application_unplaced: boolean?, load_error: string?}
 -- Retained state needs identity and edges for collision, removal and kernel
 -- checks. Only definitions used as content evidence carry a digest.
@@ -248,7 +248,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
     local allowed: {[string]: boolean} = {id = true, kind = true, package = true, digest = true,
         references = true, auto_start = true, grants = true, modules = true,
         config_objects = true, config_lists = true, config_empty = true,
-        security_actor = true, security_groups = true, application_checkpoint_invalid = true,
+        security_actor = true, security_groups = true, application_problem = true,
         application_unplaced = true, load_error = true}
     local result: {Entry} = {}
     for index = 1, count do
@@ -276,7 +276,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
             or type(item.auto_start) ~= "boolean"
             or (item.security_actor ~= nil and type(item.security_actor) ~= "boolean")
             or (item.security_groups ~= nil and type(item.security_groups) ~= "boolean")
-            or (item.application_checkpoint_invalid ~= nil and type(item.application_checkpoint_invalid) ~= "boolean")
+            or (item.application_problem ~= nil and (type(item.application_problem) ~= "string" or #item.application_problem > 512))
             or (item.application_unplaced ~= nil and type(item.application_unplaced) ~= "boolean")
             or (item.load_error ~= nil and (type(item.load_error) ~= "string" or #item.load_error > 2048)) then
             return nil, "candidate entry is malformed"
@@ -289,7 +289,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
         if item.load_error ~= nil then measured.load_error = item.load_error end
         if item.security_actor ~= nil then measured.security_actor = item.security_actor end
         if item.security_groups ~= nil then measured.security_groups = item.security_groups end
-        if item.application_checkpoint_invalid ~= nil then measured.application_checkpoint_invalid = item.application_checkpoint_invalid end
+        if item.application_problem ~= nil then measured.application_problem = item.application_problem end
         if item.application_unplaced ~= nil then measured.application_unplaced = item.application_unplaced end
         result[index] = entry
     end
@@ -562,9 +562,9 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if item.load_error then
             issue("LUA_LOAD_FAILED", item.id, item.load_error, "fix the Lua source at the reported location and freeze a new version")
         end
-        if item.application_checkpoint_invalid == true then
-            issue("APPLICATION_CHECKPOINT", item.id, "application checkpoint metadata cannot be opened by the desktop",
-                "use restart_policy never for an app without checkpoints; automatic or manual requires a nonempty resume_schema of at most 80 characters without control characters")
+        if item.application_problem then
+            issue("APPLICATION_DESCRIPTOR", item.id, "the desktop cannot open this application: " .. item.application_problem,
+                "fix that field of meta.application and freeze a new version")
         end
         if item.application_unplaced == true then
             issue("APPLICATION_MENU", item.id, "application names no menu, so the person has no way to open it",

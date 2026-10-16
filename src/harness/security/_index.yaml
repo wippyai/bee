@@ -215,8 +215,9 @@ entries:
     - tty.resize
     - env.get
     - funcs.call
+    - events.subscribe
     resources: '*'
-    expression: (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action == "funcs.call" && resource == "bee.threads.sessions.binding:idle_check") || (action in ["process.spawn", "process.spawn.monitored", "process.spawn.linked"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
+    expression: (action == "events.subscribe" && resource == "bee.attention") || (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action == "funcs.call" && resource == "bee.threads.sessions.binding:idle_check") || (action in ["process.spawn", "process.spawn.monitored", "process.spawn.linked"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
       ["process.context", "process.cancel", "tty.create", "tty.mount", "tty.observe", "tty.input", "tty.resize"] || ((action == "process.registry.register" || action == "process.registry.unregister") &&
       resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$")
     effect: allow

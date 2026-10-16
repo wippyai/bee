@@ -12,13 +12,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
-- name: blocked_review
-  kind: function.lua
-  source: file://blocked_review.lua
-  method: main
-  meta: {type: test_support}
-  modules: [process]
-
+    viewer: bee.harness.service:viewer
 - name: directory_test
   kind: function.lua
   source: file://directory_test.lua

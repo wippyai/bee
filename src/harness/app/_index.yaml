@@ -260,10 +260,7 @@ entries:
   - tty
   - process
   - channel
-  - time
-  - logger
   imports:
-    waiting: bee.harness.app:waiting
     presentation: bee.harness.service:viewer
     bounds: bee.values:bounds
     client: bee.app:client

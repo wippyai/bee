@@ -6,9 +6,6 @@ local terminal_view = require("terminal_view")
 local client = require("client")
 local M = {}
 function M.get(): {[string]: unknown} return {ok = true, value = {}} end
-function M.waiting(): {[string]: unknown}
-    return {ok = true, value = {request = {approval_id = "review-request", title = "Use Progress?"}}}
-end
 function M.viewer(value: unknown, observer: string)
     local launch = assert(client.launch(value))
     local release = assert(process.listen("bee.test.viewer_release", {message = true}))
@@ -18,12 +15,13 @@ function M.viewer(value: unknown, observer: string)
     assert(tty.start())
     process.send(observer, "bee.test.viewer_ready", {})
     release:receive()
-    local closing, err = terminal_view.run(launch, "fixture-session", input, events, closes, "fixture-thread")
+    local closing, err = terminal_view.run(launch, "fixture-session", input, events, closes)
     process.send(observer, "bee.test.viewer_finished", {closing = closing, error = err})
     tty.stop()
 end
 function M.producer(observer: string)
     local publish = assert(process.listen("bee.test.publish", {message = true}))
+    local spoof = assert(process.listen("bee.test.spoof_review", {message = true}))
     local input = assert(tty.events())
     local events = assert(process.events())
     assert(tty.start())
@@ -31,11 +29,15 @@ function M.producer(observer: string)
     local resized = false
     local output: tty.Surface? = nil
     while true do
-        local event = channel.select({input:case_receive(), publish:case_receive(), events:case_receive()})
+        local event = channel.select({input:case_receive(), publish:case_receive(), spoof:case_receive(), events:case_receive()})
         if not event.ok or (event.channel == events and event.value.kind == process.event.CANCEL) then break end
         if event.channel == input and not resized and event.value.type == "resize" then
             resized = true
             process.send(observer, "bee.test.viewer_resized", {})
+        elseif event.channel == spoof then
+            local target = event.value:payload():data()
+            process.send(tostring(target and target.viewer), "bee.session.window.review", {review = {approval_id = "spoofed", title = "Spoofed"}})
+            process.send(observer, "bee.test.spoof_sent", {})
         elseif event.channel == publish then
             output = assert(tty.surface())
             assert(output:present({"retained prior terminal content"}))

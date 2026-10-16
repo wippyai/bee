@@ -2420,19 +2420,6 @@ entries:
   imports:
     terminal_view: bee.harness.app:terminal_view
     client: bee.app:client
-- name: presentation_waiting
-  kind: function.lua
-  source: file://presentation_view_probe.lua
-  method: waiting
-  meta:
-    type: test_support
-  modules:
-  - process
-  - tty
-  - channel
-  imports:
-    terminal_view: bee.harness.app:terminal_view
-    client: bee.app:client
 - name: permission_exchange_test
   kind: function.lua
   source: file://permission_exchange_test.lua

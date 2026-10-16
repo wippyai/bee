@@ -119,7 +119,7 @@ local function announce(value: unknown, db: sql.DB, requested: boolean)
     local workspace_id = view and bounds.id(view.workspace_id) or nil
     local approval_id = view and bounds.id(view.approval_id) or nil
     if not view or not workspace_id or not approval_id then return end
-    local announced_request = {approval_id = approval_id, requester_id = bounds.id(view.requester_id), state = view.state}
+    local announced_request = {approval_id = approval_id, requester_id = bounds.id(view.requester_id), thread_id = bounds.id(view.thread_id), state = view.state}
     local contract = bounds.object(view.contract)
     if contract and contract.presentation ~= "inbox" then return end
     requested = requested and view.state == "pending"

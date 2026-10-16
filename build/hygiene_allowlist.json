@@ -140,11 +140,6 @@
     "reason": "Explains why long polling follows the remote state machine duration."
   },
   {
-    "path": "tests/lua/harness/app/terminal_view_test.lua",
-    "text": "-- MIT. Retained presentation enters the fixed host scope through a trusted function boundary.",
-    "reason": "Describes an immutable bound, scope, role or host-selected value."
-  },
-  {
     "path": "tests/lua/harness/permission_carrier_test.lua",
     "text": "-- of a fixed sleep guessing how long the carrier takes to reach it under a",
     "reason": "Explains why the test uses a protocol barrier to prove the carrier state."

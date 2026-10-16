@@ -394,7 +394,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     if result.conversation.session.snapshot.terminal == true and not result.conversation.node then
                         output:close()
                         client.title(launch, text.bound(result.conversation.title, 76))
-                        local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes, result.conversation.session.snapshot.thread_ref)
+                        local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes)
                         if closing then return finish(nil, view_error) end
                         client.title(launch, "Agents")
                         output = assert(tty.surface())

@@ -9,6 +9,7 @@ local security = require("security")
 local funcs = require("funcs")
 local json = require("json")
 local tty = require("tty")
+local eventbus = require("events")
 local bounds = require("bounds")
 local admission = require("admission")
 local setup = require("setup")
@@ -21,6 +22,7 @@ local OWNER = "bee.session.window/"
 local CALLER = "bee.session.viewer/"
 local TOPIC = "bee.session.window.request"
 local REPLY = "bee.session.window.reply"
+local REVIEW = "bee.session.window.review"
 local env = require("env")
 local logger = require("logger")
 -- idle_period is the host's idle period for an unused agent, a duration such
@@ -166,6 +168,10 @@ end
 local function run(value: unknown, name: unknown, initial_token: string, operation_key: string, supervisor: string)
     local requests = assert(process.listen(TOPIC, {message = true}))
     local events = assert(process.events())
+    local attention = assert(eventbus.subscribe("bee.attention"))
+    local self_actor = security.actor()
+    local self_id = self_actor and self_actor:id() or ""
+    local thread_id: string? = nil
     local request_body = bounds.object(value)
     local restoring = request_body and bounds.object(request_body.resume)
     local request: admission.Request? = nil
@@ -199,6 +205,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         assert(process.registry.register(OWNER .. session))
         aliases = {OWNER .. session}
         session_ref = session
+        thread_id = saved.thread_id
         local encoded = assert(recovery.encode(saved))
         view, pid = start(workspace, assert(uuid.v7()), {}, encoded, operation_key)
         reply_to(initial_token, {ok = true, value = {session = session}})
@@ -211,6 +218,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         if not admitted or not admitted.session_ref then error(tostring(refused and refused.error and refused.error.message or "window was not admitted")) end
         local alias = OWNER .. admitted.session_ref
         session_ref = admitted.session_ref
+        thread_id = admitted.thread_id
         assert(process.registry.register(alias))
         aliases = {name, alias}
         local encoded = assert(json.encode({request_id = decoded.request_id, definition_ref = decoded.definition_ref,
@@ -222,6 +230,20 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
     end
     local mount: string? = nil
     local recipient: string? = nil
+    -- The request waiting for the person on this session's behalf: one its
+    -- thread is bound to, or one this window asked for while it starts. The
+    -- attached viewer shows it until the request settles.
+    local review: {approval_id: string, title: string}? = nil
+    local function show_review()
+        if recipient then process.send(recipient, REVIEW, {review = review or false}) end
+    end
+    local function attend(event: {[string]: unknown})
+        local next_review, changed = viewer.review(review, event, thread_id, self_id)
+        if changed then
+            review = next_review
+            show_review()
+        end
+    end
     -- An agent nobody uses stops after the host's idle period: idle since its
     -- last turn ended with nothing waiting, and no viewer attached. A message,
     -- a start or a viewer keeps it running; the next message resumes it.
@@ -236,7 +258,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
         if idle and not recipient and pid and not idle_timer and idle_after then idle_timer = time.timer(idle_after) end
     end
     while true do
-        local cases = {requests:case_receive(), events:case_receive()}
+        local cases = {requests:case_receive(), events:case_receive(), attention:channel():case_receive()}
         local stopping = idle_timer
         if stopping then cases[#cases + 1] = stopping:channel():case_receive() end
         local event = channel.select(cases)
@@ -255,6 +277,8 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 if check_error or not verdict then logger:warn("Session idle check unavailable", {session = session_ref, cause = tostring(check_error)}) end
                 arm()
             end
+        elseif event.channel == attention:channel() then
+            attend(event.value)
         elseif event.channel == events then
             if pid and event.value.kind == process.event.EXIT and tostring(event.value.from) == pid then break end
             if event.value.kind == process.event.CANCEL then
@@ -321,10 +345,12 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
             else reply = fail("invalid window operation") end
             reply.caller_token = token
             process.send(sender, REPLY, reply)
+            if body.op == "attach" and review then show_review() end
         end
         ::next_request::
     end
     disarm()
+    attention:close()
     if view then view:close() end
     for _, registered in ipairs(aliases) do process.registry.unregister(registered, process.registry.LOCAL) end
 end

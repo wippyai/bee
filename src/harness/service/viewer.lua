@@ -72,6 +72,28 @@ function M.attach(value: unknown): Object
         owner = process.registry.lookup(OWNER .. session)
     end
     if not owner then return fail("the session has no live terminal") end
-    return M.rpc(tostring(owner), {op = request.detach == true and "detach" or "attach"})
+    local reply = M.rpc(tostring(owner), {op = request.detach == true and "detach" or "attach"})
+    -- The viewer takes the session's review only from the owner it attached to.
+    local value = reply.ok == true and bounds.object(reply.value)
+    if value then value.owner = tostring(owner) end
+    return reply
+end
+type Review = {approval_id: string, title: string}
+-- review is the request a session's viewer shows after an attention event:
+-- one bound to the session's thread or asked by its window, while pending;
+-- none once that request settles. The second result says whether it changed.
+function M.review(current: Review?, event: {[string]: unknown}, thread_id: string?, self_id: string): (Review?, boolean)
+    local data = bounds.object(event.data)
+    local request = data and bounds.object(data.request)
+    local approval_id = request and bounds.id(request.approval_id)
+    if not data or not request or not approval_id then return current, false end
+    local ours = (thread_id ~= nil and request.thread_id == thread_id) or (self_id ~= "" and request.requester_id == self_id)
+    if event.kind == "approval.requested" and ours and request.state == "pending" then
+        return {approval_id = approval_id, title = bounds.line(data.title, 160) or "Review request"}, true
+    end
+    if event.kind == "approval.changed" and current and current.approval_id == approval_id and request.state ~= "pending" then
+        return nil, true
+    end
+    return current, false
 end
 return M

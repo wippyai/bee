@@ -43,10 +43,6 @@ local function define_tests()
             local fixture = assert(registry.get("bee.tests.harness:presentation_view_get"))
             fixture.id = "bee.threads.sessions.binding:get"
             apply(fixture)
-            local original_waiting = assert(registry.get("bee.approvals.binding:waiting"))
-            local waiting = assert(registry.get("bee.tests.harness:presentation_waiting"))
-            waiting.id = "bee.approvals.binding:waiting"
-            apply(waiting)
             local reviews = assert(process.listen("bee.app.review", {message = true}))
             local requests = assert(process.listen("bee.session.window.request", {message = true}))
             assert(process.registry.register("bee.session.window/fixture-session"))
@@ -83,6 +79,9 @@ local function define_tests()
                             if sender == tostring(viewer) then
                                 local mount = body.op == "attach" and assert(content:mount(sender, {observe = true, input = true, resize = true})) or nil
                                 process.send(sender, "bee.session.window.reply", {ok = true, caller_token = body.caller_token, value = {mount = mount}})
+                                if body.op == "attach" then
+                                    process.send(sender, "bee.session.window.review", {review = {approval_id = "review-request", title = "Use Progress?"}})
+                                end
                                 if body.op == "detach" then return end
                             end
                         end
@@ -122,7 +121,6 @@ local function define_tests()
             process.registry.unregister("bee.session.window/fixture-session", process.registry.LOCAL)
             process.unlisten(requests)
             apply(original)
-            apply(original_waiting)
             process.unlisten(reviews)
             if not ok then error(tostring(failure)) end
         end)

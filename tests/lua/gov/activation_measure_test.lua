@@ -40,7 +40,7 @@ local function facts(): ({[string]: unknown}, preflight.Candidate, preflight.Con
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b",
         base_revision = 4, base_digest = SHA, artifacts = {{component = "demo/app", version = "v1",
             digest = SHA, dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries,
-        capabilities = {}, requirements = {}, migrations = {}}
+        requirements = {}, migrations = {}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 4,
         registry_digest = SHA, policy_digest = SHA, packages = {["demo/app"] = true},
         namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {}, grants = {},
@@ -84,7 +84,7 @@ local function define_tests()
         test.it("shares unchanged preflight after observation while retaining the fresh grant record", function()
             local plan, candidate, context = facts()
             context.registry_preparation = {}
-            local proposal: capability_grants.Proposal = {capabilities = {}, policies = {}, bindings = {},
+            local proposal: capability_grants.Proposal = {capabilities = {}, policies = {},
                 volumes = {}, databases = {}, executors = {}, thread_access = "none", digest = SHA}
             local review: capability_grants.Review = {added = {}, widened = {}, narrowed = {}, removed = {},
                 changed = {}, requires_approval = false, revocation = {grants = {}, fenced_attempts = {}},
@@ -94,7 +94,7 @@ local function define_tests()
             local first = assert(measure.measure(plan, candidate, context, preparation))
             local installed: capability_grants.Installed = {schema_revision = "bee.capability-grants@1",
                 overlay_owner = "bee.gov:overlay", workspace_id = "workspace-a", application = "demo:run",
-                capabilities = {}, bindings = {}, policies = {}, thread_access = "none", digest = SHA,
+                capabilities = {}, policies = {}, thread_access = "none", digest = SHA,
                 approval_id = "approved", revision = 1, record_digest = string.rep("b", 64)}
             context.host_evidence.capability = {kind = "installed", proposal = proposal, installed = installed, review = review}
             local observed = assert(measure.measure(plan, candidate, context, preparation))
@@ -173,7 +173,7 @@ local function define_tests()
             local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b",
                 base_revision = 4, base_digest = SHA, artifacts = {{component = "demo/app", version = "v1",
                     digest = exact.digest, dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries,
-                capabilities = {}, requirements = {},
+                requirements = {},
                 migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}}
             local database = candidate_entry("host:db", "db.sql.sqlite", "host/base", SHA)
             local context: preflight.Context = {node_id = "node-a", registry_revision = 4,

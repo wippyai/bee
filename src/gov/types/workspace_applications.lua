@@ -57,7 +57,7 @@ function M.application(raw: unknown): (string?, string?)
             selected = id
         elseif entry and meta and meta.application ~= nil and not mistyped then
             mistyped = tostring(entry.id) .. " has meta.application but meta.type " .. tostring(meta.type)
-                .. "; set meta.type to bee.application"
+                .. "; an application declares meta.type bee.application"
         end
     end
     if not selected then

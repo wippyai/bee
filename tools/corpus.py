@@ -94,7 +94,7 @@ REQUEST_EXAMPLE = """```yaml
 ```"""
 
 AUTHOR_ERRORS = [
-    ("`<app> has meta.application but meta.type bee.app; set meta.type to bee.application`",
+    ("`<app> has meta.application but meta.type bee.app; an application declares meta.type bee.application`",
      "the application entry carries another meta.type; set `meta.type: bee.application`."),
     ("`workspace artifact declares no application; declare one process.lua entry with meta.type bee.application and meta.application`",
      "add the application's process.lua entry."),
@@ -122,6 +122,8 @@ AUTHOR_ERRORS = [
      "move the request onto the application; keep `ns.requirement` for configuration and dependency bindings."),
     ("`installed capability grant record of <app> binds ns.requirement entries this host no longer reads; uninstall the application and install it again`",
      "the installed version used requirement entries for its capabilities; uninstall it in Library, then install the new version."),
+    ("`stored candidate requests capabilities through ns.requirement entries, which this host no longer reads; install the application again so the person reviews its meta.application.capabilities`",
+     "the node left that installed version out at startup and reported it; uninstall it in Library and install a version that lists its capabilities on the application."),
     ("Preflight `APPLICATION_DESCRIPTOR`: `the desktop cannot open this application: meta.application.lifetime must be view`",
      "fix the named `meta.application` field and freeze a new version."),
     ("Preflight `MODULE_DENIED` naming `request capability process.exec ...`",

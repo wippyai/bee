@@ -219,7 +219,7 @@ local function define_tests()
                     namespaces = {"app.counter"}}},
                 entries = {measure(assert(bounds.object(measured.entries[1])), {"bee.app:client", "bee.ui:appearance", "bee.ui:frame", "bee.shell:apps_menu"}),
                     measure(entry, {"wippy.test:test"})},
-                capabilities = {}, requirements = {}, migrations = {}}
+                requirements = {}, migrations = {}}
             local context: preflight.Context = {node_id = "node-a", registry_revision = 1, registry_digest = string.rep("a", 64),
                 policy_digest = string.rep("a", 64), packages = {["app.counter"] = true}, namespaces = {["app.counter"] = true},
                 kinds = {["process.lua"] = true, ["function.lua"] = true}, databases = {}, entries = {["wippy.test:test"] = base,

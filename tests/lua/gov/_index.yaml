@@ -705,6 +705,7 @@ entries:
   modules:
   - hash
   - registry
+  - json
   imports:
     bounds: bee.values:bounds
     test: wippy.test:test
@@ -1220,6 +1221,41 @@ entries:
     artifact: bee.gov.types:artifact
     application_admission: bee.gov.types:governed_application_admission
     workspace_applications: bee.gov.types:workspace_applications
+- name: stored_capabilities_recovery_test
+  kind: function.lua
+  source: file://stored_capabilities_recovery_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - registry
+  - json
+  - sql
+  - hash
+  - time
+  - uuid
+  - cdc
+  - env
+  - system
+  - process
+  meta:
+    type: test
+    suite: bee
+    timeout: 240s
+  security:
+    policies:
+    - bee.tests.gov:app_expiry_test_policy
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    test: wippy.test:test
+    harness: bee.tests.gov:delivery_harness
+    guide: bee.gov.traits:guide
+    artifact: bee.gov.types:artifact
+    preflight: bee.gov.binding:preflight
+    application_admission: bee.gov.types:governed_application_admission
+    workspace_applications: bee.gov.types:workspace_applications
+    test_fixtures: bee.tests.support:fixtures
 - name: app_expiry_test
   kind: function.lua
   source: file://app_expiry_test.lua

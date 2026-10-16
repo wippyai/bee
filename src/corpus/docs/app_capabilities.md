@@ -41,7 +41,7 @@ Risk class uses the catalog's confirmation class: standard means ordinary approv
 
 Install preflight names the exact field and the value it expects. `<app>` stands for the application entry ID.
 
-- `<app> has meta.application but meta.type bee.app; set meta.type to bee.application`: the application entry carries another meta.type; set `meta.type: bee.application`.
+- `<app> has meta.application but meta.type bee.app; an application declares meta.type bee.application`: the application entry carries another meta.type; set `meta.type: bee.application`.
 - `workspace artifact declares no application; declare one process.lua entry with meta.type bee.application and meta.application`: add the application's process.lua entry.
 - `<app> meta.application.capabilities must be a list of at most 8 {capability, parameters, reason} objects`: write `capabilities` as a YAML list with at most eight items.
 - `<app> meta.application.capabilities[1]: unknown field target; it takes capability, parameters and reason`: remove every other field; the host decides where the generated policy goes.
@@ -55,6 +55,7 @@ Install preflight names the exact field and the value it expects. `<app>` stands
 - `<app> meta.application.capabilities[2] repeats <app> meta.application.capabilities[1]`: list each capability and parameter set once.
 - `app.notes:database: an ns.requirement has no meta.capability; list {capability, parameters, reason} in the application's meta.application.capabilities`: move the request onto the application; keep `ns.requirement` for configuration and dependency bindings.
 - `installed capability grant record of <app> binds ns.requirement entries this host no longer reads; uninstall the application and install it again`: the installed version used requirement entries for its capabilities; uninstall it in Library, then install the new version.
+- `stored candidate requests capabilities through ns.requirement entries, which this host no longer reads; install the application again so the person reviews its meta.application.capabilities`: the node left that installed version out at startup and reported it; uninstall it in Library and install a version that lists its capabilities on the application.
 - Preflight `APPLICATION_DESCRIPTOR`: `the desktop cannot open this application: meta.application.lifetime must be view`: fix the named `meta.application` field and freeze a new version.
 - Preflight `MODULE_DENIED` naming `request capability process.exec ...`: list the named capability in `meta.application.capabilities`, or remove the module.
 

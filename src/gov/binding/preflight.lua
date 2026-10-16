@@ -8,9 +8,13 @@ local application_admission = require("application_admission")
 local capability_grants = require("capability_grants")
 local driver_admission = require("driver_admission")
 local M = {}
+-- application_checkpoint_invalid marks an application the desktop cannot open
+-- and application_problem names its meta.application field; stored candidates
+-- are decoded by these exact names and shapes.
 type Entry = {id: string, kind: string, package: string, digest: string, references: {string}, auto_start: boolean,
     grants: {string}, modules: {string}, config_objects: {string}?, config_lists: {string}?,
-    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?, application_problem: string?,
+    config_empty: {string}?, security_actor: boolean?, security_groups: boolean?, application_checkpoint_invalid: boolean?,
+    application_problem: string?,
     application_unplaced: boolean?, load_error: string?}
 -- Retained state needs identity and edges for collision, removal and kernel
 -- checks. Only definitions used as content evidence carry a digest.
@@ -32,8 +36,9 @@ type CapabilityEvidence = {kind: "absent"} |
     {kind: "installed", proposal: capability_grants.Proposal, installed: capability_grants.Installed,
         review: capability_grants.Review}
 type HostEvidence = {application_admission: AdmissionEvidence, capability: CapabilityEvidence}
+-- capabilities is present only when the closure's application lists any.
 type Candidate = {destination_node: string, source_node: string, base_revision: integer, base_digest: string,
-    artifacts: {Artifact}, entries: {Entry}, requirements: {Requirement}, capabilities: {CapabilityRequest},
+    artifacts: {Artifact}, entries: {Entry}, requirements: {Requirement}, capabilities: {CapabilityRequest}?,
     migrations: {Migration}}
 type Context = {registry_preparation: unknown?, node_id: string, registry_revision: integer, registry_digest: string, policy_digest: string,
     packages: {[string]: boolean}, namespaces: {[string]: boolean}, kinds: {[string]: boolean}, databases: {[string]: boolean},
@@ -248,7 +253,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
     local allowed: {[string]: boolean} = {id = true, kind = true, package = true, digest = true,
         references = true, auto_start = true, grants = true, modules = true,
         config_objects = true, config_lists = true, config_empty = true,
-        security_actor = true, security_groups = true, application_problem = true,
+        security_actor = true, security_groups = true, application_checkpoint_invalid = true, application_problem = true,
         application_unplaced = true, load_error = true}
     local result: {Entry} = {}
     for index = 1, count do
@@ -276,6 +281,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
             or type(item.auto_start) ~= "boolean"
             or (item.security_actor ~= nil and type(item.security_actor) ~= "boolean")
             or (item.security_groups ~= nil and type(item.security_groups) ~= "boolean")
+            or (item.application_checkpoint_invalid ~= nil and type(item.application_checkpoint_invalid) ~= "boolean")
             or (item.application_problem ~= nil and (type(item.application_problem) ~= "string" or #item.application_problem > 512))
             or (item.application_unplaced ~= nil and type(item.application_unplaced) ~= "boolean")
             or (item.load_error ~= nil and (type(item.load_error) ~= "string" or #item.load_error > 2048)) then
@@ -289,6 +295,7 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
         if item.load_error ~= nil then measured.load_error = item.load_error end
         if item.security_actor ~= nil then measured.security_actor = item.security_actor end
         if item.security_groups ~= nil then measured.security_groups = item.security_groups end
+        if item.application_checkpoint_invalid ~= nil then measured.application_checkpoint_invalid = item.application_checkpoint_invalid end
         if item.application_problem ~= nil then measured.application_problem = item.application_problem end
         if item.application_unplaced ~= nil then measured.application_unplaced = item.application_unplaced end
         result[index] = entry
@@ -305,6 +312,10 @@ local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
         local row = (raw)[index]
         if type(row) ~= "table" then return nil, "candidate requirement is malformed" end
         local item = row
+        if item.capability_request ~= nil then
+            return nil, "stored candidate requests capabilities through ns.requirement entries, which this host no longer reads;"
+                .. " install the application again so the person reviews its meta.application.capabilities"
+        end
         local extra = only(item, allowed, "candidate requirement")
         if extra then return nil, extra end
         local targets, targets_error = identifiers(item.targets, "requirement targets", 64)
@@ -399,8 +410,12 @@ local function normalize_candidate(raw: unknown): (Candidate?, string?)
     if not entries then return nil, entries_error end
     local requirements, requirements_error = candidate_requirements(value.requirements)
     if not requirements then return nil, requirements_error end
-    local capabilities, capabilities_error = candidate_capabilities(value.capabilities)
-    if not capabilities then return nil, capabilities_error end
+    local capabilities: {CapabilityRequest}? = nil
+    if value.capabilities ~= nil then
+        local decoded, capabilities_error = candidate_capabilities(value.capabilities)
+        if not decoded or #decoded == 0 then return nil, capabilities_error or "candidate capabilities are empty" end
+        capabilities = decoded
+    end
     local migrations, migrations_error = candidate_migrations(value.migrations)
     if not migrations then return nil, migrations_error end
     return {destination_node = value.destination_node, source_node = value.source_node,
@@ -430,7 +445,7 @@ end
 -- a remote plan as authority. Every suggested remedy requires a NEW candidate.
 function M.check(candidate: Candidate, context: Context): (Report?, string?)
     if #candidate.artifacts == 0 or #candidate.artifacts > 32 or #candidate.entries > 512
-        or #candidate.requirements > 128 or #candidate.capabilities > 64 or #candidate.migrations > 128 then return nil, "candidate exceeds preflight bounds" end
+        or #candidate.requirements > 128 or #(candidate.capabilities or {}) > 64 or #candidate.migrations > 128 then return nil, "candidate exceeds preflight bounds" end
     if not identifier(candidate.destination_node) or not identifier(candidate.source_node)
         or candidate.base_revision < 0 or candidate.base_revision > 9007199254740991
         or not digest(candidate.base_digest) or not digest(context.registry_digest)
@@ -562,8 +577,9 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if item.load_error then
             issue("LUA_LOAD_FAILED", item.id, item.load_error, "fix the Lua source at the reported location and freeze a new version")
         end
-        if item.application_problem then
-            issue("APPLICATION_DESCRIPTOR", item.id, "the desktop cannot open this application: " .. item.application_problem,
+        if item.application_checkpoint_invalid == true then
+            issue("APPLICATION_DESCRIPTOR", item.id, "the desktop cannot open this application: "
+                .. (item.application_problem or "meta.application is not a valid application declaration"),
                 "fix that field of meta.application and freeze a new version")
         end
         if item.application_unplaced == true then
@@ -683,7 +699,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
             if not final[reference] then issue("DANGLING_REQUIREMENT_TARGET", item.id, "missing target entry " .. reference, "repair the package requirement target") end
         end
     end
-    for _, request in ipairs(candidate.capabilities) do
+    for _, request in ipairs(candidate.capabilities or {}) do
         local application = final[request.application]
         if not artifacts[request.package] then
             issue("UNKNOWN_OWNER", request.application, "capability request is outside measured closure", "repair the application's package ownership")

@@ -32,6 +32,7 @@ function M.define()
             data = {source = "return true"}}})
         local facts = resolve(deps, spec)
         local measured = (principals.objects(facts.candidate.entries))[1]
+        test.is_true(measured.application_checkpoint_invalid)
         test.contains(tostring(measured.application_problem), "meta.application.restart_policy automatic needs a nonempty meta.application.resume_schema")
         local report = assert(preflight.check(facts.candidate, facts.context))
         local denied = false

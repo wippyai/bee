@@ -37,7 +37,7 @@ local function fixture(existing_database: boolean?): (artifact.Artifact, preflig
     local exact = assert(artifact.create(definitions))
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7,
         base_digest = SHA, artifacts = {{component = "demo/app", version = "1.0.0", digest = SHA,
-            dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries, capabilities = {}, requirements = {},
+            dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries, requirements = {},
         migrations = {{id = "demo:001", target_db = target_db, checksum = measured(migration), ordinal = 1}}}
     local bindings: {[string]: preflight.DatabaseBinding}? = nil
     if not existing_database then
@@ -103,7 +103,7 @@ local function define_tests()
             context.databases = {notes = true}
             context.database_bindings = {notes = {database_id = database_id}}
             context.generated_databases = {[database_id] = "notes"}
-            local proposal = {capabilities = {}, policies = {}, bindings = {}, volumes = {}, databases = {generated},
+            local proposal = {capabilities = {}, policies = {}, volumes = {}, databases = {generated},
                 executors = {}, thread_access = "none", digest = SHA}
             local evidence: unknown = {application_admission = {kind = "absent"},
                 capability = {kind = "new", proposal = proposal, review = {}}}

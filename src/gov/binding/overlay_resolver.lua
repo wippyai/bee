@@ -73,6 +73,7 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
     return {id = id, kind = kind, package = package, digest = digest,
         load_error = not registry_default_metadata and source_check.check(clean) or nil,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
+        application_checkpoint_invalid = artifact.application_problem(clean) ~= nil,
         application_problem = artifact.application_problem(clean),
         application_unplaced = artifact.application_unplaced(clean),
         security_actor = security ~= nil and security.actor ~= nil,
@@ -399,7 +400,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         dependencies = dependencies, namespaces = names}}
     local candidate: preflight.Candidate = {destination_node = destination, source_node = source,
         base_revision = captured.revision, base_digest = base_digest, artifacts = artifacts,
-        entries = candidate_entries, requirements = requirements, capabilities = requested, migrations = candidate_migrations}
+        entries = candidate_entries, requirements = requirements, capabilities = #requested > 0 and requested or nil, migrations = candidate_migrations}
     return candidate, context, nil
 end
 

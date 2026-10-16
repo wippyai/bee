@@ -181,6 +181,7 @@ local function measured_entry(entry: Entry, package: string, installed: boolean?
     return {id = id, kind = kind, package = package, digest = digest,
         load_error = not installed and source_check.check(clean) or nil,
         references = refs, auto_start = lifecycle ~= nil and lifecycle.auto_start == true,
+        application_checkpoint_invalid = artifact.application_problem(clean) ~= nil,
         application_problem = artifact.application_problem(clean),
         application_unplaced = artifact.application_unplaced(clean),
         grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
@@ -511,7 +512,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     context.registry_preparation = prepared
     return {destination_node = destination, source_node = source, base_revision = captured.revision,
         base_digest = base_digest, artifacts = artifacts, entries = candidate_entries,
-        requirements = requirements, capabilities = requested, migrations = migrations}, context, nil
+        requirements = requirements, capabilities = #requested > 0 and requested or nil, migrations = migrations}, context, nil
 end
 
 type Config = {overlay_owner: string?, root: (unknown, unknown?) -> (Root?, string?), policy: (unknown, unknown, unknown) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}

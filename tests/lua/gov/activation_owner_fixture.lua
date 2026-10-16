@@ -125,7 +125,7 @@ local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorl
             base_revision = world.revision, base_digest = world.digest,
             artifacts = {{component = "demo/app", version = version,
                 digest = SHA, dependencies = {}, namespaces = {"demo"}}},
-            entries = candidate_entries, capabilities = {}, requirements = {}, migrations = {}}
+            entries = candidate_entries, requirements = {}, migrations = {}}
         local application_evidence: preflight.AdmissionEvidence = {kind = "absent"}
         if world.application_admission then
             application_evidence = {kind = "measured", value = world.application_admission}
@@ -165,7 +165,7 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
         local candidate_entries: {preflight.Entry} = {migration_entry}
         local candidate: preflight.Candidate = {destination_node = "node-owner", source_node = "source-a", base_revision = 4, base_digest = SHA,
             artifacts = {{component = "demo/app", version = selected.version, digest = SHA,
-                dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries, capabilities = {}, requirements = {},
+                dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries, requirements = {},
             migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}}
         local context: preflight.Context = {node_id = "node-owner", registry_revision = 4, registry_digest = SHA,
             policy_digest = type(state.policy_digest) == "string" and state.policy_digest or SHA,

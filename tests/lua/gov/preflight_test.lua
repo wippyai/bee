@@ -7,6 +7,7 @@ local registry = require("registry")
 local canonical = require("canonical")
 local artifact = require("artifact")
 local hash = require("hash")
+local json = require("json")
 local SHA = string.rep("a", 64)
 local EMPTY_STRINGS: {string} = {}
 type Manifest = {revision: integer, super_edit: {string}, entries: {string}}
@@ -28,7 +29,7 @@ local function fixture(): (preflight.Candidate, preflight.Context)
     local candidate: preflight.Candidate = {destination_node = "node-a", source_node = "node-b", base_revision = 7, base_digest = SHA,
         artifacts = {{component = "example/demo", version = "1.0.0", digest = SHA, dependencies = {}, namespaces = {"demo"}}},
         entries = candidate_entries,
-        capabilities = {}, requirements = {{id = "demo:target_db", package = "example/demo", value = "host:db", expected_kind = "db.sql.sqlite", targets = {"demo:run"}}},
+        requirements = {{id = "demo:target_db", package = "example/demo", value = "host:db", expected_kind = "db.sql.sqlite", targets = {"demo:run"}}},
         migrations = {{id = "demo:001", target_db = "host:db", checksum = SHA, ordinal = 1}}}
     local context: preflight.Context = {node_id = "node-a", registry_revision = 7, registry_digest = SHA, policy_digest = SHA,
         packages = {["example/demo"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true}, databases = {["host:db"] = true},
@@ -91,11 +92,13 @@ local function define_tests()
         end)
         test.it("blocks an application whose declaration the desktop cannot open and names the field", function()
             local candidate, context = fixture()
+            candidate.entries[1].application_checkpoint_invalid = true
             candidate.entries[1].application_problem = "meta.application.lifetime must be view"
             local report = checked(candidate, context)
             test.is_false(report.ready)
             test.is_true(has(report, "APPLICATION_DESCRIPTOR"))
             test.contains(report.diagnostics[1].message, "meta.application.lifetime must be view")
+            candidate.entries[1].application_checkpoint_invalid = false
             candidate.entries[1].application_problem = nil
             test.is_true(checked(candidate, context).ready)
         end)
@@ -292,6 +295,18 @@ local function define_tests()
             candidate.capabilities[1].reason = "two\nlines"
             bytes = assert(canonical.encode(candidate, 1048576))
             test.is_nil(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
+        end)
+        test.it("names the reinstall a stored candidate with requirement capability requests needs", function()
+            local candidate = fixture()
+            local stored = assert(bounds.object(assert(json.decode(assert(canonical.encode(candidate, 1048576))))))
+            local rows = assert(bounds.array(stored.requirements, 128))
+            local row = assert(bounds.object(rows[1]))
+            row.capability_request = {capability = "app.database", parameters = {name = "notes"}, reason = "Keep notes",
+                target = "demo:run", path = ".security.policies +=", catalog_revision = 1, template_revision = 1}
+            local bytes = assert(canonical.encode(stored, 1048576))
+            local decoded, problem = preflight.decode_candidate(bytes, assert(hash.sha256(bytes)))
+            test.is_nil(decoded)
+            test.contains(tostring(problem), "install the application again")
         end)
         test.it("measures an exact destination plan without executing it", function()
             local candidate, context = fixture()

@@ -364,7 +364,8 @@ end
 
 -- generated_install answers the grant an installed application's intent
 -- carries. Refused is true when the current host application rules reject
--- the stored artifact; any other error is a failure to read it.
+-- the stored artifact or its stored resolution; any other error is a failure
+-- to read it.
 local function generated_install(profile_value: Profile, intent_raw: unknown): (Object?, string?, boolean?)
     local identity = activation_profiles.hub_identity(profile_value.workspace_id, profile_value.source_workspace)
         or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
@@ -380,12 +381,12 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     end
     local candidate, candidate_error = preflight.decode_candidate(intent.resolution_bytes,
         intent.resolution_digest)
-    if not candidate then return nil, candidate_error end
+    if not candidate then return nil, candidate_error, true end
     local catalog_entry, catalog_lookup_error = registry.get("bee.capability:catalog")
     if not catalog_entry then return nil, "host capability catalog lookup failed: " .. tostring(catalog_lookup_error) end
     local vocabulary, catalog_error = capability_model.decode(catalog_entry)
     if not vocabulary then return nil, catalog_error end
-    local requested = candidate.capabilities
+    local requested = candidate.capabilities or {}
     local folder: unknown = nil
     if capability_files.rooted(requested) then
         local resolved, folder_error = resources.workspace_folder(profile_value.workspace_id)

@@ -321,7 +321,7 @@ local function credentials_tests()
             test.is_true(native_fixture.has(native_fixture.kinds(changed_id), "credential.refused"))
             test.is_nil((native_fixture.shell("cat " .. home .. "/marker"):find("changed-login", 1, true)))
         end)
-        test.it("composes Grok configuration only from the current admitted initializer", function()
+        test.it("composes Grok configuration only from an empty or person-admitted base", function()
             local source = "bee.tests.credentials:codex_login_fixture"
             local source_root = ".wippy/codex-login-fixture"
             native_fixture.admit_grok_login_source(source)
@@ -398,7 +398,7 @@ local function credentials_tests()
             -- The external digest binding commits before any setup file or
             -- ready marker. A failed binding therefore leaves a retryable empty
             -- retained home instead of a permanently unbound ready session.
-            test.eq(native_fixture.shell("mkdir -p " .. source_root .. "/.grok && printf 'crash_safe = true\\n' > " .. source_root .. "/.grok/config.toml"), "")
+            test.eq(native_fixture.shell("mkdir -p " .. source_root .. "/.grok && rm -f " .. source_root .. "/.grok/config.toml"), "")
             local binding_attempt, binding_session = native_fixture.fresh("grok-binding-attempt"), native_fixture.fresh("grok-binding-session")
             local _, binding_projection = projection(binding_attempt)
             if type(binding_projection.projection_id) ~= "string" then error("invalid fixture binding_projection.projection_id") end
@@ -453,31 +453,29 @@ local function credentials_tests()
             missing_db:release()
             native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = missing_attempt}))
 
-            -- Structural insertion refuses a semantic Bee subtree already in
-            -- the user's source, before publishing the final configuration.
-            for _, collision in ipairs({
+            -- The person's own configuration is never a base the login carries:
+            -- without their admission the launch is refused and the bytes never
+            -- reach the agent home.
+            for _, own in ipairs({
+                "model = \"own\"\n",
                 "[mcp_servers.bee]\nurl = \"http://existing.invalid\"\n",
-                "[mcp_servers]\nbee = { url = \"http://existing.invalid\" }\n",
-                "mcp_servers.bee = { url = \"http://existing.invalid\" }\n",
-                "[\"mcp_servers\".\"bee\"]\nurl = \"http://existing.invalid\"\n",
-                "[mcp_servers.'bee']\nurl = \"http://existing.invalid\"\n",
             }) do
-                test.eq(native_fixture.shell("printf %s " .. quote.posix(collision) .. " > " .. source_root .. "/.grok/config.toml"), "")
-                local collision_attempt, collision_session = native_fixture.fresh("grok-collision-attempt"), native_fixture.fresh("grok-collision-session")
-                local _, collision_projection = projection(collision_attempt)
-                if type(collision_projection.projection_id) ~= "string" then error("invalid fixture collision_projection.projection_id") end
-                local collision_request = native_fixture.grok_composition_request(collision_attempt, collision_session,
-                    collision_projection.projection_id, grok_configuration.BASE_PATH)
-                local collision_prepared, collision_error, collision_db = prepare(collision_request)
-                if collision_prepared then error("colliding Grok MCP subtree was accepted") end
-                test.is_true(tostring(collision_error):find("mcp_servers.bee", 1, true) ~= nil)
-                test.is_true(tostring(collision_error):find("has no admitted mapping", 1, true) ~= nil)
-                evidence_has_no_start_or_publication(collision_db, collision_attempt)
-                local _, collision_home = session_path(collision_session)
-                test.eq(native_fixture.shell("test ! -e " .. quote.posix(collision_home .. "/.grok/config.toml") .. " && printf absent"), "absent")
-                retire(collision_db, collision_attempt)
-                collision_db:release()
-                native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = collision_attempt}))
+                test.eq(native_fixture.shell("printf %s " .. quote.posix(own) .. " > " .. source_root .. "/.grok/config.toml"), "")
+                local own_attempt, own_session = native_fixture.fresh("grok-own-attempt"), native_fixture.fresh("grok-own-session")
+                local _, own_projection = projection(own_attempt)
+                if type(own_projection.projection_id) ~= "string" then error("invalid fixture own_projection.projection_id") end
+                local own_request = native_fixture.grok_composition_request(own_attempt, own_session,
+                    own_projection.projection_id, grok_configuration.BASE_PATH)
+                local own_prepared, own_error, own_db = prepare(own_request)
+                if own_prepared then error("an unadmitted Grok configuration was composed") end
+                test.eq(own_error, "Bee needs permission to use this profile's configuration file. Open Agents, choose Setup, then approve the request in Needs you.")
+                evidence_has_no_start_or_publication(own_db, own_attempt)
+                local _, own_home = session_path(own_session)
+                test.eq(native_fixture.shell("test ! -e " .. quote.posix(own_home .. "/.grok/config.toml") .. " && test ! -e "
+                    .. quote.posix(own_home .. "/" .. grok_configuration.BASE_PATH) .. " && printf absent"), "absent")
+                retire(own_db, own_attempt)
+                own_db:release()
+                native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = own_attempt}))
             end
 
             -- An absent admitted source is an explicit empty base. It composes

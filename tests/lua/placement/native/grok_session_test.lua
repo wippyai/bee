@@ -85,7 +85,7 @@ local function admit_source()
         changes:update(policy)
     end
     assert(changes:apply())
-    command({"sh", "-c", "mkdir -p .wippy/grok-session-login/.grok && printf '%s' '{\"fixture\":true}' > .wippy/grok-session-login/.grok/auth.json && printf 'fixture = true\\n' > .wippy/grok-session-login/.grok/config.toml"})
+    command({"sh", "-c", "mkdir -p .wippy/grok-session-login/.grok && printf '%s' '{\"fixture\":true}' > .wippy/grok-session-login/.grok/auth.json && rm -f .wippy/grok-session-login/.grok/config.toml"})
 end
 
 local FIXTURE = [[

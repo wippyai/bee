@@ -409,6 +409,10 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local policy_data = policy_entry and bounds.object(policy_entry.data)
     local file_projection = false
     local composition_bases: {[string]: string} = {}
+    local composed: {[string]: boolean} = {}
+    for _, file in ipairs(delivery.files) do
+        if file.composition then composed[file.composition.base_path] = true end
+    end
     for index, projection_id in ipairs(request.projections) do
         local generation_key = attempt_id .. ":" .. tostring(index)
         local credential_request: {[string]: unknown} = {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id,
@@ -531,6 +535,14 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             local protected: {string} = {login_path}
             local login_file = source.format.file
             if not login_file then return refused("file login format unavailable") end
+            -- A composed base holds the person's own configuration and enters
+            -- only through configuration admission; the login carries only
+            -- an empty base.
+            local initializers: {formats.Initializer} = {}
+            for _, item in ipairs(login_file.initialize) do
+                if item.content == "" or not composed[item.path] then initializers[#initializers + 1] = item end
+            end
+            login_file.initialize = initializers
             for _, item in ipairs(login_file.initialize) do
                 if descriptor then
                     local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, item.content, request.placement_profile_ref, request.preferences and request.preferences.options)

@@ -818,8 +818,8 @@ local function main(saved: unknown)
         end
         for _, instance in pairs(instances) do
             if instance.desktop == id then
-                local cancelled, cancel_error = process.cancel(instance.pid)
-                if not cancelled then return protocol.fail("stop " .. instance.title .. ": " .. tostring(cancel_error)) end
+                local stopped = stop(instance)
+                if not stopped.ok then return stopped end
             end
         end
         local removed, err = workspaces.remove_desktop(id)

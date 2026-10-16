@@ -115,9 +115,10 @@ function M.restore(value: unknown): Object
     -- continuation under the key that created it, so admission attaches the
     -- same session.
     local owner = bounds.id(facts and facts.owner_id)
-    local prefix = "bee.application:" .. workspace .. ":"
-    local instance = owner and owner:sub(1, #prefix) == prefix and owner:sub(#prefix + 1) or nil
-    if not instance or instance == "" then return fail("the window session is not owned by an application of this workspace") end
+    local instance = owner and owner:match("^[^:]+:[^:]+:(.+)$") or nil
+    if not instance or principal.actor_id(workspace, instance) ~= owner then
+        return fail("the window session is not owned by an application of this workspace")
+    end
     local owner_window = window(workspace, instance, bounds.ids(facts and facts.trait_ceiling, true))
     if not owner_window then return fail("window principal could not be created") end
     return rpc(nil, {op = "resume"}, {resume = saved, session = session, workspace_id = workspace}, OWNER .. session, operation_key, owner_window)

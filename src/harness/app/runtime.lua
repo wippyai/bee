@@ -475,7 +475,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 local choice: admission.Admitted? = nil
                 local refused: admission.Reply? = nil
                 local ok, unexpected = pcall(function()
-                    choice, refused = admission.admit_request(candidate, session_operation_key)
+                    choice, refused = direct_launch.restore(candidate, session_operation_key)
                 end)
                 if not ok then refused = {ok = false, error = {code = "UNAVAILABLE", message = tostring(unexpected)}, value = nil} end
                 -- A cancelled continuation may finish reconciliation after

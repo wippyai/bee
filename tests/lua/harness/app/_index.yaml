@@ -66,3 +66,13 @@ entries:
     bounds: bee.values:bounds
     test: wippy.test:test
     client: bee.node:client
+- name: direct_restore_test
+  kind: function.lua
+  source: file://direct_restore_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    direct: bee.harness.app:direct
+    admission: bee.harness.launch:admission

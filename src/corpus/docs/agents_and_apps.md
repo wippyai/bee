@@ -2,9 +2,10 @@
 
 How an agent session works with the apps installed in its workspace: start an
 app on the person's desktop, send it a message while it runs, call its app
-tools, and talk with the person on the bound thread. Searches such as "start
-an app", "open app", "send message to app", "talk to running app" and "app
-tools" lead here. Every tool below is an MCP tool of your session.
+tools, and talk with the person on the bound thread.
+Searches that lead here: start an app, open app, open application window,
+send message to app, talk to running app, app tools.
+Every tool below is an MCP tool of your session.
 
 ## Access you request
 
@@ -54,8 +55,8 @@ Open the app again with the message as its arguments. An app declared with
 again: the node delivers the arguments to the running window as navigation,
 and the result has `reused: true`. The app receives them on the
 `bee.app.navigate` topic and reads them with `client.navigation(launch,
-sender, payload)`; `reference_apps/starter` shows the whole loop (Hello greets
-the name it is opened or navigated with). Use a new `idempotency_key` per
+sender, payload)`; `reference_apps/starter` shows the whole loop (the Hello app
+greets the name it is opened or navigated with). Use a new `idempotency_key` per
 message.
 
 An app cannot register a process name, and an app tool runs as its own

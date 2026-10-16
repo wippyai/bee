@@ -362,7 +362,10 @@ local function destination_resolver(config: Configuration, profile_value: Profil
         folder = function(): (unknown?, string?) return resources.workspace_folder(workspace_id) end})
 end
 
-local function generated_install(profile_value: Profile, intent_raw: unknown): (Object?, string?)
+-- generated_install answers the grant an installed application's intent
+-- carries. Refused is true when the current host application rules reject
+-- the stored artifact; any other error is a failure to read it.
+local function generated_install(profile_value: Profile, intent_raw: unknown): (Object?, string?, boolean?)
     local identity = activation_profiles.hub_identity(profile_value.workspace_id, profile_value.source_workspace)
         or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
     local prior_owner = workspace_applications.prior_owner(profile_value.workspace_id, profile_value.source_workspace)
@@ -395,7 +398,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     local artifact_entries, artifact_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
     if not artifact_entries then return nil, artifact_error end
     local application_id, application_error = workspace_applications.application(artifact_entries)
-    if not application_id then return nil, application_error end
+    if not application_id then return nil, application_error, true end
     local proposed, proposed_error = capability_grants.propose(vocabulary, profile_value.overlay_owner,
         application_id, requested, uses_prior, folder)
     if not proposed then return nil, proposed_error end
@@ -612,9 +615,9 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
             local generated, generated_error = generated_install(profile_value, intent)
             if generated_error then return nil, generated_error, true end
             return materializer.reconcile_composed(overlay_owner, entries, admission, generated)
-        end, matches = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): (boolean?, string?)
-            local generated, generated_error = generated_install(profile_value, intent)
-            if generated_error then return nil, generated_error end
+        end, matches = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): (boolean?, string?, boolean?)
+            local generated, generated_error, refused = generated_install(profile_value, intent)
+            if generated_error then return nil, generated_error, refused end
             return materializer.matches_composed(overlay_owner, entries, admission, generated)
         end, migrations = migration_adapter}
     return {ok = true, config = owner_configuration}

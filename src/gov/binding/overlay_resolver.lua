@@ -31,7 +31,7 @@ type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, str
 type Resolver = resolution.Resolver
 type Instance = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?,
-    resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
+    resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?, boolean?)}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -119,7 +119,7 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
     return context, nil
 end
 
-function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
+function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
     local spec = object(spec_raw)
     local destination = spec and bounds.id(spec.owner_node) or nil
     local source = spec and bounds.id(spec.source_node) or nil
@@ -304,7 +304,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 catalog = decoded
             end
             local item, item_error = requirement.resolve(entry, component, final, artifact_ids, catalog)
-            if not item then return nil, nil, item_error end
+            if not item then return nil, nil, item_error, true end
             requirements[#requirements + 1] = item
             if driver_artifact and item.value and #item.targets == 1
                 and item.targets[1] == driver_admission.TARGET then
@@ -317,9 +317,9 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             end
         end
     end
-    local prepared, capability_error = application_capabilities.prepare(policy, spec, incoming,
+    local prepared, capability_error, capability_refused = application_capabilities.prepare(policy, spec, incoming,
         requirements, current_raw, deps.folder)
-    if not prepared then return nil, nil, capability_error end
+    if not prepared then return nil, nil, capability_error, capability_refused end
     policy = prepared.policy
     local capability_proposal = prepared.proposal
     local evidence: preflight.HostEvidence = {application_admission = {kind = "absent"},
@@ -442,7 +442,7 @@ function M.new(config: Config): Resolver
     end
     local value: Instance
     value = {capture = capture, root = config.root, policy = config.policy, folder = config.folder,
-        resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
+        resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
             return M.resolve_with(value, spec)
         end}
     return value

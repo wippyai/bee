@@ -130,6 +130,33 @@ function M.define()
         local wrong_path = resolver.resolve_with(deps, spec)
         test.is_nil(wrong_path)
     end)
+    test.it("refuses an artifact the host application rules reject and fails on a missing host catalog", function()
+        local deps, spec = fixture(nil)
+        local captured = (deps.capture)()
+        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.app"},
+            data = {source = "return true"}}
+        local request: Entry = {id = "private.app:files", kind = "ns.requirement",
+            meta = {value_kind = "security.policy", capability = "workspace.files.read",
+                parameters = {subpath = "docs"}, reason = "Render documentation"},
+            data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
+        changes(spec, {app, request})
+        local absent, _, absent_error, absent_refused = resolver.resolve_with(deps, spec)
+        test.is_nil(absent)
+        test.eq(absent_error, "host capability catalog is absent")
+        test.is_nil(absent_refused)
+        captured.entries[#captured.entries + 1] = {id = "bee.capability:catalog", kind = "registry.entry",
+            meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
+            data = {revision = 1, never = {"exec"}, capabilities = {{id = "workspace.files.read",
+                revision = 1, confirm = "standard", parameters = {subpath = "relative_subpath"},
+                text = "Read workspace files under {subpath}",
+                policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
+                resources = {}}}}}
+        local refused, _, refusal, is_refused = resolver.resolve_with(deps, spec)
+        test.is_nil(refused)
+        test.eq(refusal, "capability requirement must append policies to its own application")
+        test.is_true(is_refused == true)
+    end)
+
     test.it("accepts a Hive exposure request for the artifact's own operations", function()
         local deps, spec = fixture(nil)
         local captured = (deps.capture)()

@@ -47,7 +47,7 @@ local function resolver(node: string, entry: {[string]: unknown}, component: str
     local entry_bytes = assert(canonical.encode(entry))
     local entry_digest = assert(hash.sha256(entry_bytes))
     local value = {}
-    function value.resolve(self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?)
+    function value.resolve(self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
         local selected = assert(bounds.object(plan))
         local version = selected.version
         assert(type(version) == "string" and type(selected.source_node) == "string")
@@ -156,7 +156,7 @@ local function define_tests()
                         return nil, false, "unexpected migration execution"
                     end},
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): (boolean?, string?) return applied, nil end,
+                    _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     applied = true

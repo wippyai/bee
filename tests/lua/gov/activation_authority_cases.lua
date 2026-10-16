@@ -49,7 +49,7 @@ local function authority_tests()
                     resolver = shifting_resolver(entry, {revision = 4, digest = SHA}),
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                     overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                    matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return false, nil end,
+                    matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
                     apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                         error("failed activation must never reach apply")
                     end}
@@ -117,7 +117,7 @@ local function authority_tests()
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
                 migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): (boolean?, string?) return applied, nil end,
+                    _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     applied = true
@@ -172,7 +172,7 @@ local function authority_tests()
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
                 migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): (boolean?, string?) return false, nil end,
+                    _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     applied = true
@@ -218,7 +218,7 @@ local function authority_tests()
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
                 migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): (boolean?, string?) return false, nil end,
+                    _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): ({[string]: unknown}?, string?, boolean?) return {changed = true}, nil end}
             test.eq(ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
@@ -273,7 +273,7 @@ local function authority_tests()
                     overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
                     migrations = migration_effect(),
                     matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                        _intent: unknown): (boolean?, string?) return false, nil end,
+                        _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
                     apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
                         _intent: unknown): ({[string]: unknown}?, string?, boolean?) return {changed = true}, nil end}
                 local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",

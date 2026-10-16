@@ -38,7 +38,7 @@ type Deps = {prepared: Preparation?, capture: () -> (Captured?, string?), root: 
 type Resolver = resolution.Resolver
 type Instance = {prepared: Preparation?, capture: () -> (Captured?, string?), root: (unknown, unknown?) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?),
-    resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
+    resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?, boolean?)}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -254,7 +254,7 @@ local function same_state(prior: Captured, current: Captured): boolean
     return next(entries) == nil
 end
 
-local function prepare(captured: Captured, root: Root, spec: Object, expected: {Entry}): (Preparation?, string?)
+local function prepare(captured: Captured, root: Root, spec: Object, expected: {Entry}): (Preparation?, string?, boolean?)
     if type(spec.artifact_bytes) ~= "string" or type(spec.artifact_digest) ~= "string" then
         return nil, "selected artifact identity is invalid"
     end
@@ -337,7 +337,7 @@ local function prepare(captured: Captured, root: Root, spec: Object, expected: {
             candidate_entries[#candidate_entries + 1] = measured
             if entry.kind == "ns.requirement" then
                 local item, item_error = requirement.resolve(entry, package, final_by_id, owned, catalog)
-                if not item then return nil, item_error end
+                if not item then return nil, item_error, true end
                 requirements[#requirements + 1] = item
             end
             local meta = object(entry.meta)
@@ -385,7 +385,7 @@ local function prepare(captured: Captured, root: Root, spec: Object, expected: {
         requirements = requirements, migrations = migrations, current = current}, nil
 end
 
-function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
+function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
     local spec = object(spec_raw)
     if not spec or type(spec.artifact_bytes) ~= "string" or type(spec.artifact_digest) ~= "string" then
         return nil, nil, "selected artifact identity is invalid"
@@ -411,8 +411,8 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local prepared = deps.prepared
     if not prepared or prepared.artifact_bytes ~= spec.artifact_bytes or prepared.artifact_digest ~= spec.artifact_digest
         or not equal(prepared.root, root) or not same_state(prepared.captured, captured) then
-        local value, prepare_error = prepare(captured, root, spec, expected)
-        if not value then return nil, nil, prepare_error end
+        local value, prepare_error, prepare_refused = prepare(captured, root, spec, expected)
+        if not value then return nil, nil, prepare_error, prepare_refused end
         prepared, deps.prepared = value, value
     end
     local expected, preview, flattened = prepared.expected, prepared.preview, prepared.flattened
@@ -430,9 +430,9 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     end
     local current_raw: {[string]: Entry} = {}
     for _, entry in ipairs(captured.entries) do current_raw[entry.id] = entry end
-    local capabilities, capability_error = application_capabilities.prepare(policy, spec, flattened,
+    local capabilities, capability_error, capability_refused = application_capabilities.prepare(policy, spec, flattened,
         requirements, current_raw, deps.folder)
-    if not capabilities then return nil, nil, capability_error end
+    if not capabilities then return nil, nil, capability_error, capability_refused end
     policy = capabilities.policy
     -- Measure only the existing definitions that can affect this closure:
     -- owned namespaces, external references, and requirement targets. This
@@ -547,7 +547,7 @@ function M.new(config: Config): Resolver
     end
     local value: Instance
     value = {capture = capture, root = config.root, policy = config.policy, folder = config.folder,
-        resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
+        resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
             return M.resolve_with(value, spec)
         end}
     return value

@@ -54,7 +54,7 @@ function M.application(raw: unknown): (string?, string?)
             selected = id
         end
     end
-    if not selected then return nil, "workspace artifact declares no application" end
+    if not selected then return nil, "workspace artifact declares no process.lua application with meta.type bee.application" end
     return selected, nil
 end
 

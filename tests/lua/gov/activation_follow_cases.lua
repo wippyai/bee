@@ -71,7 +71,7 @@ local function follow_tests()
                     return {plans = plans, activations = activations, resolver = scenario == "migration" and migration_resolver(entry, {}) or shifting_resolver(entry, world),
                         approvals = executor, actor_id = "host-a", consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
                         approval_policy = "local-install", migrations = migration_effect(), leases = lease_handle,
-                        matches = function(_overlay: string, _entries: unknown, _admission: unknown?, intent: unknown): (boolean?, string?)
+                        matches = function(_overlay: string, _entries: unknown, _admission: unknown?, intent: unknown): (boolean?, string?, boolean?)
                             if scenario == "uncertain" and effects > 0 and not interrupted then
                                 interrupted = true
                                 return nil, "Effect observation is interrupted"

@@ -48,7 +48,7 @@ local function migration_tests()
                 resolver = migration_resolver(entry, state), approvals = approvals(), actor_id = "host-a",
                 consumer_id = "destination-host", overlay_owner = "bee.gov:migration-overlay",
                 approval_policy = "local-install", migrations = effect,
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return state.applied == true, nil end,
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return state.applied == true, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     test.is_true(state.executed == true)
                     test.is_true(state.staged ~= true)

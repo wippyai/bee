@@ -114,7 +114,7 @@ local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorl
     local selected_digest, digest_error = hash.sha256(entry_bytes)
     if not selected_digest then error(tostring(digest_error)) end
     local value = {}
-    function value.resolve(self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?)
+    function value.resolve(self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
         local selected = assert(bounds.object(plan))
         local version = selected.version
         assert(type(version) == "string")
@@ -153,7 +153,7 @@ end
 local function migration_resolver(entry: {[string]: unknown}, state: {[string]: unknown}): owner.Resolver
     local checksum = assert(hash.sha256(assert(canonical.encode(entry))))
     local value = {}
-    function value.resolve(self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?)
+    function value.resolve(self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
         local selected = assert(bounds.object(plan))
         assert(type(selected.version) == "string")
         local applied: {[string]: preflight.Migration} = {}
@@ -232,7 +232,7 @@ local function definite_failure_test(broken_source: boolean?)
         resolver = shifting_resolver(entry, {revision = 4, digest = SHA}), approvals = approvals(),
         actor_id = "host-a", consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
         approval_policy = "local-install", migrations = migration_effect(),
-        matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return false, nil end,
+        matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
         apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
             attempts = attempts + 1
             return nil, "failed to add library node: demo:run:5:19: syntax error", true
@@ -272,7 +272,7 @@ local function queued_failure_test()
         resolver = shifting_resolver(entry, {revision = 4, digest = SHA}), approvals = executor,
         actor_id = "host-a", consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
         approval_policy = "local-install", migrations = migration_effect(),
-        matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return installed, nil end,
+        matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return installed, nil end,
         apply = function(_overlay: string, _entries: unknown, _admission: unknown?, raw: unknown): ({[string]: unknown}?, string?, boolean?)
             if assert(bounds.object(raw)).version == "v1" then return nil, "demo:run:5:19: syntax error", true end
             installed = true
@@ -331,7 +331,7 @@ local function lease_config(workspace: string, capability: preflight.CapabilityE
         overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
         leases = leases,
         matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
-            _intent: unknown): (boolean?, string?) return flags.applied, nil end,
+            _intent: unknown): (boolean?, string?, boolean?) return flags.applied, nil end,
         apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
             _intent: unknown): ({[string]: unknown}?, string?, boolean?)
             flags.applied = true

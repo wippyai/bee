@@ -30,7 +30,7 @@ end
 local sha = bounds.digest_hex
 
 function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requirements: {preflight.Requirement},
-    current_raw: {[string]: Entry}, folder_fn: (() -> (unknown?, string?))?): (Result?, string?)
+    current_raw: {[string]: Entry}, folder_fn: (() -> (unknown?, string?))?): (Result?, string?, boolean?)
     local original_policy = policy
     local database_bindings = policy.database_bindings
     local capability_proposal: capability_grants.Proposal? = nil
@@ -40,7 +40,7 @@ function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requirements
     if policy.workspace_application then
         local app_binding = policy.applications and object(policy.applications[1]) or nil
         local app_id, application_error = workspace_applications.application(incoming)
-        if not app_id then return nil, application_error end
+        if not app_id then return nil, application_error, true end
         if app_binding then app_binding.definition_id = app_id end
         if not app_binding then return nil, "application capability binding is absent" end
         local owner = bounds.id(policy.overlay_owner)

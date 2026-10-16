@@ -5,7 +5,9 @@ local preflight = require("preflight")
 local M = {}
 type DatabaseBinding = {database_id: string, table_prefix: string?}
 type DatabaseBindings = {[string]: DatabaseBinding}
-type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
+-- A resolution that fails is refused when the current host rules reject the
+-- artifact, and a failure to resolve it otherwise.
+type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?, boolean?)}
 M.MAX_TABLE_PREFIX_BYTES = 64
 
 -- Decode the host policy's logical-to-physical database bindings. An absent

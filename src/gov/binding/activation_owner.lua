@@ -23,7 +23,9 @@ type Result = transaction.Result
 type Resolver = resolution.Resolver
 type Executor = approval.Executor
 type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?, boolean?)
-type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?)
+-- An observation that cannot answer is refused when the current host rules
+-- reject the stored artifact, and unavailable otherwise.
+type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?, boolean?)
 -- Migration effects receive the intent so the destination can stage what
 -- the intent's grants provision for the migrations: the application database
 -- and the grant that lets its migrations reach it.
@@ -99,9 +101,9 @@ local function approved_spec(intent: Object): Object
 end
 
 local function measured(config: Config, spec: Object): (Object?, Result?)
-    local candidate, context, resolve_error = config.resolver:resolve(spec)
+    local candidate, context, resolve_error, rejected = config.resolver:resolve(spec)
     if candidate == nil or context == nil then
-        return nil, failure("BLOCKED", tostring(resolve_error or "resolve activation on this node"))
+        return nil, failure(rejected and "CONFLICT" or "BLOCKED", tostring(resolve_error or "resolve activation on this node"))
     end
     -- A refusal means the approval does not cover the current host policy.
     if not config.measurement then config.measurement = {} end
@@ -582,8 +584,8 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             if not recorded.ok then return recorded end
             return failure("UNCERTAIN", diagnostics, object(recorded.value))
         end
-        local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
-        if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
+        local matches, observe_error, refused = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
+        if matches == nil then return failure(refused and "CONFLICT" or "UNAVAILABLE", tostring(observe_error)) end
         if not matches then
             local applied, apply_error, definite = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
             if not applied then
@@ -636,8 +638,8 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             if value then value.recovered = result.recovered end
             return transaction.success(value or result, false)
         end
-        local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
-        if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
+        local matches, observe_error, refused = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
+        if matches == nil then return failure(refused and "CONFLICT" or "UNAVAILABLE", tostring(observe_error)) end
         if matches then
             if intent.observed_intent_id == intent_id then return transaction.success(intent, true) end
             return observed(intent)

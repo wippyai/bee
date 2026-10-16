@@ -30,7 +30,7 @@ end
 
 local function resolver(): destination.Resolver
     local value = {}
-    function value.resolve(self: destination.Resolver, raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
+    function value.resolve(self: destination.Resolver, raw: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
         local spec = assert(bounds.object(raw))
         test.eq(spec.owner_node, "node-d")
         test.eq(spec.workspace_id, "workspace-d")

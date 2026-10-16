@@ -1,6 +1,7 @@
 -- MIT. Focused activation owner test cases.
 local test = require("test")
 local artifact = require("artifact")
+local preflight = require("preflight")
 local plan_store = require("plan_store")
 local activation_store = require("activation_store")
 local owner = require("activation_owner")
@@ -31,7 +32,7 @@ local function recovery_tests()
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = lossy_approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     if fail_restore then return nil, "overlay restore failed" end
                     applied = true
@@ -77,7 +78,7 @@ local function recovery_tests()
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     applied, apply_count = true, apply_count + 1
                     return {changed = true}, nil
@@ -131,7 +132,7 @@ local function recovery_tests()
                 resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     applied, apply_count = true, apply_count + 1
                     return {changed = true}, nil
@@ -169,7 +170,7 @@ local function recovery_tests()
             local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?)
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?)
                     observations = observations + 1
                     return false, nil
                 end,
@@ -203,7 +204,7 @@ local function recovery_tests()
                 resolver = shifting_resolver(entry, world),
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                     applied, apply_count = true, apply_count + 1
                     world.digest = SHA_B
@@ -243,7 +244,7 @@ local function recovery_tests()
                     resolver = shifting_resolver(entry, world),
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                     overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
-                    matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?) return applied, nil end,
+                    matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
                     apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
                         applied, apply_count = true, apply_count + 1
                         return {changed = true}, nil
@@ -287,6 +288,91 @@ local function recovery_tests()
             test.eq(apply_count, 2)
             assert(activation_store.close(again_activations))
             assert(plan_store.close(again_plans))
+        end)
+
+        test.it("refuses an overlay the host rules no longer admit and keeps an unobservable overlay unavailable", function()
+            local plans = assert(plan_store.open("bee:db", "node-owner", "workspace-stale-rules"))
+            local activations = assert(activation_store.open("bee:db", "node-owner", "workspace-stale-rules"))
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local applied = false
+            local observation: string? = nil
+            local applications = 0
+            local config: owner.Config = {plans = plans, activations = activations, resolver = resolver(entry),
+                approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?)
+                    if observation == "refused" then return nil, "artifact breaks a host rule", true end
+                    if observation == "unavailable" then return nil, "registry is unavailable" end
+                    return applied, nil
+                end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                    applied, applications = true, applications + 1
+                    return {changed = true}, nil
+                end}
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a", version = "v1",
+                intent_id = "intent-stale-rules", receipt_key = "stale-rules"}))
+            test.eq(ok(owner.step(config, "intent-stale-rules", "stale-rules")).phase, "consuming")
+            test.eq(ok(owner.step(config, "intent-stale-rules", "stale-rules")).phase, "authorized")
+            test.eq(ok(owner.step(config, "intent-stale-rules", "stale-rules")).phase, "applying")
+            observation = "refused"
+            local applying = owner.step(config, "intent-stale-rules", "stale-rules")
+            expect_code(applying, "CONFLICT")
+            test.eq(applying.message, "artifact breaks a host rule")
+            observation = "unavailable"
+            expect_code(owner.step(config, "intent-stale-rules", "stale-rules"), "UNAVAILABLE")
+            observation = nil
+            test.eq(ok(owner.step(config, "intent-stale-rules", "stale-rules")).outcome, "applied")
+            test.eq(applications, 1)
+            applied, observation = false, "refused"
+            local restoring = owner.recover(config, "stale-rules")
+            expect_code(restoring, "CONFLICT")
+            test.eq(restoring.message, "artifact breaks a host rule")
+            observation = "unavailable"
+            expect_code(owner.recover(config, "stale-rules"), "UNAVAILABLE")
+            test.eq(applications, 1)
+            test.eq(ok(activation_store.get(activations, "intent-stale-rules")).outcome, "applied")
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+
+        test.it("refuses an authorized overlay its resolution rejects and keeps a failed resolution blocked", function()
+            local plans = assert(plan_store.open("bee:db", "node-owner", "workspace-stale-resolution"))
+            local activations = assert(activation_store.open("bee:db", "node-owner", "workspace-stale-resolution"))
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return 'v1'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local resolution: string? = nil
+            local measured = resolver(entry)
+            local applications = 0
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = {resolve = function(_self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?, boolean?)
+                    if resolution == "refused" then return nil, nil, "artifact breaks a host rule", true end
+                    if resolution == "failed" then return nil, nil, "registry snapshot is unavailable" end
+                    return measured:resolve(plan)
+                end},
+                approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                    applications = applications + 1
+                    return {changed = true}, nil
+                end}
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a", version = "v1",
+                intent_id = "intent-stale-resolution", receipt_key = "stale-resolution"}))
+            test.eq(ok(owner.step(config, "intent-stale-resolution", "stale-resolution")).phase, "consuming")
+            test.eq(ok(owner.step(config, "intent-stale-resolution", "stale-resolution")).phase, "authorized")
+            resolution = "refused"
+            local refused = owner.recover(config, "stale-resolution")
+            expect_code(refused, "CONFLICT")
+            test.eq(refused.message, "artifact breaks a host rule")
+            resolution = "failed"
+            expect_code(owner.recover(config, "stale-resolution"), "BLOCKED")
+            test.eq(applications, 0)
+            test.eq(ok(activation_store.get(activations, "intent-stale-resolution")).phase, "authorized")
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
         end)
 
     end)

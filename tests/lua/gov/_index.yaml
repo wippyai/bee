@@ -1186,6 +1186,38 @@ entries:
     - registry.update
     resources: '*'
     effect: allow
+- name: stored_rules_recovery_test
+  kind: function.lua
+  source: file://stored_rules_recovery_test.lua
+  method: run
+  modules:
+  - funcs
+  - security
+  - registry
+  - json
+  - sql
+  - time
+  - uuid
+  - cdc
+  - env
+  - system
+  - process
+  meta:
+    type: test
+    suite: bee
+    timeout: 240s
+  security:
+    policies:
+    - bee.tests.gov:app_expiry_test_policy
+  imports:
+    bounds: bee.values:bounds
+    test: wippy.test:test
+    harness: bee.tests.gov:delivery_harness
+    guide: bee.gov.traits:guide
+    test_fixtures: bee.tests.support:fixtures
+    artifact: bee.gov.types:artifact
+    application_admission: bee.gov.types:governed_application_admission
+    workspace_applications: bee.gov.types:workspace_applications
 - name: app_expiry_test
   kind: function.lua
   source: file://app_expiry_test.lua
@@ -1553,6 +1585,7 @@ entries:
   imports:
     test: wippy.test:test
     artifact: bee.gov.types:artifact
+    preflight: bee.gov.binding:preflight
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
     activation_owner: bee.gov.binding:activation_owner

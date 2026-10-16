@@ -216,8 +216,8 @@ end
 
 -- restore reports what reopens a window session whose terminal is gone: the
 -- admitted definition and plan, the saved profile, the request that first
--- admitted it, the operation key that created it, its last native attempt and
--- its thread. A window app resumes
+-- admitted it, the operation key that created it, the principal that owns it,
+-- its last native attempt and its thread. A window app resumes
 -- the native conversation from these facts through admission's continuation.
 function M.restore(raw_request: unknown): Reply
     local request, refused = request_input(raw_request)
@@ -234,11 +234,12 @@ function M.restore(raw_request: unknown): Reply
     if not security.can("bee.sessions.attach", definition) then return fail("DENIED", "window restore requires a host grant") end
     local origin, attempt = bounds.id(route.origin_request_id), bounds.id(route.native_attempt_id)
     local plan_digest, thread, operation_key = bounds.text(route.plan_digest, 128), bounds.id(stored.thread_ref), key(route.operation_key)
-    if not origin or not attempt or not plan_digest or not thread or not operation_key then
+    local owner = bounds.id(route.owner_id)
+    if not origin or not attempt or not plan_digest or not thread or not operation_key or not owner then
         return unavailable("window session records no admitted continuation to restore", nil)
     end
     local value: Object = {trait_ceiling = route.trait_ceiling, overrides = route.overrides, session = session, definition_ref = definition, plan_digest = plan_digest,
-        origin_request_id = origin, previous_attempt_id = attempt, thread_id = thread, operation_key = operation_key}
+        origin_request_id = origin, previous_attempt_id = attempt, thread_id = thread, operation_key = operation_key, owner_id = owner}
     if route.saved_profile_id ~= nil then
         value.saved_profile_id = ref(route.saved_profile_id)
         value.saved_profile_revision = bounds.integer(route.saved_profile_revision)

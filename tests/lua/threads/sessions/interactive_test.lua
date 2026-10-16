@@ -495,6 +495,7 @@ local function define_tests()
             test.eq(value.thread_id, described.thread_ref)
             test.eq(value.saved_profile_id, "profile-1")
             test.eq(value.saved_profile_revision, 2)
+            test.eq(value.owner_id, "sessions-owner", "the window reopens as the principal that owns its session")
 
             local denied = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.tests.threads.sessions:await_test_caller"))}))
             test.eq(assert(bounds.object(restore(denied, opened.session).error)).code, "DENIED")

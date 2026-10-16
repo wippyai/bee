@@ -111,9 +111,14 @@ function M.restore(value: unknown): Object
     if not workspace then return fail("window restore identity is missing") end
     local operation_key = bounds.text(facts and facts.operation_key, 128)
     if not operation_key or operation_key == "" then return fail("the window restore facts omit the session key") end
-    -- The window app admits the continuation under the key that created the
-    -- session, so admission attaches the same session.
-    local owner_window = window(workspace, saved.origin_request_id, bounds.ids(facts and facts.trait_ceiling, true))
+    -- The window reopens as the principal that owns its session and admits the
+    -- continuation under the key that created it, so admission attaches the
+    -- same session.
+    local owner = bounds.id(facts and facts.owner_id)
+    local prefix = "bee.application:" .. workspace .. ":"
+    local instance = owner and owner:sub(1, #prefix) == prefix and owner:sub(#prefix + 1) or nil
+    if not instance or instance == "" then return fail("the window session is not owned by an application of this workspace") end
+    local owner_window = window(workspace, instance, bounds.ids(facts and facts.trait_ceiling, true))
     if not owner_window then return fail("window principal could not be created") end
     return rpc(nil, {op = "resume"}, {resume = saved, session = session, workspace_id = workspace}, OWNER .. session, operation_key, owner_window)
 end

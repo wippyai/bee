@@ -13,6 +13,13 @@ type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capa
 local windows = require("windows")
 local clock = require("clock")
 local M = {}
+-- The time fact of a request: its deadline while it waits for the person,
+-- afterwards who settled it and when.
+local function timing(view: model.ApprovalView): string
+    if view.state == "pending" then return "Decide by: " .. clock.local_deadline(view.expires_at) end
+    local settled = view.decided_at
+    return model.decision_line(view) .. (settled and (" · " .. clock.local_time(settled)) or "")
+end
 local function prompt_lines(prompt: string, width: integer, prefix: string?): {string}
     local rest = (prefix == nil and "Asked: " or prefix) .. prompt
     local room = math.floor(math.max(1, width - 2))
@@ -159,7 +166,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
             for _, line in ipairs(model.permission_lines(item)) do source[#source + 1] = line end
             source[#source + 1] = "Lasts: " .. model.duration(item)
         end
-        source[#source + 1] = "Decide by: " .. clock.local_deadline(item.expires_at)
+        source[#source + 1] = timing(item)
         if not card then
             source[#source + 1] = ""
             local consequence = item.proposal.payload.consequence
@@ -289,9 +296,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             local grant = row.view.window_grant
             scope = windows.duration(grant.until_ms - grant.granted_ms) .. " until " .. clock.local_deadline(grant.until_at)
         end
-        local expiry = "Decide by: " .. clock.local_deadline(row.expires_at)
         local separator = width < 60 and " " or " · "
-        local meta = state_label(row) .. separator .. (row.view.proposal.ref == "bee.gateway:access" and model.duration(row.view) or scope) .. separator .. expiry
+        local lasting = row.view.proposal.ref == "bee.gateway:access" and model.duration(row.view) or scope
+        local label = row.state == "pending" and state_label(row) or (row.view.allowed_by_grant and model.history(row.view))
+        local meta = (label and (label .. separator) or "") .. lasting .. separator .. timing(row.view)
         if card and width >= 100 then meta = meta .. " · " .. card.scope end
         frame.list_card(painter, list_first + (slot - 1) * (card_height + 1), card_height,
             {glyph = model.state_mark(row.state == "decided" and (row.decision or "decided") or row.state),

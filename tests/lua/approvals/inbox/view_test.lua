@@ -63,6 +63,24 @@ local function define_tests()
             for _, button in ipairs(assert(opened.controls).overflow) do if button.kind == "technical" and button.key == "T" and button.label == "Details" then found = true end end
             test.is_true(found)
         end)
+        test.it("shows who decided a request and when instead of its deadline", function()
+            local state = model.new({"ws-1"})
+            local item = request("decided-access", "decided", "Let this agent session use Hub and Library?")
+            item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {review = {title = "Let this agent session use Hub and Library?", access = "Hub and Library"}}}
+            item.decision = "approved"
+            item.decider_id = "bee.application:01a06e56ba587c5aa2ab9b0b63c0f001:inbox-instance"
+            item.decided_at = "2026-09-09T09:30:00.000Z"
+            model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
+            local listed = tty.text.plain(table.concat(view.draw(120, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n"))
+            test.contains(listed, "Let this agent session use Hub and Library?")
+            test.contains(listed, "Approved by you · 2026-09-09")
+            test.is_nil((listed:find("Decide by", 1, true)))
+            model.select(state, "decided-access")
+            model.apply_read(state, "decided-access", reply({ok = true, value = item}))
+            local opened = tty.text.plain(table.concat(view.draw(120, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n"))
+            test.contains(opened, "Approved by you · 2026-09-09")
+            test.is_nil((opened:find("Decide by", 1, true)))
+        end)
         test.it("shows the whole question before enabling a decision", function()
             local state = model.new({"ws-1"})
             local item = request("long-review", "pending", string.rep("Read these terms carefully. ", 14) .. "Last consequence: files change.")

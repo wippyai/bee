@@ -10,7 +10,12 @@ local bounds = require("bounds")
 local M = {}
 M.TOPIC = "bee.approvals.wake"
 type Sender = (string, string, {[string]: unknown}) -> (boolean, string?)
-function M.message(event: {[string]: unknown}, prompt: {[string]: unknown}?): string
+-- A decision event carries its decision or request state; an effect
+-- completion carries the effect state of a request that was approved.
+local OUTCOMES: {[string]: string} = {approved = "was approved", denied = "was denied", expired = "expired",
+    withdrawn = "was withdrawn", superseded = "was superseded", invalidated = "was invalidated",
+    succeeded = "was approved and completed", failed = "was approved but failed", canceled = "was approved but canceled"}
+function M.message(event: {[string]: unknown}, prompt: {[string]: unknown}?): string?
     local summary = prompt and type(prompt.text) == "string" and prompt.text or "Your request"
     local result = bounds.object(event.result)
     if result and result.outcome == "applied" then
@@ -19,16 +24,22 @@ function M.message(event: {[string]: unknown}, prompt: {[string]: unknown}?): st
     if result and result.outcome == "failed" and type(result.error) == "string" then
         return "Installation failed: " .. result.error
     end
-    local message = "Your request " .. tostring(event.approval_id) .. " was " .. tostring(event.decision or event.state) .. ": " .. summary
+    local outcome = OUTCOMES[tostring(event.decision or event.state)]
+    if not outcome then return nil end
+    local message = "Your request " .. tostring(event.approval_id) .. " " .. outcome .. ": " .. summary
     if result and type(result.error) == "string" then message = message .. "\nError: " .. result.error end
     if event.response ~= nil then message = message .. "\nAnswer: " .. tostring(json.encode(event.response)) end
     return message
 end
+-- A requesting session hears once per decision. An approved request whose
+-- effect has a receiver is told by that effect's completion, which also
+-- acknowledges the approval it reports.
 function M.notify_sessions(db: sql.DB): string?
     local rows, query_error = db:query([[SELECT e.event_id, e.destination, e.body_json, r.prompt_json, r.requester_id, r.workspace_id
         FROM bee_approval_events e JOIN bee_approval_requests r ON r.approval_id = e.approval_id
         WHERE e.acknowledged_at IS NULL AND e.destination LIKE 'requester:bs:%'
         AND e.kind IN ('approval.decided','approval.denied','approval.expired','approval.withdrawn','approval.superseded','approval.invalidated','effect.completed')
+        AND NOT (e.kind = 'approval.decided' AND json_extract(e.body_json, '$.destination') IS NOT NULL)
         ORDER BY e.seq LIMIT 64]])
     if not rows or query_error then return "read requesting-session events" end
     local failure: string? = nil
@@ -45,12 +56,13 @@ function M.notify_sessions(db: sql.DB): string?
         if not scoped then return tostring(scope_error) end
         local prompt = type(row.prompt_json) == "string" and bounds.object(json.decode(row.prompt_json)) or nil
         local message = M.message(event, prompt)
+        if not message then return "approval event has no outcome for the requesting session" end
         local key, key_error = hash.sha256(event_id)
         if not key then return tostring(key_error) end
         local raw, send_error = scoped:call("bee.threads.sessions.binding:send", {session = session, operation_key = "approval:" .. key, input = message})
         local reply = bounds.object(raw)
         if not send_error and reply and reply.ok == true then
-            local _, ack_error = db:execute("UPDATE bee_approval_events SET acknowledged_at = COALESCE(acknowledged_at, ?) WHERE event_id = ? OR (destination = ? AND approval_id = ? AND kind = 'approval.requested')",
+            local _, ack_error = db:execute("UPDATE bee_approval_events SET acknowledged_at = COALESCE(acknowledged_at, ?) WHERE event_id = ? OR (destination = ? AND approval_id = ? AND kind IN ('approval.requested', 'approval.decided'))",
                 {clock.stamp(clock.milliseconds()), event_id, destination, event.approval_id})
             if ack_error then return "acknowledge session notification" end
         else

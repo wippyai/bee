@@ -168,6 +168,40 @@ local function define_tests()
             test.not_nil(events[1].acknowledged_at)
             db:release()
         end)
+        test.it("tells the requesting session one notice for an approved request whose effect completes", function()
+            local workspace = string.rep("e", 32)
+            local journal = thread_harness.session_owner(workspace)
+            local session = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", definition = "bee.harness.app:app"}})).session
+            local db = open_test_store()
+            local created = executed(service.execute(db, "bee.gov.activation", "request", request_of(workspace,
+                {proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "1", payload = {}},
+                    origin = {session_id = session}, continuation = {destination = "gov.activation", effect_id = "single-notice-" .. key(), context = {}},
+                    prompt = {text = "Publish Fixture Status 1.0.1?"}}), 1000, nil))
+            executed(service.execute(db, ALICE, "decide", {approval_id = created.approval_id, expected_revision = 1,
+                proposal_digest = created.proposal_digest, reviewed_digest = created.reviewed_digest, decision = "allow_once"}, 1001, nil))
+            test.is_nil(dispatch.notify_sessions(db))
+            local effect = assert(bounds.object(created.effect)).effect_id
+            executed(service.execute(db, "bee.gov.activation", "effect", {operation = "claim", approval_id = created.approval_id,
+                proposal_digest = created.proposal_digest, effect_key = effect, owner_incarnation = created.owner_incarnation}, 1002, nil))
+            executed(service.execute(db, "bee.gov.activation", "effect", {operation = "complete", approval_id = created.approval_id,
+                proposal_digest = created.proposal_digest, effect_key = effect, state = "succeeded", result = {ok = true}}, 1003, nil))
+            test.is_nil(dispatch.notify_sessions(db))
+            local items = assert(bounds.array(thread_harness.value(journal:call("work_history", {session = session})).items, 64))
+            test.eq(#items, 1)
+            local input = tostring(assert(bounds.object(items[1])).input)
+            test.contains(input, "was approved and completed: Publish Fixture Status 1.0.1?")
+            test.is_nil((input:find("was succeeded", 1, true)))
+            local pending = assert(db:query("SELECT event_id FROM bee_approval_events WHERE approval_id = ? AND destination = ? AND acknowledged_at IS NULL",
+                {created.approval_id, "requester:" .. tostring(session)}))
+            test.eq(#pending, 0)
+            db:release()
+        end)
+        test.it("words each terminal outcome as what happened to the request", function()
+            test.contains(dispatch.message({approval_id = "a", state = "decided", decision = "denied"}, {text = "Use Hub?"}), "Your request a was denied: Use Hub?")
+            test.contains(dispatch.message({approval_id = "a", state = "expired"}, {text = "Use Hub?"}), "Your request a expired: Use Hub?")
+            test.contains(dispatch.message({approval_id = "a", state = "failed", result = {ok = false}}, {text = "Use Hub?"}), "Your request a was approved but failed: Use Hub?")
+            test.contains(dispatch.message({approval_id = "a", state = "canceled", result = {ok = false}}, {text = "Use Hub?"}), "Your request a was approved but canceled: Use Hub?")
+        end)
         test.it("tells the requesting agent the installation outcome and preserves its reason", function()
             test.contains(dispatch.message({approval_id = "install", state = "succeeded", result = {outcome = "applied"}},
                 {text = "Install Fixture Status 1.0.1? It adds: Read workspace files under testdata."}), "Installed Fixture Status 1.0.1")

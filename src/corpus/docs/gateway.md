@@ -159,14 +159,15 @@ activation status. Check a candidate with preflight before requesting
 delivery. delivery stages versions, so it is not annotated read-only.
 
 application_open is available only through the active, approval-granted
-`bee.app:runtime` trait. It accepts definition_id, literal arguments and
-an idempotency key, then routes only an already applied, admitted definition
-through the node owner. It cannot publish, activate,
-write the registry or apply an overlay. The trusted binding supplies the
-workspace, thread, durable approval receipt and, for a window agent, the
-originating display. Its result names the workspace, view, instance, definition,
-title, reuse state and assigned display when one exists. A retry has one bounded
-in-flight operation; an uncertain reply does not start another application.
+`bee.app:runtime` trait. It accepts definition_id, literal arguments and an
+idempotency key; the node owner opens the app on the desktop a display shows
+for the binding's workspace, and starts only an app applied and admitted
+there. A running singleton receives the arguments as navigation. It cannot
+publish, activate, write the registry or apply an overlay. The binding
+supplies the workspace and the approved runtime grant. Its result names the
+workspace, definition, instance, view, title, desktop and whether a running
+window was reused; a retry with the same key returns the window the first
+attempt opened. `docs/agents_and_apps` is the agent's walkthrough.
 
 ## Configuration and limits
 

@@ -10,14 +10,17 @@ local function main(value: unknown)
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
+    -- Opening the app again while it runs delivers the new arguments here.
+    local navigations = assert(process.listen("bee.app.navigate", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
+    local name = launch.arguments[1] or "Bee"
     local function paint()
         local painter = frame.new(width, height, preferences)
         frame.header(painter, "HELLO BEE", "A tiny app")
-        if height >= 4 then frame.line(painter, 2, greeting.message("Bee"), painter.theme.text) end
+        if height >= 4 then frame.line(painter, 2, greeting.message(name), painter.theme.text) end
         frame.footer(painter, "Ready", "Esc closes", nil, {})
         assert(output:present(frame.rows(painter)))
     end
@@ -26,10 +29,14 @@ local function main(value: unknown)
     paint()
     client.ready(launch)
     while true do
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive()})
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), navigations:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then break end
+        elseif event.channel == navigations then
+            local message = event.value
+            local given = client.navigation(launch, tostring(message:from()), message:payload():data())
+            if given and given[1] then name = given[1]; paint() end
         elseif event.channel == states then
             local message = event.value
             local data: unknown = message:payload():data()
@@ -45,6 +52,7 @@ local function main(value: unknown)
         end
     end
     process.unlisten(states)
+    process.unlisten(navigations)
     output:close()
     tty.stop()
 end

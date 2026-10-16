@@ -12,6 +12,7 @@ checks that they match the files.
 | Component ownership and boundaries | `docs/system_map`, `docs/package_boundaries` |
 | Visual language and placement, color and breakpoint rules for application screens | `docs/ui_brand_book`, `docs/app_style` |
 | Drawing, layout, styles, input and the application client | `toolkit` |
+| Agents with apps: start an app, send it a message, call app tools, the bound thread | `docs/agents_and_apps` |
 | Copyable application screens | `reference_apps/index` and one page per application |
 | Writing an agent driver for another CLI | `reference_drivers/opencode`, `component/driver` |
 | Application admission, launch, messages and recovery | `docs/application_contracts`, `component/app`, `component/app:threads` |

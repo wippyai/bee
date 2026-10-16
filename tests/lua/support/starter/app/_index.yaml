@@ -18,6 +18,6 @@ entries:
       lifetime: view
       revision: '1'
       title: Hello Bee
-      instance_policy: multiple
+      instance_policy: singleton
       restart_policy: never
       menus: [bee.shell:apps_menu]

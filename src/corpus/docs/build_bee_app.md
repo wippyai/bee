@@ -38,7 +38,9 @@ private to your workspace until you request delivery and the person approves.
 5. **Approve and verify.** The person approves this exact version and its
    permissions in **Needs you**. Read `delivery` with `operation: status`,
    `source_overlay_id`, `version` and `intent_id` until activation settles with
-   `outcome: applied`. Open the app from **Apps**. Use `tests` with `operation:
+   `outcome: applied`. Bee opens the installed app on the desktops the person
+   shows for the workspace; start it again yourself with `application_open`
+   ([agents and apps](docs/agents_and_apps)). Use `tests` with `operation:
    list` and `application: app.<name>.app:app`, then `operation: run` for that
    application, then `operation: status` with its `run_id` until complete.
    Read the actual case results and totals; fix failures with a new version.

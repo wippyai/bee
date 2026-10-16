@@ -1711,3 +1711,33 @@ entries:
     capability_grants: bee.gov.types:capability_grants
     preflight: bee.gov.binding:preflight
     support: bee.tests.gov:overlay_resolver_fixture
+- name: stock_session
+  kind: library.lua
+  source: file://stock_session.lua
+  meta:
+    type: test_support
+  modules: [funcs, security, registry, json, http_client]
+  imports:
+    bounds: bee.values:bounds
+    harness: bee.tests.gov:delivery_harness
+    launch_policy: bee.harness.carrier:policy
+    principals: bee.tests.support.principals:bound
+- name: app_open_test
+  kind: function.lua
+  source: file://app_open_test.lua
+  method: run
+  modules: [funcs, security, json, system, channel, tty, process]
+  meta: {type: test, suite: bee, timeout: 240s}
+  security:
+    policies:
+    - bee.tests.support:approval_effect_policy
+    - bee.tests.gov:app_database_test_policy
+    - bee.tests.support.principals:application_scope_policy
+  imports:
+    test: wippy.test:test
+    bounds: bee.values:bounds
+    client: bee.node:client
+    application: bee.node:application
+    harness: bee.tests.gov:delivery_harness
+    stock_session: bee.tests.gov:stock_session
+    test_fixtures: bee.tests.support:fixtures

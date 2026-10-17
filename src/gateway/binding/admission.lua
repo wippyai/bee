@@ -276,6 +276,12 @@ function M.admit(value: unknown): Reply
     local authorized_surface, authority_error = surface_store.bind_authority(tx,assert(system.node.id()),workspace_id,subject,binding_id,assert(bounds.object(selected_surface)),policy_ref)
     if not authorized_surface then tx:rollback(); db:release(); return fail("STORAGE",authority_error and authority_error.message or "record surface authority") end
     surface_json = authorized_surface
+    if workspace_id and subject:match("^bs:") then
+        local carried, carry_error = surface_store.carry(tx, binding_id, subject, workspace_id,
+            function(traits: {string}): boolean return surface.grant(prepared, traits) ~= nil end, created)
+        if not carried then tx:rollback(); db:release(); return fail(carry_error and carry_error.code or "STORAGE", carry_error and carry_error.message or "carry session access") end
+        for _, id in ipairs(carried) do if not bounds.member(id, initial.active) then initial.active[#initial.active + 1] = id end end
+    end
     local saved, saved_error = surface_store.saved_consent(tx, binding_id, workspace_id, assert(bounds.object(selected_surface)), created)
     if not saved then tx:rollback(); db:release(); return fail("DENIED", saved_error and saved_error.message or "read saved consent") end
     for _, id in ipairs(saved) do if not bounds.member(id, initial.active) then initial.active[#initial.active + 1] = id end end

@@ -166,6 +166,23 @@ local function define_tests()
             local scope = assert(application.scope(definition, workspace))
             test.is_true(scope:evaluate(actor, "process.registry.register", "app.hello:inbox") ~= "allow")
         end)
+
+        -- Runs last: the restart retires every binding the earlier cases hold.
+        test.it("keeps the access the person approved for a session when the node restarts it", function()
+            local workspace = harness.isolated(OVERLAY .. "-restore")
+            local subject = "bs:" .. node() .. ":" .. workspace .. ":restored"
+            local first = sessions.open(workspace, "appopen-restore-first", {subject = subject})
+            local requested = sessions.structured(sessions.tool_call(first, "session", {operation = "request_access",
+                idempotency_key = "appopen-restore", traits = {"bee.hub:library", "bee.app:runtime"}, reason = "Start Hello on your desktop"}))
+            harness.approve(workspace, requested.approval_id)
+            test.eq(sessions.structured(sessions.tool_call(first, "session", {operation = "access_status",
+                approval_id = requested.approval_id})).status, "granted")
+            test.is_true(sessions.listed(first).application_open, "the approved session lists application_open")
+            sessions.restart(workspace, subject)
+            local restored = sessions.open(workspace, "appopen-restore-second", {subject = subject, thread_id = first.thread_id})
+            test.is_true(sessions.listed(restored).application_open, "the restored session keeps application_open")
+            test.is_true(sessions.listed(restored).components, "the restored session keeps components")
+        end)
     end)
 end
 return test.run_cases(define_tests)

@@ -192,8 +192,10 @@ end
 function M.cycle_placement(draft: Draft, delta: integer): (boolean, string?)
     local choices = draft._allowed.placements or {}
     if #choices == 0 then return false, "this launch admits no placement choices" end
+    -- A profile without a placement runs, and is shown, as native.
+    local current = M.placement_ref(draft) or "bee.placement.profiles:native"
     local selected = 0
-    for index, choice in ipairs(choices) do if choice == M.placement_ref(draft) then selected = index end end
+    for index, choice in ipairs(choices) do if choice == current then selected = index end end
     selected = math.floor(((selected + delta - 1) % #choices) + 1)
     local ref = choices[selected]
     if ref == "bee.placement.profiles:native" then draft.placement = {kind = "native", home = "private"}

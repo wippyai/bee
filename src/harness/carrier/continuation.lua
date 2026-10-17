@@ -26,6 +26,8 @@ end
 -- A previous attempt the thread never recorded was admitted but never
 -- started: it has no process to recover and no conversation to resume.
 M.NEVER_RECORDED = "previous attempt was never recorded"
+-- The reason a person reads when an earlier process may still run.
+M.MAY_RUN = "its earlier agent process may still be running on this machine"
 local function target(request: Request, method: string): string?
     return request.placement_methods[method]
 end
@@ -179,7 +181,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
     if unstarted_error then return nil, unstarted_error end
     if unstarted then
         if unstarted.attempt_state ~= "ended" then return nil, "previous window attempt has not ended" end
-        if unstarted.attempt_outcome == "uncertain" then return nil, "its earlier agent process may still be running on this machine" end
+        if unstarted.attempt_outcome == "uncertain" then return nil, M.MAY_RUN end
         -- Nothing ran under it: the conversation is the one it was continuing.
         local earlier, earlier_error = predecessor(call, request)
         if earlier_error then return nil, earlier_error end

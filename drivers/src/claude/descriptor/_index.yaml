@@ -2511,7 +2511,7 @@ entries:
         optional: true
         write_back: false
         container_content: '{}'
-      - path: .claude.json
+      - path: .claude/.claude.json
         kind: state
         optional: true
         write_back: false

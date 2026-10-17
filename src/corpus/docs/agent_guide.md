@@ -131,7 +131,7 @@ command; Bee checks existence only and leaves sign-in to the provider.
 
 | Driver | Login | Ambient configuration |
 |---|---|---|
-| Claude Code | `.claude/.credentials.json` | `.claude/settings.json`; `.claude.json` onboarding marker |
+| Claude Code | `.claude/.credentials.json` | `.claude/settings.json`; `.claude/.claude.json` onboarding marker |
 | Codex | `.codex/auth.json` | `.codex/config.toml` |
 | Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` |
 | Grok | `.grok/auth.json` | `.grok/config.toml` |

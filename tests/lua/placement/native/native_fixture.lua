@@ -40,7 +40,7 @@ local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@2", environ
     path = ".codex/auth.json", content_format = "json", initialize = {}}}
 local CLAUDE_LOGIN_FORMAT = {schema_revision = "bee.credential-format@2", environments = {}, file = {
     path = ".claude/.credentials.json", content_format = "json",
-    initialize = {{path = ".claude.json", content = '{"hasCompletedOnboarding":true}'}}}}
+    initialize = {{path = ".claude/.claude.json", content = '{"hasCompletedOnboarding":true}'}}}}
 local OWNER = "bee.test.owner"
 local DIGEST = string.rep("b", 64)
 local ROOT = "bee.tests.placement.native:project_fixture"

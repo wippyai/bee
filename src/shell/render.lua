@@ -84,7 +84,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
             end
             local review = overlays.reviews and overlays.reviews[win.id]
             if review and body.height > 0 then
-                local suffix = " · Enter review"
+                local suffix = " · F4 review"
                 local title = tty.text.truncate(review.title, math.floor(math.max(1, body.width - tty.text.width("Needs you: " .. suffix))), "…")
                 local label = "Needs you: " .. title .. suffix
                 canvas:put(body.x, body.y, appearance.style(theme.warn, theme.surface) .. tty.text.truncate(label, body.width, "…"), body.width)

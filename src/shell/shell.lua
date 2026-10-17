@@ -860,18 +860,22 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         end
     end
 
+    -- F4 opens the request the focused window waits on in Needs you; Enter
+    -- and every typed key reach the window itself.
+    local function open_focused_review(): boolean
+        local id = input_focus()
+        for _, instance in ipairs(running) do
+            if instance.id == id and instance.review then
+                open_app("bee.approvals.inbox.app:app", {"--review", instance.review.approval_id})
+                return true
+            end
+        end
+        return false
+    end
     local function send_focused(event: tty.InputEvent)
         local id = input_focus()
         local view = views[id]
         if view then
-            if event.type == "key" and event.action == "press" and event.key_type == "enter" and not event.ctrl and not event.alt then
-                for _, instance in ipairs(running) do
-                    if instance.id == id and instance.review then
-                        open_app("bee.approvals.inbox.app:app", {"--review", instance.review.approval_id})
-                        return
-                    end
-                end
-            end
             if alerts[id] and event.type == "key" and not event.ctrl and not event.alt then
                 local key = event.key:lower()
                 if key == "a" or key == "d" or key == "f" or key:match("^[1-4]$") then
@@ -1068,9 +1072,9 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         if noticed and (event.type == "key" or (event.type == "mouse" and event.action == "press")) then
             status, noticed = "", false
         end
-        if event.type == "key" and event.key_type == "f4" and event.action ~= "release" and current_alert() then
-            invoke("attention")
-            return false
+        if event.type == "key" and event.key_type == "f4" and event.action ~= "release" then
+            if open_focused_review() then return false end
+            if current_alert() then invoke("attention"); return false end
         end
         local current_modal = modal
         if current_modal then

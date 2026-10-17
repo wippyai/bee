@@ -36,7 +36,7 @@ local function define_tests()
             local scene = model.add(model.new(120, 40), "agent", "agent", "Worker")
             local shown = render.draw(scene, {"agent"}, {}, nil, nil, "", "Workspace", appearance.defaults(),
                 {alert_popup = false, reviews = {agent = {title = "Use Progress?", approval_id = "approval-1"}}})
-            test.contains(table.concat(shown.rows, "\n"), "Needs you: Use Progress? · Enter review")
+            test.contains(table.concat(shown.rows, "\n"), "Needs you: Use Progress? · F4 review")
         end)
         test.it("shows a counted alert and request card while preserving occupied and idle keyboards", function()
             for _, occupied in ipairs({true, false}) do

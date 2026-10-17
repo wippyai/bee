@@ -558,6 +558,44 @@ local function define_tests()
             exits(lifecycle, {pid})
         end)
 
+        display_case("keeps Enter in a window that waits on a request and opens the request only on F4", function(fixture: Fixture)
+            local lifecycle = assert(process.events())
+            local viewport, pid = fixture:start()
+            expect(viewport, "the desktop opens", " BEE ", true)
+            open_probe(viewport)
+            local node = assert(system.node.id())
+            local listed = assert(client.state(assert(client.call(node, "list", {}))))
+            local title = assert(bar(viewport):match("Desktop %d+"))
+            local workspace = ""
+            for _, item in ipairs(listed.desktops) do if item.title == title then workspace = item.workspace end end
+            local probe = ""
+            for _, item in ipairs(listed.running) do if item.app == "bee.tests.node:probe_app" then probe = item.id end end
+            local raw, err = funcs.call("bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = uuid.v7(),
+                policy = "agent-access", request_kind = "permission", proposal = {kind = "operation", ref = "desktop-review", revision = "1", payload = {}},
+                prompt = {text = "Review the waiting window request?"}})
+            assert(not err, tostring(err))
+            local id = assert(bounds.id(assert(bounds.object(assert(bounds.object(raw)).value)).approval_id))
+            local function pending(): boolean
+                local read = funcs.call("bee.approvals.binding:read", {approval_id = id})
+                return assert(bounds.object(assert(bounds.object(read).value))).state == "pending"
+            end
+            expect(viewport, "arrival shows a badge", "! 1 Needs you", true)
+            assert(events.send("bee.attention", "approval.requested", workspace, {approval_id = id, count = 1, title = "Review the waiting window request?",
+                request = {approval_id = id, requester_id = "bee.application:" .. workspace .. ":" .. probe, state = "pending"}}))
+            expect(viewport, "the waiting window shows its banner", "Needs you: Review the waiting window request?", true)
+            key(viewport, "enter")
+            expect(viewport, "Enter reaches the waiting window", "key enter", true)
+            key(viewport, "d")
+            expect(viewport, "typing reaches the waiting window", "key d", true)
+            test.is_true(pending(), "a key typed in the waiting window decided its request")
+            key(viewport, "f4")
+            expect(viewport, "F4 opens the waiting request", "Reviewing request", true)
+            key(viewport, "d")
+            expect(viewport, "the visible card records the decision", "Recorded:", true)
+            test.is_false(pending())
+            exits(lifecycle, {pid})
+        end)
+
         display_case("shows an app's question over the desktop and sends the person's answer back to the app", function(fixture: Fixture)
             local lifecycle = assert(process.events())
             local view, pid = fixture:start()

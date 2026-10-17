@@ -90,14 +90,15 @@ entries:
   kind: library.lua
   source: file://probe_cache.lua
   modules:
-  - sql
   - fs
   - env
   - hash
   - time
   imports:
+    bounds: bee.values:bounds
     canonical: bee.values:canonical
     resources: bee.placement.native.env:resources
+    measurements: bee.placement.native.persist:measurements
 - name: probe_version
   kind: library.lua
   source: file://probe_version.lua

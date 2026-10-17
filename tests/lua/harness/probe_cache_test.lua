@@ -1,11 +1,14 @@
--- MIT. Version and help probes are measured once per executable file and
--- arguments, and measured again when the file changes on disk.
+-- MIT. Version and help probes are measured once per executable file version
+-- and arguments, recorded with the file identity among the executable
+-- measurements, and measured again when the file changes on disk.
 local test = require("test")
 local sql = require("sql")
 local fs = require("fs")
 local env = require("env")
 local uuid = require("uuid")
+local time = require("time")
 local probe_cache = require("probe_cache")
+local measurements = require("measurements")
 
 local function counting(output: string?, code: integer?, failure: string?): ({count: integer}, ({string}) -> (string?, integer?, string?, boolean?))
     local calls = {count = 0}
@@ -42,6 +45,12 @@ local function define_tests()
             test.eq(linked.mode, target.mode)
         end)
         test.it("reuses a measurement while the executable is unchanged and measures again after it changes", function()
+            -- Only a file whose last change precedes the stamp granularity
+            -- pins its version; the shard's fixture copy may be newer.
+            local resolved = assert(probe_cache.resolve("claude"))
+            local changed = assert(math.tointeger(resolved.info.ctime_ns or resolved.info.mtime_ns))
+            local wait_ns = changed + measurements.GRANULE_NS - time.now():unix_nano()
+            if wait_ns > 0 then time.sleep(math.floor(wait_ns / 1000000) + 100 .. "ms") end
             local home = "/fixture-home/" .. assert(uuid.v4())
             local calls, capture = counting("Claude Code 2.1.265\n", 0, nil)
             local first, first_code = probe_cache.measure({"claude", "--version"}, home, capture)
@@ -54,9 +63,8 @@ local function define_tests()
             test.eq(calls.count, 2)
 
             local db = assert(sql.get(probe_cache.DB))
-            local identity = assert(probe_cache.resolve("claude"))
-            local _, update_error = db:execute("UPDATE bee_harness_probe_outputs SET modified = ? WHERE executable_path = ?",
-                {identity.modified - 60, identity.path})
+            local resolved = assert(probe_cache.resolve("claude"))
+            local _, update_error = db:execute("UPDATE bee_placement_executable_measurements SET mtime_ns = '1' WHERE path = ?", {resolved.path})
             db:release()
             test.is_nil(update_error)
             probe_cache.measure({"claude", "--version"}, home, capture)

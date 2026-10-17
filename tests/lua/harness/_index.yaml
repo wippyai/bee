@@ -2517,9 +2517,11 @@ entries:
   - fs
   - env
   - uuid
+  - time
   imports:
     test: wippy.test:test
     probe_cache: bee.harness.launch:probe_cache
+    measurements: bee.placement.native.persist:measurements
   security:
     policies:
     - bee.tests.harness:probe_cache_test_policy

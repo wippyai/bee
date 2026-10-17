@@ -68,3 +68,10 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-23T00:04:00Z'}
   imports:
     migration: wippy.migration:migration
+- name: probe_outputs_retired
+  kind: function.lua
+  source: file://probe_outputs_retired.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-24T00:02:00Z'}
+  imports:
+    migration: wippy.migration:migration

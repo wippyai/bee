@@ -794,6 +794,7 @@ entries:
     - bee.harness.migrations:driver_options
     - bee.harness.migrations:driver_options_all
     - bee.harness.migrations:probe_outputs
+    - bee.harness.migrations:probe_outputs_retired
     - bee.harness.migrations:profile_consent_traits
     - bee.harness.migrations:profile_grants
     - bee.harness.permission.external.binding:answer_hook

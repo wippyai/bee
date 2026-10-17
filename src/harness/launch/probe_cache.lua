@@ -11,7 +11,6 @@ local canonical = require("canonical")
 local resources = require("resources")
 local measurements = require("measurements")
 local M = {}
-M.DB = "bee:db"
 M.PATH_REF = "bee.placement.native.env:placement_path"
 
 type Resolved = {path: string, size: integer, mode: integer, info: measurements.Info}

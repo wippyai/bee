@@ -2,7 +2,6 @@
 -- and arguments, recorded with the file identity among the executable
 -- measurements, and measured again when the file changes on disk.
 local test = require("test")
-local sql = require("sql")
 local fs = require("fs")
 local env = require("env")
 local uuid = require("uuid")
@@ -62,7 +61,7 @@ local function define_tests()
             probe_cache.measure({"claude", "--help"}, home, capture)
             test.eq(calls.count, 2)
 
-            local db = assert(sql.get(probe_cache.DB))
+            local db = assert(measurements.open())
             local resolved = assert(probe_cache.resolve("claude"))
             local _, update_error = db:execute("UPDATE bee_placement_executable_measurements SET mtime_ns = '1' WHERE path = ?", {resolved.path})
             db:release()

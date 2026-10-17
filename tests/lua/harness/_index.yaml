@@ -2513,7 +2513,6 @@ entries:
     type: test
     suite: bee
   modules:
-  - sql
   - fs
   - env
   - uuid

@@ -447,7 +447,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             if session then
                 client.ready(launch, {negotiate_close = true})
                 ready_announced = true
-                local closing, view_error = terminal_view.run(launch, session, input, lifecycle, closes, restored.thread_id)
+                local closing, view_error = terminal_view.run(launch, session, input, lifecycle, closes)
                 if view_error and not closing then show_failure("Managed window restore: " .. view_error) end
                 tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
                 return

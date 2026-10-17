@@ -144,6 +144,18 @@ local function define_tests()
             changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())
             assert(ok, tostring(failure))
         end)
+        test.it("offers Docker access revocation once for a Docker profile", function()
+            local opened = assert(form.load("profile-claude-docker", {definition_ref = "bee.driver.claude.profiles:default_window", title = "Claude Docker"}, true))
+            opened.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
+            local state = view.new(opened, function(_: string, _: {[string]: unknown})
+                return {ok = false, error = {code = "UNAVAILABLE", message = "No call expected"}, replayed = false}
+            end)
+            view.action(state, "advanced")
+            local frame = view.draw(160, 90, appearance.defaults(), state)
+            local footer = frame.rows[#frame.rows]
+            local _, count = footer:gsub("Revoke Docker access", "")
+            test.eq(count, 1, footer)
+        end)
         test.it("edits the CLI permission mode from its declared schema", function()
             local opened = assert(form.load("profile-cli-permission-edit", {definition_ref = "bee.driver.claude.profiles:default_window", title = "CLI permissions"}, true))
             test.is_true(editor.cycle_option(opened.draft, "permission_mode"))

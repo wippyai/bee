@@ -20,30 +20,43 @@ local function received(inbox: channel.Channel<process.Message>): {[string]: unk
 end
 local function define_tests()
     test.describe("Session review", function()
-        test.it("follows the requests bound to the session's thread or asked by its window", function()
+        test.it("follows the requests bound to the session's thread, asked by its window or made for its session", function()
             local requested = {kind = "approval.requested", data = {title = "Allow Bee to use config.toml?",
                 request = {approval_id = "config", requester_id = "window-principal", state = "pending"}}}
-            local shown, changed = viewer_review.review(nil, requested, "thread-1", "window-principal")
+            local pending, changed = viewer_review.review({}, requested, "thread-1", "window-principal", "bs:session")
             test.is_true(changed)
-            test.eq(assert(shown).approval_id, "config")
-            test.eq(assert(shown).title, "Allow Bee to use config.toml?")
+            local shown = assert(viewer_review.shown(pending))
+            test.eq(shown.approval_id, "config")
+            test.eq(shown.title, "Allow Bee to use config.toml?")
             local other = {kind = "approval.requested", data = {title = "Other", request = {approval_id = "other",
                 requester_id = "someone", thread_id = "thread-2", state = "pending"}}}
-            local kept, other_changed = viewer_review.review(shown, other, "thread-1", "window-principal")
+            local kept, other_changed = viewer_review.review(pending, other, "thread-1", "window-principal", "bs:session")
             test.is_false(other_changed)
-            test.eq(assert(kept).approval_id, "config")
+            test.eq(assert(viewer_review.shown(kept)).approval_id, "config")
+            local install = {kind = "approval.requested", data = {title = "Install Greeter 1.0.0?",
+                request = {approval_id = "install", requester_id = "bee.gov.activation", requesting_session = "bs:session", state = "pending"}}}
+            local installing = viewer_review.review(kept, install, "thread-1", "window-principal", "bs:session")
+            test.eq(assert(viewer_review.shown(installing)).approval_id, "install")
             local bound = {kind = "approval.requested", data = {title = "Let this agent session use Hub and Library?",
                 request = {approval_id = "access", requester_id = "bs:session", thread_id = "thread-1", state = "pending"}}}
-            local access = assert((viewer_review.review(kept, bound, "thread-1", "window-principal")))
-            test.eq(access.approval_id, "access")
-            local unrelated_settled = {kind = "approval.changed", data = {request = {approval_id = "config", state = "decided"}}}
-            local still, still_changed = viewer_review.review(access, unrelated_settled, "thread-1", "window-principal")
+            local access = viewer_review.review(installing, bound, "thread-1", "window-principal", "bs:session")
+            test.eq(assert(viewer_review.shown(access)).approval_id, "access")
+            local unrelated_settled = {kind = "approval.changed", data = {request = {approval_id = "elsewhere", state = "decided"}}}
+            local still, still_changed = viewer_review.review(access, unrelated_settled, "thread-1", "window-principal", "bs:session")
             test.is_false(still_changed)
-            test.eq(assert(still).approval_id, "access")
+            test.eq(assert(viewer_review.shown(still)).approval_id, "access")
+            -- Settling the shown request brings back the one still waiting.
             local settled = {kind = "approval.changed", data = {request = {approval_id = "access", thread_id = "thread-1", state = "decided"}}}
-            local cleared, cleared_changed = viewer_review.review(still, settled, "thread-1", "window-principal")
+            local after_access, access_changed = viewer_review.review(still, settled, "thread-1", "window-principal", "bs:session")
+            test.is_true(access_changed)
+            test.eq(assert(viewer_review.shown(after_access)).approval_id, "install")
+            local installed = {kind = "approval.changed", data = {request = {approval_id = "install", state = "decided"}}}
+            local after_install = viewer_review.review(after_access, installed, "thread-1", "window-principal", "bs:session")
+            test.eq(assert(viewer_review.shown(after_install)).approval_id, "config")
+            local configured = {kind = "approval.changed", data = {request = {approval_id = "config", state = "decided"}}}
+            local cleared, cleared_changed = viewer_review.review(after_install, configured, "thread-1", "window-principal", "bs:session")
             test.is_true(cleared_changed)
-            test.is_nil(cleared)
+            test.is_nil(viewer_review.shown(cleared))
         end)
     end)
     test.describe("Presentation execution boundary", function()

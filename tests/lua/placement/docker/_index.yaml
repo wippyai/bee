@@ -454,3 +454,31 @@ entries:
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
     - bee.placement.docker.security:host_user_policy
+- name: authority_probe
+  kind: function.lua
+  source: file://authority_probe.lua
+  method: run
+  meta: {type: test_support}
+  imports:
+    environment: bee.placement.docker.service:environment
+    bounds: bee.drivers.values:bounds
+- name: authority_test
+  kind: function.lua
+  source: file://authority_test.lua
+  method: run
+  modules: [registry, security, funcs, uuid]
+  security:
+    policies: [bee.tests.approvals:apply_test_policy, bee.tests.placement.docker:authority_test_policy]
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+- name: authority_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.get, funcs.call, funcs.security, security.policy.get, security.actor.create, security.scope.create]
+    resources: '*'
+    effect: allow

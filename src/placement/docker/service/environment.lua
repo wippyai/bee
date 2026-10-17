@@ -54,6 +54,18 @@ local function receipt(value: unknown): environment.Receipt?
     local result: environment.Receipt = {state = state, selection_digest = digest, approval_id = id, proposal_digest = proposal, owner_incarnation = incarnation, address = address,grant_id = bounds.id(data.grant_id)}
     return result
 end
+-- The person's standing consent for this exact environment selection on this node.
+function M.authority(recorded: environment.Receipt, selected: environment.Selection): (grants.Grant?,string?)
+    local raw, err = approval_call("grant",{operation = "read",grant_id = recorded.approval_id .. ":grant"})
+    local body = raw and bounds.object(raw.grant)
+    if not body then return nil,err or "Docker consent grant is unavailable" end
+    local grant, decode_error = grants.decode(body)
+    if not grant then return nil,decode_error end
+    local node, node_error = system.node.id()
+    if not node then return nil,"node identity is unavailable: " .. tostring(node_error) end
+    if grant.domain ~= "docker_environment" or grant.owner_node ~= node or grant.metadata.selection_digest ~= selected.digest or grant.metadata.network ~= selected.network then return nil,"Docker consent grant scope differs" end
+    return grant,nil
+end
 function M.run(profile_ref: string, digest: string, network: string, workspace: string, recipient: string?, cancel: Channel<boolean>?, revoke: boolean?): (string?, string?)
     local config, config_error = configuration()
     if not config then return nil, config_error end
@@ -82,16 +94,6 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
         if not written then return tostring(write_error or "record Docker environment") end
         return nil
     end
-    local function authority(recorded: environment.Receipt, selected: environment.Selection): (grants.Grant?,string?)
-        local id = recorded.approval_id .. ":grant"
-        local raw, err, code = approval_call("grant",{operation = "read",grant_id = id})
-        local body = raw and bounds.object(raw.grant)
-        if not body then return nil,err or "Docker consent grant is unavailable" end
-        local grant, decode_error = grants.decode(body)
-        if not grant then return nil,decode_error end
-        if grant.domain ~= "docker_environment" or grant.owner_node ~= system.node.id() or grant.metadata.selection_digest ~= selected.digest or grant.metadata.network ~= selected.network then return nil,"Docker consent grant scope differs" end
-        return grant,nil
-    end
     local function listener_action(kind: string, expected: string): string?
         local sent, send_error = events.send("supervisor", "service." .. kind, tostring(config.listener))
         if not sent then return tostring(send_error or "gateway listener lifecycle request refused") end
@@ -107,7 +109,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
         local recorded, read_error = load()
         if not recorded then return nil, read_error or "Docker environment has no admission to revoke" end
         local selected: environment.Selection = {workspace = workspace,profile = profile_ref,digest = digest,network = network,policy = tostring(config.approval_policy)}
-        local grant, authority_error = authority(recorded,selected)
+        local grant, authority_error = M.authority(recorded,selected)
         if not grant then return nil,authority_error end
         local revoked, revoke_error = approval_call("grant",{operation = "revoke",grant_id = grant.grant_id,expected_revision = grant.revision})
         if not revoked then return nil,revoke_error end
@@ -143,7 +145,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
             end
         end,
         check = function(recorded: environment.Receipt,selected: environment.Selection): string?
-            local grant, err = authority(recorded,selected)
+            local grant, err = M.authority(recorded,selected)
             if not grant then return err or "Docker consent grant is unavailable" end
             local effect = assert(uuid.v7())
             local reserved, reserve_error = approval_call("grant",{operation = "reserve",grant_id = grant.grant_id,subject = grant.subject,scope = grant.scope,effect_key = effect,expected_revision = grant.revision})

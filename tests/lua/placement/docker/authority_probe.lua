@@ -2,6 +2,12 @@
 local environment = require("environment")
 local bounds = require("bounds")
 local M = {}
+function M.consume(raw: unknown): {[string]: unknown}
+    local input = assert(bounds.object(raw))
+    local err = environment.consume({approval_id = tostring(input.approval_id), proposal_digest = tostring(input.proposal_digest),
+        owner_incarnation = math.floor(assert(tonumber(input.owner_incarnation)))}, tostring(input.digest))
+    return {error = err}
+end
 function M.run(raw: unknown): {[string]: unknown}
     local input = assert(bounds.object(raw))
     local grant, err = environment.authority({state = "approved", selection_digest = tostring(input.digest), approval_id = tostring(input.approval_id),

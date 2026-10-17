@@ -68,6 +68,7 @@ entries:
     daemon: bee.placement.docker.service:daemon
     spec: bee.placement.docker.binding:spec
     demand: bee.process:demand
+    executable: bee.placement.native.service:executable
 - name: image_owner
   kind: process.lua
   source: file://image_owner.lua

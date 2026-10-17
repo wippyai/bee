@@ -2,6 +2,7 @@
 local test = require("test")
 local image = require("image")
 local daemon = require("daemon")
+local sql = require("sql")
 local function recipe(): {[string]: unknown}
     return {schema_revision = "bee.runtime-recipe@1", base = "node@sha256:" .. string.rep("a", 64),
         artifacts = {{name = "fixture", executable_ref = "bee.test:executable", candidates = {"../vendor/bin/fixture"}}}}
@@ -48,6 +49,19 @@ local function run()
             test.is_nil(image.verified_image(value, digest, inputs, "arm64"))
             labels["bee.runtime.fixture"] = string.rep("d", 64)
             test.is_nil(image.verified_image(value, digest, inputs, "amd64"))
+        end)
+        test.it("measures each installed artifact once per file version", function()
+            local first = assert(image.discover("bee.tests.placement.docker:measured_recipe"))
+            test.eq(#first.inputs, 1)
+            local source = first.inputs[1].source
+            local db = assert(sql.get("bee:db"))
+            local rows = assert(db:query("SELECT measurement FROM bee_placement_executable_measurements WHERE path = ?", {source}))
+            db:release()
+            test.eq(#rows, 1, source)
+            local measured = tostring(daemon.command({"/usr/bin/sha256sum", source})):match("^([0-9a-f]+)")
+            test.eq(first.inputs[1].digest, measured)
+            local second = assert(image.discover("bee.tests.placement.docker:measured_recipe"))
+            test.eq(second.digest, first.digest)
         end)
         test.it("requires an immutable base and bounded installed executable sources", function()
             test.not_nil(image.decode(recipe()))

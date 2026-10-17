@@ -255,11 +255,28 @@ entries:
   meta:
     type: test
     suite: bee
+  modules: [sql]
   imports:
     test: wippy.test:test
     image: bee.placement.docker.service:image
     daemon: bee.placement.docker.service:daemon
-  security: {policies: [bee.placement.native.security:placement_exec_policy]}
+  security: {policies: [bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_store_policy]}
+- name: measured_executable
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee:os
+  variable: BEE_TEST_MEASURED_EXECUTABLE
+  default: /bin/true
+  readonly: true
+- name: measured_recipe
+  kind: registry.entry
+  meta: {type: bee.runtime_recipe, test_support: true}
+  data:
+    schema_revision: bee.runtime-recipe@1
+    base: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
+    artifacts:
+    - name: probe
+      executable_ref: bee.tests.placement.docker:measured_executable
 - name: environment_test
   kind: function.lua
   source: file://environment_test.lua

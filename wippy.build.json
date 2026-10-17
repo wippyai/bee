@@ -63,7 +63,7 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261011123143-48cfb64335c2",
+      "version": "v0.0.0-20261017010125-6d124f051863",
       "package": "github.com/wippyai/bee/native/hive",
       "factory": "Component",
       "private": true,
@@ -71,7 +71,7 @@
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261011123143-48cfb64335c2",
+      "version": "v0.0.0-20261017010125-6d124f051863",
       "package": "github.com/wippyai/bee/native/host",
       "factory": "New",
       "private": true

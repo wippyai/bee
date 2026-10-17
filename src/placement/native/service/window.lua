@@ -196,7 +196,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
             executor:release()
             return fail(db, backend, verify_error or "executable changed", gateway_binding, attempt_id)
         end
-        store.transition(db, attempt_id, {evidence = {kind = "executable.measured", detail = verified.revision .. " " .. verified.kind .. " digest " .. verified.digest}})
+        store.transition(db, attempt_id, {evidence = {kind = "executable.measured", detail = verified.revision .. " " .. verified.kind .. " digest " .. verified.digest .. (verified.identity and ", file identity unchanged" or "")}})
     end
 
     argv = {request.launch.executable}

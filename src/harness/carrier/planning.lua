@@ -13,6 +13,7 @@ local policy = require("policy")
 local continuation = require("continuation")
 local driver_types = require("driver_types")
 local placement_types = require("placement_types")
+local placement_decode = require("placement_decode")
 local placement_resolver = require("placement_resolver")
 local placement_profiles = require("placement_profiles")
 local launch_request = require("launch_request")
@@ -56,7 +57,7 @@ end
 local function executable_measurement(value: unknown, expected_path: string): (placement_types.ExecutableMeasurement?, string?)
     local object = bounds.object(value)
     if not object then return nil, "measurement must be an object" end
-    local unknown_field = bounds.fields(object, {"revision", "path", "kind", "interpreter", "size", "digest"})
+    local unknown_field = bounds.fields(object, {"revision", "path", "kind", "interpreter", "size", "digest", "identity"})
     local revision, path = bounds.id(object.revision), bounds.text(object.path, bounds.MAX_TEXT_BYTES)
     local kind = bounds.member(object.kind, {"elf", "script", "other"})
     local size, digest = bounds.count(object.size), bounds.text(object.digest, 64)
@@ -75,7 +76,14 @@ local function executable_measurement(value: unknown, expected_path: string): (p
     if kind == "elf" then decoded_kind = "elf"
     elseif kind == "script" then decoded_kind = "script"
     else decoded_kind = "other" end
-    local decoded: placement_types.ExecutableMeasurement = {revision = revision, kind = decoded_kind, digest = digest}
+    local identity: placement_types.ExecutableIdentity? = nil
+    if object.identity ~= nil then
+        local decoded_identity, identity_error = placement_decode.executable_identity(object.identity)
+        if not decoded_identity then return nil, "measurement " .. tostring(identity_error) end
+        if decoded_identity.size ~= size then return nil, "measurement identity names another size" end
+        identity = decoded_identity
+    end
+    local decoded: placement_types.ExecutableMeasurement = {revision = revision, kind = decoded_kind, digest = digest, identity = identity}
     return decoded, nil
 end
 local function must(io: IO, target: string, request: unknown): (unknown, string?)
@@ -434,7 +442,11 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
     if request.working_directory then launch.working_directory_ref = request.working_directory end
     local measured_exchange: {[string]: unknown}? = nil
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
-    local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry,
+    -- The plan pins the executable content; the file identity only lets the
+    -- runner verify that content without reading it again.
+    local executable_content: {[string]: unknown}? = nil
+    if measurement then executable_content = {revision = measurement.revision, kind = measurement.kind, digest = measurement.digest} end
+    local plan_digest, digest_error = digest_of({executable = executable_content, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry,
         placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods,
         launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, reauthorize = request.reauthorize,
         environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})

@@ -19,6 +19,24 @@ local function digest(value: unknown): string?
     return decoded
 end
 
+-- executable_identity: a complete file identity a plan carries.
+function M.executable_identity(value: unknown): (types.ExecutableIdentity?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "identity must be an object" end
+    local unknown_field = bounds.fields(object, {"dev", "ino", "size", "ctime_ns", "mtime_ns"})
+    if unknown_field then return nil, "identity: " .. unknown_field end
+    local function decimal(name: string): string?
+        local text = bounds.text(object[name], 20)
+        if not text or not text:match("^%d+$") then return nil end
+        return text
+    end
+    local dev, ino, ctime_ns, mtime_ns = decimal("dev"), decimal("ino"), decimal("ctime_ns"), decimal("mtime_ns")
+    if not dev or not ino or not ctime_ns or not mtime_ns then return nil, "identity dev, ino, ctime_ns and mtime_ns must be decimal text" end
+    local size = bounds.count(object.size)
+    if size == nil then return nil, "identity.size must be a count" end
+    return {dev = dev, ino = ino, size = size, ctime_ns = ctime_ns, mtime_ns = mtime_ns}, nil
+end
+
 function M.execution(value: unknown): types.ExecutionState?
     if value == "intended" then return "intended" end
     if value == "starting" then return "starting" end

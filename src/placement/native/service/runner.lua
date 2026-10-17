@@ -177,7 +177,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 executor:release()
                 return refuse(verify_error or "executable changed")
             end
-            evidence(db, attempt_id, "executable.measured", verified.revision .. " " .. verified.kind .. " digest " .. verified.digest .. " size " .. tostring(verified.size))
+            evidence(db, attempt_id, "executable.measured", verified.revision .. " " .. verified.kind .. " digest " .. verified.digest .. " size " .. tostring(verified.size) .. (verified.identity and ", file identity unchanged" or ""))
         end
         local argv: {string} = {request.launch.executable}
         for _, argument in ipairs(materialized.arguments) do argv[#argv + 1] = argument end

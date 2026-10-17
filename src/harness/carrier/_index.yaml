@@ -168,6 +168,7 @@ entries:
     placement_types: bee.placement:types
     placement_resolver: bee.placement.binding:resolver
     launch_request: bee.placement:request
+    placement_decode: bee.placement:decode
     service_reply: bee.values:reply
     carrier_types: bee.harness:types
     descriptor: bee.driver.descriptor:descriptor

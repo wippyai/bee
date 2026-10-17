@@ -22,3 +22,11 @@ entries:
   kind: library.lua
   source: file://supervision.lua
   modules: [sql]
+- name: measurements
+  kind: library.lua
+  source: file://measurements.lua
+  modules: [sql, json, time]
+  imports:
+    bounds: bee.values:bounds
+    node_database: bee.persist:database
+    types: bee.placement:types

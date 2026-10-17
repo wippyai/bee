@@ -32,9 +32,13 @@ type JsonOperation = {kind: "default" | "insert" | "append" | "set", path: {stri
 type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}, append_text: boolean?} | {kind: "json_patch" | "toml_patch", base_path: string, operations: {JsonOperation}}
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type ConfigurationDelivery = {environment: {[string]: string}?,arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
+-- The file version a measurement was taken from, as the OS identifies it:
+-- device, inode and change times as decimal text.
+type ExecutableIdentity = {dev: string, ino: string, size: integer, ctime_ns: string, mtime_ns: string}
 -- The plan's measurement of the launch executable, verified by the runner
--- immediately before exec.
-type ExecutableMeasurement = {revision: string, kind: string, digest: string}
+-- immediately before exec: against the identity when the plan carries one,
+-- otherwise by measuring the content again.
+type ExecutableMeasurement = {revision: string, kind: string, digest: string, identity: ExecutableIdentity?}
 -- The gateway binding a launch carries: the admitted tool set, the
 -- host-approved endpoint and credential destinations, and the
 -- environment destination the runner fills with the materialized token.

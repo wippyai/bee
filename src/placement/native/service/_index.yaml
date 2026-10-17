@@ -7,11 +7,13 @@ entries:
   modules:
   - fs
   - hash
+  - time
   imports:
     bounds: bee.values:bounds
     resources: bee.placement.native.env:resources
     types: bee.placement:types
     executable_stream: bee.placement.native.service:executable_stream
+    measurements: bee.placement.native.persist:measurements
 - name: executable_stream
   kind: library.lua
   source: file://executable_stream.lua

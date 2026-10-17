@@ -1079,7 +1079,9 @@ entries:
     - bee.placement.native.env:workdir_preparers_ref
     - bee.placement.native.migrations:attempts
     - bee.placement.native.migrations:complete
+    - bee.placement.native.migrations:executable_measurements
     - bee.placement.native.migrations:folder_trust
+    - bee.placement.native.persist:measurements
     - bee.placement.native.persist:store
     - bee.placement.native.persist:supervision
     - bee.placement.native.security:placement_exec_policy

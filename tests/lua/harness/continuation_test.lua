@@ -559,6 +559,54 @@ local function define_tests()
             test.eq(planned.placement_request.configuration_digest, assert(configuration.digest(planned.binding.binding_id,
                 {option_values = planned.policy.prepare_options, context = "resume", fixture = true}, assert(planned.binding.methods.configure))))
         end)
+        test.it("pins the executable content in the plan digest and carries the file identity only to placement", function()
+            local snapshot = assert(catalog.snapshot())
+            local binding_digest, profile_digest = "", ""
+            for _, binding in ipairs(snapshot.bindings) do
+                if binding.binding_id == "bee.driver.claude.binding:binding" then
+                    binding_digest, profile_digest = binding.binding_digest.entry, binding.profile_digest.entry
+                end
+            end
+            local point = checkpoint.new({binding_ref = "bee.driver.claude.binding:binding", binding_digest = binding_digest,
+                profile_id = "batch", profile_digest = profile_digest}, 1)
+            point.retained_session_ref = "session"
+            point.terminal = {outcome = "succeeded", resume_ref = "provider-session"}
+            local function plan_with(identity: {[string]: unknown}?): machine.Plan
+                local io: machine.IO = {
+                    call = function(target: string, input: unknown): (unknown, string?)
+                        if target == "bee.threads.binding:checkpoint" then
+                            return {ok = true, value = {attempt_id = "previous", action_id = "action", attempt_state = "ended", attempt_outcome = "succeeded",
+                                placement_binding = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, checkpoint = point}}, nil
+                        elseif target == PLACEMENT_METHODS.status then
+                            return {ok = true, value = {private_home = true, attempt = {attempt_id = "previous", action_id = "action", owner_id = "alice",
+                                session_ref = "session", execution_state = "exited", cleanup_state = "complete"}}}, nil
+                        elseif target == PLACEMENT_METHODS.measure_executable then
+                            local path = tostring((assert(bounds.object(input))).path)
+                            return {ok = true, value = {revision = "bee.executable-measurement@1", path = path, kind = "elf", size = 4096,
+                                digest = string.rep("b", 64), identity = identity}}, nil
+                        end
+                        test.eq(target, "bee.driver.claude.binding:dispatch")
+                        return {ok = true, launch = claude.specification(assert(claude.decode(input)))}, nil
+                    end,
+                    send = function(_: string, _: string, _: unknown) error("unexpected send") end,
+                    self_pid = function(): string return "test" end,
+                    now_ms = function(): integer return 0 end,
+                    key = function(): string return "key" end,
+                }
+                return assert(machine.plan(io, {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice", owner_incarnation = 1,
+                    binding_ref = "bee.driver.claude.binding:binding", profile_id = "batch", brief = "Next turn", policy_ref = "bee.tests.harness:selection_policy",
+                    placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest,
+                    resources = {{name = "session", grant_ref = "session", root_ref = "fixture:session", subpath = "", access = "write", purpose = "session"}},
+                    environment = {}, previous_attempt_id = "previous", session_ref = "session"}))
+            end
+            local hashed = plan_with(nil)
+            local identified = plan_with({dev = "2049", ino = "77", size = 4096, ctime_ns = "1700000000000000000", mtime_ns = "1700000000000000000"})
+            test.eq(identified.plan_digest, hashed.plan_digest)
+            test.is_nil((assert(hashed.placement_request.executable)).identity)
+            local carried = assert((assert(identified.placement_request.executable)).identity)
+            test.eq(carried.ino, "77")
+            test.eq(carried.ctime_ns, "1700000000000000000")
+        end)
         test.it("forms native resume argv with no prompt or stdin replay", function()
             local codex_request, codex_error = codex.decode({profile_id = "window", brief = "", resume_ref = "provider-session"})
             if not codex_request then error(tostring(codex_error)) end

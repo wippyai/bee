@@ -1045,3 +1045,29 @@ entries:
     homes: bee.placement.native.service:homes
     quote: bee.driver.binding:quote
     native_fixture: bee.tests.placement.native:native_fixture
+- name: native_measurement_test
+  kind: function.lua
+  source: file://native_measurement_test.lua
+  method: measurement
+  meta:
+    type: test
+    suite: bee
+    timeout: 60s
+  modules:
+  - hash
+  - time
+  - json
+  security:
+    policies:
+    - bee.tests.placement.native:apply_test_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_store_policy
+    - bee.credentials.security:credential_store_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+  imports:
+    test: wippy.test:test
+    measurements: bee.placement.native.persist:measurements
+    native_fixture: bee.tests.placement.native:native_fixture

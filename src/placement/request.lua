@@ -7,6 +7,7 @@ local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local types = require("types")
+local placement_decode = require("placement_decode")
 local driver_types = require("driver_types")
 local preferences = require("preferences")
 local login_evidence = require("login_evidence")
@@ -477,7 +478,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if object.executable ~= nil then
         local declared = bounds.object(object.executable)
         if not declared then return nil, "executable must be an object" end
-        local unknown_measurement = bounds.fields(declared, {"revision", "kind", "digest"})
+        local unknown_measurement = bounds.fields(declared, {"revision", "kind", "digest", "identity"})
         if unknown_measurement then return nil, "executable: " .. unknown_measurement end
         local revision = bounds.id(declared.revision)
         if not revision then return nil, "executable.revision is not an identifier" end
@@ -485,7 +486,13 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
         if not kind then return nil, "executable.kind must be elf, script or other" end
         local measured_digest = digest_hex(declared.digest)
         if not measured_digest then return nil, "executable.digest must be a sha256 hex digest" end
-        executable = {revision = revision, kind = kind, digest = measured_digest}
+        local identity: types.ExecutableIdentity? = nil
+        if declared.identity ~= nil then
+            local decoded, identity_error = placement_decode.executable_identity(declared.identity)
+            if not decoded then return nil, "executable." .. tostring(identity_error) end
+            identity = decoded
+        end
+        executable = {revision = revision, kind = kind, digest = measured_digest, identity = identity}
     end
     local projections, projections_error = bounds.ids(object.projections == nil and {} or object.projections, true)
     if not projections then return nil, "projections: " .. tostring(projections_error) end

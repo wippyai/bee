@@ -16,6 +16,7 @@ entries:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
     types: bee.placement:types
+    placement_decode: bee.placement:decode
     driver_types: bee.driver:types
     login_evidence: bee.driver.locate:login_evidence
     hook_catalog: bee.gateway.hooks:hooks

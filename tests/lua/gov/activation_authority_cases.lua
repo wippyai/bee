@@ -228,6 +228,49 @@ local function authority_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+        test.it("asks the person about a self-edit by the part of Bee it replaces", function()
+            local workspace = "workspace-self-edit"
+            local plans = assert(plan_store.open("bee:db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee:db", "node-owner", workspace))
+            local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest}, "Claude Code")
+            local review: capability_grants.Review = {added = {}, widened = {}, narrowed = {}, removed = {}, changed = {},
+                requires_approval = true, revocation = {grants = {}, fenced_attempts = {}},
+                lines = {}, resolved = {}, delta = {}}
+            local world: ResolverWorld = {revision = 4, digest = SHA, capability = installed_capability(review)}
+            local prompt: string? = nil
+            local payload: {[string]: unknown}? = nil
+            local executor = {}
+            function executor.call(self: owner.Executor, method: string, request: unknown): (unknown?, unknown?)
+                local input = assert(bounds.object(request))
+                local proposal = assert(bounds.object(input.proposal))
+                prompt = tostring((assert(bounds.object(input.prompt))).text)
+                payload = bounds.object(proposal.payload)
+                return {ok = true, value = {approval_id = "self-edit-approval", proposal = proposal,
+                    proposal_digest = assert(hash.sha256(assert(canonical.encode(proposal)))),
+                    owner_incarnation = 3}}, nil
+            end
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = shifting_resolver(entry, world), approvals = executor,
+                actor_id = "host-a", consumer_id = "destination-host",
+                overlay_owner = "bee.super_edit:workspace-self-edit.token", approval_policy = "super-edit-person",
+                super_edit = true, migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                    _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
+                    _intent: unknown): ({[string]: unknown}?, string?, boolean?) return {changed = true}, nil end}
+            test.eq(ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-self-edit", receipt_key = "self-edit"})).phase, "approval_bound")
+            local asked = tostring(prompt)
+            test.eq(asked:sub(1, asked:find(".", asked:find("?", 1, true), true)),
+                "Change Bee's app-a v1 (made by Claude Code · from bee source-a)? It replaces demo:run.")
+            local shown = assert(payload)
+            test.eq(shown.subject, "self_edit")
+            test.eq(assert(bounds.array(shown.replaces, 8))[1], "demo:run")
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
         test.it("ends an activation whose approval was denied or expired and closes its request", function()
             for _, ending in ipairs({"denied", "expired", "withdrawn", "superseded", "invalidated"}) do
                 local projected = ending == "superseded" and "withdrawn" or (ending == "invalidated" and "expired" or ending)

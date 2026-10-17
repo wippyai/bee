@@ -47,6 +47,16 @@ local function define_tests()
             local bounded = install({title = "Notes", version = "1.0.0", permission_changes = long})
             test.eq(model.permission_lines(bounded)[1], "Review unavailable: permission_changes exceeds 128 items")
         end)
+        test.it("names the part of Bee a self-edit replaces instead of an app's screen", function()
+            local edit = view("self-edit-1", 1, "pending", {proposal = {kind = "operation", ref = "bee.gov:establish-overlay",
+                revision = string.rep("a", 64), input_digest = string.rep("a", 64), payload = {source_workspace = "bee.shell",
+                    version = "1.0.0", subject = "self_edit", replaces = {"bee.shell:chrome"}}}})
+            local card = assert(model.card(edit))
+            test.eq(card.title, "Change Bee's bee.shell 1.0.0")
+            test.eq(card.sections[1].heading, "It replaces part of Bee")
+            test.contains(card.sections[1].lines[1], "bee.shell:chrome")
+            for _, section in ipairs(card.sections) do test.neq(section.heading, "It can") end
+        end)
         test.it("requires a typed answer and sends it at the reviewed question revision", function()
             local state = model.new({"ws-1"})
             local request = view("question", 1, "pending", {request_kind = "question", response_schema = {

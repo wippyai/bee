@@ -72,6 +72,9 @@ entries:
     - bee.security.gateway:gateway_supervision_policy
     - bee.node.security:workspace_folder_browse_policy
     - bee.node.security:workspace_catalog_read_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:home_policy
+    - bee.placement.docker.security:docker_socket_policy
     - bee.threads.security:sessions_owner
     - bee.harness.security:presentation_owner_policy
     - bee.harness.security:presentation_bridge_policy
@@ -131,6 +134,9 @@ entries:
     - bee.security.gateway:gateway_supervision_policy
     - bee.node.security:workspace_folder_browse_policy
     - bee.node.security:workspace_catalog_read_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:home_policy
+    - bee.placement.docker.security:docker_socket_policy
     - bee.threads.security:sessions_owner
     - bee.harness.security:presentation_owner_policy
     - bee.harness.security:presentation_bridge_policy
@@ -180,6 +186,9 @@ entries:
     - bee.security.gateway:gateway_supervision_policy
     - bee.node.security:workspace_folder_browse_policy
     - bee.node.security:workspace_catalog_read_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:home_policy
+    - bee.placement.docker.security:docker_socket_policy
     - bee.threads.security:sessions_owner
     - bee.harness.security:presentation_owner_policy
     - bee.harness.security:presentation_bridge_policy

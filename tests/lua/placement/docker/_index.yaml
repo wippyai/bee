@@ -491,3 +491,24 @@ entries:
     actions: [registry.get, funcs.call, funcs.security, security.policy.get, security.actor.create, security.scope.create]
     resources: '*'
     effect: allow
+- name: window_scope_probe
+  kind: function.lua
+  source: file://window_scope_probe.lua
+  method: run
+  modules: [exec]
+  meta: {type: test_support}
+  imports:
+    profile_home: bee.placement.docker.service:profile_home
+- name: window_scope_test
+  kind: function.lua
+  source: file://window_scope_test.lua
+  method: run
+  modules: [registry, security, funcs]
+  security:
+    policies: [bee.tests.placement.docker:authority_test_policy, bee.placement.docker.security:home_policy]
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds

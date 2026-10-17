@@ -143,16 +143,14 @@ function M.define()
     test.it("refuses an artifact the host application rules reject and fails on a missing host catalog", function()
         local deps, spec = fixture(nil)
         local captured = (deps.capture)()
-        local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.app"},
+        local app: Entry = {id = "private.app:main", kind = "process.lua",
+            meta = {type = "bee.application", application = {capabilities = {{capability = "workspace.files.read",
+                parameters = {subpath = "docs"}, reason = ""}}}},
             data = {source = "return true"}}
-        local request: Entry = {id = "private.app:files", kind = "ns.requirement",
-            meta = {value_kind = "security.policy", capability = "workspace.files.read",
-                parameters = {subpath = "docs"}, reason = "Render documentation"},
-            data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
-        changes(spec, {app, request})
+        changes(spec, {app})
         local absent, _, absent_error, absent_refused = resolver.resolve_with(deps, spec)
         test.is_nil(absent)
-        test.eq(absent_error, "host capability catalog is absent")
+        test.eq(absent_error, "host capability catalog bee.capability:catalog is absent")
         test.is_nil(absent_refused)
         captured.entries[#captured.entries + 1] = {id = "bee.capability:catalog", kind = "registry.entry",
             meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
@@ -163,7 +161,7 @@ function M.define()
                 resources = {}}}}}
         local refused, _, refusal, is_refused = resolver.resolve_with(deps, spec)
         test.is_nil(refused)
-        test.eq(refusal, "capability requirement must append policies to its own application")
+        test.eq(refusal, "private.app:main meta.application.capabilities[1].reason must be one line of 1 to 512 characters saying why the app needs workspace.files.read")
         test.is_true(is_refused == true)
     end)
 

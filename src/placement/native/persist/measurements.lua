@@ -103,6 +103,22 @@ function M.record(db: sql.DB, key: string, path: string, identity: Identity, mea
     return nil
 end
 
+-- A content-addressed subject, such as an immutable image ID, is its own
+-- identity: its key names the address, so the record holds for as long as the
+-- key matches. Its row carries no file stamps (size and modification time 0).
+function M.find_addressed(db: sql.DB, key: string): unknown
+    local rows = db:query("SELECT measurement FROM bee_placement_executable_measurements WHERE key_digest = ? AND dev IS NULL AND ino IS NULL AND ctime_ns IS NULL", {key})
+    local row = rows and rows[1]
+    if not row or type(row.measurement) ~= "string" then return nil end
+    local decoded, decode_error = json.decode(row.measurement)
+    if decode_error then return nil end
+    return decoded
+end
+
+function M.record_addressed(db: sql.DB, key: string, address: string, measurement: unknown): string?
+    return M.record(db, key, address, {size = 0, mtime_ns = "0"}, measurement)
+end
+
 function M.open(): (sql.DB?, string?)
     return node_database.open()
 end

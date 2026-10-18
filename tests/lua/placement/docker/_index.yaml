@@ -529,3 +529,20 @@ entries:
   imports:
     test: wippy.test:test
     bounds: bee.drivers.values:bounds
+- name: probe_cache_test
+  kind: function.lua
+  source: file://probe_cache_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee_docker
+    resources: [docker_daemon]
+    timeout: 120s
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    runtime_probe: bee.placement.docker.service:runtime_probe
+    daemon: bee.placement.docker.service:daemon
+    bounds: bee.drivers.values:bounds
+  security:
+    policies: [bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_store_policy, bee.placement.docker.security:docker_policy, bee.placement.docker.security:docker_socket_policy]

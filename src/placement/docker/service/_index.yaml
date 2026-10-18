@@ -148,9 +148,12 @@ entries:
   source: file://runtime_probe.lua
   modules:
   - uuid
+  - hash
   imports:
     bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     daemon: bee.placement.docker.service:daemon
+    measurements: bee.placement.native.persist:measurements
 - name: daemon
   kind: library.lua
   source: file://daemon.lua

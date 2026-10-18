@@ -1,0 +1,23 @@
+-- SPDX-License-Identifier: MIT
+-- A runtime help probe depends only on the immutable image and its arguments.
+local test = require("test")
+local sql = require("sql")
+local runtime_probe = require("runtime_probe")
+local daemon = require("daemon")
+local bounds = require("bounds")
+local function define_tests()
+    test.describe("Docker runtime probes", function()
+        test.it("records a probe of an immutable image once and answers repeats from the record", function()
+            local image = assert(bounds.object(assert(daemon.inspect("image", "node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2"))))
+            local id = assert(bounds.line(image.Id, 71))
+            local first = assert(runtime_probe.run(id, "node", {"--version"}))
+            test.contains(first, "v")
+            local db = assert(sql.get("bee:db"))
+            local rows = assert(db:query("SELECT measurement FROM bee_placement_executable_measurements WHERE path = ?", {id}))
+            db:release()
+            test.eq(#rows, 1, "the probe of " .. id .. " is not recorded")
+            test.eq(runtime_probe.run(id, "node", {"--version"}), first)
+        end)
+    end)
+end
+return test.run_cases(define_tests)

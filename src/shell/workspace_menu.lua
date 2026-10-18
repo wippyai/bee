@@ -225,7 +225,7 @@ function M.respond(menu: Menu, event: unknown): Response
         elseif row.kind == "add_folder" then response.add = true
         elseif row.desktop then
             if here and row.desktop.id == menu.current then response.close = true
-            elseif row.desktop.shown then menu.status = row.desktop.title .. " is on another display"
+            elseif row.desktop.shown then menu.status = row.desktop.title .. " is shown on another display; a desktop shows on one display at a time"
             else
                 response.close = true
                 response.switch = row.desktop.id

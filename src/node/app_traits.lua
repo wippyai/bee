@@ -82,7 +82,10 @@ function M.catalog(workspace: string): (Catalog?, string?)
             local declared, trait_error = agent_trait.declaration({id = id, title = app.title, prompt = prompt,
                 tools = names, application_ref = definition, application_revision = app.revision})
             if not declared then return nil, trait_error end
-            declared.digest = hash.sha256(assert(canonical.encode({declaration = declared, tools = tools, grants = record})))
+            -- The person approves the declaration, its tools and the measured
+            -- grant set; the installed record's revision is storage
+            -- bookkeeping a restart writes again.
+            declared.digest = hash.sha256(assert(canonical.encode({declaration = declared, tools = tools, grants = record.digest})))
             traits[#traits + 1] = declared
         end
     end

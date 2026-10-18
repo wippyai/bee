@@ -285,12 +285,16 @@ local function define_tests()
             test.eq(harness.settle(writer, OVERLAY, workspace, third, "1.0.2").outcome, "applied")
             harness.close_presented(before)
             local owner = assert(workspace_applications.identity(workspace, OVERLAY)).overlay_owner
+            local approved = as_agents(workspace, assert(app_trait))
             test.eq(#harness.restart({owner}), 0)
             test.is_true(registry.get(APP) ~= nil)
             test.eq(counts(as_agent(workspace, "counter_list", {})), "1:kept,2:kept")
             -- Agents resolves the launch plan of a session it restores after
-            -- the restart, with the counter's trait active.
-            test.eq(as_agents(workspace, assert(app_trait)).application_ref, APP)
+            -- the restart, with the counter's trait active, and the trait keeps
+            -- the identity the person approved.
+            local restored = as_agents(workspace, assert(app_trait))
+            test.eq(restored.application_ref, APP)
+            test.eq(restored.digest, approved.digest, "a restart keeps the declaration the person approved")
             -- The session presentation service resolves it the same way when
             -- it restores the session's window.
             test.eq(as_presentation(workspace, assert(app_trait)).application_ref, APP)

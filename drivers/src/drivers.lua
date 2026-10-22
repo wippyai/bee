@@ -9,7 +9,7 @@ local resolver = require("resolver")
 local profile_codec = require("profile")
 local descriptor = require("descriptor")
 local effective = require("effective")
-local universal = require("universal")
+local codec_registry = require("codec_registry")
 local configuration = require("configuration")
 local stream_json = require("stream_json")
 
@@ -37,8 +37,6 @@ type Selected = {binding_ref: string, driver_id: string, profiles_ref: string?, 
 
 local M = {}
 
-local RESERVED = {profile_id = true, brief = true, resume_ref = true, placement = true, unattended = true, option_provenance = true}
-
 local function fail(kind: string, message: string): error
     return errors.new({kind = kind, message = message})
 end
@@ -57,12 +55,18 @@ local function selected_in(pinned: registry.Snapshot, ref: string): (Selected?, 
     return {binding_ref = ref, driver_id = driver_id, profiles_ref = bounds.id(meta.profiles_ref), descriptor = loaded, descriptor_ref = descriptor_ref}, nil
 end
 
-local function activated(pinned: registry.Snapshot): ({Selected}?, error?)
+local function activated_refs(pinned: registry.Snapshot): ({string}?, error?)
     local active, active_error = resolver.active(pinned)
     if not active then return nil, fail(errors.INTERNAL, tostring(active_error)) end
     local refs: {string} = {}
     for ref in pairs(active) do refs[#refs + 1] = ref end
     table.sort(refs)
+    return refs, nil
+end
+
+local function activated(pinned: registry.Snapshot): ({Selected}?, error?)
+    local refs, refs_error = activated_refs(pinned)
+    if not refs then return nil, refs_error end
     local result: {Selected} = {}
     for _, ref in ipairs(refs) do
         local selected, selected_error = selected_in(pinned, ref)
@@ -72,11 +76,15 @@ local function activated(pinned: registry.Snapshot): ({Selected}?, error?)
     return result, nil
 end
 
+-- find decodes only the descriptor of the binding that declares driver_id.
 local function find(pinned: registry.Snapshot, driver_id: string): (Selected?, error?)
-    local drivers, drivers_error = activated(pinned)
-    if not drivers then return nil, drivers_error end
-    for _, selected in ipairs(drivers) do
-        if selected.driver_id == driver_id then return selected, nil end
+    local refs, refs_error = activated_refs(pinned)
+    if not refs then return nil, refs_error end
+    for _, ref in ipairs(refs) do
+        local binding, binding_error = resolver.entry(pinned, ref)
+        if binding_error then return nil, fail(errors.INTERNAL, binding_error) end
+        local meta = binding and bounds.object(binding.meta)
+        if meta and meta.driver_id == driver_id then return selected_in(pinned, ref) end
     end
     return nil, fail(errors.NOT_FOUND, "driver " .. driver_id .. " is not activated")
 end
@@ -87,15 +95,26 @@ local function snapshot(): (registry.Snapshot?, error?)
     return pinned, nil
 end
 
+-- provider_field returns the declaration of an option a host may set: a
+-- descriptor field with a provider path. Fields without one are protocol
+-- fields the library sets from its own request (resume_ref, gateway tools).
+local function provider_field(selected: Selected, name: string): Object?
+    local field = bounds.object((bounds.object(selected.descriptor.options.fields) or {})[name])
+    if not field or field.path == nil then return nil end
+    return field
+end
+
 local function options_of(selected: Selected): {Option}
     local result: {Option} = {}
-    for name, raw in pairs(bounds.object(selected.descriptor.options.fields) or {}) do
-        local field = bounds.object(raw) or {}
-        local spec = descriptor.runtime_spec(field)
-        result[#result + 1] = {name = name, label = bounds.text(field.label, 256) or name, description = bounds.text(field.description, 1024) or "",
-            section = bounds.id(field.section) or "advanced", group = bounds.text(field.group, 128) or "", order = type(field.order) == "number" and field.order or 0,
-            type = tostring(spec.type), values = bounds.array(spec.values, 64), schema = bounds.object(spec.schema), default = field.default,
-            profiles = bounds.ids(spec.profiles, true)}
+    for name in pairs(bounds.object(selected.descriptor.options.fields) or {}) do
+        local field = provider_field(selected, name)
+        if field then
+            local spec = descriptor.runtime_spec(field)
+            result[#result + 1] = {name = name, label = bounds.text(field.label, 256) or name, description = bounds.text(field.description, 1024) or "",
+                section = bounds.id(field.section) or "advanced", group = bounds.text(field.group, 128) or "", order = type(field.order) == "number" and field.order or 0,
+                type = tostring(spec.type), values = bounds.array(spec.values, 64), schema = bounds.object(spec.schema), default = field.default,
+                profiles = bounds.ids(spec.profiles, true)}
+        end
     end
     table.sort(result, function(a: Option, b: Option): boolean
         if a.section ~= b.section then return a.section < b.section end
@@ -210,8 +229,17 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
 
     local values: Object = {}
     for name, value in pairs(request.options or {}) do
-        if RESERVED[name] then return nil, fail(errors.INVALID, "option " .. name .. " is reserved") end
+        if not provider_field(selected, name) then return nil, fail(errors.INVALID, "option " .. name .. " is not a " .. driver_id .. " option") end
         values[name] = value
+    end
+    -- Instructions arrive as the request field or the instructions option;
+    -- the driver delivers one value through its configuration.
+    local instructions = request.instructions
+    if values.system_prompt_append ~= nil then
+        if instructions ~= nil then return nil, fail(errors.INVALID, "give instructions once: the instructions field or the system_prompt_append option") end
+        if type(values.system_prompt_append) ~= "string" then return nil, fail(errors.INVALID, "system_prompt_append must be text") end
+        instructions = values.system_prompt_append
+        values.system_prompt_append = nil
     end
     if request.unattended == true then
         local merged, unattended_error = effective.unattended(selected.descriptor, values)
@@ -221,6 +249,10 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
 
     local prepare: Object = {profile_id = request.profile_id or "batch", brief = brief, resume_ref = request.resume_ref, placement = request.placement}
     for name, value in pairs(values) do prepare[name] = value end
+    if request.gateway then
+        prepare.gateway_tools = request.gateway.tools
+        prepare.gateway_hooks = request.gateway.hooks
+    end
     local binding, open_error = contract.open(selected.binding_ref)
     if not binding then return nil, fail(errors.INTERNAL, "open " .. selected.binding_ref .. ": " .. tostring(open_error)) end
     local raw, call_error = binding:prepare(prepare)
@@ -235,7 +267,7 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     if not target then return nil, fail(errors.INTERNAL, tostring(target_error)) end
     local context = request.profile_id == "window" and "window" or request.resume_ref ~= nil and "resume" or "first_turn"
     local delivery, delivery_error = configuration.call(selected.binding_ref, target, {fixture = false, home_directory = home,
-        placement = request.placement, option_values = values, context = context, gateway = request.gateway, instructions = request.instructions})
+        placement = request.placement, option_values = values, context = context, gateway = request.gateway, instructions = instructions})
     if not delivery then return nil, fail(errors.INVALID, tostring(delivery_error)) end
 
     local argv: {string} = {}
@@ -246,7 +278,15 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     local provider_home = selected.descriptor.provider_home
     local variable, directory = bounds.id(provider_home.variable), bounds.text(provider_home.directory, 128)
     if variable and directory then environment[variable] = home .. "/" .. directory end
-    return {executable = tostring(prepared.executable), argv = argv, stdin = bounds.text(prepared.stdin, bounds.MAX_TEXT_BYTES),
+    for _, raw in ipairs(bounds.array(provider_home.extra_variables, 8) or {}) do
+        local extra = bounds.object(raw) or {}
+        local extra_variable, extra_directory = bounds.id(extra.variable), bounds.text(extra.directory, 128)
+        if extra_variable and extra_directory then environment[extra_variable] = home .. "/" .. extra_directory end
+    end
+    if prepared.stdin ~= nil and type(prepared.stdin) ~= "string" then
+        return nil, fail(errors.INTERNAL, selected.binding_ref .. " prepare returned a non-text stdin")
+    end
+    return {executable = tostring(prepared.executable), argv = argv, stdin = prepared.stdin :: string?,
         stdin_eof = prepared.stdin_eof == true or nil, environment = environment, files = delivered_files(delivery.files),
         readiness = tostring(prepared.readiness)}, nil
 end
@@ -259,7 +299,10 @@ function M.reader(driver_id: string, resumed: boolean?): (Reader?, error?)
     if not pinned then return nil, pin_error end
     local selected, find_error = find(pinned, driver_id)
     if not selected then return nil, find_error end
-    local protocol = universal.protocol(selected.descriptor_ref)
+    -- The codec is pinned for the reader's lifetime: a descriptor change
+    -- applies to the next stream, never to state this one built.
+    local protocol = codec_registry.resolve(selected.descriptor.codec, bounds.object(selected.descriptor.json_paths) or {})
+    if not protocol then return nil, fail(errors.INTERNAL, selected.descriptor_ref .. " selects an unsupported codec " .. selected.descriptor.codec) end
     local decoder = stream_json.new(nil)
     local state = protocol.new(resumed == true)
     local function fold(step: Step, index: integer, value: Object): error?

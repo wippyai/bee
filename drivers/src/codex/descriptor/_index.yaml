@@ -181,7 +181,7 @@ entries:
           security_class: host-ceiling
           person_values: [true]
           consent_message: "All allowed: Codex runs without approvals or the CLI sandbox."
-          capabilities: {"false": [], "true": [bypass]}
+          capabilities: {"false": [], "true": [bypass, write-anywhere, network]}
           ceiling: []
           section: advanced
           order: 3
@@ -1139,6 +1139,7 @@ entries:
               flag: --add-dir
           capabilities:
           - profile-option
+          - write-anywhere
           ceiling: []
           render:
           - kind: argv
@@ -1171,6 +1172,7 @@ entries:
             'false': []
             'true':
             - profile-option
+            - network
           ceiling: []
           render:
           - kind: config

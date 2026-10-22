@@ -15,12 +15,16 @@ placement in each request.
 ## Personal use of subscription logins
 
 A driver can run a CLI with the login a person made on their own machine
-(Claude Pro/Max, ChatGPT plans and similar subscriptions). Those logins are for
-that person's own use. Do not use them to serve other people, to run a
-production service, or to share one subscription among users: providers
-restrict this in their terms and may suspend the account. For production or
-multi-user hosts, give each driver an official API key, or point it at an
-endpoint you operate (see Endpoints).
+(Claude Pro/Max, ChatGPT plans and similar subscriptions): a login file or a
+variable the descriptor lists in `subscription_variables`. Running a
+subscription login through a tool like this is not compliant with the
+provider's terms except for that person's own, personal use. Do not use it to
+serve other people, to run a production service, or to share one subscription
+among users: providers may restrict or suspend the account. For production or
+multi-user hosts, use an official API key, or point the driver at an endpoint
+you operate (see Endpoints). `drivers.list()` reports which credentials are
+subscription logins (`credentials.files` and `credentials.subscriptions`) so a
+host can say so where a person enters one.
 
 ## Host requirements
 

@@ -33,7 +33,7 @@ local drivers = require("drivers") -- imports: drivers: bee.drivers:drivers
 local list = drivers.list()        -- {id, title, executable, profiles, options, capabilities, unattended, credentials}
 local launch, err = drivers.launch("claude", {
     brief = "say pong",
-    home = "/home/node",                   -- the CLI's HOME inside the placement
+    home = "/home",                   -- the CLI's HOME inside the placement
     placement = {kind = "container", network = "bridge",
         mounts = {{resource = "workspace", target = "/workspace", access = "write"}},
         allows = {"bypass", "network", "write-anywhere"}},

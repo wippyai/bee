@@ -13,7 +13,7 @@ function M.collect(pinned: registry.Snapshot, binding_ref: string, data: {[strin
     for _, raw in ipairs(profiles) do
         local profile = bounds.object(raw)
         if profile and profile.observer ~= nil then
-            local candidates, find_error = pinned:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.drivers.window_observer", ["meta.driver_ref"] = binding_ref,
+            local candidates, find_error = pinned:find({[".kind"] = "registry.entry", ["meta.type"] = "bee.driver.window_observer", ["meta.driver_ref"] = binding_ref,
                 ["meta.profile_id"] = tostring(profile.id), ["meta.observer"] = tostring(profile.observer)})
             if not candidates or find_error or #candidates ~= 1 then return nil, "window profile must select exactly one observer by metadata" end
             local declaration = bounds.object(candidates[1])

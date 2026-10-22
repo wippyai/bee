@@ -5,7 +5,7 @@ local security = require("security")
 local drivers = require("drivers")
 local placements = require("placements")
 
-local CLAUDE_HOME = "/home/node"
+local CLAUDE_HOME = "/home"
 
 local function recording(path: string): string
     local volume = assert(fs.get("bee.drivers.tests:fixtures"))

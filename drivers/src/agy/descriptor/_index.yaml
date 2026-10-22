@@ -4,10 +4,10 @@ entries:
 - name: cli
   kind: registry.entry
   meta:
-    type: bee.drivers.cli_descriptor
+    type: bee.driver.cli_descriptor
     comment: Agy CLI command, stream-json codec, login evidence and version probe
   data:
-    schema_revision: bee.drivers.cli-descriptor@4
+    schema_revision: bee.driver.cli-descriptor@4
     provider: agy
     executable: agy
     version_probe:

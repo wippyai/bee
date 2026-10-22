@@ -209,3 +209,11 @@ entries:
     actions: [registry.get, registry.snapshot, funcs.call]
     resources: [bee.drivers:host, bee.drivers.tests:active_probe]
     effect: allow
+- name: format_test
+  kind: function.lua
+  source: file://format_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    format: bee.drivers.credentials:format

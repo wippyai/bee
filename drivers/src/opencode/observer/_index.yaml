@@ -9,7 +9,7 @@ entries:
 - name: declaration
   kind: registry.entry
   meta:
-    type: bee.drivers.window_observer
+    type: bee.driver.window_observer
     driver_ref: bee.drivers.opencode.binding:binding
     profile_id: window
     observer: local_http

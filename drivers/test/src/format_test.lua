@@ -1,15 +1,17 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
-local formats = require("formats")
-local function decode(file: unknown): formats.Format?
-    return formats.decode({schema_revision = "bee.credential-format@1", file = file})
+local format = require("format")
+local function decode(file: unknown): format.Format?
+    return format.decode({schema_revision = format.REVISION, file = file})
 end
 local function define_tests()
     test.describe("Host-selected credential formats", function()
         test.it("keeps environment and nested opaque login formats declarative", function()
-            local environment, env_error = formats.decode({schema_revision = "bee.credential-format@1", environment_destination = "EXAMPLE_API_KEY"})
+            local environment, env_error = format.decode({schema_revision = format.REVISION, environments = {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}})
             if not environment then error(tostring(env_error)) end
-            test.eq(environment.environment_destination, "EXAMPLE_API_KEY")
+            test.eq(#environment.environments, 2)
+            test.eq(environment.environments[1], "ANTHROPIC_API_KEY")
+            test.eq(environment.environments[2], "CLAUDE_CODE_OAUTH_TOKEN")
             test.is_nil(environment.file)
             local login = decode({path = ".gemini/antigravity-cli/antigravity-oauth-token", content_format = "opaque"})
             if not login or not login.file then error("nested opaque format rejected") end
@@ -26,10 +28,13 @@ local function define_tests()
             end
             test.is_nil(decode({path = "token", content_format = "unknown"}))
             test.is_nil(decode({path = "token", content_format = "json", extra = true}))
-            test.is_nil(formats.decode({schema_revision = "bee.credential-format@1", environment_destination = "bad-name"}))
-            test.is_nil(formats.decode({schema_revision = "bee.credential-format@1", environment_destination = string.rep("A", 129)}))
-            test.is_nil(formats.decode({schema_revision = "bee.credential-format@1"}))
-            test.is_nil(formats.decode({schema_revision = "bee.credential-format@2", environment_destination = "KEY"}))
+            test.is_nil(format.decode({schema_revision = format.REVISION, environments = {"bad-name"}}))
+            test.is_nil(format.decode({schema_revision = format.REVISION, environments = {string.rep("A", 129)}}))
+            test.is_nil(format.decode({schema_revision = format.REVISION, environments = {"A", "B", "C", "D", "E", "F", "G", "H", "I"}}))
+            test.is_nil(format.decode({schema_revision = format.REVISION, environments = "KEY"}))
+            test.is_nil(format.decode({schema_revision = format.REVISION}))
+            test.is_nil(format.decode({schema_revision = format.REVISION, environments = {}}))
+            test.is_nil(format.decode({schema_revision = "bee.credential-format@1", environment_destination = "KEY"}))
         end)
         test.it("bounds initialization and refuses collisions and sparse lists", function()
             test.is_nil(decode({path = "token", content_format = "opaque", initialize = {{path = "token", content = "x"}}}))

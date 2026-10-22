@@ -26,8 +26,8 @@ local function capabilities(value: unknown): (Capabilities?, string?)
     end
     return {permission_answers = result}, nil
 end
-M.TYPE = "bee.drivers.cli_descriptor"
-M.SCHEMA = "bee.drivers.cli-descriptor@4"
+M.TYPE = "bee.driver.cli_descriptor"
+M.SCHEMA = "bee.driver.cli-descriptor@4"
 M.MAX_TEMPLATE_ITEMS = 128
 M.MAX_TEMPLATE_DEPTH = 8
 M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl"}

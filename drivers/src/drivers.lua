@@ -18,6 +18,8 @@ local driver_types = require("driver_types")
 local placements = require("placements")
 local configuration_types = require("configuration_types")
 local record_types = require("record_types")
+local composition = require("composition")
+local hash = require("hash")
 
 type Object = {[string]: unknown}
 type Placement = placements.Placement
@@ -293,6 +295,21 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     local delivery, delivery_error = configuration.call(selected.binding_ref, selected.configure_target, {fixture = false, home_directory = home,
         placement = request.placement, option_values = values, context = context, gateway = request.gateway, instructions = instructions})
     if not delivery then return nil, delivery_error end
+    -- The launch home starts empty, so a file composed onto a base the home
+    -- would keep composes onto an empty document.
+    local files: {DeliveredFile} = {}
+    for _, file in ipairs(delivery.files) do
+        if file.composition then
+            local content, compose_error = composition.compose(file.composition, file.content, "")
+            if not content then return nil, fail(errors.INTERNAL, file.path .. ": " .. tostring(compose_error)) end
+            local digest, digest_error = hash.sha256(content)
+            if not digest then return nil, fail(errors.INTERNAL, file.path .. " digest: " .. tostring(digest_error)) end
+            files[#files + 1] = {secret_fields = file.secret_fields, revision = file.revision, path = file.path, content = content,
+                digest = digest, provider_ref = file.provider_ref}
+        else
+            files[#files + 1] = file
+        end
+    end
 
     local argv: {string} = {}
     for _, argument in ipairs(delivery.arguments) do argv[#argv + 1] = argument end
@@ -311,7 +328,7 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
         return nil, fail(errors.INTERNAL, selected.binding_ref .. " prepare returned a non-text stdin")
     end
     return {executable = tostring(prepared.executable), argv = argv, stdin = prepared.stdin :: string?,
-        stdin_eof = prepared.stdin_eof == true or nil, environment = environment, files = delivery.files,
+        stdin_eof = prepared.stdin_eof == true or nil, environment = environment, files = files,
         readiness = tostring(prepared.readiness)}, nil
 end
 

@@ -1,0 +1,13 @@
+{
+  "harness": "codex",
+  "protocol": "stream-json",
+  "protocol_revision": "exec-json-1",
+  "executable_version": "0.153.4",
+  "captured_at": "2026-09-08",
+  "capture": "codex exec --json --skip-git-repo-check --sandbox <mode> <prompt> < /dev/null, home paths sanitized",
+  "samples": {
+    "plain": "single agent_message and turn.completed with usage",
+    "tool": "transient reconnect error events, a command_execution item started and completed, then the answer",
+    "tool_failure": "a command_execution that failed with exit code 1, then the answer"
+  }
+}

@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.drivers.agy.env
+entries:
+- name: executable
+  kind: env.variable
+  variable: agy
+  default: ''
+  readonly: true
+- name: api_key
+  kind: env.variable
+  variable: agy_api_key
+  default: ''

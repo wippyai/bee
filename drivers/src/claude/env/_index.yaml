@@ -1,0 +1,18 @@
+version: '1.0'
+namespace: bee.drivers.claude.env
+entries:
+- name: executable
+  kind: env.variable
+  variable: claude
+  default: ''
+  readonly: true
+- name: api_key
+  kind: env.variable
+  variable: ANTHROPIC_API_KEY
+  default: ''
+  readonly: true
+- name: config_home
+  kind: env.variable
+  variable: CLAUDE_CONFIG_DIR
+  default: ''
+  readonly: true

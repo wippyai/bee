@@ -1,0 +1,19 @@
+version: '1.0'
+namespace: bee.drivers.profiles
+entries:
+- name: profile_access
+  kind: library.lua
+  source: file://profile_access.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+- name: instructions
+  kind: library.lua
+  source: file://instructions.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+- name: profile
+  kind: library.lua
+  source: file://profile.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+    types: bee.drivers:types

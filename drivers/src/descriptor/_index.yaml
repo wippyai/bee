@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.drivers.descriptor
+entries:
+- name: schema_values
+  kind: library.lua
+  source: file://schema_values.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+- name: descriptor
+  kind: library.lua
+  source: file://descriptor.lua
+  modules:
+  - registry
+  imports:
+    bounds: bee.drivers.values:bounds
+    login_evidence: bee.drivers.locate:login_evidence
+    schema_values: bee.drivers.descriptor:schema_values
+    login_evidence_types: bee.drivers:login_types
+- name: effective
+  modules: [json, toml]
+  kind: library.lua
+  source: file://effective.lua
+  imports:
+    isolations: bee.drivers.descriptor:isolation
+    descriptors: bee.drivers.descriptor:descriptor
+    profile_access: bee.drivers.profiles:profile_access
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
+    instructions: bee.drivers.profiles:instructions
+- name: profile_values
+  kind: library.lua
+  source: file://profile_values.lua
+  modules: [registry, json]
+  imports:
+    bounds: bee.drivers.values:bounds
+    descriptors: bee.drivers.descriptor:descriptor
+    effective: bee.drivers.descriptor:effective
+- name: isolation
+  kind: library.lua
+  source: file://isolation.lua
+  imports:
+    bounds: bee.drivers.values:bounds

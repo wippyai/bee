@@ -1,0 +1,83 @@
+version: '1.0'
+namespace: bee.drivers.records
+entries:
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua
+  imports:
+    shared_bounds: bee.drivers.values:bounds
+- name: values
+  kind: library.lua
+  source: file://values.lua
+  imports:
+    types: bee.drivers.records:record_types
+    bounds: bee.drivers.values:bounds
+    record_bounds: bee.drivers.records:bounds
+- name: observation
+  kind: library.lua
+  source: file://observation.lua
+  modules: [json]
+  imports:
+    types: bee.drivers.records:record_types
+    bounds: bee.drivers.values:bounds
+    values: bee.drivers.records:values
+    record_bounds: bee.drivers.records:bounds
+- name: message
+  kind: library.lua
+  source: file://message.lua
+  imports:
+    types: bee.drivers.records:record_types
+    bounds: bee.drivers.values:bounds
+    values: bee.drivers.records:values
+- name: lifecycle
+  kind: library.lua
+  source: file://lifecycle.lua
+  imports:
+    types: bee.drivers.records:record_types
+    bounds: bee.drivers.values:bounds
+    values: bee.drivers.records:values
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  imports:
+    types: bee.drivers.records:record_types
+    bounds: bee.drivers.values:bounds
+    values: bee.drivers.records:values
+- name: approval
+  kind: library.lua
+  source: file://approval.lua
+  imports:
+    types: bee.drivers.records:record_types
+    bounds: bee.drivers.values:bounds
+    values: bee.drivers.records:values
+    canonical: bee.drivers.values:canonical
+- name: record
+  kind: library.lua
+  source: file://record.lua
+  modules: [json]
+  imports:
+    types: bee.drivers.records:record_types
+    bounds: bee.drivers.values:bounds
+    values: bee.drivers.records:values
+    observation: bee.drivers.records:observation
+    approval: bee.drivers.records:approval
+    canonical: bee.drivers.values:canonical
+    message: bee.drivers.records:message
+    lifecycle: bee.drivers.records:lifecycle
+    delivery: bee.drivers.records:delivery
+    record_bounds: bee.drivers.records:bounds
+- name: app_identity
+  kind: library.lua
+  source: file://app_identity.lua
+  modules:
+  - hash
+  imports:
+    bounds: bee.drivers.values:bounds
+- name: budgets
+  kind: library.lua
+  source: file://budgets.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+- name: record_types
+  kind: library.lua
+  source: file://record_types.lua

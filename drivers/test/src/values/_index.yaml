@@ -1,0 +1,20 @@
+version: '1.0'
+namespace: bee.drivers.tests.values
+entries:
+- name: bounds_test
+  kind: function.lua
+  source: file://bounds_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+- name: canonical_test
+  kind: function.lua
+  source: file://canonical_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [hash]
+  imports:
+    test: wippy.test:test
+    canonical: bee.drivers.values:canonical

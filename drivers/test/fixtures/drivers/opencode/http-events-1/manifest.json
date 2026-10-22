@@ -1,0 +1,13 @@
+{
+  "implementation_version": "1.18.32",
+  "capture": "OpenCode serve with an isolated fake OpenAI-compatible provider, bash permission asked and replied once; workdir paths normalized to /work/opencode-fixture",
+  "events": {
+    "file": "events.jsonl",
+    "count": 91,
+    "sha256": "a2939d82e23068881471ae45bb4fc1157e6c4aca98e30b8d2378fe6d31196377"
+  },
+  "messages": {
+    "file": "messages.json",
+    "sha256": "da06792bf2b162016b3db04d28bb50ab8502c6383e222fe9e7830e67412067a4"
+  }
+}

@@ -1,0 +1,55 @@
+version: '1.0'
+namespace: bee.drivers.tests.host
+entries:
+- name: processes
+  kind: process.host
+  host:
+    max_processes: 64
+    workers: 4
+  lifecycle:
+    auto_start: true
+- name: environment
+  kind: env.storage.file
+  meta:
+    comment: Host-selected variables for the drivers; the starting shell's environment stays out
+  file_path: .wippy/host-environment.env
+  auto_create: true
+  file_mode: 384
+  lifecycle:
+    auto_start: true
+- name: entered_values
+  kind: env.storage.file
+  file_path: .wippy/entered-values.env
+  auto_create: true
+  file_mode: 384
+  lifecycle:
+    auto_start: true
+- name: activation
+  kind: registry.entry
+  meta:
+    type: bee.harness_activation
+    comment: The test host activates every shipped driver binding
+  data:
+    schema_revision: bee.harness-activation@1
+    bindings:
+    - bee.drivers.agy.binding:binding
+    - bee.drivers.claude.binding:binding
+    - bee.drivers.codex.binding:binding
+    - bee.drivers.grok.binding:binding
+    - bee.drivers.muse.binding:binding
+    - bee.drivers.opencode.binding:binding
+- name: dependency.drivers
+  kind: ns.dependency
+  component: bee/drivers
+  version: '*'
+  parameters:
+  - name: activation
+    value: bee.drivers.tests.host:activation
+  - name: host_environment
+    value: bee.drivers.tests.host:environment
+  - name: entered_values
+    value: bee.drivers.tests.host:entered_values
+- name: dependency.test
+  kind: ns.dependency
+  component: wippy/test
+  version: '*'

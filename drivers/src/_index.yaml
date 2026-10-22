@@ -1,0 +1,133 @@
+version: '1.0'
+namespace: bee.drivers
+entries:
+- name: definition
+  kind: ns.definition
+  meta:
+    title: Bee Drivers
+    description: Declarative, installable agent CLI drivers (Claude Code, Codex, Antigravity, Muse, Grok, opencode) with their codecs, option descriptors and record types, for any host that runs agent CLIs.
+- name: host
+  kind: registry.entry
+  meta:
+    comment: Host declarations the drivers read; each requirement below writes one field
+- name: activation
+  kind: ns.requirement
+  meta:
+    comment: The host's harness activation declaration (meta.type bee.harness_activation) naming the driver bindings it activates
+  targets:
+  - entry: bee.drivers:host
+    path: .meta.activation
+- name: host_environment
+  kind: ns.requirement
+  meta:
+    value_kind: env.storage
+    comment: Environment storage holding the host variables drivers read, such as CLI executable paths and configuration homes
+  targets:
+  - entry: bee.drivers.agy.env:executable
+    path: .storage
+  - entry: bee.drivers.claude.env:api_key
+    path: .storage
+  - entry: bee.drivers.claude.env:config_home
+    path: .storage
+  - entry: bee.drivers.claude.env:executable
+    path: .storage
+  - entry: bee.drivers.codex.env:config_home
+    path: .storage
+  - entry: bee.drivers.codex.env:executable
+    path: .storage
+  - entry: bee.drivers.grok.env:executable
+    path: .storage
+  - entry: bee.drivers.muse.env:executable
+    path: .storage
+  - entry: bee.drivers.opencode.env:executable
+    path: .storage
+- name: entered_values
+  kind: ns.requirement
+  meta:
+    value_kind: env.storage
+    comment: Environment storage holding credential values a person entered for the drivers' credential sources
+  targets:
+  - entry: bee.drivers.agy.env:api_key
+    path: .storage
+  - entry: bee.drivers.codex.env:api_key
+    path: .storage
+  - entry: bee.drivers.grok.env:api_key
+    path: .storage
+  - entry: bee.drivers.muse.env:api_key
+    path: .storage
+  - entry: bee.drivers.opencode.env:api_key
+    path: .storage
+- name: types
+  kind: library.lua
+  source: file://types.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+    login_evidence: bee.drivers:login_types
+    events: bee.drivers:event_types
+    values: bee.drivers.records:values
+    record_bounds: bee.drivers.records:bounds
+- name: driver
+  kind: contract.definition
+  methods:
+  - name: prepare
+    description: Return the declarative launch specification for a profile and a brief
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"options":{"type":"object"}},"additionalProperties":true,"required":["profile_id","brief"]}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"launch":{"type":"object"}},"additionalProperties":true,"required":["ok","launch"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
+  - name: dispatch
+    description: Return the declarative input for a turn or control operation on a running attempt
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"options":{"type":"object"}},"additionalProperties":true,"required":["profile_id","brief"]}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"launch":{"type":"object"}},"additionalProperties":true,"required":["ok","launch"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
+  - name: normalize
+    description: Turn one protocol envelope into observations and, when the protocol says so, a terminal report
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"index":{"type":"integer"},"state":{"type":"object"},"envelope":{"type":"object"},"resumed":{"type":"boolean"},"eof":{"type":"boolean"}},"additionalProperties":true,"required":["index"]}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"observations":{"type":"array","items":{"type":"object"}}},"additionalProperties":true,"required":["ok","observations"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
+  - name: configure
+    description: Return argv arguments and protected private-home files from host-selected configuration inputs
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"isolation":{"type":"object"},"option_provenance":{"type":"object"},"configure_renderer":{"type":"string"},"option_values":{"type":"object"},"context":{"type":"string"},"instructions_path":{"type":"string"},"instructions":{"type":"string"},"instruction_builder":{"type":"object"},"provider_ref":{"type":"string"},"provider":{"type":"object"},"gateway":{"type":"object"},"home_directory":{"type":"string"},"private_home":{"type":"boolean"},"attempt_id":{"type":"string"},"fixture":{"type":"boolean"}},"additionalProperties":true}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"delivery":{"type":"object"}},"additionalProperties":true,"required":["ok","delivery"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
+- name: locate_facet
+  kind: contract.definition
+  methods:
+  - name: locate
+    description: Locate an admitted external driver profile from host-probed executable, login evidence, and platform evidence
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"configured":{"type":"boolean"},"executable":{"type":"object"},"login_checks":{"type":"array"},"platform":{"type":"object"},"checked_at":{"type":"string"}},"additionalProperties":true,"required":["profile_id","configured"]}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"anyOf":[{"type":"object","properties":{"capabilities":{"type":"object"},"provider":{"type":"string"},"status":{"enum":["ready","missing","unconfigured","incompatible","unknown"]},"executable":{"type":"object"},"login":{"type":"object"},"platform":{"type":"object"},"checked_at":{"type":"string"},"reason":{"type":"string"}},"additionalProperties":true,"required":["provider","status","executable","login","platform"]},{"type":"null"}]}}
+    - {format: application/schema+json, definition: {"type":["string","null"]}}
+- name: window_observer
+  kind: library.lua
+  source: file://window_observer.lua
+  modules: [registry, hash]
+  imports:
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+- name: login_types
+  kind: library.lua
+  source: file://login_types.lua
+- name: event_types
+  kind: library.lua
+  source: file://event_types.lua
+  imports:
+    record_types: bee.drivers.records:record_types
+- name: framing_types
+  kind: library.lua
+  source: file://framing_types.lua
+- name: stream_types
+  kind: library.lua
+  source: file://stream_types.lua
+  imports:
+    framing: bee.drivers:framing_types
+- name: configuration_types
+  kind: library.lua
+  source: file://configuration_types.lua
+  imports:
+    driver_types: bee.drivers:types

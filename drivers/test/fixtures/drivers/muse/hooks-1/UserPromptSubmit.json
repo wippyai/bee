@@ -1,0 +1,10 @@
+{
+  "cwd": "/fixture/work",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "fixture",
+  "model_provider": "meta",
+  "permission_mode": "default",
+  "prompt": "Fixture prompt.",
+  "session_id": "01a11c5a-0fa5-78d0-8ea0-36a7e98338bf",
+  "turn_id": "c94a5327-db99-4a73-881d-706ad9881ec8"
+}

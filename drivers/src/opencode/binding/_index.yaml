@@ -1,0 +1,78 @@
+version: '1.0'
+namespace: bee.drivers.opencode.binding
+entries:
+- name: prepare
+  kind: function.lua
+  source: file://prepare.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    configuration: bee.drivers.opencode.binding:configuration
+    observer_events: bee.drivers.opencode.observer:events
+    bounds: bee.drivers.values:bounds
+    configure_protocol: bee.drivers:configuration_types
+    universal: bee.drivers.binding:universal
+  security:
+    policies:
+    - bee.drivers.opencode.binding:configuration_policy
+- name: locate
+  kind: function.lua
+  source: file://locate.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: configuration_policy
+  kind: security.policy.expr
+  policy:
+    effect: allow
+    actions:
+    - registry.get
+    - registry.snapshot
+    - funcs.call
+    resources:
+    - '*'
+    expression: (action == "registry.get" && resource == "bee.drivers.opencode.descriptor:cli") || action == "registry.snapshot"
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules:
+  - hash
+  imports:
+    canonical: bee.drivers.values:canonical
+    configure_protocol: bee.drivers.binding:configuration
+    configure_protocol_types: bee.drivers:configuration_types
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.drivers:driver
+    methods:
+      prepare: bee.drivers.opencode.binding:prepare
+      dispatch: bee.drivers.opencode.binding:dispatch
+      normalize: bee.drivers.opencode.binding:normalize
+      configure: bee.drivers.opencode.binding:configure
+  - contract: bee.drivers:locate_facet
+    methods:
+      locate: bee.drivers.opencode.binding:locate
+  meta:
+    type: harness.driver
+    driver_id: opencode
+    descriptor_ref: bee.drivers.opencode.descriptor:cli
+    accepts_model: false
+    profiles_ref: bee.drivers.opencode.profiles:profiles

@@ -4,7 +4,8 @@ entries:
 - name: host_access
   kind: security.policy
   meta:
-    comment: What a host's callers need to use bee.drivers:drivers with the shipped drivers. The host also grants registry.get on its own activation entry.
+    comment: What a host's callers need to use bee.drivers:drivers with the shipped drivers. The access_scope requirement adds it to the host's group; the host also grants registry.get on its own activation entry.
+  groups: []
   policy:
     actions: [registry.get, registry.snapshot, contract.get, contract.open, contract.call, funcs.call]
     resources:

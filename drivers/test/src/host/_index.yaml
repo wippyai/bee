@@ -49,6 +49,8 @@ entries:
     value: bee.drivers.tests.host:environment
   - name: entered_values
     value: bee.drivers.tests.host:entered_values
+  - name: access_scope
+    value: bee.drivers.tests.host:drivers_users
 - name: dependency.test
   kind: ns.dependency
   component: wippy/test

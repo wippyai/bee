@@ -146,3 +146,4 @@ entries:
     codec_registry: bee.drivers.codec:codec_registry
     configuration: bee.drivers.binding:configuration
     stream_json: bee.drivers.transport:stream_json
+    credential_format: bee.drivers.credentials:format

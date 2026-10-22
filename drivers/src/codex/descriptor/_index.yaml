@@ -68,6 +68,8 @@ entries:
           reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel. The window
             uses PermissionRequest hooks. App-server JSON-RPC approvals require a different driver mode.
     options:
+      unattended:
+        dangerously_bypass_approvals_and_sandbox: true
       profiles:
       - window
       - batch

@@ -4,7 +4,7 @@ local effective = require("effective")
 local registry = require("registry")
 local bounds = require("bounds")
 local universal = require("universal")
-local isolations = require("isolations")
+local placements = require("placements")
 local json = require("json")
 local function define_tests()
     test.describe("Effective driver option schema", function()
@@ -21,7 +21,7 @@ local function define_tests()
         test.it("requires explicit person selection when policy excludes the safe bypass default", function()
             local cli = assert(descriptors.load("bee.drivers.codex.descriptor:cli"))
             local compiled, err = effective.compile(cli, {profile_restrictions = {
-                ["provider.options.dangerously_bypass_approvals_and_sandbox"] = {true}}}, nil, {}, nil, nil, nil, isolations.DOCKER)
+                ["provider.options.dangerously_bypass_approvals_and_sandbox"] = {true}}}, nil, {}, nil, nil, nil, placements.DOCKER)
             test.is_nil(compiled)
             test.is_true(tostring(err):find("person", 1, true) ~= nil)
         end)
@@ -29,15 +29,15 @@ local function define_tests()
             local cli = assert(descriptors.load("bee.drivers.codex.descriptor:cli"))
             local policy = {profile_restrictions = {["provider.options.sandbox"] = {kind = "declared"}, ["provider.options.approval_policy"] = {kind = "declared"}}}
             local content = 'sandbox_mode="danger-full-access"\napproval_policy="never"'
-            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", content, isolations.DOCKER))
-            test.is_nil(effective.check_config(cli, policy, ".codex/config.toml", content, isolations.DOCKER,
+            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", content, placements.DOCKER))
+            test.is_nil(effective.check_config(cli, policy, ".codex/config.toml", content, placements.DOCKER,
                 {sandbox = "danger-full-access", approval_policy = "never"}))
-            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", content, isolations.NATIVE))
+            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", content, placements.NATIVE))
             policy.option_constraints = {sandbox = {capabilities = {"read"}}}
-            local denied = effective.check_config(cli, policy, ".codex/config.toml", content, isolations.DOCKER)
+            local denied = effective.check_config(cli, policy, ".codex/config.toml", content, placements.DOCKER)
             test.not_nil(denied)
             test.is_true(assert(denied):find("sandbox", 1, true) ~= nil)
-            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", '[sandbox_workspace_write]\nnetwork_access=true', isolations.DOCKER))
+            test.not_nil(effective.check_config(cli, policy, ".codex/config.toml", '[sandbox_workspace_write]\nnetwork_access=true', placements.DOCKER))
         end)
         test.it("renders a person-selected Codex bypass inside the registry container placement", function()
             for _, case in ipairs({
@@ -46,7 +46,7 @@ local function define_tests()
                 {profile = "batch", resume = "fixture-thread", expected = '--sandbox danger-full-access -c approval_policy="never" --dangerously-bypass-approvals-and-sandbox exec resume fixture-thread --json --skip-git-repo-check -'},
             }) do
                 local reply = assert(bounds.object(universal.prepare("bee.drivers.codex.descriptor:cli")({profile_id = case.profile, brief = "Fixture", resume_ref = case.resume,
-                    isolation = isolations.DOCKER, sandbox = "danger-full-access", approval_policy = "never",
+                    placement = placements.DOCKER, sandbox = "danger-full-access", approval_policy = "never",
                     dangerously_bypass_approvals_and_sandbox = true})))
                 assert(reply.ok == true, tostring(reply.error))
                 local argv = assert(bounds.ids(assert(bounds.object(reply.launch)).argv, true))
@@ -55,7 +55,7 @@ local function define_tests()
         end)
         test.it("renders the same person-selected Codex bypass on native placement", function()
             local reply = assert(bounds.object(universal.prepare("bee.drivers.codex.descriptor:cli")({profile_id = "batch", brief = "Fixture",
-                isolation = isolations.NATIVE, sandbox = "danger-full-access", approval_policy = "never",
+                placement = placements.NATIVE, sandbox = "danger-full-access", approval_policy = "never",
                 dangerously_bypass_approvals_and_sandbox = true})))
             test.eq(reply.ok, true)
             local argv = assert(bounds.ids(assert(bounds.object(reply.launch)).argv, true))

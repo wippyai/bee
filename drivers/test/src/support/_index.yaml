@@ -10,8 +10,8 @@ entries:
     bounds: bee.drivers.values:bounds
   modules:
   - registry
-- name: isolations
+- name: placements
   kind: library.lua
-  source: file://isolations.lua
+  source: file://placements.lua
   meta:
     type: test_support

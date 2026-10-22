@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.drivers.tests.drivers
+entries:
+- name: drivers_test
+  kind: function.lua
+  source: file://drivers_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [fs]
+  imports:
+    test: wippy.test:test
+    drivers: bee.drivers:drivers
+    placements: bee.drivers.tests.support:placements

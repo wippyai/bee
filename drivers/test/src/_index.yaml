@@ -37,7 +37,7 @@ entries:
     render: bee.drivers.binding:option_render
     descriptor: bee.drivers.descriptor:descriptor
     configuration: bee.drivers.binding:configuration
-    isolations: bee.drivers.tests.support:isolations
+    placements: bee.drivers.tests.support:placements
     bounds: bee.drivers.values:bounds
     configuration_types: bee.drivers:configuration_types
 - name: providers_test
@@ -168,7 +168,7 @@ entries:
     descriptors: bee.drivers.descriptor:descriptor
     effective: bee.drivers.descriptor:effective
     universal: bee.drivers.binding:universal
-    isolations: bee.drivers.tests.support:isolations
+    placements: bee.drivers.tests.support:placements
     bounds: bee.drivers.values:bounds
 - name: option_cleanup_test
   kind: function.lua

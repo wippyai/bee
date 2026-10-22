@@ -73,6 +73,8 @@ entries:
           transport: provider
           reason: Bee runs opencode run --format json with stdin closed; batch turns retain provider permission handling.
     options:
+      unattended:
+        auto: true
       profiles:
       - window
       - batch

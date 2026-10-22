@@ -7,7 +7,7 @@ entries:
   meta:
     type: test_support
   imports:
-    isolations: bee.drivers.tests.support:isolations
+    placements: bee.drivers.tests.support:placements
     universal: bee.drivers.binding:universal
 - name: claude_protocol
   kind: library.lua
@@ -22,7 +22,7 @@ entries:
   meta:
     type: test_support
   imports:
-    isolations: bee.drivers.tests.support:isolations
+    placements: bee.drivers.tests.support:placements
     universal: bee.drivers.binding:universal
 - name: codex_protocol
   kind: library.lua
@@ -37,7 +37,7 @@ entries:
   meta:
     type: test_support
   imports:
-    isolations: bee.drivers.tests.support:isolations
+    placements: bee.drivers.tests.support:placements
     universal: bee.drivers.binding:universal
 - name: agy_protocol
   kind: library.lua
@@ -52,7 +52,7 @@ entries:
   meta:
     type: test_support
   imports:
-    isolations: bee.drivers.tests.support:isolations
+    placements: bee.drivers.tests.support:placements
     universal: bee.drivers.binding:universal
 - name: grok_protocol
   kind: library.lua
@@ -67,7 +67,7 @@ entries:
   meta:
     type: test_support
   imports:
-    isolations: bee.drivers.tests.support:isolations
+    placements: bee.drivers.tests.support:placements
     universal: bee.drivers.binding:universal
 - name: muse_protocol
   kind: library.lua
@@ -82,7 +82,7 @@ entries:
   meta:
     type: test_support
   imports:
-    isolations: bee.drivers.tests.support:isolations
+    placements: bee.drivers.tests.support:placements
     universal: bee.drivers.binding:universal
 - name: opencode_protocol
   kind: library.lua

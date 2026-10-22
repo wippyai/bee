@@ -59,6 +59,8 @@ entries:
           transport: hook_http
           adapter_ref: bee.drivers.permission:permission_request_hook
     options:
+      unattended:
+        yolo: true
       profiles:
       - window
       - batch

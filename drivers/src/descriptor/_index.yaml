@@ -22,7 +22,7 @@ entries:
   kind: library.lua
   source: file://effective.lua
   imports:
-    isolations: bee.drivers.descriptor:isolation
+    placements: bee.drivers.descriptor:placement
     descriptors: bee.drivers.descriptor:descriptor
     profile_access: bee.drivers.profiles:profile_access
     canonical: bee.drivers.values:canonical
@@ -36,8 +36,8 @@ entries:
     bounds: bee.drivers.values:bounds
     descriptors: bee.drivers.descriptor:descriptor
     effective: bee.drivers.descriptor:effective
-- name: isolation
+- name: placement
   kind: library.lua
-  source: file://isolation.lua
+  source: file://placement.lua
   imports:
     bounds: bee.drivers.values:bounds

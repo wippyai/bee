@@ -7,11 +7,10 @@ capability profiles (batch, session and window modes, protocol, resume,
 interrupt, MCP, hooks, sandbox), and a contract binding — plus a codec that
 turns the CLI's output stream into typed records.
 
-A driver never runs anything. It turns an admitted request into a declarative
-launch (executable, arguments, environment names, stdin, required files,
-provider home, readiness) and normalizes output. The host decides where the
-launch runs — natively or in a container — and passes that placement's
-isolation in each request.
+A driver never runs anything. It turns a request into a declarative launch
+(executable, arguments, stdin, environment, files under the CLI's home) and
+normalizes output. The host decides where the launch runs and describes that
+placement in each request.
 
 ## Host requirements
 
@@ -21,34 +20,57 @@ isolation in each request.
 | `host_environment` | `env.storage` with the host variables drivers read (CLI executable paths, configuration homes) |
 | `entered_values` | `env.storage` with credential values a person entered for the drivers' credential sources |
 
-## Contract
+## Library
 
-`bee.drivers:driver`, one binding per CLI:
-
-- `prepare` — the launch for `{profile_id, brief, <option values>, isolation}`.
-- `dispatch` — the input for a turn on a running attempt.
-- `normalize` — one output envelope into observations and, at the end of a turn, a terminal report (`outcome`, `answer`, `resume_ref`, `usage`, `error`).
-- `configure` — arguments and private-home files for the selected options, MCP gateway and hooks.
-
-`bee.drivers:locate_facet` — `locate` checks executable, login evidence and platform.
-
-`isolation` is `{kind = "native" | "container", credentials, mounted_roots, network, option_ceilings}`. A request without it gets only the descriptor's own option ceilings.
-
-## Kit
-
-`bee.drivers.kit:kit` is the host-facing library; attach the
-`bee.drivers.kit:client` policy to the entries that use it.
+`bee.drivers:drivers` is the host-facing surface. Hosts name drivers by id;
+bindings, descriptors and codecs stay behind it. Errors carry kinds
+(`errors.NOT_FOUND`, `errors.INVALID`, `errors.INTERNAL`, `errors.UNAVAILABLE`).
 
 ```lua
-local kit = require("kit") -- imports: kit: bee.drivers.kit:kit
+local drivers = require("drivers") -- imports: drivers: bee.drivers:drivers
 
-local drivers = kit.catalog()                 -- activated drivers, profiles, declared options
-local launch = kit.prepare("bee.drivers.claude.binding:binding",
-    {profile_id = "batch", brief = "say pong", model = "sonnet", isolation = isolation})
-local stream = kit.stream("bee.drivers.claude.binding:binding")
-local step = stream:feed(chunk)               -- {observations, terminal?}
-local last = stream:finish()                  -- settles a stream that ended early
+local list = drivers.list()        -- {id, title, profiles, options, capabilities, unattended, credentials}
+local launch, err = drivers.launch("claude", {
+    brief = "say pong",
+    home = "/home/node",                   -- the CLI's HOME inside the placement
+    placement = {kind = "container", network = "bridge",
+        mounts = {{resource = "workspace", target = "/workspace", access = "write"}},
+        allows = {"bypass", "network", "write-anywhere"}},
+    unattended = true,                     -- no person answers permission prompts
+    options = {model = "sonnet"},
+    gateway = gateway,                     -- optional: the host's MCP + hook endpoint
+})
+-- launch = {executable, argv, stdin, stdin_eof, environment, files, readiness}
+
+local reader = drivers.reader("claude")
+local step = reader:feed(chunk)            -- {observations, terminal?, problems}
+local last = reader:finish()               -- settles the stream at its end
 ```
+
+**Placement.** `allows` names the capabilities the placement admits
+(`prompt`, `edit`, `automatic`, `deny-unapproved`, `read`, `bypass`,
+`write-admitted`, `write-anywhere`, `network`, `request-approval`,
+`no-approvals`, `profile-option`). Each descriptor maps its option values to
+these capabilities, so hosts never name driver options to bound them.
+
+**Unattended.** Each descriptor declares the option values its CLI runs with
+when no person answers prompts; the placement must allow their capabilities.
+
+**Gateway.** `{endpoint, action_id, tools, hooks, token_environment,
+hook_token_environment?, hook_command?}`: the one MCP server and hook target
+the host serves at `http://{endpoint}/mcp/{action_id}` and
+`http://{endpoint}/hook/{action_id}`. Tokens travel only as the named
+environment variables.
+
+**Files.** Paths are relative to `home`. A file with `secret_fields` takes
+the named environment values at those JSON paths; a file with `composition`
+merges onto the existing file at `composition.base_path`.
+
+## Contract
+
+`bee.drivers:driver`, one binding per CLI, for hosts that need the raw
+steps: `prepare`, `dispatch`, `normalize`, `configure`, and
+`bee.drivers:locate_facet` `locate`.
 
 ## Development
 

@@ -113,9 +113,9 @@ end
 function M.decode_request(value: unknown): (vocabulary.Request?, string?)
     local request = bounds.object(value)
     if not request then return nil, "configuration request must be an object" end
-    local unexpected = bounds.fields(request, {"isolation", "option_provenance", "configure_renderer", "provider_ref", "provider", "gateway", "home_directory", "private_home", "attempt_id", "fixture", "instructions", "instruction_builder", "option_values", "context"})
+    local unexpected = bounds.fields(request, {"placement", "option_provenance", "configure_renderer", "provider_ref", "provider", "gateway", "home_directory", "private_home", "attempt_id", "fixture", "instructions", "instruction_builder", "option_values", "context"})
     if unexpected then return nil, "configuration request: " .. unexpected end
-    if request.isolation ~= nil and not bounds.object(request.isolation) then return nil, "configuration isolation must be an object" end
+    if request.placement ~= nil and not bounds.object(request.placement) then return nil, "configuration placement must be an object" end
     local configure_renderer: string? = nil
     if request.configure_renderer ~= nil then
         configure_renderer = bounds.id(request.configure_renderer)
@@ -161,7 +161,7 @@ function M.decode_request(value: unknown): (vocabulary.Request?, string?)
     if request.option_values ~= nil and not option_values then return nil, "configuration option_values must be an object" end
     local context = request.context == nil and nil or bounds.member(request.context, {"window", "first_turn", "resume"})
     if request.context ~= nil and not context then return nil, "configuration context is invalid" end
-    return {isolation = bounds.object(request.isolation), option_provenance = bounds.object(request.option_provenance), configure_renderer = configure_renderer, option_values = option_values or {}, context = context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = private_home, attempt_id = attempt_id, fixture = request.fixture}, nil
+    return {placement = bounds.object(request.placement), option_provenance = bounds.object(request.option_provenance), configure_renderer = configure_renderer, option_values = option_values or {}, context = context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = private_home, attempt_id = attempt_id, fixture = request.fixture}, nil
 end
 local function sequence(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
@@ -529,7 +529,7 @@ function M.digest(binding_ref: string?, request_value: unknown, target: string, 
         end
     end
     local encoded, encode_error = canonical.encode({target = selected, configure_renderer = configure_renderer, descriptor_digest = descriptor_digest,
-        isolation = request.isolation, option_values = request.option_values, context = request.context, instructions = request.instructions, instruction_builder = request.instruction_builder, provider_ref = request.provider_ref,
+        placement = request.placement, option_values = request.option_values, context = request.context, instructions = request.instructions, instruction_builder = request.instruction_builder, provider_ref = request.provider_ref,
         provider = request.provider, gateway = request.gateway, fixture = request.fixture})
     if not encoded then return nil, "configuration digest: " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
@@ -582,7 +582,7 @@ function M.execute(binding_ref: string?, target: string, request_value: unknown)
         end
     end
     local driver_request = {
-        isolation = request.isolation, option_provenance = request.option_provenance, option_values = request.option_values, context = request.context,
+        placement = request.placement, option_provenance = request.option_provenance, option_values = request.option_values, context = request.context,
         configure_renderer = configure_renderer,
         instructions = final_instructions,
         provider_ref = request.provider_ref,

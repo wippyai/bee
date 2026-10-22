@@ -63,6 +63,8 @@ entries:
           reason: A host-accepted exchange selects duplex ACP with default permission mode. Explicit models use session/set_model;
             effort selection remains on the print route.
     options:
+      unattended:
+        permission_mode: bypassPermissions
       profiles:
       - window
       - session

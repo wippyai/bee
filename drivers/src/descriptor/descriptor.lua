@@ -465,7 +465,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
 
     local options, options_error = object(item.options, "CLI descriptor.options")
     if not options then return nil, options_error end
-    if bounds.fields(options, {"profiles", "fields", "rules", "unknown_prefix"}) then return nil, "CLI descriptor.options has unknown fields" end
+    if bounds.fields(options, {"profiles", "fields", "rules", "unknown_prefix", "unattended"}) then return nil, "CLI descriptor.options has unknown fields" end
     if options.unknown_prefix ~= nil and not bounds.text(options.unknown_prefix, 64) then return nil, "CLI descriptor.options.unknown_prefix is invalid" end
     local profiles, profiles_error = sequence(options.profiles, "CLI descriptor.options.profiles", 16)
     if not profiles or #profiles == 0 then return nil, profiles_error or "CLI descriptor.options.profiles is empty" end
@@ -643,6 +643,19 @@ function M.decode(value: unknown): (Descriptor?, string?)
             for _, target in ipairs(bounds.ids(field[kind], true) or {}) do
                 if target == name or fields[target] == nil then return nil, "OptionSpec " .. kind .. " must name another declared option" end
             end
+        end
+    end
+    -- The option values the CLI runs with when no person can answer its
+    -- permission prompts; placement still bounds their capabilities.
+    if options.unattended ~= nil then
+        local unattended, unattended_error = object(options.unattended, "CLI descriptor.options.unattended")
+        if not unattended then return nil, unattended_error end
+        if next(unattended) == nil then return nil, "CLI descriptor.options.unattended is empty" end
+        for name, value in pairs(unattended) do
+            local declaration = bounds.object(fields[name])
+            if not declaration then return nil, "CLI descriptor.options.unattended names an undeclared option" end
+            local _, value_error = M.decode_option(name, declaration, value)
+            if value_error then return nil, "CLI descriptor.options.unattended." .. name .. ": " .. value_error end
         end
     end
     local rules, rules_error = sequence(options.rules or {}, "CLI descriptor.options.rules", 32)

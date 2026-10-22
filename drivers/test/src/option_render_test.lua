@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: MIT
 local configuration_types = require("configuration_types")
 local test = require("test")
-local isolations = require("isolations")
+local placements = require("placements")
 local render = require("render")
 local descriptor = require("descriptor")
 local configuration = require("configuration")
@@ -21,7 +21,7 @@ local function define_tests()
         test.it("captures the same person-selected Codex configuration in Docker and native", function()
             local options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true, model_provider = "openai"}
             local request: configuration_types.Request = {fixture = true, private_home = true, context = "first_turn", option_values = options,
-                isolation = isolations.DOCKER}
+                placement = placements.DOCKER}
             local delivery, err = configuration.call("bee.drivers.codex.binding:binding", "bee.drivers.codex.binding:configure", request)
             assert(delivery, tostring(err))
             local captured: Object? = nil
@@ -29,7 +29,7 @@ local function define_tests()
                 if file.path == ".codex/config.toml" then captured = bounds.object(toml.decode(file.content)) end
             end
             test.eq(assert(captured).model_provider, "openai")
-            request.isolation = isolations.NATIVE
+            request.placement = placements.NATIVE
             local native, reason = configuration.call("bee.drivers.codex.binding:binding", "bee.drivers.codex.binding:configure", request)
             assert(native, tostring(reason))
             test.eq(native.files[1].content, delivery.files[1].content)

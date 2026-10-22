@@ -95,26 +95,32 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
     if not object then return nil, "launch request must be an object" end
     local options = bounds.object(selected.options) or {}
     local declared_fields = bounds.object(options.fields) or {}
-    local allowed: {string} = {"profile_id", "brief", "option_provenance", "isolation"}
+    local allowed: {string} = {"profile_id", "brief", "option_provenance", "placement", "unattended"}
     for name in pairs(declared_fields) do allowed[#allowed + 1] = tostring(name) end
     local extra = bounds.fields(object, allowed)
     if extra then return nil, (bounds.text(options.unknown_prefix, 64) or "") .. extra end
-    if object.isolation ~= nil and not bounds.object(object.isolation) then return nil, "isolation must be an object" end
+    if object.placement ~= nil and not bounds.object(object.placement) then return nil, "placement must be an object" end
     local profile_id = bounds.member(object.profile_id, assert(bounds.ids(options.profiles, true)))
     if not profile_id then return nil, "profile_id is not one Bee admits" end
     local brief = bounds.text(object.brief, profile_id == "window" and 65536 or bounds.MAX_TEXT_BYTES)
     if not brief or (brief == "" and profile_id ~= "window") then return nil, "brief must be nonempty bounded text" end
+    if object.unattended ~= nil and type(object.unattended) ~= "boolean" then return nil, "unattended must be a boolean" end
+    local values: Object = {}
+    for name in pairs(declared_fields) do values[name] = object[name] end
+    if object.unattended == true then
+        local merged, unattended_error = effective.unattended(selected, values)
+        if not merged then return nil, unattended_error end
+        values = merged
+    end
     local context = profile_id == "window" and "window" or object.resume_ref ~= nil and "resume" or "first_turn"
     for name, raw_field in pairs(declared_fields) do
         local field = bounds.object(raw_field) or {}
-        if field.path and object[name] ~= nil and not bounds.member(context, field.contexts) then
+        if field.path and values[name] ~= nil and not bounds.member(context, field.contexts) then
             return nil, name .. " is not supported for " .. context
         end
     end
     local request: Request = {profile_id = profile_id, brief = brief}
-    local values: Object = {}
-    for name in pairs(declared_fields) do values[name] = object[name] end
-    local compiled, compile_error = effective.compile(selected, nil, nil, values, nil, nil, bounds.object(object.option_provenance), object.isolation)
+    local compiled, compile_error = effective.compile(selected, nil, nil, values, nil, nil, bounds.object(object.option_provenance), object.placement)
     if not compiled then return nil, compile_error end
     for name, value in pairs(compiled.values) do
         request[name] = value
@@ -498,9 +504,9 @@ local function launch_reply(ref: string, raw: unknown, dispatch: boolean): Objec
     return {ok = true, launch = launch}
 end
 
--- launch is a descriptor's launch API for one placement isolation, which a
--- request without its own isolation is measured against.
-function M.launch(ref: string, isolation: Object?): LaunchAPI
+-- launch is a descriptor's launch API for one placement, which a request
+-- without its own placement is measured against.
+function M.launch(ref: string, placement: Object?): LaunchAPI
     local function selected(): (Descriptor?, string?)
         local loaded, load_error = descriptor_reader.load(ref)
         if not loaded then return nil, load_error end
@@ -511,10 +517,10 @@ function M.launch(ref: string, isolation: Object?): LaunchAPI
             local descriptor, load_error = selected()
             if not descriptor then return nil, load_error or "CLI descriptor is unavailable" end
             local request = bounds.object(value)
-            if request and request.isolation == nil and isolation ~= nil then
+            if request and request.placement == nil and placement ~= nil then
                 local placed: Object = {}
                 for key, item in pairs(request) do placed[key] = item end
-                placed.isolation = isolation
+                placed.placement = placement
                 return decode_request(descriptor, placed)
             end
             return decode_request(descriptor, value)
@@ -580,7 +586,7 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
         if not delivery then return {ok = false, error = delivery_error} end
         local prompt_files = generic.system_prompt_files
         generic.system_prompt_files = nil
-        local compiled, compile_error = effective.compile(descriptor, nil, nil, generic, nil, nil, request.option_provenance, request.isolation)
+        local compiled, compile_error = effective.compile(descriptor, nil, nil, generic, nil, nil, request.option_provenance, request.placement)
         if not compiled then return {ok = false, error = compile_error} end
         generic = compiled.values
         generic.system_prompt_files = prompt_files

@@ -7,7 +7,7 @@ local canonical = require("canonical")
 local descriptors = require("descriptors")
 local json = require("json")
 local toml = require("toml")
-local isolations = require("isolations")
+local placements = require("placements")
 local M = {}
 M.MAX_OPTIONS = 128
 M.MAX_OPTION_VALUES = 32
@@ -299,16 +299,9 @@ local function ceiling_value(field: Object, value: unknown, constraint: Object, 
 end
 
 function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabilities: {[string]: Capability}?, values: Object?, writer: string?, selection: Value?, provenance: Object?, placement: unknown?): (Effective?, string?)
-    local isolation, isolation_error = isolations.decode(placement)
-    if isolation_error then return nil, isolation_error end
-    local placement_ceilings = isolation and bounds.object(isolation.option_ceilings[descriptor.provider]) or {}
+    local placed, placement_error = placements.decode(placement)
+    if placement_error then return nil, placement_error end
     local declared = bounds.object(descriptor.options.fields) or {}
-    for name in pairs(placement_ceilings or {}) do
-        local field = bounds.object(declared[name])
-        if not field or field.security_class ~= "host-ceiling" or (not bounds.object(field.capabilities) and not bounds.ids(field.capabilities, true)) then
-            return nil, "Placement ceiling names an option without declared host capabilities: " .. name
-        end
-    end
     local restrictions, restriction_error = decode_profile_restrictions(policy and policy.profile_restrictions)
     if not restrictions then return nil, restriction_error end
     local constraints = policy and bounds.object(policy.option_constraints) or {}
@@ -333,7 +326,7 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
         local field = bounds.object(raw) or {}
         local path = bounds.id(field.path)
         local constraint = bounds.object((constraints or {})[name]) or {}
-        local placement_ceiling = placement_ceilings and placement_ceilings[name]
+        local placement_ceiling = placed and placed.allows or nil
         local default: unknown = field.default
         local default_ceiling_error: string? = nil
         local source = default == nil and "CLI" or "driver schema"
@@ -421,7 +414,7 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
             if err then return nil, err end
             if policy and path and allowed and not allowed_option(allowed, value) then return nil, "option " .. name .. " has a value that is not allowed by the host policy" end
             local constrained, ceiling_error = ceiling_value(field, value, constraint, placement_ceiling)
-            if ceiling_error then return nil, name .. ": " .. ceiling_error .. (isolation and (" for " .. isolation.kind .. " placement") or "") end
+            if ceiling_error then return nil, name .. ": " .. ceiling_error .. (placed and (" for " .. placed.kind .. " placement") or "") end
             local compiled_value, constrained_error = descriptors.decode_option(name, field, constrained)
             if constrained_error then return nil, constrained_error end
             result.values[name] = compiled_value
@@ -442,12 +435,25 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
     return result, nil
 end
 
+-- unattended returns values with the descriptor's unattended option values
+-- merged in; an explicit value that differs from the preset is refused.
+function M.unattended(descriptor: descriptors.Descriptor, values: Object): (Object?, string?)
+    local preset = bounds.object(descriptor.options.unattended)
+    if not preset then return nil, "this CLI declares no unattended mode" end
+    local merged: Object = {}
+    for name, value in pairs(values) do merged[name] = value end
+    for name, value in pairs(preset) do
+        if merged[name] ~= nil and merged[name] ~= value then return nil, name .. " conflicts with unattended" end
+        merged[name] = value
+    end
+    return merged, nil
+end
+
 function M.option_errors(descriptor: descriptors.Descriptor, policy: Object, values: Object, placement: unknown?): ({[string]: string}, string?)
     local compiled, invalid = M.compile(descriptor, policy, nil, nil, "person", nil, nil, placement)
     if not compiled then return {}, invalid end
-    local isolation, isolation_error = isolations.decode(placement)
-    if isolation_error then return {}, isolation_error end
-    local ceilings = isolation and bounds.object(isolation.option_ceilings[descriptor.provider]) or {}
+    local placed, placement_error = placements.decode(placement)
+    if placement_error then return {}, placement_error end
     local constraints = bounds.object(policy.option_constraints) or {}
     local errors: {[string]: string} = {}
     for name, value in pairs(values) do
@@ -457,9 +463,9 @@ function M.option_errors(descriptor: descriptors.Descriptor, policy: Object, val
         elseif row.locked_reason then reason = row.locked_reason
         else
             local _, decode_error = descriptors.decode_option(name, row.declaration, value)
-            local _, ceiling_error = ceiling_value(row.declaration, value, bounds.object(constraints[name]) or {}, ceilings[name])
+            local _, ceiling_error = ceiling_value(row.declaration, value, bounds.object(constraints[name]) or {}, placed and placed.allows or nil)
             reason = decode_error or ceiling_error
-            if ceiling_error and not decode_error and isolation then reason = ceiling_error .. " for " .. isolation.kind .. " placement" end
+            if ceiling_error and not decode_error and placed then reason = ceiling_error .. " for " .. placed.kind .. " placement" end
             if not reason and row.allowed and not allowed_option(row.allowed, value) then reason = "value is not allowed by the host policy" end
             if not reason then
                 for _, dependency in ipairs(bounds.ids(row.declaration.dependencies, true) or {}) do
@@ -631,16 +637,15 @@ function M.review(descriptor: descriptors.Descriptor, values: Object, placement:
     local lines: {string} = {summary}
     local compiled, invalid = M.compile(descriptor, nil, nil, values, "person", nil, nil, placement)
     if not compiled then return nil, invalid end
-    local isolation, isolation_error = isolations.decode(placement)
-    if not isolation then return nil, isolation_error or "Placement isolation is required to review permissions" end
-    lines[#lines + 1] = "Placement: " .. (isolation.kind == "native" and "Local (native host access)" or "Docker (container isolation remains active)")
+    local placed, placement_error = placements.decode(placement)
+    if not placed then return nil, placement_error or "a placement is required to review permissions" end
+    lines[#lines + 1] = "Placement: " .. (placed.kind == "native" and "Local (native host access)" or "Container (container isolation remains active)")
     lines[#lines + 1] = "Mounted roots:"
-    for _, mount in ipairs(isolation.mounted_roots) do
+    for _, mount in ipairs(placed.mounts) do
         lines[#lines + 1] = mount.resource .. " → " .. mount.target .. " (" .. mount.access .. ")"
     end
-    if #isolation.mounted_roots == 0 then lines[#lines + 1] = "none" end
-    lines[#lines + 1] = "Network: " .. isolation.network
-    lines[#lines + 1] = "Credentials: " .. (#isolation.credentials == 0 and "none" or table.concat(isolation.credentials, ", "))
+    if #placed.mounts == 0 then lines[#lines + 1] = "none" end
+    lines[#lines + 1] = "Network: " .. placed.network
     return table.concat(lines, "\n"), nil
 end
 return M

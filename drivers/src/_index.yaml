@@ -72,13 +72,13 @@ entries:
   - name: prepare
     description: Return the declarative launch specification for a profile and a brief
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"options":{"type":"object"}},"additionalProperties":true,"required":["profile_id","brief"]}}
+    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"placement":{"type":"object"},"unattended":{"type":"boolean"},"options":{"type":"object"}},"additionalProperties":true,"required":["profile_id","brief"]}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"launch":{"type":"object"}},"additionalProperties":true,"required":["ok","launch"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
   - name: dispatch
     description: Return the declarative input for a turn or control operation on a running attempt
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"options":{"type":"object"}},"additionalProperties":true,"required":["profile_id","brief"]}}
+    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"placement":{"type":"object"},"unattended":{"type":"boolean"},"options":{"type":"object"}},"additionalProperties":true,"required":["profile_id","brief"]}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"launch":{"type":"object"}},"additionalProperties":true,"required":["ok","launch"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
   - name: normalize
@@ -90,7 +90,7 @@ entries:
   - name: configure
     description: Return argv arguments and protected private-home files from host-selected configuration inputs
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"isolation":{"type":"object"},"option_provenance":{"type":"object"},"configure_renderer":{"type":"string"},"option_values":{"type":"object"},"context":{"type":"string"},"instructions_path":{"type":"string"},"instructions":{"type":"string"},"instruction_builder":{"type":"object"},"provider_ref":{"type":"string"},"provider":{"type":"object"},"gateway":{"type":"object"},"home_directory":{"type":"string"},"private_home":{"type":"boolean"},"attempt_id":{"type":"string"},"fixture":{"type":"boolean"}},"additionalProperties":true}}
+    - {format: application/schema+json, definition: {"type":"object","properties":{"placement":{"type":"object"},"option_provenance":{"type":"object"},"configure_renderer":{"type":"string"},"option_values":{"type":"object"},"context":{"type":"string"},"instructions_path":{"type":"string"},"instructions":{"type":"string"},"instruction_builder":{"type":"object"},"provider_ref":{"type":"string"},"provider":{"type":"object"},"gateway":{"type":"object"},"home_directory":{"type":"string"},"private_home":{"type":"boolean"},"attempt_id":{"type":"string"},"fixture":{"type":"boolean"}},"additionalProperties":true}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"delivery":{"type":"object"}},"additionalProperties":true,"required":["ok","delivery"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
 - name: locate_facet
@@ -131,3 +131,18 @@ entries:
   source: file://configuration_types.lua
   imports:
     driver_types: bee.drivers:types
+- name: drivers
+  kind: library.lua
+  meta:
+    comment: Host-facing driver library - the activated drivers and their options, the launch a driver prepares for a placement, and a reader folding CLI output into records
+  source: file://drivers.lua
+  modules: [registry, contract]
+  imports:
+    bounds: bee.drivers.values:bounds
+    resolver: bee.drivers.binding:resolver
+    profile: bee.drivers.profiles:profile
+    descriptor: bee.drivers.descriptor:descriptor
+    effective: bee.drivers.descriptor:effective
+    universal: bee.drivers.binding:universal
+    configuration: bee.drivers.binding:configuration
+    stream_json: bee.drivers.transport:stream_json

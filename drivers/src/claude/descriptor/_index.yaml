@@ -64,6 +64,8 @@ entries:
           transport: stdio
           adapter_ref: bee.drivers.claude.permission:permission_adapter
     options:
+      unattended:
+        permission_mode: bypassPermissions
       profiles:
       - session
       - batch

@@ -74,5 +74,6 @@ entries:
     type: harness.driver
     driver_id: agy
     descriptor_ref: bee.drivers.agy.descriptor:cli
+    credential_format_ref: bee.drivers.agy.credentials:credential_format
     accepts_model: true
     profiles_ref: bee.drivers.agy.profiles:profiles

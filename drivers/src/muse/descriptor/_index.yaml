@@ -81,6 +81,8 @@ entries:
             'false': []
             'true':
             - bypass
+            - write-anywhere
+            - network
           ceiling: []
           section: advanced
           order: 10

@@ -74,5 +74,6 @@ entries:
     type: harness.driver
     driver_id: opencode
     descriptor_ref: bee.drivers.opencode.descriptor:cli
+    credential_format_ref: bee.drivers.opencode.credentials:credential_format
     accepts_model: false
     profiles_ref: bee.drivers.opencode.profiles:profiles

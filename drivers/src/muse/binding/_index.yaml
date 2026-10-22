@@ -74,5 +74,6 @@ entries:
     type: harness.driver
     driver_id: muse
     descriptor_ref: bee.drivers.muse.descriptor:cli
+    credential_format_ref: bee.drivers.muse.credentials:credential_format
     accepts_model: true
     profiles_ref: bee.drivers.muse.profiles:profiles

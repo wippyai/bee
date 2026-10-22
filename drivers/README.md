@@ -29,7 +29,7 @@ bindings, descriptors and codecs stay behind it. Errors carry kinds
 ```lua
 local drivers = require("drivers") -- imports: drivers: bee.drivers:drivers
 
-local list = drivers.list()        -- {id, title, profiles, options, capabilities, unattended, credentials}
+local list = drivers.list()        -- {id, title, executable, profiles, options, capabilities, unattended, credentials}
 local launch, err = drivers.launch("claude", {
     brief = "say pong",
     home = "/home/node",                   -- the CLI's HOME inside the placement

@@ -21,7 +21,7 @@ entries:
     policies: [bee.tests.harness:apply_test_policy, bee.harness.security:launch_locate_probe_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     locate: bee.harness.launch:locate
 - name: admission_dependencies_test
   kind: function.lua
@@ -37,7 +37,7 @@ entries:
   method: handle
   imports:
     admission: bee.harness.launch:admission
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     profiles: bee.harness.profiles:protocol
 - name: admit
   kind: function.lua

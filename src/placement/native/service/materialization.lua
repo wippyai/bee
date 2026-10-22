@@ -24,6 +24,7 @@ local workdir_preparers = require("workdir_preparers")
 local writable_roots_adapter = require("writable_roots_adapter")
 local provider_projection = require("provider_projection")
 local profile_values = require("profile_values")
+local placement_profiles = require("placement_profiles")
 local effective_schema = require("effective_schema")
 local registry = require("registry")
 local trust = require("trust")
@@ -405,6 +406,8 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     -- File logins run before immutable driver configuration so their provider
     -- parent remains runner-owned for this materialization.
     local descriptor, _, descriptor_error = profile_values.schema(request.binding_ref)
+    local option_placement, option_placement_error = placement_profiles.placement(request.placement_profile_ref)
+    if not option_placement then return refused(option_placement_error or "placement profile unavailable") end
     local policy_entry = registry.get(request.policy_ref)
     local policy_data = policy_entry and bounds.object(policy_entry.data)
     local file_projection = false
@@ -545,7 +548,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             login_file.initialize = initializers
             for _, item in ipairs(login_file.initialize) do
                 if descriptor then
-                    local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, item.content, request.placement_profile_ref, request.preferences and request.preferences.options)
+                    local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, item.content, option_placement, request.preferences and request.preferences.options)
                     if invalid then return refused(invalid) end
                 end
                 protected[#protected + 1] = item.path
@@ -583,7 +586,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                     if replayed and descriptor then
                         local retained, read_error = homes.read_configuration(selected_home_path, item.path, expected)
                         if retained == nil then return refused(tostring(read_error or "Retained configuration unavailable") .. ". Open Agents and choose Setup to approve the current configuration file.") end
-                        local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, retained, request.placement_profile_ref, request.preferences and request.preferences.options)
+                        local invalid = effective_schema.check_config(descriptor, policy_data or {}, item.path, retained, option_placement, request.preferences and request.preferences.options)
                         if invalid then return refused(invalid) end
                     end
                     composition_bases[item.path] = expected
@@ -757,7 +760,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 end
                 local source_path = bounds.text(value.source_path, 512)
                 if not source_path then return refused("The approved configuration source file is unavailable. Choose Setup in Agents again.") end
-                local selected_format: formats.Format = {schema_revision = "bee.credential-format@1", file = {
+                local selected_format: formats.Format = {schema_revision = formats.REVISION, environments = {}, file = {
                     path = "configuration-admission", content_format = "opaque", initialize = {
                         {path = file.composition.base_path, source_path = source_path, content = value.content, on_missing_login = true}}}}
                 local projected_format: formats.Format? = nil
@@ -797,7 +800,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             end
         end
         if descriptor and base ~= nil and file.composition then
-            local invalid = effective_schema.check_config(descriptor, policy_data or {}, file.composition.base_path, base, request.placement_profile_ref, request.preferences and request.preferences.options)
+            local invalid = effective_schema.check_config(descriptor, policy_data or {}, file.composition.base_path, base, option_placement, request.preferences and request.preferences.options)
             if invalid then return refused(invalid) end
         end
         local content, content_error = configuration.render(file, environment, request.gateway, base)

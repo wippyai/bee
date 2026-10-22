@@ -88,21 +88,21 @@ entries:
     actions:
     - env.get
     resources:
-    - bee.driver.claude.env:executable
-    - bee.driver.codex.env:executable
-    - bee.driver.agy.env:executable
-    - bee.driver.grok.env:executable
-    - bee.driver.muse.env:executable
-    - bee.driver.opencode.env:executable
-    - bee.driver.claude.env:config_home
-    - bee.driver.codex.env:config_home
+    - bee.drivers.claude.env:executable
+    - bee.drivers.codex.env:executable
+    - bee.drivers.agy.env:executable
+    - bee.drivers.grok.env:executable
+    - bee.drivers.muse.env:executable
+    - bee.drivers.opencode.env:executable
+    - bee.drivers.claude.env:config_home
+    - bee.drivers.codex.env:config_home
     effect: allow
 - name: launch_locate_probe_policy
   kind: security.policy.expr
   meta:
     comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings, and alternative login metadata without reading credential contents
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action == "env.get" && (resource matches "^bee[.]driver[.][a-z][a-z0-9]*[.]env:executable$" || resource == "bee.harness.launch:host_environment_names"
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action == "env.get" && (resource matches "^bee[.]drivers?[.][a-z][a-z0-9]*[.]env:executable$" || resource == "bee.harness.launch:host_environment_names"
       || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || (action == "exec.get" && resource == "bee.placement.native.env:placement_executor") || (action == "exec.run" && meta.executor == "bee.placement.native.env:placement_executor")
       || (action == "fs.get" && resource == "bee.env:machine_login_source")
       || (action == "fs.get" && resource == "bee.placement.native.env:placement_host_files") || action == "fs.stat"

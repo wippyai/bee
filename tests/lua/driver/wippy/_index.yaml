@@ -29,7 +29,7 @@ entries:
   source: file://mock_server.lua
   method: handle
   modules: [http, json]
-  imports: {principals: bee.tests.support.principals:bound, bounds: bee.values:bounds}
+  imports: {principals: bee.tests.support.principals:bound, bounds: bee.drivers.values:bounds}
 
 - name: driver_wippy_test
   kind: function.lua
@@ -42,7 +42,7 @@ entries:
   modules: [system, json, registry, funcs, security, time, events, channel]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     test_fixtures: bee.tests.support:fixtures
     runner: bee.driver.wippy.service:runner

@@ -10,21 +10,21 @@ entries:
   modules: [json]
   imports:
     limits: bee.hub.package:limits
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     json_schema: bee.gateway.catalog:json_schema
 - name: inspection
   kind: library.lua
   source: file://inspection.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     requirements: bee.hub.package:requirements
 - name: inventory
   kind: library.lua
   source: file://inventory.lua
   imports:
     limits: bee.hub.package:limits
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     requirements: bee.hub.package:requirements
     operations: bee.hub.types:operations
 - name: semver
@@ -36,32 +36,32 @@ entries:
   modules: [json, env]
   imports:
     limits: bee.hub.package:limits
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     semver: bee.hub.package:semver
 - name: native_compat
   kind: library.lua
   source: file://native_compat.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     binary_identity: bee.hub.package:binary_identity
     semver: bee.hub.package:semver
 - name: graph
   kind: library.lua
   source: file://graph.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     requirements: bee.hub.package:requirements
     inspection: bee.hub.package:inspection
     semver: bee.hub.package:semver
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
 - name: plan
   kind: library.lua
   source: file://plan.lua
   modules: [hash]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     binary_identity: bee.hub.package:binary_identity
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     graph: bee.hub.package:graph
     inspection: bee.hub.package:inspection
     inventory: bee.hub.package:inventory
@@ -78,11 +78,11 @@ entries:
   kind: library.lua
   source: file://result.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: review
   kind: library.lua
   source: file://review.lua
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     plan: bee.hub.package:plan

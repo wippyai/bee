@@ -19,9 +19,9 @@ end
 local function binding(): Entry
     return {id = "fake:binding", kind = "contract.binding", meta = {type = "harness.driver", driver_id = "fake", profiles_ref = "fake:profiles"},
         data = {contracts = {
-            {contract = "bee.driver:driver", methods = {prepare = "fake:prepare", dispatch = "fake:dispatch",
+            {contract = "bee.drivers:driver", methods = {prepare = "fake:prepare", dispatch = "fake:dispatch",
                 normalize = "fake:normalize", configure = "fake:configure"}},
-            {contract = "bee.driver:locate_facet", methods = {locate = "fake:locate"}},
+            {contract = "bee.drivers:locate_facet", methods = {locate = "fake:locate"}},
         }}}
 end
 local function declaration(protocol: string?): Entry
@@ -165,7 +165,7 @@ local function define_tests()
         test.it("requires the driver contract with four bound functions", function()
             local other = binding()
             data_of(other).contracts = {{contract = "bee.other:contract", methods = {}}}
-            test.is_true(has(classified(nil, other).diagnostics, "binding does not implement bee.driver:driver"))
+            test.is_true(has(classified(nil, other).diagnostics, "binding does not implement bee.drivers:driver"))
             local unbound = binding()
             local contracts = principals.objects(data_of(unbound).contracts)
             local bound = assert(bounds.object(contracts[1].methods))
@@ -207,7 +207,7 @@ local function define_tests()
             driver_methods.locate = "fake:locate"
             local invalid = classified(nil, misplaced)
             test.eq(invalid.state, "incompatible")
-            test.is_true(has(invalid.diagnostics, "method locate belongs to bee.driver:locate_facet, not bee.driver:driver"))
+            test.is_true(has(invalid.diagnostics, "method locate belongs to bee.drivers:locate_facet, not bee.drivers:driver"))
         end)
         test.it("marks compatible bindings that share a driver_id as ambiguous", function()
             local first = classified()

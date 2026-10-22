@@ -6,8 +6,8 @@ entries:
   source: file://confirmation.lua
   modules: [funcs, uuid]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     caller: bee.app:caller
 - name: dialog
   kind: library.lua

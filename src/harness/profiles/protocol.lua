@@ -3,6 +3,7 @@ local canonical = require("canonical")
 local json = require("json")
 local access = require("access")
 local profile_values = require("profile_values")
+local placement_profiles = require("placement_profiles")
 local M = {}
 M.SCHEMA = "bee.agent-profile@3"
 M.PRIOR = "bee.agent-profile@2"
@@ -213,7 +214,9 @@ function M.profile(value: unknown): (Profile?, string?)
     if provider_input and provider_input.schema_ref then
         local placement, placement_error = M.placement(raw.placement)
         if placement_error then return nil, placement_error end
-        local decoded, invalid = profile_values.decode(driver, provider_input, placement and placement.kind == "docker" and placement.profile_ref or nil)
+        local option_placement, option_placement_error = placement_profiles.placement(placement and placement.kind == "docker" and placement.profile_ref or nil)
+        if not option_placement then return nil, option_placement_error end
+        local decoded, invalid = profile_values.decode(driver, provider_input, option_placement)
         if not decoded then return nil, invalid end
         provider_input = decoded
     end
@@ -272,7 +275,9 @@ function M.profile(value: unknown): (Profile?, string?)
 end
 
 function M.storage(profile: Profile): (Object?, string?)
-    local provider, err = profile_values.encode(profile.driver_binding_ref, profile.provider, profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
+    local option_placement, placement_error = placement_profiles.placement(profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
+    if not option_placement then return nil, placement_error end
+    local provider, err = profile_values.encode(profile.driver_binding_ref, profile.provider, option_placement)
     if not provider then return nil, err end
     local result: Object = {}
     for key, value in pairs(profile) do result[key] = value end

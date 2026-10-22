@@ -7,7 +7,7 @@ entries:
   modules:
   - funcs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: source_load
   kind: function.lua
   source: file://source_load.lua
@@ -15,7 +15,7 @@ entries:
   modules:
   - eval_runner
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gov.security:source_compile_policy
@@ -30,7 +30,7 @@ entries:
   - security
   - system
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     publication_profiles: bee.gov.types:publication_profile_decoder
     activation_profiles: bee.gov.types:activation_profile_decoder
     transaction: bee.persist:transaction
@@ -52,7 +52,7 @@ entries:
   - security
   imports: &id001
     service: bee.gov.binding:publication_service
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.persist:transaction
   security:
     policies:
@@ -75,7 +75,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gov.security:super_edit_facade_policy
@@ -87,7 +87,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gov.security:super_edit_recovery_facade_policy
@@ -102,7 +102,7 @@ entries:
   - time
   - uuid
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.persist:transaction
     super_edit: bee.gov.security:super_edit
     activation_profiles: bee.gov.types:activation_profile_decoder
@@ -116,7 +116,7 @@ entries:
   - system
   - uuid
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     resources: bee.gov.binding:staging_resources
     activation_store: bee.gov.persist:activation_store
     destination_service: bee.gov.binding:destination_service
@@ -130,7 +130,7 @@ entries:
   imports:
     service: bee.gov.binding:destination_service
     transaction: bee.persist:transaction
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gov.security:destination_facade_policy
@@ -144,7 +144,7 @@ entries:
   - contract
   - hash
   imports: &id002
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
     capability_access: bee.gov.binding:capability_access
     capability_files: bee.gov.types:capability_files
@@ -189,7 +189,7 @@ entries:
     protocol: bee.gov.types:workspace_protocol
     guide: bee.gov.traits:guide
     transaction: bee.persist:transaction
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gov.security:overlay_facade_policy
@@ -198,8 +198,8 @@ entries:
   source: file://approval.lua
   imports:
     drivers: bee.gov.types:drivers
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
 - name: destination
   kind: library.lua
   source: file://destination.lua
@@ -207,8 +207,8 @@ entries:
   - hash
   imports:
     resolution: bee.gov.types:resolver
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     approval: bee.gov.binding:approval
     plan_store: bee.gov.persist:plan_store
     replicas: bee.sync.persist:replicas
@@ -221,7 +221,7 @@ entries:
   modules:
   - base64
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     delivery: bee.gov.types:delivery
     replicas: bee.sync.persist:replicas
     sync: bee.sync.persist:store
@@ -230,7 +230,7 @@ entries:
   kind: library.lua
   source: file://author.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: publication_service
   kind: library.lua
   source: file://publication_service.lua
@@ -242,7 +242,7 @@ entries:
   - base64
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     artifact: bee.gov.types:artifact
     materializer: bee.gov.binding:materializer
     application_admission: bee.gov.types:governed_application_admission
@@ -261,7 +261,7 @@ entries:
   kind: library.lua
   source: file://activation_uninstall.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.persist:transaction
     activation_store: bee.gov.persist:activation_store
 - name: activation_owner
@@ -272,7 +272,7 @@ entries:
   imports:
     source_check: bee.gov.binding:source_check
     resolution: bee.gov.types:resolver
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.persist:transaction
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
@@ -289,7 +289,7 @@ entries:
   modules:
   - hash
   imports:
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     hub_migrations: bee.hub.activation:migrations
     migration_runner: bee.hub.binding:migration_runner
     migration_work: bee.gov.types:migration_work
@@ -300,8 +300,8 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     capability_model: bee.capability:model
     lease_model: bee.gov.types:lease_model
@@ -322,8 +322,8 @@ entries:
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake
     artifact: bee.gov.types:artifact
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     resources: bee.gov.binding:staging_resources
     replicas: bee.sync.persist:replicas
@@ -369,7 +369,7 @@ entries:
     protocol: bee.gov.types:workspace_protocol
     staging: bee.gov.persist:staging
     source: bee.gov.binding:source
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     resources: bee.gov.binding:staging_resources
     transaction: bee.persist:transaction
   meta:
@@ -405,8 +405,8 @@ entries:
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake
     artifact: bee.gov.types:artifact
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     resources: bee.gov.binding:staging_resources
     replicas: bee.sync.persist:replicas
@@ -450,8 +450,8 @@ entries:
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake
     artifact: bee.gov.types:artifact
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     resources: bee.gov.binding:staging_resources
     replicas: bee.sync.persist:replicas
@@ -486,9 +486,9 @@ entries:
   - json
   imports:
     driver_admission: bee.gov.types:driver_admission
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     lists: bee.gov.types:lists
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     protected_kernel: bee.gov.types:protected_kernel
     application_admission: bee.gov.types:governed_application_admission
     capability_grants: bee.gov.types:capability_grants
@@ -498,8 +498,8 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     activation_store: bee.gov.persist:activation_store
     artifact: bee.gov.types:artifact
@@ -514,8 +514,8 @@ entries:
     preflight: bee.gov.binding:preflight
     migration_work: bee.gov.types:migration_work
     application_admission: bee.gov.types:governed_application_admission
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     comparison: bee.gov.binding:comparison
 - name: application_admissions
   kind: library.lua
@@ -524,7 +524,7 @@ entries:
   - registry
   - logger
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     catalog_revision: bee.gov.persist:catalog_revision
     resources: bee.gov.binding:staging_resources
     activation_profiles: bee.gov.types:activation_profile_decoder
@@ -544,8 +544,8 @@ entries:
     application_admission: bee.gov.types:governed_application_admission
     capability_grants: bee.gov.types:capability_grants
     capability_files: bee.gov.types:capability_files
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
 - name: requirement
   kind: library.lua
   source: file://requirement.lua
@@ -553,8 +553,8 @@ entries:
   - hash
   imports:
     requirements: bee.hub.package:requirements
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     driver_admission: bee.gov.types:driver_admission
     preflight: bee.gov.binding:preflight
 - name: hub_resolver
@@ -572,8 +572,8 @@ entries:
     capability_model: bee.capability:model
     resolution: bee.gov.types:resolver
     artifact: bee.gov.types:artifact
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     application_admission: bee.gov.types:governed_application_admission
     protected_kernel: bee.gov.types:protected_kernel
     preflight: bee.gov.binding:preflight
@@ -593,8 +593,8 @@ entries:
     driver_admission: bee.gov.types:driver_admission
     resolution: bee.gov.types:resolver
     artifact: bee.gov.types:artifact
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     application_admission: bee.gov.types:governed_application_admission
     protected_kernel: bee.gov.types:protected_kernel
     capability_model: bee.capability:model
@@ -608,14 +608,14 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: capability_http
   kind: library.lua
   source: file://capability_http.lua
   modules:
   - http_client
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
 - name: capability_access
   kind: library.lua
@@ -625,7 +625,7 @@ entries:
   - security
   - hash
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
@@ -638,7 +638,7 @@ entries:
   - base64
   - hash
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     protocol: bee.gov.types:workspace_protocol
     transaction: bee.persist:transaction
 - name: application_capabilities
@@ -647,13 +647,13 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     workspace_applications: bee.gov.types:workspace_applications
     capability_model: bee.capability:model
     capability_grants: bee.gov.types:capability_grants
     capability_files: bee.gov.types:capability_files
-    agent_tool: bee.values:agent_tool
+    agent_tool: bee.drivers.values:agent_tool
     preflight: bee.gov.binding:preflight
 - name: hub_package
   kind: library.lua
@@ -664,17 +664,17 @@ entries:
   imports:
     requirements: bee.hub.package:requirements
     inspection: bee.hub.package:inspection
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     graph: bee.hub.package:graph
     inventory: bee.hub.package:inventory
     artifact_source: bee.hub.binding:artifact_source
     artifact: bee.gov.types:artifact
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
 - name: follow_source
   kind: library.lua
   source: file://follow_source.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     follow_store: bee.gov.persist:follow_store
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
@@ -698,7 +698,7 @@ entries:
   imports:
     driver_admission: bee.gov.types:driver_admission
     artifact: bee.gov.types:artifact
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     resources: bee.gov.binding:staging_resources
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
@@ -723,7 +723,7 @@ entries:
   imports:
     follow_store: bee.gov.persist:follow_store
     artifact: bee.gov.types:artifact
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.persist:transaction
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store

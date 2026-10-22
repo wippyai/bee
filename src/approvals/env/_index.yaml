@@ -17,4 +17,4 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

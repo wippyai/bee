@@ -52,7 +52,7 @@ entries:
   security:
     policies: [bee.tests.resources:apply_test_policy, bee.resources.security:resource_store_policy]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
     authority: bee.resources.persist:authority

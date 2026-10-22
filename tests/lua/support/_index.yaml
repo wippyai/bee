@@ -7,7 +7,7 @@ entries:
   meta:
     type: test_support
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   modules:
   - registry
   - sql
@@ -43,7 +43,7 @@ entries:
   modules:
   - funcs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     committed: bee.tests.support:committed
 - name: approval_effect_policy
   kind: security.policy

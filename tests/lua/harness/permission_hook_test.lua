@@ -19,7 +19,7 @@ local function run()
     test.describe("Carrier permission hook exchange", function()
         for _, decision in ipairs({"approved", "denied"}) do
             test.it("persists and replays one " .. decision .. " response without a stdin write", function()
-                local entry = assert(registry.get("bee.driver.permission:permission_request_hook"))
+                local entry = assert(registry.get("bee.drivers.permission:permission_request_hook"))
                 local decoded = assert(adapter.decode(entry.id, assert(bounds.object(entry.data)).adapter))
                 local state: exchange.State = {request = {owner_id = "owner", attempt_id = "attempt", action_id = "action", thread_id = "thread",
                         workspace_id = "workspace"}, plan_digest = string.rep("a", 64), epoch = 1, permissions = {},

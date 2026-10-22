@@ -1,3 +1,12 @@
--- MIT. The universal launch of the codex driver's descriptor, for its suites.
+-- MIT. The universal launch of the codex driver's descriptor on Bee's default
+-- placement, for its suites. The placement resolves on each decode.
 local universal = require("universal")
-return universal.launch("bee.driver.codex.descriptor:cli")
+local placement_profiles = require("placement_profiles")
+local REF = "bee.drivers.codex.descriptor:cli"
+local plain = universal.launch(REF)
+return {
+    decode = function(value: unknown): (universal.Request?, string?)
+        return universal.launch(REF, assert(placement_profiles.placement(nil))).decode(value)
+    end,
+    specification = plain.specification,
+}

@@ -6,6 +6,6 @@ entries:
   source: file://hooks.lua
   modules: []
   imports:
-    bounds: bee.values:bounds
-    service_reply: bee.values:reply
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    service_reply: bee.drivers.values:reply
+    canonical: bee.drivers.values:canonical

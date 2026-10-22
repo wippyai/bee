@@ -29,7 +29,7 @@ local function define_tests()
                 expected_revision = 0, idempotency_key = "edited-profile",
                 profile = {schema_revision = "bee.agent-profile@3", name = "UX Claude",
                     definition_ref = "bee.driver.claude.profiles:default_window",
-                    driver_binding_ref = "bee.driver.claude.binding:binding",
+                    driver_binding_ref = "bee.drivers.claude.binding:binding",
                     provider = {model = "sonnet", effort = "high", system_prompt_append = "Use concise responses."},
                     bee = {permission_answers = "ask"}, placement = {kind = "native", home = "machine"}},
             }))))
@@ -66,7 +66,7 @@ local function define_tests()
         test.it("retains a saved profile's identity and title beside its definition", function()
             local saved = assert(funcs.call("bee.harness.binding:call", {operation = "put", workspace_id = "saved-profile-workspace",
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",
-                profile = {schema_revision = "bee.agent-profile@3", name = "Selected container profile", definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}}}}))
+                profile = {schema_revision = "bee.agent-profile@3", name = "Selected container profile", definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {}, bee = {mcp = {}}}}))
             test.is_true((assert(bounds.object(saved))).ok == true,assert(json.encode(saved)))
             local page, page_fault = catalog.list({include_unavailable = true}, "saved-profile-workspace")
             if not page then error(page_fault and page_fault.message or "catalog list failed") end
@@ -95,7 +95,7 @@ local function define_tests()
             end
         end)
         test.it("offers installed interactive drivers and options before login", function()
-            local ref = "bee.driver.claude.descriptor:cli"
+            local ref = "bee.drivers.claude.descriptor:cli"
             local original = assert(registry.get(ref))
             local edited = assert(registry.get(ref))
             local data = assert(bounds.object(edited.data))
@@ -109,7 +109,7 @@ local function define_tests()
             assert(changes:apply())
             local ok, failure = pcall(function()
                 local probe = assert(bounds.object(assert(funcs.call("bee.harness.binding:locate_probe",
-                    {binding_ref = "bee.driver.claude.binding:binding", profile_id = "window"}))))
+                    {binding_ref = "bee.drivers.claude.binding:binding", profile_id = "window"}))))
                 local result = assert(bounds.object(probe.result))
                 test.eq(result.status, "unconfigured")
                 local capabilities = assert(bounds.object(result.capabilities))
@@ -130,7 +130,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("leaves PTY authentication to the CLI and probes headless login", function()
-            local ref = "bee.driver.claude.descriptor:cli"
+            local ref = "bee.drivers.claude.descriptor:cli"
             local original = assert(registry.get(ref))
             local edited = assert(registry.get(ref))
             local data = assert(bounds.object(edited.data))
@@ -142,7 +142,7 @@ local function define_tests()
             local ok, failure = pcall(function()
                 local function login(profile: string): Object
                     local probe = assert(bounds.object(assert(funcs.call("bee.harness.binding:locate_probe",
-                        {binding_ref = "bee.driver.claude.binding:binding", profile_id = profile}))))
+                        {binding_ref = "bee.drivers.claude.binding:binding", profile_id = profile}))))
                     return assert(bounds.object(assert(bounds.object(probe.result)).login))
                 end
                 test.is_nil(login("window").exists)

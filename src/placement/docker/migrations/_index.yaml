@@ -11,7 +11,7 @@ entries:
   imports:
     migration: wippy.migration:migration
     resources: bee.placement.native.env:resources
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     grants: bee.approvals.grants:store
     legacy: bee.placement.docker.env:legacy

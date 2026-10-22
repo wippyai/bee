@@ -98,7 +98,7 @@ Copying a profile transfers no authority; machine home requires host
 permission. The gateway checks saved MCP scopes against every decoded call.
 `bee.driver.cli-descriptor@4` declares each configurable field's canonical path,
 ID, value schema, label, description, group, security class, defaults, contexts,
-support evidence and mappings. `bee.driver.descriptor:effective` compiles these
+support evidence and mappings. `bee.drivers.descriptor:effective` compiles these
 with installed capabilities and host constraints for the editor, admission and
 rendering. Rights narrow by subsets, denies combine by union, limits take minima,
 and permission modes compare declared capabilities. Person-only values require

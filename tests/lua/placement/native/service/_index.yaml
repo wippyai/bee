@@ -15,7 +15,7 @@ entries:
   imports:
     test: wippy.test:test
     capability: bee.placement.native.service:capability
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: runtime_supervision_test
   kind: function.lua
   source: file://runtime_supervision_test.lua
@@ -50,9 +50,9 @@ entries:
   meta: {type: test_support}
   modules: [env, fs, funcs, sql, process, hash, registry]
   imports:
-    profile_values: bee.driver.descriptor:profile_values
+    profile_values: bee.drivers.descriptor:profile_values
     trust_lifetime: bee.placement.native.service:trust_lifetime
-    effective_schema: bee.driver.descriptor:effective
+    effective_schema: bee.drivers.descriptor:effective
     trust: bee.driver.descriptor:trust
     grants: bee.approvals.grants:store
     profile_grants: bee.harness.profiles.persist:grants
@@ -61,15 +61,16 @@ entries:
     homes: bee.tests.placement.native.service:homes
     workdir_preparers: bee.placement.native.service:workdir_preparers
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     configuration: bee.placement.native.env:configuration
     provider_projection: bee.placement.native.service:provider_projection
     types: bee.placement:types
+    placement_profiles: bee.placement.profiles:profiles
     paths: bee.placement.profiles:paths
     gateway_protocol: bee.gateway:protocol
     credential_protocol: bee.credentials:protocol
-    service_reply: bee.values:reply
-    formats: bee.credentials:formats
+    service_reply: bee.drivers.values:reply
+    formats: bee.drivers.credentials:format
 - name: runner_observation
   kind: library.lua
   source: file://runner_observation.lua
@@ -87,7 +88,7 @@ entries:
     materialization: bee.tests.placement.native.service:materialization
     observe: bee.tests.placement.native.service:runner_observation
     types: bee.placement:types
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: materialization_runner_process
   kind: process.lua
   source: file://../materialization_runner.lua
@@ -100,7 +101,7 @@ entries:
     materialization: bee.tests.placement.native.service:materialization
     observe: bee.tests.placement.native.service:runner_observation
     types: bee.placement:types
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: required_file_test
   kind: function.lua
   source: file://required_file_test.lua
@@ -111,7 +112,7 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.placement:types
-    driver_types: bee.driver:types
+    driver_types: bee.drivers:types
     materialization: bee.tests.placement.native.service:materialization
 - name: publication_test
   kind: function.lua
@@ -144,7 +145,7 @@ entries:
     - bee.tests.placement.native.service:configuration_source_policy
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     store: bee.placement.native.persist:store
     request: bee.placement:request
     types: bee.placement:types

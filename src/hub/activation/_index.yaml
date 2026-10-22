@@ -6,7 +6,7 @@ entries:
   source: file://migrations.lua
   imports:
     limits: bee.hub.package:limits
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: migration_work
   kind: library.lua
   source: file://migration_work.lua
@@ -14,8 +14,8 @@ entries:
   - hash
   imports:
     limits: bee.hub.package:limits
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     plan: bee.hub.package:plan
     migrations: bee.hub.activation:migrations
 - name: installation
@@ -24,7 +24,7 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     semver: bee.hub.package:semver
     requirements: bee.hub.package:requirements

@@ -12,7 +12,7 @@ entries:
   - json
   imports:
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
 - name: records_test
   kind: function.lua
   source: file://records_test.lua
@@ -22,12 +22,12 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    record: bee.threads.records:record
-    observation: bee.threads.records:observation
-    message: bee.threads.records:message
-    lifecycle: bee.threads.records:lifecycle
-    delivery: bee.threads.records:delivery
-    bounds: bee.values:bounds
+    record: bee.drivers.records:record
+    observation: bee.drivers.records:observation
+    message: bee.drivers.records:message
+    lifecycle: bee.drivers.records:lifecycle
+    delivery: bee.drivers.records:delivery
+    bounds: bee.drivers.values:bounds
 - name: client_policy
   kind: security.policy
   meta:
@@ -128,7 +128,7 @@ entries:
   - time
   imports:
     fixtures: bee.tests.support:fixtures
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     service_types: bee.threads:types
     database: bee.threads.persist:database
     commits: bee.threads.delivery:commits
@@ -143,7 +143,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
 - name: lifecycle_test
   kind: function.lua
   source: file://lifecycle_test.lua
@@ -166,7 +166,7 @@ entries:
   modules:
   - time
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.threads:harness
     owner: bee.threads.persist:owner
@@ -255,9 +255,9 @@ entries:
   imports:
     test: wippy.test:test
     capabilities: bee.threads.binding:capabilities_report
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     commits: bee.threads.delivery:commits
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
 - name: carrier_test
   kind: function.lua
   source: file://carrier_test.lua
@@ -266,7 +266,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.threads:harness
 - name: approvals_test
@@ -277,7 +277,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.threads:harness
 - name: send_test
@@ -299,7 +299,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     session: bee.threads.delivery:session
 - name: addressing_test
@@ -310,7 +310,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.threads:harness
 - name: notice_test
@@ -323,7 +323,7 @@ entries:
     suite: bee
     timeout: 120s
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.threads:harness
 - name: workspace_test
@@ -337,7 +337,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.threads:harness
     reader: bee.threads.persist:reader
@@ -361,7 +361,7 @@ entries:
   - funcs
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness: bee.tests.threads:harness
     sends: bee.threads.service:sends
     owner: bee.threads.persist:owner
@@ -388,10 +388,10 @@ entries:
     suite: bee
     timeout: 120s
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.threads:harness
-    app_identity: bee.threads.records:app_identity
+    app_identity: bee.drivers.records:app_identity
 - name: app_identity_test
   kind: function.lua
   source: file://app_identity_test.lua
@@ -401,7 +401,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    app_identity: bee.threads.records:app_identity
+    app_identity: bee.drivers.records:app_identity
 - name: inbox_test
   kind: function.lua
   source: file://inbox_test.lua
@@ -412,7 +412,7 @@ entries:
   modules:
   - system
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.threads:harness
     sends: bee.threads.service:sends
@@ -424,7 +424,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     pump: bee.threads.service:pump
 - name: work_store_test
@@ -441,11 +441,11 @@ entries:
   - sql
   - uuid
   imports:
-    events: bee.driver.codec:events
+    events: bee.drivers.codec:events
     test: wippy.test:test
     harness: bee.tests.threads:harness
     owner: bee.threads.persist:owner
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: summary_policy
   kind: security.policy
   meta:
@@ -529,7 +529,7 @@ entries:
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness: bee.tests.threads:harness
     gateway: bee.gateway.binding:gateway
     owner: bee.threads.persist:owner
@@ -548,7 +548,7 @@ entries:
   imports:
     test: wippy.test:test
     host: bee.tests.memory:host
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness: bee.tests.threads:harness
     gateway: bee.gateway.binding:gateway
     owner: bee.threads.persist:owner
@@ -566,7 +566,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     host: bee.tests.memory:host
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: usage_test
@@ -577,7 +577,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 
 - name: hooks_test
   kind: function.lua
@@ -589,7 +589,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -604,7 +604,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -619,7 +619,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -634,7 +634,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -649,7 +649,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -664,7 +664,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -679,7 +679,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -694,7 +694,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -709,7 +709,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
@@ -735,7 +735,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     response: bee.threads.hooks:response
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_budget_test
@@ -748,7 +748,7 @@ entries:
     test: wippy.test:test
     host: bee.tests.memory:host
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     response: bee.threads.hooks:response
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 

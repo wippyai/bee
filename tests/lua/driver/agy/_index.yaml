@@ -16,14 +16,14 @@ entries:
   imports:
     fixtures: bee.tests.support:fixtures
     test: wippy.test:test
-    profile: bee.driver.profiles:profile
+    profile: bee.drivers.profiles:profile
     launch: bee.tests.support.driver:agy_launch
     protocol: bee.tests.support.driver:agy_protocol
-    configure_protocol: bee.driver.binding:configuration
-    observation: bee.threads.records:observation
-    stream_json: bee.driver.transport:stream_json
-    quote: bee.driver.binding:quote
-    bounds: bee.values:bounds
-    record_bounds: bee.threads.records:bounds
-    driver_types: bee.driver:types
+    configure_protocol: bee.drivers.binding:configuration
+    observation: bee.drivers.records:observation
+    stream_json: bee.drivers.transport:stream_json
+    quote: bee.drivers.binding:quote
+    bounds: bee.drivers.values:bounds
+    record_bounds: bee.drivers.records:bounds
+    driver_types: bee.drivers:types
     placement_request: bee.placement:request

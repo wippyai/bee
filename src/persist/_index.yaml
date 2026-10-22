@@ -17,7 +17,7 @@ entries:
     ledger: wippy.migration:repository
     writer_version: bee.env.identity:state_writer_version
     activations: bee.gov.persist:activation_store
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: state_guard_bootloader
   kind: function.lua
   source: file://state_guard.lua
@@ -27,7 +27,7 @@ entries:
     ledger: wippy.migration:repository
     writer_version: bee.env.identity:state_writer_version
     activations: bee.gov.persist:activation_store
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   meta:
     type: bootloader
     order: 5

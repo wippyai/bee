@@ -8,8 +8,8 @@ entries:
   - sql
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     plan_protocol: bee.gov.types:plan_protocol
 - name: activation_store
@@ -20,8 +20,8 @@ entries:
   - sql
   imports:
     catalog_revision: bee.gov.persist:catalog_revision
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     lease_store: bee.gov.persist:lease_store
     migration_work: bee.gov.types:migration_work
@@ -36,9 +36,9 @@ entries:
   - json
   imports:
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    clock: bee.drivers.values:clock
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     capability_model: bee.capability:model
     lease_model: bee.gov.types:lease_model
@@ -53,7 +53,7 @@ entries:
     transaction: bee.persist:transaction
     protocol: bee.gov.types:workspace_protocol
     workspace: bee.gov.types:workspace
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: follow_store
   kind: library.lua
   source: file://follow_store.lua
@@ -63,9 +63,9 @@ entries:
   - hash
   imports:
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    clock: bee.drivers.values:clock
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     semver: bee.hub.package:semver
     version: bee.sync.values:version
@@ -75,7 +75,7 @@ entries:
   modules:
   - sql
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.persist:transaction
 - name: activation_decode
   kind: library.lua
@@ -84,8 +84,8 @@ entries:
   - hash
   - sql
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
     migration_work: bee.gov.types:migration_work
 - name: activation_queries
@@ -94,7 +94,7 @@ entries:
   modules:
   - sql
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.persist:transaction
     migration_work: bee.gov.types:migration_work
     part_activation_decode: bee.gov.persist:activation_decode

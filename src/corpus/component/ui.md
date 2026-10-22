@@ -29,5 +29,5 @@ Apps import `frame: bee.ui:frame`, `appearance: bee.ui:appearance` and
 `text: bee.ui:text`. Import the kits as `forms: bee.ui.forms:forms`,
 `viz: bee.ui.viz:viz`, `diagram: bee.ui.diagram:diagram` and
 `folder_picker: bee.ui.picker:folder`. The picker accepts the shared
-`bee.values:reply` envelope and returns workspace catalog call intents; the
+`bee.drivers.values:reply` envelope and returns workspace catalog call intents; the
 application dispatches them through its authorized owner client.

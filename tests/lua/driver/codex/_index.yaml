@@ -10,7 +10,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    configuration: bee.driver.codex.binding:configuration
+    configuration: bee.drivers.codex.binding:configuration
 - name: launch_test
   kind: function.lua
   source: file://launch_test.lua
@@ -21,4 +21,4 @@ entries:
   imports:
     test: wippy.test:test
     launch: bee.tests.support.driver:codex_launch
-    quote: bee.driver.binding:quote
+    quote: bee.drivers.binding:quote

@@ -26,7 +26,7 @@ entries:
     probe: bee.apps.processes.app:probe
     view: bee.apps.processes.app:view
     client: bee.node:client
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
     history_values: bee.apps.processes.app:history
     hive: bee.apps.processes.app:hive
     application: bee.app:client
@@ -63,13 +63,13 @@ entries:
   - system
   - registry
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: hive
   kind: library.lua
   source: file://hive.lua
   imports:
     viz: bee.ui.viz:viz
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: start_menu
   kind: registry.entry
   meta: {type: bee.menu}

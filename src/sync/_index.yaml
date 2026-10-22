@@ -6,12 +6,12 @@ entries:
   source: file://protocol.lua
   imports:
     limits: bee.sync.values:limits
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: replica_protocol
   kind: library.lua
   source: file://replica_protocol.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     version: bee.sync.values:version
 - name: route
   kind: registry.entry

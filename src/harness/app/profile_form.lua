@@ -9,6 +9,7 @@ local protocol = require("protocol")
 local editor = require("editor")
 local descriptors = require("descriptors")
 local preferences = require("preferences")
+local placement_profiles = require("placement_profiles")
 local validation = require("validation")
 local json = require("json")
 local canonical = require("canonical")
@@ -51,7 +52,9 @@ function M.review(form: Form): (string?, string?)
     if not descriptor then return nil, schema_error end
     local selected, selection_error = protocol.preferences(profile)
     if not selected then return nil, selection_error end
-    local review, review_error = preferences.review(descriptor, selected.options, editor.placement_ref(profile))
+    local option_placement, placement_error = placement_profiles.placement(editor.placement_ref(profile))
+    if not option_placement then return nil, placement_error end
+    local review, review_error = preferences.review(descriptor, selected.options, option_placement)
     if not review then return nil, review_error end
     local entry = catalog.entry(pinned, profile.definition_ref)
     if not entry then return nil, "Agent definition is missing" end
@@ -181,7 +184,9 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     if not descriptor then return repair_only(descriptor_error) end
     local probed = readiness.probe(decoded.binding_ref, decoded.profile_id, readiness.new_cache(), editor.placement_ref(base))
     local capabilities = probed.result and probed.result.capabilities or {}
-    local compiled, compile_error = preferences.compile(descriptor, policy_data, policy_data.fixture ~= true and capabilities or nil, nil, nil, nil, nil, editor.placement_ref(base))
+    local option_placement, placement_error = placement_profiles.placement(editor.placement_ref(base))
+    if not option_placement then return repair_only(placement_error) end
+    local compiled, compile_error = preferences.compile(descriptor, policy_data, policy_data.fixture ~= true and capabilities or nil, nil, nil, nil, nil, option_placement)
     if not compiled then return repair_only(compile_error) end
     local metadata: {[string]: {label: string, section: string, order: integer, group: string?, default: unknown, default_source: string?, value_schema: {[string]: unknown}?}} = {}
     local unsupported: {string} = {}
@@ -320,8 +325,9 @@ function M.option_errors(form: Form): ({[string]: string}, string?)
     if not policy_data then return {}, "Agent policy could not be read" end
     local selected, selection_error = protocol.preferences(profile)
     if not selected then return {}, selection_error end
-    return preferences.option_errors(descriptor, policy_data, selected.options,
-        editor.placement_ref(profile) or "bee.placement.profiles:native")
+    local option_placement, placement_error = placement_profiles.placement(editor.placement_ref(profile) or "bee.placement.profiles:native")
+    if not option_placement then return {}, placement_error end
+    return preferences.option_errors(descriptor, policy_data, selected.options, option_placement)
 end
 
 function M.change_driver(form: Form, choice: Subject): (Form?, string?)

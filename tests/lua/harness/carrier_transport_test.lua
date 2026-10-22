@@ -324,7 +324,7 @@ local function define_tests()
 
         test.it("refuses malformed driver replies before executable measurement or admission", function()
             local request = plan("window", "pty").request
-            request.binding_ref = "bee.driver.claude.binding:binding"
+            request.binding_ref = "bee.drivers.claude.binding:binding"
             request.profile_id = "batch"
             request.policy_ref = "bee.tests.harness:fixture_policy"
             request.brief = "test"
@@ -339,7 +339,7 @@ local function define_tests()
                 local io: machine.IO = {
                     call = function(target: string, value: unknown): (unknown, string?)
                         calls = calls + 1
-                        test.eq(target, "bee.driver.claude.binding:prepare")
+                        test.eq(target, "bee.drivers.claude.binding:prepare")
                         return response, nil
                     end,
                     send = function(target: string, topic: string, value: unknown) error("unexpected send") end,

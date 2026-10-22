@@ -5,4 +5,4 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

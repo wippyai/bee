@@ -33,7 +33,7 @@ local function define_tests()
                 local saved_id = fresh("credential-profile")
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Selected credentials",
-                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {},
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {},
                         bee = {mcp = {}, credential_refs = refs, files = {{workspace_id = workspace, resource = "project", subpath = "", access = "read"}}}}}))
                 local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
@@ -52,7 +52,7 @@ local function define_tests()
             local saved_id = fresh("undeclared-credential")
             value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Undeclared",
-                    definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
+                    definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
             local refused = call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
             test.eq(code(refused), "DENIED")
         end)
@@ -60,7 +60,7 @@ local function define_tests()
             local listed = value(call("bee.credentials.binding:list", {workspace_id = workspace}))
             local definitions = assert(bounds.array(listed.definitions, 64))
             local destination = assert(bounds.id(assert(bounds.object(definitions[1])).destination))
-            local descriptor_ref = "bee.driver.claude.descriptor:cli"
+            local descriptor_ref = "bee.drivers.claude.descriptor:cli"
             local declaration = assert(registry.get(descriptor_ref))
             local policy_entry = assert(registry.get(POLICY))
             local saved_descriptor, saved_policy = assert(json.encode(declaration.data)), assert(json.encode(policy_entry.data))
@@ -81,7 +81,7 @@ local function define_tests()
                 environment[item.name] = item.literal and {kind = "literal", value = "fixture-value"} or {kind = "credential", credential_ref = "anthropic"}
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Environment",
-                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
                 local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
                 replies[index] = call("bee.tests.harness.launch:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
                     brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})

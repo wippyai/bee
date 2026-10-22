@@ -107,21 +107,21 @@ local function define_tests()
         test.it("ships hidden research routes without harness turn ceilings", function()
             local cases = {
                 {definition = "bee.driver.codex.profiles:research_batch", policy = "bee.driver.codex.security:launch_policy_codex_batch",
-                    binding = "bee.driver.codex.binding:binding", credential = "codex_login", executable = "bee.driver.codex.env:executable",
-                    config = "bee.driver.codex.env:config_home", option = "sandbox", expected = "workspace-write"},
+                    binding = "bee.drivers.codex.binding:binding", credential = "codex_login", executable = "bee.drivers.codex.env:executable",
+                    config = "bee.drivers.codex.env:config_home", option = "sandbox", expected = "workspace-write"},
                 {definition = "bee.driver.claude.profiles:research_batch", policy = "bee.driver.claude.security:launch_policy_claude_batch",
-                    binding = "bee.driver.claude.binding:binding", credential = "claude_api_key", executable = "bee.driver.claude.env:executable",
-                    config = "bee.driver.claude.env:config_home", option = "permission_mode", expected = "manual"},
+                    binding = "bee.drivers.claude.binding:binding", credential = "claude_api_key", executable = "bee.drivers.claude.env:executable",
+                    config = "bee.drivers.claude.env:config_home", option = "permission_mode", expected = "manual"},
                 {definition = "bee.driver.agy.profiles:research_batch", policy = "bee.driver.agy.security:launch_policy_agy_batch",
-                    binding = "bee.driver.agy.binding:binding", credential = "agy_login", executable = "bee.driver.agy.env:executable",
+                    binding = "bee.drivers.agy.binding:binding", credential = "agy_login", executable = "bee.drivers.agy.env:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
                 {definition = "bee.driver.muse.profiles:research_batch", policy = "bee.driver.muse.security:launch_policy_muse_batch",
-                    binding = "bee.driver.muse.binding:binding", credential = "muse_login", executable = "bee.driver.muse.env:executable",
+                    binding = "bee.drivers.muse.binding:binding", credential = "muse_login", executable = "bee.drivers.muse.env:executable",
                     option = "approval_mode", expected = "on-request"},
                 {definition = "bee.driver.opencode.profiles:research_batch", policy = "bee.driver.opencode.security:launch_policy_opencode_batch",
-                    binding = "bee.driver.opencode.binding:binding", credential = "opencode_login", executable = "bee.driver.opencode.env:executable", unconfined = true},
+                    binding = "bee.drivers.opencode.binding:binding", credential = "opencode_login", executable = "bee.drivers.opencode.env:executable", unconfined = true},
                 {definition = "bee.driver.grok.profiles:research_batch", policy = "bee.driver.grok.security:launch_policy_grok_batch",
-                    binding = "bee.driver.grok.binding:binding", credential = "grok_login", executable = "bee.driver.grok.env:executable",
+                    binding = "bee.drivers.grok.binding:binding", credential = "grok_login", executable = "bee.drivers.grok.env:executable",
                     option = "permission_mode", expected = "default", unconfined = true},
             }
             for _, selected in ipairs(cases) do
@@ -168,7 +168,7 @@ local function define_tests()
                             selected.policy .. "." .. name .. " admits a prompt-free mode")
                     end
                 end
-                if selected.binding == "bee.driver.agy.binding:binding" then
+                if selected.binding == "bee.drivers.agy.binding:binding" then
                     test.eq(table.concat(policy.gateway_hooks, ","), "PermissionRequest")
                     test.eq(policy.prepare_options.sandbox, true)
                     local has_thread_message = false
@@ -198,8 +198,8 @@ local function define_tests()
             local named_entry = assert(registry.get("bee.driver.codex.security:launch_policy_codex_named_batch"))
             local named, named_error = launch_policy.decode("bee.driver.codex.security:launch_policy_codex_named_batch", named_entry,
                 function(ref: string): (string?, string?)
-                    if ref == "bee.driver.codex.env:executable" then return "/usr/bin/named-agent", nil end
-                    if ref == "bee.driver.codex.env:config_home" then return "/work/person/.codex", nil end
+                    if ref == "bee.drivers.codex.env:executable" then return "/usr/bin/named-agent", nil end
+                    if ref == "bee.drivers.codex.env:config_home" then return "/work/person/.codex", nil end
                     return nil, "unadmitted environment reference"
                 end)
             if not named then error(tostring(named_error)) end

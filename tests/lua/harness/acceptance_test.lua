@@ -172,11 +172,11 @@ local function define_tests()
             stdout:close()
             executor:release()
             local fixture_digest = assert(hash.sha256(content))
-            local record, err = acceptance.decode("bee.tests.harness:permission_fixture_acceptance", {schema_revision = "bee.permission-acceptance@2", binding_id = "bee.driver.claude.binding:binding", profile_id = "session",
+            local record, err = acceptance.decode("bee.tests.harness:permission_fixture_acceptance", {schema_revision = "bee.permission-acceptance@2", binding_id = "bee.drivers.claude.binding:binding", profile_id = "session",
                 binding_digest = string.rep("1", 64), profile_digest = string.rep("2", 64), adapter_ref = "bee.tests.harness:permission_fixture_adapter", adapter_digest = pinned.digest,
                 fixture_digest = fixture_digest, executable_revision = "bee.executable-measurement@1", executable_kind = "script", executable_digest = string.rep("7", 64), proof_revision = "bee.permission-proof@1", accepted_by = "bee.test.operator", accepted_at = "2026-09-09T00:00:00.000Z"})
             if not record then error(tostring(err)) end
-            local measured = {binding_id = "bee.driver.claude.binding:binding", profile_id = "session", binding_digest = string.rep("1", 64), profile_digest = string.rep("2", 64),
+            local measured = {binding_id = "bee.drivers.claude.binding:binding", profile_id = "session", binding_digest = string.rep("1", 64), profile_digest = string.rep("2", 64),
                 adapter_ref = "bee.tests.harness:permission_fixture_adapter", adapter_digest = pinned.digest, fixture_digest = fixture_digest}
             test.is_nil(acceptance.matches(record, measured))
             measured.fixture_digest = assert(hash.sha256(content .. "\n"))

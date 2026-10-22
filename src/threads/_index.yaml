@@ -475,9 +475,6 @@ entries:
     - {format: application/schema+json, definition: {"type":"object","description":"Append one approval projection record under the approval owner's event id; the authority alone holds this","properties":{"thread_id":{"type":"string"},"idempotency_key":{"type":"string"},"owner_event_id":{"type":"string"},"kind":{},"body":{"type":"object"},"context":{"type":"object"}},"required":["thread_id"],"additionalProperties":false}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
-- name: record_types
-  kind: library.lua
-  source: file://record_types.lua
 - name: types
   kind: library.lua
   source: file://types.lua

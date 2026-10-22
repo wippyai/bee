@@ -89,7 +89,7 @@ local function define_tests()
         local structured, owned = scenario.structured, scenario.owned
         test.it(owned and "records startup while the provider owns the surface" or
             "announces " .. (structured and "structured" or "direct") .. " launch readiness before opening the terminal", function()
-            local ref = "bee.driver.claude.descriptor:cli"
+            local ref = "bee.drivers.claude.descriptor:cli"
             local original = assert(registry.get(ref))
             local original_mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
             local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))

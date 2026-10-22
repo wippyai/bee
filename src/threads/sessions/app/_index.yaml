@@ -9,5 +9,5 @@ entries:
     forms: bee.ui.forms:forms
     frame: bee.ui:frame
     appearance: bee.ui:appearance
-    bounds: bee.values:bounds
-    clock: bee.values:clock
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock

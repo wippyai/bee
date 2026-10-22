@@ -19,7 +19,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      grok: bee.driver.grok.env:executable
+      grok: bee.drivers.grok.env:executable
     environment: {}
     allow_host_home: false
     gateway_tools:
@@ -70,7 +70,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      grok: bee.driver.grok.env:executable
+      grok: bee.drivers.grok.env:executable
     environment: {}
     gateway_tools:
     - session_catalog

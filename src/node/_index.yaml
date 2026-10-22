@@ -7,7 +7,7 @@ entries:
   modules: [system, process]
   imports:
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     appearance: bee.ui:appearance
 - name: route
   kind: registry.entry
@@ -34,13 +34,13 @@ entries:
   kind: library.lua
   source: file://principal.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: application
   kind: library.lua
   source: file://application.lua
   modules: [registry, security, system]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     principal: bee.node:principal
     descriptor: bee.app:descriptor
     governed_admission: bee.gov.types:governed_application_admission
@@ -51,15 +51,15 @@ entries:
   source: file://app_tools.lua
   modules: [registry]
   imports:
-    bounds: bee.values:bounds
-    agent_tool: bee.values:agent_tool
+    bounds: bee.drivers.values:bounds
+    agent_tool: bee.drivers.values:agent_tool
     application: bee.node:application
     capability_access: bee.gov.binding:capability_access
 - name: tests
   kind: library.lua
   source: file://tests.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     app_tool_request: bee.node:app_tool_request
 - name: machine
   kind: fs.directory
@@ -104,7 +104,7 @@ entries:
   imports:
     interaction: bee.app:interaction
     arguments: bee.app:arguments
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: command
   kind: library.lua
   source: file://command.lua
@@ -115,31 +115,31 @@ entries:
   kind: library.lua
   source: file://application_tests.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: app_tool_request
   kind: library.lua
   source: file://app_tool_request.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: peer_tools
   kind: library.lua
   source: file://peer_tools.lua
   imports:
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     outbound: bee.hive:outbound
     schemas: bee.gateway.catalog:json_schema
-    declarations: bee.values:agent_tool
+    declarations: bee.drivers.values:agent_tool
 - name: app_traits
   kind: library.lua
   source: file://app_traits.lua
   modules: [registry, security, hash]
   imports:
     governed_admission: bee.gov.types:governed_application_admission
-    bounds: bee.values:bounds
-    agent_trait: bee.values:agent_trait
-    canonical: bee.values:canonical
-    app_identity: bee.threads.records:app_identity
+    bounds: bee.drivers.values:bounds
+    agent_trait: bee.drivers.values:agent_trait
+    canonical: bee.drivers.values:canonical
+    app_identity: bee.drivers.records:app_identity
     application: bee.node:application
     app_tools: bee.node:app_tools
     capability_access: bee.gov.binding:capability_access

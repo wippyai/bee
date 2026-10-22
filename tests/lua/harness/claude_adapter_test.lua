@@ -17,8 +17,8 @@ local adapter = require("adapter")
 local stream_json = require("stream_json")
 local protocol = require("protocol")
 local events = require("events")
-local ADAPTER = "bee.driver.claude.permission:permission_adapter"
-local BINDING = "bee.driver.claude.binding:binding"
+local ADAPTER = "bee.drivers.claude.permission:permission_adapter"
+local BINDING = "bee.drivers.claude.binding:binding"
 type Object = {[string]: unknown}
 local function capture_path(): string
     local streams, streams_error = env.get("bee.tests.harness:fixture_streams")
@@ -71,7 +71,7 @@ local function define_tests()
                         if profile.mode == "window" then
                             test.eq(profile.permission.mode, "adapter")
                             test.is_true(profile.permission.eligible)
-                            test.eq(profile.permission.adapter_ref, "bee.driver.permission:permission_request_hook")
+                            test.eq(profile.permission.adapter_ref, "bee.drivers.permission:permission_request_hook")
                         else
                             if not profile.permission.eligible or profile.permission.adapter_ref ~= ADAPTER then
                                 error("profile " .. profile.id .. " does not pin " .. ADAPTER .. " at digest " .. pinned.digest .. ": " .. table.concat(binding.diagnostics, "; "))

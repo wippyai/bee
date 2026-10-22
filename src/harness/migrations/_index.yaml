@@ -20,7 +20,7 @@ entries:
   imports:
     migration: wippy.migration:migration
     authority: bee.harness.profiles.persist:grants
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: profile_consent_traits
   kind: function.lua
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-16T00:00:00Z'}
@@ -29,8 +29,8 @@ entries:
   modules: [hash, json]
   imports:
     migration: wippy.migration:migration
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     mcp: bee.gateway.api:mcp
 - name: driver_options
   kind: function.lua
@@ -40,8 +40,8 @@ entries:
   modules: [json]
   imports:
     migration: wippy.migration:migration
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     protocol: bee.harness.profiles:protocol
 - name: driver_options_all
   kind: function.lua
@@ -51,8 +51,8 @@ entries:
   modules: [json, registry]
   imports:
     migration: wippy.migration:migration
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     profile_migration: bee.harness.profiles.persist:migration
 - name: tool_selections
   kind: function.lua
@@ -73,5 +73,12 @@ entries:
   source: file://probe_outputs_retired.lua
   method: run
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-24T00:02:00Z'}
+  imports:
+    migration: wippy.migration:migration
+- name: driver_bindings
+  kind: function.lua
+  source: file://driver_bindings.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-24T00:04:00Z'}
   imports:
     migration: wippy.migration:migration

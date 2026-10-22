@@ -42,8 +42,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -212,8 +212,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -394,8 +394,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -542,8 +542,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -680,8 +680,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -839,8 +839,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -968,7 +968,7 @@ entries:
   method: list
   modules: [json, security, system]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
     snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
@@ -1104,8 +1104,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1227,8 +1227,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1359,8 +1359,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1488,8 +1488,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1625,8 +1625,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1650,8 +1650,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1675,8 +1675,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1700,8 +1700,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1725,8 +1725,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1757,8 +1757,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1774,7 +1774,7 @@ entries:
   method: attention_count
   modules: [json, security, system]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
     snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
@@ -1798,13 +1798,13 @@ entries:
   modules:
   - funcs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness_catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
     admission: bee.harness.launch:admission
     profile_protocol: bee.harness.profiles:protocol
     locate: bee.threads.sessions.binding:locate
-    locate_driver: bee.driver.locate:locate
+    locate_driver: bee.drivers.locate:locate
     configuration_setup: bee.harness.launch:configuration_setup
     readiness: bee.harness.launch:readiness
     hook_capabilities: bee.threads.hooks:capabilities
@@ -1815,7 +1815,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: host_exposure
   kind: registry.entry
   meta:
@@ -1852,7 +1852,7 @@ entries:
   - json
   - uuid
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     workspaces: bee.node.persist:workspaces
     windows: bee.approvals.types:windows
 - name: allowance
@@ -1882,7 +1882,7 @@ entries:
   source: file://remote.lua
   imports:
     hive: bee.hive:hive
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     pump: bee.threads.service:pump
 - name: peers
   kind: function.lua
@@ -1894,7 +1894,7 @@ entries:
   imports:
     protocol: bee.hive:protocol
     nodes: bee.node:client
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.hive.security:caller
@@ -1914,8 +1914,8 @@ entries:
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     admission: bee.harness.launch:admission
@@ -1936,14 +1936,14 @@ entries:
   kind: library.lua
   source: file://snapshot.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     profile_values: bee.harness.profiles:protocol
 - name: listing
   kind: library.lua
   source: file://listing.lua
   modules: [json, security, system]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
     snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
@@ -1956,8 +1956,8 @@ entries:
   - time
   imports:
     snapshot: bee.threads.sessions.binding:snapshot
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
     session_protocol: bee.threads.sessions.types:protocol
-    record_values: bee.threads.records:values
+    record_values: bee.drivers.records:values

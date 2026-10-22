@@ -18,7 +18,7 @@ local function launch(session: string): types.LaunchRequest
     local id = fresh()
     local value: types.LaunchRequest = {idempotency_key = id, attempt_id = id,
         owner_id = "bee.test.publication", owner_incarnation = 1, action_id = id,
-        binding_ref = "bee.driver.codex.binding:binding", policy_ref = "bee.test:policy", profile_id = "publication",
+        binding_ref = "bee.drivers.codex.binding:binding", policy_ref = "bee.test:policy", profile_id = "publication",
         binding_digest = string.rep("b", 64), profile_digest = string.rep("c", 64),
         launch = {executable = "sh", argv = {}, environment = {}, readiness = "none", home_ref = "session"},
         session_ref = session, resources = {{name = "session", grant_ref = "test-session", root_ref = "bee.placement.native.env:root",

@@ -1,81 +1,6 @@
 version: '1.0'
 namespace: bee.driver.opencode.profiles
 entries:
-- name: profiles
-  kind: registry.entry
-  meta:
-    type: harness.profile
-    driver_ref: bee.driver.opencode.binding:binding
-  data:
-    driver:
-      schema_revision: bee.driver@1
-      kind: harness
-      title: OpenCode
-      implementation_version: 1.18.32
-      default_profile: window
-      profiles:
-      - id: batch
-        mode: batch
-        protocol: stream-json
-        protocol_revision: opencode-run-json-1
-        answer_path:
-          strategy: accumulate
-          adapter_ref: bee.driver.opencode.descriptor:cli
-        resume:
-          strategy: per-process
-          portable: false
-        inbound:
-        - next_turn
-        isolation_env:
-          variables:
-          - HOME
-          private_home: true
-        exit_codes_trustworthy: false
-        input_ready:
-          strategy: none
-        interrupt:
-          methods:
-          - signal_group
-        mcp:
-          client_transports:
-          - streamable_http
-          initialize_timeout_ms: 30000
-        permission_exchange:
-          mode: none
-      - id: window
-        mode: window
-        protocol: pty
-        protocol_revision: native-window-1
-        observer: local_http
-        hooks:
-          transports: [http]
-          events:
-          - SessionStart
-          - UserPromptSubmit
-          - PreToolUse
-          - PostToolUse
-          - PostToolUseFailure
-          - PermissionRequest
-          - Stop
-          - StopFailure
-          - SessionEnd
-          adapter_ref: bee.driver.opencode.descriptor:cli
-        answer_path:
-          strategy: none
-        resume:
-          strategy: none
-          portable: false
-        isolation_env:
-          variables:
-          - HOME
-          private_home: false
-        exit_codes_trustworthy: false
-        input_ready:
-          strategy: none
-        permission_exchange:
-          mode: adapter
-          adapter_ref: bee.driver.permission:permission_request_hook
-          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
 - name: default_window
   kind: registry.entry
   meta:
@@ -85,7 +10,7 @@ entries:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-window
     title: OpenCode
-    binding_ref: bee.driver.opencode.binding:binding
+    binding_ref: bee.drivers.opencode.binding:binding
     profile_id: window
     private_credentials:
     - opencode_login
@@ -119,7 +44,7 @@ entries:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-research-batch
     title: OpenCode researcher
-    binding_ref: bee.driver.opencode.binding:binding
+    binding_ref: bee.drivers.opencode.binding:binding
     profile_id: batch
     policy_ref: bee.driver.opencode.security:launch_policy_opencode_batch
     default_mode: batch

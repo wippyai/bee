@@ -11,7 +11,7 @@ local funcs = require("funcs")
 local function define_tests()
     test.describe("Universal external driver", function()
         test.it("resolves each streaming codec once per unchanged declaration and rejects replacements", function()
-            local ref = "bee.driver.claude.descriptor:cli"
+            local ref = "bee.drivers.claude.descriptor:cli"
             local original = assert(registry.get(ref))
             local decode = descriptor.decode
             local decodes = 0
@@ -68,7 +68,7 @@ local function define_tests()
         end)
         test.it("invalidates codec selection when an overlay changes without a history version", function()
             local owner, ref = "bee.tests.driver:codec_cache", "bee.tests.driver:overlay_codec"
-            local declaration = assert(registry.get("bee.driver.claude.descriptor:cli"))
+            local declaration = assert(registry.get("bee.drivers.claude.descriptor:cli"))
             declaration.id = ref
             local overlay = assert(registry.overlay(owner)):changes()
             overlay:create(declaration)
@@ -105,7 +105,7 @@ local function define_tests()
                     error("descriptor-selected renderer was bypassed")
                 end,
             }
-            local handle = universal.configure("claude", renderers, "bee.driver.claude.descriptor:cli")
+            local handle = universal.configure("claude", renderers, "bee.drivers.claude.descriptor:cli")
             local invalid = handle({configure_renderer = "claude", fixture = "false"})
             test.eq(invalid.ok, false)
             test.is_false(called)
@@ -122,13 +122,13 @@ local function define_tests()
                     called = true
                     return {ok = true, delivery = {arguments = {}, files = {}}}
                 end,
-            }, "bee.driver.claude.descriptor:cli")
+            }, "bee.drivers.claude.descriptor:cli")
             test.eq(handle("invalid").ok, false)
             test.eq(handle({configure_renderer = "not a renderer"}).ok, false)
             test.is_false(called)
         end)
         test.it("selects the shared normalizer from the registry descriptor codec", function()
-            local protocol = universal.protocol("bee.driver.opencode.descriptor:cli")
+            local protocol = universal.protocol("bee.drivers.opencode.descriptor:cli")
             test.eq(protocol.revision(), "opencode-run-json-1")
             local function legacy_property(raw: unknown, name: string): unknown
                 assert(type(raw) == "table")
@@ -136,7 +136,7 @@ local function define_tests()
             end
             test.eq(legacy_property(protocol, "PROTOCOL_REVISION"), protocol.revision())
             test.eq(legacy_property(protocol, "MAX_ANSWER_BYTES"), protocol.max_answer_bytes())
-            local handle = universal.normalize("bee.driver.opencode.descriptor:cli")
+            local handle = universal.normalize("bee.drivers.opencode.descriptor:cli")
             local started = handle({index = 0, envelope = {type = "step_start", sessionID = "ses_universal"}})
             local reply = assert(bounds.object(started))
             test.eq(reply.ok, true)
@@ -158,7 +158,7 @@ local function define_tests()
 
         test.it("settles Muse failure and cancellation terminal envelopes", function()
             for _, outcome in ipairs({"failed", "cancelled"}) do
-                local handle = universal.normalize("bee.driver.muse.descriptor:cli")
+                local handle = universal.normalize("bee.drivers.muse.descriptor:cli")
                 local accepted = assert(bounds.object(handle({index = 1, envelope = {payload_type = "runtime.command.accepted", stream = {id = "muse-session"}, payload = {}}})))
                 local started = assert(bounds.object(handle({state = accepted.state, index = 2, envelope = {payload_type = "run.lifecycle.started", payload = {}}})))
                 local ended = assert(bounds.object(handle({state = started.state, index = 3, envelope = {payload_type = "run.terminal." .. outcome,
@@ -170,7 +170,7 @@ local function define_tests()
         end)
 
         test.it("returns decoded common fields with typed descriptor option values", function()
-            local api = universal.launch("bee.driver.claude.descriptor:cli")
+            local api = universal.launch("bee.drivers.claude.descriptor:cli")
             local request, decode_error = api.decode({profile_id = "batch", brief = "summarize", permission_mode = "acceptEdits"})
             if not request then error(tostring(decode_error)) end
             test.eq(request.profile_id, "batch")
@@ -214,7 +214,7 @@ local function define_tests()
 
             local many: {string} = {}
             for index = 1, 129 do many[index] = "argument" end
-            local selected = assert(descriptor.load("bee.driver.claude.descriptor:cli"))
+            local selected = assert(descriptor.load("bee.drivers.claude.descriptor:cli"))
             argv, render_error = universal.render_argv(many, {profile_id = "batch", brief = "work"}, selected)
             test.is_nil(argv)
             test.not_nil(render_error)

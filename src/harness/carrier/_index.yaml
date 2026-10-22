@@ -5,38 +5,38 @@ entries:
   kind: library.lua
   source: file://provenance.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: checkpoint
   kind: library.lua
   source: file://checkpoint.lua
   modules:
   - json
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    driver_types: bee.driver:types
-    record_values: bee.threads.records:values
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    driver_types: bee.drivers:types
+    record_values: bee.drivers.records:values
     vocabulary: bee.harness:checkpoint_types
 - name: prestart
   kind: library.lua
   source: file://prestart.lua
   imports:
     placement_decode: bee.placement:decode
-    service_reply: bee.values:reply
+    service_reply: bee.drivers.values:reply
 - name: hints
   kind: library.lua
   source: file://hints.lua
   imports:
-    bounds: bee.values:bounds
-    thread_record: bee.threads.records:record
+    bounds: bee.drivers.values:bounds
+    thread_record: bee.drivers.records:record
     checkpoint: bee.harness.carrier:checkpoint
-    service_reply: bee.values:reply
+    service_reply: bee.drivers.values:reply
     carrier_types: bee.harness:types
 - name: settle
   kind: library.lua
   source: file://settle.lua
   imports:
-    driver_types: bee.driver:types
+    driver_types: bee.drivers:types
     vocabulary: bee.harness:settlement_types
 - name: policy
   kind: library.lua
@@ -48,18 +48,18 @@ entries:
   - json
   imports:
     app_traits: bee.node:app_traits
-    descriptors: bee.driver.descriptor:descriptor
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    descriptors: bee.drivers.descriptor:descriptor
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     placement_types: bee.placement:types
-    configuration: bee.driver.binding:configuration
-    driver_resolver: bee.driver.binding:resolver
+    configuration: bee.drivers.binding:configuration
+    driver_resolver: bee.drivers.binding:resolver
     mcp: bee.gateway.api:mcp
     gateway_protocol: bee.gateway:protocol
     surface: bee.gateway.catalog:surface
     trait_access: bee.gateway.security:traits
     gateway_hooks_catalog: bee.gateway.hooks:hooks
-    preferences: bee.driver.descriptor:effective
+    preferences: bee.drivers.descriptor:effective
     vocabulary: bee.harness:policy_types
 - name: continuation
   kind: library.lua
@@ -67,11 +67,11 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     checkpoint: bee.harness.carrier:checkpoint
-    record: bee.threads.records:record
+    record: bee.drivers.records:record
     hooks: bee.gateway.hooks:hooks
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
     checkpoint_types: bee.harness:checkpoint_types
 - name: hook_records
   kind: library.lua
@@ -79,8 +79,8 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     gateway_hooks: bee.gateway.hooks:hooks
 - name: machine
   kind: library.lua
@@ -88,18 +88,18 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     policy: bee.harness.carrier:policy
     checkpoint: bee.harness.carrier:checkpoint
     settle: bee.harness.carrier:settle
-    stream_json: bee.driver.transport:stream_json
+    stream_json: bee.drivers.transport:stream_json
     placement_types: bee.placement:types
     prestart: bee.harness.carrier:prestart
     placement_decode: bee.placement:decode
-    record_types: bee.threads:record_types
+    record_types: bee.drivers.records:record_types
     placement_resolver: bee.placement.binding:resolver
     placement_protocol: bee.placement.native:protocol
-    thread_record: bee.threads.records:record
+    thread_record: bee.drivers.records:record
     gateway_protocol: bee.gateway:protocol
     carrier_types: bee.harness:types
     admitted_request: bee.harness:request
@@ -108,7 +108,7 @@ entries:
     hook_exchange: bee.harness.permission:hook_exchange
     gateway_hooks_catalog: bee.gateway.hooks:hooks
     hook_records: bee.harness.carrier:hook_records
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
     part_planning: bee.harness.carrier:planning
     part_output: bee.harness.carrier:output
     checkpoint_types: bee.harness:checkpoint_types
@@ -118,7 +118,7 @@ entries:
   source: file://hooks.lua
   imports:
     checkpoint: bee.harness.carrier:checkpoint
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     checkpoint_types: bee.harness:checkpoint_types
 - name: delivery
   kind: library.lua
@@ -140,7 +140,7 @@ entries:
     continuation: bee.harness.carrier:continuation
     prestart: bee.harness.carrier:prestart
     checkpoint: bee.harness.carrier:checkpoint
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     hooks: bee.harness.carrier:hooks
     delivery: bee.harness.carrier:delivery
     records: bee.harness.carrier:hook_records
@@ -151,31 +151,32 @@ entries:
   modules:
   - registry
   imports:
-    profile_values: bee.driver.descriptor:profile_values
-    effective_schema: bee.driver.descriptor:effective
+    profile_values: bee.drivers.descriptor:profile_values
+    effective_schema: bee.drivers.descriptor:effective
     permission: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
     gateway_configuration: bee.gateway.env:configuration
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     catalog: bee.harness.catalog:catalog
     classify: bee.harness:classification
     policy: bee.harness.carrier:policy
     continuation: bee.harness.carrier:continuation
-    configuration: bee.driver.binding:configuration
-    driver_resolver: bee.driver.binding:resolver
-    driver_types: bee.driver:types
+    configuration: bee.drivers.binding:configuration
+    driver_resolver: bee.drivers.binding:resolver
+    driver_types: bee.drivers:types
     placement_types: bee.placement:types
     placement_resolver: bee.placement.binding:resolver
     launch_request: bee.placement:request
     placement_decode: bee.placement:decode
-    service_reply: bee.values:reply
+    service_reply: bee.drivers.values:reply
     carrier_types: bee.harness:types
-    descriptor: bee.driver.descriptor:descriptor
+    descriptor: bee.drivers.descriptor:descriptor
     readiness: bee.harness.launch:readiness
     placement_profiles: bee.placement.profiles:profiles
+    driver_placement: bee.drivers.descriptor:placement
     policy_types: bee.harness:policy_types
-    configuration_types: bee.driver:configuration_types
+    configuration_types: bee.drivers:configuration_types
 - name: output
   kind: library.lua
   source: file://output.lua
@@ -183,15 +184,15 @@ entries:
   - json
   imports:
     permission: bee.harness.permission:adapter
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     provenance: bee.harness.carrier:provenance
     checkpoint: bee.harness.carrier:checkpoint
-    stream_json: bee.driver.transport:stream_json
-    driver_types: bee.driver:types
+    stream_json: bee.drivers.transport:stream_json
+    driver_types: bee.drivers:types
     placement_decode: bee.placement:decode
-    record_types: bee.threads:record_types
-    observation_decode: bee.threads.records:observation
+    record_types: bee.drivers.records:record_types
+    observation_decode: bee.drivers.records:observation
     placement_protocol: bee.placement.native:protocol
     carrier_types: bee.harness:types
     permission_exchange: bee.harness.permission:exchange

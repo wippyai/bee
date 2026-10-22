@@ -251,7 +251,7 @@ entries:
   kind: library.lua
   source: file://publication.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     gateway: bee.gateway.binding:gateway
     hubpublish: bee.gateway.security:publish
 - name: publish_request
@@ -390,7 +390,7 @@ entries:
   modules:
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     gateway: bee.gateway.binding:gateway
   security:
     policies:
@@ -448,7 +448,7 @@ entries:
   - uuid
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     database: bee.persist:database
     store: bee.gateway.persist:external_store
     gateway: bee.gateway.binding:gateway
@@ -462,7 +462,7 @@ entries:
   - security
   - funcs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gateway.security:external_facade_policy
@@ -473,7 +473,7 @@ entries:
   modules:
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     external: bee.gateway.binding:external
 - name: listener
   kind: library.lua
@@ -487,8 +487,8 @@ entries:
   - crypto
   - http_client
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     configuration: bee.gateway.env:configuration
     listener_store: bee.gateway.persist:listener_store
     part_model: bee.gateway.binding:model
@@ -512,8 +512,8 @@ entries:
   - base64
   - registry
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     node_database: bee.persist:database
     part_model: bee.gateway.binding:model
     identity: bee.security.identity:identity
@@ -525,7 +525,7 @@ entries:
   - time
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     hooks: bee.gateway.hooks:hooks
     binding_store: bee.gateway.persist:binding_store
     part_model: bee.gateway.binding:model
@@ -540,7 +540,7 @@ entries:
   - json
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     hooks: bee.gateway.hooks:hooks
     binding_store: bee.gateway.persist:binding_store
     hook_store: bee.gateway.persist:hook_store
@@ -558,7 +558,7 @@ entries:
   - security
   - system
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     hooks: bee.gateway.hooks:hooks
     mcp: bee.gateway.api:mcp
     surface: bee.gateway.catalog:surface
@@ -581,7 +581,7 @@ entries:
   - uuid
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capability_model: bee.capability:model
     hooks: bee.gateway.hooks:hooks
     binding_store: bee.gateway.persist:binding_store
@@ -600,14 +600,14 @@ entries:
   - json
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     configuration: bee.gateway.env:configuration
     hooks: bee.gateway.hooks:hooks
     mcp: bee.gateway.api:mcp
     surface: bee.gateway.catalog:surface
     catalog: bee.gateway.catalog:catalog
     trait_access: bee.gateway.security:traits
-    agent_trait: bee.values:agent_trait
+    agent_trait: bee.drivers.values:agent_trait
     session_traits: bee.threads.delivery:traits
     surface_store: bee.gateway.persist:surface_store
     binding_store: bee.gateway.persist:binding_store
@@ -620,7 +620,7 @@ entries:
   modules:
   - time
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     configuration: bee.gateway.env:configuration
     surface: bee.gateway.catalog:surface
     access: bee.gateway.security:access
@@ -638,7 +638,7 @@ entries:
   - security
   - contract
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     sessions: bee.gateway.catalog:sessions
     part_model: bee.gateway.binding:model
     part_values: bee.gateway.binding:values
@@ -651,8 +651,8 @@ entries:
   - uuid
   - json
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     configuration: bee.gateway.env:configuration
     mcp: bee.gateway.api:mcp
     surface: bee.gateway.catalog:surface

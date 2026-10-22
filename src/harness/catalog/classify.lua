@@ -9,7 +9,7 @@ local driver_types = require("driver_types")
 local permission = require("permission")
 local observers = require("observers")
 local M = {}
-M.CONTRACT = "bee.driver:driver"
+M.CONTRACT = "bee.drivers:driver"
 M.METHODS = {"prepare", "dispatch", "normalize", "configure"}
 M.OPTIONAL_METHODS = {"locate"}
 type Input = {binding: vocabulary.Entry, declaration: vocabulary.Entry?, methods: {[string]: vocabulary.Entry?}, adapters: {[string]: vocabulary.Entry?}?, activated: boolean, observers: observers.Measurements?}
@@ -50,9 +50,9 @@ function M.binding(input: Input): vocabulary.Binding
                     local target = bounds.id(methods[name])
                     if not target then fail("method " .. name .. " is not bound") else mapped[name] = target end
                 end
-                if methods.locate ~= nil then fail("method locate belongs to bee.driver:locate_facet, not bee.driver:driver") end
-            elseif declared and declared.contract == "bee.driver:locate_facet" then
-                if locate_contract then fail("binding declares bee.driver:locate_facet twice") end
+                if methods.locate ~= nil then fail("method locate belongs to bee.drivers:locate_facet, not bee.drivers:driver") end
+            elseif declared and declared.contract == "bee.drivers:locate_facet" then
+                if locate_contract then fail("binding declares bee.drivers:locate_facet twice") end
                 locate_contract = true
                 local methods = bounds.object(declared.methods) or {}
                 local extra = bounds.fields(methods, {"locate"})

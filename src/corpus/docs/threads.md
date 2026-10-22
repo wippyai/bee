@@ -41,7 +41,7 @@ contract; it does not read another node's tables.
 | Namespace | Responsibility |
 | --- | --- |
 | `bee.threads` | Contracts, `types` and `record_types`, and the `threads.*` Hive route. |
-| `bee.threads.records` | Typed decoders, thread capacities, sequence checks and canonical record envelopes; no I/O. |
+| `bee.drivers.records` | Typed decoders, thread capacities, sequence checks and canonical record envelopes; no I/O. |
 | `bee.threads.binding` | The functions that implement the contracts, and the local contract bindings. |
 | `bee.threads.service` | The `threads` owner process, authority, access, lifecycle, notices, action inbox, owner-qualified send, the forwarding outbox pump and the Sessions work store. |
 | `bee.threads.delivery` | Recipient obligations, claim batches, dispatch, waits and subscriptions. |

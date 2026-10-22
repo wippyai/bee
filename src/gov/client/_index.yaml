@@ -5,5 +5,5 @@ entries:
   kind: library.lua
   source: file://governed.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     preflight: bee.gov.binding:preflight

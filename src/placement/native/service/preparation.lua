@@ -236,8 +236,10 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     local data = policy_entry and bounds.object(policy_entry.data) or nil
     if not policy_entry or policy_meta.type ~= types.LAUNCH_POLICY_TYPE or not data then return nil, nil, "policy_ref is not a host launch policy" end
     local descriptor = profile_values.schema(request.binding_ref)
+    local option_placement, option_placement_error = placement_profiles.placement(request.placement_profile_ref)
+    if not option_placement then return nil, nil, option_placement_error or "placement profile unavailable" end
     if request.preferences or descriptor then
-        local effective, preference_error = preferences.apply(data, request.preferences, descriptor, request.placement_profile_ref)
+        local effective, preference_error = preferences.apply(data, request.preferences, descriptor, option_placement)
         if not effective then return nil, nil, preference_error end
         data = effective
     end
@@ -299,7 +301,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     -- maps: their raw allocation shape is not a host option selection.
     local option_values, options_error = preferences.decode_prepare_options(data.prepare_options)
     if not option_values then return nil, nil, options_error end
-    return {placement_profile_ref = request.placement_profile_ref, option_provenance = bounds.object(data.option_provenance), option_values = option_values, context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
+    return {placement = option_placement, option_provenance = bounds.object(data.option_provenance), option_values = option_values, context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
         selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)
@@ -455,7 +457,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     -- cannot be selected by the caller or saved profile.
     configuration.attempt_id = request.attempt_id
     local delivery, delivery_error = configuration_protocol.call(request.binding_ref, configure_target, configuration)
-    if not delivery then db:release(); return fail("DENIED", delivery_error or "configuration rendering failed") end
+    if not delivery then db:release(); return fail("DENIED", delivery_error and tostring(delivery_error) or "configuration rendering failed") end
     delivery.git_writable_roots_adapter = git_writable_roots_adapter
     -- Keep the admitted request unchanged: its digest excludes this private
     -- delivery, while the durable payload includes the validated driver output.

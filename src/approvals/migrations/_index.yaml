@@ -48,8 +48,8 @@ entries:
   imports:
     migration: wippy.migration:migration
     resources: bee.approvals.env:resources
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
 - name: grants
   kind: function.lua
   meta:

@@ -9,7 +9,7 @@ local function home(clean: string?): types.ProviderHome
         {source_path = "config.toml", path = "config.toml", kind = "config", optional = true, write_back = false, container_content = clean}}}
 end
 local function format(content: string): formats.Format
-    return {schema_revision = "bee.credential-format@1", file = {path = "login.json", content_format = "json",
+    return {schema_revision = "bee.credential-format@2", environments = {}, file = {path = "login.json", content_format = "json",
         initialize = {{path = "config.toml", source_path = "config.toml", content = content}}}}
 end
 local function run()
@@ -32,7 +32,7 @@ local function run()
             local files = home(nil).files
             files[#files + 1] = {source_path = ".config/provider/access.key", path = ".config/provider/access.key", kind = "config", optional = false, write_back = false}
             local selected: types.ProviderHome = {provider = "fixture", private = true, variable = nil, directory = nil, files = files}
-            local original: formats.Format = {schema_revision = "bee.credential-format@1", file = {path = "login.json", content_format = "json", initialize = {
+            local original: formats.Format = {schema_revision = "bee.credential-format@2", environments = {}, file = {path = "login.json", content_format = "json", initialize = {
                 {path = "config.json", source_path = "config.json", content = '{"key":"{file:/host/.config/provider/access.key}"}'},
                 {path = ".config/provider/access.key", source_path = ".config/provider/access.key", content = "fixture-key"}}}}
             local result = assert(projection.native(selected, original, "/host", "/private"))

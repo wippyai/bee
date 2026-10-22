@@ -5,8 +5,8 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.values:bounds
-    service_reply: bee.values:reply
+    bounds: bee.drivers.values:bounds
+    service_reply: bee.drivers.values:reply
 - name: external_profile
   kind: registry.entry
   meta:

@@ -204,7 +204,7 @@ local function define_tests()
                 local saved_id = fresh("folder-profile")
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Profiled folder",
-                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}},
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {}, bee = {mcp = {}},
                         workdir = {root_ref = ROOT, path = "profiled"}}}))
                 local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))

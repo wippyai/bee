@@ -25,14 +25,14 @@ local function define_tests()
             local node = assert(system.node.id())
             local workspace = "driver-owner-profile"
             local binding_id = "extensions.adapters:chosen"
-            local builtin = assert(registry.get("bee.driver.claude.binding:binding"))
+            local builtin = assert(registry.get("bee.drivers.claude.binding:binding"))
             local entries: {{[string]: unknown}} = {
                 {id = binding_id, kind = "contract.binding", meta = {type = "harness.driver"}, data = builtin.data},
                 {id = "custom.admission:driver", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
                     data = {default = binding_id, targets = {{entry = activation.TARGET, path = ".bindings +="}}}},
                 {id = "shared.logins:session", kind = "registry.entry",
                     meta = {type = "bee.credential_format", provider = "ownerproof"},
-                    data = {schema_revision = "bee.credential-format@1", file = {path = ".ownerproof/auth.json", content_format = "json", initialize = {}}}},
+                    data = {schema_revision = "bee.credential-format@2", environments = {}, file = {path = ".ownerproof/auth.json", content_format = "json", initialize = {}}}},
             }
             local captured = assert(artifact.create(entries))
             local original = assert(registry.get("bee.gov:activation_profiles"))
@@ -108,7 +108,7 @@ local function define_tests()
             if not ok then error(tostring(problem)) end
         end)
         test.it("reads the declared login provider and rejects malformed format metadata", function()
-            local format = {schema_revision = "bee.credential-format@1", file = {path = ".gem/creds.json", content_format = "json", initialize = {}}}
+            local format = {schema_revision = "bee.credential-format@2", environments = {}, file = {path = ".gem/creds.json", content_format = "json", initialize = {}}}
             local logins = assert(activation.logins({
                 {id = "bee.driver.gem.credentials:credential_format", kind = "registry.entry", meta = {type = "bee.credential_format", provider = "gem"}, data = format},
             }))
@@ -126,11 +126,11 @@ local function define_tests()
             test.is_nil(activation.logins({{id = "bee.driver.gem.binding:credential_format", kind = "function.lua",
                 meta = {type = "bee.credential_format", provider = "gem"}, data = format}}))
             test.is_nil(activation.logins({{id = "bee.driver.gem.credentials:credential_format", kind = "registry.entry",
-                meta = {type = "bee.credential_format", provider = "gem"}, data = {schema_revision = "bee.credential-format@1"}}}))
+                meta = {type = "bee.credential_format", provider = "gem"}, data = {schema_revision = "bee.credential-format@2"}}}))
         end)
         test.it("keeps raw requirements declarative and derives owned approved bindings", function()
             local baseline = values()
-            local builtin = assert(registry.get("bee.driver.claude.binding:binding"))
+            local builtin = assert(registry.get("bee.drivers.claude.binding:binding"))
             local entries: {{[string]: unknown}} = {
                 {id = "bee.driver.link.binding:binding", kind = "contract.binding", meta = {type = "harness.driver"}, data = builtin.data},
                 {id = "bee.driver.link.binding:activation", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
@@ -169,7 +169,7 @@ local function define_tests()
         test.it("refuses a host-list replacement and a foreign binding before selection", function()
             for _, path in ipairs({".bindings", ".bindings +="}) do
                 local entries = {{id = "bee.driver.link.binding:activation", kind = "ns.requirement",
-                    data = {default = "bee.driver.claude.binding:binding", targets = {{entry = activation.TARGET, path = path}}}}}
+                    data = {default = "bee.drivers.claude.binding:binding", targets = {{entry = activation.TARGET, path = path}}}}}
                 local result = activation.bindings(entries)
                 test.is_nil(result)
             end

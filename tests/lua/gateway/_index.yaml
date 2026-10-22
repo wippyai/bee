@@ -16,7 +16,7 @@ entries:
   meta: {type: boot_test, suite: a_idle_node}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: surface_test_db
   kind: db.sql.sqlite
   file: .wippy/surface-test.db
@@ -32,7 +32,7 @@ entries:
   modules: [sql]
   meta: {type: test, suite: bee}
   security: {policies: [bee.tests.gateway:surface_test_policy, bee.tests.support:schema_policy]}
-  imports: {bounds: 'bee.values:bounds', clock: 'bee.values:clock', grants: 'bee.approvals.grants:store', schema: 'bee.tests.support:schema', store: 'bee.gateway.persist:surface_store', test: 'wippy.test:test'}
+  imports: {bounds: 'bee.drivers.values:bounds', clock: 'bee.drivers.values:clock', grants: 'bee.approvals.grants:store', schema: 'bee.tests.support:schema', store: 'bee.gateway.persist:surface_store', test: 'wippy.test:test'}
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua
@@ -47,12 +47,12 @@ entries:
   modules: [json, funcs]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     hooks: bee.gateway.hooks:hooks
-    configuration: bee.driver.binding:configuration
-    codex_configuration: bee.driver.codex.binding:configuration
-    configuration_types: bee.driver:configuration_types
+    configuration: bee.drivers.binding:configuration
+    codex_configuration: bee.drivers.codex.binding:configuration
+    configuration_types: bee.drivers:configuration_types
 - name: mcp_test
   kind: function.lua
   source: file://mcp_test.lua
@@ -62,7 +62,7 @@ entries:
   security: {policies: [bee.tests.gateway:mcp_test_policy]}
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     mcp: bee.gateway.api:mcp
     gateway: bee.gateway.binding:gateway
@@ -85,7 +85,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     context: bee.gateway.catalog:context
 - name: ephemeral_listener
@@ -118,7 +118,7 @@ entries:
   security:
     policies: [bee.tests.gateway:address_test_policy]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     configuration: bee.gateway.env:configuration
 - name: policy_reference_admin
@@ -144,7 +144,7 @@ entries:
   security:
     policies: [bee.tests.gateway:policy_reference_admin]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     shared_fixtures: bee.tests.support:fixtures
 - name: sessions_test
@@ -160,7 +160,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     mcp: bee.gateway.api:mcp
     catalog: bee.gateway.catalog:catalog
@@ -177,7 +177,7 @@ entries:
   meta: {type: test_support}
   modules: [funcs, security]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     boundary: bee.gateway.api:session_boundary
 - name: session_boundary_test
   kind: function.lua
@@ -188,7 +188,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: profile_scope_test
   kind: function.lua
   source: file://profile_scope_test.lua
@@ -196,14 +196,14 @@ entries:
   meta: {type: test, suite: bee}
   modules: [security]
   security: {policies: [bee.tests.gateway:profile_context_policy, bee.gateway.security:execute_policy]}
-  imports: {test: wippy.test:test, access: bee.driver.profiles:profile_access, scope: bee.gateway.catalog:profile_scope, context: bee.gateway.catalog:context, subject_call: bee.gateway.security:subject_call, bounds: bee.values:bounds}
+  imports: {test: wippy.test:test, access: bee.drivers.profiles:profile_access, scope: bee.gateway.catalog:profile_scope, context: bee.gateway.catalog:context, subject_call: bee.gateway.security:subject_call, bounds: bee.drivers.values:bounds}
 - name: profile_context_probe
   kind: function.lua
   source: file://profile_context_probe.lua
   method: handle
   meta: {type: test_support}
   modules: [ctx]
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
 - name: profile_context_policy
   kind: security.policy
   meta: {type: test_support}
@@ -216,7 +216,7 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     configuration: bee.gateway.api:external_configuration
 - name: external_test_policy
   kind: security.policy
@@ -243,7 +243,7 @@ entries:
     test: wippy.test:test
     external: bee.gateway.binding:external
     gateway: bee.gateway.binding:gateway
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     catalog: bee.gateway.catalog:catalog
 - name: external_view_test
   kind: function.lua
@@ -267,7 +267,7 @@ entries:
   imports:
     test: wippy.test:test
     client: bee.node:client
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     external: bee.gateway.binding:external
     gateway: bee.gateway.binding:gateway
     app_scope: bee.tests.support.principals:application
@@ -286,7 +286,7 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     gateway: bee.gateway.binding:gateway
 - name: node_tools_test
   kind: function.lua
@@ -298,7 +298,7 @@ entries:
   imports:
     test: wippy.test:test
     mcp: bee.gateway.api:mcp
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     json_schema: bee.gateway.catalog:json_schema
     peer_tools: bee.node:peer_tools
 
@@ -314,7 +314,7 @@ entries:
     mcp: bee.gateway.api:mcp
     installer: bee.gateway.security:installation
     installation: bee.hub.activation:installation
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: demand_test
   kind: function.lua
   source: file://demand_test.lua
@@ -344,9 +344,9 @@ entries:
     test: wippy.test:test
     schema: bee.tests.support:schema
     grants: bee.approvals.grants:store
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     store: bee.gateway.persist:surface_store
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
     service: bee.approvals.binding:service
 
 - name: extension_test
@@ -355,7 +355,7 @@ entries:
   method: run
   modules: [funcs, security]
   meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, surface: bee.gateway.catalog:surface, traits: bee.gateway.security:traits, bounds: bee.values:bounds, host: bee.tests.memory:host, gateway: bee.gateway.binding:gateway}
+  imports: {test: wippy.test:test, surface: bee.gateway.catalog:surface, traits: bee.gateway.security:traits, bounds: bee.drivers.values:bounds, host: bee.tests.memory:host, gateway: bee.gateway.binding:gateway}
   security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}
 - name: reattachment_test
   kind: function.lua
@@ -363,5 +363,5 @@ entries:
   method: run
   modules: [json]
   meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, bounds: bee.values:bounds, host: bee.tests.memory:host}
+  imports: {test: wippy.test:test, bounds: bee.drivers.values:bounds, host: bee.tests.memory:host}
   security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}

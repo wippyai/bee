@@ -7,13 +7,13 @@ entries:
   method: call
   imports:
     application: bee.node:application
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     access: bee.gov.binding:capability_access
     outbound: bee.hive:outbound
     protocol: bee.hive:protocol
     schemas: bee.gateway.catalog:json_schema
     operations: bee.hive:operations
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
   security:
     policies:
     - bee.hive.security:outbound

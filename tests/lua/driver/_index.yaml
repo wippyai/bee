@@ -9,7 +9,7 @@ entries:
   modules: [registry]
   imports:
     test: wippy.test:test
-    profile: bee.driver.profiles:profile
+    profile: bee.drivers.profiles:profile
 - name: kit_test
   kind: function.lua
   source: file://kit_test.lua
@@ -19,11 +19,11 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    framing: bee.driver.transport:framing
-    quote: bee.driver.binding:quote
-    events: bee.driver.codec:events
-    observation: bee.threads.records:observation
-    stream_json: bee.driver.transport:stream_json
+    framing: bee.drivers.transport:framing
+    quote: bee.drivers.binding:quote
+    events: bee.drivers.codec:events
+    observation: bee.drivers.records:observation
+    stream_json: bee.drivers.transport:stream_json
 - name: option_render_test
   kind: function.lua
   source: file://option_render_test.lua
@@ -32,14 +32,15 @@ entries:
   modules: [json, toml, hash, registry]
   security: {policies: [bee.tests.harness.profiles:repair_policy]}
   imports:
-    universal: bee.driver.binding:universal
+    placement_profiles: bee.placement.profiles:profiles
+    universal: bee.drivers.binding:universal
     test: wippy.test:test
-    render: bee.driver.binding:option_render
-    descriptor: bee.driver.descriptor:descriptor
-    configuration: bee.driver.binding:configuration
+    render: bee.drivers.binding:option_render
+    descriptor: bee.drivers.descriptor:descriptor
+    configuration: bee.drivers.binding:configuration
     materializer: bee.placement.native.env:configuration
-    bounds: bee.values:bounds
-    configuration_types: bee.driver:configuration_types
+    bounds: bee.drivers.values:bounds
+    configuration_types: bee.drivers:configuration_types
 - name: providers_test
   kind: function.lua
   source: file://providers_test.lua
@@ -52,19 +53,19 @@ entries:
   - fs
   - funcs
   imports:
-    driver_types: bee.driver:types
-    universal: bee.driver.binding:universal
-    bounds: bee.values:bounds
+    driver_types: bee.drivers:types
+    universal: bee.drivers.binding:universal
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    stream_json: bee.driver.transport:stream_json
+    stream_json: bee.drivers.transport:stream_json
     claude: bee.tests.support.driver:claude_protocol
     codex: bee.tests.support.driver:codex_protocol
     muse: bee.tests.support.driver:muse_protocol
     claude_launch: bee.tests.support.driver:claude_launch
     codex_launch: bee.tests.support.driver:codex_launch
     muse_launch: bee.tests.support.driver:muse_launch
-    observation: bee.threads.records:observation
-    quote: bee.driver.binding:quote
+    observation: bee.drivers.records:observation
+    quote: bee.drivers.binding:quote
 - name: fixtures
   kind: fs.directory
   meta: {type: test_support}
@@ -77,7 +78,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     codex_launch: bee.tests.support.driver:codex_launch
     claude_launch: bee.tests.support.driver:claude_launch
@@ -86,9 +87,9 @@ entries:
     muse_launch: bee.tests.support.driver:muse_launch
     opencode_launch: bee.tests.support.driver:opencode_launch
     provider_projection: bee.placement.native.service:provider_projection
-    formats: bee.credentials:formats
-    driver_types: bee.driver:types
-    universal: bee.driver.binding:universal
+    formats: bee.drivers.credentials:format
+    driver_types: bee.drivers:types
+    universal: bee.drivers.binding:universal
     materialization: bee.placement.native.service:materialization
     placement_types: bee.placement:types
 - name: locate_test
@@ -98,16 +99,16 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    locate: bee.driver.locate:locate
-    descriptor: bee.driver.descriptor:descriptor
-    login_evidence: bee.driver.locate:login_evidence
-    claude: bee.driver.claude.binding:locate
-    codex: bee.driver.codex.binding:locate
-    opencode: bee.driver.opencode.binding:locate
-    agy: bee.driver.agy.binding:locate
-    grok: bee.driver.grok.binding:locate
-    muse: bee.driver.muse.binding:locate
-    login_evidence_types: bee.driver:login_types
+    locate: bee.drivers.locate:locate
+    descriptor: bee.drivers.descriptor:descriptor
+    login_evidence: bee.drivers.locate:login_evidence
+    claude: bee.drivers.claude.binding:locate
+    codex: bee.drivers.codex.binding:locate
+    opencode: bee.drivers.opencode.binding:locate
+    agy: bee.drivers.agy.binding:locate
+    grok: bee.drivers.grok.binding:locate
+    muse: bee.drivers.muse.binding:locate
+    login_evidence_types: bee.drivers:login_types
 - name: descriptor_discovery_policy
   kind: security.policy
   meta: {type: test_support}
@@ -119,7 +120,7 @@ entries:
   meta: {type: test_support}
   modules: [registry]
   imports:
-    resolver: bee.driver.binding:resolver
+    resolver: bee.drivers.binding:resolver
 - name: descriptor_test
   kind: function.lua
   source: file://descriptor_test.lua
@@ -130,11 +131,11 @@ entries:
   imports:
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
-    descriptor: bee.driver.descriptor:descriptor
-    profile_values: bee.driver.descriptor:profile_values
-    resolver: bee.driver.binding:resolver
-    login_evidence: bee.driver.locate:login_evidence
-    bounds: bee.values:bounds
+    descriptor: bee.drivers.descriptor:descriptor
+    profile_values: bee.drivers.descriptor:profile_values
+    resolver: bee.drivers.binding:resolver
+    login_evidence: bee.drivers.locate:login_evidence
+    bounds: bee.drivers.values:bounds
 - name: universal_test
   kind: function.lua
   source: file://universal_test.lua
@@ -143,23 +144,23 @@ entries:
   modules: [registry, security, funcs]
   security: {policies: [bee.tests.driver:descriptor_discovery_policy]}
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    universal: bee.driver.binding:universal
-    codec_registry: bee.driver.codec:codec_registry
-    descriptor: bee.driver.descriptor:descriptor
-    configuration: bee.driver:configuration_types
+    universal: bee.drivers.binding:universal
+    codec_registry: bee.drivers.codec:codec_registry
+    descriptor: bee.drivers.descriptor:descriptor
+    configuration: bee.drivers:configuration_types
 - name: normalize_probe
   kind: function.lua
   source: file://normalize_probe.lua
   method: handle
   meta: {type: test_support}
-  imports: {universal: bee.driver.binding:universal}
+  imports: {universal: bee.drivers.binding:universal}
 - name: descriptor_denied
   kind: security.policy
   policy:
     actions: [registry.get]
-    resources: ['bee.driver.claude.descriptor:cli']
+    resources: ['bee.drivers.claude.descriptor:cli']
     effect: deny
 - name: muse_config_test
   kind: function.lua
@@ -169,12 +170,12 @@ entries:
   modules: [json]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     registry: registry
-    configuration: bee.driver.muse.binding:configuration
-    driver_configuration: bee.driver.binding:configuration
-    configure: bee.driver.muse.binding:configure
+    configuration: bee.drivers.muse.binding:configuration
+    driver_configuration: bee.drivers.binding:configuration
+    configure: bee.drivers.muse.binding:configure
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
 
@@ -185,7 +186,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [registry, json]
   security: {policies: [bee.tests.driver:docker_probe_policy, bee.harness.security:launch_locate_probe_policy]}
-  imports: {test: wippy.test:test, probe: bee.placement.docker.service:runtime_probe, bounds: bee.values:bounds, locate: bee.harness.launch:locate}
+  imports: {test: wippy.test:test, probe: bee.placement.docker.service:runtime_probe, bounds: bee.drivers.values:bounds, locate: bee.harness.launch:locate}
 - name: docker_probe_policy
   kind: security.policy
   meta: {type: test_support}
@@ -201,7 +202,7 @@ entries:
   meta: {type: test_support}
   modules: [registry]
   security: {policies: [bee.tests.driver:docker_probe_policy]}
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
 - name: host_values_test
   kind: function.lua
   source: file://host_values_test.lua
@@ -217,7 +218,7 @@ entries:
   meta: {comment: The host values test reads the driver override variables}
   policy:
     actions: [env.get]
-    resources: [bee.driver.claude.env:config_home, bee.driver.claude.env:api_key, bee.driver.codex.env:config_home]
+    resources: [bee.drivers.claude.env:config_home, bee.drivers.claude.env:api_key, bee.drivers.codex.env:config_home]
     effect: allow
 - name: effective_test
   modules: [registry, json]
@@ -226,12 +227,13 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    placement_profiles: bee.placement.profiles:profiles
     test: wippy.test:test
-    descriptors: bee.driver.descriptor:descriptor
-    effective: bee.driver.descriptor:effective
-    universal: bee.driver.binding:universal
+    descriptors: bee.drivers.descriptor:descriptor
+    effective: bee.drivers.descriptor:effective
+    universal: bee.drivers.binding:universal
     profiles: bee.harness.profiles:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: option_coverage_cases
   kind: library.lua
   source: file://option_coverage_cases.lua
@@ -243,17 +245,18 @@ entries:
   modules: [registry, json, toml]
   security: {policies: [bee.tests.harness.profiles:repair_policy]}
   imports:
+    placement_profiles: bee.placement.profiles:profiles
     test: wippy.test:test
     cases: bee.tests.driver:option_coverage_cases
-    descriptors: bee.driver.descriptor:descriptor
-    effective: bee.driver.descriptor:effective
-    universal: bee.driver.binding:universal
-    configuration: bee.driver.binding:configuration
+    descriptors: bee.drivers.descriptor:descriptor
+    effective: bee.drivers.descriptor:effective
+    universal: bee.drivers.binding:universal
+    configuration: bee.drivers.binding:configuration
     controls: bee.harness.app:option_controls
-    profiles: bee.driver.descriptor:profile_values
+    profiles: bee.drivers.descriptor:profile_values
     protocol: bee.harness.profiles:protocol
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
 
 - name: option_cleanup_test
   kind: function.lua
@@ -263,10 +266,10 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    descriptors: bee.driver.descriptor:descriptor
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    universal: bee.driver.binding:universal
+    descriptors: bee.drivers.descriptor:descriptor
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    universal: bee.drivers.binding:universal
 - name: allowall_test
   modules: [registry]
   kind: function.lua
@@ -275,12 +278,13 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    descriptors: bee.driver.descriptor:descriptor
-    effective: bee.driver.descriptor:effective
-    universal: bee.driver.binding:universal
+    descriptors: bee.drivers.descriptor:descriptor
+    effective: bee.drivers.descriptor:effective
+    universal: bee.drivers.binding:universal
     profiles: bee.harness.profiles:protocol
-    profile_values: bee.driver.descriptor:profile_values
-    bounds: bee.values:bounds
+    profile_values: bee.drivers.descriptor:profile_values
+    bounds: bee.drivers.values:bounds
+    placement_profiles: bee.placement.profiles:profiles
 - name: option_profile_coverage_test
   kind: function.lua
   source: file://option_coverage_test.lua
@@ -289,14 +293,15 @@ entries:
   modules: [registry, json, toml]
   security: {policies: [bee.tests.harness.profiles:repair_policy]}
   imports:
+    placement_profiles: bee.placement.profiles:profiles
     test: wippy.test:test
     cases: bee.tests.driver:option_coverage_cases
-    descriptors: bee.driver.descriptor:descriptor
-    effective: bee.driver.descriptor:effective
-    universal: bee.driver.binding:universal
-    configuration: bee.driver.binding:configuration
+    descriptors: bee.drivers.descriptor:descriptor
+    effective: bee.drivers.descriptor:effective
+    universal: bee.drivers.binding:universal
+    configuration: bee.drivers.binding:configuration
     controls: bee.harness.app:option_controls
-    profiles: bee.driver.descriptor:profile_values
+    profiles: bee.drivers.descriptor:profile_values
     protocol: bee.harness.profiles:protocol
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical

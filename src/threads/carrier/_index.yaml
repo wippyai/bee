@@ -6,11 +6,11 @@ entries:
   source: file://carrier.lua
   modules: [sql, json]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    observation: bee.threads.records:observation
-    types: bee.threads:record_types
-    record: bee.threads.records:record
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    observation: bee.drivers.records:observation
+    types: bee.drivers.records:record_types
+    record: bee.drivers.records:record
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority

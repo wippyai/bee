@@ -24,7 +24,7 @@ entries:
     - bee.resources.security:resource_resolve_policy
     - bee.credentials.security:credential_materialize_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
     service: bee.placement.native.service:service

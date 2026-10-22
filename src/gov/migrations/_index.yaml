@@ -95,8 +95,8 @@ entries:
     migration: wippy.migration:migration
     grant_schema: bee.approvals.grants:schema
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
-    bounds: bee.values:bounds
+    clock: bee.drivers.values:clock
+    bounds: bee.drivers.values:bounds
 - name: follow_grants
   kind: function.lua
   meta:
@@ -109,6 +109,6 @@ entries:
   imports:
     migration: wippy.migration:migration
     grants: bee.approvals.grants:store
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
-    clock: bee.values:clock
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock

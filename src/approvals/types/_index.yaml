@@ -5,15 +5,15 @@ entries:
   kind: library.lua
   source: file://runtime_lease.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: windows
   kind: library.lua
   source: file://windows.lua
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
 
 - name: exact_scope
   kind: registry.entry
@@ -31,6 +31,6 @@ entries:
     operation_ref: bee.approvals:runtime-lease
     domain: runtime_lease
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     grants: bee.approvals.grants:store
     runtime_lease: bee.approvals.types:runtime_lease

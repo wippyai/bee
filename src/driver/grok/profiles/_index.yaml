@@ -1,118 +1,6 @@
 version: '1.0'
 namespace: bee.driver.grok.profiles
 entries:
-- name: profiles
-  kind: registry.entry
-  meta:
-    type: harness.profile
-    driver_ref: bee.driver.grok.binding:binding
-  data:
-    driver:
-      schema_revision: bee.driver@1
-      kind: harness
-      title: Grok CLI
-      implementation_version: 1.0.30
-      default_profile: session
-      profiles:
-      - id: session
-        mode: session
-        hooks:
-          transports: []
-          events: []
-        inbound:
-        - next_turn
-        mcp:
-          client_transports:
-          - stdio
-          - streamable_http
-          - sse
-          initialize_timeout_ms: 30000
-        protocol: stream-json
-        protocol_revision: streaming-json-1
-        answer_path:
-          strategy: accumulate
-          adapter_ref: bee.driver.grok.descriptor:cli
-        resume:
-          strategy: per-process
-          portable: false
-        isolation_env:
-          variables:
-          - HOME
-          - GROK_HOME
-          private_home: true
-        exit_codes_trustworthy: false
-        permission_exchange:
-          mode: adapter
-          adapter_ref: bee.driver.grok.permission:permission_adapter
-          adapter_digest: c3100cb9d142a66ca726583cc86a9b06fa15c6219a523f536bf9aaaac8124386
-        input_ready:
-          strategy: none
-        interrupt:
-          methods:
-          - signal_group
-      - id: batch
-        mode: batch
-        hooks:
-          transports: []
-          events: []
-        inbound: []
-        mcp:
-          client_transports:
-          - stdio
-          - streamable_http
-          - sse
-          initialize_timeout_ms: 30000
-        protocol: stream-json
-        protocol_revision: streaming-json-1
-        answer_path:
-          strategy: accumulate
-          adapter_ref: bee.driver.grok.descriptor:cli
-        resume:
-          strategy: per-process
-          portable: false
-        isolation_env:
-          variables:
-          - HOME
-          - GROK_HOME
-          private_home: true
-        exit_codes_trustworthy: false
-        permission_exchange:
-          mode: adapter
-          adapter_ref: bee.driver.grok.permission:permission_adapter
-          adapter_digest: c3100cb9d142a66ca726583cc86a9b06fa15c6219a523f536bf9aaaac8124386
-        input_ready:
-          strategy: none
-        interrupt:
-          methods:
-          - signal_group
-      - id: window
-        mode: window
-        protocol: pty
-        protocol_revision: native-window-1
-        hooks:
-          transports:
-          - command
-          events:
-          - SessionStart
-          - UserPromptSubmit
-          - PreToolUse
-          - PostToolUse
-          - Stop
-        answer_path:
-          strategy: none
-        resume:
-          strategy: none
-          portable: false
-        isolation_env:
-          variables:
-          - HOME
-          - GROK_HOME
-          private_home: true
-        exit_codes_trustworthy: false
-        permission_exchange:
-          mode: none
-        input_ready:
-          strategy: none
 - name: default_window
   kind: registry.entry
   meta:
@@ -122,7 +10,7 @@ entries:
     schema_revision: bee.launch-definition@1
     launch_id: grok-window
     title: Grok CLI
-    binding_ref: bee.driver.grok.binding:binding
+    binding_ref: bee.drivers.grok.binding:binding
     profile_id: window
     private_credentials:
     - grok_login
@@ -158,7 +46,7 @@ entries:
     schema_revision: bee.launch-definition@1
     launch_id: grok-research-batch
     title: Grok researcher
-    binding_ref: bee.driver.grok.binding:binding
+    binding_ref: bee.drivers.grok.binding:binding
     profile_id: batch
     policy_ref: bee.driver.grok.security:launch_policy_grok_batch
     default_mode: batch

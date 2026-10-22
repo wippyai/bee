@@ -35,8 +35,8 @@ entries:
     - bee.placement.docker.security:docker_socket_policy
     - bee.placement.docker.security:image_client_policy
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     exchange: bee.harness.permission:exchange
     checkpoint: bee.harness.carrier:checkpoint
     admission: bee.harness.launch:admission
@@ -45,4 +45,4 @@ entries:
     classify: bee.harness:classification
     policy: bee.harness.carrier:policy
     machine: bee.harness.carrier:machine
-    descriptor: bee.driver.descriptor:descriptor
+    descriptor: bee.drivers.descriptor:descriptor

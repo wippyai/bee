@@ -13,6 +13,10 @@ local canonical = require("canonical")
 local registry = require("registry")
 local json = require("json")
 local toml = require("toml")
+local placement_profiles = require("placement_profiles")
+local function placed(ref: string): {[string]: unknown}
+    return assert(placement_profiles.placement(ref))
+end
 type Object = {[string]: unknown}
 local placement = "bee.placement.docker.profiles:coding"
 local function object(value: unknown): Object return assert(bounds.object(value)) end
@@ -99,7 +103,7 @@ local function define_tests()
         test.it("declares every verified version fixture with native mappings and security metadata", function()
             for _, raw in ipairs(cases) do
                 local case = object(raw)
-                local cli = assert(descriptors.load("bee.driver." .. tostring(case.driver) .. ".descriptor:cli"))
+                local cli = assert(descriptors.load("bee.drivers." .. tostring(case.driver) .. ".descriptor:cli"))
                 local field = object(object(cli.options.fields)[tostring(case.id)])
                 test.eq(field.id, case.id); test.eq(field.group, case.group); test.eq(field.security_class, case.security_class)
                 test.eq(object(field.support).version_range, ">=" .. tostring(case.version))
@@ -111,14 +115,14 @@ local function define_tests()
                 for _, raw in ipairs(cases) do
                     local case = object(raw)
                     local driver, id = tostring(case.driver), tostring(case.id)
-                    local cli = assert(descriptors.load("bee.driver." .. driver .. ".descriptor:cli"))
+                    local cli = assert(descriptors.load("bee.drivers." .. driver .. ".descriptor:cli"))
                     local field = object(object(cli.options.fields)[id])
                     for _, context in ipairs(sequence(case.contexts)) do
-                        local request: Object = {profile_id = context == "window" and "window" or "batch", brief = "Fixture", placement_profile_ref = placement}
+                        local request: Object = {profile_id = context == "window" and "window" or "batch", brief = "Fixture", placement = placed(placement)}
                         request[id] = case.value
                         for name, value in pairs(bounds.object(case.companions) or {}) do request[name] = value end
                         if context == "resume" then request.resume_ref = "fixture-thread" end
-                        local reply = universal.prepare("bee.driver." .. driver .. ".descriptor:cli")(request)
+                        local reply = universal.prepare("bee.drivers." .. driver .. ".descriptor:cli")(request)
                         assert(reply.ok == true, driver .. "." .. id .. "/" .. tostring(context) .. ": " .. tostring(reply.error))
                         local argv = assert(bounds.ids(object(reply.launch).argv, false))
                         if case.argv then
@@ -132,8 +136,8 @@ local function define_tests()
                             assert(start, driver .. "." .. id .. ": " .. table.concat(argv, " "))
                             for index, token in ipairs(argv) do if token == "--" then test.is_true(assert(start) < index) end end
                         else
-                            local delivery, err = configuration.call("bee.driver." .. driver .. ".binding:binding", "bee.driver." .. driver .. ".binding:configure",
-                                {fixture = true, private_home = true, context = tostring(context), option_values = {[id] = case.value}, placement_profile_ref = placement})
+                            local delivery, err = configuration.call("bee.drivers." .. driver .. ".binding:binding", "bee.drivers." .. driver .. ".binding:configure",
+                                {fixture = true, private_home = true, context = tostring(context), option_values = {[id] = case.value}, placement = placed(placement)})
                             assert(delivery, driver .. "." .. id .. ": " .. tostring(err))
                             local captured: unknown = nil
                             for _, file in ipairs(delivery.files) do if file.path == ".codex/config.toml" then captured = toml.decode(file.content) end end
@@ -149,26 +153,26 @@ local function define_tests()
                     local case = object(raw)
                     if case.security_class == "host-ceiling" then
                         local driver, id = tostring(case.driver), tostring(case.id)
-                        local cli = assert(descriptors.load("bee.driver." .. driver .. ".descriptor:cli"))
+                        local cli = assert(descriptors.load("bee.drivers." .. driver .. ".descriptor:cli"))
                         local field = object(object(cli.options.fields)[id])
                         local policy = {profile_restrictions = {[tostring(field.path)] = {kind = "declared"}}, option_constraints = {[id] = {capabilities = {}}}}
-                        local denied = effective.compile(cli, policy, nil, {[id] = case.value}, "person", nil, nil, placement)
+                        local denied = effective.compile(cli, policy, nil, {[id] = case.value}, "person", nil, nil, placed(placement))
                         if case.baseline ~= true and case.safe ~= case.value then test.is_nil(denied) end
                         if case.baseline ~= true and case.safe ~= case.value then
-                            local native = effective.compile(cli, nil, nil, {[id] = case.value}, "person", nil, nil, "bee.placement.profiles:native")
+                            local native = effective.compile(cli, nil, nil, {[id] = case.value}, "person", nil, nil, placed("bee.placement.profiles:native"))
                             if case.native_allowed then
                                 test.not_nil(native)
-                                test.is_nil(effective.compile(cli, nil, nil, {[id] = case.value}, "agent", nil, nil, "bee.placement.profiles:native"))
+                                test.is_nil(effective.compile(cli, nil, nil, {[id] = case.value}, "agent", nil, nil, placed("bee.placement.profiles:native")))
                             else test.is_nil(native) end
                         end
                         policy.option_constraints[id] = {locked = true, reason = "Host lock"}
-                        test.is_nil(effective.compile(cli, policy, nil, {[id] = case.value}, "person", nil, nil, placement))
+                        test.is_nil(effective.compile(cli, policy, nil, {[id] = case.value}, "person", nil, nil, placed(placement)))
                     end
                 end
             end)
         end)
         test.it("retains false, enforces native contexts and renders the native USD budget minimum", function()
-            local ref = "bee.driver.claude.descriptor:cli"
+            local ref = "bee.drivers.claude.descriptor:cli"
             local cli = assert(descriptors.load(ref))
             local policy = {profile_restrictions = {["provider.options.budget_usd"] = {kind = "declared"}}, option_constraints = {budget_usd = {maximum = 0.05}}}
             local applied = assert(effective.apply(policy, {options = {budget_usd = "1.25"}}, cli))
@@ -185,11 +189,11 @@ local function define_tests()
             test.not_nil(contiguous(argv, {"--prompt-suggestions", "false"}))
             test.is_nil(bounds.member("--fallback-model", argv))
             with_ceiling(function()
-                reply = universal.prepare(ref)({profile_id = "batch", brief = "Fixture", placement_profile_ref = placement, tools = {}})
+                reply = universal.prepare(ref)({profile_id = "batch", brief = "Fixture", placement = placed(placement), tools = {}})
                 assert(reply.ok == true, tostring(reply.error))
                 test.not_nil(bounds.member("--tools=", assert(bounds.ids(object(reply.launch).argv, false))))
             end)
-            test.eq(universal.prepare("bee.driver.codex.descriptor:cli")({profile_id = "batch", resume_ref = "fixture-thread", brief = "Fixture", color = "never"}).ok, false)
+            test.eq(universal.prepare("bee.drivers.codex.descriptor:cli")({profile_id = "batch", resume_ref = "fixture-thread", brief = "Fixture", color = "never"}).ok, false)
             reply = universal.prepare(ref)({profile_id = "window", brief = "Fixture", chrome = false})
             assert(reply.ok == true, tostring(reply.error))
             test.not_nil(bounds.member("--no-chrome", assert(bounds.ids(object(reply.launch).argv, false))))
@@ -199,31 +203,31 @@ local function define_tests()
             for _, value in ipairs({"{", "[]", "null", 5}) do test.is_nil(descriptors.decode_option("json_schema", object(fields.json_schema), value)) end
         end)
         test.it("keeps optional values inside their own flag and refuses variadic flag injection", function()
-            local ref = "bee.driver.claude.descriptor:cli"
+            local ref = "bee.drivers.claude.descriptor:cli"
             local reply = universal.prepare(ref)({profile_id = "window", brief = "Fixture", debug = "--dangerously-skip-permissions"})
             assert(reply.ok == true, tostring(reply.error))
             local argv = assert(bounds.ids(object(reply.launch).argv, false))
             test.not_nil(bounds.member("--debug=--dangerously-skip-permissions", argv))
             test.is_nil(bounds.member("--dangerously-skip-permissions", argv))
             with_ceiling(function()
-                reply = universal.prepare(ref)({profile_id = "window", brief = "Fixture", placement_profile_ref = placement,
+                reply = universal.prepare(ref)({profile_id = "window", brief = "Fixture", placement = placed(placement),
                     additional_dirs = {"/workspace", "--dangerously-skip-permissions"}})
                 test.eq(reply.ok, false)
             end)
         end)
         test.it("does not use empty replacements to bypass a host ceiling", function()
-            local claude = assert(descriptors.load("bee.driver.claude.descriptor:cli"))
-            test.is_true(effective.compile(claude, nil, nil, {system_prompt = ""}, "person", nil, nil, "bee.placement.profiles:native") == nil)
-            local codex = assert(descriptors.load("bee.driver.codex.descriptor:cli"))
+            local claude = assert(descriptors.load("bee.drivers.claude.descriptor:cli"))
+            test.is_true(effective.compile(claude, nil, nil, {system_prompt = ""}, "person", nil, nil, placed("bee.placement.profiles:native")) == nil)
+            local codex = assert(descriptors.load("bee.drivers.codex.descriptor:cli"))
             for _, name in ipairs({"hooks", "mcp_servers", "model_providers", "features", "writable_roots", "images"}) do
-                test.is_true(effective.compile(codex, nil, nil, {[name] = {}}, "person", nil, nil, "bee.placement.profiles:native") == nil)
+                test.is_true(effective.compile(codex, nil, nil, {[name] = {}}, "person", nil, nil, placed("bee.placement.profiles:native")) == nil)
             end
         end)
         test.it("locks every option whose installed version capability is absent", function()
             with_ceiling(function()
                 for _, raw in ipairs(cases) do
                     local case = object(raw)
-                    local cli = assert(descriptors.load("bee.driver." .. tostring(case.driver) .. ".descriptor:cli"))
+                    local cli = assert(descriptors.load("bee.drivers." .. tostring(case.driver) .. ".descriptor:cli"))
                     local fields = object(cli.options.fields)
                     local capabilities: {[string]: effective.Capability} = {}
                     for _, raw_field in pairs(fields) do
@@ -232,7 +236,7 @@ local function define_tests()
                     end
                     local id = tostring(case.id)
                     capabilities[tostring(object(fields[id]).path)] = {supported = false, reason = "Version below verified fixture"}
-                    local compiled, err = effective.compile(cli, nil, capabilities, {[id] = case.value}, "person", nil, nil, placement)
+                    local compiled, err = effective.compile(cli, nil, capabilities, {[id] = case.value}, "person", nil, nil, placed(placement))
                     test.is_nil(compiled); test.is_true(tostring(err):find("Version below", 1, true) ~= nil)
                 end
             end)
@@ -251,12 +255,12 @@ local function define_profiles_tests()
                     local values: Object = {}
                     edit(values, id, object(case.schema), case.value)
                     for name, value in pairs(bounds.object(case.companions) or {}) do values[name] = value end
-                    local stored = assert(profiles.encode("bee.driver." .. driver .. ".binding:binding", {options = values}, placement))
+                    local stored = assert(profiles.encode("bee.drivers." .. driver .. ".binding:binding", {options = values}, placed(placement)))
                     local checked, invalid = protocol.profile({schema_revision = protocol.SCHEMA, name = "Coverage",
-                        definition_ref = "bee.driver." .. driver .. ".profiles:default_window", driver_binding_ref = "bee.driver." .. driver .. ".binding:binding",
+                        definition_ref = "bee.driver." .. driver .. ".profiles:default_window", driver_binding_ref = "bee.drivers." .. driver .. ".binding:binding",
                         provider = stored, bee = {}, placement = {kind = "docker", profile_ref = placement}})
                     assert(checked, driver .. "." .. id .. ": " .. tostring(invalid))
-                    local reopened = assert(profiles.decode("bee.driver." .. driver .. ".binding:binding", object(json.decode(assert(json.encode(stored)))), placement))
+                    local reopened = assert(profiles.decode("bee.drivers." .. driver .. ".binding:binding", object(json.decode(assert(json.encode(stored)))), placed(placement)))
                     test.eq(canonical.encode(assert(profiles.flatten(reopened))[id]), canonical.encode(case.value))
                     local persisted = assert(protocol.storage(assert(checked)))
                     local restored = assert(protocol.profile(json.decode(assert(json.encode(persisted)))))

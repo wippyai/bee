@@ -18,7 +18,7 @@ entries:
     frame: bee.ui:frame
     appearance: bee.ui:appearance
     client: bee.app:client
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     confirmation: bee.approvals.app:confirmation
     manuals: bee.docs:manuals
   meta:

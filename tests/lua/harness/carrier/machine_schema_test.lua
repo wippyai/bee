@@ -14,7 +14,7 @@ return test.run_cases(function()
             end
             local ok, failure = pcall(function()
                 local request = fixtures.request({thread_id = "schema-thread", action_id = "schema-action", attempt_id = "schema-attempt",
-                    owner_id = "schema-owner", owner_incarnation = 1, binding_ref = "bee.driver.claude.binding:binding", profile_id = "window",
+                    owner_id = "schema-owner", owner_incarnation = 1, binding_ref = "bee.drivers.claude.binding:binding", profile_id = "window",
                     brief = "schema test", policy_ref = "bee.driver.claude.security:launch_policy_claude_window", resources = {}, environment = {}})
                 local reached = false
                 local io: machine.IO = {

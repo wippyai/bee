@@ -511,7 +511,7 @@ local function define_tests()
             local journal = harness.session_owner(WORKSPACE)
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
                 definition = "interactive-fixture", effective_profile = {schema_revision = "bee.agent-profile@2", name = "Recorded",
-                    definition_ref = "interactive-fixture", driver_binding_ref = "bee.driver.claude.binding:binding", provider = {}, bee = {mcp = {}},
+                    definition_ref = "interactive-fixture", driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {}, bee = {mcp = {}},
                     presentation = "window", budgets = {turn = {tokens = 10}}, supervision = {quiet_period_ms = 1000}}}}))
             local described = owner_call("get", {session = opened.session})
             local snapshot = assert(bounds.object(described.value))

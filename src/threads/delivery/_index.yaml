@@ -10,30 +10,30 @@ entries:
   source: file://claims.lua
   modules: [sql, time]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    record_types: bee.threads:record_types
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    record_types: bee.drivers.records:record_types
     access: bee.threads.service:access
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     owner: bee.threads.persist:owner
     authority: bee.threads.service:authority
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
 - name: subscriptions
   kind: library.lua
   source: file://subscriptions.lua
   modules: [sql, hash, json]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    values: bee.threads.records:values
-    record: bee.threads.records:record
-    record_types: bee.threads:record_types
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    values: bee.drivers.records:values
+    record: bee.drivers.records:record
+    record_types: bee.drivers.records:record_types
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     owner: bee.threads.persist:owner
     authority: bee.threads.service:authority
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
     listens: bee.threads.delivery:listens
     traits: bee.threads.delivery:traits
 - name: waits
@@ -41,15 +41,15 @@ entries:
   source: file://waits.lua
   modules: [sql]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    record: bee.threads.records:record
-    record_types: bee.threads:record_types
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    record: bee.drivers.records:record
+    record_types: bee.drivers.records:record_types
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
     claims: bee.threads.delivery:claims
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
     commits: bee.threads.delivery:commits
 - name: session
   kind: library.lua
@@ -59,12 +59,12 @@ entries:
   source: file://traits.lua
   modules: [sql, json]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
     trait_access: bee.gateway.security:traits
-    agent_trait: bee.values:agent_trait
+    agent_trait: bee.drivers.values:agent_trait
     hook_capabilities: bee.threads.hooks:capabilities
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
@@ -73,13 +73,13 @@ entries:
   source: file://listens.lua
   modules: [sql, json, security, hash]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     reader: bee.threads.persist:reader
     access: bee.threads.service:access
     traits: bee.threads.delivery:traits
     journal: bee.threads.persist:journal
-    record_types: bee.threads:record_types
+    record_types: bee.drivers.records:record_types
 
     trait_access: bee.gateway.security:traits
 - name: fencing

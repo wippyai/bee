@@ -11,7 +11,7 @@ entries:
     appearance: bee.ui:appearance
     arguments: bee.app:arguments
     interaction: bee.app:interaction
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
@@ -19,13 +19,13 @@ entries:
   kind: library.lua
   source: file://caller.lua
   imports:
-    reply: bee.values:reply
+    reply: bee.drivers.values:reply
 - name: interaction
   kind: library.lua
   source: file://interaction.lua
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
 - name: names
   kind: library.lua
   source: file://names.lua

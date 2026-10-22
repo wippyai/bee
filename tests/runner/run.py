@@ -191,7 +191,7 @@ def wrap_suites(document, source):
         entry["source"] = source
         entry["method"] = "run"
         entry["modules"] = ["funcs", "process", "registry", "ctx", "json", "time", "system"]
-        entry["imports"] = {"bounds": "bee.values:bounds"}
+        entry["imports"] = {"bounds": "bee.drivers.values:bounds"}
         entry.pop("security", None)
         generated.append(body)
     document["entries"].extend(generated)
@@ -203,12 +203,14 @@ def copy_workspace(root, address, identities=()):
         shutil.copytree(TESTS / name, root / name)
     composition = root / ".wippy/composition"
     shutil.copytree(TESTS / ".wippy/composition", composition)
+    drivers_composition = root / ".wippy/composition-drivers"
+    shutil.copytree(TESTS / ".wippy/composition-drivers", drivers_composition)
     shutil.copy2(TESTS / "wippy.lock", root / "wippy.lock")
     shutil.copy2(TESTS / ".wippy.yaml", root / ".wippy.yaml")
     (root / ".wippy/vendor").symlink_to(TESTS / ".wippy/vendor", target_is_directory=True)
     original = str(TESTS / "fixtures")
     costs = budgets.load()
-    indices = list((root / "lua").rglob("_index.yaml")) + list(composition.rglob("_index.yaml"))
+    indices = list((root / "lua").rglob("_index.yaml")) + list(composition.rglob("_index.yaml")) + list(drivers_composition.rglob("_index.yaml"))
     suite_limits = budgets.suites([yaml.safe_load(index.read_text()) for index in indices], set(identities), costs)
     for index in indices:
         value = index.read_text()

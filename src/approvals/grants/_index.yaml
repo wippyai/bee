@@ -10,7 +10,7 @@ entries:
   source: file://store.lua
   modules: [sql, json, hash, registry, security, time, funcs]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    clock: bee.values:clock
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    clock: bee.drivers.values:clock
     fencing: bee.threads.delivery:fencing

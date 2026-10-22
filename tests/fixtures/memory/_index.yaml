@@ -6,7 +6,7 @@ entries:
   source: file://app.lua
   method: main
   modules: [funcs, security, hash]
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
   meta:
     type: bee.application
     application:
@@ -39,11 +39,11 @@ entries:
   imports:
     owner_observer: bee.tests.support:owner_observer
     approval_effect: bee.tests.support:approval_effect
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     gateway: bee.gateway.binding:gateway
     traits: bee.gateway.security:traits
     harness: bee.tests.threads:harness
-    app_identity: bee.threads.records:app_identity
+    app_identity: bee.drivers.records:app_identity
     configuration: bee.gateway.env:configuration
 - name: host_policy
   kind: security.policy
@@ -72,7 +72,7 @@ entries:
   method: run
   meta: {type: test_support}
   modules: [funcs, security, hash]
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
 - name: index_policy
   kind: security.policy
   meta: {type: test_support}
@@ -131,7 +131,7 @@ entries:
   method: hook
   meta: {type: bee.session.hook, application_ref: 'bee.tests.memory:app', application_revision: '1'}
   modules: [security, funcs, hash, channel]
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
 - name: admission
   kind: registry.entry
   meta: {type: bee.node.application_admission}
@@ -156,7 +156,7 @@ entries:
   source: file://tool.lua
   method: handle
   modules: [sql]
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
   meta:
     type: tool
     title: Hook fixture tool
@@ -170,7 +170,7 @@ entries:
   source: file://revoke_hook.lua
   method: handle
   modules: [sql, security, funcs]
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
   security: {policies: [bee.tests.memory:host_policy]}
 - name: schema
   kind: function.lua
@@ -183,7 +183,7 @@ entries:
   source: file://hold_hook.lua
   method: handle
   modules: [process]
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
   security: {policies: [bee.tests.memory:host_policy]}
 - name: advance_hook_clock
   kind: function.lua

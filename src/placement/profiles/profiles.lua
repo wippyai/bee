@@ -2,6 +2,7 @@
 local bounds = require("bounds")
 local hash = require("hash")
 local canonical = require("canonical")
+local driver_placement = require("driver_placement")
 local registry = require("registry")
 local funcs = require("funcs")
 local M = {}
@@ -206,6 +207,16 @@ function M.decode_isolation(value: unknown): (Isolation?, string?)
     end
     return {kind = kind, credentials = credentials, mounted_roots = mounted, network = network, option_ceilings = ceilings}, nil
 end
+-- placement is the bee/drivers placement of a placement profile, the default
+-- profile when ref is nil: its isolation with the per-option ceilings that
+-- bound each driver's options, named by ref in refusals.
+function M.placement(ref: string?): (driver_placement.Placement?, string?)
+    local isolation, err = M.context(ref)
+    if not isolation then return nil, err end
+    return driver_placement.decode({kind = isolation.kind, mounts = isolation.mounted_roots, network = isolation.network,
+        option_ceilings = isolation.option_ceilings, credentials = isolation.credentials, ref = ref})
+end
+
 function M.context(ref: string?): (Isolation?, string?)
     local raw, err = funcs.call("bee.placement.profiles:context", ref or M.DEFAULT)
     if err then return nil, tostring(err) end

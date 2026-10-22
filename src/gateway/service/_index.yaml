@@ -38,7 +38,7 @@ entries:
   imports:
     protocol: bee.hive:protocol
     node_client: bee.node:client
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     configuration: bee.gateway.api:external_configuration
   meta:
     command:
@@ -65,7 +65,7 @@ entries:
   - registry
   imports:
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     external: bee.gateway.binding:external
     node_client: bee.node:client
     demand: bee.process:demand
@@ -167,7 +167,7 @@ entries:
   - security
   - funcs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: backlog
   kind: function.lua
   source: file://effects.lua
@@ -177,13 +177,13 @@ entries:
   - security
   - funcs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: access_effects
   kind: library.lua
   source: file://access_effects.lua
   modules: [funcs]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     gateway: bee.gateway.binding:gateway
     subject_call: bee.gateway.security:subject_call
 - name: access_backlog
@@ -192,7 +192,7 @@ entries:
   method: pending
   modules: [funcs]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     gateway: bee.gateway.binding:gateway
     subject_call: bee.gateway.security:subject_call
 - name: access_worker

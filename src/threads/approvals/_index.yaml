@@ -6,10 +6,10 @@ entries:
   source: file://ingress.lua
   modules: [sql]
   imports:
-    bounds: bee.values:bounds
-    types: bee.threads:record_types
-    approval: bee.threads.records:approval
-    message: bee.threads.records:message
+    bounds: bee.drivers.values:bounds
+    types: bee.drivers.records:record_types
+    approval: bee.drivers.records:approval
+    message: bee.drivers.records:message
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority

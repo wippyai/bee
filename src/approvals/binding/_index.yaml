@@ -315,7 +315,7 @@ entries:
   modules:
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     service: bee.approvals.binding:service
     outbox: bee.approvals.persist:outbox
   security:
@@ -430,10 +430,10 @@ entries:
   - hash
   - system
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
     part_model: bee.approvals.binding:model
 - name: requests
   kind: library.lua
@@ -444,9 +444,9 @@ entries:
   - uuid
   - security
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    values: bee.threads.records:values
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    values: bee.drivers.records:values
     resources: bee.approvals.env:resources
     store: bee.approvals.persist:store
     runtime_lease: bee.approvals.types:runtime_lease
@@ -469,7 +469,7 @@ entries:
   - events
   - logger
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     node_database: bee.persist:database
     transaction: bee.persist:transaction
     store: bee.approvals.persist:store
@@ -495,9 +495,9 @@ entries:
   - hash
   - json
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    values: bee.threads.records:values
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    values: bee.drivers.records:values
     resources: bee.approvals.env:resources
     store: bee.approvals.persist:store
     windows: bee.approvals.types:windows
@@ -511,7 +511,7 @@ entries:
   - sql
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.persist:transaction
     resources: bee.approvals.env:resources
     store: bee.approvals.persist:store
@@ -523,7 +523,7 @@ entries:
   modules:
   - sql
   imports:
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     store: bee.approvals.persist:store
     outbox: bee.approvals.persist:outbox
     lifecycle: bee.approvals.persist:lifecycle
@@ -537,8 +537,8 @@ entries:
   - sql
   - json
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     resources: bee.approvals.env:resources
     store: bee.approvals.persist:store
     windows: bee.approvals.types:windows
@@ -555,8 +555,8 @@ entries:
   - hash
   - security
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     resources: bee.approvals.env:resources
     store: bee.approvals.persist:store
     grants: bee.approvals.grants:store
@@ -576,8 +576,8 @@ entries:
   - security
   - events
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     resources: bee.approvals.env:resources
     store: bee.approvals.persist:store
     part_model: bee.approvals.binding:model
@@ -592,7 +592,7 @@ entries:
   - sql
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     store: bee.approvals.persist:store
     lifecycle: bee.approvals.persist:lifecycle
     part_model: bee.approvals.binding:model
@@ -607,8 +607,8 @@ entries:
   - hash
   - security
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     store: bee.approvals.persist:store
     runtime_lease: bee.approvals.types:runtime_lease
     windows: bee.approvals.types:windows

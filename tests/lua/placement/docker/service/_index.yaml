@@ -30,7 +30,7 @@ entries:
     image: bee.tests.placement.docker.service:image_fixture
     environment: bee.tests.placement.docker.service:environment_fixture
     service: bee.tests.placement.docker.service:sweep_fixture
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     demand: bee.process:demand
     task: bee.process:task
   security:
@@ -56,4 +56,4 @@ entries:
     test: wippy.test:test
     demand: bee.process:demand
     image: bee.placement.docker.service:image
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

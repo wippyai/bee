@@ -84,7 +84,7 @@ function M.define()
             local appends = assert(facts.context.driver_requirements)
             local append = assert(appends["bee.driver.stub.binding:activation"])
             if change == "missing" then facts.context.driver_requirements = nil
-            elseif change == "binding" then append.binding = "bee.driver.claude.binding:binding"
+            elseif change == "binding" then append.binding = "bee.drivers.claude.binding:binding"
             else append.digest = string.rep("b", 64) end
             local verdict = assert(preflight.check(facts.candidate, facts.context))
             test.is_false(verdict.ready)

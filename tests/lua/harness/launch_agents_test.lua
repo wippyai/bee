@@ -82,9 +82,9 @@ local function define_tests()
                 test.eq(code(refused), "UNSUPPORTED_CAPABILITY")
                 test.is_true(refusal_message(refused):find("unmapped-model", 1, true) ~= nil)
             end)
-            with_entry("bee.driver.codex.binding:binding", function(meta) meta.accepts_model = false end, function()
+            with_entry("bee.drivers.codex.binding:binding", function(meta) meta.accepts_model = false end, function()
                 with_entry(AGENT_DEFINITION, function(data)
-                    data.binding_ref = "bee.driver.codex.binding:binding"
+                    data.binding_ref = "bee.drivers.codex.binding:binding"
                     data.profile_id = "batch"
                 end, function()
                     local refused = call("bee.tests.harness.launch:resolve", {definition_ref = AGENT_DEFINITION})
@@ -114,7 +114,7 @@ local function define_tests()
             }) do
                 local refused = profile_call({operation = "put", workspace_id = workspace, profile_id = fresh("agent-profile"),
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Outside ceiling",
-                        definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = profile.provider, bee = profile.bee}})
+                        definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = profile.provider, bee = profile.bee}})
                 test.eq(refused.ok, false)
                 test.eq(refused.code, "DENIED")
             end

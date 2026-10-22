@@ -22,7 +22,7 @@ entries:
   imports:
     committed: bee.tests.support:committed
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     model: bee.capability:model
     grants: bee.gov.types:capability_grants
     materializer: bee.gov.binding:materializer
@@ -37,7 +37,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     grants: bee.gov.types:capability_grants
     capability: bee.capability:model
 - name: exposure_probe
@@ -85,7 +85,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     model: bee.capability:model
     grants: bee.gov.types:capability_grants
     outbound: bee.hive:outbound
@@ -98,6 +98,6 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     grants: bee.gov.types:capability_grants
     protocol: bee.hive:protocol

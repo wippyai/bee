@@ -17,7 +17,7 @@ local function define_tests()
             local feed = "harness.profiles:" .. assert(hash.sha256("workspace"))
             local orphan = "harness.profiles:" .. assert(hash.sha256("deleted-workspace"))
             for _, name in ipairs({feed,orphan}) do assert(db:execute("INSERT INTO bee_sync_feeds VALUES ('node',?,1,1,128,1024)",{name})) end
-            local configuration = {schema_revision = "bee.agent-profile@3",name = "Legacy",definition_ref = "bee.driver.codex.profiles:research_batch",driver_binding_ref = "bee.driver.codex.binding:binding",provider = {},bee = {mcp = {}}}
+            local configuration = {schema_revision = "bee.agent-profile@3",name = "Legacy",definition_ref = "bee.driver.codex.profiles:research_batch",driver_binding_ref = "bee.drivers.codex.binding:binding",provider = {},bee = {mcp = {}}}
             for _, item in ipairs({{feed = feed,id = "old"},{feed = feed,id = "retained-away"},{feed = orphan,id = "orphan"}}) do
                 assert(db:execute("INSERT INTO bee_sync_projections VALUES ('node',?,?,2,?,0,1,'2026-10-01T00:00:00Z')",{item.feed,item.id,json.encode(configuration)}))
             end
@@ -45,7 +45,7 @@ local function define_tests()
             local parent = assert(grants.read(db, authority.id("node", "workspace", "old", 2)))
             for _, name in ipairs({"absent", "empty", "delegated", "revoked", "requestable"}) do
                 local configuration: {[string]: unknown} = {schema_revision = "bee.agent-profile@3", name = name,
-                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding",
+                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.drivers.codex.binding:binding",
                     provider = {}, bee = {mcp = {{tool = "app_tools", scope = {}}}}}
                 if name == "empty" then configuration.active_traits, configuration.requestable = {}, {} end
                 if name == "requestable" then configuration.requestable = {"bee.app:tools"} end
@@ -87,7 +87,7 @@ local function define_tests()
                 local profile: {[string]: unknown} = {schema_revision = "bee.agent-profile@" .. tostring(version),
                     definition_ref = "bee.driver.codex.profiles:research_batch"}
                 if version == 1 then profile.title, profile.options = "Old", {model = "gpt-6"}
-                else profile.name, profile.driver_binding_ref, profile.provider, profile.bee = "Old", "bee.driver.codex.binding:binding", {model = "gpt-6"}, {} end
+                else profile.name, profile.driver_binding_ref, profile.provider, profile.bee = "Old", "bee.drivers.codex.binding:binding", {model = "gpt-6"}, {} end
                 assert(db:execute("INSERT INTO bee_sync_projections VALUES ('node',?,?,1,?,0,1,'2026-10-01T00:00:00Z')", {feed, tostring(version), json.encode(profile)}))
             end
             local id = "bee.harness.migrations:driver_options_all"
@@ -96,7 +96,7 @@ local function define_tests()
             for _, row in ipairs(assert(db:query("SELECT value_json FROM bee_sync_projections WHERE feed = ?", {feed}))) do
                 local profile = assert(bounds.object(json.decode(row.value_json)))
                 local provider = assert(bounds.object(profile.provider), json.encode(profile))
-                test.eq(provider.schema_ref, "bee.driver.codex.descriptor:cli")
+                test.eq(provider.schema_ref, "bee.drivers.codex.descriptor:cli")
                 test.eq(provider.schema_revision, "bee.driver.cli-descriptor@4")
                 test.eq(assert(bounds.object(provider.values)).model, "gpt-6")
             end
@@ -110,7 +110,7 @@ local function define_tests()
                 local provider: {[string]: unknown} = {model = "gpt-6", options = {sandbox = "read-only"}}
                 if name == "unknown" then provider.options = {retired_option = false} end
                 local profile = {schema_revision = "bee.agent-profile@3", name = name,
-                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding", provider = provider, bee = {}}
+                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.drivers.codex.binding:binding", provider = provider, bee = {}}
                 assert(db:execute("INSERT INTO bee_sync_projections VALUES ('node',?,?,2,?,0,1,'2026-10-01T00:00:00Z')", {feed, name, json.encode(profile)}))
                 assert(authority.save(db, "node", "option-migration", name, 2, profile, "person", true, "2026-10-01T00:00:00.000Z"))
             end
@@ -124,7 +124,7 @@ local function define_tests()
                 test.eq(grant.provenance.kind, "legacy")
                 if row.projection_key == "declared" then
                     local provider = assert(bounds.object(profile.provider))
-                    test.eq(provider.schema_ref, "bee.driver.codex.descriptor:cli")
+                    test.eq(provider.schema_ref, "bee.drivers.codex.descriptor:cli")
                     test.eq(provider.schema_revision, "bee.driver.cli-descriptor@4")
                     test.eq(assert(bounds.object(provider.values)).model, "gpt-6")
                     test.is_nil(provider.options)

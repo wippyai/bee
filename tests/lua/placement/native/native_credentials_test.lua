@@ -57,7 +57,7 @@ local function credentials_tests()
                     launch_policy_digest = native_fixture.DIGEST, idempotency_key = native_fixture.fresh("projection")})
                 local request = native_fixture.launch({"sh", "-c", "exit 0"}, "direct_process")
                 request.attempt_id, request.projections = attempt, {projection.projection_id}
-                request.binding_ref, request.policy_ref = "bee.driver.codex.binding:binding", native_fixture.NO_PROVIDER_POLICY
+                request.binding_ref, request.policy_ref = "bee.drivers.codex.binding:binding", native_fixture.NO_PROVIDER_POLICY
                 request.configuration_digest = native_fixture.provider_configuration_digest(native_fixture.NO_PROVIDER_POLICY)
                 local launch = assert(bounds.object(request.launch))
                 launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {
@@ -351,7 +351,7 @@ local function credentials_tests()
                 end
                 local target, seed_error = homes.retain_login(path, {provider = "grok",
                     definition_id = definition.definition_id, definition_revision = math.floor(definition.revision),
-                    optional = true, format = {schema_revision = "bee.credential-format@1", file = {
+                    optional = true, format = {schema_revision = "bee.credential-format@2", environments = {}, file = {
                         path = ".grok/auth.json", content_format = "json", initialize = initialize}}}, nil, {})
                 if not target then error(tostring(seed_error or "preseed Grok retained identity")) end
                 local db, db_error = store.open()

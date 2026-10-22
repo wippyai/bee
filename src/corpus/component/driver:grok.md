@@ -1,8 +1,8 @@
-# bee.driver.grok
+# bee.drivers.grok
 
-Grok CLI profiles and a strict CLI descriptor (`bee.driver.grok.descriptor:cli`)
+Grok CLI profiles and a strict CLI descriptor (`bee.drivers.grok.descriptor:cli`)
 selecting the universal launch layer and the shared Grok streaming-json codec,
-plus admitted configuration. The binding is `bee.driver.grok.binding:binding`.
+plus admitted configuration. The binding is `bee.drivers.grok.binding:binding`.
 
 The host supplies the executable environment and window policy. The component
 declares no process authority, credential access or MCP permissions.

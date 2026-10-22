@@ -106,7 +106,7 @@ local function define_tests()
             test.is_true(api.terminal.error ~= nil and api.terminal.error.retryable)
         end)
         test.it("keeps a provider turn-limit report as a typed failure", function()
-            local raw, call_error = funcs.call("bee.driver.claude.binding:normalize", {
+            local raw, call_error = funcs.call("bee.drivers.claude.binding:normalize", {
                 index = 1,
                 envelope = {type = "result", is_error = true, subtype = "error_max_turns",
                     terminal_reason = "max_turns", result = "provider turn limit reached"},
@@ -187,7 +187,7 @@ local function define_tests()
             test.is_nil(window_control)
             local _, flag_error = claude_launch.decode({profile_id = "batch", brief = "x", permission_exchange = "yes"})
             test.eq(flag_error, "permission_exchange must be a boolean")
-            local reply, call_error = funcs.call("bee.driver.claude.binding:dispatch", {profile_id = "session", brief = "next"})
+            local reply, call_error = funcs.call("bee.drivers.claude.binding:dispatch", {profile_id = "session", brief = "next"})
             if call_error then error(tostring(call_error)) end
             test.is_false(reply.ok)
             test.eq(reply.error, "a dispatched turn needs resume_ref")
@@ -263,32 +263,32 @@ local function define_tests()
             test.not_nil(codex_launch.decode({profile_id = "batch", brief = "x", sandbox = "danger-full-access"}))
             local _, sandbox_error = codex_launch.decode({profile_id = "batch", brief = "x", sandbox = "invalid"})
             test.eq(sandbox_error, "sandbox is not one Bee admits")
-            local reply = funcs.call("bee.driver.codex.binding:normalize", {index = 1, envelope = {type = "thread.started", thread_id = "t1"}})
+            local reply = funcs.call("bee.drivers.codex.binding:normalize", {index = 1, envelope = {type = "thread.started", thread_id = "t1"}})
             test.is_true(reply.ok)
             test.eq(reply.state.thread_id, "t1")
-            local done = funcs.call("bee.driver.codex.binding:normalize", {state = reply.state, index = 2, eof = true})
+            local done = funcs.call("bee.drivers.codex.binding:normalize", {state = reply.state, index = 2, eof = true})
             test.eq(done.terminal.outcome, "uncertain")
         end)
         test.it("decodes exact Claude and Codex saved state before normalization and EOF", function()
-            local claude_unknown = funcs.call("bee.driver.claude.binding:normalize", {index = 1, eof = true,
+            local claude_unknown = funcs.call("bee.drivers.claude.binding:normalize", {index = 1, eof = true,
                 state = {started = false, resumed = false, foreign = true}})
             test.is_false(claude_unknown.ok)
-            local claude_bad_terminal = funcs.call("bee.driver.claude.binding:normalize", {index = 1, eof = true,
+            local claude_bad_terminal = funcs.call("bee.drivers.claude.binding:normalize", {index = 1, eof = true,
                 state = {started = false, resumed = false, terminal = {outcome = "succeeded", answer = "ok", extra = true}}})
             test.is_false(claude_bad_terminal.ok)
-            local claude_resumed = funcs.call("bee.driver.claude.binding:normalize", {index = 1, eof = true,
+            local claude_resumed = funcs.call("bee.drivers.claude.binding:normalize", {index = 1, eof = true,
                 state = {started = false, resumed = true}})
             test.is_true(claude_resumed.ok)
             test.is_true(claude_resumed.state.resumed)
             test.eq(claude_resumed.terminal.outcome, "uncertain")
 
-            local codex_unknown = funcs.call("bee.driver.codex.binding:normalize", {index = 1, eof = true,
+            local codex_unknown = funcs.call("bee.drivers.codex.binding:normalize", {index = 1, eof = true,
                 state = {resumed = false, thread_id = "thread-1", foreign = true}})
             test.is_false(codex_unknown.ok)
-            local codex_oversized = funcs.call("bee.driver.codex.binding:normalize", {index = 1, eof = true,
+            local codex_oversized = funcs.call("bee.drivers.codex.binding:normalize", {index = 1, eof = true,
                 state = {resumed = false, answer = string.rep("x", codex.max_answer_bytes() + 1)}})
             test.is_false(codex_oversized.ok)
-            local codex_resumed = funcs.call("bee.driver.codex.binding:normalize", {index = 1, eof = true,
+            local codex_resumed = funcs.call("bee.drivers.codex.binding:normalize", {index = 1, eof = true,
                 resumed = true})
             test.is_true(codex_resumed.ok)
             test.is_true(codex_resumed.state.resumed)
@@ -437,13 +437,13 @@ local function define_tests()
             local done = muse.normalize(state, 5, {payload_type = "run.terminal.completed", stream = {id = "sess-bounded"}, payload = {terminal = "completed"}})
             test.is_nil(done.terminal and done.terminal.answer)
 
-            local unknown = funcs.call("bee.driver.muse.binding:normalize", {index = 1, state = {
+            local unknown = funcs.call("bee.drivers.muse.binding:normalize", {index = 1, state = {
                 resumed = false, command_accepted = false, run_started = false, answer_truncated = false,
                 unknown = true,
             }, eof = true})
             test.is_false(unknown.ok)
             test.eq(unknown.error, "state: unknown field unknown")
-            local overlong = funcs.call("bee.driver.muse.binding:normalize", {index = 1, state = {
+            local overlong = funcs.call("bee.drivers.muse.binding:normalize", {index = 1, state = {
                 resumed = false, command_accepted = false, run_started = false, answer_truncated = false,
                 answer = string.rep("x", muse.max_answer_bytes() + 1),
             }, eof = true})
@@ -501,12 +501,12 @@ local function define_tests()
             local native_both, native_both_error = muse_launch.decode({profile_id = "window", brief = "--help", resume_ref = "native-session"})
             test.is_nil(native_both)
             test.eq(native_both_error, "window resume cannot carry a brief")
-            local reply, call_error = funcs.call("bee.driver.muse.binding:normalize", {index = 1,
+            local reply, call_error = funcs.call("bee.drivers.muse.binding:normalize", {index = 1,
                 envelope = {payload_type = "runtime.command.accepted", stream = {id = "sess-1"}, payload = {}}})
             if call_error then error(tostring(call_error)) end
             test.is_true(reply.ok)
             test.eq(reply.state.session_id, "sess-1")
-            local done = funcs.call("bee.driver.muse.binding:normalize", {state = reply.state, index = 2, eof = true})
+            local done = funcs.call("bee.drivers.muse.binding:normalize", {state = reply.state, index = 2, eof = true})
             test.eq(done.terminal.outcome, "uncertain")
         end)
     end)

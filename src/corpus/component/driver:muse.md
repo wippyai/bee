@@ -1,8 +1,8 @@
-# bee.driver.muse
+# bee.drivers.muse
 
-Muse profiles and a strict CLI descriptor (`bee.driver.muse.descriptor:cli`)
+Muse profiles and a strict CLI descriptor (`bee.drivers.muse.descriptor:cli`)
 selecting the universal launch layer and the shared Muse record-JSONL codec,
-plus admitted configuration. The binding is `bee.driver.muse.binding:binding`.
+plus admitted configuration. The binding is `bee.drivers.muse.binding:binding`.
 
 The host supplies the executable environment and each route's policy. The
 component declares no process authority, credential access or MCP permissions.

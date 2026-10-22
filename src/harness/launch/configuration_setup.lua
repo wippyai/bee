@@ -9,6 +9,7 @@ local gateway_configuration = require("gateway_configuration")
 local descriptors = require("descriptors")
 local profiles = require("profiles")
 local preferences = require("preferences")
+local placement_profiles = require("placement_profiles")
 local M = {}
 type Plan = {placement_profile_ref: string?, binding_ref: string, policy_ref: string, profile_id: string, mode: string, effective_profile: unknown}
 type Requirement = {provider: string, base_path: string}
@@ -45,7 +46,9 @@ function M.requirements(plan: Plan): ({Requirement}?, string?)
     end
     local options, option_error = preferences.decode_prepare_options(data.prepare_options)
     if not options then return nil, option_error end
-    local request: configuration_types.Request = {attempt_id = "configuration-setup", placement_profile_ref = plan.placement_profile_ref, fixture = data.fixture == true, context = plan.mode == "window" and "window" or "first_turn",
+    local option_placement, placement_error = placement_profiles.placement(plan.placement_profile_ref)
+    if not option_placement then return nil, placement_error end
+    local request: configuration_types.Request = {attempt_id = "configuration-setup", placement = option_placement, fixture = data.fixture == true, context = plan.mode == "window" and "window" or "first_turn",
         option_values = options, private_home = private,
         instructions = type(data.instructions) == "string" and data.instructions or nil}
     local home, home_error = env.get("bee.env:machine_home")
@@ -72,7 +75,7 @@ function M.requirements(plan: Plan): ({Requirement}?, string?)
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
     end
     local delivery, delivery_error = configuration.call(plan.binding_ref, target, request)
-    if not delivery then return nil, delivery_error end
+    if not delivery then return nil, tostring(delivery_error) end
     local result: {Requirement} = {}
     local seen: {[string]: boolean} = {}
     for _, file in ipairs(delivery.files) do

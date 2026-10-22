@@ -189,7 +189,7 @@ def run(toolchain, fault):
     (gateway_source / "_index.yaml").write_text(yaml.safe_dump(gateway, sort_keys=False))
     shutil.copy2(REPO / "tests/wippy.lock", workspace / "wippy.lock")
     (workspace / ".wippy.yaml").write_text(yaml.safe_dump(
-        {"version": "1.0", "workspace": {"replacements": {"bee/bee": str(application)}},
+        {"version": "1.0", "workspace": {"replacements": {"bee/bee": str(application), "bee/drivers": str(REPO / "drivers/src")}},
          "cluster": {"name": "bee-boot-" + root.parent.name + "-" + root.name},
          "lua": {"cache": {"dir": str(Path(sys.argv[2]).resolve()),
                            "mode": sys.argv[3] if len(sys.argv) > 3 else 'readwrite'}} if len(sys.argv) > 2 else {}}, sort_keys=False))

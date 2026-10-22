@@ -126,7 +126,7 @@ local function has_locate_facet(pinned: registry.Snapshot, binding: {[string]: u
     if type(data.contracts) ~= "table" then return false end
     for _, raw in ipairs(data.contracts) do
         local contract = bounds.object(raw)
-        if contract and contract.contract == "bee.driver:locate_facet" then
+        if contract and contract.contract == "bee.drivers:locate_facet" then
             local methods = bounds.object(contract.methods) or {}
             local method = bounds.id(methods.locate)
             local entry = nil
@@ -163,6 +163,15 @@ local function unknown(provider: string, reason: string): driver_types.LocateRes
     return result
 end
 
+-- A driver keeps its executable variable in the .env namespace beside its
+-- .binding namespace: bee.drivers.<name> for library drivers and
+-- bee.driver.<name> for overlay drivers.
+function M.executable_ref(binding_ref: string): string?
+    local root = binding_ref:match("^(.+)%.binding:[^:]+$")
+    if not root then return nil end
+    return root .. ".env:executable"
+end
+
 function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: string, cache: Cache, placement_profile_ref: string?): driver_types.LocateResult?
     local cache_key = binding_ref .. "\n" .. profile_id .. "\n" .. (placement_profile_ref or "")
     local binding_raw, binding_error = pinned:get(binding_ref)
@@ -188,7 +197,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     end
     if not placement_profile_ref and cache.drivers[cache_key] then return cache.drivers[cache_key] end
     if not has_locate_facet(pinned, binding) then
-        local result = unsupported(selected, "the active driver does not bind bee.driver:locate_facet", nil)
+        local result = unsupported(selected, "the active driver does not bind bee.drivers:locate_facet", nil)
         cache.drivers[cache_key] = result
         return result
     end
@@ -208,7 +217,12 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
         compatible = bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
     end
     local executable_name = selected.executable
-    local executable_ref = "bee.driver." .. provider .. ".env:executable"
+    local executable_ref = M.executable_ref(binding_ref)
+    if not executable_ref then
+        local result = unknown(provider, "driver binding " .. binding_ref .. " is outside a .binding namespace")
+        cache.drivers[cache_key] = result
+        return result
+    end
     local configured_path, executable_error = env.get(executable_ref)
     local configured = type(configured_path) == "string" and configured_path ~= ""
     local executable_path = executable_name

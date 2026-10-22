@@ -9,7 +9,7 @@ local function home(clean: string?): types.ProviderHome
         {source_path = "config.toml", path = "config.toml", kind = "config", optional = true, write_back = false, container_content = clean}}}
 end
 local function format(content: string): formats.Format
-    return {schema_revision = "bee.credential-format@1", file = {path = "login.json", content_format = "json",
+    return {schema_revision = "bee.credential-format@2", environments = {}, file = {path = "login.json", content_format = "json",
         initialize = {{path = "config.toml", source_path = "config.toml", content = content}}}}
 end
 local function run()

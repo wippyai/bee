@@ -9,7 +9,7 @@ application, select a workspace, open a store or grant access to a thread.
 | `bee.app:client` | Launch decoding and the application-to-broker messages: ready, title, close, query, checkpoint, navigate |
 | `bee.app:arguments` | Bounded launch argument decoding and fingerprint |
 | `bee.app:interaction` | Interaction (confirm and input query) specs and responses |
-| `bee.app:caller` | Typed owner replies decoded through the shared `bee.values:reply` boundary |
+| `bee.app:caller` | Typed owner replies decoded through the shared `bee.drivers.values:reply` boundary |
 | `bee.app:names` | Bounded display labels for names |
 | `bee.app:descriptor` | Decodes the `meta.application` record of a `bee.app` entry |
 

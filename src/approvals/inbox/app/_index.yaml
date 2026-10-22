@@ -23,8 +23,8 @@ entries:
     appearance: bee.ui:appearance
     windows: bee.approvals.types:windows
     grants: bee.approvals.grants:store
-    bounds: bee.values:bounds
-    clock: bee.values:clock
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock
     model: bee.approvals.inbox.app:model
     view: bee.approvals.inbox.app:view
     inbox: bee.approvals.inbox.app:client
@@ -74,7 +74,7 @@ entries:
     grants: bee.approvals.grants:store
     text: bee.ui:text
     glyphs: bee.ui:glyphs
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     caller: bee.app:caller
     typed_form: bee.apps.library.app:form
 - name: leases
@@ -83,8 +83,8 @@ entries:
   modules: [json, hash]
   imports:
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
-    bounds: bee.values:bounds
+    clock: bee.drivers.values:clock
+    bounds: bee.drivers.values:bounds
     model: bee.approvals.inbox.app:model
 - name: lease_form
   kind: library.lua
@@ -101,7 +101,7 @@ entries:
   kind: library.lua
   source: file://feeds.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     sync: bee.sync:protocol
     caller: bee.app:caller
     source_config: bee.approvals.inbox.app:source_config
@@ -118,7 +118,7 @@ entries:
     model: bee.approvals.inbox.app:model
     windows: bee.approvals.types:windows
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
     names: bee.app:names
     glyphs: bee.ui:glyphs
 - name: client
@@ -130,7 +130,7 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: sources
   kind: registry.entry
   meta:

@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://status_reader.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     caller: bee.app:caller
     text: bee.ui:text
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds

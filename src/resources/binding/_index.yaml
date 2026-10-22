@@ -7,7 +7,7 @@ entries:
   modules:
   - funcs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: associate
   kind: function.lua
   source: file://associate_method.lua

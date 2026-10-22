@@ -67,7 +67,7 @@ entries:
   modules: [json]
   imports:
     root_pack_data: bee.tests.hub:root_pack_data
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     inspection: bee.hub.package:inspection
 - name: migration_runner_db
   kind: db.sql.sqlite
@@ -178,7 +178,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     inspect: bee.hub.binding:inspect
     inspection: bee.hub.package:inspection

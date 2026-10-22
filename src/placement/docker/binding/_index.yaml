@@ -26,7 +26,7 @@ entries:
   source: file://methods.lua
   method: prepare
   imports: &id001
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     request_codec: bee.placement:request
     profiles: bee.placement.profiles:profiles
     spec: bee.placement.docker.binding:spec
@@ -188,7 +188,7 @@ entries:
     request_codec: bee.placement:request
     profiles: bee.placement.profiles:profiles
     types: bee.placement:types
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: methods
   kind: library.lua
   source: file://methods.lua

@@ -19,7 +19,7 @@ entries:
   source: file://owner.lua
   method: main
   modules: [system, registry, process, sql, events, exec, json, channel, time]
-  imports: {bounds: bee.values:bounds, supervision: bee.placement.native.persist:supervision, processes: bee.tests.support:processes}
+  imports: {bounds: bee.drivers.values:bounds, supervision: bee.placement.native.persist:supervision, processes: bee.tests.support:processes}
 - name: service
   kind: process.service
   process: bee.tests.support.hygiene:owner
@@ -34,7 +34,7 @@ entries:
   kind: library.lua
   source: file://owner.lua
   modules: [system, registry, process, sql, events, exec, json, channel, time]
-  imports: {bounds: bee.values:bounds, supervision: bee.placement.native.persist:supervision, processes: bee.tests.support:processes}
+  imports: {bounds: bee.drivers.values:bounds, supervision: bee.placement.native.persist:supervision, processes: bee.tests.support:processes}
 - name: compare_test
   kind: function.lua
   source: file://compare_test.lua
@@ -67,7 +67,7 @@ entries:
   kind: library.lua
   source: file://wrapper.lua
   modules: [funcs, process, registry, ctx, json, time, system]
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
 - name: inspection_policy
   kind: security.policy
   policy:

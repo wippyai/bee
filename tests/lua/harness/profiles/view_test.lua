@@ -30,19 +30,19 @@ local function ask(target: string, request: Object): caller.Reply
     return {ok = false, error = {code = "NOT_FOUND", message = target}, value = nil, replayed = false}
 end
 local function state(): view.State
-    local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}, {options = {}, mcp_tools = {"thread_read"}, instructions = true})
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}, {options = {}, mcp_tools = {"thread_read"}, instructions = true})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"}, ask)
 end
 local function text_state(): view.State
-    local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {label = "fixture-profile"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {options = {label = "fixture-profile"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
         {options = {label = {kind = "text", max_bytes = 64}}, mcp_tools = {"thread_read"}, instructions = true})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "agent", revision = 1, draft = draft,
         save_key = "save-agent", remove_key = "remove-agent"}, ask)
 end
 local function launch_state(workdir: boolean, thread: boolean): view.State
-    local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}}}, {options = {}, mcp_tools = {}, instructions = false, workdir = workdir, thread = thread})
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}}}, {options = {}, mcp_tools = {}, instructions = false, workdir = workdir, thread = thread})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"}, ask)
 end
@@ -77,7 +77,7 @@ local function define_tests()
         end)
         test.it("reviews container bypass and its reach before saving the profile", function()
             local draft = assert(editor.new({schema_revision = "bee.agent-profile@3", name = "Container Codex",
-                definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding",
+                definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.drivers.codex.binding:binding",
                 placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"},
                 provider = {options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}}, bee = {}},
                 {options = {sandbox = {"danger-full-access"}, approval_policy = {"never"}, dangerously_bypass_approvals_and_sandbox = {true}},

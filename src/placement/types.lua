@@ -2,6 +2,7 @@
 -- what a runtime can promise about cleanup. Nothing here runs anything.
 local driver_types = require("driver_types")
 local preferences = require("preferences")
+local composition = require("composition")
 type Preferences = preferences.Value
 type Capability = "direct_process" | "process_group" | "contained_tree"
 -- How a runtime lets the runner learn the exit: independently of the pipes,
@@ -148,7 +149,7 @@ type Liveness = {observed: boolean, alive: boolean?, at: string, detail: string}
 -- without exposing either the host path or placement's private directory.
 type Status = {attempt: Attempt, liveness: Liveness, private_home: boolean?}
 local M = {}
-M.MAX_COMPOSED_CONFIGURATION_BYTES = 131072
+M.MAX_COMPOSED_CONFIGURATION_BYTES = composition.MAX_BYTES
 -- The host launch policy entry type; placement authorizes a request's
 -- host-selected parts against the policy the request names.
 M.LAUNCH_POLICY_TYPE = "bee.launch_policy"

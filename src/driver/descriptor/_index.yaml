@@ -1,47 +1,12 @@
 version: '1.0'
 namespace: bee.driver.descriptor
 entries:
-- name: schema_values
-  kind: library.lua
-  source: file://schema_values.lua
-  imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-- name: descriptor
-  kind: library.lua
-  source: file://descriptor.lua
-  modules:
-  - registry
-  imports:
-    bounds: bee.values:bounds
-    login_evidence: bee.driver.locate:login_evidence
-    schema_values: bee.driver.descriptor:schema_values
-    login_evidence_types: bee.driver:login_types
-- name: effective
-  modules: [json, toml]
-  kind: library.lua
-  source: file://effective.lua
-  imports:
-    placements: bee.placement.profiles:profiles
-    descriptors: bee.driver.descriptor:descriptor
-    profile_access: bee.driver.profiles:profile_access
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
-    instructions: bee.driver.profiles:instructions
-- name: profile_values
-  kind: library.lua
-  source: file://profile_values.lua
-  modules: [registry, json]
-  imports:
-    bounds: bee.values:bounds
-    descriptors: bee.driver.descriptor:descriptor
-    effective: bee.driver.descriptor:effective
 - name: trust
   kind: library.lua
   source: file://trust.lua
   modules: [exec, json, toml]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     paths: bee.placement.profiles:paths
-    quote: bee.driver.binding:quote
+    quote: bee.drivers.binding:quote

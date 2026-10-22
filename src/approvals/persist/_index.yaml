@@ -7,10 +7,10 @@ entries:
   modules:
   - sql
   imports:
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     lifecycle: bee.approvals.persist:lifecycle
     windows: bee.approvals.types:windows
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: outbox
   kind: library.lua
   source: file://outbox.lua
@@ -21,25 +21,25 @@ entries:
   imports:
     transaction: bee.persist:transaction
     resources: bee.approvals.env:resources
-    clock: bee.values:clock
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    clock: bee.drivers.values:clock
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
   modules: [sql, json, hash, security, registry, funcs]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     resources: bee.approvals.env:resources
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
 - name: dispatch
   kind: library.lua
   source: file://dispatch.lua
   modules: [sql, json, funcs, security, hash]
   imports:
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
     demand: bee.process:demand
     resources: bee.approvals.env:resources
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

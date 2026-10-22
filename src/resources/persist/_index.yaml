@@ -9,9 +9,9 @@ entries:
   - uuid
   - security
   imports:
-    bounds: bee.values:bounds
-    clock: bee.values:clock
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock
+    canonical: bee.drivers.values:canonical
     capability_model: bee.capability:model
     node_database: bee.persist:database
     transaction: bee.persist:transaction

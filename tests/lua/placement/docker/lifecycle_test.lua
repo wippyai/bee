@@ -405,7 +405,7 @@ local function home_tests()
                 local input: {[string]: unknown} = {operation = operation, workspace_id = workspace, profile_id = id,
                     expected_revision = revision, idempotency_key = id .. ":" .. operation .. ":" .. tostring(revision)}
                 if operation == "put" then input.profile = {schema_revision = "bee.agent-profile@3", name = "Docker home fixture",
-                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding",
+                    definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.drivers.codex.binding:binding",
                     provider = {}, bee = {mcp = {}}, placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}} end
                 local raw, err = client:call("bee.harness.binding:call", input)
                 test.is_nil(err)
@@ -423,7 +423,7 @@ local function home_tests()
             sources.data.sources = rows
             local changes = registry.snapshot():changes()
             changes:update(sources)
-            local format = assert(registry.get("bee.driver.codex.credentials:credential_format"))
+            local format = assert(registry.get("bee.drivers.codex.credentials:credential_format"))
             format.data.file.initialize = {{path = ".codex/state.json", content = '{"theme":"light"}'}}
             changes:update(format)
             for _, ref in ipairs({"bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy"}) do
@@ -514,7 +514,7 @@ local function isolated_cases(definition: () -> ())
         local originals: {[string]: unknown} = {}
         for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots",
             POLICY, "bee.harness.launch:harness_activation", "bee.tests.placement.docker:executor", "bee.credentials.env:credential_sources",
-            "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.driver.codex.credentials:credential_format"}) do
+            "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.drivers.codex.credentials:credential_format"}) do
             originals[ref] = assert(registry.get(ref)).data
         end
         local ok, result = pcall(cases, options)

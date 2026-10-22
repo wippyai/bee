@@ -30,7 +30,7 @@ end
 function M.with_host(provider: string, body: (admission.Plan?) -> ())
     local POLICY = "bee.driver." .. provider .. ".security:launch_policy_" .. provider .. "_window"
     local DEFINITION = "bee.driver." .. provider .. ".profiles:default_window"
-    local BINDING = "bee.driver." .. provider .. ".binding:binding"
+    local BINDING = "bee.drivers." .. provider .. ".binding:binding"
     local original = assert(registry.get(POLICY))
     local changed = assert(registry.get(POLICY))
     local data = assert(bounds.object(changed.data))
@@ -49,7 +49,7 @@ function M.with_host(provider: string, body: (admission.Plan?) -> ())
         end
     end
     assert(binding_digest ~= "")
-    local declaration = assert(registry.get("bee.driver.permission:permission_request_hook"))
+    local declaration = assert(registry.get("bee.drivers.permission:permission_request_hook"))
     local decoded = assert(adapter.decode(declaration.id, assert(bounds.object(declaration.data)).adapter))
     local acceptance: Object = {id = ACCEPTANCE, kind = "registry.entry", meta = {type = "harness.permission_acceptance"},
         data = {acceptance = {schema_revision = "bee.permission-acceptance@2", binding_id = BINDING,

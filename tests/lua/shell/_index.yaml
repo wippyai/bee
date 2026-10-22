@@ -63,7 +63,7 @@ entries:
   imports:
     test: wippy.test:test
     client: bee.node:client
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     menu: bee.shell:menu
     processes: bee.tests.support:processes
     protocol: bee.hive:protocol
@@ -76,7 +76,7 @@ entries:
   imports:
     test: wippy.test:test
     client: bee.node:client
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     menu: bee.shell:menu
     processes: bee.tests.support:processes
     protocol: bee.hive:protocol

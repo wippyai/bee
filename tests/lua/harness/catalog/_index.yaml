@@ -12,4 +12,4 @@ entries:
   imports:
     test: wippy.test:test
     catalog: bee.harness.catalog:catalog
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

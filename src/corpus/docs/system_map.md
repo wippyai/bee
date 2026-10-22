@@ -29,7 +29,7 @@ Aggregates and caches are projections an owner can rebuild.
 
 | Component (`src/`) | Namespace | Owns |
 |---|---|---|
-| `values` | `bee.values` | Bounded decoders, canonical encoding, the clock and reply values every owner shares |
+| `values` | `bee.drivers.values` | Bounded decoders, canonical encoding, the clock and reply values every owner shares |
 | `persist` | `bee.persist` | Access to the node database and its transactions |
 | `deps`, `env` | `bee.deps`, `bee.env` | Dependencies on Wippy modules; the workspace folder, the machine home and the documentation corpus volume |
 | `process` | `bee.process` | The worker loop background services run |
@@ -47,7 +47,7 @@ Aggregates and caches are projections an owner can rebuild.
 | `resources` | `bee.resources` | Named resource roots, associations and grants |
 | `credentials` | `bee.credentials` | Credential sources and projections |
 | `harness` | `bee.harness` | Agent profiles, launch admission, hooks, the carrier of a running attempt and the Agents app (`bee.harness.app`) |
-| `driver` | `bee.driver` | Agent drivers: `claude`, `codex`, `agy`, `grok`, `muse`, `opencode` and the native `wippy` driver, over shared descriptors, profiles, codec, permission and transport |
+| `driver` | `bee.drivers` | Agent drivers: `claude`, `codex`, `agy`, `grok`, `muse`, `opencode` and the native `wippy` driver, over shared descriptors, profiles, codec, permission and transport |
 | `placement` | `bee.placement` | Launch plans and attempts; `native` and `docker` place them |
 | `harness/permission/external` | `bee.harness.permission.external` | Running a driver's external process under a placement |
 | `git/worktree` | `bee.git.worktree` | The Git worktree a launch can prepare and clean up |

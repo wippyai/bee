@@ -6,8 +6,8 @@ entries:
   source: file://migration.lua
   modules: [registry]
   imports:
-    driver_profile: bee.driver.profiles:profile
-    bounds: bee.values:bounds
+    driver_profile: bee.drivers.profiles:profile
+    bounds: bee.drivers.values:bounds
     protocol: bee.harness.profiles:protocol
 - name: store
   kind: library.lua
@@ -17,14 +17,14 @@ entries:
   - sql
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     sync: bee.sync.persist:store
     transaction: bee.persist:transaction
     protocol: bee.harness.profiles:protocol
     migration: bee.harness.profiles.persist:migration
     authority: bee.harness.profiles.persist:grants
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
 
 - name: grants
   kind: library.lua
@@ -32,12 +32,12 @@ entries:
   modules: [sql, security, ctx, funcs]
   imports:
     protocol: bee.harness.profiles:protocol
-    profile_values: bee.driver.descriptor:profile_values
+    profile_values: bee.drivers.descriptor:profile_values
     profile_grants: bee.harness.profiles:grants
     grants: bee.approvals.grants:store
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    clock: bee.values:clock
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    clock: bee.drivers.values:clock
 - name: grant_policy
   kind: registry.entry
   meta: {type: bee.approvals.grant-policy, domain: profile_choices, allow_permanent: true}

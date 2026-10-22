@@ -10,7 +10,7 @@ entries:
   security:
     policies: [bee.tests.harness:apply_test_policy]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     viewer: bee.harness.service:viewer
 - name: directory_test
@@ -63,7 +63,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [tty, system, time, channel, registry, process]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     client: bee.node:client
 - name: direct_restore_test
@@ -73,6 +73,6 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     direct: bee.harness.app:direct
     admission: bee.harness.launch:admission

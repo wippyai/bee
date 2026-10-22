@@ -9,8 +9,8 @@ entries:
   source: file://dispatcher.lua
   modules: [sql, json, registry, security, uuid, hash, events, channel, time]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     database: bee.threads.persist:database
     transaction: bee.threads.persist:transaction
     traits: bee.threads.delivery:traits
@@ -22,8 +22,8 @@ entries:
   source: file://supervisor.lua
   modules: [funcs, channel, time, process, registry]
   imports:
-    bounds: bee.values:bounds
-    hook_limits: bee.driver.binding:hook_limits
+    bounds: bee.drivers.values:bounds
+    hook_limits: bee.drivers.binding:hook_limits
 - name: budget
   kind: registry.entry
   meta: {type: bee.session.hook_budget}
@@ -34,9 +34,9 @@ entries:
   method: handle
   modules: [funcs, security]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     application: bee.node:application
-    app_identity: bee.threads.records:app_identity
+    app_identity: bee.drivers.records:app_identity
     supervisor: bee.threads.hooks:supervisor
   security: {policies: [bee.threads.hooks:execution_policy]}
 
@@ -55,13 +55,13 @@ entries:
 - name: response
   kind: library.lua
   source: file://response.lua
-  imports: {bounds: bee.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds}
 - name: original
   kind: library.lua
   source: file://original.lua
   modules: [sql, json, security]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     transaction: bee.threads.persist:transaction
     traits: bee.threads.delivery:traits
     supervisor: bee.threads.hooks:supervisor

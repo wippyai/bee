@@ -9,4 +9,4 @@ entries:
   modules: [funcs, security]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

@@ -62,7 +62,7 @@ local function define_tests()
                     for _, selected in ipairs({{id = parent_id, definition = DEFINITION}, {id = child_id, definition = RETAINED_DEFINITION}}) do
                         value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = selected.id,
                             expected_revision = 0, idempotency_key = fresh("put"), profile = {schema_revision = "bee.agent-profile@3",
-                                definition_ref = selected.definition, driver_binding_ref = "bee.driver.claude.binding:binding", name = "Saved",
+                                definition_ref = selected.definition, driver_binding_ref = "bee.drivers.claude.binding:binding", name = "Saved",
                                 provider = {}, bee = {mcp = mcp}, active_traits = {"bee.app:tools"}, requestable = {},
                                 context = {project = "profile-project", parent_profile = parent_id, child_profile = child_id, child_definition = RETAINED_DEFINITION}}}))
                     end

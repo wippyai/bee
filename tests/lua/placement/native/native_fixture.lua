@@ -26,6 +26,7 @@ local muse_launch = require("muse_launch")
 local opencode_launch = require("opencode_launch")
 local configuration_protocol = require("configuration_protocol")
 local preferences = require("preferences")
+local placement_profiles = require("placement_profiles")
 local profile_values = require("profile_values")
 local json = require("json")
 local store = require("store")
@@ -35,9 +36,9 @@ local homes = require("homes")
 local quote = require("quote")
 local types = require("types")
 local placement_decode = require("placement_decode")
-local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
+local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@2", environments = {}, file = {
     path = ".codex/auth.json", content_format = "json", initialize = {}}}
-local CLAUDE_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
+local CLAUDE_LOGIN_FORMAT = {schema_revision = "bee.credential-format@2", environments = {}, file = {
     path = ".claude/.credentials.json", content_format = "json",
     initialize = {{path = ".claude.json", content = '{"hasCompletedOnboarding":true}'}}}}
 local OWNER = "bee.test.owner"
@@ -322,12 +323,13 @@ local function update_codex_provider(base_url: string, model: string)
 end
 local function provider_configuration_digest(policy_ref: string?): string
     local policy = assert(bounds.object(assert(registry.get(policy_ref or POLICY)).data))
-    local descriptor = assert(profile_values.schema("bee.driver.codex.binding:binding"))
-    local effective = assert(preferences.apply(policy, nil, descriptor))
+    local descriptor = assert(profile_values.schema("bee.drivers.codex.binding:binding"))
+    local native = assert(placement_profiles.placement(nil))
+    local effective = assert(preferences.apply(policy, nil, descriptor, native))
     local provider_ref = bounds.id(effective.provider_ref)
     local provider = provider_ref and assert(registry.get(provider_ref)) or nil
-    local digest, digest_error = configuration_protocol.digest("bee.driver.codex.binding:binding", {
-        provider_ref = provider_ref, provider = provider, option_values = effective.prepare_options, fixture = true}, "bee.driver.codex.binding:configure")
+    local digest, digest_error = configuration_protocol.digest("bee.drivers.codex.binding:binding", {
+        placement = native, provider_ref = provider_ref, provider = provider, option_values = effective.prepare_options, fixture = true}, "bee.drivers.codex.binding:configure")
     if not digest then error(tostring(digest_error)) end
     return digest
 end
@@ -336,7 +338,7 @@ local function retained_launch(owner: string, session_ref: string, marker: strin
     request.owner_id = owner
     request.session_ref = session_ref
     request.policy_ref = POLICY
-    request.binding_ref = "bee.driver.codex.binding:binding"
+    request.binding_ref = "bee.drivers.codex.binding:binding"
     local declared = assert(bounds.object(request.launch))
     declared.home_ref = "session"
     local resources = principals.objects(request.resources)
@@ -360,7 +362,7 @@ local function grok_composition_request(attempt_id: string, session_ref: string,
     local value: types.LaunchRequest = {
         idempotency_key = fresh("grok-key"), owner_id = OWNER, owner_incarnation = 1,
         action_id = fresh("grok-action"), attempt_id = attempt_id,
-        binding_ref = "bee.driver.grok.binding:binding", policy_ref = POLICY, profile_id = "window",
+        binding_ref = "bee.drivers.grok.binding:binding", policy_ref = POLICY, profile_id = "window",
         binding_digest = DIGEST, profile_digest = DIGEST, launch = launch_spec,
         session_ref = session_ref,
         resources = {
@@ -503,6 +505,7 @@ return {
     provider_configuration = provider_configuration,
     update_codex_provider = update_codex_provider,
     provider_configuration_digest = provider_configuration_digest,
+    native_placement = function(): {[string]: unknown} return assert(placement_profiles.placement(nil)) end,
     retained_launch = retained_launch,
     grok_composition_request = grok_composition_request,
     intend_materialization = intend_materialization,

@@ -26,7 +26,7 @@ local function define_tests()
         end)
         test.it("probes image help and invalidates cached options when an image changes or disappears", function()
             local binding_ref = "bee.placement.docker.binding:binding"
-            local descriptor_ref = "bee.driver.claude.descriptor:cli"
+            local descriptor_ref = "bee.drivers.claude.descriptor:cli"
             local binding = assert(registry.get(binding_ref))
             local declaration = assert(registry.get(descriptor_ref))
             local saved_binding = assert(json.encode(binding.data))
@@ -39,7 +39,7 @@ local function define_tests()
             assert(changes:update(binding)); assert(changes:update(declaration)); assert(changes:apply())
             local cache = locate.new_cache()
             local profile = "bee.tests.placement.docker:profile"
-            local function check(): unknown return locate.locate(registry.snapshot(), "bee.driver.claude.binding:binding", "batch", cache, profile) end
+            local function check(): unknown return locate.locate(registry.snapshot(), "bee.drivers.claude.binding:binding", "batch", cache, profile) end
             local first = check()
             local second = check()
             local facts = assert(registry.get("bee.tests.driver:docker_probe_facts"))

@@ -25,6 +25,7 @@ local descriptor = require("descriptor")
 local readiness = require("readiness")
 local profile_values = require("profile_values")
 local effective_schema = require("effective_schema")
+local driver_placement = require("driver_placement")
 local M = {}
 type Object = {[string]: unknown}
 type Reply = service_reply.Reply
@@ -97,7 +98,8 @@ local digest_of = canonical.digest
 
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, snapshot: registry.Snapshot, descriptor: descriptor.Descriptor?, binding: classify.Binding, profile: classify.Profile, policy: policy_types.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_types.Request, gateway: placement_types.Gateway?}
+-- placement: the bee/drivers placement of the request's placement profile.
+type Measured = {generation: integer, snapshot: registry.Snapshot, descriptor: descriptor.Descriptor?, binding: classify.Binding, profile: classify.Profile, policy: policy_types.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration: configuration_types.Request, gateway: placement_types.Gateway?, placement: driver_placement.Placement}
 -- verify_acceptance: the acceptance record a host declaration names,
 -- decoded and matched against this snapshot's binding, profile, adapter
 -- and proof fixture. The permission exchange stands on this record type;
@@ -150,7 +152,9 @@ local function measure(request: Request): (Measured?, string?)
     local policy_entry = catalog.entry(pinned, request.policy_ref)
     if not policy_entry then return nil, "launch policy " .. request.policy_ref .. " is not in the registry" end
     local option_descriptor, _, schema_error = profile_values.schema(request.binding_ref, pinned)
-    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, option_descriptor, request.placement_profile_ref)
+    local option_placement, option_placement_error = placement_profiles.placement(request.placement_profile_ref)
+    if not option_placement then return nil, option_placement_error end
+    local launch_policy, policy_error = policy.decode(request.policy_ref, policy_entry, nil, request.preferences, option_descriptor, option_placement)
     if not launch_policy then return nil, policy_error end
     -- The policy is host-owned and decoded from this pinned snapshot. It is
     -- the source of placement selection; request fields only prove that the
@@ -225,7 +229,7 @@ local function measure(request: Request): (Measured?, string?)
                 for name, value in pairs(request.preferences.options) do values[name] = value end
                 if request.preferences.instructions ~= "" then values.system_prompt_append = request.preferences.instructions end
             end
-            local _, invalid = effective_schema.compile(descriptor, bounds.object(policy_entry.data), capabilities, values, nil, nil, nil, request.placement_profile_ref)
+            local _, invalid = effective_schema.compile(descriptor, bounds.object(policy_entry.data), capabilities, values, nil, nil, nil, option_placement)
             if invalid then return nil, invalid end
         end
     end
@@ -236,10 +240,10 @@ local function measure(request: Request): (Measured?, string?)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
     local configuration: configuration_types.Request = {provider_ref = launch_policy.provider_ref,
-        placement_profile_ref = request.placement_profile_ref, option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
+        placement = option_placement, option_provenance = launch_policy.option_provenance, option_values = launch_policy.prepare_options, provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
         gateway = gateway_input, fixture = launch_policy.fixture}
     return {generation = snapshot.generation, snapshot = pinned, descriptor = option_descriptor, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
-        configuration = configuration, gateway = gateway}
+        configuration = configuration, gateway = gateway, placement = option_placement}
 end
 -- A launch may declare a host file it needs before it starts. Bee never
 -- copies the owner's configuration or credentials into a private home, so a
@@ -303,7 +307,7 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
         return nil, "launch policy does not authorize host HOME"
     end
     local prepare_request: {[string]: unknown} = {}
-    prepare_request.placement_profile_ref = request.placement_profile_ref
+    prepare_request.placement = measured.placement
     prepare_request.option_provenance = launch_policy.option_provenance
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id

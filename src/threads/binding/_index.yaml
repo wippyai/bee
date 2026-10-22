@@ -513,13 +513,13 @@ entries:
   kind: library.lua
   source: file://capabilities.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     claims: bee.threads.delivery:claims
     subscriptions: bee.threads.delivery:subscriptions
     commits: bee.threads.delivery:commits
     recap: bee.threads.projection:recap
     notices: bee.threads.service:notices
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
 - name: authority_local
   kind: contract.binding
   contracts:
@@ -1100,7 +1100,7 @@ entries:
   method: handle
   modules: [security, json, sql]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     database: bee.threads.persist:database
     journal: bee.threads.persist:journal
     transaction: bee.threads.persist:transaction

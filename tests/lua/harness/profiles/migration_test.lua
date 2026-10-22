@@ -7,7 +7,7 @@ local sync = require("sync")
 local uuid = require("uuid")
 type Object = {[string]: unknown}
 local function binding(ref: string): string?
-    if ref == "bee:codex" then return "bee.driver.codex.binding:binding" end
+    if ref == "bee:codex" then return "bee.drivers.codex.binding:binding" end
     return nil
 end
 local function value(result: sync.Result): Object
@@ -16,7 +16,7 @@ local function value(result: sync.Result): Object
 end
 local function v2(extra: Object): Object
     local source: Object = {schema_revision = "bee.agent-profile@2", name = "Coding", definition_ref = "bee:codex",
-        driver_binding_ref = "bee.driver.codex.binding:binding", provider = {model = "small"}, bee = {mcp = {}}}
+        driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {model = "small"}, bee = {mcp = {}}}
     for key, item in pairs(extra) do source[key] = item end
     return source
 end
@@ -35,7 +35,7 @@ local function define_tests()
             }) do
                 local converted = migration.convert(source, binding)
                 local provider = assert(bounds.object(converted.provider))
-                test.eq(provider.schema_ref, "bee.driver.codex.descriptor:cli")
+                test.eq(provider.schema_ref, "bee.drivers.codex.descriptor:cli")
                 test.eq(provider.schema_revision, "bee.driver.cli-descriptor@4")
                 test.eq(assert(bounds.object(provider.values)).model, "small")
             end
@@ -223,7 +223,7 @@ local function define_tests()
             local retained = assert(bounds.object(diagnostic.source))
             test.eq(retained.instructions, source.instructions)
             test.eq(stored.revision, 1)
-            local repaired = assert(protocol.profile({schema_revision = protocol.SCHEMA, name = "Fixed", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {}}))
+            local repaired = assert(protocol.profile({schema_revision = protocol.SCHEMA, name = "Fixed", definition_ref = "bee:codex", driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {}, bee = {}}))
             test.is_true(store:append({feed = "harness.profiles:large", projection_key = "repair", event_id = "repair", idempotency_key = "repair", event_type = "profile", expected_revision = 1, projection_value = repaired, payload = {}}).ok)
             test.eq(value(store:projection("harness.profiles:large", "repair")).revision, 2)
             test.is_true(store:close())

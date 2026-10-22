@@ -46,7 +46,7 @@ function M.define(workspace: string, shipped_sources: registry.Entry)
         test.eq(defined.optional, false)
         test.is_nil((tostring(json.encode(defined)):find(SENTINEL, 1, true)))
         local openai = value(call(manager, "define", {workspace_id = workspace, name = "openai", provider = "codex", source = {kind = "env_variable", ref = OTHER_SOURCE}}))
-        test.eq(openai.destination, "OPENAI_API_KEY")
+        test.eq(openai.destination, "CODEX_API_KEY")
         local listed = value(call(manager, "list", {workspace_id = workspace}))
         test.eq(#(principals.items(listed.definitions)), 2)
         clean(call(manager, "list", {workspace_id = workspace}))
@@ -163,7 +163,7 @@ function M.define(workspace: string, shipped_sources: registry.Entry)
         for _, row in ipairs({{provider = "agy", destination = "GEMINI_API_KEY"},
             {provider = "grok", destination = "XAI_API_KEY"}, {provider = "muse", destination = "META_API_KEY"}}) do
             local ws, attempt = fresh(row.provider), fresh("entered-key-attempt")
-            local ref = "bee.driver." .. row.provider .. ".env:api_key"
+            local ref = "bee.drivers." .. row.provider .. ".env:api_key"
             local secret = "fixture-entered-" .. row.provider .. "-832a"
             local defined = value(call(manager, "define", {workspace_id = ws, name = "api_key", provider = row.provider,
                 source = {kind = "env_variable", ref = ref}}))

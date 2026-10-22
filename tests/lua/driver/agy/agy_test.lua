@@ -35,14 +35,14 @@ end
 local function define_tests()
     test.describe("Antigravity CLI binding and profile declarations", function()
         test.it("validates the agy binding and profiles against the driver profile decoder", function()
-            local entry, err = registry.get("bee.driver.agy.binding:binding")
-            if not entry then error("bee.driver.agy.binding:binding: " .. tostring(err)) end
+            local entry, err = registry.get("bee.drivers.agy.binding:binding")
+            if not entry then error("bee.drivers.agy.binding:binding: " .. tostring(err)) end
             test.eq(entry.meta.type, "harness.driver")
             test.eq(entry.meta.driver_id, "agy")
 
             local declaration, decl_err = registry.get(tostring(entry.meta.profiles_ref))
             if not declaration then error("profiles: " .. tostring(decl_err)) end
-            test.eq(declaration.meta.driver_ref, "bee.driver.agy.binding:binding")
+            test.eq(declaration.meta.driver_ref, "bee.drivers.agy.binding:binding")
 
             local binding, decode_error = profile.decode(declaration.data.driver)
             if not binding then error("profile decode: " .. tostring(decode_error)) end
@@ -57,11 +57,11 @@ local function define_tests()
             test.eq(session_p.protocol, "stream-json")
             test.eq(session_p.protocol_revision, "agy-stream-json-1")
             test.eq(session_p.answer_path.strategy, "terminal_field")
-            test.eq(session_p.answer_path.adapter_ref, "bee.driver.agy.descriptor:cli")
+            test.eq(session_p.answer_path.adapter_ref, "bee.drivers.agy.descriptor:cli")
             test.eq(session_p.resume.strategy, "per-process")
             test.eq(session_p.input_ready.strategy, "protocol")
             test.eq(session_p.permission_exchange.mode, "adapter")
-            test.eq(session_p.permission_exchange.adapter_ref, "bee.driver.permission:permission_request_hook")
+            test.eq(session_p.permission_exchange.adapter_ref, "bee.drivers.permission:permission_request_hook")
             test.eq(#assert(session_p.permission_exchange.adapter_digest), 64)
 
             test.eq(#session_p.hooks.transports, 1)
@@ -122,7 +122,7 @@ local function define_tests()
         end)
 
         test.it("prepares the hidden Gemini batch profile and delivers its admitted HTTP MCP configuration", function()
-            local prepared, prepare_error = funcs.call("bee.driver.agy.binding:prepare", {
+            local prepared, prepare_error = funcs.call("bee.drivers.agy.binding:prepare", {
                 profile_id = "batch",
                 brief = "Use the admitted Bee overlay tool once.",
                 model = "gemini-3.8-flash",
@@ -148,7 +148,7 @@ local function define_tests()
                 hooks = {},
                 token_environment = "BEE_GATEWAY_TOKEN",
             }
-            local configured, configure_error = funcs.call("bee.driver.agy.binding:configure", {
+            local configured, configure_error = funcs.call("bee.drivers.agy.binding:configure", {
                 gateway = gateway,
                 home_directory = "/private/agy-batch-session",
                 fixture = false,
@@ -160,7 +160,7 @@ local function define_tests()
             test.eq(#configured.delivery.files, 1)
             local mcp_file = configured.delivery.files[1]
             test.eq(mcp_file.path, ".agents/mcp_config.json")
-            test.eq(mcp_file.provider_ref, "bee.gateway.api:gateway_endpoint")
+            test.eq(mcp_file.provider_ref, "bee.drivers:gateway_endpoint")
             test.is_true(mcp_file.content:find("/mcp/agy%-batch%-proof") ~= nil)
             test.eq(mcp_file.secret_fields[1].environment, "BEE_GATEWAY_TOKEN")
         end)
@@ -221,7 +221,7 @@ local function define_tests()
             test.is_true(spec.stdin:find("continue turn") ~= nil)
 
             -- Dispatch method requires resume_ref
-            local fail_reply, call_err = funcs.call("bee.driver.agy.binding:dispatch", {
+            local fail_reply, call_err = funcs.call("bee.drivers.agy.binding:dispatch", {
                 profile_id = "session",
                 brief = "missing resume",
             })
@@ -229,7 +229,7 @@ local function define_tests()
             test.is_false(fail_reply.ok)
             test.eq(fail_reply.error, "a dispatched turn needs resume_ref")
 
-            local ok_reply, ok_err = funcs.call("bee.driver.agy.binding:dispatch", {
+            local ok_reply, ok_err = funcs.call("bee.drivers.agy.binding:dispatch", {
                 profile_id = "session",
                 brief = "has resume",
                 resume_ref = "f30fe2e7-e321-4839-8e4c-bbda9d2f9c4b",
@@ -298,7 +298,7 @@ local function define_tests()
 
     test.describe("normalize_method structural validation of state and booleans", function()
         test.it("validates eof and resumed boolean flags", function()
-            local bad_eof, err1 = funcs.call("bee.driver.agy.binding:normalize", {
+            local bad_eof, err1 = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 eof = "true",
             })
@@ -306,7 +306,7 @@ local function define_tests()
             test.is_false(bad_eof.ok)
             test.eq(bad_eof.error, "eof must be a boolean")
 
-            local bad_resumed, err2 = funcs.call("bee.driver.agy.binding:normalize", {
+            local bad_resumed, err2 = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 resumed = 1,
                 envelope = {event = "init", conversation_id = "c1"},
@@ -318,7 +318,7 @@ local function define_tests()
 
         test.it("structurally validates incoming state against malformed shapes and bounds", function()
             -- Non-object state
-            local not_obj, err1 = funcs.call("bee.driver.agy.binding:normalize", {
+            local not_obj, err1 = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = "invalid",
                 envelope = {event = "init", conversation_id = "c1"},
@@ -328,7 +328,7 @@ local function define_tests()
             test.eq(not_obj.error, "state must be an object")
 
             -- Unknown fields in state
-            local unknown_state, err2 = funcs.call("bee.driver.agy.binding:normalize", {
+            local unknown_state, err2 = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {started = true, resumed = false, foreign_key = "leak"},
                 envelope = {event = "init", conversation_id = "c1"},
@@ -338,7 +338,7 @@ local function define_tests()
             test.eq(unknown_state.error, "state: unknown field foreign_key")
 
             -- Non-boolean started / resumed in state
-            local bad_started, err3 = funcs.call("bee.driver.agy.binding:normalize", {
+            local bad_started, err3 = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {started = "yes", resumed = false},
                 envelope = {event = "init", conversation_id = "c1"},
@@ -348,7 +348,7 @@ local function define_tests()
             test.eq(bad_started.error, "state.started must be a boolean")
 
             -- Invalid session_id in state
-            local bad_session, err4 = funcs.call("bee.driver.agy.binding:normalize", {
+            local bad_session, err4 = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {started = true, resumed = false, session_id = ""},
                 envelope = {event = "step_update", step_update = {}},
@@ -358,7 +358,7 @@ local function define_tests()
             test.eq(bad_session.error, "state.session_id is not an identifier")
 
             -- Oversized answer in state
-            local bad_answer, err5 = funcs.call("bee.driver.agy.binding:normalize", {
+            local bad_answer, err5 = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, answer = string.rep("x", record_bounds.MAX_RECORD_BYTES + 1)},
                 envelope = {event = "step_update", step_update = {}},
@@ -368,7 +368,7 @@ local function define_tests()
             test.eq(bad_answer.error, "state.answer exceeds maximum record bytes")
 
             -- Valid bounded state succeeds
-            local valid_reply, err6 = funcs.call("bee.driver.agy.binding:normalize", {
+            local valid_reply, err6 = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, session_id = "conv-valid", answer = "prior"},
                 envelope = {
@@ -388,7 +388,7 @@ local function define_tests()
 
             -- Terminal checkpoints are decoded field by field, including
             -- nested usage and fault values.
-            local terminal_reply, terminal_err = funcs.call("bee.driver.agy.binding:normalize", {
+            local terminal_reply, terminal_err = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {
                     started = true,
@@ -416,7 +416,7 @@ local function define_tests()
             test.eq(terminal_reply.state.terminal.usage.cost_decimal, "1.25")
             test.eq(terminal_reply.state.terminal.error.message, "bounded fault")
 
-            local bad_terminal_answer, bad_terminal_answer_call_error = funcs.call("bee.driver.agy.binding:normalize", {
+            local bad_terminal_answer, bad_terminal_answer_call_error = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "succeeded", answer = string.rep("x", record_bounds.MAX_RECORD_BYTES + 1)}},
                 envelope = {event = "step_update", step_update = {}},
@@ -424,7 +424,7 @@ local function define_tests()
             if bad_terminal_answer_call_error then error(tostring(bad_terminal_answer_call_error)) end
             test.eq(bad_terminal_answer.error, "state.terminal.answer exceeds maximum record bytes")
 
-            local bad_terminal_usage, bad_terminal_usage_call_error = funcs.call("bee.driver.agy.binding:normalize", {
+            local bad_terminal_usage, bad_terminal_usage_call_error = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "succeeded", usage = {input_tokens = -1}}},
                 envelope = {event = "step_update", step_update = {}},
@@ -432,7 +432,7 @@ local function define_tests()
             if bad_terminal_usage_call_error then error(tostring(bad_terminal_usage_call_error)) end
             test.eq(bad_terminal_usage.error, "state.terminal.usage.input_tokens must be a nonnegative integer")
 
-            local bad_terminal_error, bad_terminal_error_call_error = funcs.call("bee.driver.agy.binding:normalize", {
+            local bad_terminal_error, bad_terminal_error_call_error = funcs.call("bee.drivers.agy.binding:normalize", {
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "failed", error = {code = "failed", message = "x", retryable = "no"}}},
                 envelope = {event = "step_update", step_update = {}},
@@ -808,7 +808,7 @@ local function define_tests()
 
     test.describe("Antigravity CLI configuration and verified MCP delivery", function()
         test.it("refuses provider configurations and hooks without a host command", function()
-            local reply1, err1 = funcs.call("bee.driver.agy.binding:configure", {
+            local reply1, err1 = funcs.call("bee.drivers.agy.binding:configure", {
                 provider_ref = "bee:provider_custom",
                 provider = {model = "custom"},
                 fixture = false,
@@ -817,7 +817,7 @@ local function define_tests()
             test.is_false(reply1.ok)
             test.eq(reply1.error, "agy accepts no provider configuration")
 
-            local reply2, err2 = funcs.call("bee.driver.agy.binding:configure", {
+            local reply2, err2 = funcs.call("bee.drivers.agy.binding:configure", {
                 gateway = {
                     endpoint = "127.0.0.1:18790",
                     action_id = "act-1",
@@ -835,7 +835,7 @@ local function define_tests()
 
         test.it("renders gateway MCP with an admitted private credential field", function()
             test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
-            local reply_mcp, err_mcp = funcs.call("bee.driver.agy.binding:configure", {
+            local reply_mcp, err_mcp = funcs.call("bee.drivers.agy.binding:configure", {
                 gateway = {
                     endpoint = "127.0.0.1:18790",
                     action_id = "act-test",
@@ -854,7 +854,7 @@ local function define_tests()
             -- verified declared MCP file path
             test.eq(file.path, ".agents/mcp_config.json")
             test.eq(file.revision, "bee.agy-mcp@2")
-            test.eq(file.provider_ref, "bee.gateway.api:gateway_endpoint")
+            test.eq(file.provider_ref, "bee.drivers:gateway_endpoint")
             test.eq(reply_mcp.delivery.arguments[1], "--add-dir")
             test.eq(reply_mcp.delivery.arguments[2], "/private/agy-session")
 

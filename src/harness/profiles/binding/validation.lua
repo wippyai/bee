@@ -5,6 +5,7 @@ local descriptors = require("descriptors")
 local agent_trait = require("agent_trait")
 local protocol = require("protocol")
 local preferences = require("preferences")
+local placement_profiles = require("placement_profiles")
 local mcp = require("mcp")
 local app_traits = require("app_traits")
 local M = {}
@@ -37,7 +38,9 @@ function M.check(pinned: registry.Snapshot, profile: protocol.Profile, decoded: 
     if not selected then return selection_error end
     local values = selected.options
     if selected.instructions ~= "" then values.system_prompt_append = selected.instructions end
-    local _, invalid = preferences.compile(descriptor, nil, nil, values, nil, nil, nil, profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
+    local option_placement, placement_error = placement_profiles.placement(profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
+    if not option_placement then return placement_error or "placement profile unavailable" end
+    local _, invalid = preferences.compile(descriptor, nil, nil, values, nil, nil, nil, option_placement)
     if invalid then return invalid end
     return nil
 end
@@ -58,7 +61,9 @@ function M.ceiling(pinned: registry.Snapshot, profile: protocol.Profile, parent:
     local schema_ref = meta and bounds.id(meta.descriptor_ref)
     local descriptor = schema_ref and descriptors.load_from(pinned, schema_ref)
     if not descriptor then return "Driver option schema is unavailable" end
-    local _, err = preferences.apply(policy, selected, descriptor, profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
+    local option_placement, placement_error = placement_profiles.placement(profile.placement and profile.placement.kind == "docker" and profile.placement.profile_ref or nil)
+    if not option_placement then return placement_error or "placement profile unavailable" end
+    local _, err = preferences.apply(policy, selected, descriptor, option_placement)
     if err then return err end
     if person then return nil end
     local surface = bounds.object(policy.gateway_surface) or {}

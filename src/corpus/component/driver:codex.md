@@ -1,8 +1,8 @@
-# bee.driver.codex
+# bee.drivers.codex
 
-Codex CLI profiles and a strict CLI descriptor (`bee.driver.codex.descriptor:cli`)
+Codex CLI profiles and a strict CLI descriptor (`bee.drivers.codex.descriptor:cli`)
 selecting the universal launch layer and the shared Codex JSONL codec, plus the
-configuration renderer. The binding is `bee.driver.codex.binding:binding`.
+configuration renderer. The binding is `bee.drivers.codex.binding:binding`.
 
 The host supplies a read-only executable environment and a launch policy for
 each route. Installing the component does not activate Codex, expose a user

@@ -44,7 +44,7 @@ def run(toolchain, failing):
     (workspace / ".wippy").mkdir()
     (workspace / ".wippy/vendor").symlink_to(REPO / "tests/.wippy/vendor", target_is_directory=True)
     (workspace / ".wippy.yaml").write_text(yaml.safe_dump({
-        "version": "1.0", "workspace": {"replacements": {"bee/bee": str(application)}},
+        "version": "1.0", "workspace": {"replacements": {"bee/bee": str(application), "bee/drivers": str(REPO / "drivers/src")}},
         "cluster": {"name": "boot-lifecycle-" + root.name},
     }))
     home = root / "home"

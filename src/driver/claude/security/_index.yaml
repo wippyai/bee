@@ -18,7 +18,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      claude: bee.driver.claude.env:executable
+      claude: bee.drivers.claude.env:executable
     environment: {}
     environment_refs: {}
     allow_host_home: false
@@ -83,10 +83,10 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      claude: bee.driver.claude.env:executable
+      claude: bee.drivers.claude.env:executable
     environment: {}
     environment_refs:
-      CLAUDE_CONFIG_DIR: bee.driver.claude.env:config_home
+      CLAUDE_CONFIG_DIR: bee.drivers.claude.env:config_home
     allow_host_home: true
     gateway_tools:
     - session_catalog

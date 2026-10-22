@@ -108,7 +108,7 @@ local function driver_fixture(target_path: string?, action: string?, base: strin
     local made = assert(artifact.create(items))
     local deps, spec, facts = fixture()
     facts.captured.entries[#facts.captured.entries + 1] = {id = "bee.harness.launch:harness_activation", kind = "registry.entry",
-        data = {bindings = {"bee.driver.claude.binding:binding"}}, registry = {owner = "bee/host"}}
+        data = {bindings = {"bee.drivers.claude.binding:binding"}}, registry = {owner = "bee/host"}}
     for _, entry in ipairs(facts.captured.entries) do
         if entry.id == "bee.gov:protected_kernel" then
             entry.data = {revision = 1, super_edit = {},

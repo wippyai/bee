@@ -6,7 +6,7 @@ entries:
   source: file://catalog.lua
   modules: [hub, registry, store]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     limits: bee.hub.package:limits
 - name: updates
   kind: library.lua
@@ -18,8 +18,8 @@ entries:
     plan: bee.hub.package:plan
     artifact_source: bee.hub.binding:artifact_source
     binary_identity: bee.hub.package:binary_identity
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     requirements: bee.hub.package:requirements
     semver: bee.hub.package:semver
 - name: inspect
@@ -28,7 +28,7 @@ entries:
   modules: [hub]
   imports:
     limits: bee.hub.package:limits
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     requirements: bee.hub.package:requirements
     inspection: bee.hub.package:inspection
 - name: preview
@@ -36,7 +36,7 @@ entries:
   source: file://preview.lua
   modules: [hub, fs, base64]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     inspection: bee.hub.package:inspection
     requirements: bee.hub.package:requirements
 - name: migration_runner
@@ -51,8 +51,8 @@ entries:
   source: file://publication.lua
   modules: [registry, security, hash]
   imports:
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     artifact_source: bee.hub.binding:artifact_source
     plan: bee.hub.package:plan
     binary_identity: bee.hub.package:binary_identity
@@ -71,7 +71,7 @@ entries:
   source: file://lifecycle.lua
   modules: [registry, events, system, funcs, security]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     lifecycle: bee.hub.types:lifecycle
 - name: backend
   kind: function.lua
@@ -82,7 +82,7 @@ entries:
   imports:
     hub_package: bee.gov.binding:hub_package
     plan: bee.hub.package:plan
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     catalog: bee.hub.binding:catalog
     updates: bee.hub.binding:updates
     inventory_reader: bee.hub.package:inventory_reader
@@ -97,7 +97,7 @@ entries:
   method: handle
   modules: [security, funcs]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     catalog: bee.hub.binding:catalog
     inspection: bee.hub.package:inspection
     plan: bee.hub.package:plan
@@ -110,7 +110,7 @@ entries:
   source: file://artifact_source.lua
   imports:
     limits: bee.hub.package:limits
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     catalog: bee.hub.binding:catalog
     inspect: bee.hub.binding:inspect
     inspection: bee.hub.package:inspection

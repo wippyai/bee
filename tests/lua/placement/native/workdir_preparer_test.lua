@@ -68,7 +68,7 @@ local function make_request(attempt_id: string, options: types.WorkdirOptions?):
         owner_incarnation = 1,
         action_id = fresh("action"),
         attempt_id = attempt_id,
-        binding_ref = "bee.driver.codex.binding:binding",
+        binding_ref = "bee.drivers.codex.binding:binding",
         policy_ref = "bee.tests.placement.native:test_launch_policy",
         profile_id = "session",
         binding_digest = string.rep("c", 64),

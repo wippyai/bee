@@ -19,11 +19,11 @@ entries:
   - tty
   - events
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     setup: bee.harness.launch:setup
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
 - name: presentation_owner
@@ -45,11 +45,11 @@ entries:
   - tty
   - events
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     setup: bee.harness.launch:setup
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
   security:
@@ -102,11 +102,11 @@ entries:
   - tty
   - events
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     setup: bee.harness.launch:setup
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
   security:
@@ -153,11 +153,11 @@ entries:
   - tty
   - events
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     setup: bee.harness.launch:setup
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
   security:
@@ -202,11 +202,11 @@ entries:
   - tty
   - events
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     setup: bee.harness.launch:setup
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
   security:
@@ -251,11 +251,11 @@ entries:
   - tty
   - events
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     viewer: bee.harness.service:viewer
     admission: bee.harness.launch:admission
     setup: bee.harness.launch:setup
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     recovery: bee.harness.app:recovery
     principal: bee.node:principal
   security:
@@ -294,7 +294,7 @@ entries:
   - events
   imports:
     machine: bee.harness.carrier:machine
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     placement_protocol: bee.placement.native:protocol
     commits: bee.threads.delivery:commits
   security:
@@ -317,15 +317,15 @@ entries:
   source: file://viewer.lua
   modules: [process, channel, time, uuid, security, funcs]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: presentation_supervisor
   kind: process.lua
   source: file://supervisor.lua
   method: main
   modules: [process, channel, security]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
 - name: presentation_service
   kind: process.service
   process: bee.harness.service:presentation_supervisor

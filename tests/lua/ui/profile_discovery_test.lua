@@ -9,7 +9,7 @@ local caller = require("caller")
 local agents = require("agents")
 local function state(): view.State
     local draft = assert(editor.new({schema_revision = "bee.agent-profile@3", name = "Small worker", definition_ref = "bee.tests.harness:fixture_definition",
-        driver_binding_ref = "bee.driver.claude.binding:binding", provider = {effort = "low"}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
+        driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {effort = "low"}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
         {options = {effort = {"low", "high"}}, mcp_tools = {"thread_read"}, instructions = true}))
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft,
         fields = {effort = {label = "Effort", section = "basic", order = 1}}, save_key = "save", remove_key = "remove"},

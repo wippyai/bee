@@ -11,6 +11,10 @@ local toml = require("toml")
 local hash = require("hash")
 local registry = require("registry")
 local universal = require("universal")
+local placement_profiles = require("placement_profiles")
+local function placed(ref: string): {[string]: unknown}
+    return assert(placement_profiles.placement(ref))
+end
 type Object = {[string]: unknown}
 local function field(format: string, path: {string}, merge: string): Object
     return {render = {{kind = "config", contexts = {"first_turn"}, file = "provider/config." .. format,
@@ -21,22 +25,22 @@ local function define_tests()
         test.it("captures the same person-selected Codex configuration in Docker and native", function()
             local options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true, model_provider = "openai"}
             local request: configuration_types.Request = {fixture = true, private_home = true, context = "first_turn", option_values = options,
-                placement_profile_ref = "bee.placement.docker.profiles:coding"}
-            local delivery, err = configuration.call("bee.driver.codex.binding:binding", "bee.driver.codex.binding:configure", request)
+                placement = placed("bee.placement.docker.profiles:coding")}
+            local delivery, err = configuration.call("bee.drivers.codex.binding:binding", "bee.drivers.codex.binding:configure", request)
             assert(delivery, tostring(err))
             local captured: Object? = nil
             for _, file in ipairs(delivery.files) do
                 if file.path == ".codex/config.toml" then captured = bounds.object(toml.decode(file.content)) end
             end
             test.eq(assert(captured).model_provider, "openai")
-            request.placement_profile_ref = "bee.placement.profiles:native"
-            local native, reason = configuration.call("bee.driver.codex.binding:binding", "bee.driver.codex.binding:configure", request)
+            request.placement = placed("bee.placement.profiles:native")
+            local native, reason = configuration.call("bee.drivers.codex.binding:binding", "bee.drivers.codex.binding:configure", request)
             assert(native, tostring(reason))
             test.eq(native.files[1].content, delivery.files[1].content)
         end)
         test.it("renders installed custom-provider schemas with environment references only", function()
             local endpoint = "https://models.example.test/v1"
-            local opencode = assert(descriptor.load("bee.driver.opencode.descriptor:cli"))
+            local opencode = assert(descriptor.load("bee.drivers.opencode.descriptor:cli"))
             local fields = assert(bounds.object(opencode.options.fields))
             local provider = {npm = "@ai-sdk/openai-compatible", name = "Local", options = {baseURL = endpoint, apiKey = "{env:OPENAI_API_KEY}"},
                 models = {gemma = {name = "gemma", tool_call = true}}}
@@ -49,7 +53,7 @@ local function define_tests()
             test.eq(options.apiKey, "{env:OPENAI_API_KEY}")
             provider.options.apiKey = "fixture-raw-key"
             test.is_nil(descriptor.decode_option("providers", fields.providers, {local_model = provider}))
-            local codex = assert(descriptor.load("bee.driver.codex.descriptor:cli"))
+            local codex = assert(descriptor.load("bee.drivers.codex.descriptor:cli"))
             fields = assert(bounds.object(codex.options.fields))
             local values = {model_provider = "local_model", model_providers = {local_model = {name = "Local", base_url = endpoint,
                 env_key = "OPENAI_API_KEY", wire_api = "responses"}}}
@@ -62,9 +66,9 @@ local function define_tests()
             test.eq(selected.env_key, "OPENAI_API_KEY")
         end)
         test.it("measures omitted and empty option selections as the same configuration", function()
-            local target = "bee.driver.claude.binding:configure"
-            test.eq(configuration.digest("bee.driver.claude.binding:binding", {fixture = false, context = "window"}, target),
-                (configuration.digest("bee.driver.claude.binding:binding", {fixture = false, context = "window", option_values = {}}, target)))
+            local target = "bee.drivers.claude.binding:configure"
+            test.eq(configuration.digest("bee.drivers.claude.binding:binding", {fixture = false, context = "window"}, target),
+                (configuration.digest("bee.drivers.claude.binding:binding", {fixture = false, context = "window", option_values = {}}, target)))
         end)
         test.it("decodes bounded structured values and rejects undeclared children", function()
             local spec: Object = {value_schema = {type = "object", additionalProperties = false, required = {"enabled"},
@@ -164,8 +168,8 @@ local function define_tests()
             end
         end)
         test.it("launches and configures newly declared options without changing templates", function()
-            local ref = "bee.driver.claude.descriptor:cli"
-            local original_digest = assert(configuration.digest("bee.driver.claude.binding:binding", {fixture = false}, "bee.driver.claude.binding:configure"))
+            local ref = "bee.drivers.claude.descriptor:cli"
+            local original_digest = assert(configuration.digest("bee.drivers.claude.binding:binding", {fixture = false}, "bee.drivers.claude.binding:configure"))
             local entry = assert(registry.get(ref))
             local original = assert(json.encode(entry.data))
             local data = assert(bounds.object(entry.data))
@@ -182,7 +186,7 @@ local function define_tests()
             local changes = registry.snapshot():changes()
             assert(changes:update(entry)); assert(changes:apply())
             local selected, err = descriptor.load(ref)
-            local changed_digest = configuration.digest("bee.driver.claude.binding:binding", {fixture = false}, "bee.driver.claude.binding:configure")
+            local changed_digest = configuration.digest("bee.drivers.claude.binding:binding", {fixture = false}, "bee.drivers.claude.binding:configure")
             local launch: unknown
             local reply: Object = {}
             if selected then
@@ -206,7 +210,7 @@ local function define_tests()
         end)
         test.it("delivers every built-in prompt through descriptor file renders", function()
             for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode"}) do
-                local selected = assert(descriptor.load("bee.driver." .. provider .. ".descriptor:cli"))
+                local selected = assert(descriptor.load("bee.drivers." .. provider .. ".descriptor:cli"))
                 local prompt = assert(bounds.object(assert(bounds.object(selected.options.fields)).system_prompt_append))
                 local files = assert(render.files({system_prompt_append = prompt}, {system_prompt_append = "append marker", system_prompt_files = {"/private/.bee/system-prompt-append.txt"}}, "first_turn", {}))
                 test.is_true(#files >= 1)

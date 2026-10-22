@@ -13,7 +13,7 @@ entries:
     grants: bee.gov.types:capability_grants
     materializer: bee.gov.binding:materializer
     application: bee.node:application
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: fixture_policy
   kind: security.policy
   policy:
@@ -61,7 +61,7 @@ entries:
   - exec
   imports:
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: session_type
   kind: function.lua
   source: file://sessions_fixture.lua
@@ -79,7 +79,7 @@ entries:
   - exec
   imports:
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.e2e.sdk:fixture_policy
@@ -102,7 +102,7 @@ entries:
   - exec
   imports:
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: session_policy
   kind: security.policy
   policy:

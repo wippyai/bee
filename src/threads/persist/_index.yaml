@@ -25,7 +25,7 @@ entries:
   modules:
   - sql
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: outbox
   kind: library.lua
   source: file://outbox.lua
@@ -34,8 +34,8 @@ entries:
   - uuid
   - json
   imports:
-    bounds: bee.values:bounds
-    clock: bee.values:clock
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock
     transaction: bee.threads.persist:transaction
 - name: work_store
   kind: library.lua
@@ -46,11 +46,11 @@ entries:
   imports:
     usage: bee.threads.service:usage
     journal: bee.threads.persist:journal
-    budget_values: bee.threads.records:budgets
+    budget_values: bee.drivers.records:budgets
     access: bee.threads.service:access
     transaction: bee.threads.persist:transaction
-    observation: bee.threads.records:observation
-    bounds: bee.values:bounds
+    observation: bee.drivers.records:observation
+    bounds: bee.drivers.values:bounds
     inbox: bee.threads.service:inbox
     part_work_records: bee.threads.service:work_records
     part_session_store: bee.threads.persist:session_store

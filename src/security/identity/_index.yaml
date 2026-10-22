@@ -8,4 +8,4 @@ entries:
   - security
   - system
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

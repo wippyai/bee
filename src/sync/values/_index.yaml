@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://limits.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: version
   kind: library.lua
   source: file://version.lua
@@ -13,5 +13,5 @@ entries:
   - hash
   imports:
     limits: bee.sync.values:limits
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical

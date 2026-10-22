@@ -7,6 +7,6 @@ entries:
   modules:
   - contract
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     profiles: bee.harness.profiles:protocol
     protocol: bee.threads.sessions.types:protocol

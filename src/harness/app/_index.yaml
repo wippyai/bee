@@ -6,7 +6,7 @@ entries:
   source: file://waiting.lua
   modules: [funcs]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: request
   kind: library.lua
   source: file://request.lua
@@ -14,7 +14,7 @@ entries:
   - json
   imports:
     profiles: bee.harness.profiles:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: input
   kind: library.lua
   source: file://input.lua
@@ -27,7 +27,7 @@ entries:
   - json
   imports:
     profiles: bee.harness.profiles:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: restore_view
   kind: library.lua
   source: file://restore_view.lua
@@ -51,7 +51,7 @@ entries:
     confirmation: bee.approvals.app:confirmation
     client: bee.app:client
     text: bee.ui:text
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     waiting: bee.harness.app:waiting
     window_request: bee.harness.app:request
     placement_decode: bee.placement:decode
@@ -140,8 +140,8 @@ entries:
     names: bee.app:names
     sessions: bee.threads.sessions.client:sessions
     sessions_protocol: bee.threads.sessions.types:protocol
-    thread_record: bee.threads.records:record
-    bounds: bee.values:bounds
+    thread_record: bee.drivers.records:record
+    bounds: bee.drivers.values:bounds
     caller: bee.app:caller
 - name: picker_view
   kind: library.lua
@@ -158,8 +158,8 @@ entries:
   - tty
   - registry
   imports:
-    descriptor: bee.driver.descriptor:descriptor
-    preferences: bee.driver.descriptor:effective
+    descriptor: bee.drivers.descriptor:descriptor
+    preferences: bee.drivers.descriptor:effective
     profile_protocol: bee.harness.profiles:protocol
     frame: bee.ui:frame
     appearance: bee.ui:appearance
@@ -178,11 +178,11 @@ entries:
   - funcs
   imports:
     directory: bee.harness.app:directory
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     spawn_form: bee.harness.app:spawn_form
     confirmation: bee.approvals.app:confirmation
     frame: bee.ui:frame
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.app:client
     caller: bee.app:caller
     appearance: bee.ui:appearance
@@ -205,9 +205,9 @@ entries:
   modules:
   - json
   imports:
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
-    preferences: bee.driver.descriptor:effective
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
+    preferences: bee.drivers.descriptor:effective
     protocol: bee.harness.profiles:protocol
 - name: profile_form
   kind: library.lua
@@ -220,15 +220,16 @@ entries:
     app_traits: bee.node:app_traits
     validation: bee.harness.profiles.binding:validation
     mcp: bee.gateway.api:mcp
-    canonical: bee.values:canonical
-    descriptors: bee.driver.descriptor:descriptor
+    canonical: bee.drivers.values:canonical
+    descriptors: bee.drivers.descriptor:descriptor
     readiness: bee.harness.launch:readiness
-    preferences: bee.driver.descriptor:effective
-    bounds: bee.values:bounds
+    preferences: bee.drivers.descriptor:effective
+    bounds: bee.drivers.values:bounds
     catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
     protocol: bee.harness.profiles:protocol
     editor: bee.harness.app:profile_editor
+    placement_profiles: bee.placement.profiles:profiles
 - name: profile_view
   kind: library.lua
   source: file://profile_view.lua
@@ -237,9 +238,9 @@ entries:
   imports:
     option_controls: bee.harness.app:option_controls
     confirmation: bee.approvals.app:confirmation
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     settings: bee.harness.app:profile_settings
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     frame: bee.ui:frame
     appearance: bee.ui:appearance
     text: bee.ui:text
@@ -265,14 +266,14 @@ entries:
   - channel
   imports:
     presentation: bee.harness.service:viewer
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.app:client
     input_event: bee.harness.app:input
 - name: profile_settings
   kind: library.lua
   source: file://profile_settings.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     editor: bee.harness.app:profile_editor
 
 - name: spawn_form
@@ -288,8 +289,8 @@ entries:
   source: file://option_controls.lua
   modules: [json]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
 - name: start_menu
   kind: registry.entry
   meta: {type: bee.menu}
@@ -303,7 +304,7 @@ entries:
   source: file://directory.lua
   modules: [channel]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     agents: bee.harness.app:agents
     sessions_protocol: bee.threads.sessions.types:protocol
 
@@ -334,4 +335,4 @@ entries:
   modules: [funcs, uuid]
   imports:
     admission: bee.harness.launch:admission
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

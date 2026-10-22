@@ -16,7 +16,7 @@ entries:
   imports:
     protocol: bee.hive:protocol
     receiver: bee.hive:receiver
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     remote: bee.hive:remote
     demand: bee.process:demand
     demand_owner: bee.process:demand_owner

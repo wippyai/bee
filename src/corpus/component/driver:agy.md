@@ -1,8 +1,8 @@
-# bee.driver.agy
+# bee.drivers.agy
 
-Agy profiles and a strict CLI descriptor (`bee.driver.agy.descriptor:cli`)
+Agy profiles and a strict CLI descriptor (`bee.drivers.agy.descriptor:cli`)
 selecting the universal launch layer and the shared Agy stream-json codec, plus
-admitted configuration. The binding is `bee.driver.agy.binding:binding`.
+admitted configuration. The binding is `bee.drivers.agy.binding:binding`.
 
 The host supplies the executable environment and each route's policy. The
 component declares no process authority, credential access or MCP permissions.

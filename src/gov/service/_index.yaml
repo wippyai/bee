@@ -50,7 +50,7 @@ entries:
   modules:
   - funcs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     service: bee.gov.binding:destination_service
 - name: activation_worker
   kind: process.lua
@@ -62,7 +62,7 @@ entries:
   imports:
     worker: bee.process:worker
     service: bee.gov.binding:destination_service
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     pass: bee.gov.service:activation_pass
   meta:
     type: bee.approvals.effect-consumer

@@ -1,24 +1,22 @@
 # Reference driver: OpenCode CLI
 
-The complete `bee.driver.opencode` driver, every file verbatim from Bee's source. A CLI driver is these entries: the env entries naming its executable, the CLI descriptor (version and help probes, login evidence, options), the profiles it admits, the credential projections, the security policies, and the binding whose prepare, dispatch, normalize, configure and locate functions implement the driver contract (`component/driver`).
+The complete OpenCode CLI driver, every file verbatim: the `bee.drivers.opencode` entries from the bee/drivers module and Bee's own `bee.driver.opencode` descriptor, profile and security entries. A CLI driver is these entries: the env entries naming its executable, the CLI descriptor (version and help probes, login evidence, options), the profiles it admits, the credential projections, the security policies, and the binding whose prepare, dispatch, normalize, configure and locate functions implement the driver contract (`component/driver`).
 
-To write a driver for another CLI, author an overlay named `driver.<name>` (for example `driver.gemini`) and copy these files into it with every namespace renamed from `bee.driver.opencode` to `bee.driver.<name>`. An overlay driver defines its entries in `bee.driver.<name>.binding`, `.descriptor`, `.profiles`, `.security`, `.types` and `.credentials`. Its credential format is one `bee.credential_format` entry whose `meta.provider` is `<name>`; the activation requirement is an `ns.requirement` with `value_kind: contract.binding` whose `default` is the `contract.binding` of `meta.type: harness.driver` and whose single target appends to `bee.harness.launch:harness_activation` at `.bindings +=`. Admission reads these declared fields, so their identifiers may use any namespace the overlay owns. Its `.credentials` holds exactly one `bee.credential_format` for provider `<name>`: the login file under the home and any files to initialize beside it; profiles name the credential `<name>_login`, and the descriptor's `provider_home.files` list exactly those files: the login file with kind `login` and `source_path` equal to its path, each initialized file with kind `state` and no `source_path`, every file with a boolean `optional` and `write_back: false`, since an approved driver's machine login is admitted without write-back. Approving the driver lets its sessions use the person's machine login for that provider, and no other. The executable path is host configuration: leave `env/_index.yaml` out, and in each launch policy replace `executable_env` with `executables: {<executable>: <absolute path>}` naming the installed CLI, which the person reviews with the overlay. Change the descriptor, argv rendering and output normalization to the new CLI, then freeze and deliver it. The person approves the overlay and admits the new binding through harness activation (`component/harness`).
+To write a driver for another CLI, author an overlay named `driver.<name>` (for example `driver.gemini`) and copy these files into it with every namespace renamed from `bee.drivers.opencode` to `bee.driver.<name>`. An overlay driver defines its entries in `bee.driver.<name>.binding`, `.descriptor`, `.profiles`, `.security`, `.types` and `.credentials`. Its credential format is one `bee.credential_format` entry whose `meta.provider` is `<name>`; the activation requirement is an `ns.requirement` with `value_kind: contract.binding` whose `default` is the `contract.binding` of `meta.type: harness.driver` and whose single target appends to `bee.harness.launch:harness_activation` at `.bindings +=`. Admission reads these declared fields, so their identifiers may use any namespace the overlay owns. Its `.credentials` holds exactly one `bee.credential_format` for provider `<name>`: the login file under the home and any files to initialize beside it; profiles name the credential `<name>_login`, and the descriptor's `provider_home.files` list exactly those files: the login file with kind `login` and `source_path` equal to its path, each initialized file with kind `state` and no `source_path`, every file with a boolean `optional` and `write_back: false`, since an approved driver's machine login is admitted without write-back. Approving the driver lets its sessions use the person's machine login for that provider, and no other. The executable path is host configuration: leave `env/_index.yaml` out, and in each launch policy replace `executable_env` with `executables: {<executable>: <absolute path>}` naming the installed CLI, which the person reviews with the overlay. Change the descriptor, argv rendering and output normalization to the new CLI, then freeze and deliver it. The person approves the overlay and admits the new binding through harness activation (`component/harness`).
 
-## env/_index.yaml
+## drivers/src/opencode/env/_index.yaml
 
 ```yaml
 version: '1.0'
-namespace: bee.driver.opencode.env
+namespace: bee.drivers.opencode.env
 entries:
 - name: executable
   kind: env.variable
-  storage: bee.harness.host:environment
   variable: opencode
   default: ''
   readonly: true
 - name: api_key
   kind: env.variable
-  storage: bee.credentials.env:entered_values
   variable: OPENCODE_PERSON_KEY
   default: ''
   meta:
@@ -26,17 +24,17 @@ entries:
     credential_name: opencode_api_key
     credential:
       provider: opencode
-      format_ref: bee.driver.opencode.credentials:credential_format
+      format_ref: bee.drivers.opencode.credentials:credential_format
       workspace_id: '*'
       audience: '*'
       projection_kinds: [environment]
 ```
 
-## descriptor/_index.yaml
+## drivers/src/opencode/descriptor/_index.yaml
 
 ```yaml
 version: '1.0'
-namespace: bee.driver.opencode.descriptor
+namespace: bee.drivers.opencode.descriptor
 entries:
 - name: cli
   kind: registry.entry
@@ -101,7 +99,7 @@ entries:
       permission_answers:
         window:
           transport: hook_http
-          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_ref: bee.drivers.permission:permission_request_hook
           reason: The supervised observer relays Bee hook decisions to the OpenCode permission reply endpoint.
         first_turn:
           transport: provider
@@ -110,6 +108,8 @@ entries:
           transport: provider
           reason: Bee runs opencode run --format json with stdin closed; batch turns retain provider permission handling.
     options:
+      unattended:
+        auto: true
       profiles:
       - window
       - batch
@@ -181,7 +181,7 @@ entries:
           - first_turn
           - resume
           support:
-            config_schema_ref: bee.driver.opencode.descriptor:cli
+            config_schema_ref: bee.drivers.opencode.descriptor:cli
           render:
           - kind: config
             contexts:
@@ -364,7 +364,7 @@ entries:
           - first_turn
           - resume
           support:
-            config_schema_ref: bee.driver.opencode.descriptor:cli
+            config_schema_ref: bee.drivers.opencode.descriptor:cli
           render:
           - kind: config
             contexts: *id001
@@ -392,7 +392,7 @@ entries:
           order: 11
           contexts: *id001
           support:
-            config_schema_ref: bee.driver.opencode.descriptor:cli
+            config_schema_ref: bee.drivers.opencode.descriptor:cli
           render:
           - kind: config
             contexts: *id001
@@ -425,7 +425,7 @@ entries:
           - first_turn
           - resume
           support:
-            config_schema_ref: bee.driver.opencode.descriptor:cli
+            config_schema_ref: bee.drivers.opencode.descriptor:cli
           render: []
           trust:
             unsupported: true
@@ -520,6 +520,14 @@ entries:
         kind: config
         optional: true
         write_back: false
+```
+
+## src/driver/opencode/descriptor/_index.yaml
+
+```yaml
+version: '1.0'
+namespace: bee.driver.opencode.descriptor
+entries:
 - name: command
   kind: registry.entry
   meta:
@@ -533,17 +541,17 @@ entries:
     fullscreen: true
 ```
 
-## profiles/_index.yaml
+## drivers/src/opencode/profiles/_index.yaml
 
 ```yaml
 version: '1.0'
-namespace: bee.driver.opencode.profiles
+namespace: bee.drivers.opencode.profiles
 entries:
 - name: profiles
   kind: registry.entry
   meta:
     type: harness.profile
-    driver_ref: bee.driver.opencode.binding:binding
+    driver_ref: bee.drivers.opencode.binding:binding
   data:
     driver:
       schema_revision: bee.driver@1
@@ -558,7 +566,7 @@ entries:
         protocol_revision: opencode-run-json-1
         answer_path:
           strategy: accumulate
-          adapter_ref: bee.driver.opencode.descriptor:cli
+          adapter_ref: bee.drivers.opencode.descriptor:cli
         resume:
           strategy: per-process
           portable: false
@@ -597,7 +605,7 @@ entries:
           - Stop
           - StopFailure
           - SessionEnd
-          adapter_ref: bee.driver.opencode.descriptor:cli
+          adapter_ref: bee.drivers.opencode.descriptor:cli
         answer_path:
           strategy: none
         resume:
@@ -612,8 +620,16 @@ entries:
           strategy: none
         permission_exchange:
           mode: adapter
-          adapter_ref: bee.driver.permission:permission_request_hook
+          adapter_ref: bee.drivers.permission:permission_request_hook
           adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
+```
+
+## src/driver/opencode/profiles/_index.yaml
+
+```yaml
+version: '1.0'
+namespace: bee.driver.opencode.profiles
+entries:
 - name: default_window
   kind: registry.entry
   meta:
@@ -623,7 +639,7 @@ entries:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-window
     title: OpenCode
-    binding_ref: bee.driver.opencode.binding:binding
+    binding_ref: bee.drivers.opencode.binding:binding
     profile_id: window
     private_credentials:
     - opencode_login
@@ -657,7 +673,7 @@ entries:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-research-batch
     title: OpenCode researcher
-    binding_ref: bee.driver.opencode.binding:binding
+    binding_ref: bee.drivers.opencode.binding:binding
     profile_id: batch
     policy_ref: bee.driver.opencode.security:launch_policy_opencode_batch
     default_mode: batch
@@ -680,11 +696,11 @@ entries:
     unconfined: true
 ```
 
-## credentials/_index.yaml
+## drivers/src/opencode/credentials/_index.yaml
 
 ```yaml
 version: '1.0'
-namespace: bee.driver.opencode.credentials
+namespace: bee.drivers.opencode.credentials
 entries:
 - name: credential_format
   kind: registry.entry
@@ -692,15 +708,16 @@ entries:
     type: bee.credential_format
     provider: opencode
   data:
-    schema_revision: bee.credential-format@1
-    environment_destination: OPENAI_API_KEY
+    schema_revision: bee.credential-format@2
+    environments:
+    - OPENAI_API_KEY
     file:
       path: .local/share/opencode/auth.json
       content_format: json
       initialize: []
 ```
 
-## security/_index.yaml
+## src/driver/opencode/security/_index.yaml
 
 ```yaml
 version: '1.0'
@@ -724,7 +741,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      opencode: bee.driver.opencode.env:executable
+      opencode: bee.drivers.opencode.env:executable
     environment: {}
     allow_host_home: false
     gateway_tools:
@@ -777,7 +794,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      opencode: bee.driver.opencode.env:executable
+      opencode: bee.drivers.opencode.env:executable
     environment: {}
     allow_host_home: true
     gateway_tools:
@@ -842,49 +859,49 @@ entries:
     profile_instructions: true
 ```
 
-## binding/_index.yaml
+## drivers/src/opencode/binding/_index.yaml
 
 ```yaml
 version: '1.0'
-namespace: bee.driver.opencode.binding
+namespace: bee.drivers.opencode.binding
 entries:
 - name: prepare
   kind: function.lua
   source: file://prepare.lua
   method: handle
   imports:
-    universal: bee.driver.binding:universal
+    universal: bee.drivers.binding:universal
 - name: dispatch
   kind: function.lua
   source: file://dispatch.lua
   method: handle
   imports:
-    universal: bee.driver.binding:universal
+    universal: bee.drivers.binding:universal
 - name: configure
   kind: function.lua
   source: file://configure.lua
   method: handle
   imports:
-    configuration: bee.driver.opencode.binding:configuration
-    observer_events: bee.driver.opencode.observer:events
-    bounds: bee.values:bounds
-    configure_protocol: bee.driver:configuration_types
-    universal: bee.driver.binding:universal
+    configuration: bee.drivers.opencode.binding:configuration
+    observer_events: bee.drivers.opencode.observer:events
+    bounds: bee.drivers.values:bounds
+    configure_protocol: bee.drivers:configuration_types
+    universal: bee.drivers.binding:universal
   security:
     policies:
-    - bee.driver.opencode.binding:configuration_policy
+    - bee.drivers.opencode.binding:configuration_policy
 - name: locate
   kind: function.lua
   source: file://locate.lua
   method: handle
   imports:
-    universal: bee.driver.binding:universal
+    universal: bee.drivers.binding:universal
 - name: normalize
   kind: function.lua
   source: file://normalize.lua
   method: handle
   imports:
-    universal: bee.driver.binding:universal
+    universal: bee.drivers.binding:universal
 - name: configuration_policy
   kind: security.policy.expr
   policy:
@@ -895,37 +912,38 @@ entries:
     - funcs.call
     resources:
     - '*'
-    expression: (action == "registry.get" && resource == "bee.driver.opencode.descriptor:cli") || action == "registry.snapshot" || (action == "funcs.call" && resource == "bee.placement.profiles:context")
+    expression: (action == "registry.get" && resource == "bee.drivers.opencode.descriptor:cli") || action == "registry.snapshot"
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
   modules:
   - hash
   imports:
-    canonical: bee.values:canonical
-    configure_protocol: bee.driver.binding:configuration
-    configure_protocol_types: bee.driver:configuration_types
+    canonical: bee.drivers.values:canonical
+    configure_protocol: bee.drivers.binding:configuration
+    configure_protocol_types: bee.drivers:configuration_types
 - name: binding
   kind: contract.binding
   contracts:
-  - contract: bee.driver:driver
+  - contract: bee.drivers:driver
     methods:
-      prepare: bee.driver.opencode.binding:prepare
-      dispatch: bee.driver.opencode.binding:dispatch
-      normalize: bee.driver.opencode.binding:normalize
-      configure: bee.driver.opencode.binding:configure
-  - contract: bee.driver:locate_facet
+      prepare: bee.drivers.opencode.binding:prepare
+      dispatch: bee.drivers.opencode.binding:dispatch
+      normalize: bee.drivers.opencode.binding:normalize
+      configure: bee.drivers.opencode.binding:configure
+  - contract: bee.drivers:locate_facet
     methods:
-      locate: bee.driver.opencode.binding:locate
+      locate: bee.drivers.opencode.binding:locate
   meta:
     type: harness.driver
     driver_id: opencode
-    descriptor_ref: bee.driver.opencode.descriptor:cli
+    descriptor_ref: bee.drivers.opencode.descriptor:cli
+    credential_format_ref: bee.drivers.opencode.credentials:credential_format
     accepts_model: false
-    profiles_ref: bee.driver.opencode.profiles:profiles
+    profiles_ref: bee.drivers.opencode.profiles:profiles
 ```
 
-## binding/configuration.lua
+## drivers/src/opencode/binding/configuration.lua
 
 ```lua
 -- SPDX-License-Identifier: MIT
@@ -979,7 +997,7 @@ end
 return M
 ```
 
-## binding/configure.lua
+## drivers/src/opencode/binding/configure.lua
 
 ```lua
 -- MIT. The pure OpenCode configuration contract: the carrier and placement
@@ -1013,60 +1031,60 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     end
     return {ok = true, delivery = {arguments = {}, files = files}}
 end
-return {handle = universal.configure("opencode", {opencode = handle}, "bee.driver.opencode.descriptor:cli")}
+return {handle = universal.configure("opencode", {opencode = handle}, "bee.drivers.opencode.descriptor:cli")}
 ```
 
-## binding/dispatch.lua
+## drivers/src/opencode/binding/dispatch.lua
 
 ```lua
 -- MIT. The universal driver implements this contract method.
 local universal = require("universal")
-return {handle = universal.dispatch("bee.driver.opencode.descriptor:cli")}
+return {handle = universal.dispatch("bee.drivers.opencode.descriptor:cli")}
 ```
 
-## binding/locate.lua
+## drivers/src/opencode/binding/locate.lua
 
 ```lua
 -- MIT. The universal driver implements this contract method.
 local universal = require("universal")
-return {handle = universal.locate("bee.driver.opencode.descriptor:cli")}
+return {handle = universal.locate("bee.drivers.opencode.descriptor:cli")}
 ```
 
-## binding/normalize.lua
+## drivers/src/opencode/binding/normalize.lua
 
 ```lua
 local universal = require("universal")
-return {handle = universal.normalize("bee.driver.opencode.descriptor:cli")}
+return {handle = universal.normalize("bee.drivers.opencode.descriptor:cli")}
 ```
 
-## binding/prepare.lua
+## drivers/src/opencode/binding/prepare.lua
 
 ```lua
 -- MIT. The universal driver implements this contract method.
 local universal = require("universal")
-return {handle = universal.prepare("bee.driver.opencode.descriptor:cli")}
+return {handle = universal.prepare("bee.drivers.opencode.descriptor:cli")}
 ```
 
-## observer/_index.yaml
+## drivers/src/opencode/observer/_index.yaml
 
 ```yaml
 version: '1.0'
-namespace: bee.driver.opencode.observer
+namespace: bee.drivers.opencode.observer
 entries:
 - name: events
   kind: library.lua
   source: file://events.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: declaration
   kind: registry.entry
   meta:
     type: bee.driver.window_observer
-    driver_ref: bee.driver.opencode.binding:binding
+    driver_ref: bee.drivers.opencode.binding:binding
     profile_id: window
     observer: local_http
   data:
-    process: bee.driver.opencode.observer:subscriber
+    process: bee.drivers.opencode.observer:subscriber
     server_arguments: [serve, --port, '0', --hostname, 127.0.0.1]
     endpoint_pattern: 'http://127%.0%.0%.1:%d+'
 - name: subscriber
@@ -1075,13 +1093,13 @@ entries:
   method: main
   modules: [process, channel, http_client, json]
   imports:
-    bounds: bee.values:bounds
-    framing: bee.driver.transport:framing
-    events: bee.driver.opencode.observer:events
-    observer_types: bee.driver:window_observer
-    delivery: bee.driver.opencode.observer:delivery
+    bounds: bee.drivers.values:bounds
+    framing: bee.drivers.transport:framing
+    events: bee.drivers.opencode.observer:events
+    observer_types: bee.drivers:window_observer
+    delivery: bee.drivers.opencode.observer:delivery
   security:
-    policies: [bee.driver.opencode.observer:http_policy]
+    policies: [bee.drivers.opencode.observer:http_policy]
 - name: http_policy
   kind: security.policy.expr
   policy:
@@ -1093,10 +1111,10 @@ entries:
   kind: library.lua
   source: file://delivery.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 ```
 
-## observer/delivery.lua
+## drivers/src/opencode/observer/delivery.lua
 
 ```lua
 -- SPDX-License-Identifier: MIT
@@ -1124,7 +1142,7 @@ end
 return M
 ```
 
-## observer/events.lua
+## drivers/src/opencode/observer/events.lua
 
 ```lua
 -- SPDX-License-Identifier: MIT
@@ -1298,7 +1316,7 @@ end
 return M
 ```
 
-## observer/subscriber.lua
+## drivers/src/opencode/observer/subscriber.lua
 
 ```lua
 -- SPDX-License-Identifier: MIT

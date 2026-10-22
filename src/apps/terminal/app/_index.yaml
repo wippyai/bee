@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://command.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: app
   kind: process.lua
   meta:

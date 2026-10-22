@@ -41,7 +41,7 @@ local function define_tests()
                     local id = fresh("container-yolo")
                     local written = profile_call({operation = "put", workspace_id = workspace, profile_id = id, expected_revision = 0,
                         idempotency_key = fresh("container-save"), profile = {schema_revision = "bee.agent-profile@3", name = "Container Codex",
-                            definition_ref = definition_ref, driver_binding_ref = "bee.driver.codex.binding:binding",
+                            definition_ref = definition_ref, driver_binding_ref = "bee.drivers.codex.binding:binding",
                             placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}, bee = {},
                             provider = {options = {sandbox = "danger-full-access", approval_policy = "never", dangerously_bypass_approvals_and_sandbox = true}}}})
                     assert(written.ok == true, tostring(written.message))
@@ -114,7 +114,7 @@ local function define_tests()
                 for _, selected in ipairs({{id = parent_id, definition = DEFINITION}, {id = child_id, definition = RETAINED_DEFINITION}}) do
                     value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = selected.id,
                         expected_revision = 0, idempotency_key = fresh("put"), profile = {schema_revision = "bee.agent-profile@3",
-                            definition_ref = selected.definition, driver_binding_ref = "bee.driver.claude.binding:binding", name = "Saved",
+                            definition_ref = selected.definition, driver_binding_ref = "bee.drivers.claude.binding:binding", name = "Saved",
                             role = "Parent", provider = {}, bee = {mcp = mcp}, active_traits = {"bee.tests.memory:review"},
                             requestable = selected.id == child_id and {"bee.tests.memory:trait", "bee.tests.memory:outside"} or {"bee.tests.memory:trait"}, context = {project = "Bee", child_profile = child_id, child_definition = RETAINED_DEFINITION}}}))
                 end

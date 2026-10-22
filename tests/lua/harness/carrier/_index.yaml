@@ -9,5 +9,5 @@ entries:
   imports:
     test: wippy.test:test
     machine: bee.harness.carrier:machine
-    profile_values: bee.driver.descriptor:profile_values
+    profile_values: bee.drivers.descriptor:profile_values
     fixtures: bee.tests.harness:carrier_fixtures

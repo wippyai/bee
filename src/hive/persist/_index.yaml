@@ -8,5 +8,5 @@ entries:
   imports:
     database: bee.persist:database
     transaction: bee.persist:transaction
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     protocol: bee.hive:protocol

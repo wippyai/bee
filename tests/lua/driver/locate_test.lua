@@ -58,7 +58,7 @@ local function define_tests()
             for _, case in ipairs({{driver = claude, provider = "claude"}, {driver = codex, provider = "codex"},
                 {driver = opencode, provider = "opencode"}, {driver = agy, provider = "agy"},
                 {driver = grok, provider = "grok"}, {driver = muse, provider = "muse"}}) do
-                local selected = assert(descriptor.load("bee.driver." .. case.provider .. ".descriptor:cli"))
+                local selected = assert(descriptor.load("bee.drivers." .. case.provider .. ".descriptor:cli"))
                 for success_index in ipairs(selected.login_evidence.any_of) do
                     local checks: {login_evidence_types.Check} = {}
                     for index, evidence in ipairs(selected.login_evidence.any_of) do

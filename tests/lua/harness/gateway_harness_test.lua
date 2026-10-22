@@ -42,8 +42,8 @@ local PROVIDER = "bee.tests.harness:codex_fixture_provider"
 local CLAUDE_SOURCE = "bee.tests.harness:claude_sentinel_key"
 local CODEX_SOURCE = "bee.tests.harness:codex_sentinel_key"
 local ROOT = "bee.tests.harness:project_fixture"
-local CLAUDE_BINDING = "bee.driver.claude.binding:binding"
-local CODEX_BINDING = "bee.driver.codex.binding:binding"
+local CLAUDE_BINDING = "bee.drivers.claude.binding:binding"
+local CODEX_BINDING = "bee.drivers.codex.binding:binding"
 local CLAUDE_SENTINEL = "sk-ant-sentinel-bee-000"
 local CODEX_SENTINEL = "sk-sentinel-bee-000"
 local GATEWAY_TOKEN = "BEE_GATEWAY_TOKEN"
@@ -174,7 +174,7 @@ local function codex_gateway(input: configuration_types.GatewayInput): codex_con
         token_environment = input.token_environment, hook_token_environment = input.hook_token_environment}
 end
 local function claude_delivery(input: configuration_types.GatewayInput): configuration_types.Delivery
-    local delivery, delivery_error = configuration.call("bee.driver.claude.binding:binding", "bee.driver.claude.binding:configure", {fixture = false, gateway = input})
+    local delivery, delivery_error = configuration.call("bee.drivers.claude.binding:binding", "bee.drivers.claude.binding:configure", {fixture = false, gateway = input})
     if not delivery then error(tostring(delivery_error)) end
     return delivery
 end

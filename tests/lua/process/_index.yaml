@@ -19,7 +19,7 @@ entries:
   imports:
     demand: bee.process:demand
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: transaction_service
   kind: process.service
   process: bee.tests.process:transaction_owner
@@ -63,8 +63,8 @@ entries:
     demand: bee.process:demand
     worker: bee.process:worker
     state: bee.process:demand_state
-    bounds: bee.values:bounds
-    clock: bee.values:clock
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock
 - name: demand_events
   kind: library.lua
   source: file://demand_events.lua

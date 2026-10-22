@@ -5,12 +5,12 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.values:bounds
-    record: bee.threads.records:record
-    record_types: bee.threads:record_types
-    record_bounds: bee.threads.records:bounds
+    bounds: bee.drivers.values:bounds
+    record: bee.drivers.records:record
+    record_types: bee.drivers.records:record_types
+    record_bounds: bee.drivers.records:bounds
 - name: status_surface
   kind: library.lua
   source: file://status_surface.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

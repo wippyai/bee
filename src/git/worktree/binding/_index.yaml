@@ -9,7 +9,7 @@ entries:
   - security
   imports:
     worktree: bee.git.worktree.binding:worktree
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     types: bee.placement:types
   security:
     policies:
@@ -22,7 +22,7 @@ entries:
   - security
   imports:
     worktree: bee.git.worktree.binding:worktree
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     types: bee.placement:types
   security:
     policies:
@@ -35,7 +35,7 @@ entries:
   - security
   imports:
     worktree: bee.git.worktree.binding:worktree
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     types: bee.placement:types
   security:
     policies:
@@ -55,8 +55,8 @@ entries:
   imports:
     git_roots: bee.git.worktree.binding:git_roots
     paths: bee.placement.profiles:paths
-    bounds: bee.values:bounds
-    quote: bee.driver.binding:quote
+    bounds: bee.drivers.values:bounds
+    quote: bee.drivers.binding:quote
 - name: binding
   kind: contract.binding
   meta:

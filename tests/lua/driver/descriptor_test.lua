@@ -19,13 +19,13 @@ end
 local function define_tests()
     test.describe("External CLI descriptors", function()
         test.it("keeps option schemas at the selected registry snapshot when a binding changes", function()
-            local binding = "bee.driver.claude.binding:binding"
-            local ref = "bee.driver.claude.descriptor:cli"
+            local binding = "bee.drivers.claude.binding:binding"
+            local ref = "bee.drivers.claude.descriptor:cli"
             local pinned = assert(registry.snapshot())
             local original = assert(pinned:get(binding))
             local prior = assert(descriptor.load_from(pinned, ref))
             local meta = copy_object(assert(bounds.object(original.meta)))
-            meta.descriptor_ref = "bee.driver.codex.descriptor:cli"
+            meta.descriptor_ref = "bee.drivers.codex.descriptor:cli"
             local overlay = assert(registry.overlay("bee.driver.tests:discovery"))
             local changes = overlay:changes()
             assert(changes:update({id = binding, kind = original.kind, meta = meta, data = original.data}))
@@ -44,17 +44,17 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("declares the captured Muse permission response channel in every context", function()
-            local cli = assert(descriptor.load("bee.driver.muse.descriptor:cli"))
+            local cli = assert(descriptor.load("bee.drivers.muse.descriptor:cli"))
             local pinned = assert(registry.snapshot())
             for _, context in ipairs({"window", "first_turn", "resume"}) do
                 local answer = descriptor.permission_answer(cli, context)
                 test.eq(answer.transport, "hook_http")
-                test.eq(answer.adapter_ref, "bee.driver.permission:permission_request_hook")
+                test.eq(answer.adapter_ref, "bee.drivers.permission:permission_request_hook")
             end
             for _, profile in ipairs({"window", "batch"}) do
-                local selected = assert(resolver.profile(pinned, "bee.driver.muse.binding:binding", profile))
+                local selected = assert(resolver.profile(pinned, "bee.drivers.muse.binding:binding", profile))
                 test.eq(selected.permission_exchange.mode, "adapter")
-                test.eq(selected.permission_exchange.adapter_ref, "bee.driver.permission:permission_request_hook")
+                test.eq(selected.permission_exchange.adapter_ref, "bee.drivers.permission:permission_request_hook")
             end
         end)
         test.it("declares exactly the hooks each shipped route requests and delivers", function()
@@ -84,7 +84,7 @@ local function define_tests()
         test.it("delivers acceptance and settlement hooks on Agy Grok and Muse windows", function()
             local pinned = assert(registry.snapshot())
             for _, provider in ipairs({"agy", "grok", "muse"}) do
-                local binding = "bee.driver." .. provider .. ".binding:binding"
+                local binding = "bee.drivers." .. provider .. ".binding:binding"
                 local selected = assert(resolver.profile(pinned, binding, "window"))
                 local policy = assert(pinned:get("bee.driver." .. provider .. ".security:launch_policy_" .. provider .. "_window"))
                 local requested = assert(bounds.ids(assert(bounds.object(policy.data)).gateway_hooks, true))
@@ -94,7 +94,7 @@ local function define_tests()
             end
         end)
         test.it("allows agent model mapping when Codex declares a model option", function()
-            local binding = assert(registry.get("bee.driver.codex.binding:binding"))
+            local binding = assert(registry.get("bee.drivers.codex.binding:binding"))
             local meta = assert(bounds.object(binding.meta))
             local cli = assert(descriptor.load(tostring(meta.descriptor_ref)))
             local fields = assert(bounds.object(cli.options.fields))
@@ -110,24 +110,25 @@ local function define_tests()
             test.not_nil(resolver.active(pinned))
         end)
         test.it("reports a failed activation read instead of an empty activation", function()
+            local activation_ref = assert(resolver.activation_ref(assert(registry.snapshot())))
             local ok = assert(funcs.new():call("bee.tests.driver:active_probe"))
             test.is_true(assert(bounds.object(ok)).active)
-            local faulted = assert(funcs.new():with_context({["bee.test.registry.fault"] = resolver.ACTIVATION})
+            local faulted = assert(funcs.new():with_context({["bee.test.registry.fault"] = activation_ref})
                 :call("bee.tests.driver:active_probe"))
             local reply = assert(bounds.object(faulted))
             test.is_false(reply.active)
-            test.eq(reply.error, "read " .. resolver.ACTIVATION .. ": registry unavailable")
+            test.eq(reply.error, "read " .. activation_ref .. ": registry unavailable")
         end)
         test.it("follows the declared configure target across unrelated namespaces", function()
             local pinned = assert(registry.snapshot())
-            local binding = assert(pinned:get("bee.driver.claude.binding:binding"))
-            local original = assert(pinned:get("bee.driver.claude.binding:configure"))
+            local binding = assert(pinned:get("bee.drivers.claude.binding:binding"))
+            local original = assert(pinned:get("bee.drivers.claude.binding:configure"))
             local data = assert(bounds.object(binding.data))
             local contracts = assert(bounds.array(data.contracts, 16))
             local contract = assert(bounds.object(contracts[1]))
             local methods = copy_object(assert(bounds.object(contract.methods)))
             methods.configure = "vendor.renderer:compose"
-            local activation = assert(pinned:get(resolver.ACTIVATION))
+            local activation = assert(pinned:get(assert(resolver.activation_ref(pinned))))
             local active_data = assert(bounds.object(activation.data))
             local active_refs = assert(bounds.ids(active_data.bindings, true))
             active_refs[#active_refs + 1] = "vendor.binding:managed"
@@ -148,10 +149,10 @@ local function define_tests()
             assert(cleanup:apply())
             test.is_nil(err)
             test.eq(renderer, "claude")
-            test.is_nil(resolver.configure_renderer(fresh, "vendor.binding:managed", "bee.driver.codex.binding:configure"))
+            test.is_nil(resolver.configure_renderer(fresh, "vendor.binding:managed", "bee.drivers.codex.binding:configure"))
         end)
         test.it("resolves an admitted binding's renderer after its configure target is replaced", function()
-            local ref = "bee.driver.claude.binding:binding"
+            local ref = "bee.drivers.claude.binding:binding"
             local pinned = assert(registry.snapshot())
             local original = assert(pinned:get(ref))
             local data = assert(bounds.object(original.data))
@@ -159,11 +160,11 @@ local function define_tests()
             local replaced: {unknown} = {}
             for _, raw in ipairs(contracts) do
                 local contract = assert(bounds.object(raw))
-                if contract.contract == "bee.driver:driver" then
+                if contract.contract == "bee.drivers:driver" then
                     local mapped = assert(bounds.object(contract.methods))
                     local changed: Object = {}
                     for name, target in pairs(mapped) do changed[name] = target end
-                    changed.configure = "bee.driver.codex.binding:configure"
+                    changed.configure = "bee.drivers.codex.binding:configure"
                     replaced[#replaced + 1] = {contract = contract.contract, methods = changed}
                 else replaced[#replaced + 1] = contract end
             end
@@ -172,7 +173,7 @@ local function define_tests()
             assert(changes:update({id = ref, kind = original.kind, meta = original.meta, data = {contracts = replaced}}))
             assert(changes:apply())
             local ok, failure = pcall(function()
-                local renderer, err, selected = resolver.configure_renderer(assert(registry.snapshot()), ref, "bee.driver.codex.binding:configure")
+                local renderer, err, selected = resolver.configure_renderer(assert(registry.snapshot()), ref, "bee.drivers.codex.binding:configure")
                 test.is_nil(err)
                 test.eq(renderer, "claude")
                 test.eq(selected and selected.provider, "claude")
@@ -184,7 +185,7 @@ local function define_tests()
         test.it("resolves configuration renderers from the selected binding metadata", function()
             local pinned = assert(registry.snapshot())
             for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode"}) do
-                local namespace = "bee.driver." .. provider .. ".binding"
+                local namespace = "bee.drivers." .. provider .. ".binding"
                 local renderer, err, selected = resolver.configure_renderer(pinned, namespace .. ":binding", namespace .. ":configure")
                 test.is_nil(err)
                 test.eq(renderer, provider)
@@ -193,15 +194,15 @@ local function define_tests()
             end
         end)
         test.it("uses descriptor metadata after an authorized cross-namespace configure update", function()
-            local ref = "bee.driver.claude.binding:binding"
+            local ref = "bee.drivers.claude.binding:binding"
             local original = assert(registry.get(ref))
             local changed = assert(registry.get(ref))
             local contracts: {unknown} = {}
             for _, raw in ipairs(assert(bounds.dense_list(assert(bounds.object(original.data)).contracts, 16, "contracts"))) do
                 local contract = assert(bounds.object(raw))
-                if contract.contract == "bee.driver:driver" then
+                if contract.contract == "bee.drivers:driver" then
                     local mapped = copy_object(assert(bounds.object(contract.methods)))
-                    mapped.configure = "bee.driver.codex.binding:configure"
+                    mapped.configure = "bee.drivers.codex.binding:configure"
                     contracts[#contracts + 1] = {contract = contract.contract, methods = mapped}
                 else contracts[#contracts + 1] = contract end
             end
@@ -209,7 +210,7 @@ local function define_tests()
             local changes = registry.snapshot():changes()
             assert(changes:update(changed)); assert(changes:apply())
             local ok, failure = pcall(function()
-                local renderer, err = resolver.configure_renderer(assert(registry.snapshot()), ref, "bee.driver.codex.binding:configure")
+                local renderer, err = resolver.configure_renderer(assert(registry.snapshot()), ref, "bee.drivers.codex.binding:configure")
                 test.is_nil(err); test.eq(renderer, "claude")
             end)
             local cleanup = registry.snapshot():changes()
@@ -222,7 +223,7 @@ local function define_tests()
                 agy = {"hook_http", "hook_http"}, grok = {"stdio", "provider"},
                 muse = {"hook_http", "hook_http"}, opencode = {"provider", "hook_http"}}
             for provider, transports in pairs(expected) do
-                local loaded = assert(descriptor.load("bee.driver." .. provider .. ".descriptor:cli"))
+                local loaded = assert(descriptor.load("bee.drivers." .. provider .. ".descriptor:cli"))
                 local headless = descriptor.permission_answer(loaded, "first_turn")
                 local window = descriptor.permission_answer(loaded, "window")
                 test.eq(headless.transport, transports[1])
@@ -230,11 +231,11 @@ local function define_tests()
                 test.eq(descriptor.permission_answer(loaded, "resume").transport, transports[1])
                 if headless.transport == "provider" then test.not_nil(headless.reason) else test.not_nil(headless.adapter_ref) end
                 if window.transport == "provider" then test.not_nil(window.reason) else test.not_nil(window.adapter_ref) end
-                if provider == "opencode" then test.eq(window.adapter_ref, "bee.driver.permission:permission_request_hook") end
+                if provider == "opencode" then test.eq(window.adapter_ref, "bee.drivers.permission:permission_request_hook") end
             end
         end)
         test.it("decodes bounded any-of login evidence and rejects malformed alternatives", function()
-            local loaded = assert(bounds.object(assert(descriptor.load("bee.driver.claude.descriptor:cli"))))
+            local loaded = assert(bounds.object(assert(descriptor.load("bee.drivers.claude.descriptor:cli"))))
             local changed = copy_object(loaded)
             local valid = {
                 {kind = "file_exists", paths = {".fixture/auth.json", ".fixture/config.jsonc"}},
@@ -273,7 +274,7 @@ local function define_tests()
                 {provider = "opencode", path = ".config/opencode/opencode.jsonc", variable = "OPENCODE_API_KEY"},
             }
             for _, case in ipairs(cases) do
-                local selected = assert(descriptor.load("bee.driver." .. case.provider .. ".descriptor:cli"))
+                local selected = assert(descriptor.load("bee.drivers." .. case.provider .. ".descriptor:cli"))
                 local paths, names, status = false, false, false
                 for _, evidence in ipairs(selected.login_evidence.any_of) do
                     if evidence.kind == "file_exists" then
@@ -295,7 +296,7 @@ local function define_tests()
         end)
 
         test.it("does not treat Grok configuration alone as a signed-in login", function()
-            local selected = assert(descriptor.load("bee.driver.grok.descriptor:cli"))
+            local selected = assert(descriptor.load("bee.drivers.grok.descriptor:cli"))
             local declaration = assert(login_evidence.decode(selected.login_evidence))
             local config_only = login_evidence.probe(declaration, {
                 file = function(path, _variable, _directory) return path == ".grok/config.toml", nil end,
@@ -372,12 +373,12 @@ local function define_tests()
 
         test.it("loads each harness descriptor and rejects unknown top-level and nested fields", function()
             local entries = {
-                {ref = "bee.driver.claude.descriptor:cli", provider = "claude", codec = "claude-stream-json"},
-                {ref = "bee.driver.codex.descriptor:cli", provider = "codex", codec = "codex-jsonl"},
-                {ref = "bee.driver.opencode.descriptor:cli", provider = "opencode", codec = "opencode-json-events"},
-                {ref = "bee.driver.agy.descriptor:cli", provider = "agy", codec = "agy-stream-json"},
-                {ref = "bee.driver.grok.descriptor:cli", provider = "grok", codec = "grok-streaming-json"},
-                {ref = "bee.driver.muse.descriptor:cli", provider = "muse", codec = "muse-record-jsonl"},
+                {ref = "bee.drivers.claude.descriptor:cli", provider = "claude", codec = "claude-stream-json"},
+                {ref = "bee.drivers.codex.descriptor:cli", provider = "codex", codec = "codex-jsonl"},
+                {ref = "bee.drivers.opencode.descriptor:cli", provider = "opencode", codec = "opencode-json-events"},
+                {ref = "bee.drivers.agy.descriptor:cli", provider = "agy", codec = "agy-stream-json"},
+                {ref = "bee.drivers.grok.descriptor:cli", provider = "grok", codec = "grok-streaming-json"},
+                {ref = "bee.drivers.muse.descriptor:cli", provider = "muse", codec = "muse-record-jsonl"},
             }
             for _, item in ipairs(entries) do
                 local loaded, load_error = descriptor.load(item.ref)
@@ -410,7 +411,7 @@ local function define_tests()
         end)
 
         test.it("rejects invalid defaults, undeclared template fields and cyclic flag dependencies", function()
-            local claude = assert(bounds.object(assert(descriptor.load("bee.driver.claude.descriptor:cli"))))
+            local claude = assert(bounds.object(assert(descriptor.load("bee.drivers.claude.descriptor:cli"))))
 
             local bad_default = copy_object(claude)
             local options = copy_object(assert(bounds.object(claude.options)))
@@ -462,7 +463,7 @@ local function define_tests()
         end)
 
         test.it("rejects inert option metadata and reserved request fields", function()
-            local claude = assert(bounds.object(assert(descriptor.load("bee.driver.claude.descriptor:cli"))))
+            local claude = assert(bounds.object(assert(descriptor.load("bee.drivers.claude.descriptor:cli"))))
             local inert_metadata = copy_object(claude)
             local options = copy_object(assert(bounds.object(claude.options)))
             local fields = copy_object(assert(bounds.object(options.fields)))

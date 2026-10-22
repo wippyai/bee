@@ -74,7 +74,7 @@ local function home_tests()
                 end
                 if not login_path then error(case.provider .. " driver has no login file") end
                 local content_format = (case.provider == "agy" or case.provider == "muse") and "opaque" or "json"
-                local format = {schema_revision = "bee.credential-format@1", file = {path = login_path, content_format = content_format, initialize = initializers}}
+                local format = {schema_revision = "bee.credential-format@2", environments = {}, file = {path = login_path, content_format = content_format, initialize = initializers}}
                 local login = content_format == "json" and '{"fixture":"provider-login"}' or "fixture-provider-login"
                 local key, key_error = homes.attempt_key(native_fixture.OWNER, native_fixture.fresh("provider-home-fixture"))
                 if not key then error(tostring(key_error)) end
@@ -180,7 +180,7 @@ local function home_tests()
             local key = assert(homes.attempt_key(native_fixture.OWNER, native_fixture.fresh("provider-home-link")))
             local attempt_home = assert(homes.create_attempt(key))
             local home = assert(homes.os_path(attempt_home .. "/home"))
-            local format = {schema_revision = "bee.credential-format@1", file = {
+            local format = {schema_revision = "bee.credential-format@2", environments = {}, file = {
                 path = ".codex/auth.json", content_format = "json", initialize = {}}}
             local login = '{"fixture":"provider-login"}'
             local projected, project_error = homes.project_attempt_login(attempt_home,

@@ -6,7 +6,7 @@ entries:
   source: file://catalog.lua
   modules: [registry, fs]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     workspaces: bee.node.persist:workspaces
 - name: catalog
   kind: function.lua
@@ -14,7 +14,7 @@ entries:
   method: handle
   modules: [registry, fs, sql, uuid, time, json]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     workspaces: bee.node.persist:workspaces
 - name: read
   kind: function.lua
@@ -24,7 +24,7 @@ entries:
   method: read
   modules: [funcs, security]
   imports: &operation_imports
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     catalog: bee.node.binding:catalog_types
   security:
     policies: [bee.node.security:workspace_catalog_facade]
@@ -59,7 +59,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     tests: bee.node:tests
     peers: bee.node:peer_tools
   security:
@@ -83,7 +83,7 @@ entries:
     discovery: wippy.test:discovery
     application_tests: bee.node:application_tests
     activation_profiles: bee.gov.types:activation_profile_decoder
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: app_tools
   kind: function.lua
   meta:
@@ -96,7 +96,7 @@ entries:
   - security
   - ctx
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     application: bee.node:application
     app_tools: bee.node:app_tools
     requests: bee.node:app_tool_request
@@ -120,7 +120,7 @@ entries:
   - security
   - ctx
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     application: bee.node:application
     app_tools: bee.node:app_tools
     requests: bee.node:app_tool_request
@@ -138,7 +138,7 @@ entries:
   method: handle
   modules: [security, system, ctx]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     arguments: bee.app:arguments
     client: bee.node:client
   security:
@@ -154,7 +154,7 @@ entries:
   method: names
   modules: [security]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
   security:
     policies: [bee.hive.security:caller, bee.hive.security:messaging]
@@ -176,4 +176,4 @@ entries:
     discovery: wippy.test:discovery
     application_tests: bee.node:application_tests
     activation_profiles: bee.gov.types:activation_profile_decoder
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

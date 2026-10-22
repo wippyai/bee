@@ -19,7 +19,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      opencode: bee.driver.opencode.env:executable
+      opencode: bee.drivers.opencode.env:executable
     environment: {}
     allow_host_home: false
     gateway_tools:
@@ -72,7 +72,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      opencode: bee.driver.opencode.env:executable
+      opencode: bee.drivers.opencode.env:executable
     environment: {}
     allow_host_home: true
     gateway_tools:

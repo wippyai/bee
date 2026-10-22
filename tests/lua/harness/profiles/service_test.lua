@@ -40,7 +40,7 @@ local function fresh(): string
 end
 local function put(id: string, revision: integer, key: string, title: string): {[string]: unknown}
     return {operation = "put", workspace_id = WORKSPACE, profile_id = id, expected_revision = revision, idempotency_key = key,
-        profile = {schema_revision = "bee.agent-profile@3", name = title, definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.driver.codex.binding:binding", provider = {}, bee = {mcp = {}}}}
+        profile = {schema_revision = "bee.agent-profile@3", name = title, definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {}, bee = {mcp = {}}}}
 end
 local function define_tests()
     test.describe("Saved profile owner facade", function()
@@ -80,7 +80,7 @@ local function define_tests()
             local person = caller("bee.node", "bee.tests.harness.profiles:test_write")
             local saved = value(call(person, put(fresh(), 0, fresh(), "Folder consent")))
             local target = {parent_grant_id = saved.grant_id, canonical_workdir = "/canonical/folder",
-                driver_binding_ref = "bee.driver.codex.binding:binding", folder_trust = "approved-workdir"}
+                driver_binding_ref = "bee.drivers.codex.binding:binding", folder_trust = "approved-workdir"}
             local raw, err = person:call("bee.approvals.binding:request", {contract_version = 2, workspace_id = WORKSPACE,
                 idempotency_key = fresh(), request_kind = "permission", policy = "configuration-setup", presentation = "inbox",
                 proposal = {kind = "operation", ref = "bee.approvals:confirmation", revision = "1",
@@ -341,7 +341,7 @@ local function define_allowall_tests()
                     local request = put(fresh(), 0, fresh(), "All allowed")
                     local profile = assert(bounds.object(request.profile))
                     profile.definition_ref = "bee.driver." .. case.driver .. ".profiles:default_window"
-                    profile.driver_binding_ref = "bee.driver." .. case.driver .. ".binding:binding"
+                    profile.driver_binding_ref = "bee.drivers." .. case.driver .. ".binding:binding"
                     profile.provider = case.provider
                     profile.placement = placement == "native" and {kind = "native", home = "private"} or {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
                     local agent = caller("profile-agent", "bee.tests.harness.profiles:test_delegated_write"):with_actor(security.new_actor("profile-agent", {definition_id = "fixture:agent"}))

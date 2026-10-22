@@ -10,7 +10,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: listing_dependencies_test
   kind: function.lua
   source: file://listing_dependencies_test.lua

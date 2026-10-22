@@ -2,8 +2,8 @@ local test = require("test")
 local registry = require("registry")
 local catalog = require("catalog")
 local bounds = require("bounds")
-local CLAUDE = "bee.driver.claude.binding:binding"
-local CODEX = "bee.driver.codex.binding:binding"
+local CLAUDE = "bee.drivers.claude.binding:binding"
+local CODEX = "bee.drivers.codex.binding:binding"
 local function cases()
     test.describe("Selected launch catalog", function()
         test.it("classifies only the selected driver's group and still enforces the catalog limit", function()

@@ -22,7 +22,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
     caller: bee.app:caller
@@ -35,7 +35,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     feeds: bee.approvals.inbox.app:feeds
     model: bee.approvals.inbox.app:model
@@ -48,7 +48,7 @@ entries:
   modules: [tty]
   imports:
     question_form: bee.approvals.inbox.app:question_form
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     frames: bee.ui:frame
     test: wippy.test:test
     leases: bee.approvals.inbox.app:leases
@@ -65,7 +65,7 @@ entries:
     policies: [bee.tests.approvals.inbox:apply_test_policy, bee.tests.approvals.inbox:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
@@ -81,7 +81,7 @@ entries:
   method: main
   meta: {type: test_support}
   modules: [sql, funcs]
-  imports: {principals: bee.tests.support.principals:bound, bounds: bee.values:bounds}
+  imports: {principals: bee.tests.support.principals:bound, bounds: bee.drivers.values:bounds}
 
 - name: spawn_test_policy
   kind: security.policy
@@ -101,7 +101,7 @@ entries:
   imports:
     principals: bee.tests.support.principals:bound
     application: bee.tests.support.principals:application
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
 - name: recovery_test
   kind: function.lua
@@ -113,7 +113,7 @@ entries:
     policies: [bee.tests.approvals.inbox:spawn_test_policy, bee.tests.approvals.inbox:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
     caller: bee.app:caller
@@ -129,7 +129,7 @@ entries:
     policies: [bee.tests.approvals.inbox:apply_test_policy, bee.tests.approvals.inbox:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
     caller: bee.app:caller
@@ -141,7 +141,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     appearance: bee.ui:appearance
     model: bee.approvals.inbox.app:model
@@ -178,7 +178,7 @@ entries:
     policies: [bee.tests.approvals.inbox:spawn_test_policy, bee.tests.approvals.inbox:client_test_policy, bee.security.approvals:approval_request_policy, bee.tests.support.principals:application_scope_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     application: bee.tests.support.principals:application
     principal: bee.node:principal
     thread_harness: bee.tests.threads:harness

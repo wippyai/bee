@@ -21,7 +21,7 @@ local function define_tests()
             assert(endpoint)
             local topic = "bee.fixture.opencode.failure"
             local replies = assert(process.listen(topic, {message = true}))
-            local child = assert(process.spawn("bee.driver.opencode.observer:subscriber", "bee:workers", {
+            local child = assert(process.spawn("bee.drivers.opencode.observer:subscriber", "bee:workers", {
                 endpoint = endpoint, hook_endpoint = endpoint .. "/hook/action-1", hook_token = "fixture-hook",
                 hooks = {}, argv = {}, working_directory = fixtures, owner = process.pid(), topic = topic,
             }))
@@ -51,7 +51,7 @@ local function define_tests()
             assert(endpoint)
             local topic = "bee.fixture.opencode.subscriber"
             local replies = assert(process.listen(topic, {message = true}))
-            local child = assert(process.spawn("bee.driver.opencode.observer:subscriber", "bee:workers", {
+            local child = assert(process.spawn("bee.drivers.opencode.observer:subscriber", "bee:workers", {
                 endpoint = endpoint, hook_endpoint = endpoint .. "/hook/action-1", hook_token = "fixture-hook",
                 hooks = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop", "SessionEnd"},
                 argv = auto and {"--auto", "--prompt", case.brief} or {"--prompt", case.brief}, working_directory = fixtures, owner = process.pid(), topic = topic,

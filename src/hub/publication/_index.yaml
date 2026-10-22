@@ -13,6 +13,6 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     semver: bee.hub.package:semver

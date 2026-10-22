@@ -17,14 +17,14 @@ entries:
       codex:
         sandbox: [read, write-admitted, write-anywhere, network]
         approval_policy: [request-approval, no-approvals]
-        dangerously_bypass_approvals_and_sandbox: [bypass]
+        dangerously_bypass_approvals_and_sandbox: [bypass, write-anywhere, network]
       agy:
         dangerously_skip_permissions: [bypass]
       grok:
         permission_mode: [bypass]
       muse:
         approval_mode: [no-approvals]
-        yolo: [bypass]
+        yolo: [bypass, write-anywhere, network]
       opencode:
         auto: [bypass]
   data:
@@ -50,18 +50,18 @@ entries:
     base: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
     artifacts:
     - name: claude
-      executable_ref: bee.driver.claude.env:executable
+      executable_ref: bee.drivers.claude.env:executable
     - name: codex
-      executable_ref: bee.driver.codex.env:executable
+      executable_ref: bee.drivers.codex.env:executable
       candidates:
       - ../node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
       - ../node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
     - name: agy
-      executable_ref: bee.driver.agy.env:executable
+      executable_ref: bee.drivers.agy.env:executable
     - name: grok
-      executable_ref: bee.driver.grok.env:executable
+      executable_ref: bee.drivers.grok.env:executable
     - name: muse
-      executable_ref: bee.driver.muse.env:executable
+      executable_ref: bee.drivers.muse.env:executable
       sibling_prefix: muse-bin-
     - name: opencode
-      executable_ref: bee.driver.opencode.env:executable
+      executable_ref: bee.drivers.opencode.env:executable

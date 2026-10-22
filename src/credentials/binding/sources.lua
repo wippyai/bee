@@ -294,9 +294,11 @@ function M.format(sources: SourceSet, provider: string): (formats.Format?, strin
     if not decoded then return nil, decode_error or "credential format is invalid" end
     return decoded, nil
 end
+-- A host-defined environment credential lands in the first variable its
+-- format lists.
 function M.destination(format: formats.Format, kind: string): string?
-    if kind == "environment" and format.environment_destination then
-        return format.environment_destination
+    if kind == "environment" and #format.environments > 0 then
+        return format.environments[1]
     end
     if kind == "file" and format.file then
         return basename(format.file.path)

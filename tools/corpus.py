@@ -20,17 +20,21 @@ ORDER = ["env", "descriptor", "profiles", "credentials", "security", "binding"]
 FENCE = {".yaml": "yaml", ".lua": "lua"}
 
 
+def driver_sources(driver: str) -> list[Path]:
+    return [ROOT / "drivers" / "src" / driver, ROOT / "src" / "driver" / driver]
+
+
 def page(driver: str, title: str) -> str:
-    base = ROOT / "src" / "driver" / driver
     files = sorted(
-        (p for p in base.rglob("*") if p.is_file()),
+        (p for base in driver_sources(driver) for p in base.rglob("*") if p.is_file()),
         key=lambda p: (ORDER.index(p.parent.name) if p.parent.name in ORDER else len(ORDER),
                        p.name != "_index.yaml", str(p)),
     )
     parts = [
         f"# Reference driver: {title}",
         "",
-        f"The complete `bee.driver.{driver}` driver, every file verbatim from Bee's source. "
+        f"The complete {title} driver, every file verbatim: the `bee.drivers.{driver}` entries from the "
+        f"bee/drivers module and Bee's own `bee.driver.{driver}` descriptor, profile and security entries. "
         "A CLI driver is these entries: the env entries naming its executable, the CLI "
         "descriptor (version and help probes, login evidence, options), the profiles it admits, "
         "the credential projections, the security policies, and the binding whose prepare, "
@@ -39,7 +43,7 @@ def page(driver: str, title: str) -> str:
         "",
         "To write a driver for another CLI, author an overlay named `driver.<name>` (for example "
         "`driver.gemini`) and copy these files into it with every namespace renamed from "
-        f"`bee.driver.{driver}` to `bee.driver.<name>`. An overlay driver defines its entries in "
+        f"`bee.drivers.{driver}` to `bee.driver.<name>`. An overlay driver defines its entries in "
         "`bee.driver.<name>.binding`, `.descriptor`, `.profiles`, `.security`, `.types` and `.credentials`. "
         "Its credential format is one `bee.credential_format` entry whose `meta.provider` is `<name>`; the "
         "activation requirement is an `ns.requirement` with `value_kind: contract.binding` whose `default` is the "
@@ -62,7 +66,7 @@ def page(driver: str, title: str) -> str:
         "",
     ]
     for path in files:
-        relative = path.relative_to(base)
+        relative = path.relative_to(ROOT)
         parts.append(f"## {relative}")
         parts.append("")
         parts.append("```" + FENCE.get(path.suffix, ""))
@@ -195,7 +199,8 @@ def main() -> int:
     index = {d["id"]: i for i, d in enumerate(documents)}
     stale = []
     generated = [(f"reference_drivers/{driver}", f"Reference driver: {title}",
-                  "reference_drivers", f"src/driver/{driver}", page(driver, title))
+                  "reference_drivers", " and ".join(str(p.relative_to(ROOT)) for p in driver_sources(driver)),
+                  page(driver, title))
                  for driver, title in DRIVERS.items()]
     generated.extend([
         ("docs/app_capabilities", "App capability catalog", "capabilities",

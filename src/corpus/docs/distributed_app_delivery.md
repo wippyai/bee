@@ -121,13 +121,13 @@ host-selected security scope lives in or is reached from (`bee.app`,
 `bee.docs`, `bee.env`, `bee.gateway`, `bee.git`, `bee.gov`,
 `bee.harness`, `bee.hive`, `bee.hub`, `bee.node`, `bee.persist`,
 `bee.placement`, `bee.resources`, `bee.security`, `bee.shell`, `bee.sync`,
-`bee.threads`, `bee.ui`, `bee.values` and the shared driver namespaces
-`bee.driver.binding`, `.codec`, `.descriptor`, `.locate`, `.permission`,
+`bee.threads`, `bee.ui`, `bee.drivers.values` and the shared driver namespaces
+`bee.drivers.binding`, `.codec`, `.descriptor`, `.locate`, `.permission`,
 `.profiles` and `.transport`), each covering its child namespaces. Each
-driver's own `bee.driver.<name>` namespaces stay under governance so workspace
+driver's own `bee.driver.<name>` and `bee.drivers.<name>` namespaces stay under governance so workspace
 drivers can be delivered. The kernel also names exact host entries: itself,
 `bee.gov:activation_profiles`, `bee.gov:publication_profiles`,
-`bee.driver:types`, `bee.driver:driver`, `bee.driver:locate_facet` and the
+`bee.drivers:types`, `bee.drivers:driver`, `bee.drivers:locate_facet` and the
 host bindings `bee:definition`, `bee:workers`, `bee:terminal`, `bee:os`,
 `bee:env_path`, `bee:env`, `bee:role`, `bee:db_path` and `bee:db`. Its
 `super_edit` list is the host's explicit carve-out: Bee selects

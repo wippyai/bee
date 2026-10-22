@@ -9,7 +9,7 @@ entries:
   - json
   - time
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     trust_lifetime: bee.placement.native.service:trust_lifetime
     node_database: bee.persist:database
     resources: bee.placement.native.env:resources
@@ -17,7 +17,7 @@ entries:
     placement_decode: bee.placement:decode
     transitions: bee.placement:transitions
     request_protocol: bee.placement:request
-    configuration: bee.driver.binding:configuration
+    configuration: bee.drivers.binding:configuration
 - name: supervision
   kind: library.lua
   source: file://supervision.lua
@@ -27,6 +27,6 @@ entries:
   source: file://measurements.lua
   modules: [sql, json, time]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     node_database: bee.persist:database
     types: bee.placement:types

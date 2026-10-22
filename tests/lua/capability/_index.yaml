@@ -9,7 +9,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     fixtures: bee.tests.support:fixtures
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_catalog: bee.capability:model
 - name: containment_test
@@ -19,6 +19,6 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     fixtures: bee.tests.support:fixtures
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_containment: bee.capability:model

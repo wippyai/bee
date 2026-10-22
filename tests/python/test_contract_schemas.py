@@ -5,10 +5,11 @@ import yaml
 import jsonschema
 
 ROOT = Path(__file__).resolve().parents[2]
+SOURCES = (ROOT / 'src', ROOT / 'drivers' / 'src')
 
 
 def registry_entries():
-    for path in (ROOT / 'src').rglob('_index.yaml'):
+    for path in (path for source in SOURCES for path in source.rglob('_index.yaml')):
         doc = yaml.safe_load(path.read_text())
         for entry in doc['entries']:
             yield doc['namespace'] + ':' + entry['name'], entry
@@ -34,7 +35,7 @@ class ContractSchemaTests(unittest.TestCase):
                 continue
             for binding in entry['contracts']:
                 contract = binding['contract']
-                if contract.startswith(('bee.driver:', 'bee.placement:')):
+                if contract.startswith(('bee.drivers:', 'bee.placement:')):
                     self.assertFalse(binding.get('default'), identity)
                 elif contract.startswith('bee.'):
                     self.assertTrue(binding.get('default'), identity)
@@ -57,5 +58,5 @@ class ContractSchemaTests(unittest.TestCase):
         jsonschema.validate({'turn': 'turn', 'claim': 'fence-token'}, request)
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate({'turn': 'turn', 'claim': {}}, request)
-        jsonschema.validate(None, schema('bee.driver:locate_facet', 'locate', 'output_schemas'))
-        jsonschema.validate('probe failed', schema('bee.driver:locate_facet', 'locate', 'output_schemas', 1))
+        jsonschema.validate(None, schema('bee.drivers:locate_facet', 'locate', 'output_schemas'))
+        jsonschema.validate('probe failed', schema('bee.drivers:locate_facet', 'locate', 'output_schemas', 1))

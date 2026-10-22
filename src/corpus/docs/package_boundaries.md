@@ -20,11 +20,11 @@ and bindings that the host admits under its own policies.
 
 | Component | Owns |
 |---|---|
-| `bee.values`, `bee.app`, `bee.ui` | Shared value contracts, the application SDK (`bee.app:client`) and the terminal UI kit (frame, appearance, text, forms, visualization, diagram, picker) |
+| `bee.drivers.values`, `bee.app`, `bee.ui` | Shared value contracts, the application SDK (`bee.app:client`) and the terminal UI kit (frame, appearance, text, forms, visualization, diagram, picker) |
 | `bee.node`, `bee.shell`, `bee.process` | The node owner and broker, workspaces and desktops; the desktop shell display; the shared process worker library |
 | `bee.apps` | Stock applications: Terminal, Settings, Library, Processes, Keyboard help |
 | `bee.threads`, `bee.threads.sessions` | Thread records, delivery, the carrier contract and managed sessions |
-| `bee.harness`, `bee.driver`, `bee.credentials`, `bee.resources`, `bee.placement` | Managed agent launch, drivers, credentials, resource grants, native and Docker placement and external permission answers |
+| `bee.harness`, `bee.drivers`, `bee.credentials`, `bee.resources`, `bee.placement` | Managed agent launch, drivers, credentials, resource grants, native and Docker placement and external permission answers |
 | `bee.gateway`, `bee.docs` | The scoped MCP gateway and hooks; the offline documentation tool |
 | `bee.approvals`, `bee.capability`, `bee.security` | Durable approvals and the inbox app, the capability catalog, host security policies |
 | `bee.gov`, `bee.hub` | Governed overlays, delivery and activation; Hub inspection, planning and local apply |

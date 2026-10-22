@@ -13,6 +13,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
 COMPOSITION = TESTS / ".wippy/composition"
+# bee/drivers, composed beside Bee from the repository's drivers module.
+DRIVERS_COMPOSITION = TESTS / ".wippy/composition-drivers"
 
 
 def replace_once(path, anchor, replacement):
@@ -319,7 +321,7 @@ def runner_fixture_type(src):
   modules: [registry, store]
   imports:
     fixture_hub: bee.tests.hub:catalog_fixture
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     limits: bee.hub.package:limits
 ''')
     replace_once(catalog, 'local hub = require("hub")', 'local hub = require("fixture_hub")')
@@ -851,16 +853,16 @@ def observe_boot_recovery(src):
     path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
-def inject_registry_faults(src):
+def inject_registry_faults(src, drivers):
     """Fail one named registry read for a caller that opts in through ctx."""
-    resolver = src / "driver/binding/resolver.lua"
+    resolver = drivers / "binding/resolver.lua"
     replace_once(resolver, 'local registry = require("registry")',
                  'local registry = require("registry")\nlocal ctx = require("ctx")')
     replace_once(resolver, "    local entry, err = pinned:get(ref)", '''    local entry, err = pinned:get(ref)
     if ctx.get("bee.test.registry.fault") == ref then
         entry, err = nil, errors.new({message = "registry unavailable", kind = errors.UNAVAILABLE})
     end''')
-    add_modules(src / "driver/binding/_index.yaml", "resolver", ["ctx"])
+    add_modules(drivers / "binding/_index.yaml", "resolver", ["ctx"])
     pumping = src / "threads/service/pump_config.lua"
     replace_once(pumping, 'local registry = require("registry")',
                  'local registry = require("registry")\nlocal ctx = require("ctx")')
@@ -918,8 +920,11 @@ def compose_root_pack():
 def compose():
     compose_root_pack()
     shutil.rmtree(COMPOSITION, ignore_errors=True)
+    shutil.rmtree(DRIVERS_COMPOSITION, ignore_errors=True)
     src = COMPOSITION / "src"
     shutil.copytree(ROOT / "src", src)
+    drivers = DRIVERS_COMPOSITION
+    shutil.copytree(ROOT / "drivers/src", drivers)
     # The composition is a module root like the repository: its manifest
     # beside src, so module-relative directories resolve as they do in a pack.
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
@@ -934,7 +939,7 @@ def compose():
     observe_node_ready(src)
     observe_hive_upgrade(src)
     order_hive_readiness(src)
-    inject_registry_faults(src)
+    inject_registry_faults(src, drivers)
     stop_hive_delivery(src)
     observe_transaction_demand(src)
     hold_access_readiness(src)

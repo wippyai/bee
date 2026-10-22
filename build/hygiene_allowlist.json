@@ -15,7 +15,7 @@
     "reason": "Describes an immutable bound, scope, role or host-selected value."
   },
   {
-    "path": "src/driver/binding/resolver.lua",
+    "path": "drivers/src/binding/resolver.lua",
     "text": "-- Legacy and fixture drivers without declarative profiles cannot opt into",
     "reason": "Drivers without declarative profiles remain supported, with restrictions on opting into host policy."
   },

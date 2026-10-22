@@ -17,3 +17,14 @@ entries:
     value: bee:workers
   - name: env_storage
     value: bee:env
+- name: drivers
+  kind: ns.dependency
+  component: bee/drivers
+  version: '*'
+  parameters:
+  - name: activation
+    value: bee.harness.launch:harness_activation
+  - name: host_environment
+    value: bee.harness.host:environment
+  - name: entered_values
+    value: bee.credentials.env:entered_values

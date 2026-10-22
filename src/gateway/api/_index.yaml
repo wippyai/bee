@@ -8,7 +8,7 @@ entries:
   - json
   imports:
     hooks: bee.gateway.hooks:hooks
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     subject_call: bee.gateway.security:subject_call
     hook_response: bee.threads.hooks:response
 - name: admission
@@ -49,7 +49,7 @@ entries:
     hooks: bee.gateway.hooks:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gateway.security:address_call_policy
@@ -74,7 +74,7 @@ entries:
     hooks: bee.gateway.hooks:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gateway.security:address_call_policy
@@ -102,7 +102,7 @@ entries:
     hooks: bee.gateway.hooks:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gateway.security:address_call_policy
@@ -135,7 +135,7 @@ entries:
     catalog: bee.gateway.catalog:catalog
     context: bee.gateway.catalog:context
     session_tools: bee.gateway.catalog:session_tools
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     subject_call: bee.gateway.security:subject_call
   security:
     policies:
@@ -174,8 +174,8 @@ entries:
   source: file://mcp.lua
   imports:
     session_tools: bee.gateway.catalog:session_tools
-    bounds: bee.values:bounds
-    message: bee.threads.records:message
+    bounds: bee.drivers.values:bounds
+    message: bee.drivers.records:message
     arguments: bee.app:arguments
     workspace_protocol: bee.gov.types:workspace_protocol
     delivery_protocol: bee.gov.types:delivery_protocol
@@ -183,7 +183,7 @@ entries:
     docs_protocol: bee.docs:protocol
     json_schema: bee.gateway.catalog:json_schema
     gateway_protocol: bee.gateway:protocol
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     app_requests: bee.node:app_tool_request
     requirements: bee.hub.package:requirements
     part_arguments: bee.gateway.api:arguments
@@ -224,19 +224,19 @@ entries:
   source: file://external_configuration.lua
   modules: [json]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     address: bee.gateway.api:address_value
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
   imports:
-    bounds: bee.values:bounds
-    message: bee.threads.records:message
+    bounds: bee.drivers.values:bounds
+    message: bee.drivers.records:message
     arguments: bee.app:arguments
     workspace_protocol: bee.gov.types:workspace_protocol
     delivery_protocol: bee.gov.types:delivery_protocol
     node_tests: bee.node:tests
     docs_protocol: bee.docs:protocol
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
     app_requests: bee.node:app_tool_request
     requirements: bee.hub.package:requirements

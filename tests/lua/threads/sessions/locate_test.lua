@@ -19,7 +19,7 @@ local function candidate(): locate.CandidateInput
         title = "Claude review",
         revision = nil,
         target = "bee.harness.permission.external",
-        binding_ref = "bee.driver.claude.binding:binding",
+        binding_ref = "bee.drivers.claude.binding:binding",
         binding_digest = "sha256:binding-a",
         profile_digest = "sha256:profile-a",
         runtime_identity = "linux-amd64",

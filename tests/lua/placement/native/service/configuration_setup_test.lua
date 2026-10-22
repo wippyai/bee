@@ -32,7 +32,7 @@ local function cases()
                 provider_ref = "bee.test:provider", composition = composition}}}
             local value: types.LaunchRequest = {workspace_id = id, idempotency_key = id, attempt_id = id,
                 owner_id = "bee.test.configuration", owner_incarnation = 1, action_id = id,
-                binding_ref = "bee.driver.opencode.binding:binding", policy_ref = selected.admitted and "bee.tests.placement.native.service:admitted_provider_policy" or "bee.test:policy", profile_id = "window",
+                binding_ref = "bee.drivers.opencode.binding:binding", policy_ref = selected.admitted and "bee.tests.placement.native.service:admitted_provider_policy" or "bee.test:policy", profile_id = "window",
                 binding_digest = string.rep("b", 64), profile_digest = string.rep("c", 64),
                 launch = {executable = "sh", argv = {}, environment = {}, readiness = "none", home_ref = "session",
                     provider_home = {provider = "opencode", private = false, files = {}}},

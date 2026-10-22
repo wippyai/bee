@@ -131,7 +131,7 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
         root_ref = "bee.tests.placement.native:project_fixture", subpath = "", access = "write", purpose = "session"} end
     local request: types.LaunchRequest = {
         idempotency_key = fresh("key"), owner_id = OWNER, owner_incarnation = 1, action_id = fresh("action"), attempt_id = attempt_id,
-        binding_ref = "bee.driver.grok.binding:binding", policy_ref = "bee.tests.placement.native:test_launch_policy_without_provider",
+        binding_ref = "bee.drivers.grok.binding:binding", policy_ref = "bee.tests.placement.native:test_launch_policy_without_provider",
         profile_id = profile, binding_digest = DIGEST, profile_digest = DIGEST, launch = selected, session_ref = session_ref,
         resources = resources, environment = {}, environment_refs = {}, projections = {assert(bounds.id(projection.projection_id))},
         required_cleanup = "direct_process", required_exit_observation = "eof_gated",

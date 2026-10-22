@@ -27,13 +27,13 @@ entries:
     appearance: bee.ui:appearance
     client: bee.node:client
     confirmation: bee.approvals.app:confirmation
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     waiting: bee.node.service:waiting
-    app_identity: bee.threads.records:app_identity
+    app_identity: bee.drivers.records:app_identity
     worker: bee.process:worker
     part_catalog: bee.node.service:catalog
     part_handover: bee.node.service:handover
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     part_instance: bee.node.service:instance
 - name: owner_service
   meta:
@@ -81,7 +81,7 @@ entries:
     test_runs: bee.node.persist:test_runs
     demand: bee.process:demand
     receiver: bee.hive:receiver
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: tests_service
   meta:
     title: "Node \xB7 tests"
@@ -125,7 +125,7 @@ entries:
   kind: library.lua
   source: file://waiting.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     principal: bee.node:principal
     part_handover: bee.node.service:handover
 - name: handover
@@ -146,7 +146,7 @@ entries:
   imports:
     principal: bee.node:principal
     application: bee.node:application
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: instance
   kind: library.lua
   source: file://instance.lua
@@ -155,6 +155,6 @@ entries:
     application: bee.node:application
     workspaces: bee.node.persist:workspaces
     appearance: bee.ui:appearance
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     handover: bee.node.service:handover

@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://live_updates.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     semver: bee.hub.package:semver
 - name: edit_mode
   kind: library.lua
@@ -13,7 +13,7 @@ entries:
   modules: [time]
   imports:
     forms: bee.ui.forms:forms
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     profiles: bee.gov.types:activation_profile_decoder
     kernel: bee.gov.types:protected_kernel
     super_edit: bee.gov.security:super_edit

@@ -2,6 +2,7 @@
 local checkpoint_types = require("checkpoint_types")
 local test = require("test")
 local configuration = require("configuration")
+local placement_profiles = require("placement_profiles")
 local bounds = require("bounds")
 local continuation = require("continuation")
 local checkpoint = require("checkpoint")
@@ -523,11 +524,11 @@ local function define_tests()
             local snapshot = assert(catalog.snapshot())
             local binding_digest, profile_digest = "", ""
             for _, binding in ipairs(snapshot.bindings) do
-                if binding.binding_id == "bee.driver.claude.binding:binding" then
+                if binding.binding_id == "bee.drivers.claude.binding:binding" then
                     binding_digest, profile_digest = binding.binding_digest.entry, binding.profile_digest.entry
                 end
             end
-            local point = checkpoint.new({binding_ref = "bee.driver.claude.binding:binding", binding_digest = binding_digest,
+            local point = checkpoint.new({binding_ref = "bee.drivers.claude.binding:binding", binding_digest = binding_digest,
                 profile_id = "batch", profile_digest = profile_digest}, 1)
             point.retained_session_ref = "session"
             point.terminal = {outcome = "succeeded", resume_ref = "provider-session"}
@@ -542,7 +543,7 @@ local function define_tests()
                     elseif target == PLACEMENT_METHODS.measure_executable then
                         return {ok = false, error = {code = "UNAVAILABLE", message = "fixture"}}, nil
                     end
-                    test.eq(target, "bee.driver.claude.binding:dispatch")
+                    test.eq(target, "bee.drivers.claude.binding:dispatch")
                     return {ok = true, launch = claude.specification(assert(claude.decode(input)))}, nil
                 end,
                 send = function(_: string, _: string, _: unknown) error("unexpected send") end,
@@ -551,23 +552,23 @@ local function define_tests()
                 key = function(): string return "key" end,
             }
             local planned = assert(machine.plan(io, {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice", owner_incarnation = 1,
-                binding_ref = "bee.driver.claude.binding:binding", profile_id = "batch", brief = "Next turn", policy_ref = "bee.tests.harness:fixture_policy",
+                binding_ref = "bee.drivers.claude.binding:binding", profile_id = "batch", brief = "Next turn", policy_ref = "bee.tests.harness:fixture_policy",
                 placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest,
                 resources = {{name = "session", grant_ref = "session", root_ref = "fixture:session", subpath = "", access = "write", purpose = "session"}},
                 environment = {}, previous_attempt_id = "previous", session_ref = "session"}))
             test.eq(planned.placement_request.configuration_context, "resume")
             test.eq(planned.placement_request.configuration_digest, assert(configuration.digest(planned.binding.binding_id,
-                {option_values = planned.policy.prepare_options, context = "resume", fixture = true}, assert(planned.binding.methods.configure))))
+                {placement = assert(placement_profiles.placement(nil)), option_values = planned.policy.prepare_options, context = "resume", fixture = true}, assert(planned.binding.methods.configure))))
         end)
         test.it("pins the executable content in the plan digest and carries the file identity only to placement", function()
             local snapshot = assert(catalog.snapshot())
             local binding_digest, profile_digest = "", ""
             for _, binding in ipairs(snapshot.bindings) do
-                if binding.binding_id == "bee.driver.claude.binding:binding" then
+                if binding.binding_id == "bee.drivers.claude.binding:binding" then
                     binding_digest, profile_digest = binding.binding_digest.entry, binding.profile_digest.entry
                 end
             end
-            local point = checkpoint.new({binding_ref = "bee.driver.claude.binding:binding", binding_digest = binding_digest,
+            local point = checkpoint.new({binding_ref = "bee.drivers.claude.binding:binding", binding_digest = binding_digest,
                 profile_id = "batch", profile_digest = profile_digest}, 1)
             point.retained_session_ref = "session"
             point.terminal = {outcome = "succeeded", resume_ref = "provider-session"}
@@ -585,7 +586,7 @@ local function define_tests()
                             return {ok = true, value = {revision = "bee.executable-measurement@1", path = path, kind = "elf", size = 4096,
                                 digest = string.rep("b", 64), identity = identity}}, nil
                         end
-                        test.eq(target, "bee.driver.claude.binding:dispatch")
+                        test.eq(target, "bee.drivers.claude.binding:dispatch")
                         return {ok = true, launch = claude.specification(assert(claude.decode(input)))}, nil
                     end,
                     send = function(_: string, _: string, _: unknown) error("unexpected send") end,
@@ -594,7 +595,7 @@ local function define_tests()
                     key = function(): string return "key" end,
                 }
                 return assert(machine.plan(io, {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice", owner_incarnation = 1,
-                    binding_ref = "bee.driver.claude.binding:binding", profile_id = "batch", brief = "Next turn", policy_ref = "bee.tests.harness:selection_policy",
+                    binding_ref = "bee.drivers.claude.binding:binding", profile_id = "batch", brief = "Next turn", policy_ref = "bee.tests.harness:selection_policy",
                     placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest,
                     resources = {{name = "session", grant_ref = "session", root_ref = "fixture:session", subpath = "", access = "write", purpose = "session"}},
                     environment = {}, previous_attempt_id = "previous", session_ref = "session"}))
@@ -631,12 +632,12 @@ local function define_tests()
             if not snapshot then error(tostring(snapshot_error)) end
             local binding_digest, profile_digest = "", ""
             for _, binding in ipairs(snapshot.bindings) do
-                if binding.binding_id == "bee.driver.claude.binding:binding" then
+                if binding.binding_id == "bee.drivers.claude.binding:binding" then
                     binding_digest, profile_digest = binding.binding_digest.entry, binding.profile_digest.entry
                 end
             end
             test.is_true(binding_digest ~= "")
-            local point = checkpoint.new({binding_ref = "bee.driver.claude.binding:binding", binding_digest = binding_digest,
+            local point = checkpoint.new({binding_ref = "bee.drivers.claude.binding:binding", binding_digest = binding_digest,
                 profile_id = "window", profile_digest = profile_digest, gateway_binding = "old-binding"}, 1)
             point.retained_session_ref = "session"
             local calls = 0
@@ -652,7 +653,7 @@ local function define_tests()
                     elseif target == "bee.threads.binding:read_after" then
                         return {ok = true, value = {records = {observation(1, "provider-session", "old-binding", false, "previous")}, scanned_through = 1, has_more = false}}, nil
                     end
-                    test.eq(target, "bee.driver.claude.binding:dispatch")
+                    test.eq(target, "bee.drivers.claude.binding:dispatch")
                     local request = assert(bounds.object(input))
                     test.eq(request.profile_id, "window")
                     test.eq(request.resume_ref, "provider-session")
@@ -666,7 +667,7 @@ local function define_tests()
                 key = function(): string return "key" end,
             }
             local request: machine.Request = {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice", owner_incarnation = 1,
-                binding_ref = "bee.driver.claude.binding:binding", profile_id = "window", brief = "", policy_ref = "bee.tests.harness:fixture_policy",
+                binding_ref = "bee.drivers.claude.binding:binding", profile_id = "window", brief = "", policy_ref = "bee.tests.harness:fixture_policy",
                 placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, placement_methods = PLACEMENT_METHODS,
                 resources = {}, environment = {}, previous_attempt_id = "previous", session_ref = "session"}
             local planned, err = machine.plan(io, request)

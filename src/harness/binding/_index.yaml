@@ -12,7 +12,7 @@ entries:
   - registry
   - sql
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     protocol: bee.harness.profiles:protocol
     validation: bee.harness.profiles.binding:validation
     store: bee.harness.profiles.persist:store
@@ -38,7 +38,7 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     locator: bee.harness.launch:locate
   security:
     policies:
@@ -54,7 +54,7 @@ entries:
   - registry
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     definition: bee.harness.launch:definitions
 - name: setup
   kind: function.lua
@@ -64,7 +64,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     admission: bee.harness.launch:admission
     profiles: bee.harness.profiles:protocol
     setup: bee.harness.launch:setup
@@ -80,7 +80,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.harness.security:presentation_facade_policy
@@ -92,7 +92,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.harness.security:presentation_facade_policy
@@ -104,7 +104,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.harness.security:presentation_facade_policy
@@ -116,7 +116,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.harness.security:presentation_facade_policy
@@ -144,7 +144,7 @@ entries:
   - registry
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     definition: bee.harness.launch:definitions
 
 - name: set_credential
@@ -155,7 +155,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     admission: bee.harness.launch:admission
     profiles: bee.harness.profiles:protocol
     setup: bee.harness.launch:setup
@@ -168,7 +168,7 @@ entries:
   method: handle
   modules: [funcs, security, process, channel, time, uuid]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     prestart: bee.harness.carrier:prestart
   security:
     policies: [bee.harness.security:permission_hook_policy]
@@ -179,7 +179,7 @@ entries:
   method: get
   modules: [contract, ctx]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     protocol: bee.harness.profiles:protocol
 
 - name: profile_list
@@ -188,7 +188,7 @@ entries:
   method: list
   modules: [contract, ctx]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     protocol: bee.harness.profiles:protocol
 
 - name: profile_put
@@ -197,7 +197,7 @@ entries:
   method: put
   modules: [contract, ctx]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     protocol: bee.harness.profiles:protocol
 - name: extension_hook
   kind: function.lua
@@ -205,7 +205,7 @@ entries:
   method: handle
   modules: [funcs, security, process, channel, time, uuid]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     prestart: bee.harness.carrier:prestart
     supervisor: bee.threads.hooks:supervisor
   security: {policies: [bee.harness.security:permission_hook_policy]}

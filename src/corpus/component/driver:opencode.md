@@ -1,9 +1,9 @@
-# bee.driver.opencode
+# bee.drivers.opencode
 
-OpenCode profiles and a strict CLI descriptor (`bee.driver.opencode.descriptor:cli`)
+OpenCode profiles and a strict CLI descriptor (`bee.drivers.opencode.descriptor:cli`)
 selecting the universal launch layer and the shared OpenCode JSON event codec,
 plus the configuration renderer. The binding is
-`bee.driver.opencode.binding:binding`.
+`bee.drivers.opencode.binding:binding`.
 
 The host supplies a read-only executable environment and a launch policy for
 each route. Installing the component does not activate OpenCode, expose a user

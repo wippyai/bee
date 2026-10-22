@@ -163,9 +163,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 30403,
+      "bytes": 30440,
       "id": "docs/distributed_app_delivery",
-      "sha256": "81a2793e0ae2a29882fb7da7fa17d048a1106f1ff93573e4598301e21bfa7270",
+      "sha256": "6167fd13bd424856ec10fe2eea7d2f67ff936df4801d6917b0e94dd230f2f611",
       "source": "generated: src/corpus/docs/distributed_app_delivery.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -203,9 +203,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 4520,
+      "bytes": 4529,
       "id": "docs/package_boundaries",
-      "sha256": "d8aee1d79b229b1462fc0fac80888d9298fa361ad19caf619de0c90d0077d957",
+      "sha256": "f9431140ccd4514cf1589ebeda8b48dea7c6b9de3b0ee7671078b839b8632c60",
       "source": "generated: src/corpus/docs/package_boundaries.md",
       "title": "Package boundaries",
       "topic": "platform"
@@ -235,9 +235,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 6927,
+      "bytes": 6936,
       "id": "docs/system_map",
-      "sha256": "ed20193314ef9110c68df73f291d953a45e23c0f62368f80c1cd0d41cd533384",
+      "sha256": "4c3914e9d6b3fa4263d76886dab8995e87ee390d8c3d7ac3d944e0c6c88e74e5",
       "source": "generated: src/corpus/docs/system_map.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
@@ -245,7 +245,7 @@
     {
       "bytes": 19001,
       "id": "docs/threads",
-      "sha256": "91c0c4cd2d07f501a45037e6a253d63cb69ceb52e3f340afffb38c5d8b7a07d5",
+      "sha256": "fdf5cfc8ff89c55e2e3420ddd7f9614cd42bb51a9c6e3e3f24960ae7b2bd561f",
       "source": "generated: src/corpus/docs/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -275,9 +275,9 @@
       "topic": "storage"
     },
     {
-      "bytes": 4076,
+      "bytes": 4084,
       "id": "component/app",
-      "sha256": "bf7a343de6f0bdfed177f563ccdf4882e5d62d604003ed70988da6004c89bf8f",
+      "sha256": "3078fb5dea0fa79f2db8f66cf41ccb9cbc628607fc7c2770b64ffca2b9f4e8d5",
       "source": "generated: src/app",
       "title": "bee.app",
       "topic": "component"
@@ -339,9 +339,9 @@
       "topic": "component"
     },
     {
-      "bytes": 4045,
+      "bytes": 4053,
       "id": "component/capability",
-      "sha256": "9988776f1e718e053df2bee0e46bb6546e595f153ad2a1f926e0962a47c49627",
+      "sha256": "40fd058916b4b241232c9233e633395b043bacc9d5f21e49369b182249f5a119",
       "source": "generated: src/capability",
       "title": "Capability model",
       "topic": "component"
@@ -363,59 +363,59 @@
       "topic": "component"
     },
     {
-      "bytes": 12382,
+      "bytes": 12394,
       "id": "component/driver",
-      "sha256": "f1c1671aeb976c9a06884285b55f069545cb29feba0927d9bbcc79a02a67191e",
+      "sha256": "60f1efc31ada02c6b2ebb40aa4ac6179237af351a59382314b7709791474aeec",
       "source": "generated: src/driver",
       "title": "Bee driver",
       "topic": "component"
     },
     {
-      "bytes": 975,
+      "bytes": 978,
       "id": "component/driver:agy",
-      "sha256": "9ad5dde3ca31d594e56083a61a21771dafcf56ab9aa4fee3895a94472692e39f",
+      "sha256": "7089b27c7498d87e11887c3f3c9cb6bd020fe4bf8f4e33eb282e44f53acd7765",
       "source": "generated: src/driver/agy",
-      "title": "bee.driver.agy",
+      "title": "bee.drivers.agy",
       "topic": "component"
     },
     {
-      "bytes": 1787,
+      "bytes": 1790,
       "id": "component/driver:claude",
-      "sha256": "bcc75fc0f02af01183b339005d6f4563567c7eeb89f504e8673250ba9529e6b0",
+      "sha256": "04a9d4f89e26a752dc41dfed63146c448229f6c57c957319868bb8661b1660d7",
       "source": "generated: src/driver/claude",
-      "title": "bee.driver.claude",
+      "title": "bee.drivers.claude",
       "topic": "component"
     },
     {
-      "bytes": 2336,
+      "bytes": 2339,
       "id": "component/driver:codex",
-      "sha256": "fc6556f685b28fd746282e7df3f175ab2bf1e59ec98ce9286a74c683c01ca97e",
+      "sha256": "492f9070d2ad9c108768ecb3cc5190439078cdf668f427809c1121230e202d39",
       "source": "generated: src/driver/codex",
-      "title": "bee.driver.codex",
+      "title": "bee.drivers.codex",
       "topic": "component"
     },
     {
-      "bytes": 1136,
+      "bytes": 1139,
       "id": "component/driver:grok",
-      "sha256": "9dc1073115981bc52788513bd56c97f253e84174ee5ad0d19c088562de180658",
+      "sha256": "43bc79308f97d115d84f5bfe39973e0edd1b0b62b1243f313cb945391639c8df",
       "source": "generated: src/driver/grok",
-      "title": "bee.driver.grok",
+      "title": "bee.drivers.grok",
       "topic": "component"
     },
     {
-      "bytes": 786,
+      "bytes": 789,
       "id": "component/driver:muse",
-      "sha256": "bafd749833ce2e28f20969244a5f0ecfa23b0286d60f44509fed3003fa741e74",
+      "sha256": "0cae5e2d1e70982dcb98e95778dbc44f2ac12ae86743d8412bbb13d5f6564acb",
       "source": "generated: src/driver/muse",
-      "title": "bee.driver.muse",
+      "title": "bee.drivers.muse",
       "topic": "component"
     },
     {
-      "bytes": 4443,
+      "bytes": 4446,
       "id": "component/driver:opencode",
-      "sha256": "259724a3b50562709366ddc6889ef09d2fb3e6b6f6ce566de28aac307743f142",
+      "sha256": "aa5c173090bc06b6c7276d833106d615a57eee13ee2cf4b5571e38041e931b67",
       "source": "generated: src/driver/opencode",
-      "title": "bee.driver.opencode",
+      "title": "bee.drivers.opencode",
       "topic": "component"
     },
     {
@@ -459,17 +459,17 @@
       "topic": "component"
     },
     {
-      "bytes": 31315,
+      "bytes": 31349,
       "id": "component/gov",
-      "sha256": "760b7febe39b9d67be26fe09ba2129e176bb4cb8209fbee9de14181e15dabf42",
+      "sha256": "d6799d35456ddaab947b76da599aef376c4b5bda866c993cc76c6c5d43165e9a",
       "source": "generated: src/gov",
       "title": "Overlay authoring and preflight",
       "topic": "component"
     },
     {
-      "bytes": 10260,
+      "bytes": 10261,
       "id": "component/harness",
-      "sha256": "b7c3f315bb5ff6a9990ad543cd597dcfd3e33553d87f8a377dddd46b2ad2fe64",
+      "sha256": "24f96b11350632e50016143f5fd70662025c25130e9f57ab7d8c53243855e22c",
       "source": "generated: src/harness",
       "title": "bee.harness",
       "topic": "component"
@@ -565,23 +565,23 @@
     {
       "bytes": 6364,
       "id": "component/threads",
-      "sha256": "5560d54bbbe201bad0ddaf6e13c92347aa6f938045960f32915973f1bda63877",
+      "sha256": "ab23b96f5c7035f842af29ebb708cf01cd3a245aae7f472ba087e6d0b03633c7",
       "source": "generated: src/threads",
       "title": "bee.threads",
       "topic": "component"
     },
     {
-      "bytes": 3682,
+      "bytes": 3690,
       "id": "component/ui",
-      "sha256": "d99d01d8343ebca1c2a3feaaf7fac69bae6e8f707f3f51897198968ae10f8f05",
+      "sha256": "42ab321f89715a699549be25dc192802d2f96d8c4d96adae24ea3db4529ac663",
       "source": "generated: src/ui",
       "title": "bee.ui",
       "topic": "component"
     },
     {
-      "bytes": 646,
+      "bytes": 686,
       "id": "component/values",
-      "sha256": "210cd83131475188b38e0dbbdfa8595ac0c2190fe0a35b72a00b9f3e8d54724a",
+      "sha256": "02f64dbf314e6f818c7cf75f403ff4a1e0b11f9eb43be05ef550c74d8939e7be",
       "source": "generated: src/values",
       "title": "Bee values",
       "topic": "component"
@@ -675,10 +675,10 @@
       "topic": "terminal"
     },
     {
-      "bytes": 53338,
+      "bytes": 54077,
       "id": "reference_drivers/opencode",
-      "sha256": "89378c34dc760dff02e0e8ff3335cbc6429103bb70985df3b9dfa06f5b6c68c2",
-      "source": "generated: tools/corpus.py from src/driver/opencode",
+      "sha256": "a1fd1b4ebef0bcab109bd546e1d6808c50dba0df734d2ec4b892ab08eb81a8ae",
+      "source": "generated: tools/corpus.py from drivers/src/opencode and src/driver/opencode",
       "title": "Reference driver: OpenCode CLI",
       "topic": "reference_drivers"
     },
@@ -758,7 +758,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, errors, funcs, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL, exec and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform). Component: one page per Bee component, written from the entries under src/<component>. Reference applications: one page per application source plus an index. Terminal toolkit: one page covering the tty module, bee.ui frame, viz, diagram and forms, and the bee.app client, checked against src/ui, src/app and tests/lua/ui. Reference drivers: generated by tools/corpus.py from src/driver. The corpus is digest-checked with make lint.",
   "totals": {
-    "bytes": 858816,
+    "bytes": 859739,
     "documents": 94
   }
 }

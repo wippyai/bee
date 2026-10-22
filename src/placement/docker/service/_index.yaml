@@ -10,7 +10,7 @@ entries:
   - json
   - sql
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     types: bee.placement:types
     materialization: bee.placement.native.service:materialization
     process_backend: bee.placement.native.binding:process_backend
@@ -20,7 +20,7 @@ entries:
     service: bee.placement.docker.binding:methods
     spec: bee.placement.docker.binding:spec
     paths: bee.placement.profiles:paths
-    quote: bee.driver.binding:quote
+    quote: bee.drivers.binding:quote
 - name: runner
   kind: process.lua
   source: file://runner.lua
@@ -60,8 +60,8 @@ entries:
   - uuid
   - security
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     profiles: bee.placement.profiles:profiles
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
@@ -76,7 +76,7 @@ entries:
   - process
   - channel
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     image: bee.placement.docker.service:image
     environment: bee.placement.docker.service:environment
     service: bee.placement.docker.binding:methods
@@ -136,8 +136,8 @@ entries:
   - events
   imports:
     grants: bee.approvals.grants:store
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     environment: bee.placement.docker.env:environment
     resources: bee.placement.native.env:resources
     image: bee.placement.docker.service:image
@@ -148,7 +148,7 @@ entries:
   modules:
   - uuid
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     daemon: bee.placement.docker.service:daemon
 - name: daemon
   kind: library.lua
@@ -158,9 +158,9 @@ entries:
   - channel
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     resources: bee.placement.native.env:resources
-    quote: bee.driver.binding:quote
+    quote: bee.drivers.binding:quote
 - name: backlog
   kind: function.lua
   source: file://backlog.lua
@@ -172,11 +172,11 @@ entries:
   source: file://profile_home.lua
   modules: [hash, fs, sql, registry]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     grants: bee.approvals.grants:store
     profile_grants: bee.harness.profiles:grants
     resources: bee.placement.native.env:resources
     daemon: bee.placement.docker.service:daemon
-    quote: bee.driver.binding:quote
+    quote: bee.drivers.binding:quote
     types: bee.placement:types

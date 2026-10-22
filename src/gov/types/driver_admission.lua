@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local bounds = require("bounds")
+local format = require("format")
 local M = {}
 M.TARGET = "bee.harness.launch:harness_activation"
 type Entry = {[string]: unknown}
@@ -63,11 +64,9 @@ function M.logins(approved: {Entry}): ({Login}?, string?)
         if meta and meta.type == "bee.credential_format" then
             local id = bounds.id(entry.id)
             local provider = bounds.id(meta.provider)
-            local data = bounds.object(entry.data)
-            local file = data and bounds.object(data.file)
-            local path = file and bounds.line(file.path, 256) or nil
-            if entry.kind ~= "registry.entry" or not id or not provider
-                or not data or data.schema_revision ~= "bee.credential-format@1" or not path or seen[provider] then
+            local decoded = format.decode(entry.data)
+            local path = decoded and decoded.file and decoded.file.path or nil
+            if entry.kind ~= "registry.entry" or not id or not provider or not path or seen[provider] then
                 return nil, "approved driver login format is invalid"
             end
             seen[provider] = true

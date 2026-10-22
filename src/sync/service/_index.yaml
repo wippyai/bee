@@ -11,14 +11,14 @@ entries:
     hive: bee.hive:protocol
     version: bee.sync.values:version
     transaction: bee.persist:transaction
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: distributor
   kind: library.lua
   source: file://distributor.lua
   modules:
   - registry
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     version: bee.sync.values:version
     sync: bee.sync.persist:store
     replicas: bee.sync.persist:replicas

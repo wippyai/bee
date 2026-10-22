@@ -65,7 +65,7 @@ local function define_tests()
                 local target, saved_id = fresh("private-provider-workspace"), fresh("private-provider-profile")
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = target, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
-                        name = "Custom provider", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding",
+                        name = "Custom provider", definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding",
                         provider = {}, bee = {mcp = {}}, placement = {kind = "native", home = "private"}}}))
                 local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = target,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
@@ -96,7 +96,7 @@ local function define_tests()
             local entered_reply = assert(bounds.object(raw))
             assert(entered_reply.ok == true, assert(json.encode(entered_reply)))
             local profile = {schema_revision = "bee.agent-profile@3", name = "Local models", definition_ref = ref,
-                driver_binding_ref = "bee.driver.opencode.binding:binding", provider = {model = "local_model/gemma", options = {
+                driver_binding_ref = "bee.drivers.opencode.binding:binding", provider = {model = "local_model/gemma", options = {
                     enabled_providers = {"local_model"}, providers = {local_model = {npm = "@ai-sdk/openai-compatible", name = "Local",
                         options = {baseURL = "https://models.example.test/v1", apiKey = "{env:OPENAI_API_KEY}"}, models = {gemma = {name = "gemma"}}}}}},
                 bee = {mcp = {}}, placement = {kind = "native", home = "private"}}
@@ -140,7 +140,7 @@ local function define_tests()
                     local saved_id = fresh("trait-profile")
                     value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                         expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
-                            name = "Remember", definition_ref = route.definition, driver_binding_ref = "bee.driver.claude.binding:binding",
+                            name = "Remember", definition_ref = route.definition, driver_binding_ref = "bee.drivers.claude.binding:binding",
                             provider = {}, bee = {mcp = {}}, active_traits = {"bee.tests.memory:trait"},
                             role = "Remember facts", context = {project = "Bee", readonly = false}}}))
                     local measured = value(call("bee.tests.harness.launch:resolve", {definition_ref = route.definition, workspace_id = workspace,
@@ -165,7 +165,7 @@ local function define_tests()
             local workspace_id, saved_id = workspace, fresh("profile")
             local function save(revision: integer, title: string, options: {[string]: unknown})
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
-                    expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
+                    expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
             end
             save(0, "First profile", {})
             local original = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
@@ -190,7 +190,7 @@ local function define_tests()
             test.neq(original.plan_digest, updated.plan_digest)
             local unsafe = profile_call({operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                 expected_revision = 2, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Forbidden option",
-                    definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude.binding:binding", provider = {permission_mode = "dontAsk"}, bee = {mcp = {}}}})
+                    definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {permission_mode = "dontAsk"}, bee = {mcp = {}}}})
             test.eq(unsafe.ok, false)
             test.eq(unsafe.code, "DENIED")
             local unchanged = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,

@@ -26,7 +26,7 @@ entries:
     operation_ref: bee.placement.docker.binding:prepare_environment
     domain: docker_environment
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     grants: bee.approvals.grants:store
 - name: grant_policy
   kind: registry.entry
@@ -39,7 +39,7 @@ entries:
   source: file://legacy.lua
   modules: [hash]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     grants: bee.approvals.grants:store
-    clock: bee.values:clock
-    canonical: bee.values:canonical
+    clock: bee.drivers.values:clock
+    canonical: bee.drivers.values:canonical

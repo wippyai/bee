@@ -135,7 +135,7 @@ local function define_tests()
                 "notes_add", "bee.node.binding:app_tool_call", WORKSPACE, {text = "note"}, {definition = APP, trait = trait_id}))
 
             local profile = assert(profile_protocol.profile({schema_revision = "bee.agent-profile@3", name = "App worker",
-                definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.driver.claude.binding:binding",
+                definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.drivers.claude.binding:binding",
                 provider = {}, bee = {mcp = {}}, active_traits = {trait_id}, requestable = {}}))
             test.is_nil(profile_validation.check(assert(registry.snapshot()), profile))
             test.is_nil(profile_validation.ceiling(assert(registry.snapshot()), profile, {trait_id}, false))

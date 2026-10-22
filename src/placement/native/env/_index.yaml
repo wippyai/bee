@@ -49,18 +49,19 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     resource_authority: bee.resources.env:resources
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
   modules:
   - json
-  - toml
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     types: bee.placement:types
+    driver_configuration: bee.drivers.binding:configuration
+    composition: bee.drivers.binding:composition
 - name: environment
   kind: env.storage.os
   lifecycle:

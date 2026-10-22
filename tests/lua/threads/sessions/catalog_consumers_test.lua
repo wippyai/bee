@@ -51,7 +51,7 @@ function M.probe(path: string): Object
         expected_revision = 0, idempotency_key = "catalog-consumer-profile",
         profile = {schema_revision = "bee.agent-profile@3", name = "Catalog consumer profile",
             definition_ref = "bee.driver.claude.profiles:default_window",
-            driver_binding_ref = "bee.driver.claude.binding:binding", provider = {},
+            driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {},
             bee = {permission_answers = "provider"}, placement = {kind = "native", home = "machine"}},
     }))))
     assert(saved.ok == true, "save catalog consumer profile")

@@ -65,7 +65,7 @@ entries:
   imports:
     support: bee.tests.approvals:test_principals
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     protocol: bee.hive:protocol
 - name: service_fixture
@@ -76,7 +76,7 @@ entries:
   imports:
     support: bee.tests.approvals:test_principals
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
     schema: bee.tests.support:schema
@@ -97,7 +97,7 @@ entries:
   modules: [registry, process, events]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
     fixture: bee.tests.approvals:service_fixture
@@ -116,7 +116,7 @@ entries:
   modules: [funcs, security, registry, time, json, events]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
     resources: bee.approvals.env:resources
@@ -137,7 +137,7 @@ entries:
   modules: [time, channel, json, events]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
     fixture: bee.tests.approvals:service_fixture
@@ -155,7 +155,7 @@ entries:
     policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   modules: [time, events]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
     worker: bee.approvals.service:worker
@@ -175,7 +175,7 @@ entries:
     policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   modules: [time, channel, events]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
     dispatch: bee.approvals.persist:dispatch
@@ -196,7 +196,7 @@ entries:
   modules: [registry, process]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
     worker: bee.approvals.service:worker
@@ -222,7 +222,7 @@ entries:
     principals: bee.tests.support.principals:bound
     test: wippy.test:test
     capability_model: bee.capability:model
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     lease_grants: bee.gov.binding:lease_grants
     lease_store: bee.gov.persist:lease_store
     service: bee.approvals.binding:service
@@ -234,7 +234,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, uuid, time]
   security: {policies: [bee.tests.approvals:apply_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]}
-  imports: {test: wippy.test:test, service: bee.approvals.binding:service, lease: bee.approvals.types:runtime_lease, bounds: bee.values:bounds}
+  imports: {test: wippy.test:test, service: bee.approvals.binding:service, lease: bee.approvals.types:runtime_lease, bounds: bee.drivers.values:bounds}
 
 - name: window_test
   kind: function.lua
@@ -246,7 +246,7 @@ entries:
     policies: [bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_owner_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     service: bee.approvals.binding:service
     schema: bee.tests.support:schema
 - name: migration_test_db
@@ -262,10 +262,10 @@ entries:
   modules: [sql, funcs, hash, json]
   imports:
     test: wippy.test:test
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
     service: bee.approvals.binding:service
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
   security:
     policies: [bee.tests.approvals:migration_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_consume_policy]
 - name: migration_test_policy
@@ -295,7 +295,7 @@ entries:
   meta: {type: test, suite: a_demand_effects, timeout: 60s}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     dispatch: bee.approvals.persist:dispatch
     resources: bee.approvals.env:resources
     demand: bee.process:demand
@@ -316,15 +316,15 @@ entries:
     grants: bee.approvals.grants:store
     service: bee.approvals.binding:service
     schema: bee.tests.support:schema
-    bounds: bee.values:bounds
-    clock: bee.values:clock
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock
 - name: confirmation_fixture
   kind: library.lua
   source: file://confirmation_fixture.lua
   meta: {type: test_support}
   imports:
     caller: bee.app:caller
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: confirmation_test
   kind: function.lua
   source: file://confirmation_test.lua
@@ -335,7 +335,7 @@ entries:
     confirmation: bee.approvals.app:confirmation
     dialog: bee.approvals.app:dialog
     fixture: bee.tests.approvals:confirmation_fixture
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: effect_lifecycle_test
   kind: function.lua
   source: file://effect_lifecycle_test.lua
@@ -369,7 +369,7 @@ entries:
     test: wippy.test:test
     grants: bee.approvals.grants:store
     schema: bee.tests.support:schema
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
 
 - name: notice_probe
   kind: function.lua

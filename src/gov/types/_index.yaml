@@ -5,12 +5,12 @@ entries:
   kind: library.lua
   source: file://protected_kernel.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: lists
   kind: library.lua
   source: file://lists.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: governed_application_admission
   kind: library.lua
   source: file://application_admission.lua
@@ -18,8 +18,8 @@ entries:
   - hash
   - json
   imports:
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
 - name: migration_work
   kind: library.lua
   source: file://migration_work.lua
@@ -28,9 +28,9 @@ entries:
   - json
   imports:
     artifact: bee.gov.types:artifact
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     preflight: bee.gov.binding:preflight
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: activation_profile_decoder
   kind: library.lua
   source: file://activation_profiles.lua
@@ -39,8 +39,8 @@ entries:
   - time
   imports:
     drivers: bee.gov.types:drivers
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     application_admission: bee.gov.types:governed_application_admission
     workspace_applications: bee.gov.types:workspace_applications
     capability_grants: bee.gov.types:capability_grants
@@ -51,15 +51,15 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     capability_model: bee.capability:model
     super_edit: bee.gov.security:super_edit
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: candidate
   kind: library.lua
   source: file://candidate.lua
@@ -67,7 +67,7 @@ entries:
   - hash
   - json
   imports:
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     workspace: bee.gov.types:workspace
 - name: artifact
   kind: library.lua
@@ -76,8 +76,8 @@ entries:
   - hash
   - json
   imports:
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     hive_operations: bee.hive:operations
     descriptor: bee.app:descriptor
 - name: delivery
@@ -87,8 +87,8 @@ entries:
   - json
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     artifact: bee.gov.types:artifact
     version: bee.sync.values:version
 - name: publication_profile_decoder
@@ -99,13 +99,13 @@ entries:
   imports:
     activation_profiles: bee.gov.types:activation_profile_decoder
     drivers: bee.gov.types:drivers
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     workspace_applications: bee.gov.types:workspace_applications
 - name: resolver
   kind: library.lua
   source: file://resolver.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     preflight: bee.gov.binding:preflight
 - name: workspace
   kind: library.lua
@@ -113,40 +113,40 @@ entries:
   modules:
   - hash
   imports:
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
 - name: workspace_protocol
   kind: library.lua
   source: file://workspace_protocol.lua
   modules:
   - base64
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: workspace_applications
   kind: library.lua
   source: file://workspace_applications.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: capability_files
   kind: library.lua
   source: file://capability_files.lua
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
 - name: capability_gateway
   kind: library.lua
   source: file://capability_gateway.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: capability_grants
   kind: library.lua
   source: file://capability_grants.lua
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     capability_model: bee.capability:model
     capability_files: bee.gov.types:capability_files
     capability_gateway: bee.gov.types:capability_gateway
@@ -156,21 +156,22 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    clock: bee.values:clock
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock
+    canonical: bee.drivers.values:canonical
     capability_model: bee.capability:model
     capability_grants: bee.gov.types:capability_grants
 - name: plan_protocol
   kind: library.lua
   source: file://plan_protocol.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: driver_admission
   kind: library.lua
   source: file://driver_admission.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
+    format: bee.drivers.credentials:format
 - name: drivers
   kind: library.lua
   source: file://drivers.lua
@@ -185,8 +186,8 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     grants: bee.approvals.grants:store
     lease_model: bee.gov.types:lease_model
     capability_model: bee.capability:model

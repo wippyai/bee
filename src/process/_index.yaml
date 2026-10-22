@@ -22,8 +22,8 @@ entries:
     demand: bee.process:demand
     worker: bee.process:worker
     state: bee.process:demand_state
-    bounds: bee.values:bounds
-    clock: bee.values:clock
+    bounds: bee.drivers.values:bounds
+    clock: bee.drivers.values:clock
 - name: client_policy
   kind: security.policy
   policy:
@@ -36,7 +36,7 @@ entries:
   modules: [channel, time, logger]
   imports:
     worker: bee.process:worker
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
 - name: backlog_policy
   kind: security.policy
   policy:

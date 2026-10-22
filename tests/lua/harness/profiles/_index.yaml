@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    preferences: bee.driver.descriptor:effective
+    preferences: bee.drivers.descriptor:effective
 - name: test_call
   kind: security.policy
   meta: {type: test_support}
@@ -40,7 +40,7 @@ entries:
     editor: bee.harness.app:profile_editor
     protocol: bee.harness.profiles:protocol
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     host: bee.tests.memory:host
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: selection_test
@@ -51,7 +51,7 @@ entries:
   imports:
     protocol: bee.threads.sessions.types:protocol
     fixtures: bee.tests.threads.sessions:fixtures
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     agents: bee.harness.app:agents
     sessions: bee.threads.sessions.client:sessions
@@ -84,7 +84,7 @@ entries:
     test: wippy.test:test
     form: bee.harness.app:profile_form
     editor: bee.harness.app:profile_editor
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: agents_test
   kind: function.lua
   source: file://agents_test.lua
@@ -92,7 +92,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     protocol: bee.threads.sessions.types:protocol
     fixtures: bee.tests.threads.sessions:fixtures
     test: wippy.test:test
@@ -112,7 +112,7 @@ entries:
     agents: bee.harness.app:agents
     sessions: bee.threads.sessions.client:sessions
     protocol: bee.threads.sessions.types:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: observations_probe
   kind: function.lua
   source: file://observations_test.lua
@@ -125,7 +125,7 @@ entries:
     agents: bee.harness.app:agents
     sessions: bee.threads.sessions.client:sessions
     protocol: bee.threads.sessions.types:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: agent_view_test
   kind: function.lua
   source: file://agent_view_test.lua
@@ -150,7 +150,7 @@ entries:
   imports:
     confirmation: bee.approvals.app:confirmation
     confirmation_fixture: bee.tests.approvals:confirmation_fixture
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     test: wippy.test:test
     view: bee.harness.app:profile_view
     editor: bee.harness.app:profile_editor
@@ -172,7 +172,7 @@ entries:
   modules: [uuid]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     migration: bee.harness.profiles.persist:migration
     protocol: bee.harness.profiles:protocol
     sync: bee.sync.persist:store
@@ -187,7 +187,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [registry, json]
   security: {policies: [bee.tests.harness.profiles:repair_policy]}
-  imports: {test: wippy.test:test, form: bee.harness.app:profile_form, editor: bee.harness.app:profile_editor, bounds: bee.values:bounds}
+  imports: {test: wippy.test:test, form: bee.harness.app:profile_form, editor: bee.harness.app:profile_editor, bounds: bee.drivers.values:bounds}
 - name: reopen_test
   kind: function.lua
   source: file://reopen_test.lua
@@ -218,7 +218,7 @@ entries:
     schema: bee.tests.support:schema
     grants: bee.approvals.grants:store
     authority: bee.harness.profiles.persist:grants
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 
 - name: test_delegated_write
   kind: security.policy
@@ -235,7 +235,7 @@ entries:
   imports:
     test: wippy.test:test
     controls: bee.harness.app:option_controls
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: spawn_form_test
   kind: function.lua
   source: file://spawn_form_test.lua
@@ -255,7 +255,7 @@ entries:
     database: bee.persist:database
     grants: bee.approvals.grants:store
     authority: bee.harness.profiles.persist:grants
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies: [bee.security.approvals:approval_store_policy, bee.harness.security:consumed_decision_policy]
 - name: allowall_service_test
@@ -268,6 +268,6 @@ entries:
     editor: bee.harness.app:profile_editor
     protocol: bee.harness.profiles:protocol
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     host: bee.tests.memory:host
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}

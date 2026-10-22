@@ -64,6 +64,6 @@ entries:
   imports:
     migration: wippy.migration:migration
     grants: bee.approvals.grants:store
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     mcp: bee.gateway.api:mcp

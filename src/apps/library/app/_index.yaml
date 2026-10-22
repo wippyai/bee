@@ -7,7 +7,7 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     json_schema: bee.gateway.catalog:json_schema
     requirements: bee.hub.package:requirements
 - name: hub
@@ -16,8 +16,8 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     text: bee.ui:text
     form: bee.apps.library.app:form
 - name: contents

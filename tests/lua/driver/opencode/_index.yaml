@@ -11,9 +11,9 @@ entries:
   imports:
     test: wippy.test:test
     launch: bee.tests.support.driver:opencode_launch
-    prepare: bee.driver.opencode.binding:prepare
-    dispatch: bee.driver.opencode.binding:dispatch
-    quote: bee.driver.binding:quote
+    prepare: bee.drivers.opencode.binding:prepare
+    dispatch: bee.drivers.opencode.binding:dispatch
+    quote: bee.drivers.binding:quote
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua
@@ -24,12 +24,12 @@ entries:
   modules:
   - fs
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     protocol: bee.tests.support.driver:opencode_protocol
-    normalize: bee.driver.opencode.binding:normalize
-    stream_json: bee.driver.transport:stream_json
-    observation: bee.threads.records:observation
+    normalize: bee.drivers.opencode.binding:normalize
+    stream_json: bee.drivers.transport:stream_json
+    observation: bee.drivers.records:observation
 - name: configuration_test
   kind: function.lua
   source: file://configuration_test.lua
@@ -38,12 +38,12 @@ entries:
   modules: [json]
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     registry: registry
-    configuration: bee.driver.opencode.binding:configuration
-    driver_configuration: bee.driver.binding:configuration
-    configure: bee.driver.opencode.binding:configure
+    configuration: bee.drivers.opencode.binding:configuration
+    driver_configuration: bee.drivers.binding:configuration
+    configure: bee.drivers.opencode.binding:configure
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
     policy: bee.harness.carrier:policy
@@ -71,7 +71,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     opencode_hooks: bee.tests.support.driver:opencode_hooks
 - name: observer_test
   kind: function.lua
@@ -83,8 +83,8 @@ entries:
     policies: [bee.placement.native.security:placement_exec_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
-    mapper: bee.driver.opencode.observer:events
+    bounds: bee.drivers.values:bounds
+    mapper: bee.drivers.opencode.observer:events
 - name: supervisor_test
   kind: function.lua
   source: file://supervisor_test.lua
@@ -96,7 +96,7 @@ entries:
   imports:
     test: wippy.test:test
     observer: bee.placement.native.service:observer
-    observer_protocol: bee.driver:window_observer
+    observer_protocol: bee.drivers:window_observer
 - name: delivery_test
   kind: function.lua
   source: file://delivery_test.lua
@@ -104,13 +104,13 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    delivery: bee.driver.opencode.observer:delivery
+    delivery: bee.drivers.opencode.observer:delivery
 - name: policy_inspection
   kind: security.policy
   policy:
     effect: allow
     actions: [security.policy.get]
-    resources: ['bee.driver.opencode.observer:http_policy']
+    resources: ['bee.drivers.opencode.observer:http_policy']
 - name: subscriber_test
   kind: function.lua
   source: file://subscriber_test.lua
@@ -119,8 +119,8 @@ entries:
   modules: [exec, env, process, channel, time, http_client, json]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
-    quote: bee.driver.binding:quote
+    bounds: bee.drivers.values:bounds
+    quote: bee.drivers.binding:quote
   security:
     policies:
     - bee.placement.native.security:placement_store_policy

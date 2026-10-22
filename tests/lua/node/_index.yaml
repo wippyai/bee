@@ -59,7 +59,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
     catalog: bee.node.binding:catalog_types
     app_scope: bee.tests.support.principals:application
@@ -115,7 +115,7 @@ entries:
   modules: [process, channel, system, time, tty, sql, json]
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     client: bee.node:client
 - name: probe_command
@@ -136,7 +136,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
     app_scope: bee.tests.support.principals:application
   security:
@@ -148,7 +148,7 @@ entries:
   meta: {type: test_support}
   modules: [contract]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: app_sessions_registry_policy
   kind: security.policy
   meta: {comment: The app sessions test installs the policy activation generates}
@@ -169,7 +169,7 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
     app_scope: bee.tests.support.principals:application
     capability_model: bee.capability:model
@@ -232,7 +232,7 @@ entries:
   imports:
     committed: bee.tests.support:committed
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     tests: bee.node:tests
     test_runs: bee.node.persist:test_runs
     application: bee.node:application
@@ -320,12 +320,12 @@ entries:
     launch_policy: bee.harness.carrier:policy
     profile_scope: bee.gateway.catalog:profile_scope
     app_traits: bee.node:app_traits
-    app_identity: bee.threads.records:app_identity
+    app_identity: bee.drivers.records:app_identity
     surface: bee.gateway.catalog:surface
     catalog: bee.gateway.catalog:catalog
     mcp: bee.gateway.api:mcp
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     capability_model: bee.capability:model
     capability_grants: bee.gov.types:capability_grants
   security:
@@ -338,7 +338,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies: [bee.tests.node:names_test_policy]
 - name: names_test_policy
@@ -387,7 +387,7 @@ entries:
     demand: bee.process:demand
     owners: bee.process:demand_owner
     routing: bee.hive.service:routing
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: idle_services_test
   kind: function.lua
   source: file://idle_services_test.lua
@@ -400,7 +400,7 @@ entries:
     suite: a_idle_node
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: boot_residency_test
   kind: function.lua
   source: file://boot_residency_test.lua
@@ -409,7 +409,7 @@ entries:
   meta: {type: boot_test, suite: a_idle_node, timeout: 30s}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: boot_backlog_probe
   kind: function.lua
   source: file://boot_backlog_probe.lua
@@ -449,7 +449,7 @@ entries:
     policies: [bee.tests.node:app_namespace_policy, bee.tests.support:schema_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
 - name: app_namespace_restart_test
   kind: function.lua
@@ -459,7 +459,7 @@ entries:
   meta: {type: boot_test, suite: a_idle_node, timeout: 30s}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
 
 - name: backlog_overflow_test
@@ -485,7 +485,7 @@ entries:
     test: wippy.test:test
     runs: bee.node.persist:test_runs
     demand: bee.process:demand
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: retirement_test
   kind: function.lua
   source: file://retirement_test.lua
@@ -494,7 +494,7 @@ entries:
   meta: {type: test, suite: bee, timeout: 20s}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
     workspaces: bee.node.persist:workspaces
 - name: state_guard_db

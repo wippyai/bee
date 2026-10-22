@@ -42,13 +42,14 @@ local function configuration_tests()
         test.it("prepares the planner's default options without a configuration conflict", function()
             local policy = assert(registry.get(native_fixture.NO_PROVIDER_POLICY))
             local policy_data = assert(bounds.object(policy.data))
-            local compiled = assert(preferences.apply(policy_data, {}, assert(descriptors.load("bee.driver.claude.descriptor:cli"))))
+            local native = native_fixture.native_placement()
+            local compiled = assert(preferences.apply(policy_data, {}, assert(descriptors.load("bee.drivers.claude.descriptor:cli")), native))
             local options = assert(preferences.decode_prepare_options(compiled.prepare_options))
             test.eq(options.permission_mode, "manual")
-            local digest = assert(configuration_protocol.digest("bee.driver.claude.binding:binding", {option_values = options, context = "window", fixture = true}, "bee.driver.claude.binding:configure"))
+            local digest = assert(configuration_protocol.digest("bee.drivers.claude.binding:binding", {placement = native, option_values = options, context = "window", fixture = true}, "bee.drivers.claude.binding:configure"))
             local request = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = native_fixture.NO_PROVIDER_POLICY
-            request.binding_ref = "bee.driver.claude.binding:binding"
+            request.binding_ref = "bee.drivers.claude.binding:binding"
             request.configuration_context = "window"
             request.configuration_digest = digest
             local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
@@ -60,7 +61,7 @@ local function configuration_tests()
             local rendered = assert(configuration.projection(assert(configuration.decode("bee.tests.placement.native:codex_test_provider", provider))))
             local request = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = native_fixture.POLICY
-            request.binding_ref = "bee.driver.codex.binding:binding"
+            request.binding_ref = "bee.drivers.codex.binding:binding"
             request.configuration_digest = string.rep("0", 64)
             local refused = native_fixture.call(native_fixture.OWNER, "prepare", request)
             test.eq(refused.error and refused.error.code, "CONFLICT")
@@ -70,7 +71,7 @@ local function configuration_tests()
             -- A digest from another host selection is a plan conflict, even
             -- where the replacement policy has no provider of its own.
             request.policy_ref = native_fixture.NO_PROVIDER_POLICY
-            request.binding_ref = "bee.driver.claude.binding:binding"
+            request.binding_ref = "bee.drivers.claude.binding:binding"
             local unselected = native_fixture.call(native_fixture.OWNER, "prepare", request)
             test.eq(unselected.error and unselected.error.code, "CONFLICT")
             test.is_true(tostring(unselected.error and unselected.error.message):find("inputs changed", 1, true) ~= nil)
@@ -79,7 +80,7 @@ local function configuration_tests()
             test.eq(foreign.error and foreign.error.code, "DENIED")
             test.is_true(tostring(foreign.error and foreign.error.message):find("not a host launch policy", 1, true) ~= nil)
             request.policy_ref = native_fixture.POLICY
-            request.binding_ref = "bee.driver.codex.binding:binding"
+            request.binding_ref = "bee.drivers.codex.binding:binding"
             local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
             test.eq(prepared.execution_state, "intended")
             local db, open_error = store.open()
@@ -120,7 +121,7 @@ local function configuration_tests()
         test.it("rejects malformed persisted delivery before creating a home or starting a child", function()
             local request = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = native_fixture.POLICY
-            request.binding_ref = "bee.driver.codex.binding:binding"
+            request.binding_ref = "bee.drivers.codex.binding:binding"
             request.configuration_digest = native_fixture.provider_configuration_digest()
             local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
             local db, open_error = store.open()
@@ -188,7 +189,7 @@ local function configuration_tests()
         test.it("refuses a missing configuration when the host policy selects a provider before recording intent", function()
             local request = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
             request.policy_ref = native_fixture.POLICY
-            request.binding_ref = "bee.driver.codex.binding:binding"
+            request.binding_ref = "bee.drivers.codex.binding:binding"
             local refused = native_fixture.call(native_fixture.OWNER, "prepare", request)
 
             local db, open_error = store.open()

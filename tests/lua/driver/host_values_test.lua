@@ -7,8 +7,8 @@ local env = require("env")
 local function define_tests()
     test.describe("driver host values", function()
         test.it("leaves provider variables of the starting shell out of the driver overrides", function()
-            for _, id in ipairs({"bee.driver.claude.env:config_home", "bee.driver.claude.env:api_key",
-                "bee.driver.codex.env:config_home"}) do
+            for _, id in ipairs({"bee.drivers.claude.env:config_home", "bee.drivers.claude.env:api_key",
+                "bee.drivers.codex.env:config_home"}) do
                 local value = env.get(id)
                 test.eq(value or "", "", id .. " reads the starting shell")
             end

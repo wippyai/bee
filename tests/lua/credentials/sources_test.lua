@@ -39,7 +39,7 @@ local function define_tests()
             with_admission("bee.tests.credentials:approved_login_fixture", function()
                 local admitted = assert(sources.host_sources())
                 test.eq(admitted.formats.gem, "bee.driver.gem.credentials:credential_format")
-                test.eq(admitted.formats.claude, "bee.driver.claude.credentials:credential_format")
+                test.eq(admitted.formats.claude, "bee.drivers.claude.credentials:credential_format")
                 local found: {[string]: unknown}? = nil
                 for _, source in ipairs(admitted.sources) do
                     if source.provider == "gem" then found = source end

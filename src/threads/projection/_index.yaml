@@ -6,10 +6,10 @@ entries:
   source: file://engine.lua
   modules: [sql, json, hash]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    record: bee.threads.records:record
-    record_types: bee.threads:record_types
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    record: bee.drivers.records:record
+    record_types: bee.drivers.records:record_types
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
@@ -19,16 +19,16 @@ entries:
   source: file://recap.lua
   modules: [sql]
   imports:
-    record_types: bee.threads:record_types
+    record_types: bee.drivers.records:record_types
     transaction: bee.threads.persist:transaction
     engine: bee.threads.projection:engine
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: status
   kind: library.lua
   source: file://status.lua
   modules: [sql]
   imports:
-    record_types: bee.threads:record_types
+    record_types: bee.drivers.records:record_types
     transaction: bee.threads.persist:transaction
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     engine: bee.threads.projection:engine

@@ -52,11 +52,11 @@ function M.open(workspace: string, label: string): Session
     local action_id = label .. "-action"
     gateway_call(subject, workspace, "bee.threads.binding:admit_action", {thread_id = thread.thread_id,
         idempotency_key = label .. "-admit", action_id = action_id, admitted = {request_id = label .. "-request",
-            principal_id = subject, binding_ref = "bee.driver.claude.binding:binding", binding_digest = "stock", grant_refs = {},
+            principal_id = subject, binding_ref = "bee.drivers.claude.binding:binding", binding_digest = "stock", grant_refs = {},
             budget_ref = "stock", input = {text = "work in the workspace"}}})
     gateway_call(subject, workspace, "bee.threads.binding:prepare_attempt", {thread_id = thread.thread_id,
         idempotency_key = label .. "-prepare", action_id = action_id, attempt_id = attempt_id,
-        prepared = {binding_ref = "bee.driver.claude.binding:binding", binding_digest = "stock", profile_id = "window",
+        prepared = {binding_ref = "bee.drivers.claude.binding:binding", binding_digest = "stock", profile_id = "window",
             profile_digest = "stock", placement_binding = "bee.placement.native.binding:binding",
             placement_attempt_id = label .. "-placement", plan_digest = "stock"}})
     local admitted = gateway_call(subject, workspace, "bee.gateway.binding:admit", {subject = subject, action_id = action_id,

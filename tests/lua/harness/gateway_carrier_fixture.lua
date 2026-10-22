@@ -24,7 +24,7 @@ local harness = require("harness")
 local ACTOR = "bee.test.gateway_carrier"
 local POLICY = "bee.tests.harness:gateway_fixture_policy"
 local ROOT = "bee.tests.harness:project_fixture"
-local BINDING = "bee.driver.claude.binding:binding"
+local BINDING = "bee.drivers.claude.binding:binding"
 local CARRIER = "bee.tests.harness:carrier_faulted"
 -- The scripted author's own workspace. The shipped host profiles admit the
 -- overlay named by the guide's workspace-application rule; nothing here

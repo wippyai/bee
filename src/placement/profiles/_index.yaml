@@ -7,7 +7,7 @@ entries:
   modules:
   - exec
   imports:
-    quote: bee.driver.binding:quote
+    quote: bee.drivers.binding:quote
 - name: profiles
   kind: library.lua
   source: file://profiles.lua
@@ -16,8 +16,9 @@ entries:
   - registry
   - funcs
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    driver_placement: bee.drivers.descriptor:placement
 - name: native
   kind: registry.entry
   meta:
@@ -32,14 +33,14 @@ entries:
       codex:
         sandbox: [read, write-admitted, write-anywhere, network]
         approval_policy: [request-approval, no-approvals]
-        dangerously_bypass_approvals_and_sandbox: [bypass]
+        dangerously_bypass_approvals_and_sandbox: [bypass, write-anywhere, network]
       agy:
         dangerously_skip_permissions: [bypass]
       grok:
         permission_mode: [bypass]
       muse:
         approval_mode: [no-approvals]
-        yolo: [bypass]
+        yolo: [bypass, write-anywhere, network]
       opencode:
         auto: [bypass]
   data:
@@ -52,7 +53,7 @@ entries:
   modules: [registry]
   imports:
     profiles: bee.placement.profiles:profiles
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
   security:
     policies: [bee.placement.profiles:context_policy]
 - name: context_policy

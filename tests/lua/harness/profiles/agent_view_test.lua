@@ -24,7 +24,7 @@ local function define_tests()
             local conv = conversation("idle", {})
             conv.session.snapshot.effective_profile = {
                 schema_revision = "bee.agent-profile@3", name = "All allowed",
-                definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.driver.claude.binding:binding",
+                definition_ref = "bee.driver.claude.profiles:default_window", driver_binding_ref = "bee.drivers.claude.binding:binding",
                 provider = {permission_mode = "bypassPermissions"}, bee = {},
             }
             conv.details = true

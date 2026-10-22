@@ -8,8 +8,8 @@ entries:
   - hash
   - registry
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     placement_request: bee.placement:request
     placement_types: bee.placement:types
 - name: admission
@@ -23,8 +23,8 @@ entries:
   - security
   - time
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     catalog: bee.harness.catalog:catalog
     policy: bee.harness.carrier:policy
     definition: bee.harness.launch:definitions
@@ -36,8 +36,8 @@ entries:
     interrupted: bee.harness.carrier:interrupted
     profiles: bee.harness.profiles:protocol
     profile_validation: bee.harness.profiles.binding:validation
-    effective_schema: bee.driver.descriptor:effective
-    descriptors: bee.driver.descriptor:descriptor
+    effective_schema: bee.drivers.descriptor:effective
+    descriptors: bee.drivers.descriptor:descriptor
     placement_profiles: bee.placement.profiles:profiles
     identity: bee.security.identity:identity
     part_request: bee.harness.launch:request
@@ -48,11 +48,11 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
-    driver_resolver: bee.driver.binding:resolver
-    agent_tool: bee.values:agent_tool
-    agent_trait: bee.values:agent_trait
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    driver_resolver: bee.drivers.binding:resolver
+    agent_tool: bee.drivers.values:agent_tool
+    agent_trait: bee.drivers.values:agent_trait
     hook_capabilities: bee.threads.hooks:capabilities
 - name: selection
   kind: library.lua
@@ -61,7 +61,7 @@ entries:
   - registry
   imports:
     definitions: bee.harness.launch:definitions
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: locate
   kind: library.lua
   source: file://locate.lua
@@ -73,18 +73,18 @@ entries:
   - json
   - funcs
   imports:
-    bounds: bee.values:bounds
-    descriptor: bee.driver.descriptor:descriptor
-    driver_resolver: bee.driver.binding:resolver
-    driver_types: bee.driver:types
-    locate: bee.driver.locate:locate
-    quote: bee.driver.binding:quote
+    bounds: bee.drivers.values:bounds
+    descriptor: bee.drivers.descriptor:descriptor
+    driver_resolver: bee.drivers.binding:resolver
+    driver_types: bee.drivers:types
+    locate: bee.drivers.locate:locate
+    quote: bee.drivers.binding:quote
     resources: bee.placement.native.env:resources
     placement_profiles: bee.placement.profiles:profiles
     placement_resolver: bee.placement.binding:resolver
-    probe_capture: bee.driver.locate:probe_capture
+    probe_capture: bee.drivers.locate:probe_capture
     probe_version: bee.harness.launch:probe_version
-    login_evidence: bee.driver.locate:login_evidence
+    login_evidence: bee.drivers.locate:login_evidence
     probe_cache: bee.harness.launch:probe_cache
 - name: probe_cache
   kind: library.lua
@@ -95,24 +95,24 @@ entries:
   - hash
   - time
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     resources: bee.placement.native.env:resources
     measurements: bee.placement.native.persist:measurements
 - name: probe_version
   kind: library.lua
   source: file://probe_version.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: readiness
   kind: library.lua
   source: file://readiness.lua
   modules:
   - funcs
   imports:
-    bounds: bee.values:bounds
-    driver_locate: bee.driver.locate:locate
-    driver_types: bee.driver:types
+    bounds: bee.drivers.values:bounds
+    driver_locate: bee.drivers.locate:locate
+    driver_types: bee.drivers:types
 - name: managed_run
   kind: library.lua
   source: file://managed_run.lua
@@ -122,7 +122,7 @@ entries:
   - process
   - registry
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     placement_resolver: bee.placement.binding:resolver
     placement_decode: bee.placement:decode
     prestart: bee.harness.carrier:prestart
@@ -169,12 +169,12 @@ entries:
   data:
     schema_revision: bee.harness-activation@1
     bindings:
-    - bee.driver.agy.binding:binding
-    - bee.driver.claude.binding:binding
-    - bee.driver.codex.binding:binding
-    - bee.driver.grok.binding:binding
-    - bee.driver.muse.binding:binding
-    - bee.driver.opencode.binding:binding
+    - bee.drivers.agy.binding:binding
+    - bee.drivers.claude.binding:binding
+    - bee.drivers.codex.binding:binding
+    - bee.drivers.grok.binding:binding
+    - bee.drivers.muse.binding:binding
+    - bee.drivers.opencode.binding:binding
     - bee.driver.wippy.binding:binding
 - name: harness_setup
   kind: registry.entry
@@ -190,25 +190,25 @@ entries:
         provider: agy
         source:
           kind: env_variable
-          ref: bee.driver.agy.env:api_key
+          ref: bee.drivers.agy.env:api_key
         optional: true
       grok_api_key:
         provider: grok
         source:
           kind: env_variable
-          ref: bee.driver.grok.env:api_key
+          ref: bee.drivers.grok.env:api_key
         optional: true
       muse_api_key:
         provider: muse
         source:
           kind: env_variable
-          ref: bee.driver.muse.env:api_key
+          ref: bee.drivers.muse.env:api_key
         optional: true
       claude_api_key:
         provider: claude
         source:
           kind: env_variable
-          ref: bee.driver.claude.env:api_key
+          ref: bee.drivers.claude.env:api_key
         optional: true
       codex_login:
         provider: codex
@@ -254,14 +254,15 @@ entries:
   - funcs
   - env
   imports:
-    bounds: bee.values:bounds
-    configuration: bee.driver.binding:configuration
-    resolver: bee.driver.binding:resolver
+    bounds: bee.drivers.values:bounds
+    configuration: bee.drivers.binding:configuration
+    resolver: bee.drivers.binding:resolver
     profiles: bee.harness.profiles:protocol
-    preferences: bee.driver.descriptor:effective
+    preferences: bee.drivers.descriptor:effective
     gateway_configuration: bee.gateway.env:configuration
-    descriptors: bee.driver.descriptor:descriptor
-    configuration_types: bee.driver:configuration_types
+    descriptors: bee.drivers.descriptor:descriptor
+    configuration_types: bee.drivers:configuration_types
+    placement_profiles: bee.placement.profiles:profiles
 - name: folder_consent
   kind: library.lua
   source: file://folder_consent.lua
@@ -275,8 +276,8 @@ entries:
   imports:
     admission: bee.harness.launch:admission
     definitions: bee.harness.launch:definitions
-    profile_values: bee.driver.descriptor:profile_values
-    bounds: bee.values:bounds
+    profile_values: bee.drivers.descriptor:profile_values
+    bounds: bee.drivers.values:bounds
     resources: bee.placement.native.env:resources
     trust: bee.driver.descriptor:trust
     database: bee.persist:database
@@ -302,16 +303,16 @@ entries:
   kind: library.lua
   source: file://request.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     definition: bee.harness.launch:definitions
     continuation: bee.harness.carrier:continuation
     profiles: bee.harness.profiles:protocol
-    record_bounds: bee.threads.records:bounds
+    record_bounds: bee.drivers.records:bounds
 - name: setup
   kind: library.lua
   source: file://setup.lua
   modules: [funcs, security]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     admission: bee.harness.launch:admission
     folder_consent: bee.harness.launch:folder_consent

@@ -9,4 +9,4 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds

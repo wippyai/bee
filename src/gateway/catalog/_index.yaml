@@ -7,16 +7,16 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.values:bounds
-    agent_tool: bee.values:agent_tool
-    agent_trait: bee.values:agent_trait
+    bounds: bee.drivers.values:bounds
+    agent_tool: bee.drivers.values:agent_tool
+    agent_trait: bee.drivers.values:agent_trait
 - name: context
   kind: library.lua
   source: file://context.lua
   modules:
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: sessions
   kind: library.lua
   source: file://sessions.lua
@@ -29,7 +29,7 @@ entries:
   - json
   - text
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: session_bundle
   kind: library.lua
   source: file://session_bundle.lua
@@ -39,25 +39,25 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     json_schema: bee.gateway.catalog:json_schema
     session_bundle: bee.gateway.catalog:session_bundle
 - name: profile_scope
   kind: library.lua
   source: file://profile_scope.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     surface: bee.gateway.catalog:surface
-    profile_access: bee.driver.profiles:profile_access
+    profile_access: bee.drivers.profiles:profile_access
 - name: surface
   kind: library.lua
   source: file://surface.lua
   imports:
     app_traits: bee.node:app_traits
-    profile_access: bee.driver.profiles:profile_access
-    bounds: bee.values:bounds
+    profile_access: bee.drivers.profiles:profile_access
+    bounds: bee.drivers.values:bounds
     catalog: bee.gateway.catalog:catalog
-    agent_trait: bee.values:agent_trait
+    agent_trait: bee.drivers.values:agent_trait
     capability_model: bee.capability:model
     context: bee.gateway.catalog:context
     mcp: bee.gateway.api:mcp
@@ -68,7 +68,7 @@ entries:
   - registry
   - hash
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     surface: bee.gateway.catalog:surface
     mcp: bee.gateway.api:mcp
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical

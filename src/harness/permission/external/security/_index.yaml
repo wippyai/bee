@@ -4,15 +4,15 @@ entries:
 - name: driver_placement_calls
   kind: security.policy
   meta:
-    comment: External turn worker calls the selected bee.driver operations and native placement operations
+    comment: External turn worker calls the selected bee.drivers operations and native placement operations
   policy:
     actions:
     - funcs.call
     resources:
     - bee.gov.binding:driver_bindings
-    - bee.driver.*.binding:prepare
-    - bee.driver.*.binding:dispatch
-    - bee.driver.*.binding:normalize
+    - bee.drivers.*.binding:prepare
+    - bee.drivers.*.binding:dispatch
+    - bee.drivers.*.binding:normalize
     - bee.threads.binding:turn_observation
     - bee.harness.binding:call
     - bee.approvals.binding:runtime_lease

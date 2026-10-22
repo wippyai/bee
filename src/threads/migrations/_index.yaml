@@ -123,7 +123,7 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-23T00:03:00Z'}
   imports:
     migration: wippy.migration:migration
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
   modules: [json]
 - name: tool_selection_paths
   kind: function.lua
@@ -132,5 +132,12 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-23T00:04:00Z'}
   imports:
     migration: wippy.migration:migration
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
   modules: [json]
+- name: driver_bindings
+  kind: function.lua
+  source: file://driver_bindings.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-24T00:05:00Z'}
+  imports:
+    migration: wippy.migration:migration

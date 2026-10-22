@@ -24,7 +24,7 @@ local exits = require("exits")
 local ACTOR = "bee.test.carrier"
 local POLICY = "bee.tests.harness:fixture_policy"
 local ROOT = "bee.tests.harness:project_fixture"
-local BINDING = "bee.driver.claude.binding:binding"
+local BINDING = "bee.drivers.claude.binding:binding"
 local counter = 0
 
 local registry_input = shared_fixtures.registry_input

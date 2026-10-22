@@ -334,13 +334,13 @@ Preflight also refuses edits to the host `bee.security.gov:protected_kernel` tru
 transitive code dependencies and requirement selectors aimed at it. That map
 names every shipped namespace a host-selected scope lives in or is reached from
 (`bee.app`, `bee.approvals`, `bee.apps`, `bee.capability`, `bee.credentials`,
-`bee.deps`, `bee.docs`, the shared `bee.driver` core, `bee.env`,
+`bee.deps`, `bee.docs`, the shared `bee.drivers` core, `bee.env`,
 `bee.gateway`, `bee.git`, `bee.gov`, `bee.harness`, `bee.hive`, `bee.hub`,
 `bee.node`, `bee.persist`, `bee.placement`, `bee.resources`, `bee.security`,
-`bee.shell`, `bee.sync`, `bee.threads`, `bee.ui`, `bee.values`), and its
+`bee.shell`, `bee.sync`, `bee.threads`, `bee.ui`, `bee.drivers.values`), and its
 `super_edit` list is the host's explicit carve-out of protected namespaces. Bee
-selects `bee.apps.settings` and `bee.shell` there. Each driver's own `bee.driver.<name>`
-namespaces stay under governance. A super-edit profile row carries `expires_at`; it is admitted only
+selects `bee.apps.settings` and `bee.shell` there. Each driver's own `bee.driver.<name>` and
+`bee.drivers.<name>` namespaces stay under governance. A super-edit profile row carries `expires_at`; it is admitted only
 while unexpired, must set `allow.auto_start: false`, must name a dedicated
 `super-edit`-prefixed approver policy declared with `confirm: explicit`, and may
 not carry `allow.grants` for `security.*`, `funcs.security`, `process.security`

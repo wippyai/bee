@@ -84,7 +84,7 @@ function M.define()
     test.it("publishes admitted setup when an optional login is absent", function()
         local session_key = assert(homes.session_key(native_fixture.OWNER, native_fixture.fresh("optional-login-setup")))
         local session_path = assert(homes.ensure_session(session_key))
-        local format = {schema_revision = "bee.credential-format@1", file = {
+        local format = {schema_revision = "bee.credential-format@2", environments = {}, file = {
             path = ".grok/auth.json", content_format = "json",
             initialize = {{path = ".grok/.bee-global-config.toml", content = "[ui]\ntheme = \"system\"\n", on_missing_login = true}}}}
         local source = {provider = "grok", format = format, definition_id = "bee.test.grok_login", definition_revision = 1, optional = true}
@@ -143,7 +143,7 @@ function M.define()
         if not key then error(tostring(key_error)) end
         local session, session_error = homes.ensure_session(key)
         if not session then error(tostring(session_error)) end
-        local format = {schema_revision = "bee.credential-format@1", file = {
+        local format = {schema_revision = "bee.credential-format@2", environments = {}, file = {
             path = ".gemini/antigravity-cli/antigravity-oauth-token", content_format = "opaque",
             initialize = {{path = ".gemini/antigravity-cli/initialized", content = "ready"}}}}
         local source = {provider = "agy", definition_id = "bee.test.nested_login", definition_revision = 1, format = format}
@@ -167,7 +167,7 @@ function M.define()
         test.is_nil(refused)
         test.eq(refusal, "retained login parent already exists")
         local reserved, reserved_error = homes.decode_login_source({provider = "fixture", definition_id = "fixture", definition_revision = 1,
-            format = {schema_revision = "bee.credential-format@1", file = {path = ".bee-retained-login-ready.json", content_format = "opaque"}}})
+            format = {schema_revision = "bee.credential-format@2", environments = {}, file = {path = ".bee-retained-login-ready.json", content_format = "opaque"}}})
         test.is_nil(reserved)
         test.eq(reserved_error, "login format overlaps retained identity")
     end)

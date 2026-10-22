@@ -25,7 +25,7 @@ function M.define()
             local profile = native_fixture.fresh("trust-profile")
             local db = assert(store.open())
             local grant = assert(authority.save(db, native_fixture.OWNER, profile, profile, 1,
-                {driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}},
+                {driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}},
                 "person", false, "2026-10-01T00:00:00.000Z"))
             db:release()
             local request = native_fixture.retained_launch(native_fixture.OWNER, profile, "trust")
@@ -39,7 +39,7 @@ function M.define()
                 workspace_id = grant.workspace_id, requester_id = grant.requester_id, granted_by = grant.granted_by, subject = grant.subject,
                 scope = {type = "exact", parameters = {parent_grant_id = grant.grant_id,
                     canonical_workdir = assert(resources.directory(native_fixture.ROOT)) .. "/" .. workdir,
-                    configuration = {driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}}}},
+                    configuration = {driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}}}},
                 terms = grant.terms, provenance = grant.provenance, metadata = {profile_id = profile, folder_profile_grant = grant.grant_id},
                 state = "active", revision = 1, used = 0, reserved = 0, created_at = grant.created_at}
             assert(not grants.create(db, scoped)); db:release()
@@ -51,10 +51,10 @@ function M.define()
             launch.argv = {"-c", [[grep -q 'trust_level.*trusted' "$CODEX_HOME/config.toml" || exit 7; ]] ..
                 ((ending == "attempt" or ending == "session") and "exit 0" or "exec sleep 30")}
             local data = assert(bounds.object(assert(registry.get("bee.tests.placement.native:trust_launch_policy")).data))
-            local effective = assert(preferences.apply(data, request.preferences, assert(descriptors.load("bee.driver.codex.descriptor:cli"))))
-            request.configuration_digest = assert(configuration_protocol.digest("bee.driver.codex.binding:binding",
-                {fixture = true, provider_ref = "bee.tests.placement.native:codex_test_provider", provider = assert(registry.get("bee.tests.placement.native:codex_test_provider")),
-                    option_values = effective.prepare_options}, "bee.driver.codex.binding:configure"))
+            local effective = assert(preferences.apply(data, request.preferences, assert(descriptors.load("bee.drivers.codex.descriptor:cli")), native_fixture.native_placement()))
+            request.configuration_digest = assert(configuration_protocol.digest("bee.drivers.codex.binding:binding",
+                {placement = native_fixture.native_placement(), fixture = true, provider_ref = "bee.tests.placement.native:codex_test_provider", provider = assert(registry.get("bee.tests.placement.native:codex_test_provider")),
+                    option_values = effective.prepare_options}, "bee.drivers.codex.binding:configure"))
             local independent = native_fixture.retained_launch(native_fixture.OWNER, native_fixture.fresh("independent"), "independent")
             local independent_after = native_fixture.retained_launch(native_fixture.OWNER, native_fixture.fresh("independent-after"), "independent-after")
             local planned_digest = independent.configuration_digest
@@ -113,12 +113,12 @@ function M.define()
         native_fixture.shell(quote.line({"mkdir", "-p", root .. "/" .. folder .. "/.git", root .. "/" .. folder .. "-other/.git"}))
         local db = assert(store.open())
         local base = assert(authority.save(db, native_fixture.OWNER, profile, profile, 1,
-            {driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}}, "person", false, "2026-10-01T00:00:00.000Z"))
+            {driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}}, "person", false, "2026-10-01T00:00:00.000Z"))
         local consent: grants.Grant = {grant_id = native_fixture.fresh("folder-consent-grant"), domain = "profile_choices",
             owner_node = base.owner_node, workspace_id = base.workspace_id, requester_id = base.requester_id,
             granted_by = base.granted_by, subject = base.subject,
             scope = {type = "exact", parameters = {profile_id = profile, parent_grant_id = base.grant_id,
-                canonical_workdir = root .. "/" .. folder, configuration = {driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}}}},
+                canonical_workdir = root .. "/" .. folder, configuration = {driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {options = {folder_trust = "approved-workdir"}}}}},
             terms = {kind = "until_revoked", time_basis = "absolute"}, provenance = {kind = "consent", source = "saved_profile"},
             metadata = {profile_id = profile, folder_profile_grant = base.grant_id}, state = "active", revision = 1, used = 0, reserved = 0, created_at = base.created_at}
         assert(not grants.create(db, consent)); db:release()
@@ -135,10 +135,10 @@ function M.define()
             launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {}}
             launch.argv = {"-c", [[if grep -q 'trust_level.*trusted' "$CODEX_HOME/config.toml"; then exit 0; else exit 7; fi]]}
             local data = assert(bounds.object(assert(registry.get(request.policy_ref)).data))
-            local effective = assert(preferences.apply(data, request.preferences, assert(descriptors.load("bee.driver.codex.descriptor:cli"))))
-            request.configuration_digest = assert(configuration_protocol.digest("bee.driver.codex.binding:binding",
-                {fixture = true, provider_ref = "bee.tests.placement.native:codex_test_provider", provider = assert(registry.get("bee.tests.placement.native:codex_test_provider")), option_values = effective.prepare_options},
-                "bee.driver.codex.binding:configure"))
+            local effective = assert(preferences.apply(data, request.preferences, assert(descriptors.load("bee.drivers.codex.descriptor:cli")), native_fixture.native_placement()))
+            request.configuration_digest = assert(configuration_protocol.digest("bee.drivers.codex.binding:binding",
+                {placement = native_fixture.native_placement(), fixture = true, provider_ref = "bee.tests.placement.native:codex_test_provider", provider = assert(registry.get("bee.tests.placement.native:codex_test_provider")), option_values = effective.prepare_options},
+                "bee.drivers.codex.binding:configure"))
             local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
             local started = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))
             assert(not started.start_failure, started.start_failure)
@@ -169,7 +169,7 @@ function M.define()
     test.it("renders trust using only declared isolated destinations", function()
         local workdir = "/approved/folder"
         for _, driver in ipairs({"claude", "codex"}) do
-            local cli = assert(descriptors.load("bee.driver." .. driver .. ".descriptor:cli"))
+            local cli = assert(descriptors.load("bee.drivers." .. driver .. ".descriptor:cli"))
             local field = assert(bounds.object(assert(bounds.object(cli.options.fields)).folder_trust))
             local mapping = assert(bounds.object(field.trust))
             local content = assert(trust.render(mapping, workdir, nil))
@@ -192,7 +192,7 @@ function M.define()
                 test.eq(project.trust_level, "trusted")
             end
         end
-        local muse = assert(descriptors.load("bee.driver.muse.descriptor:cli"))
+        local muse = assert(descriptors.load("bee.drivers.muse.descriptor:cli"))
         local field = assert(bounds.object(assert(bounds.object(muse.options.fields)).folder_trust))
         test.eq(assert(bounds.object(field.trust)).flag, "--trust-workspace")
     end)

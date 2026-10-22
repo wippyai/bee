@@ -19,7 +19,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      agy: bee.driver.agy.env:executable
+      agy: bee.drivers.agy.env:executable
     environment: {}
     allow_host_home: false
     gateway_tools:
@@ -71,7 +71,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      agy: bee.driver.agy.env:executable
+      agy: bee.drivers.agy.env:executable
     environment: {}
     allow_host_home: true
     gateway_tools:

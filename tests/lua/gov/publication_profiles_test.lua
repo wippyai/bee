@@ -87,14 +87,14 @@ local function define_tests()
         end)
         test.it("ships a kernel that protects the shared driver core and leaves workspace drivers to governance", function()
             local kernel = assert(protected_kernel.decode(assert(registry.get("bee.gov:protected_kernel")).data))
-            for _, core in ipairs({"bee.driver.binding", "bee.driver.codec", "bee.driver.descriptor", "bee.driver.locate",
-                "bee.driver.permission", "bee.driver.profiles", "bee.driver.transport"}) do
+            for _, core in ipairs({"bee.drivers.binding", "bee.drivers.codec", "bee.driver.descriptor", "bee.drivers.locate",
+                "bee.drivers.permission", "bee.drivers.profiles", "bee.drivers.transport"}) do
                 local entries = assert(registry.find({[".ns"] = core}))
                 for _, entry in ipairs(entries) do test.is_true(protected_kernel.names(kernel, entry.id), entry.id) end
             end
-            test.is_true(protected_kernel.names(kernel, "bee.driver:types"))
-            test.is_true(protected_kernel.names(kernel, "bee.driver:driver"))
-            test.is_true(protected_kernel.names(kernel, "bee.driver:locate_facet"))
+            test.is_true(protected_kernel.names(kernel, "bee.drivers:types"))
+            test.is_true(protected_kernel.names(kernel, "bee.drivers:driver"))
+            test.is_true(protected_kernel.names(kernel, "bee.drivers:locate_facet"))
             for _, own in ipairs({"bee.driver.gemini.binding", "bee.driver.gemini.descriptor", "bee.driver.gemini.profiles",
                 "bee.driver.gemini.security", "bee.driver.gemini.types", "bee.driver.gemini.env"}) do
                 test.is_false(protected_kernel.names(kernel, own .. ":unadmitted"), own)

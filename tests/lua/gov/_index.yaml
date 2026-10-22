@@ -10,7 +10,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     delivery_protocol: bee.gov.types:delivery_protocol
 - name: guide_test
@@ -25,7 +25,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     guide: bee.gov.traits:guide
     artifact: bee.gov.types:artifact
@@ -76,7 +76,7 @@ entries:
     - bee.tests.gov:gateway_test_policy
   imports:
     app_scope: bee.tests.support.principals:application
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
@@ -119,7 +119,7 @@ entries:
     - bee.tests.gov:gateway_test_policy
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     caller: bee.app:caller
 - name: hub_snapshot_probe
@@ -140,7 +140,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     destination_service: bee.gov.binding:destination_service
     artifact: bee.gov.types:artifact
@@ -163,7 +163,7 @@ entries:
   imports:
     app_scope: bee.tests.support.principals:application
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     super_edit: bee.gov.security:super_edit
     principal: bee.node:principal
@@ -179,7 +179,7 @@ entries:
     - bee.tests.gov:plan_test_policy
   imports:
     artifact: bee.gov.types:artifact
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     transaction: bee.persist:transaction
     headless_revert: bee.gov.binding:headless_revert
@@ -210,7 +210,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     activation_profiles: bee.gov.types:activation_profile_decoder
     workspace_applications: bee.gov.types:workspace_applications
@@ -229,7 +229,7 @@ entries:
   - security
   imports:
     app_scope: bee.tests.support.principals:application
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     artifact: bee.gov.types:artifact
     publication_service: bee.gov.binding:publication_service
@@ -262,7 +262,7 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     plan_store: bee.gov.persist:plan_store
     database: bee.persist:database
@@ -280,8 +280,8 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     test: wippy.test:test
     activation_store: bee.gov.persist:activation_store
 - name: lease_store_test
@@ -299,9 +299,9 @@ entries:
     - bee.tests.gov:plan_test_policy
   imports:
     common_grants: bee.approvals.grants:store
-    clock: bee.values:clock
+    clock: bee.drivers.values:clock
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     lease_store: bee.gov.persist:lease_store
 - name: activation_measure_test
@@ -314,12 +314,12 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     activation_measure: bee.gov.binding:activation_measure
     artifact: bee.gov.types:artifact
     preflight: bee.gov.binding:preflight
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     application_admission: bee.gov.types:governed_application_admission
     capability_grants: bee.gov.types:capability_grants
 - name: migration_work_test
@@ -335,7 +335,7 @@ entries:
     test: wippy.test:test
     migration_work: bee.gov.types:migration_work
     artifact: bee.gov.types:artifact
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     preflight: bee.gov.binding:preflight
 - name: activation_owner_test
   kind: function.lua
@@ -428,7 +428,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     application_admission: bee.gov.types:governed_application_admission
 - name: activation_profiles_test
@@ -442,7 +442,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     activation_profiles: bee.gov.types:activation_profile_decoder
 - name: materializer_test
@@ -453,7 +453,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     materializer: bee.gov.binding:materializer
     artifact: bee.gov.types:artifact
@@ -468,11 +468,11 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     approval: bee.gov.binding:approval
     drivers: bee.gov.types:drivers
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
 - name: replica_fixture
   kind: library.lua
   source: file://replica_fixture.lua
@@ -492,7 +492,7 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     destination: bee.gov.binding:destination
     replica_fixture: bee.tests.gov:replica_fixture
@@ -517,9 +517,9 @@ entries:
     - bee.tests.gov:plan_test_policy
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     artifact: bee.gov.types:artifact
     delivery: bee.gov.types:delivery
     publisher: bee.gov.binding:publisher
@@ -557,9 +557,9 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     activation_store: bee.gov.persist:activation_store
     activation_uninstall: bee.gov.binding:activation_uninstall
 - name: lifecycle_test_policy
@@ -597,7 +597,7 @@ entries:
     - bee.tests.memory:read_policy
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     artifact: bee.gov.types:artifact
     delivery: bee.gov.types:delivery
@@ -636,7 +636,7 @@ entries:
     - bee.tests.gov:plan_test_policy
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     publisher: bee.gov.binding:publisher
     delivery: bee.gov.types:delivery
@@ -663,7 +663,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     protocol: bee.gov.types:workspace_protocol
 - name: workspace_method_test_policy
@@ -693,7 +693,7 @@ entries:
     policies:
     - bee.tests.gov:workspace_method_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
 - name: preflight_test
   kind: function.lua
@@ -707,11 +707,11 @@ entries:
   - registry
   - json
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     preflight: bee.gov.binding:preflight
     protected_kernel: bee.gov.types:protected_kernel
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     artifact: bee.gov.types:artifact
 - name: capability_containment_test
   kind: function.lua
@@ -722,7 +722,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_containment: bee.capability:model
 - name: lease_grants_test
@@ -740,7 +740,7 @@ entries:
     - bee.tests.gov:plan_test_policy
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_model: bee.capability:model
     lease_grants: bee.gov.binding:lease_grants
@@ -768,7 +768,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_model: bee.capability:model
     capability_grants: bee.gov.types:capability_grants
@@ -783,7 +783,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_files: bee.gov.types:capability_files
 - name: capability_gateway_test
@@ -800,7 +800,7 @@ entries:
     suite: bee
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_catalog: bee.capability:model
     capability_grants: bee.gov.types:capability_grants
@@ -838,7 +838,7 @@ entries:
     type: test
     suite: bee
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     artifact: bee.gov.types:artifact
     hub_resolver: bee.gov.binding:hub_resolver
@@ -875,7 +875,7 @@ entries:
   meta:
     type: test_support
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     materializer: bee.gov.binding:materializer
 - name: source_test
   kind: function.lua
@@ -893,7 +893,7 @@ entries:
     test: wippy.test:test
     source: bee.gov.binding:source
     protocol: bee.gov.types:workspace_protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: source_test_policy
   kind: security.policy
   policy:
@@ -928,11 +928,11 @@ entries:
     test: wippy.test:test
     materializer: bee.gov.binding:materializer
     activation: bee.gov.types:driver_admission
-    resolver: bee.driver.binding:resolver
-    bounds: bee.values:bounds
+    resolver: bee.drivers.binding:resolver
+    bounds: bee.drivers.values:bounds
     activation_store: bee.gov.persist:activation_store
     artifact: bee.gov.types:artifact
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     resources: bee.gov.binding:staging_resources
     destination_service: bee.gov.binding:destination_service
 - name: driver_link_test_policy
@@ -1020,7 +1020,7 @@ entries:
     - bee.tests.gov:gateway_test_policy
   imports:
     app_scope: bee.tests.support.principals:application
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
@@ -1037,7 +1037,7 @@ entries:
     policies:
     - bee.tests.gov:gateway_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
@@ -1100,7 +1100,7 @@ entries:
     - bee.tests.support:approval_effect_policy
     - bee.tests.gov:app_database_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     application: bee.node:application
     guide: bee.gov.traits:guide
@@ -1155,7 +1155,7 @@ entries:
   - system
   imports:
     approval_effect: bee.tests.support:approval_effect
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
     principal: bee.node:principal
 - name: app_expiry_test_policy
@@ -1209,7 +1209,7 @@ entries:
     policies:
     - bee.tests.gov:app_expiry_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.gov:delivery_harness
     guide: bee.gov.traits:guide
@@ -1244,8 +1244,8 @@ entries:
     policies:
     - bee.tests.gov:app_expiry_test_policy
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     test: wippy.test:test
     harness: bee.tests.gov:delivery_harness
     guide: bee.gov.traits:guide
@@ -1273,7 +1273,7 @@ entries:
     policies:
     - bee.tests.gov:app_expiry_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.gov:delivery_harness
     guide: bee.gov.traits:guide
@@ -1299,7 +1299,7 @@ entries:
     policies: [bee.tests.gov:app_database_test_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness: bee.tests.gov:delivery_harness
     application: bee.node:application
     hub: bee.apps.library.app:hub
@@ -1316,7 +1316,7 @@ entries:
     policies: [bee.tests.gov:plan_test_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     activation_store: bee.gov.persist:activation_store
     follow_store: bee.gov.persist:follow_store
     delivery: bee.gov.types:delivery
@@ -1356,7 +1356,7 @@ entries:
   imports:
     test: wippy.test:test
     guide: bee.gov.traits:guide
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness: bee.tests.gov:delivery_harness
 - name: hub_ui_test
   kind: function.lua
@@ -1366,7 +1366,7 @@ entries:
   meta: {type: test, suite: bee, timeout: 180s}
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness: bee.tests.gov:delivery_harness
     application: bee.node:application
     client: bee.node:client
@@ -1393,9 +1393,9 @@ entries:
     policies:
     - bee.tests.gov:plan_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     activation_store: bee.gov.persist:activation_store
     activation_uninstall: bee.gov.binding:activation_uninstall
 
@@ -1421,7 +1421,7 @@ entries:
     - bee.tests.support:approval_effect_policy
     - bee.tests.gov:app_database_test_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     application: bee.node:application
     guide: bee.gov.traits:guide
@@ -1440,7 +1440,7 @@ entries:
     worker: bee.process:worker
     pass: bee.tests.gov:activation_fixture
     service: bee.tests.gov:activation_follow_fixture
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
 - name: activation_drain_test
   kind: function.lua
   source: file://activation_drain_test.lua
@@ -1477,7 +1477,7 @@ entries:
     policies: [bee.tests.gov:grant_migration_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     grant_schema: bee.approvals.grants:schema
     grants: bee.approvals.grants:store
 
@@ -1516,7 +1516,7 @@ entries:
     - bee.tests.gov:app_expiry_test_policy
     - bee.tests.gov:bundle_files_policy
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.gov:delivery_harness
     guide: bee.gov.traits:guide
@@ -1549,7 +1549,7 @@ entries:
     policies: [bee.tests.gov:app_database_test_policy]
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness: bee.tests.gov:delivery_harness
 - name: activation_owner_fixture
   kind: library.lua
@@ -1560,9 +1560,9 @@ entries:
   - hash
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     artifact: bee.gov.types:artifact
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
@@ -1582,9 +1582,9 @@ entries:
   - hash
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     artifact: bee.gov.types:artifact
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
@@ -1600,7 +1600,7 @@ entries:
   source: file://activation_admission_cases.lua
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     artifact: bee.gov.types:artifact
     plan_store: bee.gov.persist:plan_store
@@ -1633,7 +1633,7 @@ entries:
   - hash
   imports:
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     artifact: bee.gov.types:artifact
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
@@ -1646,7 +1646,7 @@ entries:
     type: test_support
   source: file://activation_follow_cases.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     artifact: bee.gov.types:artifact
     plan_store: bee.gov.persist:plan_store
@@ -1668,23 +1668,23 @@ entries:
   - hash
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     artifact: bee.gov.types:artifact
     overlay_resolver: bee.gov.binding:overlay_resolver
     capability_grants: bee.gov.types:capability_grants
     application_admission: bee.gov.types:governed_application_admission
     preflight: bee.gov.binding:preflight
     activation_measure: bee.gov.binding:activation_measure
-    resolver: bee.driver.binding:resolver
+    resolver: bee.drivers.binding:resolver
 - name: overlay_driver_cases
   kind: library.lua
   meta:
     type: test_support
   source: file://overlay_driver_cases.lua
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
     overlay_resolver: bee.gov.binding:overlay_resolver
     preflight: bee.gov.binding:preflight
@@ -1699,9 +1699,9 @@ entries:
   - hash
   imports:
     principals: bee.tests.support.principals:bound
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     test: wippy.test:test
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     artifact: bee.gov.types:artifact
     overlay_resolver: bee.gov.binding:overlay_resolver
     capability_grants: bee.gov.types:capability_grants
@@ -1714,7 +1714,7 @@ entries:
     type: test_support
   modules: [funcs, security, registry, json, http_client]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     harness: bee.tests.gov:delivery_harness
     launch_policy: bee.harness.carrier:policy
     principals: bee.tests.support.principals:bound
@@ -1731,7 +1731,7 @@ entries:
     - bee.tests.support.principals:application_scope_policy
   imports:
     test: wippy.test:test
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     client: bee.node:client
     application: bee.node:application
     harness: bee.tests.gov:delivery_harness
@@ -1745,5 +1745,5 @@ entries:
     type: test_support
     comment: Loads one application trait with the caller's authority
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     app_traits: bee.node:app_traits

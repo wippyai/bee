@@ -6,7 +6,7 @@ entries:
   source: file://address.lua
   modules: [registry, system]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     application: bee.node:application
     profiles: bee.gov.types:activation_profile_decoder
     grants: bee.gov.types:capability_grants
@@ -17,39 +17,39 @@ entries:
   source: file://receiver.lua
   modules: [registry, security, funcs]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     operations: bee.hive:operations
     address: bee.hive:address
     application: bee.node:application
     access: bee.gov.binding:capability_access
     schemas: bee.gateway.catalog:json_schema
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     receipts: bee.hive.persist:receipts
     protocol: bee.hive:protocol
 - name: operations
   kind: library.lua
   source: file://operations.lua
   imports:
-    bounds: bee.values:bounds
-    schemas: bee.values:agent_tool
+    bounds: bee.drivers.values:bounds
+    schemas: bee.drivers.values:agent_tool
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
   modules: [process, channel, time, uuid, system]
   imports:
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
 - name: outbound
   kind: library.lua
   source: file://outbound.lua
   modules: [time]
   imports:
     protocol: bee.hive:protocol
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     gateway: bee.gov.types:capability_gateway
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     schemas: bee.gateway.catalog:json_schema
-    declarations: bee.values:agent_tool
+    declarations: bee.drivers.values:agent_tool
 - name: hive
   kind: library.lua
   source: file://hive.lua
@@ -60,14 +60,14 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     application: bee.node:application
     app_tools: bee.node:app_tools
     application_tests: bee.node:application_tests
     receiver: bee.hive:receiver
     operations: bee.hive:operations
     protocol: bee.hive:protocol
-    canonical: bee.values:canonical
+    canonical: bee.drivers.values:canonical
     tests: bee.node:tests
     test_runs: bee.node.persist:test_runs
     backend: bee.node.binding:tests_backend_library

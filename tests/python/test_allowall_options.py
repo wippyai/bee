@@ -22,7 +22,8 @@ class AllAllowedOptions(unittest.TestCase):
         ]
         for driver, name, value, capture, flag in cases:
             with self.subTest(driver=driver, option=name, capture=capture):
-                descriptor = yaml.safe_load((ROOT / f"src/driver/{driver}/descriptor/_index.yaml").read_text())["entries"][0]["data"]
+                entries = yaml.safe_load((ROOT / f"drivers/src/{driver}/descriptor/_index.yaml").read_text())["entries"]
+                descriptor = next(entry["data"] for entry in entries if entry["name"] == "cli")
                 field = descriptor["options"]["fields"][name]
                 self.assertIn(flag, (FIXTURES / capture).read_text())
                 self.assertEqual(field["security_class"], "host-ceiling")

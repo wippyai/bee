@@ -6,11 +6,11 @@ entries:
   source: file://classify.lua
   modules: []
   imports:
-    bounds: bee.values:bounds
-    observers: bee.driver:window_observer
-    canonical: bee.values:canonical
-    profile: bee.driver.profiles:profile
-    driver_types: bee.driver:types
+    bounds: bee.drivers.values:bounds
+    observers: bee.drivers:window_observer
+    canonical: bee.drivers.values:canonical
+    profile: bee.drivers.profiles:profile
+    driver_types: bee.drivers:types
     permission: bee.harness.permission:adapter
     vocabulary: bee.harness:classification
 - name: catalog
@@ -19,8 +19,8 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.values:bounds
-    observers: bee.driver:window_observer
+    bounds: bee.drivers.values:bounds
+    observers: bee.drivers:window_observer
     classify: bee.harness.catalog:classify
-    resolver: bee.driver.binding:resolver
+    resolver: bee.drivers.binding:resolver
     classify_types: bee.harness:classification

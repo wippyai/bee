@@ -19,7 +19,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      codex: bee.driver.codex.env:executable
+      codex: bee.drivers.codex.env:executable
     environment: {}
     environment_refs: {}
     allow_host_home: false
@@ -89,7 +89,7 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      codex: bee.driver.codex.env:executable
+      codex: bee.drivers.codex.env:executable
     environment: {}
     environment_refs: {}
     allow_host_home: false
@@ -159,10 +159,10 @@ entries:
     fixture: false
     executables: {}
     executable_env:
-      codex: bee.driver.codex.env:executable
+      codex: bee.drivers.codex.env:executable
     environment: {}
     environment_refs:
-      CODEX_HOME: bee.driver.codex.env:config_home
+      CODEX_HOME: bee.drivers.codex.env:config_home
     allow_host_home: true
     gateway_tools:
     - session_catalog

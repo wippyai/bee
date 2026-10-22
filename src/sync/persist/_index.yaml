@@ -7,8 +7,8 @@ entries:
   modules: [sql, json, time]
   imports:
     limits: bee.sync.values:limits
-    bounds: bee.values:bounds
-    canonical: bee.values:canonical
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     database: bee.persist:database
     transaction: bee.persist:transaction
 - name: replicas
@@ -16,7 +16,7 @@ entries:
   source: file://replicas.lua
   modules: [json, sql, hash, base64]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     database: bee.persist:database
     transaction: bee.persist:transaction
     version: bee.sync.values:version
@@ -25,6 +25,6 @@ entries:
   source: file://distribution_store.lua
   modules: [sql]
   imports:
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     database: bee.persist:database
     transaction: bee.persist:transaction

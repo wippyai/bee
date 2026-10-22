@@ -1,8 +1,8 @@
-# bee.driver.claude
+# bee.drivers.claude
 
-Claude Code profiles and a strict CLI descriptor (`bee.driver.claude.descriptor:cli`)
+Claude Code profiles and a strict CLI descriptor (`bee.drivers.claude.descriptor:cli`)
 selecting the universal launch layer and the shared Claude stream-json codec,
-plus admitted configuration. The binding is `bee.driver.claude.binding:binding`.
+plus admitted configuration. The binding is `bee.drivers.claude.binding:binding`.
 
 The host supplies the executable and API-key environment and each route's
 policy. The component declares no process authority, credential access or MCP

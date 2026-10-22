@@ -16,6 +16,7 @@ local process = require("process")
 local exec = require("exec")
 local quote = require("quote")
 local configuration_protocol = require("configuration_protocol")
+local placement_profiles = require("placement_profiles")
 
 local OWNER = "bee.test.instruction_builder"
 local DIGEST = string.rep("b", 64)
@@ -150,6 +151,7 @@ local function measure_policy_digest(policy_ref: string): string
     local provider = registry.get(PROVIDER)
     if not provider then error("provider entry") end
     local request_input = {
+        placement = assert(placement_profiles.placement(nil)),
         provider_ref = PROVIDER,
         provider = provider,
         instructions = data.instructions,

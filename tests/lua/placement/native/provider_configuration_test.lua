@@ -16,6 +16,7 @@ local completion = require("completion")
 local exec = require("exec")
 local quote = require("quote")
 local configuration_protocol = require("configuration_protocol")
+local placement_profiles = require("placement_profiles")
 
 local OWNER = "bee.test.third_driver"
 local DIGEST = string.rep("b", 64)
@@ -132,7 +133,7 @@ end
 local function provider_configuration_digest(): string
     local provider = registry.get(PROVIDER)
     if not provider then error("provider entry") end
-    local digest, digest_error = configuration_protocol.digest(nil, {provider_ref = PROVIDER, provider = provider, fixture = true}, "bee.tests.placement.native:fixture_agent_configure")
+    local digest, digest_error = configuration_protocol.digest(nil, {placement = assert(placement_profiles.placement(nil)), provider_ref = PROVIDER, provider = provider, fixture = true}, "bee.tests.placement.native:fixture_agent_configure")
     if not digest then error(tostring(digest_error)) end
     return digest
 end

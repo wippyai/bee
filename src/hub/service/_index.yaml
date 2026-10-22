@@ -13,5 +13,5 @@ entries:
   meta: {type: internal}
   imports:
     publication: bee.hub.binding:publication
-    bounds: bee.values:bounds
+    bounds: bee.drivers.values:bounds
     hub_result: bee.hub.package:result

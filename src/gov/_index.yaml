@@ -79,7 +79,7 @@ entries:
   meta:
     type: bee.protected_kernel
     comment: Host trust map no overlay profile can open; preflight refuses edits to these definitions, their transitive code dependencies and requirement selectors aimed at them. super_edit names exact entries
-      a person may open to a time-bounded edit. The shared driver core is protected; each driver's own bee.driver.<name> namespaces stay under governance, so workspace drivers can be delivered
+      a person may open to a time-bounded edit. The shared driver core is protected; each driver's own bee.driver.<name> and bee.drivers.<name> namespaces stay under governance, so workspace drivers can be delivered
   data:
     revision: 1
     super_edit:
@@ -306,7 +306,6 @@ entries:
     - bee.credentials.service:worker
     - bee.credentials:configuration_admission
     - bee.credentials:contract
-    - bee.credentials:formats
     - bee.credentials:protocol
     - bee.deps:bootloader
     - bee.deps:migration
@@ -316,42 +315,44 @@ entries:
     - bee.docs.env:corpus_ref
     - bee.docs.env:resources
     - bee.docs:protocol
-    - bee.driver.binding:configuration
-    - bee.driver.binding:configure
-    - bee.driver.binding:configure_policy
-    - bee.driver.binding:hook_limits
-    - bee.driver.binding:option_render
-    - bee.driver.binding:quote
-    - bee.driver.binding:resolver
-    - bee.driver.binding:toml
-    - bee.driver.binding:universal
-    - bee.driver.codec:agy_stream_json
-    - bee.driver.codec:claude_stream_json
-    - bee.driver.codec:codec_registry
-    - bee.driver.codec:codex_jsonl
-    - bee.driver.codec:events
-    - bee.driver.codec:grok_streaming_json
-    - bee.driver.codec:muse_record_jsonl
-    - bee.driver.codec:normalize
-    - bee.driver.codec:opencode_json_events
-    - bee.driver.codec:paths
-    - bee.driver.descriptor:descriptor
-    - bee.driver.descriptor:effective
-    - bee.driver.descriptor:profile_values
-    - bee.driver.descriptor:schema_values
+    - bee.drivers.binding:composition
+    - bee.drivers.binding:configuration
+    - bee.drivers.binding:configure
+    - bee.drivers.binding:configure_policy
+    - bee.drivers.binding:hook_limits
+    - bee.drivers.binding:option_render
+    - bee.drivers.binding:quote
+    - bee.drivers.binding:resolver
+    - bee.drivers.binding:toml
+    - bee.drivers.binding:universal
+    - bee.drivers.codec:agy_stream_json
+    - bee.drivers.codec:claude_stream_json
+    - bee.drivers.codec:codec_registry
+    - bee.drivers.codec:codex_jsonl
+    - bee.drivers.codec:events
+    - bee.drivers.codec:grok_streaming_json
+    - bee.drivers.codec:muse_record_jsonl
+    - bee.drivers.codec:normalize
+    - bee.drivers.codec:opencode_json_events
+    - bee.drivers.codec:paths
+    - bee.drivers.credentials:format
+    - bee.drivers.descriptor:descriptor
+    - bee.drivers.descriptor:effective
+    - bee.drivers.descriptor:profile_values
+    - bee.drivers.descriptor:schema_values
     - bee.driver.descriptor:trust
-    - bee.driver.locate:locate
-    - bee.driver.locate:login_evidence
-    - bee.driver.locate:probe_capture
-    - bee.driver.permission:permission_request_hook
-    - bee.driver.profiles:instructions
-    - bee.driver.profiles:profile
-    - bee.driver.profiles:profile_access
-    - bee.driver.transport:framing
-    - bee.driver.transport:stream_json
-    - bee.driver:driver
-    - bee.driver:locate_facet
-    - bee.driver:types
+    - bee.drivers.locate:locate
+    - bee.drivers.locate:login_evidence
+    - bee.drivers.locate:probe_capture
+    - bee.drivers.permission:permission_request_hook
+    - bee.drivers.profiles:instructions
+    - bee.drivers.profiles:profile
+    - bee.drivers.profiles:profile_access
+    - bee.drivers.transport:framing
+    - bee.drivers.transport:stream_json
+    - bee.drivers:driver
+    - bee.drivers:locate_facet
+    - bee.drivers:types
     - bee.env.identity:binary_identity
     - bee.env.identity:state_writer_version
     - bee.env:approved_driver_admission
@@ -1351,16 +1352,16 @@ entries:
     - bee.threads.projection:engine
     - bee.threads.projection:recap
     - bee.threads.projection:status
-    - bee.threads.records:app_identity
-    - bee.threads.records:approval
-    - bee.threads.records:bounds
-    - bee.threads.records:budgets
-    - bee.threads.records:delivery
-    - bee.threads.records:lifecycle
-    - bee.threads.records:message
-    - bee.threads.records:observation
-    - bee.threads.records:record
-    - bee.threads.records:values
+    - bee.drivers.records:app_identity
+    - bee.drivers.records:approval
+    - bee.drivers.records:bounds
+    - bee.drivers.records:budgets
+    - bee.drivers.records:delivery
+    - bee.drivers.records:lifecycle
+    - bee.drivers.records:message
+    - bee.drivers.records:observation
+    - bee.drivers.records:record
+    - bee.drivers.records:values
     - bee.threads.security:admission
     - bee.threads.security:announce
     - bee.threads.security:app_alias
@@ -1471,7 +1472,7 @@ entries:
     - bee.threads:journal
     - bee.threads:lifecycle
     - bee.threads:projection
-    - bee.threads:record_types
+    - bee.drivers.records:record_types
     - bee.threads:route
     - bee.threads:types
     - bee.ui.diagram:diagram
@@ -1499,12 +1500,12 @@ entries:
     - bee.ui:frame
     - bee.ui:glyphs
     - bee.ui:text
-    - bee.values:agent_tool
-    - bee.values:agent_trait
-    - bee.values:bounds
-    - bee.values:canonical
-    - bee.values:clock
-    - bee.values:reply
+    - bee.drivers.values:agent_tool
+    - bee.drivers.values:agent_trait
+    - bee.drivers.values:bounds
+    - bee.drivers.values:canonical
+    - bee.drivers.values:clock
+    - bee.drivers.values:reply
     - bee:db
     - bee:db_path
     - bee:definition

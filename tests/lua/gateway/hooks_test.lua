@@ -155,7 +155,7 @@ local function define_tests()
         end)
         test.it("gives Claude no settings argument when its gateway selects no hook", function()
             local gateway: configuration_types.GatewayInput = {endpoint = "127.0.0.1:18790", action_id = "act-1", tools = {"thread_read"}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
-            local raw, call_error = funcs.call("bee.driver.claude.binding:configure", {fixture = false, gateway = gateway})
+            local raw, call_error = funcs.call("bee.drivers.claude.binding:configure", {fixture = false, gateway = gateway})
             if call_error then error(tostring(call_error)) end
             local claude, claude_error = configuration.decode_reply(raw, nil, gateway)
             if not claude then error(tostring(claude_error)) end
@@ -166,7 +166,7 @@ local function define_tests()
         test.it("renders driver-owned hook delivery with Codex trust hashes as the pinned executable computes them", function()
             local events = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
             local gateway: configuration_types.GatewayInput = {endpoint = "127.0.0.1:18790", action_id = "act-1", tools = {"thread_read"}, hooks = events, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN", hook_command = "/opt/bee/bee"}
-            local raw, call_error = funcs.call("bee.driver.claude.binding:configure", {fixture = false, gateway = gateway})
+            local raw, call_error = funcs.call("bee.drivers.claude.binding:configure", {fixture = false, gateway = gateway})
             if call_error then error(tostring(call_error)) end
             local claude, claude_error = configuration.decode_reply(raw, nil, gateway)
             if not claude then error(tostring(claude_error)) end

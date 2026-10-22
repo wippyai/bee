@@ -44,7 +44,7 @@ local function define_tests()
             if not file then error(tostring(err)) end
             test.eq(file.revision, "bee.muse-config@1")
             test.eq(file.path, ".config/muse/settings.json")
-            test.eq(file.provider_ref, "bee.gateway.api:gateway_endpoint")
+            test.eq(file.provider_ref, "bee.drivers:gateway_endpoint")
             local composition = assert(file.composition)
             test.eq(composition.kind, "json_patch")
             test.eq(composition.base_path, ".config/muse/.bee-global-settings.json")

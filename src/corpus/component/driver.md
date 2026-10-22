@@ -1,6 +1,6 @@
 # Bee driver
 
-`bee.driver` is the shared Lua contract and implementation for external CLI
+`bee.drivers` is the shared Lua contract and implementation for external CLI
 drivers. It defines declarative launches, protocol normalization, saved
 preferences, configuration delivery, and host-evidence-based location. It does
 not execute a process, read credentials, or write thread records.
@@ -25,20 +25,20 @@ Placement validates the returned launch, measures the selected executable, and
 runs it. The carrier writes accepted observations through Threads. A process
 exit alone never establishes a successful turn.
 
-External CLI bindings also implement `bee.driver:locate_facet`. Its `locate`
+External CLI bindings also implement `bee.drivers:locate_facet`. Its `locate`
 method evaluates host-probed executable presence and version, platform support,
 and alternative provider login evidence. Results are `ready`, `missing`,
 `unconfigured`, `incompatible`, or `unknown`. Login contents are never read;
 file or config existence and environment presence are setup evidence, not proof that a login is valid.
 
-The six external CLI packages (`bee.driver.<claude|codex|agy|grok|muse|opencode>`) use the shared `bee.driver.binding:universal`
+The six external CLI packages (`bee.drivers.<claude|codex|agy|grok|muse|opencode>`) use the shared `bee.drivers.binding:universal`
 implementation. Each contributes a strict `bee.driver.cli_descriptor` registry
 entry (`bee.driver.cli-descriptor@4`) with executable and version probe, an any-of login evidence declaration, launch templates,
 OptionSpec value schemas, form labels, contexts, capability evidence and renders, JSON paths, and a codec ID. The same declaration supplies form choices, argv, structured configuration and environment delivery; there is no separate profile-options map. Locate reports capabilities established by version/help probes. The host validates the
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
 
-The effective compiler lives at `bee.driver.descriptor:effective`. Editable options
+The effective compiler lives at `bee.drivers.descriptor:effective`. Editable options
 carry `id`, `group`, `security_class`, `value_schema`, `default`, `support`, and
 `render` mappings; omitted defaults inherit the installed CLI. Optional
 `dependencies`, `conflicts`, `capabilities`, `ceiling`, and `config_aliases` describe
@@ -53,7 +53,7 @@ OpenCode declare trust unsupported. Docker trust is unavailable until its guest
 workdir can be bound to the approved canonical scope.
 
 The Harness catalog discovers `contract.binding` entries with `meta.type: harness.driver`.
-Each declares `driver_id`, `profiles_ref` and the four `bee.driver:driver`
+Each declares `driver_id`, `profiles_ref` and the four `bee.drivers:driver`
 methods. CLI bindings also name `descriptor_ref`. The profiles entry has
 `meta.type: harness.profile` and `meta.driver_ref` naming that exact binding.
 The binding ID and method targets may belong to different namespaces and use
@@ -81,10 +81,10 @@ changed candidate requires review again. The host's exact binding activation
 and launch permissions still apply.
 
 Shared configuration calls, option rendering, shell quoting and TOML literals
-live in `bee.driver.binding` (`configuration`, `option_render`, `quote`,
+live in `bee.drivers.binding` (`configuration`, `option_render`, `quote`,
 `toml`, `resolver`, `universal`). Observation builders and the normalizer
-boundary live in `bee.driver.codec`; framing and stream decoding live in
-`bee.driver.transport`. Consumers import these helpers directly.
+boundary live in `bee.drivers.codec`; framing and stream decoding live in
+`bee.drivers.transport`. Consumers import these helpers directly.
 
 `login_evidence` declares a display-only `command` and one to eight `any_of`
 alternatives. One positive observation makes the login ready. If all checks
@@ -120,7 +120,7 @@ selection; actual authentication remains the CLI's responsibility.
 
 Each observed wire protocol has one shared codec: Claude stream-json, Codex
 JSONL, OpenCode JSON events, Agy stream-json, Grok streaming-json and Muse
-record JSONL. The codec registry (`bee.driver.codec:codec_registry`) selects the
+record JSONL. The codec registry (`bee.drivers.codec:codec_registry`) selects the
 implementation by the descriptor's codec ID. `bee.driver.wippy` is a separate
 non-CLI driver and does not use this registry.
 
@@ -150,7 +150,7 @@ inputs, materializes admitted secrets only into declared fields, and records the
 resulting delivery before starting the process.
 
 Custom configure targets decode the common request with
-`bee.driver.binding:configuration.decode_request`, including its optional
+`bee.drivers.binding:configuration.decode_request`, including its optional
 host-selected `configure_renderer`. The universal driver uses this same decoder;
 an arbitrary target does not need a namespace-derived adapter.
 
@@ -158,7 +158,7 @@ Provider-specific command syntax, profile options, authentication, hook wire
 formats, and MCP configuration belong in that provider's component guide and
 Lua package.
 
-`bee.driver:types` `AUTHENTICATION_STATUS` is the shared release gate for
+`bee.drivers:types` `AUTHENTICATION_STATUS` is the shared release gate for
 executable-backed provider login acceptance. `unproven` records that the
 configured provider executables have not all been exercised through placement;
 it does not decide whether a login is valid or admit a launch.

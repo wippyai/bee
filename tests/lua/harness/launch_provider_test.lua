@@ -26,14 +26,14 @@ local function define_tests()
     test.describe("Launch provider", function()
         local workspace = fixture.prepare()
         test.it("defers driver configuration until placement supplies the actual HOME", function()
-            local binding = assert(registry.get("bee.driver.claude.binding:binding"))
+            local binding = assert(registry.get("bee.drivers.claude.binding:binding"))
             local original = binding.data
             binding.data = {contracts = {
-                {contract = "bee.driver:driver", methods = {
-                    prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch",
-                    normalize = "bee.driver.claude.binding:normalize", configure = "bee.tests.harness:configuration_probe",
+                {contract = "bee.drivers:driver", methods = {
+                    prepare = "bee.drivers.claude.binding:prepare", dispatch = "bee.drivers.claude.binding:dispatch",
+                    normalize = "bee.drivers.claude.binding:normalize", configure = "bee.tests.harness:configuration_probe",
                 }},
-                {contract = "bee.driver:locate_facet", methods = {locate = "bee.driver.claude.binding:locate"}},
+                {contract = "bee.drivers:locate_facet", methods = {locate = "bee.drivers.claude.binding:locate"}},
             }}
             local ok, failure = pcall(function()
                 apply(binding)
@@ -62,7 +62,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("keeps Claude's provider config home aligned with a profile that inherits host HOME", function()
-            local profile_entry = assert(registry.get("bee.driver.claude.profiles:profiles"))
+            local profile_entry = assert(registry.get("bee.drivers.claude.profiles:profiles"))
             local definition_entry = assert(registry.get(SHIPPED_SHAPE_DEFINITION))
             local policy_entry = assert(registry.get(SHIPPED_BATCH_POLICY))
             local original_profiles, original_definition, original_policy = profile_entry.data, definition_entry.data, policy_entry.data
@@ -152,7 +152,7 @@ local function define_tests()
             local changed_policy: {[string]: unknown} = {}
             for name, value in pairs(assert(bounds.object(original_definition))) do changed_definition[name] = value end
             for name, value in pairs(assert(bounds.object(original_policy))) do changed_policy[name] = value end
-            changed_definition.binding_ref = "bee.driver.codex.binding:binding"
+            changed_definition.binding_ref = "bee.drivers.codex.binding:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
             changed_definition.session_resource = "session"
@@ -212,7 +212,7 @@ local function define_tests()
                 local saved_id = fresh("provider-private-home")
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
-                        name = "Private provider", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding",
+                        name = "Private provider", definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.codex.binding:binding",
                         provider = {}, bee = {mcp = {}}, placement = {kind = "native", home = "private"}}}))
                 local private_selected = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION,
                     workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
@@ -240,7 +240,7 @@ local function define_tests()
             local changed_policy: {[string]: unknown} = {}
             for name, value in pairs(assert(bounds.object(original_definition))) do changed_definition[name] = value end
             for name, value in pairs(assert(bounds.object(original_policy))) do changed_policy[name] = value end
-            changed_definition.binding_ref = "bee.driver.codex.binding:binding"
+            changed_definition.binding_ref = "bee.drivers.codex.binding:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
             changed_definition.session_resource = "session"
@@ -276,7 +276,7 @@ local function define_tests()
                 if not applied then error("configure codex named profile: " .. tostring(apply_error)) end
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
-                    profile = {schema_revision = "bee.agent-profile@3", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = "fixture-profile"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
+                    profile = {schema_revision = "bee.agent-profile@3", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {options = {config_profile = "fixture-profile"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
                 local selected = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
@@ -330,7 +330,7 @@ local function define_tests()
             for name, value in pairs(assert(bounds.object(original_definition))) do changed_definition[name] = value end
             for name, value in pairs(assert(bounds.object(original_policy))) do changed_policy[name] = value end
             for name, value in pairs(assert(bounds.object(original_provider))) do changed_provider[name] = value end
-            changed_definition.binding_ref = "bee.driver.codex.binding:binding"
+            changed_definition.binding_ref = "bee.drivers.codex.binding:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
             changed_definition.session_resource = "session"

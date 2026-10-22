@@ -11,6 +11,6 @@ entries:
     test: wippy.test:test
     permissions: bee.harness.permission:exchange
     adapter: bee.harness.permission:adapter
-    canonical: bee.values:canonical
-    bounds: bee.values:bounds
+    canonical: bee.drivers.values:canonical
+    bounds: bee.drivers.values:bounds
     adapter_types: bee.harness:permission_types

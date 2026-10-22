@@ -112,7 +112,7 @@ local function define_tests()
             test.eq(exit_error, "profile batch.exit_codes_trustworthy must be a boolean")
         end)
         test.it("validates the shipped Claude, Codex and Muse bindings", function()
-            for _, id in ipairs({"bee.driver.claude.binding:binding", "bee.driver.codex.binding:binding", "bee.driver.agy.binding:binding", "bee.driver.muse.binding:binding"}) do
+            for _, id in ipairs({"bee.drivers.claude.binding:binding", "bee.drivers.codex.binding:binding", "bee.drivers.agy.binding:binding", "bee.drivers.muse.binding:binding"}) do
                 local entry, err = registry.get(id)
                 if not entry then error(id .. ": " .. tostring(err)) end
                 test.eq(entry.meta.type, "harness.driver")
@@ -133,17 +133,17 @@ local function define_tests()
                 test.eq(window.mode, "window")
                 test.eq(window.protocol, "pty")
                 test.eq(window.answer_path.strategy, "none")
-                test.eq(window.isolation_env.private_home, id == "bee.driver.muse.binding:binding")
+                test.eq(window.isolation_env.private_home, id == "bee.drivers.muse.binding:binding")
                 test.is_false(window.exit_codes_trustworthy)
                 test.eq(window.input_ready.strategy, "none")
                 test.eq(window.permission_exchange.mode, "adapter")
-                test.eq(window.permission_exchange.adapter_ref, "bee.driver.permission:permission_request_hook")
+                test.eq(window.permission_exchange.adapter_ref, "bee.drivers.permission:permission_request_hook")
                 test.eq(#assert(window.permission_exchange.adapter_digest), 64)
-                if id == "bee.driver.claude.binding:binding" then
+                if id == "bee.drivers.claude.binding:binding" then
                     test.eq(window.sandbox.git_writable_roots_adapter, "claude_add_dir")
-                elseif id == "bee.driver.codex.binding:binding" then
+                elseif id == "bee.drivers.codex.binding:binding" then
                     test.eq(window.sandbox.git_writable_roots_adapter, "codex_workspace_write")
-                elseif id == "bee.driver.agy.binding:binding" then
+                elseif id == "bee.drivers.agy.binding:binding" then
                     test.eq(profile.find(binding, "batch").sandbox.git_writable_roots_adapter, "agy_add_dir")
                 end
             end

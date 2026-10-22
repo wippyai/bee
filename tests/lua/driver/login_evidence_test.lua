@@ -42,7 +42,7 @@ local function define_tests()
                 else test.eq(policy_data.allow_host_home, true) end
                 local home = assert(case.launch.provider_home)
                 test.eq(home.private, private)
-                local profiles = assert(registry.get("bee.driver." .. case.provider .. ".profiles:profiles"))
+                local profiles = assert(registry.get("bee.drivers." .. case.provider .. ".profiles:profiles"))
                 local profile_data = profiles.data
                 for _, profile in ipairs(profile_data.driver.profiles) do
                     if profile.id == "window" then test.eq(profile.isolation_env.private_home, private) end
@@ -54,7 +54,7 @@ local function define_tests()
                 test.eq(login.files[1].variable, case.variable)
                 test.eq(login.files[1].default_directory, case.directory)
                 test.eq(login.files[1].path, case.path)
-                local found = assert(universal.locate("bee.driver." .. case.provider .. ".descriptor:cli")({
+                local found = assert(universal.locate("bee.drivers." .. case.provider .. ".descriptor:cli")({
                     profile_id = "window", configured = true, executable = {present = true, version = "1.2.3"},
                     login_checks = (function(): {{present: boolean?, exit_code: integer?}}
                         local checks: {{present: boolean?, exit_code: integer?}} = {}
@@ -95,7 +95,7 @@ local function define_tests()
             local home: driver_types.ProviderHome = assert(opencode.specification(assert(opencode.decode({profile_id = "batch", brief = "fixture"}))).provider_home)
             local key = ".config/opencode/provider.key"
             local config = ".config/opencode/.bee-global-opencode.json"
-            local original: formats.Format = {schema_revision = "bee.credential-format@1", file = {
+            local original: formats.Format = {schema_revision = "bee.credential-format@2", environments = {}, file = {
                 path = ".local/share/opencode/auth.json", content_format = "json", initialize = {
                     {path = config, source_path = ".config/opencode/opencode.json", content = '{"apiKey":"{file:~/' .. key .. '}"}'},
                     {path = key, source_path = key, content = "fixture-provider-key"}}}}

@@ -1,97 +1,6 @@
 version: '1.0'
 namespace: bee.driver.muse.profiles
 entries:
-- name: profiles
-  kind: registry.entry
-  meta:
-    type: harness.profile
-    driver_ref: bee.driver.muse.binding:binding
-  data:
-    driver:
-      schema_revision: bee.driver@1
-      kind: harness
-      title: Muse CLI
-      implementation_version: 1.3.0
-      default_profile: batch
-      profiles:
-      - id: batch
-        mode: batch
-        hooks:
-          transports:
-          - command
-          events:
-          - SessionStart
-          - UserPromptSubmit
-          - PreToolUse
-          - PostToolUse
-          - PermissionRequest
-          - Stop
-          adapter_ref: bee.driver.muse.descriptor:cli
-        permission_exchange:
-          mode: adapter
-          adapter_ref: bee.driver.permission:permission_request_hook
-          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
-        inbound:
-        - next_turn
-        protocol: stream-json
-        protocol_revision: msp-exec-1
-        answer_path:
-          strategy: accumulate
-          adapter_ref: bee.driver.muse.descriptor:cli
-        resume:
-          strategy: per-process
-          portable: false
-        isolation_env:
-          variables:
-          - HOME
-          private_home: true
-        exit_codes_trustworthy: false
-        input_ready:
-          strategy: protocol
-          adapter_ref: bee.driver.muse.descriptor:cli
-          timeout_ms: 15000
-        interrupt:
-          methods:
-          - signal_group
-        mcp:
-          client_transports:
-          - streamable_http
-          initialize_timeout_ms: 30000
-        sandbox:
-          providers:
-          - muse-sandbox
-          required_placement_features: []
-      - id: window
-        mode: window
-        hooks:
-          transports:
-          - command
-          events:
-          - SessionStart
-          - UserPromptSubmit
-          - PreToolUse
-          - PostToolUse
-          - PermissionRequest
-          - Stop
-          adapter_ref: bee.driver.muse.descriptor:cli
-        protocol: pty
-        protocol_revision: native-window-1
-        answer_path:
-          strategy: none
-        resume:
-          strategy: none
-          portable: false
-        isolation_env:
-          variables:
-          - HOME
-          private_home: true
-        exit_codes_trustworthy: false
-        input_ready:
-          strategy: none
-        permission_exchange:
-          mode: adapter
-          adapter_ref: bee.driver.permission:permission_request_hook
-          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
 - name: default_window
   kind: registry.entry
   meta:
@@ -101,7 +10,7 @@ entries:
     schema_revision: bee.launch-definition@1
     launch_id: muse-window
     title: Muse CLI
-    binding_ref: bee.driver.muse.binding:binding
+    binding_ref: bee.drivers.muse.binding:binding
     profile_id: window
     private_credentials:
     - muse_login
@@ -136,7 +45,7 @@ entries:
     schema_revision: bee.launch-definition@1
     launch_id: muse-research-batch
     title: Muse researcher
-    binding_ref: bee.driver.muse.binding:binding
+    binding_ref: bee.drivers.muse.binding:binding
     profile_id: batch
     policy_ref: bee.driver.muse.security:launch_policy_muse_batch
     default_mode: batch

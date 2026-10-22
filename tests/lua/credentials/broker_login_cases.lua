@@ -146,7 +146,7 @@ function M.define(workspace: string)
         test.eq(value(call(runner, "check", request)).destination, "auth.json")
         -- A changed host-selected format is fenced independently of the
         -- source digest and cannot retarget a retained projection.
-        local format_entry = registry.get("bee.driver.codex.credentials:credential_format")
+        local format_entry = registry.get("bee.drivers.codex.credentials:credential_format")
         if not format_entry then error("codex credential format") end
         local format_data = assert(bounds.object(format_entry.data))
         local file_data = assert(bounds.object(format_data.file))

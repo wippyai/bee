@@ -4,9 +4,11 @@
 -- no resource access.
 local bounds = require("bounds")
 local M = {}
+M.REVISION = "bee.credential-format@2"
 type Initializer = {path: string, content: string, source_path: string?, on_missing_login: boolean?}
 type File = {path: string, content_format: string, initialize: {Initializer}}
-type Format = {schema_revision: string, environment_destination: string?, file: File?}
+-- environments: the variables an API key or token reaches the CLI through.
+type Format = {schema_revision: string, environments: {string}, file: File?}
 M.MAX_INITIALIZATION_BYTES = 65536
 
 function M.path(value: unknown): string?
@@ -16,12 +18,17 @@ function M.path(value: unknown): string?
 end
 function M.decode(value: unknown): (Format?, string?)
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"schema_revision", "environment_destination", "file"}) then return nil, "invalid credential format fields" end
-    if object.schema_revision ~= "bee.credential-format@1" then return nil, "unsupported credential format revision" end
-    local environment: string? = nil
-    if object.environment_destination ~= nil then
-        environment = bounds.text(object.environment_destination, 128)
-        if not environment or not environment:match("^[A-Z_][A-Z0-9_]*$") then return nil, "invalid credential environment destination" end
+    if not object or bounds.fields(object, {"schema_revision", "environments", "file"}) then return nil, "invalid credential format fields" end
+    if object.schema_revision ~= M.REVISION then return nil, "unsupported credential format revision" end
+    local environments: {string} = {}
+    if object.environments ~= nil then
+        local rows = bounds.array(object.environments, 8)
+        if not rows then return nil, "credential environments must be a list of at most eight variables" end
+        for _, raw in ipairs(rows) do
+            local name = bounds.text(raw, 128)
+            if not name or not name:match("^[A-Z_][A-Z0-9_]*$") then return nil, "invalid credential environment variable" end
+            environments[#environments + 1] = name
+        end
     end
     local file: File? = nil
     if object.file ~= nil then
@@ -68,7 +75,7 @@ function M.decode(value: unknown): (Format?, string?)
         end
         file = {path = path, content_format = content_format, initialize = initializers}
     end
-    if not environment and not file then return nil, "credential format has no destination" end
-    return {schema_revision = "bee.credential-format@1", environment_destination = environment, file = file}, nil
+    if #environments == 0 and not file then return nil, "credential format has no destination" end
+    return {schema_revision = M.REVISION, environments = environments, file = file}, nil
 end
 return M

@@ -25,8 +25,10 @@ type Profile = {id: string, mode: string}
 type Initializer = {path: string, content: string}
 type CredentialFile = {path: string, write_back: boolean, initialize: {Initializer}}
 type Credentials = {files: {CredentialFile}, variables: {string}}
-type Driver = {id: string, title: string, default_profile: string, profiles: {Profile}, options: {Option},
-    capabilities: {string}, unattended: boolean, credentials: Credentials}
+-- unattended: the option values the CLI runs with when no person answers its
+-- prompts, absent when the driver declares no unattended mode.
+type Driver = {id: string, title: string, executable: string, default_profile: string, profiles: {Profile}, options: {Option},
+    capabilities: {string}, unattended: Object?, credentials: Credentials}
 type LaunchRequest = {brief: string, placement: Placement, home: string, profile_id: string?, resume_ref: string?,
     options: Object?, unattended: boolean?, gateway: Gateway?, instructions: string?}
 type SecretField = {path: {string}, environment: string, prefix: string}
@@ -36,7 +38,8 @@ type Launch = {executable: string, argv: {string}, stdin: string?, stdin_eof: bo
 type Problem = {index: integer, message: string}
 type Step = {observations: {Object}, terminal: Object?, problems: {Problem}}
 type Reader = {feed: (Reader, string) -> (Step?, error?), finish: (Reader) -> (Step?, error?)}
-type Selected = {binding_ref: string, driver_id: string, profiles_ref: string?, descriptor: descriptor.Descriptor, descriptor_ref: string}
+type Selected = {binding_ref: string, driver_id: string, profiles_ref: string?, credential_format_ref: string,
+    descriptor: descriptor.Descriptor, descriptor_ref: string}
 
 local M = {}
 
@@ -50,12 +53,14 @@ local function selected_in(pinned: registry.Snapshot, ref: string): (Selected?, 
     local meta = binding and bounds.object(binding.meta)
     local driver_id = meta and bounds.id(meta.driver_id)
     local descriptor_ref = meta and bounds.id(meta.descriptor_ref)
-    if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" or not driver_id or not descriptor_ref then
+    local credential_format_ref = meta and bounds.id(meta.credential_format_ref)
+    if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" or not driver_id or not descriptor_ref or not credential_format_ref then
         return nil, fail(errors.INTERNAL, "activated binding " .. ref .. " is not a declarative driver")
     end
     local loaded, load_error = descriptor.load_from(pinned, descriptor_ref)
     if not loaded then return nil, fail(errors.INTERNAL, ref .. " descriptor: " .. tostring(load_error)) end
-    return {binding_ref = ref, driver_id = driver_id, profiles_ref = bounds.id(meta.profiles_ref), descriptor = loaded, descriptor_ref = descriptor_ref}, nil
+    return {binding_ref = ref, driver_id = driver_id, profiles_ref = bounds.id(meta.profiles_ref), credential_format_ref = credential_format_ref,
+        descriptor = loaded, descriptor_ref = descriptor_ref}, nil
 end
 
 local function activated_refs(pinned: registry.Snapshot): ({string}?, error?)
@@ -148,48 +153,37 @@ local function capabilities_of(selected: Selected): {string}
     return result
 end
 
--- credentials_of names where a credential reaches the CLI: the login files
--- its home declares, with the files its credential format initializes beside
--- them, and the environment variables its login evidence accepts.
+-- credentials_of names where a credential reaches the CLI, as the binding's
+-- credential format declares it: the variables an API key or token goes to,
+-- and the login files its home keeps with the files each one initializes.
 local function credentials_of(pinned: registry.Snapshot, selected: Selected): (Credentials?, error?)
-    local initialize: {[string]: {Initializer}} = {}
-    local found, find_error = pinned:find({["meta.type"] = "bee.credential_format"})
-    if find_error then return nil, fail(errors.INTERNAL, "credential formats: " .. tostring(find_error)) end
-    for _, raw in ipairs(found or {}) do
-        local entry = bounds.object(raw)
-        local meta = entry and bounds.object(entry.meta)
-        if entry and meta and meta.provider == selected.driver_id then
-            local decoded, decode_error = credential_format.decode(entry.data)
-            if not decoded then return nil, fail(errors.INTERNAL, selected.driver_id .. " credential format: " .. tostring(decode_error)) end
-            if decoded.file then
-                local items: {Initializer} = {}
-                for _, item in ipairs(decoded.file.initialize) do items[#items + 1] = {path = item.path, content = item.content} end
-                initialize[decoded.file.path] = items
-            end
-        end
-    end
+    local entry, entry_error = resolver.entry(pinned, selected.credential_format_ref)
+    if entry_error then return nil, fail(errors.INTERNAL, selected.credential_format_ref .. ": " .. tostring(entry_error)) end
+    if not entry then return nil, fail(errors.INTERNAL, selected.credential_format_ref .. " is not readable") end
+    local decoded, decode_error = credential_format.decode(entry.data)
+    if not decoded then return nil, fail(errors.INTERNAL, selected.credential_format_ref .. ": " .. tostring(decode_error)) end
     local files: {CredentialFile} = {}
-    for _, raw in ipairs(bounds.array(selected.descriptor.provider_home.files, 16) or {}) do
-        local file = bounds.object(raw) or {}
-        local path = bounds.text(file.path, 512)
-        if file.kind == "login" and path then
-            files[#files + 1] = {path = path, write_back = file.write_back == true, initialize = initialize[path] or {}}
+    if decoded.file then
+        local write_back = false
+        for _, raw in ipairs(bounds.array(selected.descriptor.provider_home.files, 16) or {}) do
+            local file = bounds.object(raw) or {}
+            if file.kind == "login" and file.path == decoded.file.path then write_back = file.write_back == true end
         end
+        local initialize: {Initializer} = {}
+        for _, item in ipairs(decoded.file.initialize) do initialize[#initialize + 1] = {path = item.path, content = item.content} end
+        files[1] = {path = decoded.file.path, write_back = write_back, initialize = initialize}
     end
     local variables: {string} = {}
-    for _, evidence in ipairs(selected.descriptor.login_evidence.any_of or {}) do
-        if evidence.kind == "env_present" then
-            for _, name in ipairs(evidence.names) do variables[#variables + 1] = name end
-        end
-    end
+    for _, name in ipairs(decoded.environments) do variables[#variables + 1] = name end
     return {files = files, variables = variables}, nil
 end
 
 local function driver_of(pinned: registry.Snapshot, selected: Selected): (Driver?, error?)
     local credentials, credentials_error = credentials_of(pinned, selected)
     if not credentials then return nil, credentials_error end
-    local result: Driver = {id = selected.driver_id, title = selected.driver_id, default_profile = "", profiles = {},
-        options = options_of(selected), capabilities = capabilities_of(selected), unattended = bounds.object(selected.descriptor.options.unattended) ~= nil,
+    local result: Driver = {id = selected.driver_id, title = selected.driver_id, executable = selected.descriptor.executable,
+        default_profile = "", profiles = {}, options = options_of(selected), capabilities = capabilities_of(selected),
+        unattended = bounds.object(selected.descriptor.options.unattended),
         credentials = credentials}
     if selected.profiles_ref then
         local entry, entry_error = resolver.entry(pinned, selected.profiles_ref)

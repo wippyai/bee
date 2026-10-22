@@ -65,5 +65,6 @@ entries:
     type: harness.driver
     driver_id: claude
     descriptor_ref: bee.drivers.claude.descriptor:cli
+    credential_format_ref: bee.drivers.claude.credentials:credential_format
     accepts_model: true
     profiles_ref: bee.drivers.claude.profiles:profiles

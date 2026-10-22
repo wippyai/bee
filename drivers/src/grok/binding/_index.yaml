@@ -81,6 +81,7 @@ entries:
     type: harness.driver
     driver_id: grok
     descriptor_ref: bee.drivers.grok.descriptor:cli
+    credential_format_ref: bee.drivers.grok.credentials:credential_format
     accepts_model: true
     profiles_ref: bee.drivers.grok.profiles:profiles
 

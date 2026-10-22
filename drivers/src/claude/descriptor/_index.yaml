@@ -1053,6 +1053,7 @@ entries:
               flag: --mcp-config
           capabilities:
           - profile-option
+          - network
           ceiling: []
           render:
           - kind: argv
@@ -1165,6 +1166,7 @@ entries:
               flag: --plugin-url
           capabilities:
           - profile-option
+          - network
           ceiling: []
           render:
           - kind: argv
@@ -1281,6 +1283,7 @@ entries:
               flag: --settings
           capabilities:
           - profile-option
+          - bypass
           ceiling: []
           render:
           - kind: argv

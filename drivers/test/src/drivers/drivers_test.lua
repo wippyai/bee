@@ -56,11 +56,13 @@ local function define_tests()
             local ids: {string} = {}
             for _, driver in ipairs(list) do
                 ids[#ids + 1] = driver.id
-                test.is_true(driver.unattended, driver.id .. " declares an unattended mode")
+                test.not_nil(driver.unattended, driver.id .. " declares an unattended mode")
             end
             test.eq(joined(ids), "agy claude codex grok muse opencode")
             local claude = assert(drivers.get("claude"))
             test.eq(claude.title, "Claude Code")
+            test.eq(claude.executable, "claude")
+            test.eq(assert(claude.unattended).permission_mode, "bypassPermissions")
             local model = nil
             for _, option in ipairs(claude.options) do if option.name == "model" then model = option end end
             test.eq(assert(model).label, "Model")
@@ -78,6 +80,8 @@ local function define_tests()
             test.is_true(contains(claude.credentials.variables, "CLAUDE_CODE_OAUTH_TOKEN"))
             local codex = assert(drivers.get("codex"))
             test.eq(table.concat(codex.credentials.variables, ","), "CODEX_API_KEY")
+            local opencode = assert(drivers.get("opencode"))
+            test.is_false(contains(opencode.credentials.variables, "OPENCODE_CONFIG_CONTENT"), "configuration is not a credential")
         end)
         test.it("names an unknown driver as not found", function()
             local driver, err = drivers.get("nonexistent")
@@ -181,6 +185,19 @@ local function define_tests()
             for _, item in ipairs(placements.DOCKER.allows) do open_allows[#open_allows + 1] = item end
             test.not_nil(drivers.launch("codex", {brief = "x", home = CLAUDE_HOME, placement = allowing(open_allows),
                 options = {network_access = true, sandbox = "workspace-write"}}))
+        end)
+        test.it("bounds configuration-bearing and sandbox-disabling options by their capabilities", function()
+            local muse, muse_err = drivers.launch("muse", {brief = "x", home = CLAUDE_HOME, placement = without("network"), unattended = true})
+            test.is_nil(muse)
+            test.is_true(errors.is(muse_err, errors.INVALID), tostring(muse_err))
+            test.is_true(tostring(muse_err):find("permission capabilities exceed", 1, true) ~= nil, tostring(muse_err))
+            local open_allows: {string} = {"profile-option"}
+            for _, item in ipairs(placements.DOCKER.allows) do if item ~= "bypass" then open_allows[#open_allows + 1] = item end end
+            local settings, settings_err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = allowing(open_allows),
+                options = {settings_ref = "/workspace/settings.json"}})
+            test.is_nil(settings)
+            test.is_true(errors.is(settings_err, errors.INVALID), tostring(settings_err))
+            test.is_true(tostring(settings_err):find("permission capabilities exceed", 1, true) ~= nil, tostring(settings_err))
         end)
         test.it("reads a recorded Claude stream fed in chunks into records and one terminal report", function()
             local terminal, observations, problems = read("claude", "/claude/stream-json-2/plain.jsonl", 37)

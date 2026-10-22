@@ -96,7 +96,7 @@ entries:
   security: {policies: [bee.drivers.tests:descriptor_discovery_policy]}
   method: run
   meta: {type: test, suite: bee}
-  modules: [registry, funcs]
+  modules: [registry, funcs, security]
   imports:
     principals: bee.drivers.tests.support:fixtures
     test: wippy.test:test
@@ -200,3 +200,12 @@ entries:
   method: handle
   meta: {type: test_support}
   imports: {universal: bee.drivers.binding:universal}
+- name: activation_unreadable
+  kind: security.policy
+  meta:
+    type: test_support
+    comment: Reads the drivers host declaration and calls the activation probe, but not the activation entry it names
+  policy:
+    actions: [registry.get, registry.snapshot, funcs.call]
+    resources: [bee.drivers:host, bee.drivers.tests:active_probe]
+    effect: allow

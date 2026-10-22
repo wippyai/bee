@@ -6,6 +6,7 @@ local profile_values = require("profile_values")
 local resolver = require("resolver")
 local registry = require("registry")
 local funcs = require("funcs")
+local security = require("security")
 local login_evidence = require("login_evidence")
 local bounds = require("bounds")
 type Object = {[string]: unknown}
@@ -76,17 +77,12 @@ local function define_tests()
         test.it("reports a failed activation read instead of an empty activation", function()
             local ok = assert(funcs.new():call("bee.drivers.tests:active_probe"))
             test.is_true(assert(bounds.object(ok)).active)
-            local pinned = assert(registry.snapshot())
-            local activation_ref = assert(resolver.activation_ref(pinned))
-            local failing = {get = function(_, ref: string)
-                if ref == activation_ref then
-                    return nil, errors.new({kind = errors.UNAVAILABLE, message = "registry unavailable", retryable = true})
-                end
-                return pinned:get(ref)
-            end}
-            local active, active_error = resolver.active(failing :: any)
-            test.is_nil(active)
-            test.eq(active_error, "read " .. activation_ref .. ": registry unavailable")
+            -- A caller that can read the host declaration but not the
+            -- activation it names gets the read failure, not an empty set.
+            local scope = security.new_scope({assert(security.policy("bee.drivers.tests:activation_unreadable"))})
+            local denied = assert(bounds.object(assert(assert(funcs.new():with_scope(scope)):call("bee.drivers.tests:active_probe"))))
+            test.is_false(denied.active)
+            test.is_true(tostring(denied.error):find("read bee.drivers.tests.host:activation", 1, true) ~= nil, tostring(denied.error))
         end)
         test.it("follows the declared configure target across unrelated namespaces", function()
             local pinned = assert(registry.snapshot())

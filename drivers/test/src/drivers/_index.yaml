@@ -11,6 +11,9 @@ entries:
     test: wippy.test:test
     drivers: bee.drivers:drivers
     placements: bee.drivers.tests.support:placements
+    placement: bee.drivers.descriptor:placement
+    configuration_types: bee.drivers:configuration_types
+    driver_types: bee.drivers:types
 - name: launch_probe
   kind: function.lua
   meta: {type: test_support}
@@ -23,38 +26,8 @@ entries:
   kind: security.policy
   meta:
     type: test_support
-    comment: The grant the README documents for a host that uses the drivers library
+    comment: The host's own entries beside bee.drivers.security:host_access - its activation entry, and here the probe it calls
   policy:
-    actions: [registry.get, registry.snapshot, contract.get, contract.open, contract.call, funcs.call]
-    resources:
-    - bee.drivers:host
-    - bee.drivers:driver
-    - bee.drivers.tests.host:activation
-    - bee.drivers.binding:configure
-    - prepare
-    - bee.drivers.tests.drivers:launch_probe
-    - bee.drivers.agy.binding:binding
-    - bee.drivers.agy.descriptor:cli
-    - bee.drivers.agy.profiles:profiles
-    - bee.drivers.agy.credentials:credential_format
-    - bee.drivers.claude.binding:binding
-    - bee.drivers.claude.descriptor:cli
-    - bee.drivers.claude.profiles:profiles
-    - bee.drivers.claude.credentials:credential_format
-    - bee.drivers.codex.binding:binding
-    - bee.drivers.codex.descriptor:cli
-    - bee.drivers.codex.profiles:profiles
-    - bee.drivers.codex.credentials:credential_format
-    - bee.drivers.grok.binding:binding
-    - bee.drivers.grok.descriptor:cli
-    - bee.drivers.grok.profiles:profiles
-    - bee.drivers.grok.credentials:credential_format
-    - bee.drivers.muse.binding:binding
-    - bee.drivers.muse.descriptor:cli
-    - bee.drivers.muse.profiles:profiles
-    - bee.drivers.muse.credentials:credential_format
-    - bee.drivers.opencode.binding:binding
-    - bee.drivers.opencode.descriptor:cli
-    - bee.drivers.opencode.profiles:profiles
-    - bee.drivers.opencode.credentials:credential_format
+    actions: [registry.get, funcs.call]
+    resources: [bee.drivers.tests.host:activation, bee.drivers.tests.drivers:launch_probe]
     effect: allow

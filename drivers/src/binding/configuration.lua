@@ -536,13 +536,18 @@ function M.digest(binding_ref: string?, request_value: unknown, target: string, 
     if hash_error or not digest then return nil, "configuration digest failed" end
     return digest, nil
 end
-function M.call(binding_ref: string?, target: string, request_value: unknown): (vocabulary.Delivery?, string?)
+-- call renders a binding's configuration under the configure function's
+-- authority. A refused request is an INVALID error; a malformed delivery is
+-- INTERNAL; a failed call keeps the runtime's own error.
+function M.call(binding_ref: string?, target: string, request_value: unknown): (vocabulary.Delivery?, error?)
     local raw, err = funcs.call("bee.drivers.binding:configure", {binding_ref = binding_ref, target = target, request = request_value})
-    if err then return nil, tostring(err) end
+    if err then return nil, err end
     local reply = bounds.object(raw)
-    if not reply then return nil, "Agent configuration returned no delivery." end
-    if type(reply.error) == "string" then return nil, reply.error end
-    return M.decode_delivery(reply.delivery)
+    if not reply then return nil, errors.new({kind = errors.INTERNAL, message = "agent configuration returned no delivery"}) end
+    if type(reply.error) == "string" then return nil, errors.new({kind = errors.INVALID, message = reply.error}) end
+    local delivery, decode_error = M.decode_delivery(reply.delivery)
+    if not delivery then return nil, errors.new({kind = errors.INTERNAL, message = "agent configuration delivery: " .. tostring(decode_error)}) end
+    return delivery, nil
 end
 function M.execute(binding_ref: string?, target: string, request_value: unknown): (vocabulary.Delivery?, string?)
     local request, request_error = M.decode_request(request_value)

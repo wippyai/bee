@@ -1,0 +1,39 @@
+version: '1.0'
+namespace: bee.drivers.security
+entries:
+- name: host_access
+  kind: security.policy
+  meta:
+    comment: What a host's callers need to use bee.drivers:drivers with the shipped drivers. The host also grants registry.get on its own activation entry.
+  policy:
+    actions: [registry.get, registry.snapshot, contract.get, contract.open, contract.call, funcs.call]
+    resources:
+    - bee.drivers:host
+    - bee.drivers:driver
+    - bee.drivers.binding:configure
+    - prepare
+    - bee.drivers.agy.binding:binding
+    - bee.drivers.agy.descriptor:cli
+    - bee.drivers.agy.profiles:profiles
+    - bee.drivers.agy.credentials:credential_format
+    - bee.drivers.claude.binding:binding
+    - bee.drivers.claude.descriptor:cli
+    - bee.drivers.claude.profiles:profiles
+    - bee.drivers.claude.credentials:credential_format
+    - bee.drivers.codex.binding:binding
+    - bee.drivers.codex.descriptor:cli
+    - bee.drivers.codex.profiles:profiles
+    - bee.drivers.codex.credentials:credential_format
+    - bee.drivers.grok.binding:binding
+    - bee.drivers.grok.descriptor:cli
+    - bee.drivers.grok.profiles:profiles
+    - bee.drivers.grok.credentials:credential_format
+    - bee.drivers.muse.binding:binding
+    - bee.drivers.muse.descriptor:cli
+    - bee.drivers.muse.profiles:profiles
+    - bee.drivers.muse.credentials:credential_format
+    - bee.drivers.opencode.binding:binding
+    - bee.drivers.opencode.descriptor:cli
+    - bee.drivers.opencode.profiles:profiles
+    - bee.drivers.opencode.credentials:credential_format
+    effect: allow

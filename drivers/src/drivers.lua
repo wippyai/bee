@@ -13,17 +13,26 @@ local codec_registry = require("codec_registry")
 local configuration = require("configuration")
 local stream_json = require("stream_json")
 local credential_format = require("credential_format")
+local observation = require("observation")
+local driver_types = require("driver_types")
+local placements = require("placements")
+local configuration_types = require("configuration_types")
+local record_types = require("record_types")
 
 type Object = {[string]: unknown}
-type Mount = {resource: string, target: string, access: "read" | "write"}
-type Placement = {kind: "native" | "container", mounts: {Mount}, network: string, allows: {string}}
-type Gateway = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string,
-    hook_token_environment: string?, hook_command: string?}
+type Placement = placements.Placement
+-- The host's MCP and hook endpoint for one run.
+type Gateway = configuration_types.GatewayInput
+-- A file to write under the CLI home: secret_fields name environment values
+-- the host injects at JSON paths, composition a file it merges onto.
+type DeliveredFile = configuration_types.Configuration
+type Observation = record_types.Observation
+type Terminal = driver_types.Terminal
 type Option = {name: string, label: string, description: string, section: string, group: string, order: number,
     type: string, values: {unknown}?, schema: Object?, default: unknown, profiles: {string}?}
 type Profile = {id: string, mode: string}
 type Initializer = {path: string, content: string}
-type CredentialFile = {path: string, write_back: boolean, initialize: {Initializer}}
+type CredentialFile = {path: string, content_format: "json" | "opaque", write_back: boolean, initialize: {Initializer}}
 type Credentials = {files: {CredentialFile}, variables: {string}}
 -- unattended: the option values the CLI runs with when no person answers its
 -- prompts, absent when the driver declares no unattended mode.
@@ -31,12 +40,10 @@ type Driver = {id: string, title: string, executable: string, default_profile: s
     capabilities: {string}, unattended: Object?, credentials: Credentials}
 type LaunchRequest = {brief: string, placement: Placement, home: string, profile_id: string?, resume_ref: string?,
     options: Object?, unattended: boolean?, gateway: Gateway?, instructions: string?}
-type SecretField = {path: {string}, environment: string, prefix: string}
-type File = {path: string, content: string, secret_fields: {SecretField}?, composition: Object?}
 type Launch = {executable: string, argv: {string}, stdin: string?, stdin_eof: boolean?, environment: {[string]: string},
-    files: {File}, readiness: string}
-type Problem = {index: integer, message: string}
-type Step = {observations: {Object}, terminal: Object?, problems: {Problem}}
+    files: {DeliveredFile}, readiness: string}
+type Problem = {index: integer, message: string, sample: string}
+type Step = {observations: {Observation}, terminal: Terminal?, problems: {Problem}}
 type Reader = {feed: (Reader, string) -> (Step?, error?), finish: (Reader) -> (Step?, error?)}
 -- configure_target: the binding's configure method, which the configure
 -- function validates under its own authority when it renders.
@@ -71,38 +78,32 @@ local function selected_in(pinned: registry.Snapshot, ref: string): (Selected?, 
         configure_target = configure_target, descriptor = loaded, descriptor_ref = descriptor_ref}, nil
 end
 
-local function activated_refs(pinned: registry.Snapshot): ({string}?, error?)
+-- index maps each activated driver id to its binding. Two activated
+-- bindings declaring one driver id make the id ambiguous, so it is refused.
+local function index(pinned: registry.Snapshot): ({[string]: string}?, error?)
     local active, active_error = resolver.active(pinned)
     if not active then return nil, fail(errors.INTERNAL, tostring(active_error)) end
-    local refs: {string} = {}
-    for ref in pairs(active) do refs[#refs + 1] = ref end
-    table.sort(refs)
-    return refs, nil
-end
-
-local function activated(pinned: registry.Snapshot): ({Selected}?, error?)
-    local refs, refs_error = activated_refs(pinned)
-    if not refs then return nil, refs_error end
-    local result: {Selected} = {}
-    for _, ref in ipairs(refs) do
-        local selected, selected_error = selected_in(pinned, ref)
-        if not selected then return nil, selected_error end
-        result[#result + 1] = selected
-    end
-    return result, nil
-end
-
--- find decodes only the descriptor of the binding that declares driver_id.
-local function find(pinned: registry.Snapshot, driver_id: string): (Selected?, error?)
-    local refs, refs_error = activated_refs(pinned)
-    if not refs then return nil, refs_error end
-    for _, ref in ipairs(refs) do
+    local by_id: {[string]: string} = {}
+    for ref in pairs(active) do
         local binding, binding_error = resolver.entry(pinned, ref)
         if binding_error then return nil, fail(errors.INTERNAL, binding_error) end
         local meta = binding and bounds.object(binding.meta)
-        if meta and meta.driver_id == driver_id then return selected_in(pinned, ref) end
+        local driver_id = meta and bounds.id(meta.driver_id)
+        if not driver_id then return nil, fail(errors.INTERNAL, "activated binding " .. ref .. " declares no driver_id") end
+        if by_id[driver_id] then
+            return nil, fail(errors.CONFLICT, "activated bindings " .. by_id[driver_id] .. " and " .. ref .. " both declare driver " .. driver_id)
+        end
+        by_id[driver_id] = ref
     end
-    return nil, fail(errors.NOT_FOUND, "driver " .. driver_id .. " is not activated")
+    return by_id, nil
+end
+
+local function find(pinned: registry.Snapshot, driver_id: string): (Selected?, error?)
+    local by_id, index_error = index(pinned)
+    if not by_id then return nil, index_error end
+    local ref = by_id[driver_id]
+    if not ref then return nil, fail(errors.NOT_FOUND, "driver " .. driver_id .. " is not activated") end
+    return selected_in(pinned, ref)
 end
 
 local function snapshot(): (registry.Snapshot?, error?)
@@ -179,7 +180,7 @@ local function credentials_of(pinned: registry.Snapshot, selected: Selected): (C
         end
         local initialize: {Initializer} = {}
         for _, item in ipairs(decoded.file.initialize) do initialize[#initialize + 1] = {path = item.path, content = item.content} end
-        files[1] = {path = decoded.file.path, write_back = write_back, initialize = initialize}
+        files[1] = {path = decoded.file.path, content_format = decoded.file.content_format, write_back = write_back, initialize = initialize}
     end
     local variables: {string} = {}
     for _, name in ipairs(decoded.environments) do variables[#variables + 1] = name end
@@ -210,15 +211,19 @@ end
 function M.list(): ({Driver}?, error?)
     local pinned, pin_error = snapshot()
     if not pinned then return nil, pin_error end
-    local drivers, drivers_error = activated(pinned)
-    if not drivers then return nil, drivers_error end
+    local by_id, index_error = index(pinned)
+    if not by_id then return nil, index_error end
+    local refs: {{id: string, ref: string}} = {}
+    for id, ref in pairs(by_id) do refs[#refs + 1] = {id = id, ref = ref} end
+    table.sort(refs, function(a: {id: string, ref: string}, b: {id: string, ref: string}): boolean return a.id < b.id end)
     local result: {Driver} = {}
-    for _, selected in ipairs(drivers) do
+    for _, item in ipairs(refs) do
+        local selected, selected_error = selected_in(pinned, item.ref)
+        if not selected then return nil, selected_error end
         local driver, driver_error = driver_of(pinned, selected)
         if not driver then return nil, driver_error end
         result[#result + 1] = driver
     end
-    table.sort(result, function(a: Driver, b: Driver): boolean return a.id < b.id end)
     return result, nil
 end
 
@@ -231,15 +236,6 @@ function M.get(driver_id: string): (Driver?, error?)
     return driver_of(pinned, selected)
 end
 
-local function delivered_files(files: {Object}): {File}
-    local result: {File} = {}
-    for _, file in ipairs(files) do
-        result[#result + 1] = {path = tostring(file.path), content = tostring(file.content),
-            secret_fields = file.secret_fields :: {SecretField}?, composition = bounds.object(file.composition)}
-    end
-    return result
-end
-
 -- launch returns what the host runs for one turn: the command, the
 -- environment and the files to write under the placement's home. Option
 -- values, the unattended preset and MCP gateway configuration are all
@@ -249,7 +245,9 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     if not brief then return nil, fail(errors.INVALID, "brief must be bounded text") end
     local home = bounds.text(request.home, 4096)
     if not home or home:sub(1, 1) ~= "/" then return nil, fail(errors.INVALID, "home must be an absolute path") end
-    if request.placement == nil then return nil, fail(errors.INVALID, "placement is required") end
+    local placed, placement_error = placements.decode(request.placement)
+    if placement_error then return nil, fail(errors.INVALID, placement_error) end
+    if not placed then return nil, fail(errors.INVALID, "placement is required") end
     local pinned, pin_error = snapshot()
     if not pinned then return nil, pin_error end
     local selected, find_error = find(pinned, driver_id)
@@ -294,7 +292,7 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     local context = request.profile_id == "window" and "window" or request.resume_ref ~= nil and "resume" or "first_turn"
     local delivery, delivery_error = configuration.call(selected.binding_ref, selected.configure_target, {fixture = false, home_directory = home,
         placement = request.placement, option_values = values, context = context, gateway = request.gateway, instructions = instructions})
-    if not delivery then return nil, fail(errors.INVALID, tostring(delivery_error)) end
+    if not delivery then return nil, delivery_error end
 
     local argv: {string} = {}
     for _, argument in ipairs(delivery.arguments) do argv[#argv + 1] = argument end
@@ -313,7 +311,7 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
         return nil, fail(errors.INTERNAL, selected.binding_ref .. " prepare returned a non-text stdin")
     end
     return {executable = tostring(prepared.executable), argv = argv, stdin = prepared.stdin :: string?,
-        stdin_eof = prepared.stdin_eof == true or nil, environment = environment, files = delivered_files(delivery.files),
+        stdin_eof = prepared.stdin_eof == true or nil, environment = environment, files = delivery.files,
         readiness = tostring(prepared.readiness)}, nil
 end
 
@@ -331,26 +329,38 @@ function M.reader(driver_id: string, resumed: boolean?): (Reader?, error?)
     if not protocol then return nil, fail(errors.INTERNAL, selected.descriptor_ref .. " selects an unsupported codec " .. selected.descriptor.codec) end
     local decoder = stream_json.new(nil)
     local state = protocol.new(resumed == true)
-    local function fold(step: Step, index: integer, value: Object): error?
-        local folded, normalize_error = protocol.normalize(state, index, value)
-        if not folded then return fail(errors.INVALID, "frame " .. tostring(index) .. ": " .. tostring(normalize_error)) end
-        for _, observation in ipairs(folded.observations) do step.observations[#step.observations + 1] = observation end
-        if folded.terminal ~= nil then step.terminal = bounds.object(folded.terminal) end
+    -- take decodes what the codec reported into typed records.
+    local function take(step: Step, observations: {unknown}, terminal: unknown): error?
+        for _, raw in ipairs(observations) do
+            local decoded, decode_error = observation.decode(raw)
+            if not decoded then return fail(errors.INTERNAL, selected.descriptor.codec .. " produced an invalid observation: " .. tostring(decode_error)) end
+            step.observations[#step.observations + 1] = decoded
+        end
+        if terminal ~= nil then
+            local decoded, decode_error = driver_types.decode_terminal(terminal)
+            if not decoded then return fail(errors.INTERNAL, selected.descriptor.codec .. " produced an invalid terminal report: " .. tostring(decode_error)) end
+            step.terminal = decoded
+        end
         return nil
+    end
+    local function fold(step: Step, frame: integer, value: Object): error?
+        local folded, normalize_error = protocol.normalize(state, frame, value)
+        if not folded then return fail(errors.INVALID, "frame " .. tostring(frame) .. ": " .. tostring(normalize_error)) end
+        return take(step, folded.observations, folded.terminal)
     end
     local reader: Reader = {
         feed = function(_self: Reader, chunk: string): (Step?, error?)
             local envelopes, problems, feed_error = stream_json.feed(decoder, chunk)
             if feed_error then return nil, fail(errors.INVALID, feed_error) end
             local step: Step = {observations = {}, problems = {}}
-            for _, problem in ipairs(problems) do step.problems[#step.problems + 1] = {index = problem.index, message = problem.message} end
+            for _, problem in ipairs(problems) do step.problems[#step.problems + 1] = {index = problem.index, message = problem.message, sample = problem.sample} end
             for _, envelope in ipairs(envelopes) do
                 local value = bounds.object(envelope.value)
                 if value then
                     local fold_error = fold(step, envelope.index, value)
                     if fold_error then return nil, fold_error end
                 else
-                    step.problems[#step.problems + 1] = {index = envelope.index, message = "frame is not a JSON object"}
+                    step.problems[#step.problems + 1] = {index = envelope.index, message = "frame is not a JSON object", sample = ""}
                 end
             end
             return step, nil
@@ -358,11 +368,11 @@ function M.reader(driver_id: string, resumed: boolean?): (Reader?, error?)
         finish = function(_self: Reader): (Step?, error?)
             local step: Step = {observations = {}, problems = {}}
             local tail = stream_json.finish(decoder)
-            if tail then step.problems[#step.problems + 1] = {index = tail.index, message = tail.message} end
+            if tail then step.problems[#step.problems + 1] = {index = tail.index, message = tail.message, sample = tail.sample} end
             local folded, finish_error = protocol.finish(state, decoder.index + 1)
             if not folded then return nil, fail(errors.INVALID, tostring(finish_error)) end
-            for _, observation in ipairs(folded.observations) do step.observations[#step.observations + 1] = observation end
-            if folded.terminal ~= nil then step.terminal = bounds.object(folded.terminal) end
+            local take_error = take(step, folded.observations, folded.terminal)
+            if take_error then return nil, take_error end
             return step, nil
         end,
     }

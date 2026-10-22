@@ -8,10 +8,10 @@ entries:
     type: test_support
   imports:
     bounds: bee.drivers.values:bounds
-  modules:
-  - registry
 - name: placements
   kind: library.lua
   source: file://placements.lua
   meta:
     type: test_support
+  imports:
+    placement: bee.drivers.descriptor:placement

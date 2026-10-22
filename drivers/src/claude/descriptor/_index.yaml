@@ -52,6 +52,10 @@ entries:
       usage:
       - usage
     configure: claude
+    endpoints:
+    - protocol: anthropic-messages
+      environment:
+        ANTHROPIC_BASE_URL: base_url
     capabilities:
       permission_answers:
         window:

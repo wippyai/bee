@@ -38,10 +38,15 @@ type CredentialFile = {path: string, content_format: "json" | "opaque", write_ba
 type Credentials = {files: {CredentialFile}, variables: {string}}
 -- unattended: the option values the CLI runs with when no person answers its
 -- prompts, absent when the driver declares no unattended mode.
+-- endpoints: the protocols of host-selected endpoints the CLI can reach.
 type Driver = {id: string, title: string, executable: string, default_profile: string, profiles: {Profile}, options: {Option},
-    capabilities: {string}, unattended: Object?, credentials: Credentials}
+    capabilities: {string}, unattended: Object?, credentials: Credentials, endpoints: {string}}
+-- Endpoint: where the CLI sends model traffic instead of its vendor's default,
+-- in one of the protocols the driver lists; its key reaches the CLI as a
+-- credential variable.
+type Endpoint = {protocol: string, base_url: string, model: string?}
 type LaunchRequest = {brief: string, placement: Placement, home: string, profile_id: string?, resume_ref: string?,
-    options: Object?, unattended: boolean?, gateway: Gateway?, instructions: string?}
+    options: Object?, unattended: boolean?, gateway: Gateway?, instructions: string?, endpoint: Endpoint?}
 type Launch = {executable: string, argv: {string}, stdin: string?, stdin_eof: boolean?, environment: {[string]: string},
     files: {DeliveredFile}, readiness: string}
 type Problem = {index: integer, message: string, sample: string}
@@ -195,7 +200,8 @@ local function driver_of(pinned: registry.Snapshot, selected: Selected): (Driver
     local result: Driver = {id = selected.driver_id, title = selected.driver_id, executable = selected.descriptor.executable,
         default_profile = "", profiles = {}, options = options_of(selected), capabilities = capabilities_of(selected),
         unattended = bounds.object(selected.descriptor.options.unattended),
-        credentials = credentials}
+        credentials = credentials, endpoints = {}}
+    for _, mapping in ipairs(selected.descriptor.endpoints) do result.endpoints[#result.endpoints + 1] = mapping.protocol end
     if selected.profiles_ref then
         local entry, entry_error = resolver.entry(pinned, selected.profiles_ref)
         if entry_error then return nil, fail(errors.INTERNAL, entry_error) end
@@ -242,6 +248,51 @@ end
 -- environment and the files to write under the placement's home. Option
 -- values, the unattended preset and MCP gateway configuration are all
 -- rendered by the driver; the placement bounds what they may allow.
+M.ENDPOINT_PROVIDER_REF = "bee.drivers:endpoint"
+
+-- Endpoint values a mapping reads: base_url, model, and plain_http, set when
+-- the host chose a plain http base URL.
+type Reach = {mapping: descriptor.EndpointMapping, values: {[string]: unknown}}
+
+local function reach(selected: Selected, value: Endpoint?): (Reach?, error?)
+    if value == nil then return nil, nil end
+    local raw = bounds.object(value)
+    if not raw or bounds.fields(raw, {"protocol", "base_url", "model"}) then return nil, fail(errors.INVALID, "endpoint must be {protocol, base_url, model?}") end
+    local protocol = bounds.id(raw.protocol)
+    local mapping: descriptor.EndpointMapping? = nil
+    for _, candidate in ipairs(selected.descriptor.endpoints) do
+        if candidate.protocol == protocol then mapping = candidate end
+    end
+    if not mapping then return nil, fail(errors.INVALID, selected.driver_id .. " cannot reach a " .. tostring(raw.protocol) .. " endpoint") end
+    local base_url = bounds.text(raw.base_url, configuration.MAX_ENDPOINT_BYTES)
+    local scheme = base_url and base_url:match("^(https?)://[^/?#%s]+[^?#%s]*$")
+    if not base_url or not scheme then return nil, fail(errors.INVALID, "endpoint base_url must be an http(s) URL with a host and no query") end
+    local model: string? = nil
+    if raw.model ~= nil then
+        model = bounds.id(raw.model)
+        if not model then return nil, fail(errors.INVALID, "endpoint model must be a model identifier") end
+    end
+    local values: {[string]: unknown} = {base_url = base_url, model = model, plain_http = scheme == "http"}
+    for _, field in ipairs(mapping.requires) do
+        if values[field] == nil then return nil, fail(errors.INVALID, selected.driver_id .. " needs the endpoint's " .. field) end
+    end
+    return {mapping = mapping, values = values}, nil
+end
+
+-- endpoint_provider builds the provider entry a mapping hands the driver's
+-- configure method.
+local function endpoint_provider(target: Reach): Object?
+    local declared = target.mapping.provider
+    if not declared then return nil end
+    local data: Object = {}
+    for name, value in pairs(declared.data) do data[name] = value end
+    for name, field in pairs(declared.fields) do
+        local value = target.values[field]
+        if value ~= nil and value ~= false then data[name] = value end
+    end
+    return {kind = "registry.entry", meta = {type = declared.type}, data = data}
+end
+
 function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     local brief = bounds.text(request.brief, bounds.MAX_TEXT_BYTES)
     if not brief then return nil, fail(errors.INVALID, "brief must be bounded text") end
@@ -254,6 +305,8 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     if not pinned then return nil, pin_error end
     local selected, find_error = find(pinned, driver_id)
     if not selected then return nil, find_error end
+    local target, endpoint_error = reach(selected, request.endpoint)
+    if endpoint_error then return nil, endpoint_error end
 
     local values: Object = {}
     for name, value in pairs(request.options or {}) do
@@ -292,8 +345,10 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     if not prepared then return nil, fail(errors.INTERNAL, selected.binding_ref .. " prepare returned no launch") end
 
     local context = request.profile_id == "window" and "window" or request.resume_ref ~= nil and "resume" or "first_turn"
+    local provider = target and endpoint_provider(target) or nil
     local delivery, delivery_error = configuration.call(selected.binding_ref, selected.configure_target, {fixture = false, home_directory = home,
-        placement = request.placement, option_values = values, context = context, gateway = request.gateway, instructions = instructions})
+        placement = request.placement, option_values = values, context = context, gateway = request.gateway, instructions = instructions,
+        provider_ref = provider and M.ENDPOINT_PROVIDER_REF or nil, provider = provider})
     if not delivery then return nil, delivery_error end
     -- The launch home starts empty, so a file composed onto a base the home
     -- would keep composes onto an empty document.
@@ -319,6 +374,9 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     local provider_home = selected.descriptor.provider_home
     local variable, directory = bounds.id(provider_home.variable), bounds.text(provider_home.directory, 128)
     if variable and directory then environment[variable] = home .. "/" .. directory end
+    if target then
+        for name, field in pairs(target.mapping.environment) do environment[name] = tostring(target.values[field]) end
+    end
     for _, raw in ipairs(bounds.array(provider_home.extra_variables, 8) or {}) do
         local extra = bounds.object(raw) or {}
         local extra_variable, extra_directory = bounds.id(extra.variable), bounds.text(extra.directory, 128)

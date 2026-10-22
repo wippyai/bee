@@ -123,6 +123,42 @@ local function define_tests()
                 test.is_nil(file.composition, file.path .. " composes onto a machine-home projection the host does not make")
             end
         end)
+        test.it("points Claude Code at a host endpoint through the variables its descriptor declares", function()
+            local claude = assert(drivers.get("claude"))
+            test.is_true(contains(claude.endpoints, "anthropic-messages"))
+            local launch = assert(drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER,
+                endpoint = {protocol = "anthropic-messages", base_url = "http://towers.local:8000"}}))
+            test.eq(launch.environment.ANTHROPIC_BASE_URL, "http://towers.local:8000")
+            local plain = assert(drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER}))
+            test.is_nil(plain.environment.ANTHROPIC_BASE_URL)
+        end)
+        test.it("points Codex at a host endpoint through a model provider in its configuration", function()
+            local codex = assert(drivers.get("codex"))
+            test.is_true(contains(codex.endpoints, "openai-responses"))
+            local launch = assert(drivers.launch("codex", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER,
+                endpoint = {protocol = "openai-responses", base_url = "http://towers.local:8000/v1", model = "qwen3-coder"}}))
+            local config = assert(file_at(launch, ".codex/config.toml"))
+            for _, expected in ipairs({'base_url = "http://towers.local:8000/v1"', 'env_key = "OPENAI_API_KEY"', 'wire_api = "responses"', 'model = "qwen3-coder"'}) do
+                test.is_true(config.content:find(expected, 1, true) ~= nil, config.content)
+            end
+            test.is_nil(config.composition)
+        end)
+        test.it("refuses endpoints a driver does not declare or cannot point at", function()
+            local unknown, unknown_err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER,
+                endpoint = {protocol = "openai-responses", base_url = "https://models.example.test/v1"}})
+            test.is_nil(unknown)
+            test.is_true(errors.is(unknown_err, errors.INVALID), tostring(unknown_err))
+            local modelless, modelless_err = drivers.launch("codex", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER,
+                endpoint = {protocol = "openai-responses", base_url = "https://models.example.test/v1"}})
+            test.is_nil(modelless)
+            test.is_true(errors.is(modelless_err, errors.INVALID), tostring(modelless_err))
+            for _, url in ipairs({"ftp://towers.local", "towers.local:8000", "http://towers.local/v1?key=x"}) do
+                local launch, err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER,
+                    endpoint = {protocol = "anthropic-messages", base_url = url}})
+                test.is_nil(launch)
+                test.is_true(errors.is(err, errors.INVALID), url .. ": " .. tostring(err))
+            end
+        end)
         test.it("refuses unattended runs a placement does not allow to bypass permissions", function()
             local launch, err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = without("bypass"), unattended = true})
             test.is_nil(launch)

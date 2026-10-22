@@ -7,6 +7,65 @@ local schema_values = require("schema_values")
 local M = {}
 type PermissionAnswer = {transport: string, adapter_ref: string?, reason: string?}
 type Capabilities = {permission_answers: {[string]: PermissionAnswer}}
+-- An endpoint mapping says how the CLI reaches a host-selected endpoint of one
+-- protocol: environment variables set to endpoint fields, or a provider entry
+-- the driver's configure method renders, with constant data and fields taken
+-- from the endpoint. Endpoint fields are base_url, model and plain_http (the
+-- base URL is plain http); requires names the fields a protocol needs.
+type EndpointProvider = {type: string, data: {[string]: unknown}, fields: {[string]: string}}
+type EndpointMapping = {protocol: string, requires: {string}, environment: {[string]: string}, provider: EndpointProvider?}
+M.ENDPOINT_FIELDS = {"base_url", "model", "plain_http"}
+
+local function field_map(value: unknown, label: string, key_pattern: string): ({[string]: string}?, string?)
+    if value == nil then return {}, nil end
+    local raw = bounds.object(value)
+    if not raw then return nil, label .. " must map names to endpoint fields" end
+    local mapped: {[string]: string} = {}
+    for key, field in pairs(raw) do
+        local name = bounds.text(key, 128)
+        local source = bounds.member(field, M.ENDPOINT_FIELDS)
+        if not name or not name:match(key_pattern) or not source then return nil, label .. " maps " .. tostring(key) .. " to an unknown endpoint field" end
+        mapped[name] = source
+    end
+    return mapped, nil
+end
+
+local function endpoints(value: unknown): ({EndpointMapping}?, string?)
+    if value == nil then return {}, nil end
+    local rows = bounds.array(value, 8)
+    if not rows then return nil, "CLI descriptor.endpoints must be a list of at most eight mappings" end
+    local result: {EndpointMapping} = {}
+    local seen: {[string]: boolean} = {}
+    for _, raw in ipairs(rows) do
+        local item = bounds.object(raw)
+        if not item or bounds.fields(item, {"protocol", "requires", "environment", "provider"}) then return nil, "CLI descriptor.endpoints entry is malformed" end
+        local protocol = bounds.id(item.protocol)
+        if not protocol or seen[protocol] then return nil, "CLI descriptor.endpoints protocol is missing or repeated" end
+        seen[protocol] = true
+        local requires: {string} = {}
+        for _, field in ipairs(bounds.array(item.requires or {}, 3) or {}) do
+            local name = bounds.member(field, M.ENDPOINT_FIELDS)
+            if not name then return nil, "CLI descriptor.endpoints." .. protocol .. ".requires names an unknown endpoint field" end
+            requires[#requires + 1] = name
+        end
+        local environment, environment_error = field_map(item.environment, "CLI descriptor.endpoints." .. protocol .. ".environment", "^[A-Z_][A-Z0-9_]*$")
+        if not environment then return nil, environment_error end
+        local provider: EndpointProvider? = nil
+        if item.provider ~= nil then
+            local raw_provider = bounds.object(item.provider)
+            if not raw_provider or bounds.fields(raw_provider, {"type", "data", "fields"}) then return nil, "CLI descriptor.endpoints." .. protocol .. ".provider is malformed" end
+            local provider_type, data = bounds.id(raw_provider.type), bounds.object(raw_provider.data or {})
+            local fields, fields_error = field_map(raw_provider.fields, "CLI descriptor.endpoints." .. protocol .. ".provider.fields", "^[a-z][a-z0-9_]*$")
+            if not fields then return nil, fields_error end
+            if not provider_type or not data then return nil, "CLI descriptor.endpoints." .. protocol .. ".provider needs a type and data" end
+            provider = {type = provider_type, data = data, fields = fields}
+        end
+        if next(environment) == nil and not provider then return nil, "CLI descriptor.endpoints." .. protocol .. " maps the endpoint nowhere" end
+        result[#result + 1] = {protocol = protocol, requires = requires, environment = environment, provider = provider}
+    end
+    return result, nil
+end
+
 local function capabilities(value: unknown): (Capabilities?, string?)
     if value == nil then return {permission_answers = {}}, nil end
     local object = bounds.object(value)
@@ -49,6 +108,7 @@ type Descriptor = {
     provider_home: Object,
     configure: string,
     capabilities: Capabilities?,
+    endpoints: {EndpointMapping},
 }
 
 local function object(value: unknown, label: string): (Object?, string?)
@@ -414,7 +474,7 @@ end
 function M.decode(value: unknown): (Descriptor?, string?)
     local item, object_error = object(value, "CLI descriptor")
     if not item then return nil, object_error end
-    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities"})
+    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities", "endpoints"})
     if extra then return nil, "CLI descriptor: " .. extra end
     if item.schema_revision ~= M.SCHEMA then return nil, "CLI descriptor schema_revision is unsupported" end
     local provider, executable, codec, configure = bounds.id(item.provider), bounds.id(item.executable), bounds.member(item.codec, M.CODECS), bounds.id(item.configure)
@@ -821,9 +881,12 @@ function M.decode(value: unknown): (Descriptor?, string?)
 
     local declared, capability_error = capabilities(item.capabilities)
     if not declared then return nil, capability_error end
+    local mappings, endpoints_error = endpoints(item.endpoints)
+    if not mappings then return nil, endpoints_error end
     return {schema_revision = M.SCHEMA, provider = provider, executable = executable, version_probe = probe,
         login_evidence = login, platform = platform, codec = codec, json_paths = paths, argv_templates = templates,
-        options = options, flags = flags, provider_home = home, configure = configure, capabilities = declared}, nil
+        options = options, flags = flags, provider_home = home, configure = configure, capabilities = declared,
+        endpoints = mappings}, nil
 end
 
 function M.permission_answer(item: Descriptor, context: string): PermissionAnswer

@@ -30,14 +30,16 @@ M.INSTRUCTIONS_PROVIDER_REF = "bee.drivers:profile_instructions"
 
 -- Profile guidance is separate from a turn brief and grants no authority.
 M.instructions = instructions.decode
-function M.endpoint(value: unknown, allow_loopback: boolean, field: string?): (string?, string?)
+-- endpoint admits an https URL, plain http to the 127.0.0.1 loopback fixture,
+-- or, when plain_http says the host chose it, plain http to any host.
+function M.endpoint(value: unknown, allow_loopback: boolean, field: string?, plain_http: boolean?): (string?, string?)
     local name = field or "endpoint"
     local url = bounds.text(value, M.MAX_ENDPOINT_BYTES)
     if not url or url == "" or url:find("%s") then return nil, name .. " must be one bounded URL" end
     local scheme, host, rest = url:match("^(https?)://([^/]+)(.*)$")
     if not scheme or not host then return nil, name .. " must be an http(s) URL with a host" end
     if rest:find("[?#]") then return nil, name .. " carries no query or fragment" end
-    if scheme == "http" then
+    if scheme == "http" and plain_http ~= true then
         if not allow_loopback then
             if name == "base_url" then return nil, "plain http is permitted only for the loopback fixture" end
             return nil, "plain http is permitted only for the 127.0.0.1 loopback fixture"

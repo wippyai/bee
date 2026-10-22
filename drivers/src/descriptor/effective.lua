@@ -273,9 +273,8 @@ end
 
 -- placement_label names the placement a refusal applies to.
 local function placement_label(placed: placements.Placement?): string
-    if not placed then return "" end
-    if placed.ref then return " for placement " .. placed.ref end
-    return " for " .. placed.kind .. " placement"
+    if placed and placed.ref then return " for placement " .. placed.ref end
+    return ""
 end
 
 local function ceiling_value(field: Object, value: unknown, constraint: Object, placement_ceiling: unknown): (unknown, string?)

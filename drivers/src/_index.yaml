@@ -43,9 +43,10 @@ entries:
     path: .storage
 - name: access_scope
   kind: ns.requirement
+  default: bee.drivers:users
   meta:
     value_kind: security.scope
-    comment: Security group whose members use bee.drivers:drivers through the host; it receives bee.drivers.security:host_access
+    comment: Security group whose members use bee.drivers:drivers through the host; it receives bee.drivers.security:host_access. A host that grants driver access through its own policies keeps the default.
   targets:
   - entry: bee.drivers.security:host_access
     path: .groups +=
@@ -144,8 +145,9 @@ entries:
   meta:
     comment: Host-facing driver library - the activated drivers and their options, the launch a driver prepares for a placement, and a reader folding CLI output into records
   source: file://drivers.lua
-  modules: [registry, contract]
+  modules: [registry, contract, hash]
   imports:
+    composition: bee.drivers.binding:composition
     bounds: bee.drivers.values:bounds
     resolver: bee.drivers.binding:resolver
     profile: bee.drivers.profiles:profile

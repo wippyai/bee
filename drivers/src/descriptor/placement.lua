@@ -2,6 +2,7 @@
 -- container, the roots mounted into it, its network, and the capabilities it
 -- allows a CLI's permission options to take. Option values map to these
 -- capabilities in each descriptor, so a host names capabilities, not options.
+-- A placement without allows leaves each option at its descriptor ceiling.
 -- A host whose placement policy bounds individual options names them in
 -- option_ceilings: driver id -> option -> capabilities; those ceilings take
 -- precedence over allows. ref names the placement in refusals; credentials
@@ -9,7 +10,7 @@
 local bounds = require("bounds")
 local M = {}
 type Mount = {resource: string, target: string, access: "read" | "write"}
-type Placement = {kind: "native" | "container", mounts: {Mount}, network: string, allows: {string},
+type Placement = {kind: "native" | "container", mounts: {Mount}, network: string, allows: {string}?,
     option_ceilings: {[string]: {[string]: {string}}}?, ref: string?, credentials: {string}?}
 
 M.MAX_MOUNTS = 16
@@ -38,9 +39,13 @@ function M.decode(value: unknown): (Placement?, string?)
     if not raw or bounds.fields(raw, {"kind", "mounts", "network", "allows", "option_ceilings", "ref", "credentials"}) then return nil, "placement is malformed" end
     local kind = bounds.member(raw.kind, {"native", "container"})
     local network = bounds.line(raw.network, 128)
-    local allows = bounds.ids(raw.allows, true)
+    local allows: {string}? = nil
+    if raw.allows ~= nil then
+        allows = bounds.ids(raw.allows, true)
+        if not allows then return nil, "placement allows must be a list of capabilities" end
+    end
     local rows = bounds.array(raw.mounts, M.MAX_MOUNTS)
-    if not kind or not network or not allows or not rows then return nil, "placement is malformed" end
+    if not kind or not network or not rows then return nil, "placement is malformed" end
     local mounts: {Mount} = {}
     for _, row in ipairs(rows) do
         local selected = mount(row)

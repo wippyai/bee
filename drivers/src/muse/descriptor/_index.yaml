@@ -4,10 +4,10 @@ entries:
 - name: cli
   kind: registry.entry
   meta:
-    type: bee.drivers.cli_descriptor
+    type: bee.driver.cli_descriptor
     comment: Muse headless CLI command, record JSONL codec, login evidence and version probe
   data:
-    schema_revision: bee.drivers.cli-descriptor@4
+    schema_revision: bee.driver.cli-descriptor@4
     provider: muse
     executable: muse
     version_probe:

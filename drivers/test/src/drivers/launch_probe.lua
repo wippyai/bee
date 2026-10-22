@@ -6,7 +6,7 @@ local placements = require("placements")
 local function run(driver_id: string): {[string]: any}
     local list, list_err = drivers.list()
     if not list then return {ok = false, error = "list: " .. tostring(list_err)} end
-    local launch, err = drivers.launch(driver_id, {brief = "x", home = "/home/node", placement = placements.DOCKER, unattended = true})
+    local launch, err = drivers.launch(driver_id, {brief = "x", home = "/home", placement = placements.DOCKER, unattended = true})
     if not launch then return {ok = false, error = tostring(err)} end
     local reader, reader_err = drivers.reader(driver_id, false)
     if not reader then return {ok = false, error = "reader: " .. tostring(reader_err)} end

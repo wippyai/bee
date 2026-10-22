@@ -8,7 +8,7 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
         local arguments, argument_error = configuration.session_arguments(request.gateway)
         if not arguments then return {ok = false, error = tostring(argument_error)} end
         local files: {configure_protocol.Configuration} = {}
-        if request.private_home == true then
+        if request.private_home == true or request.instructions then
             local projected, err = configuration.login_configuration()
             if not projected then return {ok = false, error = tostring(err)} end
             files[#files + 1] = projected

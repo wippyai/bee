@@ -33,6 +33,18 @@ entries:
 - name: toml
   kind: library.lua
   source: file://toml.lua
+- name: composition
+  kind: library.lua
+  meta:
+    comment: Composes a delivered configuration file onto the base its home keeps for it
+  source: file://composition.lua
+  modules:
+  - json
+  - toml
+  imports:
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    configuration_types: bee.drivers:configuration_types
 - name: configuration
   kind: library.lua
   source: file://configuration.lua

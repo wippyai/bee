@@ -54,7 +54,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Provider?, string?)
     if meta.type ~= M.PROVIDER_TYPE then return nil, ref .. " is not a " .. M.PROVIDER_TYPE end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "name", "base_url", "model", "reasoning_effort", "developer_instructions", "loopback_fixture", "authentication"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "name", "base_url", "model", "reasoning_effort", "developer_instructions", "loopback_fixture", "authentication", "plain_http"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.PROVIDER_SCHEMA then return nil, ref .. ": schema_revision must be " .. M.PROVIDER_SCHEMA end
     local name = bounds.id(data.name)
@@ -75,6 +75,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Provider?, string?)
     end
     local loopback = data.loopback_fixture == true
     if data.loopback_fixture ~= nil and type(data.loopback_fixture) ~= "boolean" then return nil, ref .. ": loopback_fixture must be a boolean" end
+    if data.plain_http ~= nil and type(data.plain_http) ~= "boolean" then return nil, ref .. ": plain_http must be a boolean" end
     local authentication = data.authentication == nil and "api_key" or bounds.member(data.authentication, {"api_key", "chatgpt"})
     if not authentication then return nil, ref .. ": authentication must be api_key or chatgpt" end
     local base_url: string? = nil
@@ -85,7 +86,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Provider?, string?)
     else
         if not model then return nil, ref .. ": model must be a model identifier" end
         local url_error: string?
-        base_url, url_error = shared_configuration.endpoint(data.base_url, loopback, "base_url")
+        base_url, url_error = shared_configuration.endpoint(data.base_url, loopback, "base_url", data.plain_http == true)
         if not base_url then return nil, ref .. ": " .. tostring(url_error) end
     end
     local digest, digest_error = measurable(data)

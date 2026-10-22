@@ -12,6 +12,16 @@ A driver never runs anything. It turns a request into a declarative launch
 normalizes output. The host decides where the launch runs and describes that
 placement in each request.
 
+## Personal use of subscription logins
+
+A driver can run a CLI with the login a person made on their own machine
+(Claude Pro/Max, ChatGPT plans and similar subscriptions). Those logins are for
+that person's own use. Do not use them to serve other people, to run a
+production service, or to share one subscription among users: providers
+restrict this in their terms and may suspend the account. For production or
+multi-user hosts, give each driver an official API key, or point it at an
+endpoint you operate (see Endpoints).
+
 ## Host requirements
 
 | Requirement | Value |
@@ -82,6 +92,30 @@ environment variables.
 **Files.** Paths are relative to `home`. A file with `secret_fields` takes
 the named environment values at those JSON paths; a file with `composition`
 merges onto the existing file at `composition.base_path`.
+
+## Endpoints
+
+A host can send a CLI's model traffic to an endpoint it chooses instead of the
+vendor's default: an official API, a gateway, or a model server on your own
+machines. `drivers.list()` reports each driver's `endpoints`, the protocols it
+can reach; a launch passes one endpoint, and the API key reaches the CLI as one
+of the driver's credential variables.
+
+```lua
+local launch = drivers.launch("codex", {
+    brief = "fix the failing test", home = "/home", placement = placement,
+    endpoint = {protocol = "openai-responses", base_url = "http://towers.lan:8000/v1", model = "qwen3-coder"},
+})  -- Codex gets a model_providers entry; set OPENAI_API_KEY in the launch environment
+```
+
+| Driver | Protocol | How the CLI reaches it |
+|---|---|---|
+| claude | `anthropic-messages` | `ANTHROPIC_BASE_URL`; key in `ANTHROPIC_API_KEY` |
+| codex | `openai-responses` (needs `model`) | a generated `model_providers` entry with `env_key = "OPENAI_API_KEY"` |
+
+Each driver declares its mappings in its CLI descriptor (`endpoints`), so a new
+protocol or driver is data. Plain `http` base URLs are accepted because the
+host chose them; prefer `https` outside a private network.
 
 ## Contract
 

@@ -54,6 +54,13 @@ entries:
       usage:
       - usage
     configure: codex
+    endpoints:
+    - protocol: openai-responses
+      requires: [model]
+      provider:
+        type: bee.codex_provider
+        data: {schema_revision: bee.codex-provider@1, name: endpoint, authentication: api_key}
+        fields: {base_url: base_url, model: model, plain_http: plain_http}
     capabilities:
       permission_answers:
         window:

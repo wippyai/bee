@@ -35,7 +35,9 @@ type Option = {name: string, label: string, description: string, section: string
 type Profile = {id: string, mode: string}
 type Initializer = {path: string, content: string}
 type CredentialFile = {path: string, content_format: "json" | "opaque", write_back: boolean, initialize: {Initializer}}
-type Credentials = {files: {CredentialFile}, variables: {string}}
+-- A login file holds a person's subscription login; subscriptions names the
+-- variables that carry one too, and the other variables take an API key.
+type Credentials = {files: {CredentialFile}, variables: {string}, subscriptions: {string}}
 -- unattended: the option values the CLI runs with when no person answers its
 -- prompts, absent when the driver declares no unattended mode.
 -- endpoints: the protocols of host-selected endpoints the CLI can reach.
@@ -190,8 +192,14 @@ local function credentials_of(pinned: registry.Snapshot, selected: Selected): (C
         files[1] = {path = decoded.file.path, content_format = decoded.file.content_format, write_back = write_back, initialize = initialize}
     end
     local variables: {string} = {}
-    for _, name in ipairs(decoded.environments) do variables[#variables + 1] = name end
-    return {files = files, variables = variables}, nil
+    local subscriptions: {string} = {}
+    for _, name in ipairs(decoded.environments) do
+        variables[#variables + 1] = name
+        for _, declared in ipairs(selected.descriptor.subscription_variables) do
+            if declared == name then subscriptions[#subscriptions + 1] = name end
+        end
+    end
+    return {files = files, variables = variables, subscriptions = subscriptions}, nil
 end
 
 local function driver_of(pinned: registry.Snapshot, selected: Selected): (Driver?, error?)

@@ -52,6 +52,7 @@ entries:
       usage:
       - usage
     configure: claude
+    subscription_variables: [CLAUDE_CODE_OAUTH_TOKEN]
     endpoints:
     - protocol: anthropic-messages
       environment:

@@ -109,6 +109,9 @@ type Descriptor = {
     configure: string,
     capabilities: Capabilities?,
     endpoints: {EndpointMapping},
+    -- subscription_variables: credential variables that carry a person's
+    -- subscription login rather than an API key.
+    subscription_variables: {string},
 }
 
 local function object(value: unknown, label: string): (Object?, string?)
@@ -474,7 +477,7 @@ end
 function M.decode(value: unknown): (Descriptor?, string?)
     local item, object_error = object(value, "CLI descriptor")
     if not item then return nil, object_error end
-    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities", "endpoints"})
+    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities", "endpoints", "subscription_variables"})
     if extra then return nil, "CLI descriptor: " .. extra end
     if item.schema_revision ~= M.SCHEMA then return nil, "CLI descriptor schema_revision is unsupported" end
     local provider, executable, codec, configure = bounds.id(item.provider), bounds.id(item.executable), bounds.member(item.codec, M.CODECS), bounds.id(item.configure)
@@ -883,10 +886,20 @@ function M.decode(value: unknown): (Descriptor?, string?)
     if not declared then return nil, capability_error end
     local mappings, endpoints_error = endpoints(item.endpoints)
     if not mappings then return nil, endpoints_error end
+    local subscription_variables: {string} = {}
+    if item.subscription_variables ~= nil then
+        local rows = bounds.array(item.subscription_variables, 8)
+        if not rows then return nil, "CLI descriptor.subscription_variables must be a list of at most eight variables" end
+        for _, raw in ipairs(rows) do
+            local name = bounds.text(raw, 128)
+            if not name or not name:match("^[A-Z_][A-Z0-9_]*$") then return nil, "CLI descriptor.subscription_variables names an invalid variable" end
+            subscription_variables[#subscription_variables + 1] = name
+        end
+    end
     return {schema_revision = M.SCHEMA, provider = provider, executable = executable, version_probe = probe,
         login_evidence = login, platform = platform, codec = codec, json_paths = paths, argv_templates = templates,
         options = options, flags = flags, provider_home = home, configure = configure, capabilities = declared,
-        endpoints = mappings}, nil
+        endpoints = mappings, subscription_variables = subscription_variables}, nil
 end
 
 function M.permission_answer(item: Descriptor, context: string): PermissionAnswer

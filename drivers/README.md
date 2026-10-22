@@ -47,6 +47,15 @@ local step = reader:feed(chunk)            -- {observations, terminal?, problems
 local last = reader:finish()               -- settles the stream at its end
 ```
 
+**Access.** The library runs under its caller's scope. A host grants
+`registry.get` and `registry.snapshot`, `contract.get`, `contract.open`,
+`contract.call` and `funcs.call` on exactly: `bee.drivers:host`,
+`bee.drivers:driver`, its activation entry, `bee.drivers.binding:configure`,
+the method name `prepare`, and for each activated driver its
+`binding:binding`, `descriptor:cli`, `profiles:profiles` and
+`credentials:credential_format` entries. `test/src/drivers` launches under
+exactly this grant.
+
 **Placement.** `allows` names the capabilities the placement admits
 (`prompt`, `edit`, `automatic`, `deny-unapproved`, `read`, `bypass`,
 `write-admitted`, `write-anywhere`, `network`, `request-approval`,

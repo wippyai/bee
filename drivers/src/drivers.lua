@@ -38,8 +38,10 @@ type Launch = {executable: string, argv: {string}, stdin: string?, stdin_eof: bo
 type Problem = {index: integer, message: string}
 type Step = {observations: {Object}, terminal: Object?, problems: {Problem}}
 type Reader = {feed: (Reader, string) -> (Step?, error?), finish: (Reader) -> (Step?, error?)}
+-- configure_target: the binding's configure method, which the configure
+-- function validates under its own authority when it renders.
 type Selected = {binding_ref: string, driver_id: string, profiles_ref: string?, credential_format_ref: string,
-    descriptor: descriptor.Descriptor, descriptor_ref: string}
+    configure_target: string, descriptor: descriptor.Descriptor, descriptor_ref: string}
 
 local M = {}
 
@@ -57,10 +59,16 @@ local function selected_in(pinned: registry.Snapshot, ref: string): (Selected?, 
     if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" or not driver_id or not descriptor_ref or not credential_format_ref then
         return nil, fail(errors.INTERNAL, "activated binding " .. ref .. " is not a declarative driver")
     end
+    local configure_target: string? = nil
+    for _, raw in ipairs(bounds.array((bounds.object(binding.data) or {}).contracts, 8) or {}) do
+        local declared = bounds.object(raw) or {}
+        if declared.contract == "bee.drivers:driver" then configure_target = bounds.id((bounds.object(declared.methods) or {}).configure) end
+    end
+    if not configure_target then return nil, fail(errors.INTERNAL, "activated binding " .. ref .. " binds no configure method") end
     local loaded, load_error = descriptor.load_from(pinned, descriptor_ref)
     if not loaded then return nil, fail(errors.INTERNAL, ref .. " descriptor: " .. tostring(load_error)) end
     return {binding_ref = ref, driver_id = driver_id, profiles_ref = bounds.id(meta.profiles_ref), credential_format_ref = credential_format_ref,
-        descriptor = loaded, descriptor_ref = descriptor_ref}, nil
+        configure_target = configure_target, descriptor = loaded, descriptor_ref = descriptor_ref}, nil
 end
 
 local function activated_refs(pinned: registry.Snapshot): ({string}?, error?)
@@ -283,10 +291,8 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     local prepared = bounds.object(reply.launch)
     if not prepared then return nil, fail(errors.INTERNAL, selected.binding_ref .. " prepare returned no launch") end
 
-    local target, target_error = resolver.configure(pinned, selected.binding_ref)
-    if not target then return nil, fail(errors.INTERNAL, tostring(target_error)) end
     local context = request.profile_id == "window" and "window" or request.resume_ref ~= nil and "resume" or "first_turn"
-    local delivery, delivery_error = configuration.call(selected.binding_ref, target, {fixture = false, home_directory = home,
+    local delivery, delivery_error = configuration.call(selected.binding_ref, selected.configure_target, {fixture = false, home_directory = home,
         placement = request.placement, option_values = values, context = context, gateway = request.gateway, instructions = instructions})
     if not delivery then return nil, fail(errors.INVALID, tostring(delivery_error)) end
 

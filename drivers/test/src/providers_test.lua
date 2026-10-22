@@ -243,6 +243,12 @@ local function define_tests()
             test.is_true(has(plain.types, "session.state:started"))
             local tool = run(codex, "/codex/exec-json-1/tool.jsonl", 100, false)
             test.is_true(has(tool.types, "notice:warning"))
+            local notice = nil
+            for _, item in ipairs(tool.observations) do
+                if item.type == "notice" and item.data.code == "provider_error" then notice = item; break end
+            end
+            test.eq(notice and notice.data.content.text,
+                "Reconnecting... 1/5 (stream disconnected before completion: stream closed before response.completed)")
             test.is_true(has(tool.types, "tool.call:"))
             test.is_true(has(tool.types, "tool.result:succeeded"))
             test.eq(tool.terminal and tool.terminal.answer, "hive fixture\n")

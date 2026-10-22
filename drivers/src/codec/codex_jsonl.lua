@@ -98,7 +98,11 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         local item: unknown = envelope.item
         if type(item) == "table" then item_observations(state, index, tostring(kind):sub(6), item, envelope, paths, out) end
     elseif kind == "error" then
-        out[#out + 1] = events.notice(key(index, "error"), "warning", "provider_error", tostring(path_reader.read(envelope, paths, "errors")))
+        -- A transient provider error carries its text in the event's own
+        -- message; the errors path names the detail of a failed turn.
+        local message: unknown = envelope.message
+        if type(message) ~= "string" then message = "provider error" end
+        out[#out + 1] = events.notice(key(index, "error"), "warning", "provider_error", message :: string)
     elseif kind == "turn.completed" then
         local usage = usage_of(path_reader.read(envelope, paths, "usage"))
         out[#out + 1] = events.turn(key(index, "turn"), "ended", "succeeded", usage)

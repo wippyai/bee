@@ -93,6 +93,9 @@ local function define_tests()
             test.eq(launch.executable, "codex")
             test.is_true(contains(launch.argv, "--dangerously-bypass-approvals-and-sandbox"), joined(launch.argv))
             test.eq(launch.stdin, "say pong")
+            for _, file in ipairs(launch.files) do
+                test.is_nil(file.composition, file.path .. " composes onto a machine-home projection the host does not make")
+            end
         end)
         test.it("refuses unattended runs a placement does not allow to bypass permissions", function()
             local launch, err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = without("bypass"), unattended = true})

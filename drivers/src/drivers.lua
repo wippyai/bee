@@ -234,7 +234,7 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
     local target, target_error = resolver.configure(pinned, selected.binding_ref)
     if not target then return nil, fail(errors.INTERNAL, tostring(target_error)) end
     local context = request.profile_id == "window" and "window" or request.resume_ref ~= nil and "resume" or "first_turn"
-    local delivery, delivery_error = configuration.call(selected.binding_ref, target, {fixture = false, private_home = true, home_directory = home,
+    local delivery, delivery_error = configuration.call(selected.binding_ref, target, {fixture = false, home_directory = home,
         placement = request.placement, option_values = values, context = context, gateway = request.gateway, instructions = request.instructions})
     if not delivery then return nil, fail(errors.INVALID, tostring(delivery_error)) end
 

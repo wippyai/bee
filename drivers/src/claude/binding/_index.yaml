@@ -1,0 +1,69 @@
+version: '1.0'
+namespace: bee.drivers.claude.binding
+entries:
+- name: prepare
+  kind: function.lua
+  source: file://prepare.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    configure_protocol: bee.drivers:configuration_types
+    canonical: bee.drivers.values:canonical
+    universal: bee.drivers.binding:universal
+    quote: bee.drivers.binding:quote
+    hook_limits: bee.drivers.binding:hook_limits
+  security:
+    policies:
+    - bee.drivers.claude.binding:configuration_policy
+- name: locate
+  kind: function.lua
+  source: file://locate.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: configuration_policy
+  kind: security.policy.expr
+  policy:
+    effect: allow
+    actions:
+    - registry.get
+    - registry.snapshot
+    - funcs.call
+    resources:
+    - '*'
+    expression: (action == "registry.get" && resource == "bee.drivers.claude.descriptor:cli") || action == "registry.snapshot"
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.drivers:driver
+    methods:
+      prepare: bee.drivers.claude.binding:prepare
+      dispatch: bee.drivers.claude.binding:dispatch
+      normalize: bee.drivers.claude.binding:normalize
+      configure: bee.drivers.claude.binding:configure
+  - contract: bee.drivers:locate_facet
+    methods:
+      locate: bee.drivers.claude.binding:locate
+  meta:
+    type: harness.driver
+    driver_id: claude
+    descriptor_ref: bee.drivers.claude.descriptor:cli
+    accepts_model: true
+    profiles_ref: bee.drivers.claude.profiles:profiles

@@ -1,0 +1,83 @@
+version: '1.0'
+namespace: bee.drivers.binding
+entries:
+- name: universal
+  kind: library.lua
+  source: file://universal.lua
+  modules: [registry, json]
+  imports:
+    effective: bee.drivers.descriptor:effective
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    descriptor: bee.drivers.descriptor:descriptor
+    configuration: bee.drivers.binding:configuration
+    types: bee.drivers:types
+    locate: bee.drivers.locate:locate
+    codec_registry: bee.drivers.codec:codec_registry
+    option_render: bee.drivers.binding:option_render
+    configuration_types: bee.drivers:configuration_types
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  modules:
+  - registry
+  - funcs
+  imports:
+    bounds: bee.drivers.values:bounds
+    profile: bee.drivers.profiles:profile
+    descriptor: bee.drivers.descriptor:descriptor
+    types: bee.drivers:types
+- name: quote
+  kind: library.lua
+  source: file://quote.lua
+- name: toml
+  kind: library.lua
+  source: file://toml.lua
+- name: configuration
+  kind: library.lua
+  source: file://configuration.lua
+  modules:
+  - hash
+  - funcs
+  - security
+  - registry
+  - json
+  - toml
+  imports:
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    driver_resolver: bee.drivers.binding:resolver
+    descriptors: bee.drivers.descriptor:descriptor
+    types: bee.drivers:types
+    instructions: bee.drivers.profiles:instructions
+    vocabulary: bee.drivers:configuration_types
+- name: option_render
+  kind: library.lua
+  source: file://option_render.lua
+  modules:
+  - json
+  - toml
+  - hash
+  imports:
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    configuration: bee.drivers.binding:configuration
+    configuration_types: bee.drivers:configuration_types
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    bounds: bee.drivers.values:bounds
+    configuration: bee.drivers.binding:configuration
+  security:
+    policies: [bee.drivers.binding:configure_policy]
+- name: configure_policy
+  kind: security.policy
+  policy:
+    actions: [registry.snapshot, registry.get, funcs.call, funcs.security, security.scope.create]
+    resources: '*'
+    effect: allow
+- name: hook_limits
+  kind: library.lua
+  source: file://hook_limits.lua

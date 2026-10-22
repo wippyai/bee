@@ -1,0 +1,11 @@
+organization: bee
+module: drivers
+version: 0.1.0
+description: Declarative, installable agent CLI drivers (Claude Code, Codex, Antigravity, Muse, Grok, opencode) with their codecs, option descriptors and record types, for any host that runs agent CLIs.
+license: MIT
+exclude:
+  - "wippy.lock"
+  - "test/**"
+  - "test:**"
+  - ".wippy/**"
+  - ".wippy:**"

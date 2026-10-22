@@ -1,0 +1,22 @@
+version: '1.0'
+namespace: bee.drivers.tests.kit
+entries:
+- name: kit_test
+  kind: function.lua
+  source: file://kit_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [fs]
+  imports:
+    test: wippy.test:test
+    kit: bee.drivers.kit:kit
+    isolations: bee.drivers.tests.support:isolations
+  security:
+    policies: [bee.drivers.kit:client, bee.drivers.tests.kit:fixtures_read]
+- name: fixtures_read
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [fs.get]
+    resources: [bee.drivers.tests:fixtures]
+    effect: allow

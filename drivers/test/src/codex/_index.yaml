@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.drivers.tests.codex
+entries:
+- name: config_test
+  kind: function.lua
+  source: file://config_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    configuration: bee.drivers.codex.binding:configuration
+- name: launch_test
+  kind: function.lua
+  source: file://launch_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    launch: bee.drivers.tests.support.driver:codex_launch
+    quote: bee.drivers.binding:quote

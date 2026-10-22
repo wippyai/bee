@@ -1,0 +1,14 @@
+version: '1.0'
+namespace: bee.harness.host
+entries:
+- name: environment
+  kind: env.storage.static
+  meta:
+    test_support: true
+    comment: Unit tests provide the host facts without loading Bee's native host component.
+  data:
+    values:
+      binary_identity: '{"native_module":"github.com/wippyai/bee/native","native_version":"v1.0.0","native_modules":{"github.com/wippyai/bee/native":"v1.0.0"},"runtime_commit":"v0.1.14-0.20261007011850-2bb9e144ab06"}'
+      environment_names: '["PATH"]'
+      boot_id: 3c9e5a1f-6b2d-4e8a-9f70-1d2c3b4a5e6f
+      self: /usr/local/bin/bee

@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.drivers.tests.support
+entries:
+- name: fixtures
+  kind: library.lua
+  source: file://fixtures.lua
+  meta:
+    type: test_support
+  imports:
+    bounds: bee.drivers.values:bounds
+  modules:
+  - registry
+- name: isolations
+  kind: library.lua
+  source: file://isolations.lua
+  meta:
+    type: test_support

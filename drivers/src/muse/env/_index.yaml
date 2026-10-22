@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.drivers.muse.env
+entries:
+- name: executable
+  kind: env.variable
+  variable: muse
+  default: ''
+  readonly: true
+- name: api_key
+  kind: env.variable
+  variable: muse_api_key
+  default: ''

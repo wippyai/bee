@@ -1,0 +1,52 @@
+version: '1.0'
+namespace: bee.drivers.tests.grok
+entries:
+- name: launch_test
+  kind: function.lua
+  source: file://launch_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    launch: bee.drivers.tests.support.driver:grok_launch
+    prepare: bee.drivers.grok.binding:prepare
+    configure: bee.drivers.grok.binding:configure
+    dispatch: bee.drivers.grok.binding:dispatch
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+  imports:
+    bounds: bee.drivers.values:bounds
+    test: wippy.test:test
+    protocol: bee.drivers.tests.support.driver:grok_protocol
+    normalize: bee.drivers.grok.binding:normalize
+- name: configuration_test
+  kind: function.lua
+  source: file://configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    principals: bee.drivers.tests.support:fixtures
+    bounds: bee.drivers.values:bounds
+    test: wippy.test:test
+    configuration: bee.drivers.grok.binding:configuration
+    configure: bee.drivers.grok.binding:configure
+- name: acp_test
+  kind: function.lua
+  source: file://acp_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    normalize: bee.drivers.grok.binding:normalize
+    prepare: bee.drivers.grok.binding:prepare
+    configure: bee.drivers.grok.binding:configure

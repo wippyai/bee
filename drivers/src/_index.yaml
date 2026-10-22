@@ -143,6 +143,6 @@ entries:
     profile: bee.drivers.profiles:profile
     descriptor: bee.drivers.descriptor:descriptor
     effective: bee.drivers.descriptor:effective
-    universal: bee.drivers.binding:universal
+    codec_registry: bee.drivers.codec:codec_registry
     configuration: bee.drivers.binding:configuration
     stream_json: bee.drivers.transport:stream_json

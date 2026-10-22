@@ -378,7 +378,10 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
                 row.allowed = {kind = "enum", values = admitted}
             end
         end
-        if default ~= nil and (default_ceiling_error or (row.allowed and not allowed_option(row.allowed, default))) then
+        local explicit = values ~= nil and values[name] ~= nil
+        -- A default the placement or policy excludes needs a replacement only
+        -- when it would be used; an explicit value takes its place.
+        if default ~= nil and not explicit and (default_ceiling_error or (row.allowed and not allowed_option(row.allowed, default))) then
             local replacement: unknown = nil
             if row.allowed and row.allowed.kind == "enum" then
                 local rights = bounds.object(field.capabilities)
@@ -400,7 +403,6 @@ function M.compile(descriptor: descriptors.Descriptor, policy: Object?, capabili
             row.default, row.default_source = default, source
         end
         result.fields[name] = row
-        local explicit = values and values[name] ~= nil
         local value: unknown = explicit and values and values[name] or default
         if explicit and values then value = values[name] end
         if value ~= nil and not (trust_mapping and trust_mapping.unsupported == true and not explicit) then

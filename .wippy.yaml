@@ -1,6 +1,3 @@
 version: '1.0'
 shutdown:
   timeout: 3s
-workspace:
-  replacements:
-    bee/drivers: drivers/src

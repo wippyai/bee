@@ -19,33 +19,35 @@ local function contains(list: {string}, item: string): boolean
     return false
 end
 
-local function allowing(allows: {string}): {[string]: any}
+local function allowing(allows: {string}): placement.Placement
     return {kind = "container", mounts = placements.DOCKER.mounts, network = "bridge", allows = allows}
 end
 
-local function file_at(launch: any, path: string): any
+local function file_at(launch: drivers.Launch, path: string): configuration_types.Configuration?
     for _, file in ipairs(launch.files) do if file.path == path then return file end end
     return nil
 end
 
-local function without(capability: string): {[string]: any}
+local function without(capability: string): placement.Placement
     local allows: {string} = {}
     for _, item in ipairs(placements.DOCKER.allows) do if item ~= capability then allows[#allows + 1] = item end end
     return {kind = "container", mounts = placements.DOCKER.mounts, network = "bridge", allows = allows}
 end
 
-local function read(driver_id: string, path: string, size: integer): (any, integer, integer)
+local function read(driver_id: string, path: string, size: integer): (driver_types.Terminal?, integer, integer)
     local reader = assert(drivers.reader(driver_id, false))
     local content = recording(path)
-    local terminal: any = nil
+    local terminal: driver_types.Terminal? = nil
     local observations, problems = 0, 0
     for offset = 1, #content, size do
-        local step = assert(reader:feed(content:sub(offset, offset + size - 1)))
+        local step, feed_err = reader:feed(content:sub(offset, offset + size - 1))
+        if not step then error(tostring(feed_err)) end
         observations = observations + #step.observations
         problems = problems + #step.problems
         terminal = step.terminal or terminal
     end
-    local last = assert(reader:finish())
+    local last, finish_err = reader:finish()
+    if not last then error(tostring(finish_err)) end
     observations = observations + #last.observations
     problems = problems + #last.problems
     return last.terminal or terminal, observations, problems
@@ -133,15 +135,16 @@ local function define_tests()
             test.is_nil(launch)
             test.is_true(tostring(err):find("permission_mode conflicts with unattended", 1, true) ~= nil, tostring(err))
         end)
-        test.it("refuses protocol fields as options and a launch without a placement", function()
+        test.it("refuses protocol fields as options and an invalid placement", function()
             for _, name in ipairs({"placement", "resume_ref", "gateway_tools", "permission_exchange"}) do
                 local launch, err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER, options = {[name] = {}}})
                 test.is_nil(launch)
                 test.is_true(errors.is(err, errors.INVALID), name)
             end
-            local unplaced, unplaced_err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME})
-            test.is_nil(unplaced)
-            test.is_true(errors.is(unplaced_err, errors.INVALID))
+            local misplaced, misplaced_err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = {kind = "container",
+                network = "bridge", allows = {}, mounts = {{resource = "workspace", target = "relative/path", access = "write"}}}})
+            test.is_nil(misplaced)
+            test.is_true(errors.is(misplaced_err, errors.INVALID), tostring(misplaced_err))
         end)
         test.it("runs Claude unattended where the placement allows only bypass", function()
             local launch = assert(drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = allowing({"bypass"}), unattended = true}))
@@ -165,8 +168,7 @@ local function define_tests()
         end)
         test.it("delivers Codex instructions into its own home without composing another configuration", function()
             local launch = assert(drivers.launch("codex", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER, instructions = "Answer tersely."}))
-            local config = file_at(launch, ".codex/config.toml")
-            test.not_nil(config)
+            local config = assert(file_at(launch, ".codex/config.toml"))
             test.is_nil(config.composition)
             test.is_true(config.content:find("Answer tersely.", 1, true) ~= nil, config.content)
         end)
@@ -185,8 +187,9 @@ local function define_tests()
             test.is_true(errors.is(bypass_err, errors.INVALID), tostring(bypass_err))
             local open_allows: {string} = {"profile-option"}
             for _, item in ipairs(placements.DOCKER.allows) do open_allows[#open_allows + 1] = item end
-            test.not_nil(drivers.launch("codex", {brief = "x", home = CLAUDE_HOME, placement = allowing(open_allows),
-                options = {network_access = true, sandbox = "workspace-write"}}))
+            local open_launch, open_err = drivers.launch("codex", {brief = "x", home = CLAUDE_HOME, placement = allowing(open_allows),
+                options = {network_access = true, sandbox = "workspace-write"}})
+            test.not_nil(open_launch, tostring(open_err))
         end)
         test.it("bounds configuration-bearing and sandbox-disabling options by their capabilities", function()
             local muse, muse_err = drivers.launch("muse", {brief = "x", home = CLAUDE_HOME, placement = without("network"), unattended = true})
@@ -202,7 +205,8 @@ local function define_tests()
             test.is_true(tostring(settings_err):find("permission capabilities exceed", 1, true) ~= nil, tostring(settings_err))
         end)
         test.it("launches with exactly the grant a host gives the library", function()
-            local scope = security.new_scope({assert(security.policy("bee.drivers.tests.drivers:host_grant"))})
+            local scope = security.new_scope({assert(security.policy("bee.drivers.security:host_access")),
+                assert(security.policy("bee.drivers.tests.drivers:host_grant"))})
             local caller = assert(funcs.new():with_scope(scope))
             local reply, err = caller:call("bee.drivers.tests.drivers:launch_probe", "claude")
             if err then error(tostring(err)) end
@@ -214,13 +218,13 @@ local function define_tests()
             local terminal, observations, problems = read("claude", "/claude/stream-json-2/plain.jsonl", 37)
             test.is_true(observations > 0)
             test.eq(problems, 0)
-            test.eq(terminal.outcome, "succeeded")
-            test.eq(terminal.answer, "pong")
+            test.eq(assert(terminal).outcome, "succeeded")
+            test.eq(assert(terminal).answer, "pong")
         end)
         test.it("reads a recorded Codex stream with provider notices", function()
             local terminal, observations = read("codex", "/codex/exec-json-1/tool.jsonl", 64)
             test.is_true(observations > 0)
-            test.eq(terminal.outcome, "succeeded")
+            test.eq(assert(terminal).outcome, "succeeded")
         end)
         test.it("reports frames that are not JSON as problems", function()
             local reader = assert(drivers.reader("claude", false))

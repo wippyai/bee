@@ -106,12 +106,15 @@ end
 
 -- A fresh empty table with the list-or-map shape of an empty value; any
 -- other value yields an empty list.
-function M.empty_like(value: unknown): {[unknown]: unknown}
+-- empty_like returns an empty table that encodes with the JSON shape of an
+-- empty value: {} for an object, [] otherwise. table.create carries the shape
+-- hint; the table holds no entries, so it types as an empty map.
+function M.empty_like(value: unknown): {[string]: unknown}
     if type(value) == "table" and next(value) == nil then
         local shape = json.encode(value)
-        if shape == "{}" then return table.create(0, 1) end
+        if shape == "{}" then return table.create(0, 1) :: {[string]: unknown} end
     end
-    return table.create(1, 0)
+    return table.create(1, 0) :: {[string]: unknown}
 end
 
 function M.encode(value: unknown, maximum_bytes: integer?, maximum_depth: integer?): (string?, string?)

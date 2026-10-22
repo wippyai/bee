@@ -72,13 +72,13 @@ entries:
   - name: prepare
     description: Return the declarative launch specification for a profile and a brief
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"placement":{"type":"object"},"unattended":{"type":"boolean"},"options":{"type":"object"}},"additionalProperties":true,"required":["profile_id","brief"]}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Declared descriptor options appear as top-level fields next to these.","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"placement":{"type":"object"},"unattended":{"type":"boolean"}},"additionalProperties":true,"required":["profile_id","brief"]}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"launch":{"type":"object"}},"additionalProperties":true,"required":["ok","launch"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
   - name: dispatch
     description: Return the declarative input for a turn or control operation on a running attempt
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"placement":{"type":"object"},"unattended":{"type":"boolean"},"options":{"type":"object"}},"additionalProperties":true,"required":["profile_id","brief"]}}
+    - {format: application/schema+json, definition: {"type":"object","description":"Declared descriptor options appear as top-level fields next to these.","properties":{"profile_id":{"type":"string"},"brief":{"type":"string"},"resume_ref":{"type":"string"},"placement":{"type":"object"},"unattended":{"type":"boolean"}},"additionalProperties":true,"required":["profile_id","brief"]}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"state":{"type":"object"},"terminal":{"type":"object"},"ok":{"const":true},"launch":{"type":"object"}},"additionalProperties":true,"required":["ok","launch"]},{"type":"object","properties":{"error":{"type":"string"},"ok":{"const":false}},"additionalProperties":true,"required":["error","ok"]}]}}
   - name: normalize
@@ -147,3 +147,8 @@ entries:
     configuration: bee.drivers.binding:configuration
     stream_json: bee.drivers.transport:stream_json
     credential_format: bee.drivers.credentials:format
+    observation: bee.drivers.records:observation
+    driver_types: bee.drivers:types
+    placements: bee.drivers.descriptor:placement
+    configuration_types: bee.drivers:configuration_types
+    record_types: bee.drivers.records:record_types

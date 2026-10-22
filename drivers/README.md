@@ -47,14 +47,20 @@ local step = reader:feed(chunk)            -- {observations, terminal?, problems
 local last = reader:finish()               -- settles the stream at its end
 ```
 
-**Access.** The library runs under its caller's scope. A host grants
-`registry.get` and `registry.snapshot`, `contract.get`, `contract.open`,
-`contract.call` and `funcs.call` on exactly: `bee.drivers:host`,
-`bee.drivers:driver`, its activation entry, `bee.drivers.binding:configure`,
-the method name `prepare`, and for each activated driver its
-`binding:binding`, `descriptor:cli`, `profiles:profiles` and
-`credentials:credential_format` entries. `test/src/drivers` launches under
-exactly this grant.
+**Access.** The library runs under its caller's scope. A host includes the
+`bee.drivers.security:host_access` policy for the shipped drivers and grants
+`registry.get` on its own activation entry. `test/src/drivers` lists, launches
+and reads under exactly that grant.
+
+**Errors.** Every call returns `(value, error)` with a runtime error whose kind
+says what went wrong: `NOT_FOUND` (no such activated driver), `INVALID` (the
+request, an option or the placement is refused), `CONFLICT` (two activated
+bindings declare one driver id), `INTERNAL` (a driver produced something
+malformed) or `UNAVAILABLE` (the registry could not be read).
+
+**Types.** `drivers.Driver`, `drivers.LaunchRequest`, `drivers.Launch`,
+`drivers.Placement`, `drivers.Gateway`, `drivers.Step`, `drivers.Observation`
+and `drivers.Terminal` are exported; reader steps carry decoded records.
 
 **Placement.** `allows` names the capabilities the placement admits
 (`prompt`, `edit`, `automatic`, `deny-unapproved`, `read`, `bypass`,

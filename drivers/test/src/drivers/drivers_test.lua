@@ -205,8 +205,9 @@ local function define_tests()
             test.is_true(tostring(settings_err):find("permission capabilities exceed", 1, true) ~= nil, tostring(settings_err))
         end)
         test.it("launches with exactly the grant a host gives the library", function()
-            local scope = security.new_scope({assert(security.policy("bee.drivers.security:host_access")),
-                assert(security.policy("bee.drivers.tests.drivers:host_grant"))})
+            -- The group the host binds through access_scope holds host_access.
+            local group = assert(security.named_scope("bee.drivers.tests.host:drivers_users"))
+            local scope = group:with(assert(security.policy("bee.drivers.tests.drivers:host_grant")))
             local caller = assert(funcs.new():with_scope(scope))
             local reply, err = caller:call("bee.drivers.tests.drivers:launch_probe", "claude")
             if err then error(tostring(err)) end

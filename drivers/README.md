@@ -19,6 +19,7 @@ placement in each request.
 | `activation` | the host's `bee.harness_activation` entry naming the driver bindings it activates |
 | `host_environment` | `env.storage` with the host variables drivers read (CLI executable paths, configuration homes) |
 | `entered_values` | `env.storage` with credential values a person entered for the drivers' credential sources |
+| `access_scope` | the security group whose members use the library; it receives `bee.drivers.security:host_access` |
 
 ## Library
 
@@ -47,10 +48,11 @@ local step = reader:feed(chunk)            -- {observations, terminal?, problems
 local last = reader:finish()               -- settles the stream at its end
 ```
 
-**Access.** The library runs under its caller's scope. A host includes the
-`bee.drivers.security:host_access` policy for the shipped drivers and grants
-`registry.get` on its own activation entry. `test/src/drivers` lists, launches
-and reads under exactly that grant.
+**Access.** The library runs under its caller's scope. The `access_scope`
+requirement names the host group whose members use it; that group receives
+`bee.drivers.security:host_access` for the shipped drivers. The host also
+grants `registry.get` on its own activation entry. `test/src/drivers` lists,
+launches and reads as a member of the bound group.
 
 **Errors.** Every call returns `(value, error)` with a runtime error whose kind
 says what went wrong: `NOT_FOUND` (no such activated driver), `INVALID` (the

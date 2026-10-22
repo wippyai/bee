@@ -41,6 +41,14 @@ entries:
     path: .storage
   - entry: bee.drivers.opencode.env:executable
     path: .storage
+- name: access_scope
+  kind: ns.requirement
+  meta:
+    value_kind: security.scope
+    comment: Security group whose members use bee.drivers:drivers through the host; it receives bee.drivers.security:host_access
+  targets:
+  - entry: bee.drivers.security:host_access
+    path: .groups +=
 - name: entered_values
   kind: ns.requirement
   meta:

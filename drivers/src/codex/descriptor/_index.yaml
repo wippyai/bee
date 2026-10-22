@@ -24,7 +24,6 @@ entries:
         directory: .codex
       - kind: env_present
         names:
-        - OPENAI_API_KEY
         - CODEX_API_KEY
       - kind: auth_status
         argv:

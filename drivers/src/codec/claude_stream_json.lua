@@ -189,7 +189,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         out[#out + 1] = events.turn(key(index, "turn"), "ended", outcome, usage)
         local answer: string? = nil
         local result = path_reader.read(envelope, paths, "result_text")
-        if outcome == "succeeded" and type(result) == "string" then answer = result end
+        if outcome == "succeeded" and type(result) == "string" and #result <= M.MAX_ANSWER_BYTES then answer = result end
         state.terminal = {outcome = outcome, answer = answer, resume_ref = state.session_id, usage = usage, error = fault}
         return {observations = out, terminal = state.terminal}
     else

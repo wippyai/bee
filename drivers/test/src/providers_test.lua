@@ -69,7 +69,99 @@ local function has(list: {string}, item: string): boolean
     return false
 end
 local function define_tests()
+    test.describe("Terminal answer retention", function()
+        test.it("keeps every codec terminal decodable at and beyond its answer bound", function()
+            type AnswerCase = {provider: string, envelopes: (string) -> {{[string]: unknown}}}
+            local cases: {AnswerCase} = {
+                {provider = "claude", envelopes = function(answer: string): {{[string]: unknown}}
+                    return {{type = "stream_event", event = {type = "content_block_delta", index = 0,
+                        delta = {type = "text_delta", text = answer}}},
+                        {type = "result", subtype = "success", is_error = false, result = answer}}
+                end},
+                {provider = "codex", envelopes = function(answer: string): {{[string]: unknown}}
+                    return {{type = "item.completed", item = {id = "answer", type = "agent_message", text = answer}},
+                        {type = "turn.completed"}}
+                end},
+                {provider = "grok", envelopes = function(answer: string): {{[string]: unknown}}
+                    return {{type = "text", data = answer}, {type = "end", stopReason = "end_turn"}}
+                end},
+                {provider = "muse", envelopes = function(answer: string): {{[string]: unknown}}
+                    return {{payload_type = "runtime.command.accepted", payload = {}},
+                        {payload_type = "run.lifecycle.started", payload = {}},
+                        {payload_type = "run.output.delta", payload = {text = answer}},
+                        {payload_type = "run.terminal.completed", payload = {terminal = "completed"}}}
+                end},
+                {provider = "agy", envelopes = function(answer: string): {{[string]: unknown}}
+                    return {{event = "init", conversation_id = "answer-session", init = {}},
+                        {event = "step_update", step_update = {step_type = "agent_response", text_delta = answer}},
+                        {event = "result", result = {status = "SUCCESS", response = answer}}}
+                end},
+                {provider = "opencode", envelopes = function(answer: string): {{[string]: unknown}}
+                    return {{type = "text", part = {text = answer}}, {type = "step_finish", part = {reason = "stop"}}}
+                end},
+            }
+            for _, case in ipairs(cases) do
+                local protocol = universal.protocol("bee.drivers." .. case.provider .. ".descriptor:cli")
+                local limit = protocol.max_answer_bytes()
+                for _, size in ipairs({limit, limit + 1, 60000}) do
+                    local answer = string.rep("x", size)
+                    local state: unknown = nil
+                    local terminal: driver_types.Terminal? = nil
+                    local text: {string} = {}
+                    local envelopes = case.envelopes(answer)
+                    for index = 1, #envelopes + 1 do
+                        local raw, call_error = funcs.call("bee.drivers." .. case.provider .. ".binding:normalize", {
+                            state = state, index = index, envelope = envelopes[index], eof = index > #envelopes,
+                        })
+                        if call_error then error(tostring(call_error)) end
+                        local reply = assert(bounds.object(raw))
+                        test.is_true(reply.ok == true, case.provider .. ": " .. tostring(reply.error))
+                        state = reply.state
+                        for _, item in ipairs(reply.observations) do
+                            local decoded = assert(observation.decode(item))
+                            if decoded.type == "text" and decoded.data.channel == "answer" then
+                                text[#text + 1] = decoded.data.text
+                            end
+                        end
+                        if reply.terminal ~= nil then terminal = assert(driver_types.decode_terminal(reply.terminal)) end
+                    end
+                    test.eq(table.concat(text), answer, case.provider)
+                    test.eq(assert(terminal).outcome, "succeeded", case.provider)
+                    if size <= limit then test.eq(assert(terminal).answer, answer, case.provider)
+                    else test.is_nil(assert(terminal).answer, case.provider) end
+                end
+            end
+        end)
+    end)
     test.describe("Claude stream-json normalization", function()
+        test.it("succeeds without retaining a result beyond the answer bound", function()
+            for _, size in ipairs({claude.max_answer_bytes() + 1, 60000}) do
+                local raw, call_error = funcs.call("bee.drivers.claude.binding:normalize", {
+                    index = 1,
+                    envelope = {type = "result", subtype = "success", is_error = false,
+                        result = string.rep("x", size)},
+                })
+                if call_error then error(tostring(call_error)) end
+                local reply = assert(bounds.object(raw))
+                test.is_true(reply.ok == true, tostring(reply.error))
+                local terminal = assert(driver_types.decode_terminal(reply.terminal))
+                test.eq(terminal.outcome, "succeeded")
+                test.is_nil(terminal.answer)
+            end
+        end)
+        test.it("retains a result at the answer byte bound", function()
+            local answer = string.rep("x", claude.max_answer_bytes())
+            local raw, call_error = funcs.call("bee.drivers.claude.binding:normalize", {
+                index = 1,
+                envelope = {type = "result", subtype = "success", is_error = false, result = answer},
+            })
+            if call_error then error(tostring(call_error)) end
+            local reply = assert(bounds.object(raw))
+            test.is_true(reply.ok == true, tostring(reply.error))
+            local terminal = assert(driver_types.decode_terminal(reply.terminal))
+            test.eq(terminal.outcome, "succeeded")
+            test.eq(terminal.answer, answer)
+        end)
         test.it("extracts the answer from the result and streams deltas as answer text", function()
             for _, size in ipairs({7, 64, 4096}) do
                 local plain = run(claude, "/claude/stream-json-2/plain.jsonl", size, false)

@@ -11,10 +11,13 @@ local M = {}
 M.PROTOCOL_REVISION = "stream-json-2"
 M.MAX_ANSWER_BYTES = events.MAX_TEXT_BYTES
 type Observation = {[string]: unknown}
+-- api_error: the error kind of the last assistant message Claude Code
+-- synthesized from a failed API call, such as authentication_failed.
 type State = {
     session_id: string?,
     started: boolean,
     resumed: boolean,
+    api_error: string?,
     terminal: types.Terminal?,
 }
 type Step = {observations: {Observation}, terminal: types.Terminal?}
@@ -24,7 +27,7 @@ end
 function M.decode_state(value: unknown): (State?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state must be an object" end
-    local unknown = bounds.fields(object, {"session_id", "started", "resumed", "terminal"})
+    local unknown = bounds.fields(object, {"session_id", "started", "resumed", "api_error", "terminal"})
     if unknown then return nil, "state: " .. unknown end
     if type(object.started) ~= "boolean" or type(object.resumed) ~= "boolean" then return nil, "state flags must be booleans" end
     local session_id: string? = nil
@@ -32,13 +35,26 @@ function M.decode_state(value: unknown): (State?, string?)
         session_id = bounds.id(object.session_id)
         if not session_id then return nil, "state.session_id is not an identifier" end
     end
+    local api_error: string? = nil
+    if object.api_error ~= nil then
+        api_error = bounds.id(object.api_error)
+        if not api_error then return nil, "state.api_error is not an identifier" end
+    end
     local terminal: types.Terminal? = nil
     if object.terminal ~= nil then
         local decoded, terminal_error = types.decode_terminal(object.terminal)
         if not decoded then return nil, terminal_error end
         terminal = decoded
     end
-    return {session_id = session_id, started = object.started, resumed = object.resumed, terminal = terminal}, nil
+    return {session_id = session_id, started = object.started, resumed = object.resumed, api_error = api_error, terminal = terminal}, nil
+end
+-- retryable reports whether a failed turn may succeed when repeated: the
+-- HTTP status of the failed API call decides when Claude Code reports one -
+-- a rate limit or a server fault, never a refused credential or request.
+local function retryable(reason: string, status: unknown): boolean
+    local code = tonumber(status)
+    if code then return code == 429 or code >= 500 end
+    return reason == "api_error" or reason == "rate_limit"
 end
 local function key(index: integer, suffix: string): string
     return "claude:" .. tostring(index) .. ":" .. suffix
@@ -130,6 +146,9 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             out[#out + 1] = events.extension(key(index, "system"), "claude.system." .. tostring(subtype), M.PROTOCOL_REVISION, (not err and encoded) or "{}")
         end
     elseif kind == "assistant" or kind == "user" then
+        if kind == "assistant" and envelope.is_api_error_message == true and type(envelope.error) == "string" then
+            state.api_error = bounds.id(envelope.error)
+        end
         content_blocks(state, index, envelope.message, out)
     elseif kind == "stream_event" then
         local event: unknown = envelope.event
@@ -154,7 +173,8 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             outcome = "failed"
             local raw_reason = path_reader.read(envelope, paths, "errors")
             local reason = tostring(raw_reason or subtype or "error")
-            fault = events.fault(reason, text_of(path_reader.read(envelope, paths, "result_text")), reason == "api_error" or reason == "rate_limit")
+            fault = events.fault(state.api_error or reason, text_of(path_reader.read(envelope, paths, "result_text")),
+                retryable(reason, envelope.api_error_status))
         end
         local denials: unknown = envelope.permission_denials
         if type(denials) == "table" then

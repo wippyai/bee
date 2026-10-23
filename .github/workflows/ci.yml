@@ -142,6 +142,18 @@ jobs:
       CI_TESTS: '1'
       TEST_CACHE_MODE: readonly
       REVISION: prepared
+  drivers:
+    name: Drivers module suites
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - id: setup
+      uses: ./.github/actions/setup-bee
+      with:
+        target: linux/amd64
+    - name: Drivers module suites
+      run: make test-drivers
   check:
     name: Check gate
     needs:
@@ -149,6 +161,7 @@ jobs:
     - lint
     - boot
     - tests
+    - drivers
     - warm
     - plan
     - profiles

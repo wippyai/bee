@@ -853,16 +853,8 @@ def observe_boot_recovery(src):
     path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
-def inject_registry_faults(src, drivers):
+def inject_registry_faults(src):
     """Fail one named registry read for a caller that opts in through ctx."""
-    resolver = drivers / "binding/resolver.lua"
-    replace_once(resolver, 'local registry = require("registry")',
-                 'local registry = require("registry")\nlocal ctx = require("ctx")')
-    replace_once(resolver, "    local entry, err = pinned:get(ref)", '''    local entry, err = pinned:get(ref)
-    if ctx.get("bee.test.registry.fault") == ref then
-        entry, err = nil, errors.new({message = "registry unavailable", kind = errors.UNAVAILABLE})
-    end''')
-    add_modules(drivers / "binding/_index.yaml", "resolver", ["ctx"])
     pumping = src / "threads/service/pump_config.lua"
     replace_once(pumping, 'local registry = require("registry")',
                  'local registry = require("registry")\nlocal ctx = require("ctx")')
@@ -923,8 +915,7 @@ def compose():
     shutil.rmtree(DRIVERS_COMPOSITION, ignore_errors=True)
     src = COMPOSITION / "src"
     shutil.copytree(ROOT / "src", src)
-    drivers = DRIVERS_COMPOSITION
-    shutil.copytree(ROOT / "drivers/src", drivers)
+    shutil.copytree(ROOT / "drivers/src", DRIVERS_COMPOSITION)
     # The composition is a module root like the repository: its manifest
     # beside src, so module-relative directories resolve as they do in a pack.
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
@@ -939,7 +930,7 @@ def compose():
     observe_node_ready(src)
     observe_hive_upgrade(src)
     order_hive_readiness(src)
-    inject_registry_faults(src, drivers)
+    inject_registry_faults(src)
     stop_hive_delivery(src)
     observe_transaction_demand(src)
     hold_access_readiness(src)

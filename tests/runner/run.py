@@ -201,6 +201,8 @@ def copy_workspace(root, address, identities=()):
     root.mkdir()
     for name in ("lua", "fixtures"):
         shutil.copytree(TESTS / name, root / name)
+    # The drivers module owns its recorded CLI streams; Bee's suites read them too.
+    shutil.copytree(REPO / "drivers/test/fixtures/drivers", root / "fixtures/drivers")
     composition = root / ".wippy/composition"
     shutil.copytree(TESTS / ".wippy/composition", composition)
     drivers_composition = root / ".wippy/composition-drivers"

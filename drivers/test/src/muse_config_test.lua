@@ -95,6 +95,16 @@ local function define_tests()
             local _, source_error = configuration.settings_file(gateway({}, {"SessionStart"}))
             test.eq(source_error, "muse hooks require an attempt credential file")
         end)
+        test.it("renders one attempt-qualified private hook credential file", function()
+            local first, first_source = configuration.hook_token_file("/private/muse", "attempt:first", "BEE_HOOK_TOKEN")
+            local second, second_source = configuration.hook_token_file("/private/muse", "attempt:second", "BEE_HOOK_TOKEN")
+            if not first or not first_source or not second or not second_source then error("hook token file was not rendered") end
+            test.neq(first.path, second.path)
+            test.neq(first_source, second_source)
+            test.eq(first.content, '{"token":""}\n')
+            test.eq(first.secret_fields and #first.secret_fields, 1)
+            test.eq(first.secret_fields and first.secret_fields[1].environment, "BEE_HOOK_TOKEN")
+        end)
         test.it("delivers scoped settings and private prompt instructions", function()
             local reply = configure.handle({fixture = false,
                 home_directory = "/private/muse", attempt_id = "attempt:one",

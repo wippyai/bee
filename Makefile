@@ -4,7 +4,9 @@
 #   make tools     install wippy-builder and build the matching wippy toolchain
 #   make check     lint, fixture lint, boot checks and the sharded Lua suites
 #   make lint      lint application and fixture source with that toolchain
-#   make test      run the Lua suites in tests/ against the application source
+#   make test      run the Lua suites in tests/ against the application source,
+#                  then the drivers module suites
+#   make test-drivers  lint and run the bee/drivers module suites in drivers/test
 #   make build     pack the application, record its checksum, build dist/bee
 #   make install   install dist/bee as ~/.local/bin/bee (previous kept as bee.prev)
 #   make runtime-pin RUNTIME_VERSION=<commit>  pin the release build to one runtime commit
@@ -148,8 +150,27 @@ test-python: .wippy/build/lua-parse .wippy/build/test-migration
 
 test-prepare: $(if $(CI_TESTS),fixture-install,fixture-lint test-python) $(TEST_FIXTURES)/harness/bin/gateway-client
 
-test: boot-check
+test: boot-check test-drivers
 	python3 -m tests.runner.run --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --tests $(TESTS)
+
+# The bee/drivers module's suites run in its standalone harness, drivers/test,
+# against drivers/src alone. Its lock pins the harness dependencies. The runner
+# starts from a clean environment and empty harness value storages; provider
+# variables carry fixture values the drivers must not read. It fails when the
+# harness finds no cases.
+DRIVERS_TEST := $(abspath drivers/test)
+DRIVERS_STATE := $(DRIVERS_TEST)/.wippy
+
+test-drivers: tools
+	cd $(DRIVERS_TEST) && $(abspath $(WIPPY)) install
+	cd $(DRIVERS_TEST) && $(abspath $(WIPPY)) lint --memory-limit 1G
+	rm -rf $(DRIVERS_STATE)/home $(DRIVERS_STATE)/shell $(DRIVERS_STATE)/tmp $(DRIVERS_STATE)/host-environment.env $(DRIVERS_STATE)/entered-values.env
+	mkdir -p $(DRIVERS_STATE)/home $(DRIVERS_STATE)/tmp
+	cd $(DRIVERS_TEST) && env -i PATH=/usr/bin:/bin LANG=C.UTF-8 NO_COLOR= HOME=$(DRIVERS_STATE)/home \
+		TMPDIR=$(DRIVERS_STATE)/tmp ANTHROPIC_API_KEY=fixture-shell-value-not-a-key \
+		CLAUDE_CONFIG_DIR=$(DRIVERS_STATE)/shell/claude CODEX_HOME=$(DRIVERS_STATE)/shell/codex \
+		$(abspath $(WIPPY)) test --memory-limit 1G | tee $(DRIVERS_STATE)/test.log
+	! grep -q "No tests found" $(DRIVERS_STATE)/test.log
 
 test-shard: test-prepare
 	@test -n "$(SHARD)" || { echo "set SHARD=<1-based shard>"; exit 2; }
@@ -237,6 +258,6 @@ release-publish:
 release-package:
 	python3 build/ci.py package --target $(TARGET) --version $(VERSION)
 
-.PHONY: builder-version test-prepare test-shard release-prepare release-compile ci-tools ci-tools-outputs ci-prepare ci-import ci-stamp ci-require ci-warm ci-gate ci-plan release-package release-rosetta release-verify release-publish
+.PHONY: builder-version test-prepare test-shard test-drivers release-prepare release-compile ci-tools ci-tools-outputs ci-prepare ci-import ci-stamp ci-require ci-warm ci-gate ci-plan release-package release-rosetta release-verify release-publish
 
 .PHONY: hygiene fixture-install ci-profile ci-assemble ci-lint

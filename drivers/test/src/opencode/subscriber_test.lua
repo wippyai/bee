@@ -1,7 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
 local exec = require("exec")
-local env = require("env")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -9,11 +8,12 @@ local http = require("http_client")
 local json = require("json")
 local bounds = require("bounds")
 local quote = require("quote")
+-- The recorded OpenCode server captures, relative to the harness root.
+local fixtures = "fixtures/drivers/opencode/"
 local function define_tests()
     test.describe("OpenCode HTTP subscriber", function()
         test.it("records the failed startup operation without exposing the HTTP payload", function()
-            local fixtures = assert(env.get("BEE_FIXTURE_STREAMS")) .. "/opencode/"
-            local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
+            local executor = assert(exec.get("bee.drivers.tests.opencode:fixture_server"))
             local server = assert(executor:exec(quote.line({"/usr/bin/python3", fixtures .. "http-server.py", fixtures .. "http-events-1", "/session/status"}), {process_group = true}))
             local stdout = server:stdout_stream()
             assert(server:start())
@@ -21,7 +21,7 @@ local function define_tests()
             assert(endpoint)
             local topic = "bee.fixture.opencode.failure"
             local replies = assert(process.listen(topic, {message = true}))
-            local child = assert(process.spawn("bee.drivers.opencode.observer:subscriber", "bee:workers", {
+            local child = assert(process.spawn("bee.drivers.opencode.observer:subscriber", "bee.drivers.tests.host:processes", {
                 endpoint = endpoint, hook_endpoint = endpoint .. "/hook/action-1", hook_token = "fixture-hook",
                 hooks = {}, argv = {}, working_directory = fixtures, owner = process.pid(), topic = topic,
             }))
@@ -42,8 +42,7 @@ local function define_tests()
         test.it("subscribes before the prompt, delivers captured hooks and permissions, and stops with its window", function()
             for _, case in ipairs({{auto = false, brief = "Fixture peer request"}, {auto = true, brief = "Fixture peer request"}, {auto = false, brief = "--auto"}}) do
             local auto = case.auto
-            local fixtures = assert(env.get("BEE_FIXTURE_STREAMS")) .. "/opencode/"
-            local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
+            local executor = assert(exec.get("bee.drivers.tests.opencode:fixture_server"))
             local server = assert(executor:exec(quote.line({"/usr/bin/python3", fixtures .. "http-server.py", fixtures .. "http-events-1"}), {process_group = true}))
             local stdout = server:stdout_stream()
             assert(server:start())
@@ -51,7 +50,7 @@ local function define_tests()
             assert(endpoint)
             local topic = "bee.fixture.opencode.subscriber"
             local replies = assert(process.listen(topic, {message = true}))
-            local child = assert(process.spawn("bee.drivers.opencode.observer:subscriber", "bee:workers", {
+            local child = assert(process.spawn("bee.drivers.opencode.observer:subscriber", "bee.drivers.tests.host:processes", {
                 endpoint = endpoint, hook_endpoint = endpoint .. "/hook/action-1", hook_token = "fixture-hook",
                 hooks = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop", "SessionEnd"},
                 argv = auto and {"--auto", "--prompt", case.brief} or {"--prompt", case.brief}, working_directory = fixtures, owner = process.pid(), topic = topic,

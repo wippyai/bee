@@ -24,13 +24,6 @@ entries:
   imports:
     placement_profiles: bee.placement.profiles:profiles
     universal: bee.drivers.binding:universal
-- name: codex_protocol
-  kind: library.lua
-  source: file://codex_protocol.lua
-  meta:
-    type: test_support
-  imports:
-    universal: bee.drivers.binding:universal
 - name: agy_launch
   kind: library.lua
   source: file://agy_launch.lua
@@ -38,13 +31,6 @@ entries:
     type: test_support
   imports:
     placement_profiles: bee.placement.profiles:profiles
-    universal: bee.drivers.binding:universal
-- name: agy_protocol
-  kind: library.lua
-  source: file://agy_protocol.lua
-  meta:
-    type: test_support
-  imports:
     universal: bee.drivers.binding:universal
 - name: grok_launch
   kind: library.lua
@@ -54,13 +40,6 @@ entries:
   imports:
     placement_profiles: bee.placement.profiles:profiles
     universal: bee.drivers.binding:universal
-- name: grok_protocol
-  kind: library.lua
-  source: file://grok_protocol.lua
-  meta:
-    type: test_support
-  imports:
-    universal: bee.drivers.binding:universal
 - name: muse_launch
   kind: library.lua
   source: file://muse_launch.lua
@@ -69,13 +48,6 @@ entries:
   imports:
     placement_profiles: bee.placement.profiles:profiles
     universal: bee.drivers.binding:universal
-- name: muse_protocol
-  kind: library.lua
-  source: file://muse_protocol.lua
-  meta:
-    type: test_support
-  imports:
-    universal: bee.drivers.binding:universal
 - name: opencode_launch
   kind: library.lua
   source: file://opencode_launch.lua
@@ -83,13 +55,6 @@ entries:
     type: test_support
   imports:
     placement_profiles: bee.placement.profiles:profiles
-    universal: bee.drivers.binding:universal
-- name: opencode_protocol
-  kind: library.lua
-  source: file://opencode_protocol.lua
-  meta:
-    type: test_support
-  imports:
     universal: bee.drivers.binding:universal
 - name: opencode_hooks
   kind: library.lua

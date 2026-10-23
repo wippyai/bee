@@ -77,6 +77,19 @@ class CIContractTests(unittest.TestCase):
         self.assertNotIn('verify-prepared', remote)
         self.assertEqual(next(step['run'] for step in workflow('ci.yml')['jobs']['lint']['steps'] if step.get('name') == 'Python unit tests and corpus'), 'make ci-lint')
 
+    def test_drivers_module_suites_run_in_their_own_harness_with_the_full_suite(self):
+        commands = subprocess.check_output(['make', '--no-print-directory', '-n', 'test-drivers'], cwd=ROOT, text=True)
+        harness = str(ROOT / 'drivers/test')
+        self.assertIn(f'cd {harness} && ', commands)
+        self.assertIn('wippy install', commands)
+        self.assertIn('wippy lint', commands)
+        self.assertIn('env -i ', commands)
+        self.assertIn('wippy test', commands)
+        self.assertIn('No tests found', commands)
+        full = subprocess.check_output(['make', '--no-print-directory', '-n', 'test'], cwd=ROOT, text=True)
+        self.assertIn(f'cd {harness} && ', full)
+        self.assertIn('tests.runner.run', full)
+
     def test_profile_merge_rejects_other_sources_and_missing_checks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -231,6 +244,9 @@ class CIContractTests(unittest.TestCase):
                 self.assertEqual(ci_jobs[name]['env']['TEST_CACHE_MODE'], 'readonly')
                 self.assertEqual(ci_jobs[name]['env']['CI_TESTS'], '1')
         self.assertIn('profiles', ci_jobs['check']['needs'])
+        self.assertIn('drivers', ci_jobs['check']['needs'])
+        self.assertNotIn('needs', ci_jobs['drivers'])
+        self.assertEqual([step['run'] for step in ci_jobs['drivers']['steps'] if 'run' in step], ['make test-drivers'])
         darwin = [row for row in release['build']['strategy']['matrix']['include'] if row['goos'] == 'darwin']
         self.assertEqual({row['goarch'] for row in darwin}, {'amd64', 'arm64'})
         commands = subprocess.check_output(['make', '--no-print-directory', '-n', 'release-compile'], cwd=ROOT, text=True)

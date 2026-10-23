@@ -5,7 +5,7 @@ local json = require("json")
 local bounds = require("bounds")
 local mapper = require("mapper")
 local function fixture(name: string): string
-    local files = assert(fs.get("bee.tests.driver:fixtures"))
+    local files = assert(fs.get("bee.drivers.tests:fixtures"))
     local content = assert(files:readfile("opencode/http-events-1/" .. name))
     return content
 end

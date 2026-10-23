@@ -38,6 +38,52 @@ entries:
   imports:
     test: wippy.test:test
     delivery: bee.drivers.opencode.observer:delivery
+- name: observer_test
+  kind: function.lua
+  source: file://observer_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [fs, json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    mapper: bee.drivers.opencode.observer:events
+- name: observer_declaration_test
+  kind: function.lua
+  source: file://observer_declaration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [security]
+  security:
+    policies: [bee.drivers.tests.opencode:policy_inspection]
+  imports:
+    test: wippy.test:test
+    observer_protocol: bee.drivers:window_observer
+- name: subscriber_test
+  kind: function.lua
+  source: file://subscriber_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [exec, process, channel, time, http_client, json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    quote: bee.drivers.binding:quote
+  security:
+    policies: [bee.drivers.tests.opencode:fixture_server_policy, bee.drivers.tests.opencode:http_probe_policy]
+- name: fixture_server
+  kind: exec.native
+  meta:
+    type: test_support
+    comment: Runs the recorded OpenCode HTTP server the subscriber suite attaches to
+  default_env: {PATH: '/usr/bin:/bin'}
+- name: fixture_server_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    effect: allow
+    actions: [exec.get, exec.run]
+    resources: [bee.drivers.tests.opencode:fixture_server]
 - name: policy_inspection
   kind: security.policy
   policy:

@@ -54,7 +54,7 @@ local function item_observations(state: State, index: integer, phase: string, it
     if kind == "agent_message" then
         local answer = path_reader.read(envelope, paths, "result_text")
         if phase == "completed" and type(answer) == "string" then
-            state.answer = answer
+            state.answer = bounds.text(answer, M.MAX_ANSWER_BYTES)
             for _, piece in ipairs(events.text(key(index, "message"), id, "complete", answer, "answer")) do out[#out + 1] = piece end
         end
     elseif kind == "reasoning" then

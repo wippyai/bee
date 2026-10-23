@@ -102,8 +102,68 @@ local function define_tests()
             if not api.terminal then error("no terminal") end
             test.eq(api.terminal.outcome, "failed")
             test.is_nil(api.terminal.answer)
-            test.eq(api.terminal.error and api.terminal.error.code, "api_error")
-            test.is_true(api.terminal.error ~= nil and api.terminal.error.retryable)
+            test.eq(api.terminal.error and api.terminal.error.code, "billing_error")
+            test.is_false(api.terminal.error ~= nil and api.terminal.error.retryable)
+        end)
+        test.it("reports a refused credential as a fault repeating cannot fix", function()
+            local refused = run(claude, "/claude/stream-json-2/authentication_failed.jsonl", 100, false)
+            if not refused.terminal then error("no terminal") end
+            test.eq(refused.terminal.outcome, "failed")
+            test.eq(refused.terminal.error and refused.terminal.error.code, "authentication_failed")
+            test.is_false(refused.terminal.error ~= nil and refused.terminal.error.retryable)
+        end)
+        test.it("keeps rate limits and server faults retryable", function()
+            for _, status in ipairs({429, 500, 529}) do
+                local raw, call_error = funcs.call("bee.drivers.claude.binding:normalize", {
+                    index = 1,
+                    envelope = {type = "result", is_error = true, subtype = "success", terminal_reason = "api_error",
+                        api_error_status = status, result = "provider fault"},
+                })
+                if call_error then error(tostring(call_error)) end
+                local reply = assert(bounds.object(raw))
+                local terminal = assert(bounds.object(reply.terminal))
+                local fault = assert(bounds.object(terminal.error))
+                test.eq(fault.code, "api_error")
+                test.eq(fault.retryable, true, tostring(status))
+            end
+        end)
+        test.it("names a retryable API fault by the kind its error message reports", function()
+            local function step(state: unknown, index: integer, envelope: {[string]: unknown}): {[string]: unknown}
+                local raw, call_error = funcs.call("bee.drivers.claude.binding:normalize", {index = index, state = state, envelope = envelope})
+                if call_error then error(tostring(call_error)) end
+                local reply = assert(bounds.object(raw))
+                if reply.ok ~= true then error(tostring(reply.error)) end
+                return reply
+            end
+            local limited = step(nil, 1, {type = "assistant", is_api_error_message = true, error = "rate_limit",
+                api_error_status = 429, message = {content = {{type = "text", text = "API Error: rate limited"}}}})
+            local ended = step(limited.state, 2, {type = "result", is_error = true, subtype = "success",
+                terminal_reason = "api_error", api_error_status = 429, result = "API Error: rate limited"})
+            local fault = assert(bounds.object(assert(bounds.object(ended.terminal)).error))
+            test.eq(fault.code, "rate_limit")
+            test.eq(fault.retryable, true)
+        end)
+        test.it("decodes saved Claude state with and without an API error kind", function()
+            local billing = {type = "result", is_error = true, subtype = "success", terminal_reason = "api_error",
+                api_error_status = 400, result = "Credit balance is too low"}
+            local function fault(state: {[string]: unknown}): {[string]: unknown}
+                local raw, call_error = funcs.call("bee.drivers.claude.binding:normalize", {index = 4, state = state, envelope = billing})
+                if call_error then error(tostring(call_error)) end
+                local reply = assert(bounds.object(raw))
+                if reply.ok ~= true then error(tostring(reply.error)) end
+                return assert(bounds.object(assert(bounds.object(reply.terminal)).error))
+            end
+            local stored = fault({session_id = "session-1", started = true, resumed = false})
+            test.eq(stored.code, "api_error")
+            test.eq(stored.retryable, false)
+            local kind = fault({session_id = "session-1", started = true, resumed = false, api_error = "billing_error"})
+            test.eq(kind.code, "billing_error")
+            test.eq(kind.retryable, false)
+            for _, malformed in ipairs({"", "billing\nerror", 42}) do
+                local raw = funcs.call("bee.drivers.claude.binding:normalize", {index = 1, eof = true,
+                    state = {started = true, resumed = false, api_error = malformed}})
+                test.is_false(assert(bounds.object(raw)).ok == true)
+            end
         end)
         test.it("keeps a provider turn-limit report as a typed failure", function()
             local raw, call_error = funcs.call("bee.drivers.claude.binding:normalize", {

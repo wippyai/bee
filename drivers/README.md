@@ -108,7 +108,7 @@ of the driver's credential variables.
 ```lua
 local launch = drivers.launch("codex", {
     brief = "fix the failing test", home = "/home", placement = placement,
-    endpoint = {protocol = "openai-responses", base_url = "http://towers.lan:8000/v1", model = "qwen3-coder"},
+    endpoint = {protocol = "openai-responses", base_url = "http://models.example.internal:8000/v1", model = "qwen3-coder"},
 })  -- Codex gets a model_providers entry; set OPENAI_API_KEY in the launch environment
 ```
 

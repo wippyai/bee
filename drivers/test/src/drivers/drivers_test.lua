@@ -128,8 +128,8 @@ local function define_tests()
             local claude = assert(drivers.get("claude"))
             test.is_true(contains(claude.endpoints, "anthropic-messages"))
             local launch = assert(drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER,
-                endpoint = {protocol = "anthropic-messages", base_url = "http://towers.local:8000"}}))
-            test.eq(launch.environment.ANTHROPIC_BASE_URL, "http://towers.local:8000")
+                endpoint = {protocol = "anthropic-messages", base_url = "http://models.example.internal:8000"}}))
+            test.eq(launch.environment.ANTHROPIC_BASE_URL, "http://models.example.internal:8000")
             local plain = assert(drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER}))
             test.is_nil(plain.environment.ANTHROPIC_BASE_URL)
         end)
@@ -137,9 +137,9 @@ local function define_tests()
             local codex = assert(drivers.get("codex"))
             test.is_true(contains(codex.endpoints, "openai-responses"))
             local launch = assert(drivers.launch("codex", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER,
-                endpoint = {protocol = "openai-responses", base_url = "http://towers.local:8000/v1", model = "qwen3-coder"}}))
+                endpoint = {protocol = "openai-responses", base_url = "http://models.example.internal:8000/v1", model = "qwen3-coder"}}))
             local config = assert(file_at(launch, ".codex/config.toml"))
-            for _, expected in ipairs({'base_url = "http://towers.local:8000/v1"', 'env_key = "OPENAI_API_KEY"', 'wire_api = "responses"', 'model = "qwen3-coder"'}) do
+            for _, expected in ipairs({'base_url = "http://models.example.internal:8000/v1"', 'env_key = "OPENAI_API_KEY"', 'wire_api = "responses"', 'model = "qwen3-coder"'}) do
                 test.is_true(config.content:find(expected, 1, true) ~= nil, config.content)
             end
             test.is_nil(config.composition)
@@ -153,7 +153,7 @@ local function define_tests()
                 endpoint = {protocol = "openai-responses", base_url = "https://models.example.test/v1"}})
             test.is_nil(modelless)
             test.is_true(errors.is(modelless_err, errors.INVALID), tostring(modelless_err))
-            for _, url in ipairs({"ftp://towers.local", "towers.local:8000", "http://towers.local/v1?key=x"}) do
+            for _, url in ipairs({"ftp://models.example.internal", "models.example.internal:8000", "http://models.example.internal/v1?key=x"}) do
                 local launch, err = drivers.launch("claude", {brief = "x", home = CLAUDE_HOME, placement = placements.DOCKER,
                     endpoint = {protocol = "anthropic-messages", base_url = url}})
                 test.is_nil(launch)

@@ -135,6 +135,15 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
         end
         return {policy = generated, volume = volume}, nil
     end
+    if grant.capability == "workspace.files.watch" and grant.operation == "files.watch"
+        and grant.resource == "workspace" and type(scope.subpath) == "string" then
+        local volume, volume_error = files.volume(owner, folder, scope.subpath, false)
+        local generated, policy_error = volume and files.watch_policy(owner, folder, scope.subpath, id) or nil
+        if not volume or not generated then
+            return nil, volume_error or policy_error or "workspace watch grant is not installable"
+        end
+        return {policy = generated, volume = volume}, nil
+    end
     if grant.capability == "app.database" and grant.operation == "database.use"
         and grant.resource == scope.name and type(scope.name) == "string" then
         local database, database_error = files.database(owner, scope.name)
@@ -255,7 +264,7 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
     local volumes: {Object} = table.create(1, 0)
     local databases: {Object} = table.create(1, 0)
     local executors: {Object} = table.create(1, 0)
-    local volume_ids: {[string]: boolean} = {}
+    local volume_ids: {[string]: integer} = {}
     local database_ids: {[string]: boolean} = {}
     local executor_ids: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
@@ -285,10 +294,15 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
         pairs_by_id[id] = {grant = resolved_operations[1], policy = generated.policy}
         ids[#ids + 1] = id
         if volume then
+            -- Grants on one folder share its volume; a writable grant's
+            -- volume serves the read-only grants on that folder too.
             local volume_id = (volume).id
-            if not volume_ids[volume_id] then
-                volume_ids[volume_id] = true
+            local index = volume_ids[volume_id]
+            if not index then
                 volumes[#volumes + 1] = volume
+                volume_ids[volume_id] = #volumes
+            elseif (bounds.object(volume.data) or {}).readonly ~= true then
+                volumes[index] = volume
             end
         end
         if database then

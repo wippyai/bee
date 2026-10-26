@@ -13,7 +13,7 @@ entries:
     comment: Host-owned review vocabulary and templates for the capabilities a governed application or an agent attempt may request; declarations are not grants. modules names the runtime modules a granted
       application may load; tools names the gateway tools through which an agent attempt exercises the grant
   data:
-    revision: 6
+    revision: 7
     never:
     - env
     - credentials
@@ -32,6 +32,23 @@ entries:
       confirm: standard
       policies:
       - operation: files.read
+        resource: workspace
+        scope:
+          subpath: $subpath
+      resources:
+      - kind: fs.directory
+        mode: readonly
+        source: verified_workspace_subroot
+    - id: workspace.files.watch
+      revision: 1
+      parameters:
+        subpath: relative_subpath
+      text: Read workspace files under {subpath} and receive change notices for its folders
+      confirm: standard
+      modules:
+      - ioevents
+      policies:
+      - operation: files.watch
         resource: workspace
         scope:
           subpath: $subpath

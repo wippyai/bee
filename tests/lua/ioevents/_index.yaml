@@ -1,0 +1,55 @@
+version: '1.0'
+namespace: bee.tests.ioevents
+entries:
+- name: watched
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/ioevents-watched
+  auto_init: true
+- name: watch_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [fs.get, ioevents.watch]
+    resources: [bee.tests.ioevents:watched]
+    effect: allow
+- name: read_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [fs.get]
+    resources: [bee.tests.ioevents:watched]
+    effect: allow
+- name: watch_test
+  kind: function.lua
+  source: file://watch_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "30s"}
+  modules: [fs, ioevents, channel, time]
+  security:
+    policies: [bee.tests.ioevents:watch_policy]
+  imports:
+    test: wippy.test:test
+- name: probe
+  kind: function.lua
+  meta: {type: test_support}
+  source: file://probe.lua
+  method: probe
+  modules: [ioevents]
+- name: probe_call_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.tests.ioevents:probe]
+    effect: allow
+- name: denied_test
+  kind: function.lua
+  source: file://denied_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  security:
+    policies: [bee.tests.ioevents:probe_call_policy]
+  imports:
+    test: wippy.test:test

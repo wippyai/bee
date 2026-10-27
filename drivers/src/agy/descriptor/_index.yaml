@@ -123,6 +123,30 @@ entries:
           id: mode
           group: access/trust
           security_class: host-ceiling
+        model_provider:
+          id: model_provider
+          path: provider.options.model_provider
+          value_schema:
+            type: string
+            enum: [gemini]
+          label: Model provider
+          description: Select gemini when using a GEMINI_API_KEY credential; omit for account login
+          section: basic
+          order: 0
+          contexts: [window, first_turn, resume]
+          group: model/provider
+          security_class: free
+          support:
+            config_schema_ref: bee.drivers.agy.descriptor:cli
+          render:
+          - kind: config
+            contexts: [window, first_turn, resume]
+            file: .gemini/antigravity-cli/settings.json
+            format: json
+            path: [modelProvider]
+            merge: set
+            value:
+              field: provider.options.model_provider
         model:
           invalid: model is not one bounded model identifier
           path: provider.model

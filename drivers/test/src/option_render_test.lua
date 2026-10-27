@@ -52,14 +52,14 @@ local function define_tests()
             local codex = assert(descriptor.load("bee.drivers.codex.descriptor:cli"))
             fields = assert(bounds.object(codex.options.fields))
             local values = {model_provider = "local_model", model_providers = {local_model = {name = "Local", base_url = endpoint,
-                env_key = "OPENAI_API_KEY", wire_api = "responses"}}}
+                env_key = "CODEX_API_KEY", wire_api = "responses"}}}
             test.not_nil(descriptor.decode_option("model_providers", fields.model_providers, values.model_providers))
             files = assert(render.files(fields, values, "window", {}))
             content = assert(bounds.object(toml.decode(files[1].content)))
             test.eq(content.model_provider, "local_model")
             local selected = assert(bounds.object(assert(bounds.object(content.model_providers)).local_model))
             test.eq(selected.base_url, endpoint)
-            test.eq(selected.env_key, "OPENAI_API_KEY")
+            test.eq(selected.env_key, "CODEX_API_KEY")
         end)
         test.it("measures omitted and empty option selections as the same configuration", function()
             local target = "bee.drivers.claude.binding:configure"

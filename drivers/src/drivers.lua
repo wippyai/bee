@@ -302,7 +302,7 @@ local function endpoint_provider(target: Reach): Object?
 end
 
 function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
-    local brief = bounds.text(request.brief, bounds.MAX_TEXT_BYTES)
+    local brief = bounds.text(request.brief, bounds.MAX_BRIEF_BYTES)
     if not brief then return nil, fail(errors.INVALID, "brief must be bounded text") end
     local home = bounds.text(request.home, 4096)
     if not home or home:sub(1, 1) ~= "/" then return nil, fail(errors.INVALID, "home must be an absolute path") end

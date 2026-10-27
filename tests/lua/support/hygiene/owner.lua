@@ -178,6 +178,9 @@ function M.main()
             local updates = assert(events.subscribe("supervisor", "service.update"))
             local monitored: {[string]: boolean} = {}
             while true do
+                -- Restoring registry entries can queue Sync work that wakes a
+                -- demand service. Settle it before deciding children are idle.
+                sync_idle()
                 after = snapshot()
                 local pending = false
                 for name in pairs(after.pending) do if not assert(baseline).pending[name] then pending = true end end
@@ -205,7 +208,6 @@ function M.main()
             end
             for pid in pairs(monitored) do process.unmonitor(pid) end
             updates:close()
-            sync_idle()
             after = snapshot()
         end
         local leaks = after and M.compare(assert(baseline), after, reported) or {}

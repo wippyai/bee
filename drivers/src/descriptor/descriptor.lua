@@ -184,8 +184,8 @@ function M.decode_option(field: string, declaration: Object, value: unknown): (O
         if not selected then return nil, field_error(spec, field, "is not an identifier") end
         return selected, nil
     elseif spec.type == "model" then
-        local selected = bounds.text(value, 128)
-        if not selected or selected == "" or not selected:match("^[A-Za-z0-9][A-Za-z0-9._:/%-]*$") then
+        local selected = bounds.model(value)
+        if not selected then
             return nil, field_error(spec, field, "is not one bounded model identifier")
         end
         return selected, nil

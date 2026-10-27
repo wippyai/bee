@@ -8,6 +8,21 @@ local function provider(data: {[string]: unknown}): {[string]: unknown}
 end
 local function define_tests()
     test.describe("Codex configuration", function()
+        test.it("uses the same bounded model identifiers for providers and launch options", function()
+            for _, model in ipairs({"deepseek/deepseek-v4.1-flash", "provider/model:variant", "model:variant", "m" .. string.rep("x", 127)}) do
+                local decoded, err = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee",
+                    base_url = "https://models.example.test/v1", model = model}))
+                if not decoded then error(tostring(err)) end
+                test.eq(decoded.model, model)
+                test.is_true(configuration.render(decoded):find('model = "' .. model .. '"', 1, true) ~= nil)
+            end
+            for _, model in ipairs({"", "-model", "a b", "a\nmodel_provider=bad", 'a"', "a\0b", "a\127b", "a;id", "a$(id)", "a`id`", "a\\b", string.rep("x", 129)}) do
+                local decoded, err = configuration.decode("host:provider", provider({schema_revision = "bee.codex-provider@1", name = "bee",
+                    base_url = "https://models.example.test/v1", model = model}))
+                test.is_nil(decoded)
+                test.eq(err, "host:provider: model must be a model identifier")
+            end
+        end)
         test.it("adds scoped session MCP and trusted hooks without selecting a replacement user profile", function()
             local args, err = configuration.session_arguments({endpoint = "127.0.0.1:4312", action_id = "action-one",
                 tools = {"thread_read"}, hooks = {"SessionStart"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN"})
@@ -33,7 +48,7 @@ local function define_tests()
             test.is_true(projection.content:find('model_reasoning_effort = "high"', 1, true) ~= nil)
             test.is_true(projection.content:find('developer_instructions = "Answer tersely. Keep the \\"host\\" boundary.\\n"', 1, true) ~= nil)
             test.is_true(projection.content:find('[model_providers.bee]', 1, true) ~= nil)
-            test.is_true(projection.content:find('env_key = "OPENAI_API_KEY"', 1, true) ~= nil)
+            test.is_true(projection.content:find('env_key = "CODEX_API_KEY"', 1, true) ~= nil)
             test.is_true(projection.content:find('wire_api = "responses"', 1, true) ~= nil)
             test.is_true(projection.content:find('base_url = "https://gateway.example.net/v1"', 1, true) ~= nil)
             test.eq(#projection.digest, 64)

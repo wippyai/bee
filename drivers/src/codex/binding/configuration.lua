@@ -18,7 +18,7 @@ local M = {}
 M.REVISION = "bee.codex-config@1"
 M.PROVIDER_TYPE = "bee.codex_provider"
 M.PROVIDER_SCHEMA = "bee.codex-provider@1"
-M.ENV_KEY = "OPENAI_API_KEY"
+M.ENV_KEY = "CODEX_API_KEY"
 M.WIRE_API = "responses"
 M.PATH = ".codex/config.toml"
 M.MAX_URL_BYTES = shared_configuration.MAX_ENDPOINT_BYTES
@@ -59,8 +59,8 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Provider?, string?)
     if data.schema_revision ~= M.PROVIDER_SCHEMA then return nil, ref .. ": schema_revision must be " .. M.PROVIDER_SCHEMA end
     local name = bounds.id(data.name)
     if not name or not name:match("^[a-z][a-z0-9_]*$") then return nil, ref .. ": name must be a lowercase identifier" end
-    local model = bounds.id(data.model)
-    if data.model ~= nil and (not model or not model:match("^[A-Za-z0-9][A-Za-z0-9._-]*$")) then return nil, ref .. ": model must be a model identifier" end
+    local model = bounds.model(data.model)
+    if data.model ~= nil and not model then return nil, ref .. ": model must be a model identifier" end
     local reasoning_effort: string? = nil
     if data.reasoning_effort ~= nil then
         local declared = bounds.member(data.reasoning_effort, M.REASONING_EFFORTS)

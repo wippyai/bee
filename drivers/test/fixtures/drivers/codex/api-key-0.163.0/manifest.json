@@ -1,0 +1,12 @@
+{
+  "harness": "codex",
+  "protocol": "stream-json",
+  "protocol_revision": "exec-json-1",
+  "executable_version": "0.163.0",
+  "captured_at": "2026-10-27",
+  "capture": "Driver-rendered exec launch with prompt stdin, private home and CODEX_API_KEY; thread identifiers replaced, stderr omitted.",
+  "samples": {
+    "openai": "gpt-5.4-nano: exit 0, pong",
+    "openrouter": "deepseek/deepseek-v4.1-flash via a Responses endpoint: exit 0, pong"
+  }
+}

@@ -38,6 +38,7 @@ entries:
     - bee.drivers.grok.binding:binding
     - bee.drivers.muse.binding:binding
     - bee.drivers.opencode.binding:binding
+    - bee.drivers.pi.binding:binding
 - name: dependency.drivers
   kind: ns.dependency
   component: bee/drivers

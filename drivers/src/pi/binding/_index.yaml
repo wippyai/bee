@@ -1,0 +1,66 @@
+version: '1.0'
+namespace: bee.drivers.pi.binding
+entries:
+- name: prepare
+  kind: function.lua
+  source: file://prepare.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: configure
+  kind: function.lua
+  source: file://configure.lua
+  method: handle
+  imports:
+    configure_protocol: bee.drivers:configuration_types
+    shared: bee.drivers.binding:configuration
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    universal: bee.drivers.binding:universal
+  modules: [hash]
+  security:
+    policies: [bee.drivers.pi.binding:configuration_policy]
+- name: locate
+  kind: function.lua
+  source: file://locate.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+- name: configuration_policy
+  kind: security.policy.expr
+  policy:
+    effect: allow
+    actions: [registry.get, registry.snapshot, funcs.call]
+    resources: ['*']
+    expression: (action == "registry.get" && resource == "bee.drivers.pi.descriptor:cli") || action == "registry.snapshot"
+- name: binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.drivers:driver
+    methods:
+      prepare: bee.drivers.pi.binding:prepare
+      dispatch: bee.drivers.pi.binding:dispatch
+      normalize: bee.drivers.pi.binding:normalize
+      configure: bee.drivers.pi.binding:configure
+  - contract: bee.drivers:locate_facet
+    methods:
+      locate: bee.drivers.pi.binding:locate
+  meta:
+    type: harness.driver
+    driver_id: pi
+    descriptor_ref: bee.drivers.pi.descriptor:cli
+    credential_format_ref: bee.drivers.pi.credentials:credential_format
+    accepts_model: true
+    profiles_ref: bee.drivers.pi.profiles:profiles

@@ -335,6 +335,7 @@ entries:
     - bee.drivers.codec:normalize
     - bee.drivers.codec:opencode_json_events
     - bee.drivers.codec:paths
+    - bee.drivers.codec:pi_json
     - bee.drivers.credentials:format
     - bee.drivers.descriptor:descriptor
     - bee.drivers.descriptor:effective

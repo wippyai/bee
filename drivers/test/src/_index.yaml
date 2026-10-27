@@ -85,6 +85,7 @@ entries:
     agy: bee.drivers.agy.binding:locate
     grok: bee.drivers.grok.binding:locate
     muse: bee.drivers.muse.binding:locate
+    pi: bee.drivers.pi.binding:locate
     login_evidence_types: bee.drivers:login_types
 - name: descriptor_discovery_policy
   kind: security.policy

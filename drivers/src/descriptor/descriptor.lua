@@ -89,7 +89,7 @@ M.TYPE = "bee.driver.cli_descriptor"
 M.SCHEMA = "bee.driver.cli-descriptor@4"
 M.MAX_TEMPLATE_ITEMS = 128
 M.MAX_TEMPLATE_DEPTH = 8
-M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl"}
+M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl", "pi-json"}
 
 type Object = {[string]: unknown}
 type OptionValue = string | number | boolean | {[string]: unknown} | {unknown}

@@ -1,7 +1,7 @@
 # bee/drivers
 
 Declarative, installable drivers for agent CLIs: Claude Code, Codex,
-Antigravity (agy), Muse, Grok and opencode. Each driver is a set of registry
+Antigravity (agy), Muse, Grok, opencode and Pi. Each driver is a set of registry
 entries — a CLI descriptor (command, options, login evidence, version probe),
 capability profiles (batch, session and window modes, protocol, resume,
 interrupt, MCP, hooks, sandbox), and a contract binding — plus a codec that
@@ -116,10 +116,49 @@ local launch = drivers.launch("codex", {
 |---|---|---|
 | claude | `anthropic-messages` | `ANTHROPIC_BASE_URL`; key in `ANTHROPIC_API_KEY` |
 | codex | `openai-responses` (needs `model`) | a generated `model_providers` entry with `env_key = "OPENAI_API_KEY"` |
+| pi | `anthropic-messages` | a generated `models.json` provider override; key in `ANTHROPIC_API_KEY` |
 
 Each driver declares its mappings in its CLI descriptor (`endpoints`), so a new
 protocol or driver is data. Plain `http` base URLs are accepted because the
 host chose them; prefer `https` outside a private network.
+
+## Pi
+
+Pi 0.73.1 runs the `batch` profile with `-p --mode json --no-session`.
+The prompt travels on stdin with EOF. Extension, skill, prompt-template and
+context-file discovery are disabled; `--offline` disables startup network
+operations and still permits model requests. Pi has no permission prompts or
+sandbox. The placement admits `no-approvals`, `write-anywhere` and `network`;
+the tools option conservatively requires these rights for every allowlist.
+The tools option is a comma-separated string; an empty string renders `--no-tools`. Batch sessions are ephemeral and do
+not support resume, MCP or hooks.
+
+The provider option supports exactly these API key providers:
+
+| Provider | Credential variable |
+|---|---|
+| anthropic | `ANTHROPIC_API_KEY` |
+| openai | `OPENAI_API_KEY` |
+| google (default) | `GEMINI_API_KEY` |
+| openrouter | `OPENROUTER_API_KEY` |
+| groq | `GROQ_API_KEY` |
+| xai | `XAI_API_KEY` |
+| mistral | `MISTRAL_API_KEY` |
+| deepseek | `DEEPSEEK_API_KEY` |
+
+These names come from `@mariozechner/pi-ai/dist/env-api-keys.js` in the
+0.73.1 package. Pi supports more providers and OAuth, but the frozen
+`bee.credential-format@2` admits at most eight variables; this driver projects
+only the eight keys above and no login files.
+
+Pi's `docs/models.md` and `dist/core/model-registry.js` support custom
+`baseUrl` values in `models.json`. The existing endpoint provider template
+renders an `anthropic-messages` endpoint as
+`.pi/agent/models.json` with `providers.anthropic.baseUrl` and selects
+`--provider anthropic`. The key stays in `ANTHROPIC_API_KEY`; choose a built-in
+Anthropic model through the model option. Other endpoint protocols and custom
+model definitions are not declared. Both frozen descriptor revisions remain
+unchanged. Capture evidence lives in `test/fixtures/drivers/pi/json-1/manifest.json`.
 
 ## Contract
 

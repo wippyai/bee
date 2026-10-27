@@ -68,6 +68,15 @@ entries:
     values: bee.drivers.records:values
     paths: bee.drivers.codec:paths
     record_bounds: bee.drivers.records:bounds
+- name: pi_json
+  kind: library.lua
+  source: file://pi_json.lua
+  modules: [json]
+  imports:
+    events: bee.drivers.codec:events
+    types: bee.drivers:types
+    bounds: bee.drivers.values:bounds
+    values: bee.drivers.records:values
 - name: codec_registry
   kind: library.lua
   source: file://codec_registry.lua
@@ -80,6 +89,7 @@ entries:
     agy_stream_json: bee.drivers.codec:agy_stream_json
     grok_streaming_json: bee.drivers.codec:grok_streaming_json
     muse_record_jsonl: bee.drivers.codec:muse_record_jsonl
+    pi_json: bee.drivers.codec:pi_json
 - name: events
   kind: library.lua
   source: file://events.lua

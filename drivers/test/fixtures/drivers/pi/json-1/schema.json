@@ -1,0 +1,118 @@
+{
+  "package": "@mariozechner/pi-coding-agent@0.73.1",
+  "format": "Upstream TypeScript declarations for JSON wire values; optional and undefined fields are omitted by JSON.stringify; extension discoveries are disabled by the driver",
+  "declarations": {
+    "SessionHeader": {
+      "source": "dist/core/session-manager.d.ts",
+      "typescript": "export interface SessionHeader {\n    type: \"session\";\n    version?: number;\n    id: string;\n    timestamp: string;\n    cwd: string;\n    parentSession?: string;\n}"
+    },
+    "AgentSessionEvent": {
+      "source": "dist/core/agent-session.d.ts",
+      "typescript": "export type AgentSessionEvent = AgentEvent | {\n    type: \"queue_update\";\n    steering: readonly string[];\n    followUp: readonly string[];\n} | {\n    type: \"compaction_start\";\n    reason: \"manual\" | \"threshold\" | \"overflow\";\n} | {\n    type: \"session_info_changed\";\n    name: string | undefined;\n} | {\n    type: \"thinking_level_changed\";\n    level: ThinkingLevel;\n} | {\n    type: \"compaction_end\";\n    reason: \"manual\" | \"threshold\" | \"overflow\";\n    result: CompactionResult | undefined;\n    aborted: boolean;\n    willRetry: boolean;\n    errorMessage?: string;\n} | {\n    type: \"auto_retry_start\";\n    attempt: number;\n    maxAttempts: number;\n    delayMs: number;\n    errorMessage: string;\n} | {\n    type: \"auto_retry_end\";\n    success: boolean;\n    attempt: number;\n    finalError?: string;\n};"
+    },
+    "AgentMessage": {
+      "source": "@mariozechner/pi-agent-core/dist/types.d.ts",
+      "typescript": "export type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];"
+    },
+    "AgentEvent": {
+      "source": "@mariozechner/pi-agent-core/dist/types.d.ts",
+      "typescript": "export type AgentEvent = {\n    type: \"agent_start\";\n} | {\n    type: \"agent_end\";\n    messages: AgentMessage[];\n} | {\n    type: \"turn_start\";\n} | {\n    type: \"turn_end\";\n    message: AgentMessage;\n    toolResults: ToolResultMessage[];\n} | {\n    type: \"message_start\";\n    message: AgentMessage;\n} | {\n    type: \"message_update\";\n    message: AgentMessage;\n    assistantMessageEvent: AssistantMessageEvent;\n} | {\n    type: \"message_end\";\n    message: AgentMessage;\n} | {\n    type: \"tool_execution_start\";\n    toolCallId: string;\n    toolName: string;\n    args: any;\n} | {\n    type: \"tool_execution_update\";\n    toolCallId: string;\n    toolName: string;\n    args: any;\n    partialResult: any;\n} | {\n    type: \"tool_execution_end\";\n    toolCallId: string;\n    toolName: string;\n    result: any;\n    isError: boolean;\n};"
+    },
+    "TextContent": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export interface TextContent {\n    type: \"text\";\n    text: string;\n    textSignature?: string;\n}"
+    },
+    "ThinkingContent": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export interface ThinkingContent {\n    type: \"thinking\";\n    thinking: string;\n    thinkingSignature?: string;\n    \n    redacted?: boolean;\n}"
+    },
+    "ImageContent": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export interface ImageContent {\n    type: \"image\";\n    data: string;\n    mimeType: string;\n}"
+    },
+    "ToolCall": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export interface ToolCall {\n    type: \"toolCall\";\n    id: string;\n    name: string;\n    arguments: Record<string, any>;\n    thoughtSignature?: string;\n}"
+    },
+    "Usage": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export interface Usage {\n    input: number;\n    output: number;\n    cacheRead: number;\n    cacheWrite: number;\n    totalTokens: number;\n    cost: {\n        input: number;\n        output: number;\n        cacheRead: number;\n        cacheWrite: number;\n        total: number;\n    };\n}"
+    },
+    "StopReason": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export type StopReason = \"stop\" | \"length\" | \"toolUse\" | \"error\" | \"aborted\";"
+    },
+    "UserMessage": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export interface UserMessage {\n    role: \"user\";\n    content: string | (TextContent | ImageContent)[];\n    timestamp: number;\n}"
+    },
+    "AssistantMessage": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export interface AssistantMessage {\n    role: \"assistant\";\n    content: (TextContent | ThinkingContent | ToolCall)[];\n    api: Api;\n    provider: Provider;\n    model: string;\n    responseModel?: string;\n    responseId?: string;\n    diagnostics?: AssistantMessageDiagnostic[];\n    usage: Usage;\n    stopReason: StopReason;\n    errorMessage?: string;\n    timestamp: number;\n}"
+    },
+    "ToolResultMessage": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export interface ToolResultMessage<TDetails = any> {\n    role: \"toolResult\";\n    toolCallId: string;\n    toolName: string;\n    content: (TextContent | ImageContent)[];\n    details?: TDetails;\n    isError: boolean;\n    timestamp: number;\n}"
+    },
+    "Message": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export type Message = UserMessage | AssistantMessage | ToolResultMessage;\nimport type { TSchema } from \"typebox\";"
+    },
+    "AssistantMessageEvent": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export type AssistantMessageEvent = {\n    type: \"start\";\n    partial: AssistantMessage;\n} | {\n    type: \"text_start\";\n    contentIndex: number;\n    partial: AssistantMessage;\n} | {\n    type: \"text_delta\";\n    contentIndex: number;\n    delta: string;\n    partial: AssistantMessage;\n} | {\n    type: \"text_end\";\n    contentIndex: number;\n    content: string;\n    partial: AssistantMessage;\n} | {\n    type: \"thinking_start\";\n    contentIndex: number;\n    partial: AssistantMessage;\n} | {\n    type: \"thinking_delta\";\n    contentIndex: number;\n    delta: string;\n    partial: AssistantMessage;\n} | {\n    type: \"thinking_end\";\n    contentIndex: number;\n    content: string;\n    partial: AssistantMessage;\n} | {\n    type: \"toolcall_start\";\n    contentIndex: number;\n    partial: AssistantMessage;\n} | {\n    type: \"toolcall_delta\";\n    contentIndex: number;\n    delta: string;\n    partial: AssistantMessage;\n} | {\n    type: \"toolcall_end\";\n    contentIndex: number;\n    toolCall: ToolCall;\n    partial: AssistantMessage;\n} | {\n    type: \"done\";\n    reason: Extract<StopReason, \"stop\" | \"length\" | \"toolUse\">;\n    message: AssistantMessage;\n} | {\n    type: \"error\";\n    reason: Extract<StopReason, \"aborted\" | \"error\">;\n    error: AssistantMessage;\n};"
+    },
+    "BashExecutionMessage": {
+      "source": "dist/core/messages.d.ts",
+      "typescript": "export interface BashExecutionMessage {\n    role: \"bashExecution\";\n    command: string;\n    output: string;\n    exitCode: number | undefined;\n    cancelled: boolean;\n    truncated: boolean;\n    fullOutputPath?: string;\n    timestamp: number;\n    \n    excludeFromContext?: boolean;\n}"
+    },
+    "CustomMessage": {
+      "source": "dist/core/messages.d.ts",
+      "typescript": "export interface CustomMessage<T = unknown> {\n    role: \"custom\";\n    customType: string;\n    content: string | (TextContent | ImageContent)[];\n    display: boolean;\n    details?: T;\n    timestamp: number;\n}"
+    },
+    "BranchSummaryMessage": {
+      "source": "dist/core/messages.d.ts",
+      "typescript": "export interface BranchSummaryMessage {\n    role: \"branchSummary\";\n    summary: string;\n    fromId: string;\n    timestamp: number;\n}"
+    },
+    "CompactionSummaryMessage": {
+      "source": "dist/core/messages.d.ts",
+      "typescript": "export interface CompactionSummaryMessage {\n    role: \"compactionSummary\";\n    summary: string;\n    tokensBefore: number;\n    timestamp: number;\n}\ndeclare module \"@mariozechner/pi-agent-core\" {\n    interface CustomAgentMessages {\n        bashExecution: BashExecutionMessage;\n        custom: CustomMessage;\n        branchSummary: BranchSummaryMessage;\n        compactionSummary: CompactionSummaryMessage;\n    }\n}"
+    },
+    "CompactionResult": {
+      "source": "dist/core/compaction/compaction.d.ts",
+      "typescript": "export interface CompactionResult<T = unknown> {\n    summary: string;\n    firstKeptEntryId: string;\n    tokensBefore: number;\n    \n    details?: T;\n}"
+    },
+    "ThinkingLevel": {
+      "source": "@mariozechner/pi-agent-core/dist/types.d.ts",
+      "typescript": "export type ThinkingLevel = \"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\";"
+    },
+    "Api": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export type Api = KnownApi | (string & {});"
+    },
+    "KnownApi": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export type KnownApi = \"openai-completions\" | \"mistral-conversations\" | \"openai-responses\" | \"azure-openai-responses\" | \"openai-codex-responses\" | \"anthropic-messages\" | \"bedrock-converse-stream\" | \"google-generative-ai\" | \"google-vertex\";"
+    },
+    "Provider": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export type Provider = KnownProvider | string;"
+    },
+    "KnownProvider": {
+      "source": "@mariozechner/pi-ai/dist/types.d.ts",
+      "typescript": "export type KnownProvider = \"amazon-bedrock\" | \"anthropic\" | \"google\" | \"google-vertex\" | \"openai\" | \"azure-openai-responses\" | \"openai-codex\" | \"deepseek\" | \"github-copilot\" | \"xai\" | \"groq\" | \"cerebras\" | \"openrouter\" | \"vercel-ai-gateway\" | \"zai\" | \"mistral\" | \"minimax\" | \"minimax-cn\" | \"moonshotai\" | \"moonshotai-cn\" | \"huggingface\" | \"fireworks\" | \"opencode\" | \"opencode-go\" | \"kimi-coding\" | \"cloudflare-workers-ai\" | \"cloudflare-ai-gateway\" | \"xiaomi\" | \"xiaomi-token-plan-cn\" | \"xiaomi-token-plan-ams\" | \"xiaomi-token-plan-sgp\";"
+    },
+    "AssistantMessageDiagnostic": {
+      "source": "@mariozechner/pi-ai/dist/utils/diagnostics.d.ts",
+      "typescript": "export interface AssistantMessageDiagnostic {\n    type: string;\n    timestamp: number;\n    error?: DiagnosticErrorInfo;\n    details?: Record<string, unknown>;\n}"
+    },
+    "CustomAgentMessages": {
+      "source": "dist/core/messages.d.ts",
+      "typescript": "declare module \"@mariozechner/pi-agent-core\" {\n    interface CustomAgentMessages {\n        bashExecution: BashExecutionMessage;\n        custom: CustomMessage;\n        branchSummary: BranchSummaryMessage;\n        compactionSummary: CompactionSummaryMessage;\n    }\n}"
+    },
+    "DiagnosticErrorInfo": {
+      "source": "@mariozechner/pi-ai/dist/utils/diagnostics.d.ts",
+      "typescript": "export interface DiagnosticErrorInfo {\n    name?: string;\n    message: string;\n    stack?: string;\n    code?: string | number;\n}"
+    }
+  }
+}

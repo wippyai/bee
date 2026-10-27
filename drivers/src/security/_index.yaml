@@ -37,4 +37,8 @@ entries:
     - bee.drivers.opencode.descriptor:cli
     - bee.drivers.opencode.profiles:profiles
     - bee.drivers.opencode.credentials:credential_format
+    - bee.drivers.pi.binding:binding
+    - bee.drivers.pi.descriptor:cli
+    - bee.drivers.pi.profiles:profiles
+    - bee.drivers.pi.credentials:credential_format
     effect: allow

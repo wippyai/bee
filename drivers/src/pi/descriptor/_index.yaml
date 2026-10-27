@@ -1,0 +1,191 @@
+version: '1.0'
+namespace: bee.drivers.pi.descriptor
+entries:
+- name: cli
+  kind: registry.entry
+  meta:
+    type: bee.driver.cli_descriptor
+    comment: Pi print-mode JSON events, provider keys and version probe
+  data:
+    schema_revision: bee.driver.cli-descriptor@4
+    provider: pi
+    executable: pi
+    version_probe:
+      argv: [--version]
+      pattern: ([0-9]+[.][0-9]+[.][0-9]+)
+    login_evidence:
+      command: pi
+      any_of:
+      - kind: env_present
+        names: [ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, XAI_API_KEY, MISTRAL_API_KEY, DEEPSEEK_API_KEY]
+    platform:
+      os: [linux, darwin]
+      arch: [x86_64, amd64, arm64, aarch64]
+    codec: pi-json
+    json_paths:
+      resume_id: [id]
+      result_text: [message, content]
+      errors: [message, errorMessage]
+      usage: [message, usage]
+    configure: pi
+    endpoints:
+    - protocol: anthropic-messages
+      provider:
+        type: bee.pi_provider
+        data: {}
+        fields: {base_url: base_url, plain_http: plain_http}
+    capabilities:
+      permission_answers:
+        window:
+          transport: provider
+          reason: Pi has no permission prompts or permission answer protocol.
+        first_turn:
+          transport: provider
+          reason: Pi has no permission prompts or permission answer protocol.
+        resume:
+          transport: provider
+          reason: Pi has no permission prompts or permission answer protocol.
+    options:
+      unattended:
+        tools: read,bash,edit,write
+      profiles: [batch]
+      unknown_prefix: 'launch request: '
+      fields:
+        provider:
+          id: provider
+          path: provider.provider
+          value_schema:
+            type: string
+            enum: [anthropic, openai, google, openrouter, groq, xai, mistral, deepseek]
+          label: Provider
+          description: API key provider; Pi defaults to google
+          section: basic
+          order: 0
+          group: model/provider
+          security_class: free
+          contexts: [first_turn]
+          support:
+            help_probe: {argv: [--help], flag: --provider}
+          render:
+          - kind: argv
+            contexts: [first_turn]
+            tokens:
+            - if: provider
+              then: [--provider, {field: provider}]
+        model:
+          id: model
+          path: provider.model
+          value_schema: {type: string, format: model}
+          label: Model
+          description: Pi model pattern or provider/id with optional thinking suffix
+          section: basic
+          order: 1
+          group: model/provider
+          security_class: free
+          contexts: [first_turn]
+          support:
+            help_probe: {argv: [--help], flag: --model}
+          render:
+          - kind: argv
+            contexts: [first_turn]
+            tokens:
+            - if: model
+              then: [--model, {field: model}]
+        thinking:
+          id: thinking
+          path: provider.thinking
+          value_schema:
+            type: string
+            enum: ['off', minimal, low, medium, high, xhigh]
+          label: Thinking
+          description: Thinking level clamped by Pi to the selected model
+          section: basic
+          order: 2
+          group: model/provider
+          security_class: free
+          contexts: [first_turn]
+          support:
+            help_probe: {argv: [--help], flag: --thinking}
+          render:
+          - kind: argv
+            contexts: [first_turn]
+            tokens:
+            - if: thinking
+              then: [--thinking, {field: thinking}]
+        tools:
+          id: tools
+          path: provider.tools
+          default: read,bash,edit,write
+          value_schema:
+            type: string
+            maxLength: 128
+          pattern: '^[a-z,]*$'
+          label: Tools
+          description: Comma-separated built-in tool names; empty disables all tools. Pi validates names and runs tools without permission checks or a sandbox.
+          section: advanced
+          order: 3
+          group: access/trust
+          security_class: host-ceiling
+          capabilities: [no-approvals, write-anywhere, network]
+          ceiling: [no-approvals, write-anywhere, network]
+          contexts: [first_turn]
+          support:
+            help_probe: {argv: [--help], flag: --tools}
+          render:
+          - kind: argv
+            contexts: [first_turn]
+            tokens:
+            - if: tools
+              then:
+              - --tools
+              - field: tools
+              else: [--no-tools]
+        resume_ref:
+          type: id
+          unsupported: Pi batch runs use no-session and cannot resume
+        gateway_tools:
+          type: ids
+          default: []
+        gateway_hooks:
+          type: ids
+          default: []
+      rules:
+      - kind: profile_fields
+        profile: batch
+        fields: [resume_ref, gateway_tools, gateway_hooks]
+        message: Pi batch supports neither resume nor gateway adapters
+    flags: {}
+    argv_templates:
+      window:
+        argv: []
+        readiness: none
+      resume:
+        argv: []
+        readiness: none
+      first_turn:
+        argv:
+        - -p
+        - --mode
+        - json
+        - --no-session
+        - --no-extensions
+        - --no-skills
+        - --no-prompt-templates
+        - --no-context-files
+        - --offline
+        - render: provider
+          context: first_turn
+        - render: model
+          context: first_turn
+        - render: thinking
+          context: first_turn
+        - render: tools
+          context: first_turn
+        stdin: {field: brief}
+        stdin_eof: true
+        readiness: none
+        provider_home_private: true
+    provider_home:
+      variable: PI_CODING_AGENT_DIR
+      directory: .pi/agent
+      files: []

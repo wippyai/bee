@@ -1,0 +1,141 @@
+{
+  "harness": "pi",
+  "protocol": "stream-json",
+  "protocol_revision": "pi-json-1",
+  "executable_version": "0.73.1",
+  "captured_at": "2026-10-26",
+  "capture": "node:22-bookworm-slim; npm i -g @mariozechner/pi-coding-agent@0.73.1; pi -p --mode json --no-session --no-extensions --no-skills --no-prompt-templates --no-context-files --offline --provider anthropic --model claude-sonnet-4-6 --thinking off <prompt>; local fake Anthropic Messages SSE endpoint reached through the Docker host gateway; fixture-only keys; session UUID, timestamps and cwd normalized",
+  "samples": {
+    "plain": "Text answer, stop, agent_end",
+    "tool": "Real bash execution: printf fixture-tool; tool_execution_start/end, toolResult, next model turn and agent_end",
+    "error": "Fake returns HTTP 401 authentication_error for fixture-invalid; assistant stopReason error and agent_end; process exits 0",
+    "stdin": "Prompt -literal @prompt delivered through stdin with EOF"
+  },
+  "evidence": {
+    "credentials": "@mariozechner/pi-ai/dist/env-api-keys.js getApiKeyEnvVars maps anthropic/openai/google/openrouter/groq/xai/mistral/deepseek to the eight declared variables",
+    "endpoint": "docs/models.md: Overriding Built-in Providers; dist/core/model-registry.js loadModels (baseUrl: providerOverride.baseUrl ?? model.baseUrl) and loadCustomModels parse models.json; pi-ai/dist/providers/anthropic.js constructs the SDK with model.baseUrl; the capture uses this override",
+    "events": [
+      "docs/json.md",
+      "dist/modes/print-mode.js",
+      "dist/core/agent-session.d.ts: AgentSessionEvent",
+      "@mariozechner/pi-agent-core/dist/types.d.ts: AgentEvent",
+      "@mariozechner/pi-ai/dist/types.d.ts: AssistantMessageEvent, AssistantMessage, Usage, StopReason"
+    ],
+    "terminal": "dist/core/agent-session.js _processAgentEvent emits agent_end before _handleRetryableError; settle the final agent_end at EOF, not intermediate turn_end or retryable agent_end"
+  },
+  "schema": "schema.json",
+  "provider_key_variables": {
+    "openai": [
+      "OPENAI_API_KEY"
+    ],
+    "azure-openai-responses": [
+      "AZURE_OPENAI_API_KEY"
+    ],
+    "deepseek": [
+      "DEEPSEEK_API_KEY"
+    ],
+    "google": [
+      "GEMINI_API_KEY"
+    ],
+    "google-vertex": [
+      "GOOGLE_CLOUD_API_KEY"
+    ],
+    "groq": [
+      "GROQ_API_KEY"
+    ],
+    "cerebras": [
+      "CEREBRAS_API_KEY"
+    ],
+    "xai": [
+      "XAI_API_KEY"
+    ],
+    "openrouter": [
+      "OPENROUTER_API_KEY"
+    ],
+    "vercel-ai-gateway": [
+      "AI_GATEWAY_API_KEY"
+    ],
+    "zai": [
+      "ZAI_API_KEY"
+    ],
+    "mistral": [
+      "MISTRAL_API_KEY"
+    ],
+    "minimax": [
+      "MINIMAX_API_KEY"
+    ],
+    "minimax-cn": [
+      "MINIMAX_CN_API_KEY"
+    ],
+    "moonshotai": [
+      "MOONSHOT_API_KEY"
+    ],
+    "moonshotai-cn": [
+      "MOONSHOT_API_KEY"
+    ],
+    "huggingface": [
+      "HF_TOKEN"
+    ],
+    "fireworks": [
+      "FIREWORKS_API_KEY"
+    ],
+    "opencode": [
+      "OPENCODE_API_KEY"
+    ],
+    "opencode-go": [
+      "OPENCODE_API_KEY"
+    ],
+    "kimi-coding": [
+      "KIMI_API_KEY"
+    ],
+    "cloudflare-workers-ai": [
+      "CLOUDFLARE_API_KEY"
+    ],
+    "cloudflare-ai-gateway": [
+      "CLOUDFLARE_API_KEY"
+    ],
+    "xiaomi": [
+      "XIAOMI_API_KEY"
+    ],
+    "xiaomi-token-plan-cn": [
+      "XIAOMI_TOKEN_PLAN_CN_API_KEY"
+    ],
+    "xiaomi-token-plan-ams": [
+      "XIAOMI_TOKEN_PLAN_AMS_API_KEY"
+    ],
+    "xiaomi-token-plan-sgp": [
+      "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+    ],
+    "anthropic": [
+      "ANTHROPIC_OAUTH_TOKEN",
+      "ANTHROPIC_API_KEY"
+    ],
+    "github-copilot": [
+      "COPILOT_GITHUB_TOKEN",
+      "GH_TOKEN",
+      "GITHUB_TOKEN"
+    ]
+  },
+  "additional_authentication_environment": {
+    "google-vertex": {
+      "credentials_file": "GOOGLE_APPLICATION_CREDENTIALS",
+      "project": [
+        "GOOGLE_CLOUD_PROJECT",
+        "GCLOUD_PROJECT"
+      ],
+      "location": "GOOGLE_CLOUD_LOCATION",
+      "fallback": "Default gcloud application_default_credentials.json"
+    },
+    "amazon-bedrock": {
+      "credential_sources": [
+        "AWS_PROFILE",
+        "AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY",
+        "AWS_BEARER_TOKEN_BEDROCK",
+        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+        "AWS_WEB_IDENTITY_TOKEN_FILE"
+      ]
+    }
+  },
+  "fake_endpoint": "../mock_anthropic.py"
+}

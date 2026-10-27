@@ -13,6 +13,7 @@ from unittest.mock import patch
 import yaml
 from build import ci
 from build import lua_seed
+from build import prepare
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -124,6 +125,76 @@ class CIContractTests(unittest.TestCase):
         changed_imports = {'bee:a': {'source_hash': 'current', 'imports': {}},
                            'bee:b': {'source_hash': 'b', 'imports': {'renamed': 'bee:a'}}}
         self.assertEqual(set(lua_seed.select_entries(entries, changed_imports, {'bee:a', 'bee:b'})), {'compile-a'})
+
+    def test_selection_resolves_installed_modules_separately_from_fixture_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            drivers = root / 'drivers/src'
+            drivers.mkdir(parents=True)
+            (drivers / 'bounds.lua').write_text('return "edited driver"')
+            (drivers / '_index.yaml').write_text(yaml.safe_dump({
+                'namespace': 'bee.drivers.values', 'entries': [{'name': 'bounds', 'kind': 'library.lua',
+                                                             'source': 'file://bounds.lua'}]}))
+            installed = {'kind': 'library.lua', 'source': 'return "published driver"',
+                         'imports': {'clock': 'bee.drivers.values:clock'}, 'modules': ['time'],
+                         'method': 'ignored_for_libraries'}
+            inventory = [{'id': 'bee.drivers.values:bounds', 'kind': 'library.lua'}]
+
+            def registry(command, **kwargs):
+                self.assertEqual(kwargs['cwd'], root)
+                if command[2] == 'list':
+                    return json.dumps(inventory)
+                self.assertEqual(command[2:], ['show', 'bee.drivers.values:bounds', '--json'])
+                return json.dumps({'kind': installed['kind'], 'data': installed})
+
+            with patch.object(prepare.subprocess, 'check_output', side_effect=registry) as query:
+                sources, ids = prepare.selection(root)
+                self.assertEqual(query.call_count, 2)
+                self.assertEqual(ids, {'bee.drivers.values:bounds'})
+                self.assertEqual(sources['bee.drivers.values:bounds'], lua_seed.source_metadata(installed))
+                self.assertEqual(sources['bee.drivers.values:bounds']['imports'],
+                                 {'clock': 'bee.drivers.values:clock', 'time': ':time'})
+                query.reset_mock()
+                fixtures, _ = prepare.selection(root, [drivers])
+                self.assertEqual(query.call_count, 1)
+                self.assertNotEqual(fixtures['bee.drivers.values:bounds']['source_hash'],
+                                    sources['bee.drivers.values:bounds']['source_hash'])
+
+    def test_seed_export_excludes_other_module_versions_and_their_transitive_dependents(self):
+        entries = {}
+        for version in ('published', 'edited'):
+            for stage in ('compile', 'typecheck'):
+                fingerprint = stage + '_fingerprint'
+                entries[version + '-' + stage] = {
+                    'entry_id': 'drivers:bounds', 'source_hash': version, fingerprint: version + stage}
+                entries[version + '-consumer-' + stage] = {
+                    'entry_id': 'bee:consumer', 'source_hash': 'unchanged', fingerprint: version + 'consumer' + stage,
+                    'deps': [{'alias': 'bounds', 'id': 'drivers:bounds', fingerprint: version + stage}]}
+                entries[version + '-outer-' + stage] = {
+                    'entry_id': 'bee:outer', 'source_hash': 'outer', fingerprint: version + 'outer' + stage,
+                    'deps': [{'alias': 'consumer', 'id': 'bee:consumer', fingerprint: version + 'consumer' + stage}]}
+        entries['unknown'] = {'entry_id': 'other:unknown', 'source_hash': 'unverified', 'compile_fingerprint': 'unknown'}
+        sources = {'drivers:bounds': {'source_hash': 'published', 'imports': {}},
+                   'bee:consumer': {'source_hash': 'unchanged', 'imports': {'bounds': 'drivers:bounds'}},
+                   'bee:outer': {'source_hash': 'outer', 'imports': {'consumer': 'bee:consumer'}}}
+        ids = {entry['entry_id'] for entry in entries.values()}
+        expected = {key for key in entries if key.startswith('published-')}
+        self.assertEqual(set(lua_seed.select_entries(entries, sources, ids)), expected)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / 'cache'
+            for key, meta in entries.items():
+                entry = cache / 'v1/entries' / key
+                entry.mkdir(parents=True)
+                (entry / 'meta.json').write_text(json.dumps(meta))
+                (entry / 'payload').write_bytes(b'cached')
+            with contextlib.redirect_stdout(io.StringIO()):
+                lua_seed.export_seed(cache, root / 'seed', sources, ids)
+            self.assertEqual({path.name for path in (root / 'seed/v1/entries').iterdir()}, expected)
+            fixture_sources = dict(sources, **{'drivers:bounds': {'source_hash': 'edited', 'imports': {}}})
+            with contextlib.redirect_stdout(io.StringIO()):
+                lua_seed.retain_current(cache, [(sources, ids), (fixture_sources, ids)])
+            self.assertEqual({path.name for path in (cache / 'v1/entries').iterdir()}, entries.keys() - {'unknown'})
 
     def test_export_carries_generated_fixture_sources(self):
         with tempfile.TemporaryDirectory() as directory:

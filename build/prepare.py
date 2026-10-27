@@ -58,14 +58,27 @@ def cache_config(cache):
         config.write_bytes(original)
 
 
-def selections(fixtures=False):
+def selection(root, directories=None):
     wippy = str(ROOT / '.wippy/bin/wippy')
-    inventory = json.loads(subprocess.check_output([wippy, 'registry', 'list', '--json'], text=True))
-    selected = [(lua_seed.application_sources(ROOT), {row['id'] for row in inventory})]
+    inventory = json.loads(subprocess.check_output([wippy, 'registry', 'list', '--json'], cwd=root, text=True))
+    sources = lua_seed.application_sources(root, directories)
+    # Module packs can differ from both repository sources and fixture overlays.
+    # Resolve their actual installed sources instead of accepting every cached version.
+    missing = [row['id'] for row in inventory if row['kind'] in lua_seed.LUA_KINDS and row['id'] not in sources]
+
+    def load(entry_id):
+        entry = json.loads(subprocess.check_output([wippy, 'registry', 'show', entry_id, '--json'], cwd=root, text=True))
+        return entry_id, lua_seed.source_metadata(dict(entry['data'], kind=entry['kind']))
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        sources.update(executor.map(load, missing))
+    return sources, {row['id'] for row in inventory}
+
+
+def selections(fixtures=False):
+    selected = [selection(ROOT)]
     if fixtures:
-        inventory = json.loads(subprocess.check_output([wippy, 'registry', 'list', '--json'], cwd=ROOT / 'tests', text=True))
-        sources = lua_seed.application_sources(ROOT, [ROOT / 'tests/.wippy/composition/src', ROOT / 'tests/lua'])
-        selected.append((sources, {row['id'] for row in inventory}))
+        selected.append(selection(ROOT / 'tests', [ROOT / 'tests/.wippy/composition/src', ROOT / 'tests/lua']))
     return selected
 
 
@@ -95,7 +108,7 @@ def assemble(cache, fixtures):
     source = ROOT / '.wippy/release-module'
     shutil.rmtree(source, ignore_errors=True)
     seed = ROOT / '.wippy/application-seed'
-    lua_seed.export_seed(cache, seed, ROOT, selected[0][1])
+    lua_seed.export_seed(cache, seed, *selected[0])
     lua_seed.retain_current(cache, selected)
     subprocess.run(['python3', 'build/release_builder.py'], check=True)
     environment = dict(os.environ, BEE_RELEASE_LUA_CACHE=str(seed), BEE_RELEASE_EXPORT=str(source))

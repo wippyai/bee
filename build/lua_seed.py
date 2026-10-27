@@ -6,28 +6,34 @@ import shutil
 import yaml
 
 
+LUA_KINDS = ('library.lua', 'function.lua', 'process.lua', 'workflow.lua')
+
+
+def source_metadata(entry, directory=None):
+    source = entry.get('source', '')
+    if source.startswith('file://'):
+        source = (directory / source[7:]).read_bytes().decode()
+    method = '' if entry['kind'] == 'library.lua' else entry.get('method', '')
+    imports = dict(entry.get('imports') or {})
+    imports.update({name: ':' + name for name in entry.get('modules', [])})
+    return {'source_hash': hashlib.sha256((source + method).encode()).hexdigest(), 'imports': imports}
+
+
 def application_sources(root, directories=None):
     sources = {}
     for index in (index for directory in (directories or [root / 'src', *sorted((root / 'modules').glob('*/src'))]) for index in directory.rglob('_index.yaml')):
         document = yaml.safe_load(index.read_text())
         for entry in document.get('entries', []):
-            if entry.get('kind') not in ('library.lua', 'function.lua', 'process.lua', 'workflow.lua'):
+            if entry.get('kind') not in LUA_KINDS:
                 continue
-            source = entry.get('source', '')
-            if source.startswith('file://'):
-                source = (index.parent / source[7:]).read_bytes().decode()
-            method = '' if entry['kind'] == 'library.lua' else entry.get('method', '')
-            imports = dict(entry.get('imports') or {})
-            imports.update({name: ':' + name for name in entry.get('modules', [])})
-            sources[document['namespace'] + ':' + entry['name']] = {
-                'source_hash': hashlib.sha256((source + method).encode()).hexdigest(), 'imports': imports}
+            sources[document['namespace'] + ':' + entry['name']] = source_metadata(entry, index.parent)
     return sources
 
 
 def select_entries(entries, sources, application_ids):
     def compatible(meta):
         current = sources.get(meta['entry_id'])
-        return current is None or (meta['source_hash'] == current['source_hash'] and
+        return current is not None and (meta['source_hash'] == current['source_hash'] and
                                    {dep['alias']: dep['id'] for dep in meta.get('deps', [])} == current['imports'])
     candidates = {key: meta for key, meta in entries.items()
                   if meta['entry_id'] in application_ids and compatible(meta)}
@@ -43,10 +49,10 @@ def select_entries(entries, sources, application_ids):
         candidates = valid
 
 
-def export_seed(cache, destination, root, application_ids):
+def export_seed(cache, destination, sources, application_ids):
     source = cache / 'v1/entries'
     entries = {path.name: json.loads((path / 'meta.json').read_text()) for path in source.iterdir()}
-    selected = select_entries(entries, application_sources(root), application_ids)
+    selected = select_entries(entries, sources, application_ids)
     shutil.rmtree(destination, ignore_errors=True)
     target = destination / 'v1/entries'
     target.mkdir(parents=True)

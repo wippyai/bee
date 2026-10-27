@@ -1,0 +1,40 @@
+version: '1.0'
+namespace: bee.drivers.pi.profiles
+entries:
+- name: profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.drivers.pi.binding:binding
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Pi
+      implementation_version: 0.73.1
+      default_profile: batch
+      profiles:
+      - id: batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: pi-json-1
+        answer_path:
+          strategy: terminal_field
+          adapter_ref: bee.drivers.pi.descriptor:cli
+        resume:
+          strategy: none
+          portable: false
+        inbound: []
+        hooks:
+          transports: []
+          events: []
+        isolation_env:
+          variables: [HOME, PI_CODING_AGENT_DIR]
+          private_home: true
+        exit_codes_trustworthy: false
+        input_ready:
+          strategy: none
+        interrupt:
+          methods: [signal_group]
+        permission_exchange:
+          mode: none

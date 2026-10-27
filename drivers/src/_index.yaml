@@ -5,7 +5,7 @@ entries:
   kind: ns.definition
   meta:
     title: Bee Drivers
-    description: Declarative, installable agent CLI drivers (Claude Code, Codex, Antigravity, Muse, Grok, opencode) with their codecs, option descriptors and record types, for any host that runs agent CLIs.
+    description: Declarative, installable agent CLI drivers (Claude Code, Codex, Antigravity, Muse, Grok, opencode, Pi) with their codecs, option descriptors and record types, for any host that runs agent CLIs.
 - name: host
   kind: registry.entry
   meta:
@@ -40,6 +40,10 @@ entries:
   - entry: bee.drivers.muse.env:executable
     path: .storage
   - entry: bee.drivers.opencode.env:executable
+    path: .storage
+  - entry: bee.drivers.pi.env:executable
+    path: .storage
+  - entry: bee.drivers.pi.env:config_home
     path: .storage
 - name: access_scope
   kind: ns.requirement

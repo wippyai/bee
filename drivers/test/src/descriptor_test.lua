@@ -150,7 +150,7 @@ local function define_tests()
         end)
         test.it("resolves configuration renderers from the selected binding metadata", function()
             local pinned = assert(registry.snapshot())
-            for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode"}) do
+            for _, provider in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode", "pi"}) do
                 local namespace = "bee.drivers." .. provider .. ".binding"
                 local renderer, err, selected = resolver.configure_renderer(pinned, namespace .. ":binding", namespace .. ":configure")
                 test.is_nil(err)
@@ -187,7 +187,7 @@ local function define_tests()
             local expected: {[string]: {string}} = {
                 claude = {"stdio", "hook_http"}, codex = {"provider", "hook_mcp"},
                 agy = {"hook_http", "hook_http"}, grok = {"stdio", "provider"},
-                muse = {"hook_http", "hook_http"}, opencode = {"provider", "hook_http"}}
+                muse = {"hook_http", "hook_http"}, opencode = {"provider", "hook_http"}, pi = {"provider", "provider"}}
             for provider, transports in pairs(expected) do
                 local loaded = assert(descriptor.load("bee.drivers." .. provider .. ".descriptor:cli"))
                 local headless = descriptor.permission_answer(loaded, "first_turn")
@@ -345,6 +345,7 @@ local function define_tests()
                 {ref = "bee.drivers.agy.descriptor:cli", provider = "agy", codec = "agy-stream-json"},
                 {ref = "bee.drivers.grok.descriptor:cli", provider = "grok", codec = "grok-streaming-json"},
                 {ref = "bee.drivers.muse.descriptor:cli", provider = "muse", codec = "muse-record-jsonl"},
+                {ref = "bee.drivers.pi.descriptor:cli", provider = "pi", codec = "pi-json"},
             }
             for _, item in ipairs(entries) do
                 local loaded, load_error = descriptor.load(item.ref)

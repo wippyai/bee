@@ -5,6 +5,7 @@ local opencode = require("opencode_json_events")
 local agy = require("agy_stream_json")
 local grok = require("grok_streaming_json")
 local muse = require("muse_record_jsonl")
+local pi = require("pi_json")
 
 local bounds = require("bounds")
 local normalizer = require("normalizer")
@@ -59,7 +60,7 @@ end
 local implementations: {[string]: Protocol} = {
     ["claude-stream-json"] = adapted(claude), ["codex-jsonl"] = adapted(codex),
     ["opencode-json-events"] = adapted(opencode), ["agy-stream-json"] = adapted(agy),
-    ["grok-streaming-json"] = adapted(grok), ["muse-record-jsonl"] = adapted(muse),
+    ["grok-streaming-json"] = adapted(grok), ["muse-record-jsonl"] = adapted(muse), ["pi-json"] = adapted(pi),
 }
 function M.bind(codec_id: string, paths: Object): ((unknown) -> unknown)?
     if codec_id == "claude-stream-json" then
@@ -108,6 +109,14 @@ function M.bind(codec_id: string, paths: Object): ((unknown) -> unknown)?
                 return muse.normalize(state, index, envelope, paths)
             end, function(state: muse.State, index: integer): (Step?, string?)
                 return muse.finish(state, index), nil
+            end)
+    end
+    if codec_id == "pi-json" then
+        return normalizer.bind(pi.new, pi.decode_state,
+            function(state: pi.State, index: integer, envelope: Object): (Step?, string?)
+                return pi.normalize(state, index, envelope, paths)
+            end, function(state: pi.State, index: integer): (Step?, string?)
+                return pi.finish(state, index), nil
             end)
     end
     return nil

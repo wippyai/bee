@@ -62,7 +62,7 @@ local function define_tests()
                 ids[#ids + 1] = driver.id
                 test.not_nil(driver.unattended, driver.id .. " declares an unattended mode")
             end
-            test.eq(joined(ids), "agy claude codex grok muse opencode")
+            test.eq(joined(ids), "agy claude codex grok muse opencode pi")
             local claude = assert(drivers.get("claude"))
             test.eq(claude.title, "Claude Code")
             test.eq(claude.executable, "claude")
@@ -246,11 +246,13 @@ local function define_tests()
             local group = assert(security.named_scope("bee.drivers.tests.host:drivers_users"))
             local scope = group:with(assert(security.policy("bee.drivers.tests.drivers:host_grant")))
             local caller = assert(funcs.new():with_scope(scope))
-            local reply, err = caller:call("bee.drivers.tests.drivers:launch_probe", "claude")
-            if err then error(tostring(err)) end
-            test.is_true(reply.ok == true, tostring(reply.error))
-            test.eq(reply.executable, "claude")
-            test.eq(reply.drivers, 6)
+            for _, driver in ipairs({"claude", "pi"}) do
+                local reply, err = caller:call("bee.drivers.tests.drivers:launch_probe", driver)
+                if err then error(tostring(err)) end
+                test.is_true(reply.ok == true, tostring(reply.error))
+                test.eq(reply.executable, driver)
+                test.eq(reply.drivers, 7)
+            end
         end)
         test.it("applies a placement's per-option ceilings before its allowances and names the placement", function()
             local limited: placement.Placement = {kind = "container", mounts = {}, network = "bridge", allows = placements.DOCKER.allows,

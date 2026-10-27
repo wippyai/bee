@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.drivers.pi.env
+entries:
+- name: executable
+  kind: env.variable
+  variable: pi
+  default: ''
+  readonly: true
+- name: config_home
+  kind: env.variable
+  variable: PI_CODING_AGENT_DIR
+  default: ''
+  readonly: true

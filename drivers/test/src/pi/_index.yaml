@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.drivers.tests.pi
+entries:
+- name: pi_test
+  kind: function.lua
+  source: file://pi_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [fs, json, registry]
+  imports:
+    test: wippy.test:test
+    codec: bee.drivers.codec:pi_json
+    normalize: bee.drivers.pi.binding:normalize
+    prepare: bee.drivers.pi.binding:prepare
+    dispatch: bee.drivers.pi.binding:dispatch
+    configure: bee.drivers.pi.binding:configure
+    descriptor: bee.drivers.descriptor:descriptor
+    profile: bee.drivers.profiles:profile
+    format: bee.drivers.credentials:format
+    drivers: bee.drivers:drivers
+    placements: bee.drivers.tests.support:placements
+    bounds: bee.drivers.values:bounds
+    observation: bee.drivers.records:observation
+    types: bee.drivers:types
+    configuration: bee.drivers.binding:configuration

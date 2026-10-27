@@ -8,6 +8,7 @@ local opencode = require("opencode")
 local agy = require("agy")
 local grok = require("grok")
 local muse = require("muse")
+local pi = require("pi")
 local descriptor = require("descriptor")
 local login_evidence = require("login_evidence")
 
@@ -57,7 +58,7 @@ local function define_tests()
         test.it("evaluates every declared kind for each installed provider descriptor", function()
             for _, case in ipairs({{driver = claude, provider = "claude"}, {driver = codex, provider = "codex"},
                 {driver = opencode, provider = "opencode"}, {driver = agy, provider = "agy"},
-                {driver = grok, provider = "grok"}, {driver = muse, provider = "muse"}}) do
+                {driver = grok, provider = "grok"}, {driver = muse, provider = "muse"}, {driver = pi, provider = "pi"}}) do
                 local selected = assert(descriptor.load("bee.drivers." .. case.provider .. ".descriptor:cli"))
                 for success_index in ipairs(selected.login_evidence.any_of) do
                     local checks: {login_evidence_types.Check} = {}

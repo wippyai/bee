@@ -102,7 +102,7 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
     if object.placement ~= nil and not bounds.object(object.placement) then return nil, "placement must be an object" end
     local profile_id = bounds.member(object.profile_id, assert(bounds.ids(options.profiles, true)))
     if not profile_id then return nil, "profile_id is not one Bee admits" end
-    local brief = bounds.text(object.brief, profile_id == "window" and 65536 or bounds.MAX_TEXT_BYTES)
+    local brief = bounds.text(object.brief, profile_id == "window" and 65536 or bounds.MAX_BRIEF_BYTES)
     if not brief or (brief == "" and profile_id ~= "window") then return nil, "brief must be nonempty bounded text" end
     if object.unattended ~= nil and type(object.unattended) ~= "boolean" then return nil, "unattended must be a boolean" end
     local values: Object = {}

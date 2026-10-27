@@ -420,7 +420,7 @@ local function without_variable(harness: Harness)
         for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
         stdin = specification.stdin
         environment.CODEX_HOME = home .. "/.codex"
-        environment.OPENAI_API_KEY = CODEX_SENTINEL
+        environment.CODEX_API_KEY = CODEX_SENTINEL
     end
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, proc_error = executor:exec(quote.line(argv), {work_dir = root .. "/work", env = environment})
@@ -557,7 +557,7 @@ local function hooks_through_gateway(harness: Harness)
         for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
         stdin = specification.stdin
         environment.CODEX_HOME = home .. "/.codex"
-        environment.OPENAI_API_KEY = CODEX_SENTINEL
+        environment.CODEX_API_KEY = CODEX_SENTINEL
     end
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local started_at = time.now()

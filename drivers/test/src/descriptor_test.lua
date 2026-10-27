@@ -19,6 +19,16 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("does not treat OPENAI_API_KEY alone as Codex login evidence", function()
+            local loaded = assert(descriptor.load("bee.drivers.codex.descriptor:cli"))
+            for _, evidence in ipairs(loaded.login_evidence.any_of) do
+                if evidence.kind == "env_present" then
+                    for _, name in ipairs(evidence.names) do
+                        test.is_false(name == "OPENAI_API_KEY")
+                    end
+                end
+            end
+        end)
         test.it("keeps option schemas at the selected registry snapshot when a binding changes", function()
             local binding = "bee.drivers.claude.binding:binding"
             local ref = "bee.drivers.claude.descriptor:cli"

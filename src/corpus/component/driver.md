@@ -109,11 +109,21 @@ unobserved.
 | CLI | Declared evidence | Provider home variable |
 |---|---|---|
 | Claude | `.claude/.credentials.json` under `CLAUDE_CONFIG_DIR`; `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`; `auth status` exit 0 | `CLAUDE_CONFIG_DIR` |
-| Codex | `.codex/auth.json` under `CODEX_HOME`; `OPENAI_API_KEY`, `CODEX_API_KEY`; `login status` exit 0 | `CODEX_HOME` |
+| Codex | `.codex/auth.json` under `CODEX_HOME`; `CODEX_API_KEY`; `login status` exit 0 | `CODEX_HOME` |
 | Agy | `.gemini/antigravity-cli/antigravity-oauth-token`; `GEMINI_API_KEY` | none |
 | Grok | `.grok/auth.json` under `GROK_HOME`; `XAI_API_KEY`, `GROK_CODE_XAI_API_KEY` | `GROK_HOME` |
 | Muse | `.config/muse/auth.json` under `XDG_CONFIG_HOME`; `META_API_KEY` | none |
 | OpenCode | `.local/share/opencode/auth.json`; `.config/opencode/opencode.json` or `.jsonc`; provider key names or `OPENCODE_CONFIG_CONTENT` | `XDG_CONFIG_HOME`, `XDG_DATA_HOME` |
+
+Codex API-key credentials use `CODEX_API_KEY` for headless `exec` runs and
+for generated Responses providers. `OPENAI_API_KEY` alone does not authenticate
+an ordinary `codex exec` launch.
+
+Agy API-key launches must select `provider.options.model_provider: gemini` and
+deliver `GEMINI_API_KEY`. The driver renders `modelProvider: "gemini"` in
+`.gemini/antigravity-cli/settings.json`; omit the option for account login.
+For a Gemini API model outside Agy's built-in model list, its model identifier
+can use the `gemini-api://gemini-3.5-flash-lite` form.
 
 Config file existence establishes setup without inspecting keys or provider
 selection; actual authentication remains the CLI's responsibility.

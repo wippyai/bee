@@ -5,11 +5,20 @@ M.MAX_SAFE_INTEGER = 9007199254740991
 M.MAX_ID_BYTES = 160
 M.MAX_ARRAY_ITEMS = 64
 M.MAX_TEXT_BYTES = 16384
+M.MAX_BRIEF_BYTES = 96 * 1024
 M.MAX_SUBPATH_BYTES = 512
 type RelativePathOptions = {nonempty: boolean?, no_control: boolean?}
 
 function M.id(value: unknown): string?
     if type(value) ~= "string" or #value == 0 or #value > M.MAX_ID_BYTES or value:find("%c") then return nil end
+    return value
+end
+
+-- Model names may include a provider prefix and a variant. Keep this alphabet
+-- shared by CLI options and endpoint configuration; quotes, controls, spaces
+-- and shell metacharacters never become model identifiers.
+function M.model(value: unknown): string?
+    if type(value) ~= "string" or #value > 128 or not value:match("^[A-Za-z0-9][A-Za-z0-9._:/%-]*$") then return nil end
     return value
 end
 

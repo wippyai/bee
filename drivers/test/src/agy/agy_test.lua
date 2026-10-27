@@ -34,6 +34,24 @@ end
 
 local function define_tests()
     test.describe("Antigravity CLI binding and profile declarations", function()
+        test.it("renders the documented Gemini provider setting in every launch context", function()
+            for _, context in ipairs({"window", "first_turn", "resume"}) do
+                local decoded, err = launch.decode({profile_id = context == "window" and "window" or "batch", brief = "say pong",
+                    model_provider = "gemini", resume_ref = context == "resume" and "session-1" or nil})
+                if not decoded then error(tostring(err)) end
+                local reply, configure_error = funcs.call("bee.drivers.agy.binding:configure", {
+                    fixture = false, context = context, option_values = {model_provider = "gemini"},
+                })
+                if configure_error then error(tostring(configure_error)) end
+                test.is_true(reply.ok)
+                test.eq(#reply.delivery.files, 1)
+                test.eq(reply.delivery.files[1].path, ".gemini/antigravity-cli/settings.json")
+                test.eq(reply.delivery.files[1].content, '{"modelProvider":"gemini"}')
+            end
+            local invalid, err = launch.decode({profile_id = "batch", brief = "say pong", model_provider = 'gemini"\n'})
+            test.is_nil(invalid)
+            test.not_nil(err)
+        end)
         test.it("validates the agy binding and profiles against the driver profile decoder", function()
             local entry, err = registry.get("bee.drivers.agy.binding:binding")
             if not entry then error("bee.drivers.agy.binding:binding: " .. tostring(err)) end

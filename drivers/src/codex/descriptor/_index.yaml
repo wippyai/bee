@@ -24,7 +24,6 @@ entries:
         directory: .codex
       - kind: env_present
         names:
-        - OPENAI_API_KEY
         - CODEX_API_KEY
       - kind: auth_status
         argv:
@@ -442,7 +441,7 @@ entries:
                 env_key:
                   type: string
                   enum:
-                  - OPENAI_API_KEY
+                  - CODEX_API_KEY
                 http_headers:
                   type: object
                   maxProperties: 16

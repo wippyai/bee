@@ -95,7 +95,7 @@ func watchDirectory(l *lua.LState) int {
 		l.Push(lua.NewLuaError(l, "filesystem watches require a process").WithKind(lua.Invalid))
 		return 2
 	}
-	topic :=fmt.Sprintf("ioevents@%d", sequence.Add(1))
+	topic := fmt.Sprintf("ioevents@%d", sequence.Add(1))
 	channel, id, generation, err := process.SubscribeRouted(topic, eventBuffer)
 	if err != nil {
 		l.Push(lua.LNil)

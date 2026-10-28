@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/stretchr/testify v1.12.1
+	github.com/syncthing/notify v0.0.0-20250528144937-c7027d4f7465
 	github.com/wippyai/go-lua v1.6.8
 	github.com/wippyai/runtime v0.1.14-0.20261017174019-c398a0bbce70
 	golang.org/x/sys v0.49.0

@@ -115,6 +115,24 @@ local function as_agents(workspace: string, trait: string): Object
     return assert(bounds.object(reply.trait))
 end
 
+-- as_presentation loads an application trait inside the session
+-- presentation service, which resolves the launch plan of a session window it
+-- restores in the presentation execution scope plus its owner entry's
+-- policies.
+local function as_presentation(workspace: string, trait: string): Object
+    local actor = assert(application.actor(workspace, "notesdb-presentation", assert(application.definition("bee.harness.app:app")), 1))
+    local scope = assert(security.named_scope("bee.harness.security:presentation_execution_scope"))
+    local entry = assert(registry.get("bee.harness.service:presentation_owner"))
+    local data = assert(bounds.object(entry.data))
+    local declared = assert(bounds.object(data.security))
+    for _, id in ipairs(assert(bounds.array(declared.policies, 64))) do scope = scope:with(assert(security.policy(tostring(id)))) end
+    local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.tests.gov:app_trait_probe", {ref = trait, workspace = workspace})
+    if err then error(tostring(err)) end
+    local reply = assert(bounds.object(raw))
+    if reply.error ~= nil then error(tostring(reply.error)) end
+    return assert(bounds.object(reply.trait))
+end
+
 local function as_agent(workspace: string, tool: string, arguments: Object): Object
     local actor = assert(security.new_actor("bee.tests.notesdb_agent", {workspace_id = workspace}))
     local scope = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_app_tools_policy"))})
@@ -273,6 +291,9 @@ local function define_tests()
             -- Agents resolves the launch plan of a session it restores after
             -- the restart, with the counter's trait active.
             test.eq(as_agents(workspace, assert(app_trait)).application_ref, APP)
+            -- The session presentation service resolves it the same way when
+            -- it restores the session's window.
+            test.eq(as_presentation(workspace, assert(app_trait)).application_ref, APP)
             test.is_nil(listed(asking).counter_list, "an upgraded app needs approval of its new declaration")
             local returned = harness.value(harness.library(workspace, {operation = "revert", source_workspace = source, receipt_key = "countdb-back-2"}))
             harness.close_presented(before)

@@ -198,16 +198,16 @@ entries:
     effect: allow
 - name: application_catalog_reader
   kind: security.policy
-  groups: [bee.hub.security:execution_scope]
+  groups: [bee.hub.security:execution_scope, bee.harness.security:presentation_execution_scope]
   meta:
-    comment: Reads which applications a workspace admits and the agent traits they offer, from the registry and the governed overlays that install them; it changes nothing
+    comment: Reads which applications a workspace admits and the agent traits they offer, from the registry and the governed overlays that install them, wherever a launch plan is resolved; it changes nothing
   policy:
     actions: [registry.get, registry.version, registry.find, registry.snapshot, registry.overlay.get]
     resources: '*'
     effect: allow
 - name: application_catalog_node
   kind: security.policy
-  groups: [bee.hub.security:execution_scope]
+  groups: [bee.hub.security:execution_scope, bee.harness.security:presentation_execution_scope]
   meta:
     comment: The application catalog reads which node it serves, since admissions select per node
   policy:

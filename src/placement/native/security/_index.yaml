@@ -55,7 +55,8 @@ entries:
 - name: placement_service_policy
   kind: security.policy
   meta:
-    comment: The service spawns runners on the workers host and talks to them
+    comment: The service spawns runners on the workers host, talks to them, and observes
+      whether the process group of a child it recorded still has members
   policy:
     actions:
     - process.spawn
@@ -67,6 +68,7 @@ entries:
     - funcs.call
     - bee.placement.workdir_preparer.cleanup
     - process.registry.lookup
+    - hostprocess.observe_group
     resources:
     - bee.placement.native.service:runner
     - bee:workers

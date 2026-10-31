@@ -79,12 +79,16 @@ local function cleanup_tests()
                 if not native_fixture.wait_for(function()
                     return (native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
                 end, 8000) then error("grouped attempt did not exit") end
-                -- A stored state without its runtime completion source cannot authorize cleanup.
+                -- A stored state without its runtime completion source and
+                -- without the group its child led cannot authorize cleanup.
                 local db = store.open()
                 if not db then error("store") end
                 local completion_source = assert(store.attempt(db, prepared.attempt_id)).exit_source
                 test.not_nil(completion_source)
-                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET exit_source = NULL WHERE attempt_id = ?", {prepared.attempt_id})
+                local recorded_row = assert(store.row(db, prepared.attempt_id))
+                local recorded_group = recorded_row.pgid
+                test.not_nil(recorded_group)
+                local _, clear_error = db:execute("UPDATE bee_placement_attempts SET exit_source = NULL, pgid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
                 db:release()
                 if clear_error then error("clear completion source: " .. tostring(clear_error)) end
                 local refused = native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id})
@@ -101,12 +105,12 @@ local function cleanup_tests()
                 test.eq(after.cleanup_state, "pending")
                 -- Restore the observed proof after the missing-proof assertion so preparers can retire.
                 db = assert(store.open())
-                assert(db:execute("UPDATE bee_placement_attempts SET exit_source = ? WHERE attempt_id = ?", {completion_source, prepared.attempt_id}))
+                assert(db:execute("UPDATE bee_placement_attempts SET exit_source = ?, pgid = ? WHERE attempt_id = ?", {completion_source, recorded_group, prepared.attempt_id}))
                 db:release()
                 local cleaned = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
                 test.eq(cleaned.cleanup_state, "complete")
             end)
-            test.it("keeps lost owner outcomes uncertain without reconstructing PID authority", function()
+            test.it("keeps a lost owner's outcome uncertain while its group has members, without reconstructing PID authority", function()
                 local request = native_fixture.launch({"sh", "-c", "sleep 8"}, "process_group")
                 local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
                 native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))
@@ -131,11 +135,14 @@ local function cleanup_tests()
                     local event = selected.value
                     if event.kind == process.event.EXIT and tostring(event.from) == runner then break end
                 end
+                -- The runner's exit ends the child it owned; the empty
+                -- recorded group, not the pid, proves the tree gone.
                 local outcome = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
-                test.eq(outcome.execution_state, "uncertain")
-                test.is_nil(outcome.exit_source)
-                local cleaned = native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id})
-                test.eq(cleaned.error and cleaned.error.code, "CONFLICT")
+                test.eq(outcome.execution_state, "exited")
+                test.eq(outcome.exit_source, "reconcile")
+                test.is_true(native_fixture.has(native_fixture.kinds(prepared.attempt_id), "group.ended"))
+                local cleaned = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+                test.eq(cleaned.cleanup_state, "complete")
                 process.unmonitor(runner)
             end)
             test.it("removes the grandchild with the group on stop", function()

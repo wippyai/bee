@@ -90,6 +90,7 @@ entries:
   - channel
   - env
   - funcs
+  - hostprocess
   - process
   - sql
   - time

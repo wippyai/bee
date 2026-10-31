@@ -25,6 +25,7 @@ local service_reply = require("service_reply")
 local workdir_preparers = require("workdir_preparers")
 local supervision = require("supervision")
 local demand = require("demand")
+local hostprocess = require("hostprocess")
 local M = {}
 local part_preparation = require("part_preparation")
 type LocalPreparation = part_preparation.LocalPreparation
@@ -101,6 +102,29 @@ function M.host_restart(row: store.Row?): string?
     if not recorded or not current or recorded == current then return nil end
     return "the machine restarted after the child started; boot " .. recorded .. " is now " .. current
 end
+-- A process group id stays allocated while any process belongs to the group,
+-- so the recorded group of a child that led it, with no member left, proves
+-- the recorded child tree ended, whichever boot it ran in. A present group,
+-- or a group recorded without the child that led it, proves nothing.
+function M.group_ended(row: store.Row?): (string?, string?)
+    local pgid = row and bounds.integer(row.pgid) or nil
+    local pid = row and bounds.integer(row.pid) or nil
+    if not pgid or pid ~= pgid then return nil, nil end
+    local present, probe_error = hostprocess.group_present(pgid)
+    if probe_error then return nil, "process group " .. tostring(pgid) .. " is not observable: " .. tostring(probe_error) end
+    if present ~= false then return nil, nil end
+    return "recorded process group " .. tostring(pgid) .. " has no members", nil
+end
+-- The proof that a recorded child is gone when its runtime owner did not
+-- observe the exit: the machine restarted, or its process group is empty.
+-- The evidence kind names which one; an unobservable group is reported.
+function M.exit_proof(row: store.Row?): (string?, string?, string?)
+    local restarted = M.host_restart(row)
+    if restarted then return "host.restarted", restarted, nil end
+    local ended, unobservable = M.group_ended(row)
+    if ended then return "group.ended", ended, nil end
+    return nil, nil, unobservable
+end
 -- The identity a native child is recorded under: its pid, its group when it
 -- leads one, and the boot it runs in.
 function M.child_identity(pid: integer, group: boolean): {[string]: unknown}
@@ -108,10 +132,14 @@ function M.child_identity(pid: integer, group: boolean): {[string]: unknown}
     if group then fields.pgid = pid end
     return fields
 end
-local function restarted_exit(attempt: types.Attempt, detail: string): Reply
-    M.retire_gateway(attempt, "machine restarted")
+local function proven_exit(attempt: types.Attempt, kind: string, detail: string): Reply
+    M.retire_gateway(attempt, detail)
     return transition(attempt.attempt_id, {execution = "exited", fields = {exit_source = "reconcile"},
-        evidence = {kind = "host.restarted", detail = detail}})
+        evidence = {kind = kind, detail = detail}})
+end
+local function unproven_detail(detail: string, unobservable: string?): string
+    if unobservable then return detail .. "; " .. unobservable end
+    return detail
 end
 local function runner_authority(attempt_id: string): (string?, string?)
     local db, open_error = store.open()
@@ -324,10 +352,10 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
             return transition(attempt.attempt_id, {evidence = {kind = "stop.delivery_failed", detail = tostring(send_error) .. "; durable stop remains requested during startup"}})
         end
     end
-    local restarted = M.host_restart(row)
-    if restarted then return restarted_exit(attempt, restarted) end
+    local proof, detail, unobservable = M.exit_proof(row)
+    if proof and detail then return proven_exit(attempt, proof, detail) end
     return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "stop.unproven",
-        detail = "runtime process owner unavailable; no recoverable native handle"}})
+        detail = unproven_detail("runtime process owner unavailable; no recoverable native handle", unobservable)}})
 
 end
 -- measure_executable: a read-only measurement of one host path, for the
@@ -456,8 +484,8 @@ function M.runner_present(row: store.Row): (boolean?, string?)
 end
 function M.reconcile_attempt(attempt: types.Attempt): Reply
     if attempt.execution_state == "uncertain" then
-        local restarted = M.host_restart(recorded_row(attempt.attempt_id))
-        if restarted then return restarted_exit(attempt, restarted) end
+        local proof, detail = M.exit_proof(recorded_row(attempt.attempt_id))
+        if proof and detail then return proven_exit(attempt, proof, detail) end
     end
     if not transitions.live(attempt.execution_state) then return succeed(attempt) end
     local row = recorded_row(attempt.attempt_id)
@@ -493,11 +521,11 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
         if enforcement then return enforcement end
         return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = detail or "runtime owner responds"}})
     end
-    local restarted = M.host_restart(row)
-    if restarted then return restarted_exit(attempt, restarted) end
+    local proof, proven, unobservable = M.exit_proof(row)
+    if proof and proven then return proven_exit(attempt, proof, proven) end
     M.retire_gateway(attempt, "runtime owner unavailable")
     return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unobserved",
-        detail = "runtime owner unavailable; native handle recovery is unsupported"}})
+        detail = unproven_detail("runtime owner unavailable; native handle recovery is unsupported", unobservable)}})
 end
 function M.reconcile(value: unknown): Reply
     local id, invalid = named(value)
@@ -560,9 +588,9 @@ local function completion_observed(attempt: types.Attempt, row: store.Row): (boo
     if attempt.exit_source == "runner" or attempt.exit_source == "terminal" then
         return true, "exit observed by the runtime handle"
     end
-    local restarted = M.host_restart(row)
-    if restarted then return true, restarted end
-    return false, "runtime exit not observed"
+    local proof, detail, unobservable = M.exit_proof(row)
+    if proof and detail then return true, detail end
+    return false, unproven_detail("runtime exit not observed", unobservable)
 end
 -- A live attempt keeps the authority it still holds: its leases are renewed.
 -- One whose grant does not resolve is stopped; enforcement stays pending

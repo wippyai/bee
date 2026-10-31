@@ -141,3 +141,10 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-24T00:05:00Z'}
   imports:
     migration: wippy.migration:migration
+- name: driver_binding_checkpoints
+  kind: function.lua
+  source: file://driver_binding_checkpoints.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-31T00:01:00Z'}
+  imports:
+    migration: wippy.migration:migration

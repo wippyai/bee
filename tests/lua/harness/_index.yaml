@@ -3064,6 +3064,8 @@ entries:
   modules: [sql, funcs, json]
   imports:
     test: wippy.test:test
+    canonical: bee.drivers.values:canonical
+    sources: bee.credentials.binding:sources
   security:
     policies: [bee.tests.harness:driver_bindings_migration_policy, bee.tests.support:schema_policy]
 - name: driver_bindings_migration_policy

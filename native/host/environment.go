@@ -7,6 +7,9 @@
 // its bare name. Drivers locate the harnesses installed on the machine through
 // it, generated hooks call back into the same Bee instead of finding another
 // one on PATH, and placement proves that a process of an earlier boot is gone.
+// Its hostprocess Lua module reports whether a recorded process group still
+// has members, so placement also proves that a child tree of the current boot
+// is gone.
 package host
 
 import (
@@ -24,6 +27,7 @@ import (
 	"github.com/wippyai/runtime/api/boot"
 	envapi "github.com/wippyai/runtime/api/env"
 	"github.com/wippyai/runtime/api/registry"
+	luaboot "github.com/wippyai/runtime/boot/components/runtime/lua"
 )
 
 // StorageID is the environment storage the host facts are read through.
@@ -183,7 +187,8 @@ func (storage *hostEnvironment) List(context.Context) (map[string]string, error)
 	return values, nil
 }
 
-// Component registers the host environment storage at boot.
+// Component registers the host environment storage and the process group
+// module at boot.
 type Component struct{}
 
 // New returns the host environment component.
@@ -193,8 +198,9 @@ func New() *Component { return &Component{} }
 func (*Component) Name() string { return "bee.host" }
 
 // DependsOn implements boot.Component: the storage registers into the
-// environment registry the env component creates.
-func (*Component) DependsOn() []string { return []string{"env"} }
+// environment registry the env component creates, and the module into the
+// Lua engine.
+func (*Component) DependsOn() []string { return []string{"env", string(luaboot.EngineName)} }
 
 // Load implements boot.Component: it registers the storage before the
 // registry's environment variables are read.
@@ -203,12 +209,16 @@ func (*Component) Load(ctx context.Context) (context.Context, error) {
 	if environment == nil {
 		return ctx, errors.New("bee host: environment registry is unavailable")
 	}
+	code := luaboot.GetCodeManager(ctx)
+	if code == nil {
+		return ctx, errors.New("bee host: Lua code manager is unavailable")
+	}
 	storage, err := newHostEnvironment(systemHostResolver())
 	if err != nil {
 		return ctx, err
 	}
 	environment.RegisterStorage(registry.ParseID(StorageID), storage)
-	return ctx, nil
+	return ctx, luaboot.AddModules(ctx, code, ProcessModule)
 }
 
 // Start implements boot.Component.

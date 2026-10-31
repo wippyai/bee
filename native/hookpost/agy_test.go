@@ -10,7 +10,7 @@ import (
 )
 
 func TestAgyTranscriptBoundaries(t *testing.T) {
-	fixtures := "../../tests/fixtures/drivers/agy/hooks-1"
+	fixtures := "../../drivers/test/fixtures/drivers/agy/hooks-1"
 	artifact := filepath.Join(t.TempDir(), "brain", "ef06ab43-51b5-4911-8a6f-f4700e9a3193")
 	transcript := filepath.Join(artifact, ".system_generated", "logs", "transcript_full.jsonl")
 	if err := os.MkdirAll(filepath.Dir(transcript), 0700); err != nil {

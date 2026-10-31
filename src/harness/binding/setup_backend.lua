@@ -7,6 +7,9 @@ local registry = require("registry")
 local security = require("security")
 local bounds = require("bounds")
 local definition = require("definition")
+local sources = require("sources")
+local formats = require("formats")
+local canonical = require("canonical")
 local SETUP = "bee.harness.launch:harness_setup"
 local MACHINE_LOGIN = "bee.env:machine_login_source"
 local function fail(message: string): {[string]: unknown} return {ok = false, error = message} end
@@ -97,14 +100,33 @@ local function same_credential(value: unknown, chosen: Credential): boolean
         and object.source_ref == chosen.source.ref and object.projection_kind == chosen.projection_kind
         and object.optional == chosen.optional
 end
-local function ensure_credential(workspace: string, name: string, chosen: Credential): (boolean, string?)
+local function define_credential(workspace: string, name: string, chosen: Credential, revision: integer): (boolean, string?)
     local reply, call_error = funcs.call("bee.credentials.binding:define", {workspace_id = workspace, name = name,
-        provider = chosen.provider, source = chosen.source, projection_kind = chosen.projection_kind, optional = chosen.optional, expected_revision = 0})
+        provider = chosen.provider, source = chosen.source, projection_kind = chosen.projection_kind, optional = chosen.optional, expected_revision = revision})
     local value = bounds.object(reply)
     if call_error or not value then return false, tostring(call_error or "define credential") end
     if value.ok == true and same_credential(value.value, chosen) then return true, nil end
     local error = bounds.object(value.error)
     if value.ok ~= false or not error or error.code ~= "CONFLICT" then return false, tostring(error and error.message or "define credential") end
+    return false, nil
+end
+-- A definition freezes the credential format the host selected when it was
+-- defined; a host that selects another format for the provider since then
+-- needs the definition measured again before it projects anything.
+local function current_format(definition: {[string]: unknown}, provider: string): (boolean?, string?)
+    local admitted, admitted_error = sources.host_sources()
+    if not admitted then return nil, admitted_error or "host credential sources" end
+    local selected, selected_error = sources.format(admitted, provider)
+    if not selected then return nil, selected_error or "host credential format" end
+    local frozen, frozen_error = formats.decode(definition.format)
+    if not frozen then return nil, "existing credential format: " .. tostring(frozen_error) end
+    local selected_json, frozen_json = canonical.encode(selected), canonical.encode(frozen)
+    if not selected_json or not frozen_json then return nil, "credential format is not measurable" end
+    return selected_json == frozen_json, nil
+end
+local function ensure_credential(workspace: string, name: string, chosen: Credential): (boolean, string?)
+    local created, create_error = define_credential(workspace, name, chosen, 0)
+    if created or create_error then return created, create_error end
     local listed, list_error = funcs.call("bee.credentials.binding:list", {workspace_id = workspace})
     local result = bounds.object(listed)
     local data = result and bounds.object(result.value)
@@ -112,8 +134,15 @@ local function ensure_credential(workspace: string, name: string, chosen: Creden
     for _, item in ipairs(data.definitions) do
         local definition = bounds.object(item)
         if definition and definition.name == name then
-            if same_credential(definition, chosen) then return true, nil end
-            return false, "existing credential " .. name .. " differs from host setup"
+            if not same_credential(definition, chosen) then return false, "existing credential " .. name .. " differs from host setup" end
+            local current, format_error = current_format(definition, chosen.provider)
+            if current == nil then return false, format_error end
+            if current then return true, nil end
+            local revision = bounds.count(definition.revision)
+            if not revision or revision < 1 then return false, "existing credential " .. name .. " has an invalid revision" end
+            local redefined, redefine_error = define_credential(workspace, name, chosen, revision)
+            if redefined then return true, nil end
+            return false, redefine_error or "existing credential " .. name .. " changed during host setup"
         end
     end
     return false, "credential conflict was not readable"

@@ -271,6 +271,41 @@ local function define_tests()
             apply(entry)
             if not ok then error(tostring(failure)) end
         end)
+        test.it("redefines a setup credential once after the host changes its credential format", function()
+            local target = fresh("setup-format-change")
+            test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+            local before = principals.objects(value(call("bee.credentials.binding:list", {workspace_id = target})).definitions)
+            test.eq(before[1].revision, 1)
+            local sources_entry = assert(registry.get("bee.credentials.env:credential_sources"))
+            local format_ref = tostring(assert(bounds.object(assert(bounds.object(sources_entry.data)).formats)).claude)
+            local entry = assert(registry.get(format_ref))
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(assert(bounds.object(original))) do changed[key] = item end
+            local environments = principals.strings(changed.environments)
+            environments[#environments + 1] = "BEE_TEST_ADDED_TOKEN"
+            changed.environments = environments
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+                local after = principals.objects(value(call("bee.credentials.binding:list", {workspace_id = target})).definitions)
+                test.eq(#after, 1)
+                test.eq(after[1].revision, 2)
+                test.eq(after[1].source_ref, before[1].source_ref)
+                local format = assert(bounds.object(after[1].format))
+                test.eq(principals.strings(format.environments)[#environments], "BEE_TEST_ADDED_TOKEN")
+                test.is_true(setup(target, RETAINED_DEFINITION).ok == true)
+                local retried = principals.objects(value(call("bee.credentials.binding:list", {workspace_id = target})).definitions)
+                test.eq(retried[1].revision, 2)
+                local admitted = value(call("bee.tests.harness.launch:admit", {request_id = fresh("setup-format-change-admit"),
+                    definition_ref = RETAINED_DEFINITION, workspace_id = target, brief = "ping"}))
+                test.eq(#(principals.items((assert(bounds.object(admitted.request))).projections)), 1)
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
+        end)
         test.it("never replaces a different existing credential during first-use setup", function()
             local target = fresh("setup-existing-credential")
             local existing = value(call("bee.credentials.binding:define", {workspace_id = target, name = "anthropic", provider = "claude",

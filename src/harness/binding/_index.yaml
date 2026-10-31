@@ -56,6 +56,12 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     definition: bee.harness.launch:definitions
+    sources: bee.credentials.binding:sources
+    formats: bee.drivers.credentials:format
+    canonical: bee.drivers.values:canonical
+  security:
+    policies:
+    - bee.credentials.security:credential_login_admission_policy
 - name: setup
   kind: function.lua
   source: file://setup_method.lua
@@ -146,6 +152,12 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     definition: bee.harness.launch:definitions
+    sources: bee.credentials.binding:sources
+    formats: bee.drivers.credentials:format
+    canonical: bee.drivers.values:canonical
+  security:
+    policies:
+    - bee.credentials.security:credential_login_admission_policy
 
 - name: set_credential
   kind: function.lua

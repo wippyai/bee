@@ -365,3 +365,25 @@ entries:
   meta: {type: test, suite: bee}
   imports: {test: wippy.test:test, bounds: bee.drivers.values:bounds, host: bee.tests.memory:host}
   security: {policies: [bee.tests.memory:read_policy, bee.tests.memory:host_policy]}
+- name: hook_occurrence_migration_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/gateway-hook-occurrence-migration-test.db
+  lifecycle: {auto_start: true}
+- name: hook_occurrence_migration_test
+  kind: function.lua
+  source: file://hook_occurrence_migration_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [sql, funcs]
+  imports:
+    test: wippy.test:test
+  security:
+    policies: [bee.tests.gateway:hook_occurrence_migration_policy, bee.tests.support:schema_policy]
+- name: hook_occurrence_migration_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.tests.gateway:hook_occurrence_migration_db]
+    effect: allow

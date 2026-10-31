@@ -105,6 +105,14 @@ local function define_tests()
             test.eq(start_ambiguous, false)
             local _, start_without_source = hooks.occurrence("SessionStart", {session_id = "s1"})
             test.eq(start_without_source, true)
+            -- A session starts once, but it compacts, clears, resumes and
+            -- forks as often as the person or the harness asks; those starts
+            -- name no occurrence of their own and are kept per delivery.
+            for _, source in ipairs({"compact", "resume", "clear", "fork"}) do
+                local repeated, repeated_ambiguous = hooks.occurrence("SessionStart", {session_id = "s1", source = source, prompt_id = "p1"})
+                test.eq(repeated, "session:s1")
+                test.eq(repeated_ambiguous, true, source .. " starts recur within one session")
+            end
             local finish, finish_ambiguous = hooks.occurrence("SessionEnd", {session_id = "s1", reason = "other"})
             test.eq(finish, "session:s1")
             test.eq(finish_ambiguous, false)

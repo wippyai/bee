@@ -59,9 +59,11 @@ local sha = canonical.digest
 -- The occurrence identity an event carries, from the captures: a tool call
 -- by its tool_use_id, a prompt submission by prompt_id (Claude Code) or
 -- turn_id (Codex) with its prompt's digest, since a message queued during a
--- running turn is submitted under that turn's id, a session start by session_id and source, a session end
--- by session_id. A stop carries no identifier of its own occurrence (a
--- prompt may stop more than once), so it is always ambiguous. An event
+-- running turn is submitted under that turn's id, a session's startup by
+-- session_id, a session end by session_id. A stop carries no identifier of
+-- its own occurrence (a prompt may stop more than once), and neither does a
+-- start from compacting, clearing, resuming or forking, which a session
+-- repeats as often as it is asked; both are always ambiguous. An event
 -- that carries none of its identifiers is ambiguous: it is recorded per
 -- delivery and never merged.
 function M.occurrence(event: string, payload: Object): (string, boolean)
@@ -82,8 +84,7 @@ function M.occurrence(event: string, payload: Object): (string, boolean)
         return "turn:" .. id, true
     end
     if event == "SessionStart" then
-        local source = bounds.id(payload.source)
-        if session ~= "" and source then return "session:" .. session .. ":" .. source, false end
+        if session ~= "" and payload.source == "startup" then return "session:" .. session .. ":startup", false end
         return "session:" .. session, true
     end
     if session ~= "" then return "session:" .. session, false end

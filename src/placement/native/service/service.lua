@@ -293,6 +293,37 @@ function M.activity(value: unknown): Reply
     if not attempt then return assert(denied) end
     return fail("UNSUPPORTED_CAPABILITY", "runtime exposes no native descendant activity measurement")
 end
+-- forget_session removes the files placement materialized into a removed
+-- session's home and their records. Everything else in the home, such as the
+-- agent's own conversation files, stays where the agent wrote it.
+function M.forget_session(value: unknown): Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"session", "thread_id", "owner_id"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local owner_id, session_ref = bounds.id(object.owner_id), bounds.id(object.session)
+    if not owner_id or not session_ref then return fail("INVALID", "owner_id and session must be identifiers") end
+    local caller = actor()
+    if not caller then return fail("UNAUTHENTICATED", "no actor") end
+    if caller ~= owner_id then return fail("FORBIDDEN", "the session belongs to another owner") end
+    local session_key, key_error = homes.session_key(owner_id, session_ref)
+    if not session_key then return fail("INTERNAL", key_error or "derive session home") end
+    local db, open_error = store.open()
+    if not db then return fail("STORAGE", open_error or "open placement store") end
+    local held, held_error = store.session_held(db, owner_id, session_ref)
+    if held == nil then db:release(); return fail("STORAGE", held_error or "read session holders") end
+    if held then db:release(); return fail("CONFLICT", "an unfinished attempt still holds the session home") end
+    local paths, paths_error = store.session_files(db, owner_id, session_ref)
+    if not paths then db:release(); return fail("STORAGE", paths_error or "read session files") end
+    for _, path in ipairs(paths) do
+        local remove_error = homes.remove_session_file(session_key, path)
+        if remove_error then db:release(); return fail("STORAGE", remove_error) end
+        local forget_error = store.forget_session_file(db, owner_id, session_ref, path)
+        if forget_error then db:release(); return fail("STORAGE", forget_error) end
+    end
+    db:release()
+    return succeed({session = session_ref, files = #paths})
+end
 function M.stop(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "stop request must be an object") end

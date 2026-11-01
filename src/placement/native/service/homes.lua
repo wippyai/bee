@@ -116,6 +116,19 @@ function M.remove_tree(vol: fs.FS, path: string): string?
     if not removed and vol:exists(path) ~= false then return "remove " .. path .. ": " .. tostring(err) end
     return nil
 end
+-- remove_session_file removes one file placement materialized into a
+-- session's home; a file already gone is removed.
+function M.remove_session_file(session_key: string, relative: string): string?
+    if not formats.path(relative) then return "session file path escapes the home" end
+    local vol, vol_error = volume()
+    if not vol then return vol_error end
+    local target = "/" .. M.SESSIONS .. "/" .. session_key .. "/home/" .. relative
+    if vol:exists(target) ~= true then return nil end
+    if vol:isdir(target) then return target .. " is a directory" end
+    local removed, err = vol:remove(target)
+    if not removed and vol:exists(target) ~= false then return "remove " .. target .. ": " .. tostring(err) end
+    return nil
+end
 function M.remove_attempt(home_key: string): string?
     local vol, vol_error = volume()
     if not vol then return vol_error end

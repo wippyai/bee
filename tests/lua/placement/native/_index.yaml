@@ -702,6 +702,32 @@ entries:
     store: bee.placement.native.persist:store
     protocol: bee.placement.native:protocol
     native_fixture: bee.tests.placement.native:native_fixture
+- name: native_forget_session_test
+  kind: function.lua
+  source: file://native_forget_session_test.lua
+  method: forget
+  meta:
+    type: test
+    suite: bee
+    timeout: 120s
+  modules:
+  - registry
+  - hash
+  security:
+    policies:
+    - bee.tests.placement.native:apply_test_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_store_policy
+    - bee.credentials.security:credential_store_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+  imports:
+    test: wippy.test:test
+    store: bee.placement.native.persist:store
+    homes: bee.placement.native.service:homes
+    native_fixture: bee.tests.placement.native:native_fixture
 - name: provider_configuration_test
   kind: function.lua
   source: file://provider_configuration_test.lua

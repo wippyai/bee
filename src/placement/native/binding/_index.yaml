@@ -59,6 +59,16 @@ entries:
     service: bee.placement.native.service:service
   security:
     policies: *id001
+- name: forget_session
+  kind: function.lua
+  meta:
+    type: bee.sessions.forget
+  source: file://forget_session_method.lua
+  method: handle
+  imports:
+    service: bee.placement.native.service:service
+  security:
+    policies: *id001
 - name: stop
   kind: function.lua
   source: file://stop_method.lua

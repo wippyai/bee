@@ -176,6 +176,33 @@ function M.bind_session_file(db: sql.DB, owner_id: string, session_ref: string, 
     end
     return nil
 end
+-- session_files lists the paths recorded as materialized into one session's home.
+function M.session_files(db: sql.DB, owner_id: string, session_ref: string): ({string}?, string?)
+    local rows, err = db:query("SELECT path FROM bee_placement_session_files WHERE owner_id = ? AND session_ref = ? ORDER BY path",
+        {owner_id, session_ref})
+    if err or not rows then return nil, "read retained configuration bindings" end
+    local paths: {string} = {}
+    for _, row in ipairs(rows) do
+        local path = text(row.path)
+        if not path then return nil, "retained configuration binding is invalid" end
+        paths[#paths + 1] = path
+    end
+    return paths, nil
+end
+function M.forget_session_file(db: sql.DB, owner_id: string, session_ref: string, path: string): string?
+    local _, err = db:execute("DELETE FROM bee_placement_session_files WHERE owner_id = ? AND session_ref = ? AND path = ?",
+        {owner_id, session_ref, path})
+    if err then return "forget retained configuration binding" end
+    return nil
+end
+-- session_held reports whether an attempt of the owner still runs, or has
+-- not yet started, in the session's home.
+function M.session_held(db: sql.DB, owner_id: string, session_ref: string): (boolean?, string?)
+    local rows, err = db:query([[SELECT COUNT(*) AS count FROM bee_placement_attempts
+        WHERE owner_id = ? AND session_ref = ? AND execution_state NOT IN ('exited', 'start_failed')]], {owner_id, session_ref})
+    if err or not rows or #rows ~= 1 then return nil, "read session holders" end
+    return (tonumber(rows[1].count) or 0) > 0, nil
+end
 function M.request(row: Row): (types.LaunchRequest?, string?)
     local encoded = text(row.request_json)
     if not encoded then return nil, "attempt request is missing" end

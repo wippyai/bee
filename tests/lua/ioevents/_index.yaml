@@ -10,7 +10,7 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [fs.get, ioevents.watch]
+    actions: [ioevents.watch]
     resources: [bee.tests.ioevents:watched]
     effect: allow
 - name: read_policy
@@ -27,7 +27,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "30s"}
   modules: [fs, ioevents, channel, time]
   security:
-    policies: [bee.tests.ioevents:watch_policy]
+    policies: [bee.tests.ioevents:watch_policy, bee.tests.ioevents:read_policy]
   imports:
     test: wippy.test:test
 - name: probe

@@ -88,7 +88,7 @@ local function http_request(request_raw: unknown): Reply
 end
 
 -- The registry identities of the calling application's own installed file
--- volumes, databases and command executors, keyed by the approved subpath,
+-- volumes, watch targets, databases and command executors, keyed by the approved subpath,
 -- database name, and command then folder, so an application addresses its
 -- grants on any node without embedding host-generated identities.
 local function granted_resources(_request: unknown): Reply
@@ -96,6 +96,7 @@ local function granted_resources(_request: unknown): Reply
     if refusal then return refusal end
     if not live or not record then return fail("DENIED", "the caller holds no live application grants") end
     local volumes: {[string]: string} = {}
+    local watches: {[string]: string} = {}
     local databases: {[string]: string} = {}
     local executors: {[string]: {[string]: string}} = {}
     for _, raw_grant in ipairs((record.capabilities or {})) do
@@ -106,6 +107,11 @@ local function granted_resources(_request: unknown): Reply
             local id, id_error = files.volume_id(record.overlay_owner, record.folder, scope.subpath)
             if not id then return fail("UNAVAILABLE", tostring(id_error)) end
             volumes[scope.subpath] = id
+            if grant.capability == "workspace.files.watch" then
+                local watch_id, watch_error = files.watch_volume_id(record.overlay_owner, record.folder, scope.subpath)
+                if not watch_id then return fail("UNAVAILABLE", tostring(watch_error)) end
+                watches[scope.subpath] = watch_id
+            end
         elseif grant and scope and grant.capability == "app.database" then
             local id, id_error = files.database_id(record.overlay_owner, scope.name)
             if not id then return fail("UNAVAILABLE", tostring(id_error)) end
@@ -118,7 +124,7 @@ local function granted_resources(_request: unknown): Reply
             executors[grant.resource] = folders
         end
     end
-    return succeed({volumes = volumes, databases = databases, executors = executors})
+    return succeed({volumes = volumes, watches = watches, databases = databases, executors = executors})
 end
 
 return {contract_call = contract_call, http_request = http_request, granted_resources = granted_resources}

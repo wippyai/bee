@@ -43,7 +43,7 @@ entries:
       revision: 1
       parameters:
         subpath: relative_subpath
-      text: Read workspace files under {subpath} and receive change notices for its folders
+      text: Watch files under {subpath} for changes, with read-only access to them
       confirm: standard
       modules:
       - ioevents
@@ -55,6 +55,9 @@ entries:
       resources:
       - kind: fs.directory
         mode: readonly
+        source: verified_workspace_subroot
+      - kind: fs.directory
+        mode: watch_only
         source: verified_workspace_subroot
     - id: workspace.files.write
       revision: 1

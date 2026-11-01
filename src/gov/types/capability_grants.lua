@@ -102,23 +102,17 @@ end
 -- The capabilities whose generated enforcement is a policy expression: the
 -- runtime pairs their actions with the approved resources and request
 -- metadata only through one.
-local EXPRESSION_CAPABILITIES: {[string]: boolean} = {["agents.launch"] = true, ["process.exec"] = true}
+local EXPRESSION_CAPABILITIES: {[string]: boolean} = {["agents.launch"] = true, ["process.exec"] = true,
+    ["workspace.files.watch"] = true}
 function M.expression(capability: unknown): boolean
     return type(capability) == "string" and EXPRESSION_CAPABILITIES[capability] == true
 end
-
--- The workspace file capabilities and the operation each one grants.
-local WORKSPACE_FILE_OPERATIONS: {[string]: string} = {
-    ["workspace.files.read"] = "files.read",
-    ["workspace.files.write"] = "files.write",
-    ["workspace.files.watch"] = "files.watch",
-}
 
 -- Each installable catalog entry materializes into generated host entries: a
 -- policy plus the host-created volume, database or executor it authorizes. A
 -- Hive exposure grant materializes into an exposure-scope policy over exactly
 -- the approved operations; other review-vocabulary entries have no app grant.
-type Generated = {policy: Object, volume: Object?, database: Object?, executor: Object?}
+type Generated = {policy: Object, volumes: {Object}?, database: Object?, executor: Object?}
 local function only(generated: Object): (Generated?, string?)
     return {policy = generated}, nil
 end
@@ -131,16 +125,26 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
                 resources = {"bee.threads.binding:get", "bee.threads.binding:list",
                     "bee.threads.binding:read_after"}, effect = "allow"}}})
     end
-    if WORKSPACE_FILE_OPERATIONS[grant.capability] == grant.operation
+    if (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write")
+        and (grant.operation == "files.read" or grant.operation == "files.write")
         and grant.resource == "workspace" and type(scope.subpath) == "string" then
         local writable = grant.capability == "workspace.files.write"
-        local watch = grant.capability == "workspace.files.watch"
         local volume, volume_error = files.volume(owner, folder, scope.subpath, writable)
-        local generated, policy_error = volume and files.file_policy(owner, folder, scope.subpath, writable, id, watch) or nil
+        local generated, policy_error = volume and files.file_policy(owner, folder, scope.subpath, writable, id) or nil
         if not volume or not generated then
             return nil, volume_error or policy_error or "workspace file grant is not installable"
         end
-        return {policy = generated, volume = volume}, nil
+        return {policy = generated, volumes = {volume}}, nil
+    end
+    if grant.capability == "workspace.files.watch" and grant.operation == "files.watch"
+        and grant.resource == "workspace" and type(scope.subpath) == "string" then
+        local volume, volume_error = files.volume(owner, folder, scope.subpath, false)
+        local watched, watched_error = files.watch_volume(owner, folder, scope.subpath)
+        local generated, policy_error = files.watch_policy(owner, folder, scope.subpath, id)
+        if not volume or not watched or not generated then
+            return nil, volume_error or watched_error or policy_error or "workspace watch grant is not installable"
+        end
+        return {policy = generated, volumes = {volume, watched}}, nil
     end
     if grant.capability == "app.database" and grant.operation == "database.use"
         and grant.resource == scope.name and type(scope.name) == "string" then
@@ -288,10 +292,10 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
         if pairs_by_id[id] then return nil, "application " .. app .. " lists capability " .. capability .. " twice with the same parameters" end
         local generated, policy_error = policy(owner, resolved_operations[1], id, folder, app)
         if not generated then return nil, policy_error end
-        local volume, database, executor = generated.volume, generated.database, generated.executor
+        local database, executor = generated.database, generated.executor
         pairs_by_id[id] = {grant = resolved_operations[1], policy = generated.policy}
         ids[#ids + 1] = id
-        if volume then
+        for _, volume in ipairs(generated.volumes or {}) do
             -- Grants on one folder share its volume; a writable grant's
             -- volume serves the read-only grants on that folder too.
             local volume_id = (volume).id
@@ -393,7 +397,8 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
         return nil, "installed capability grant record of " .. app .. " binds ns.requirement entries this host no longer reads; uninstall the application and install it again"
     end
     local capabilities, policies = list(data.capabilities, 128), list(data.policies, 128)
-    local volumes = list(data.volumes or {}, 8)
+    -- Each of at most eight capabilities installs at most two volumes.
+    local volumes = list(data.volumes or {}, 16)
     local databases = list(data.databases or {}, 8)
     local executors = list(data.executors or {}, 8)
     if not capabilities or not policies or not volumes or not databases or not executors

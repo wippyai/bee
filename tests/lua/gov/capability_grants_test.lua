@@ -179,21 +179,31 @@ local function define_tests()
             installed_entries[proposed.volumes[1].id] = nil
             test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
         end)
-        test.it("materializes a read-only workspace volume the application may watch", function()
+        test.it("reads a watched folder through its read-only volume and watches a target it cannot acquire", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("workspace.files.watch", {subpath = "docs"})}, nil, FOLDER))
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "files.watch")
-            test.eq(#proposed.volumes, 1)
-            local volume = assert(bounds.object(proposed.volumes[1].data))
-            test.eq(volume.directory, "alpha/docs")
-            test.is_true(volume.readonly)
-            local body = assert(bounds.object((assert(bounds.object(proposed.policies[1].data))).policy))
+            test.eq(#proposed.volumes, 2)
+            local read, watched
+            for _, volume in ipairs(proposed.volumes) do
+                local data = assert(bounds.object(volume.data))
+                test.eq(data.directory, "alpha/docs")
+                test.is_false(data.auto_init)
+                if data.readonly then read = tostring(volume.id) else watched = tostring(volume.id) end
+            end
+            assert(read and watched and read ~= watched, "one read-only volume and one watch target")
+            local policy = assert(bounds.object(proposed.policies[1]))
+            test.eq(policy.kind, "security.policy.expr")
+            local body = assert(bounds.object((assert(bounds.object(policy.data))).policy))
             local actions = principals.strings(body.actions)
             table.sort(actions)
             test.eq(table.concat(actions, ","), "fs.get,funcs.call,ioevents.watch")
-            test.is_true(table.concat(principals.strings(body.resources), ",")
-                :find(proposed.volumes[1].id, 1, true) ~= nil)
+            local expression = tostring(body.expression)
+            test.contains(expression, '(action == "fs.get" && resource == "' .. read .. '")')
+            test.contains(expression, '(action == "ioevents.watch" && resource == "' .. watched .. '")')
+            test.is_false(expression:find('"fs.get" && resource == "' .. watched, 1, true) ~= nil)
+            test.is_true(grants.expression("workspace.files.watch"))
             test.is_true(capability_model.modules(vocabulary(), proposed.capabilities).ioevents)
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-watch", 1))
             test.is_true(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()) ~= nil)
@@ -203,8 +213,10 @@ local function define_tests()
             local write = request("workspace.files.write", {subpath = "docs"})
             for _, listed in ipairs({{watch, write}, {write, watch}}) do
                 local proposed = assert(grants.propose(vocabulary(), OWNER, APP, listed, nil, FOLDER))
-                test.eq(#proposed.volumes, 1)
-                test.is_false((assert(bounds.object(proposed.volumes[1].data))).readonly)
+                test.eq(#proposed.volumes, 2)
+                for _, volume in ipairs(proposed.volumes) do
+                    test.is_false((assert(bounds.object(volume.data))).readonly)
+                end
             end
         end)
         test.it("materializes an isolated application database and its policy", function()

@@ -78,19 +78,20 @@ Grants:
 
 ## workspace.files.watch
 
-workspace.files.watch: Read workspace files under {subpath} and receive change notices for its folders. Risk class: standard. Template revision: 1.
+workspace.files.watch: Watch files under {subpath} for changes, with read-only access to them. Risk class: standard. Template revision: 1.
 
-Watches are not recursive: watch each folder of interest, and a file's containing folder to see atomic saves. Each event has `kind` (`change` or `rescan`), `resource`, `path` (relative to the volume root) and `operation` (`create`, `write`, `rename`, `remove` or `other`). A `rescan` arrives first and then every five seconds; on it, list the folder again, because the operating system can merge or drop notices. A process may hold 32 watches. For example, with the `ioevents`, `funcs` and `channel` modules:
+The app reads the folder through its read-only volume, `volumes[subpath]` of `bee.gov.binding:granted_resources`, and watches it through `watches[subpath]`, a watch target that admits no filesystem operation, so the app cannot write, delete or rename there. Watches are not recursive: watch each folder of interest, and a file's containing folder to see atomic saves. Each event has `kind` (`change` or `rescan`), `resource` (the watch target), `path` (relative to the subpath) and `operation` (`create`, `write`, `rename`, `remove` or `other`). A `rescan` arrives first and then every five seconds; on it, list the folder again, because the operating system can merge or drop notices. A process may hold 32 watches. For example, with the `ioevents`, `funcs` and `channel` modules:
 
 ```lua
-local granted = funcs.new():call("bee.gov.binding:granted_resources", {})
-local watch, err = ioevents.watch(granted.value.volumes["docs"], ".")
+local reply = funcs.new():call("bee.gov.binding:granted_resources", {})
+local granted = reply and reply.ok and reply.value
+local watch, err = ioevents.watch(granted.watches["docs"], ".")
 if not watch then return nil, err end
 local events = watch:channel()
 while true do
     local event, ok = events:receive()
     if not ok then break end
-    -- event.kind, event.path, event.operation
+    -- event.kind, event.path, event.operation; read files through granted.volumes["docs"]
 end
 watch:close()
 ```
@@ -103,6 +104,7 @@ Grants:
 
 - files.watch on workspace, scope {"subpath": "$subpath"}
 - fs.directory resource, mode readonly, selected by verified_workspace_subroot
+- fs.directory resource, mode watch_only, selected by verified_workspace_subroot
 
 ## workspace.files.write
 

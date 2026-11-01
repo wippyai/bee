@@ -246,6 +246,11 @@ local function provision(complete: {Entry}, generated: Provisioned, capability_o
                     return "generated capability policy references an absent executor"
                 end
             end
+            for volume_id in expression:gmatch("bee%.gov%.grants:volume%.[0-9a-f]+") do
+                if not volume_ids[volume_id] then
+                    return "generated capability policy references an absent volume"
+                end
+            end
         end
         local resources = inner and inner.resources or nil
         if type(resources) == "table" then

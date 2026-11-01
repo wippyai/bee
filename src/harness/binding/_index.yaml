@@ -133,6 +133,23 @@ entries:
     default: true
     methods:
       call: bee.harness.binding:call
+- name: forget_session_windows
+  kind: function.lua
+  meta:
+    type: bee.sessions.forget
+  source: file://session_windows.lua
+  method: forget
+  modules:
+  - json
+  - system
+  imports:
+    bounds: bee.drivers.values:bounds
+    client: bee.node:client
+    recovery: bee.harness.app:recovery
+  security:
+    policies:
+    - bee.hive.security:caller
+    - bee.hive.security:messaging
 - name: windows
   kind: library.lua
   source: file://windows.lua

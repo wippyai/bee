@@ -94,6 +94,22 @@ local function dialog_of(instance: Instance): {[string]: unknown}?
         message = dialog.message, accept = dialog.accept, initial = dialog.initial}
 end
 
+-- app_instances is the wire form of one app's running instances with the
+-- arguments the node keeps for each, so the app's owner can tell which of its
+-- windows show what.
+local function app_instances(instances: {[string]: Instance}, app: string): {{[string]: unknown}}
+    local found: {{[string]: unknown}} = {}
+    for _, instance in pairs(instances) do
+        if instance.app == app then
+            found[#found + 1] = {id = instance.id, execution_id = instance.execution_id, workspace = instance.workspace, arguments = words(instance.args),
+                resume_state = type(instance.args.resume_state) == "string" and instance.args.resume_state or nil}
+        end
+    end
+    table.sort(found, function(a, b) return tostring(a.id) < tostring(b.id) end)
+    return found
+end
+
+M.app_instances = app_instances
 M.restored = restored
 M.describe = describe
 M.dialog_of = dialog_of

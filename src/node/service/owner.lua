@@ -1013,6 +1013,10 @@ local function main(saved: unknown)
         if op == "answer" then return answer(args) end
         if op == "command" then return resolve_command(args.name, args.arguments, request.caller) end
         if op == "stats" then return stats() end
+        if op == "instances" then
+            if type(args.app) ~= "string" or args.app == "" then return protocol.fail("instances needs an app") end
+            return protocol.ok({instances = part_handover.app_instances(instances, args.app)})
+        end
         if op == "move" then return move(args.id, args.desktop) end
         if op == "themes" then return theme_list() end
         if op == "appearance" then return set_appearance(args) end

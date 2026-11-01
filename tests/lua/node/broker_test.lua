@@ -196,6 +196,25 @@ local function define_tests()
             db:release()
         end)
 
+        test.it("lists one app's running instances with the arguments it keeps for each", function()
+            local events = assert(process.listen(client.EVENTS, {message = true}))
+            local id, view = open(events, {"accept", "", "", "", "shows-subject"})
+            local listed = call("instances", {app = BROKER}).instances :: {Object}
+            local found: Object? = nil
+            for _, item in ipairs(listed) do if item.id == id then found = item end end
+            local instance = assert(found, "the probe instance is listed")
+            test.eq((instance.arguments :: {string})[5], "shows-subject")
+            test.not_nil(instance.execution_id)
+            test.eq(#(call("instances", {app = "bee.tests.node:no_such_app"}).instances :: {Object}), 0)
+            local _, refused = client.call(assert(system.node.id()), "instances", {})
+            test.not_nil(refused)
+            view:close()
+            call("close", {id = id, force = true})
+            local ended = false
+            while not ended do ended = raw_event(events, "closed").id == id end
+            process.unlisten(events)
+        end)
+
         test.it("puts an app's question to the display, lists it to a new watcher and returns the answer", function()
             local events = assert(process.listen(client.EVENTS, {message = true}))
             local id, view = open(events, {"accept", "Name?"})

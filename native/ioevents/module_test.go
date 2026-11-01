@@ -87,18 +87,25 @@ func watchTestProcess(t *testing.T, script, denied string) *engine.Process {
 	return p
 }
 
-func TestLuaWatchChecksBothCallerPermissionsBeforeYield(t *testing.T) {
-	for _, denied := range []string{"fs.get", "ioevents.watch"} {
-		t.Run(denied, func(t *testing.T) {
-			p := watchTestProcess(t, `local w, err = ioevents.watch("workspace"); assert(w == nil and err ~= nil); return true`, denied)
-			var out process.StepOutput
-			if err := p.Step(nil, &out); err != nil {
-				t.Fatal(err)
-			}
-			if !out.IsDone() || out.Count() != 0 || p.LiveSubscriptionCount() != 0 {
-				t.Fatalf("denied watch yielded or leaked: %+v", out)
-			}
-		})
+func TestLuaWatchChecksCallerWatchPermissionBeforeYield(t *testing.T) {
+	p := watchTestProcess(t, `local w, err = ioevents.watch("workspace"); assert(w == nil and err ~= nil); return true`, "ioevents.watch")
+	var out process.StepOutput
+	if err := p.Step(nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.IsDone() || out.Count() != 0 || p.LiveSubscriptionCount() != 0 {
+		t.Fatalf("denied watch yielded or leaked: %+v", out)
+	}
+}
+
+func TestLuaWatchNeedsNoFilesystemAcquisition(t *testing.T) {
+	p := watchTestProcess(t, `local w, err = ioevents.watch("workspace"); return true`, "fs.get")
+	var out process.StepOutput
+	if err := p.Step(nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Count() != 1 || p.LiveSubscriptionCount() != 1 {
+		t.Fatalf("watch without fs.get did not reach the native watcher: %+v", out)
 	}
 }
 

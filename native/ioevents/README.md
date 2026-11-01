@@ -6,17 +6,23 @@ cover real file notifications, periodic reconciliation signals, path containment
 owner cancellation, quotas and shutdown.
 
 The build manifest links `ioevents.Component()` into the native component list.
-Lua entries must declare `ioevents` in `modules`. A process also needs `fs.get`
-and `ioevents.watch` grants for the named filesystem resource. An application
-receives both, with the module admission, through an approved
-`workspace.files.watch` capability, whose read-only volume identity
-`bee.gov.binding:granted_resources` reports under `volumes[<subpath>]`.
+Lua entries must declare `ioevents` in `modules`. A process needs only the
+`ioevents.watch` grant for the named filesystem resource: a watch reports names
+and operations and never hands the caller the filesystem, so the watched
+resource can be one the caller cannot acquire with `fs.get`. Watches need a
+host-backed resource; read-only volumes withhold their host directory.
+
+An application receives this through an approved `workspace.files.watch`
+capability. The grant installs the folder's read-only volume, which the
+application reads with `fs.get`, and a host-backed watch target on the same
+folder that admits only `ioevents.watch`. `bee.gov.binding:granted_resources`
+reports them under `volumes[<subpath>]` and `watches[<subpath>]`.
 
 Consumer example:
 
 ```lua
 local ioevents = require("ioevents")
-local watch, err = ioevents.watch(volume_id, ".")
+local watch, err = ioevents.watch(watch_target, ".")
 if not watch then
     error(err)
 end

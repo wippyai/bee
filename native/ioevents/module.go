@@ -82,8 +82,10 @@ func watchDirectory(l *lua.LState) int {
 	}
 	// The caller's frame context carries its actor and policy scope; the
 	// dispatcher context the command handler runs under carries neither.
+	// Watching is its own authority: it reports names and operations and never
+	// hands the caller the filesystem.
 	ctx := l.Context()
-	if !security.IsAllowed(ctx, "ioevents.watch", resourceName, nil) || !security.IsAllowed(ctx, "fs.get", resourceName, nil) {
+	if !security.IsAllowed(ctx, "ioevents.watch", resourceName, nil) {
 		l.Push(lua.LNil)
 		l.Push(lua.NewLuaError(l, "filesystem watch is not permitted: "+resourceName).WithKind(lua.PermissionDenied).WithRetryable(false))
 		return 2

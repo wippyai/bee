@@ -1,6 +1,6 @@
 # App capability catalog
 
-App permissions: an app asks for host access by listing capabilities on its own application entry. Generated from the host catalog, revision 6. A listed capability requests review; it grants nothing until the person approves it.
+App permissions: an app asks for host access by listing capabilities on its own application entry. Generated from the host catalog, revision 7. A listed capability requests review; it grants nothing until the person approves it.
 
 Use docs search with topic capabilities and a task phrase, or ask `what can an app request to read workspace files`. Read the matching section here for the exact parameters and grants.
 
@@ -74,6 +74,19 @@ Agent tools for an approved attempt: none.
 Grants:
 
 - files.read on workspace, scope {"subpath": "$subpath"}
+- fs.directory resource, mode readonly, selected by verified_workspace_subroot
+
+## workspace.files.watch
+
+workspace.files.watch: Read workspace files under {subpath} and receive change notices for its folders. Risk class: standard. Template revision: 1.
+
+Parameters: subpath: relative_subpath.
+Runtime modules admitted by this capability: ioevents.
+Agent tools for an approved attempt: none.
+
+Grants:
+
+- files.watch on workspace, scope {"subpath": "$subpath"}
 - fs.directory resource, mode readonly, selected by verified_workspace_subroot
 
 ## workspace.files.write

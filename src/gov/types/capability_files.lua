@@ -277,6 +277,19 @@ function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unk
         "Host-generated workspace file grant"), nil
 end
 
+-- A watch grant reads the folder through its read-only volume and lets the
+-- ioevents module subscribe to change notices for that same volume.
+function M.watch_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
+    policy_id_raw: unknown): (Policy?, string?)
+    local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, false)
+    local id = bounds.id(policy_id_raw)
+    if not volume or not id then
+        return nil, volume_error or "watch grant policy identity is invalid"
+    end
+    return policy(id, {"fs.get", "ioevents.watch", "funcs.call"}, {volume.id, gateway.GRANTED_RESOURCES},
+        "Host-generated workspace file watch grant"), nil
+end
+
 -- The application reaches only its own database through this policy; every
 -- other store stays denied by the application boundary.
 function M.database_policy(owner_raw: unknown, name_raw: unknown, policy_id_raw: unknown): (Policy?, string?)

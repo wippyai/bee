@@ -1,4 +1,4 @@
--- MIT. The ten default session tools: closed schemas, mandatory operation
+-- MIT. The eleven default session tools: closed schemas, mandatory operation
 -- keys, identity refused in payloads, exact projection onto a fake owner
 -- binding, and owner replies held to the published output schema.
 local test = require("test")
@@ -16,7 +16,7 @@ local WORK2 = "bw:node-a:ws-1:w2"
 local OP = "bo:node-a:ws-1:o1"
 local NOW = "2026-09-29T10:00:00Z"
 
-local MUTATIONS = {"session_open", "session_run", "session_send", "session_join", "session_cancel", "session_close"}
+local MUTATIONS = {"session_open", "session_run", "session_send", "session_join", "session_cancel", "session_close", "session_remove"}
 local READS = {"session_catalog", "session_await", "session_get", "session_list"}
 
 local function valid(name: string): Object
@@ -50,6 +50,7 @@ local function success(name: string): Object
     if name == "session_run" or name == "session_send" then return {ok = true, value = receipt()} end
     if name == "session_cancel" then return {ok = true, value = {operation = OP, subject = WORK, state = "requested", effect = "cancel"}} end
     if name == "session_close" then return {ok = true, value = {operation = OP, subject = SESSION, state = "requested", effect = "close"}} end
+    if name == "session_remove" then return {ok = true, value = {operation = OP, session = SESSION, state = "removing"}} end
     if name == "session_await" then return {ok = true, value = {subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}} end
     if name == "session_get" then return {ok = true, value = {kind = "session", value = snapshot()}} end
     if name == "session_list" then return {ok = true, value = {items = {snapshot()}}} end
@@ -60,7 +61,7 @@ end
 
 local function fake_owner(log: {Object}): Object
     local owner: Object = {}
-    for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "cancel", "close"}) do
+    for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "cancel", "close", "remove"}) do
         owner[method] = function(_self: Object, request: Object): (unknown, unknown)
             log[#log + 1] = {method = method, request = request}
             return {ok = true, value = {}}, nil
@@ -71,8 +72,8 @@ end
 
 local function define_tests()
     test.describe("Default session MCP tools", function()
-        test.it("publishes exactly the ten tools as owner contract projections", function()
-            test.eq(#session_tools.NAMES, 10)
+        test.it("publishes exactly the eleven tools as owner contract projections", function()
+            test.eq(#session_tools.NAMES, 11)
             local seen: {[string]: mcp.Tool} = {}
             for _, tool in ipairs(mcp.TOOLS) do
                 test.is_nil(seen[tool.name])
@@ -110,7 +111,7 @@ local function define_tests()
                 test.eq(tool.annotations.idempotentHint, true)
             end
             for _, name in ipairs(READS) do test.eq((mcp.tool(name)).annotations.readOnlyHint, true) end
-            for _, name in ipairs({"session_join", "session_cancel", "session_close"}) do
+            for _, name in ipairs({"session_join", "session_cancel", "session_close", "session_remove"}) do
                 test.eq((mcp.tool(name)).annotations.destructiveHint, true)
             end
             test.eq((mcp.tool("session_send")).annotations.destructiveHint, false)
@@ -125,6 +126,9 @@ local function define_tests()
             test.is_true(await:find("timeout never cancels", 1, true) ~= nil)
             test.is_true(await:find("Wait up to timeout_ms", 1, true) ~= nil)
             test.is_true((mcp.tool("session_join")).description:find("waiting up to timeout_ms", 1, true) ~= nil)
+            local remove = (mcp.tool("session_remove")).description
+            test.is_true(remove:find("stops its agent first", 1, true) ~= nil)
+            test.is_true(remove:find("thread history stays", 1, true) ~= nil)
         end)
         test.it("admits every tool through the strict catalog and keeps the no-shadow rule", function()
             local list: {Object} = {}
@@ -224,6 +228,8 @@ local function define_tests()
             refused("session_join", function(a) a.policy = "all_success" end)
             refused("session_join", function(a) a.works = {} end)
             refused("session_close", function(a) a.mode = "kill" end)
+            refused("session_remove", function(a) a.expected_incarnation = 1 end)
+            refused("session_remove", function(a) a.session = WORK end)
             refused("session_open", function(a) a.spec = {} end)
             refused("session_open", function(a) a.spec = {definition = "d", limits = {active_ms = 0}} end)
             refused("session_await", function(a) a.deadline_at = "2026-09-29T10:00:00.5+02:00" end)
@@ -247,7 +253,7 @@ local function define_tests()
         test.it("projects each tool onto exactly one owner method with the validated request", function()
             local expected = {session_catalog = "list", session_open = "open", session_run = "run", session_send = "send",
                 session_await = "await", session_join = "join", session_get = "get", session_list = "list",
-                session_cancel = "cancel", session_close = "close"}
+                session_cancel = "cancel", session_close = "close", session_remove = "remove"}
             for _, name in ipairs(session_tools.NAMES) do
                 local log: {Object} = {}
                 local owner = fake_owner(log)
@@ -331,6 +337,9 @@ local function define_tests()
             local bad_cancel = success("session_cancel")
             ;(assert(bounds.object(bad_cancel.value))).effect = "close"
             test.is_nil(session_tools.result("session_cancel", bad_cancel))
+            local bad_remove = success("session_remove")
+            ;(assert(bounds.object(bad_remove.value))).state = "closed"
+            test.is_nil(session_tools.result("session_remove", bad_remove))
         end)
     end)
 end

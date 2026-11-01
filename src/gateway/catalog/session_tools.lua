@@ -1,4 +1,4 @@
--- MIT. The ten default session MCP tools as projections of the bee.sessions
+-- MIT. The eleven default session MCP tools as projections of the bee.sessions
 -- owner contracts. The gateway validates arguments against the published
 -- closed schemas, refuses caller identity in the payload, and validates each
 -- owner reply against the published output schema. It implements no session
@@ -26,9 +26,10 @@ local TARGETS: {[string]: Target} = {
     session_list = {contract = M.CONTRACT, method = "list", mutation = false, read = true, destructive = false},
     session_cancel = {contract = M.CONTRACT, method = "cancel", mutation = true, read = false, destructive = true},
     session_close = {contract = M.CONTRACT, method = "close", mutation = true, read = false, destructive = true},
+    session_remove = {contract = M.CONTRACT, method = "remove", mutation = true, read = false, destructive = true},
 }
 M.NAMES = {"session_catalog", "session_open", "session_run", "session_send", "session_await", "session_join",
-    "session_get", "session_list", "session_cancel", "session_close"}
+    "session_get", "session_list", "session_cancel", "session_close", "session_remove"}
 
 local bundle = assert(bounds.object((json.decode(bundle_source))))
 local defs = assert(bounds.object(bundle["$defs"]))
@@ -104,7 +105,7 @@ end
 for _, name in ipairs(M.NAMES) do assert(INPUT[name], "missing session tool " .. name) end
 M.OUTPUT_SCHEMAS = OUTPUT
 
--- tools: the ten declarations. The host-linked policy reference names the
+-- tools: the eleven declarations. The host-linked policy reference names the
 -- scope the projection runs under; it never widens the owner's own checks.
 function M.tools(policy: string, read: Object, write: Object): {Tool}
     local destructive = assert(bounds.object(copy(write)))

@@ -271,7 +271,7 @@ local TOOLS: {Tool} = {
             idempotency_key = {type = "string", minLength = 1, maxLength = 64},
         }}},
 }
--- The ten default session tools project the bee.sessions owner contracts.
+-- The eleven default session tools project the bee.sessions owner contracts.
 for _, tool in ipairs(session_tools.tools(TOOL_POLICY_REFS.session, READ_ANNOTATIONS, WRITE_ANNOTATIONS)) do
     TOOLS[#TOOLS + 1] = tool
 end

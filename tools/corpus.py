@@ -97,6 +97,23 @@ REQUEST_EXAMPLE = """```yaml
         reason: Show the documents in your docs folder
 ```"""
 
+CAPABILITY_USAGE = {
+    "workspace.files.watch": """Watches are not recursive: watch each folder of interest, and a file's containing folder to see atomic saves. Each event has `kind` (`change` or `rescan`), `resource`, `path` (relative to the volume root) and `operation` (`create`, `write`, `rename`, `remove` or `other`). A `rescan` arrives first and then every five seconds; on it, list the folder again, because the operating system can merge or drop notices. A process may hold 32 watches. For example, with the `ioevents`, `funcs` and `channel` modules:
+
+```lua
+local granted = funcs.new():call("bee.gov.binding:granted_resources", {})
+local watch, err = ioevents.watch(granted.value.volumes["docs"], ".")
+if not watch then return nil, err end
+local events = watch:channel()
+while true do
+    local event, ok = events:receive()
+    if not ok then break end
+    -- event.kind, event.path, event.operation
+end
+watch:close()
+```""",
+}
+
 AUTHOR_ERRORS = [
     ("`<app> has meta.application but meta.type bee.app; an application declares meta.type bee.application`",
      "the application entry carries another meta.type; set `meta.type: bee.application`."),
@@ -159,6 +176,8 @@ def capability_page() -> str:
         parts.extend([f"## {cap['id']}", "", f"{cap['id']}: {cap['text']}. Risk class: {cap['confirm']}. Template revision: {cap['revision']}.", ""])
         if cap['id'] == 'hub.self_update':
             parts.extend(["Host-only: only the person-operated Library receives this grant; an authored app cannot request Bee self-update.", ""])
+        if cap['id'] in CAPABILITY_USAGE:
+            parts.extend([CAPABILITY_USAGE[cap['id']], ""])
         parts.extend(["Parameters: " + (", ".join(f"{name}: {kind}" for name, kind in cap["parameters"].items()) or "none") + ".",
             "Runtime modules admitted by this capability: " + (", ".join(cap.get("modules", [])) or "none") + ".",
             "Agent tools for an approved attempt: " + (", ".join(cap.get("tools", [])) or "none") + ".", "",

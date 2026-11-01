@@ -26,7 +26,13 @@ local events = watch:channel()
 ```
 
 Watches target one directory under an admitted host filesystem. Files, escaped
-paths and unsupported virtual providers are rejected. Watches are not recursive:
+paths and unsupported virtual providers are rejected. Containment is resolved
+when the watch starts; the backend installs its watch by path, so a folder
+component replaced by an outside symlink between that check and the install is
+watched where it points. Failures carry error kinds: `Invalid` for a bad path or
+a file, `PermissionDenied` for a symlink escape or an unreadable folder,
+`NotFound`, `RateLimited` at a quota and `Unavailable` after shutdown. Messages
+name only paths relative to the resource. Watches are not recursive:
 subscribe to each directory of interest, and to a file's containing directory to
 observe atomic saves. This provider uses host filesystem paths; native code and
 the OS account remain outside Lua permission isolation, as with Bee's native

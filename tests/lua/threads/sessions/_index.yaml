@@ -120,6 +120,7 @@ entries:
       get: bee.tests.threads.sessions:fake_get
       cancel: bee.tests.threads.sessions:fake_cancel
       close: bee.tests.threads.sessions:fake_close
+      remove: bee.tests.threads.sessions:fake_remove
       list: bee.tests.threads.sessions:fake_list
       history: bee.tests.threads.sessions:fake_history
 - name: fake_catalog_owner
@@ -203,6 +204,14 @@ entries:
   kind: function.lua
   source: file://fake_owner.lua
   method: close
+  meta: {type: test_support}
+  modules: [security]
+  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.support.principals:bound, bounds: bee.drivers.values:bounds}
+
+- name: fake_remove
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: remove
   meta: {type: test_support}
   modules: [security]
   imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.support.principals:bound, bounds: bee.drivers.values:bounds}
@@ -504,3 +513,19 @@ entries:
     view: bee.threads.sessions.app:allowance_form
     forms: bee.ui.forms:forms
     appearance: bee.ui:appearance
+- name: remove_test
+  kind: function.lua
+  source: file://remove_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, sql, uuid, registry]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.drivers.values:bounds
+- name: removal_placement
+  kind: function.lua
+  source: file://interactive_placement.lua
+  modules: [security]
+  method: running
+  meta: {type: test_support}

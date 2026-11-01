@@ -7,6 +7,7 @@ local cancellation = require("cancellation")
 local time = require("time")
 local session_protocol = require("session_protocol")
 local record_values = require("record_values")
+local removal = require("removal")
 local snapshot = require("snapshot").decode
 
 local M = {}
@@ -316,6 +317,18 @@ local function cancel_settle_key(turn: string): string
     return "cancel-settle:" .. turn:sub(-72)
 end
 
+-- finish_removal completes a removal the session's close waited for.
+local function finish_removal(session: string): string?
+    local raw, read_error = journal.invoke("session_describe", {session = session})
+    local stored = object(raw)
+    if read_error or not stored then return read_error or "closed session unavailable" end
+    if stored.removal_requested ~= true or stored.state ~= "closed" then return nil end
+    local remove_key, key_error = internal_key("remove-final", session)
+    if not remove_key then return key_error or "cannot derive the removal key" end
+    local _, remove_error = removal.complete(stored, remove_key)
+    return remove_error
+end
+
 finish_closing = function(session: string, operation_key: string): string?
     local current, current_error = describe(session)
     if not current then return current_error or "closing session unavailable" end
@@ -375,7 +388,8 @@ finish_closing = function(session: string, operation_key: string): string?
     if not close_key then return key_error or "cannot derive final close operation key" end
     local _, close_error = journal.invoke("session_transition", {session = session, state = "closed",
         expected_revision = current.revision, operation_key = close_key})
-    return close_error
+    if close_error then return close_error end
+    return finish_removal(session)
 end
 
 function M.join(raw_request: unknown): Reply
@@ -505,6 +519,7 @@ M.identity = identity
 M.key = key
 M.ref = ref
 M.finish_closing = finish_closing
+M.finish_removal = finish_removal
 M.describe = describe
 M.work_value = work_value
 M.operation_state = operation_state

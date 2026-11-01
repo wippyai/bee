@@ -5,7 +5,7 @@ local funcs = require("funcs")
 local M = {}
 M.CONTRACT = "bee.threads:journal"
 M.BINDING_REF = "bee.threads.sessions.env:threads_journal_ref"
-M.METHODS = {"session_create", "session_attach", "session_describe", "session_scan", "session_transition", "work_send", "work_describe", "work_await",
+M.METHODS = {"session_create", "session_attach", "session_describe", "session_scan", "session_transition", "session_remove", "work_send", "work_describe", "work_await",
     "work_history", "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "turn_observation", "work_settle", "work_uncertain", "work_cancel",
     "operation_lookup", "operation_describe", "feed_read"}
 
@@ -61,24 +61,38 @@ local function resolve(): (Targets?, string?)
     return targets, nil
 end
 
-function M.invoke(method: string, request: unknown): (unknown?, string?)
+type Fault = {code: string, message: string}
+
+-- call invokes one journal operation and returns its value, or the code and
+-- message of its refusal.
+function M.call(method: string, request: unknown): (unknown?, Fault?)
     local allowed = false
     for _, name in ipairs(M.METHODS) do if name == method then allowed = true; break end end
-    if not allowed then return nil, "UNSUPPORTED: unknown Threads journal operation" end
+    if not allowed then return nil, {code = "UNSUPPORTED", message = "unknown Threads journal operation"} end
     local targets, resolve_error = resolve()
-    if not targets then return nil, resolve_error end
+    if not targets then return nil, {code = "UNAVAILABLE", message = tostring(resolve_error)} end
     local target = (targets)[method]
-    if not target then return nil, "Threads journal binding omits " .. method end
+    if not target then return nil, {code = "UNAVAILABLE", message = "Threads journal binding omits " .. method} end
     local raw, call_error = funcs.call(target, request)
-    if call_error then return nil, tostring(call_error) end
+    if call_error then return nil, {code = "UNAVAILABLE", message = tostring(call_error)} end
     local reply = object(raw)
-    if not reply then return nil, "Threads journal returned a malformed Reply" end
+    if not reply then return nil, {code = "UNAVAILABLE", message = "Threads journal returned a malformed Reply"} end
     if reply.ok == true then return reply.value, nil end
     if reply.ok == false then
         local fault = object(reply.error)
-        return nil, fault and tostring(fault.message or fault.code) or "Threads journal refused the operation"
+        local code = fault and type(fault.code) == "string" and fault.code or "UNAVAILABLE"
+        return nil, {code = code, message = fault and tostring(fault.message or fault.code) or "Threads journal refused the operation"}
     end
-    return nil, "Threads journal returned a malformed Reply"
+    return nil, {code = "UNAVAILABLE", message = "Threads journal returned a malformed Reply"}
+end
+
+function M.invoke(method: string, request: unknown): (unknown?, string?)
+    local value, fault = M.call(method, request)
+    if fault then
+        if fault.code == "UNSUPPORTED" then return nil, "UNSUPPORTED: " .. fault.message end
+        return nil, fault.message
+    end
+    return value, nil
 end
 
 function M.target(method: string): (string?, string?)

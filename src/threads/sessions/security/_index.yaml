@@ -23,6 +23,7 @@ entries:
     - bee.threads.binding:session_describe
     - bee.threads.binding:session_scan
     - bee.threads.binding:session_transition
+    - bee.threads.binding:session_remove
     - bee.threads.binding:work_send
     - bee.threads.binding:work_describe
     - bee.threads.binding:work_await
@@ -93,6 +94,16 @@ entries:
     - funcs.security
     resources: '*'
     expression: action == "funcs.security" || resource == actor.id
+    effect: allow
+- name: owner_removal_policy
+  kind: security.policy.expr
+  meta:
+    comment: Removing a session asks each owner to forget what it keeps for that session
+  policy:
+    actions: [registry.find, funcs.call, bee.gateway.manage]
+    resources: '*'
+    expression: (action == "registry.find" && resource == "*") || (action == "bee.gateway.manage" && resource == "bindings") || (action == "funcs.call" && resource in ["bee.placement.native.binding:forget_session",
+      "bee.gateway.binding:forget_session", "bee.harness.binding:forget_session_windows"])
     effect: allow
 - name: owner_registry_read_policy
   kind: security.policy

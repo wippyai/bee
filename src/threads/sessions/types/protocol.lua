@@ -48,6 +48,9 @@ type WorkState = {work: string, session: string, sender: Sender, revision: integ
 type ControlReceipt = {operation: string, subject: string, state: "requested",
     effect: "cancel" | "close"}
 type Cleanup = "complete" | "pending" | "uncertain"
+-- A removal is removing while the agent of a session that was not closed is
+-- stopped, and removed once the session is gone.
+type Removal = {operation: string, session: string, state: "removed" | "removing"}
 type ControlResult = {effect: "cancel", state: "stopped" | "already_terminal", work: string, evidence: Evidence}
     | {effect: "close", state: "closed", session: string, cleanup: Cleanup}
 type OperationResult = {kind: "receipt", value: OperationReceipt} | {kind: "control", value: ControlResult} | {kind: "result", result: Result}
@@ -384,6 +387,15 @@ function M.decode_control_receipt(value: unknown): (ControlReceipt?, string?)
         return nil, "control receipt is malformed"
     end
     return {operation = operation, subject = subject, state = "requested", effect = effect == "close" and "close" or "cancel"}, nil
+end
+
+function M.decode_removal(value: unknown): (Removal?, string?)
+    local object, failure = shape(value, "removal", {"operation", "session", "state"})
+    if not object then return nil, failure end
+    local operation, session = M.ref("operation", object.operation), M.ref("session", object.session)
+    local state = one_of(object.state, {"removed", "removing"})
+    if not operation or not session or not state then return nil, "removal is malformed" end
+    return {operation = operation, session = session, state = state == "removed" and "removed" or "removing"}, nil
 end
 
 local function decode_control_result(value: unknown): (ControlResult?, string?)

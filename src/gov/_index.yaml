@@ -397,6 +397,7 @@ entries:
     - bee.gateway.binding:external
     - bee.gateway.binding:external_backend
     - bee.gateway.binding:external_call
+    - bee.gateway.binding:forget_session
     - bee.gateway.binding:gateway
     - bee.gateway.binding:hook_ack
     - bee.gateway.binding:hook_claim
@@ -743,6 +744,7 @@ entries:
     - bee.harness.binding:call
     - bee.harness.binding:capabilities
     - bee.harness.binding:extension_hook
+    - bee.harness.binding:forget_session_windows
     - bee.harness.binding:locate_probe
     - bee.harness.binding:permission_hook
     - bee.harness.binding:present
@@ -1052,6 +1054,7 @@ entries:
     - bee.placement.native.binding:cleanup
     - bee.placement.native.binding:close_stdin
     - bee.placement.native.binding:evidence
+    - bee.placement.native.binding:forget_session
     - bee.placement.native.binding:measure_executable
     - bee.placement.native.binding:prepare
     - bee.placement.native.binding:process_backend
@@ -1289,6 +1292,7 @@ entries:
     - bee.threads.binding:session_attach
     - bee.threads.binding:session_create
     - bee.threads.binding:session_describe
+    - bee.threads.binding:session_remove
     - bee.threads.binding:session_scan
     - bee.threads.binding:session_transition
     - bee.threads.binding:start_attempt
@@ -1443,6 +1447,8 @@ entries:
     - bee.threads.sessions.binding:peer_authorize
     - bee.threads.sessions.binding:peers
     - bee.threads.sessions.binding:remote
+    - bee.threads.sessions.binding:removal
+    - bee.threads.sessions.binding:remove
     - bee.threads.sessions.binding:restore
     - bee.threads.sessions.binding:run
     - bee.threads.sessions.binding:send

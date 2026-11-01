@@ -13,7 +13,7 @@ local windows = require("windows")
 local M = {}
 M.APP = "bee.harness.app:app"
 M.SCOPES = {list = {"list", "get", "history", "catalog"}, message = {"list", "get", "history", "catalog", "send", "await", "join"},
-    open = {"list", "get", "history", "catalog", "send", "await", "join", "open", "run", "cancel", "close"}}
+    open = {"list", "get", "history", "catalog", "send", "await", "join", "open", "run", "cancel", "close", "remove"}}
 type Object = {[string]: unknown}
 local function id(peer: string, workspace: string): string
     return "bee.threads.sessions.allowances:" .. assert(hash.sha256(peer .. "\n" .. workspace))

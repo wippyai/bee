@@ -691,6 +691,48 @@ function M.close(raw_request: unknown): Reply
     return succeed(control_receipt(operation, session, "close"))
 end
 
+local REMOVAL_CODES: {[string]: string} = {NOT_FOUND = "NOT_FOUND", DENIED = "DENIED", CONFLICT = "CONFLICT", INVALID_ARGUMENT = "INVALID"}
+
+local function removal_fault(fault: {code: string, message: string}, operation_key: string): Reply
+    local code = REMOVAL_CODES[fault.code]
+    if code then return fail(code, fault.message, operation_key) end
+    return unavailable(fault.message, operation_key)
+end
+
+-- remove deletes a session and what Bee keeps only for it; its thread and
+-- records stay. The request is recorded first. A session that is not closed
+-- closes: its agent stops, and the close completes the removal once
+-- placement proves the agent exited. Until then the session is removing.
+function M.remove(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request)
+    if not request then return assert(refused) end
+    local operation_key = key(request.operation_key)
+    local session = ref(request.session)
+    if not operation_key or not session or session:sub(1, 3) ~= "bs:" or bounds.fields(request, {"session", "operation_key"}) then
+        return fail("INVALID", "remove requires a session and operation_key", operation_key)
+    end
+    local current = describe(session)
+    local recorded, record_fault = journal.call("session_remove", {session = session, operation_key = operation_key})
+    if record_fault then return removal_fault(record_fault, operation_key) end
+    local receipt = object(recorded)
+    local operation = receipt and ref(receipt.operation)
+    if not operation then return unavailable("Threads returned a malformed removal receipt", operation_key) end
+    if current then
+        if current.lifecycle ~= "closing" and current.lifecycle ~= "closed" then
+            local close_key = assert(internal_key("remove-close", operation_key))
+            local _, transition_fault = journal.call("session_transition", {session = session, state = "closing", operation_key = close_key})
+            if transition_fault then return removal_fault(transition_fault, operation_key) end
+        end
+        local finish_error: string?
+        if current.lifecycle == "closed" then finish_error = part_observation.finish_removal(session)
+        else finish_error = finish_closing(session, operation_key) end
+        if finish_error then return unavailable(finish_error, operation_key) end
+    end
+    local _, absent = journal.call("session_describe", {session = session})
+    if absent and absent.code ~= "NOT_FOUND" then return unavailable(absent.message, operation_key) end
+    return succeed({operation = operation, session = session, state = absent and "removed" or "removing"})
+end
+
 function M.cancel(raw_request: unknown): Reply
     local request, refused = request_input(raw_request)
     if not request then return assert(refused) end
@@ -778,7 +820,7 @@ function M.run(raw_request: unknown): Reply
         expected_incarnation = 1, operation_key = operation_key})
 end
 
-for _, name in ipairs({"open", "run", "send", "await", "join", "get", "history", "cancel", "close", "catalog"}) do
+for _, name in ipairs({"open", "run", "send", "await", "join", "get", "history", "cancel", "close", "remove", "catalog"}) do
     local local_method = M[name]
     M[name] = function(raw: unknown): Reply
         local input = object(raw)

@@ -8,7 +8,7 @@ local function define_tests()
     test.describe("Sessions owner boundary", function()
         test.it("rejects non-object requests through every registered method", function()
             for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "history",
-                "cancel", "close", "catalog", "attach", "detach", "hook_boundary", "attention_count"}) do
+                "cancel", "close", "remove", "catalog", "attach", "detach", "hook_boundary", "attention_count"}) do
                 local raw, problem = funcs.call("bee.threads.sessions.binding:" .. method, "invalid")
                 test.is_nil(problem, method)
                 local reply = assert(bounds.object(raw))
@@ -23,7 +23,7 @@ local function define_tests()
             changes:update({id = original.id, kind = replacement.kind, meta = replacement.meta, data = replacement.data})
             assert(changes:apply())
             local ok, failure = pcall(function()
-                for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close", "catalog"}) do
+                for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close", "remove", "catalog"}) do
                     local raw, err = funcs.call("bee.threads.sessions.binding:" .. method, {node = "peer-test", operation_key = "key/" .. method})
                     test.is_nil(err)
                     local reply = assert(bounds.object(raw))
@@ -45,7 +45,7 @@ local function define_tests()
             if not ok then error(tostring(failure)) end
         end)
         test.it("accepts node additively while rejecting invalid targets", function()
-            for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close", "catalog"}) do
+            for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close", "remove", "catalog"}) do
                 local raw, err = funcs.call("bee.threads.sessions.binding:" .. method, {node = "", operation_key = "k"})
                 test.is_nil(err)
                 local reply = assert(bounds.object(raw))

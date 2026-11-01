@@ -7,7 +7,7 @@ local function define_tests()
     test.describe("Shared confirmation presentation", function()
         test.it("records each inline keyboard gesture once and withdraws Escape", function()
             for _, action in ipairs({"library.review", "library.remove", "library.back", "hub.apply", "hub.recover", "app.stop",
-                "close", "close_listed", "stop", "profile.remove", "docker.revoke", "mcp.revoke", "login.acknowledge"}) do
+                "close", "close_listed", "remove", "remove_listed", "stop", "profile.remove", "docker.revoke", "mcp.revoke", "login.acknowledge"}) do
                 local records = fixture.new()
                 local state = confirmation.new({workspace_id = "workspace", origin = {instance_id = "origin-instance"}},
                     function(target, request) return fixture.ask(records, target, request) end)

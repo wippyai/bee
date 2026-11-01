@@ -158,6 +158,25 @@ function M.close(conv: Conversation, key: string): boolean
     return true
 end
 
+-- Removes the session, stopping its agent first; its thread stays. The key
+-- makes a retry resolve the same removal.
+function M.remove(conv: Conversation, key: string): boolean
+    if conv.node and conv.peer_scope ~= "open" then conv.notice = "Session control is not allowed by this bee"; return false end
+    local removal, fault = conv.session:remove({operation_key = key})
+    if not removal then
+        conv.notice = describe(fault)
+        return false
+    end
+    conv.notice = ""
+    return true
+end
+
+-- removal_message names what removing a session takes away and what stays.
+function M.removal_message(title: string, lifecycle: string): string
+    local stopped = lifecycle ~= "closed" and " Its agent is stopped first." or ""
+    return "Remove session " .. title .. "? Its thread history stays." .. stopped .. " Enter confirms · Esc keeps it"
+end
+
 local function render(value: unknown): string
     if type(value) == "string" then return value end
     local object = bounds.object(value)

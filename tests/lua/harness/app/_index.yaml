@@ -66,6 +66,34 @@ entries:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     client: bee.node:client
+- name: remove_session_test
+  kind: function.lua
+  source: file://remove_session_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [tty, system, time, channel, registry, process, funcs]
+  imports:
+    bounds: bee.drivers.values:bounds
+    test: wippy.test:test
+    client: bee.node:client
+    owner: bee.tests.harness.app:removable_owner
+- name: removable_list
+  kind: function.lua
+  source: file://removable_owner.lua
+  method: list
+  meta: {type: test_support}
+  modules: [process]
+- name: removable_remove
+  kind: function.lua
+  source: file://removable_owner.lua
+  method: remove
+  meta: {type: test_support}
+  modules: [process]
+- name: removable_owner
+  kind: library.lua
+  source: file://removable_owner.lua
+  meta: {type: test_support}
+  modules: [process]
 - name: direct_restore_test
   kind: function.lua
   source: file://direct_restore_test.lua

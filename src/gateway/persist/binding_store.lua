@@ -64,6 +64,27 @@ function M.advance_credential_generation(db: sql.DB, binding_id: string, expecte
     return db:execute("UPDATE bee_gateway_bindings SET credential_generation = ? WHERE binding_id = ? AND credential_generation = ?", {expected + 1, binding_id, expected})
 end
 
+-- by_subject lists the bindings issued to one subject.
+function M.by_subject(db: sql.DB | sql.Transaction, subject: string)
+    return db:query("SELECT * FROM bee_gateway_bindings WHERE subject = ? ORDER BY created_at, binding_id", {subject})
+end
+
+-- forget_subject deletes the bindings issued to one subject with their
+-- credentials, hooks, surfaces and access receipts.
+function M.forget_subject(tx: sql.Transaction, subject: string): (integer?, string?)
+    local owned = "SELECT binding_id FROM bee_gateway_bindings WHERE subject = ?"
+    for _, statement in ipairs({"DELETE FROM bee_gateway_credentials WHERE binding_id IN (" .. owned .. ")",
+        "DELETE FROM bee_gateway_hooks WHERE binding_id IN (" .. owned .. ")",
+        "DELETE FROM bee_gateway_surfaces WHERE binding_id IN (" .. owned .. ")",
+        "DELETE FROM bee_gateway_access_receipts WHERE binding_id IN (" .. owned .. ")"}) do
+        local _, err = tx:execute(statement, {subject})
+        if err then return nil, tostring(err) end
+    end
+    local result, err = tx:execute("DELETE FROM bee_gateway_bindings WHERE subject = ?", {subject})
+    if err or not result then return nil, tostring(err or "delete subject bindings") end
+    return math.floor(tonumber(result.rows_affected) or 0), nil
+end
+
 function M.revoke(db: sql.DB, binding_id: string, at: string)
     return db:execute("UPDATE bee_gateway_bindings SET revoked_at = COALESCE(revoked_at, ?), sealed_at = COALESCE(sealed_at, ?) WHERE binding_id = ?", {at, at, binding_id})
 end

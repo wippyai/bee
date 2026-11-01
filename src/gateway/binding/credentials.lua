@@ -9,6 +9,7 @@ local binding_store = require("binding_store")
 local credential_store = require("credential_store")
 local subject_call = require("subject_call")
 local hook_store = require("hook_store")
+local authority = require("authority")
 local part_listener = require("part_listener")
 local part_model = require("part_model")
 local part_records = require("part_records")
@@ -339,6 +340,49 @@ function M.revoke_attempt(value: unknown): Reply
     db:release()
     if reject_error then return fail("STORAGE", "reject queued hooks") end
     return succeed({attempt_id = attempt_id, carrier_epoch = carrier_epoch, revoked = revoked, revocation = revocation})
+end
+-- forget_session: the Sessions owner removing a session deletes every
+-- binding issued to it. A binding still open first withdraws the approvals
+-- its origin asked for; the bindings, their credentials, hooks, surfaces,
+-- access receipts and the session's gateway access grants then go in one
+-- transaction.
+function M.forget_session(value: unknown): Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"session", "thread_id", "owner_id"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local session = bounds.id(object.session)
+    if not session or session:sub(1, 3) ~= "bs:" then return fail("INVALID", "session is not a session ref") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    if not security.can(part_model.MANAGE, "bindings") then return fail("DENIED", "caller does not manage gateway bindings") end
+    local db, open_failure = open()
+    if not db then return open_failure end
+    local rows, rows_error = binding_store.by_subject(db, session)
+    if rows_error or not rows then db:release(); return fail("STORAGE", "read session bindings") end
+    for _, raw in ipairs(rows) do
+        local row = bounds.object(raw)
+        local id = row and bounds.id(row.binding_id)
+        if not id then db:release(); return fail("STORAGE", "invalid session binding") end
+        local binding, missing = binding_by_id(db, id)
+        if not binding then db:release(); return missing end
+        if not binding.revoked then
+            local closed = close_origin(binding)
+            if not closed.ok then db:release(); return closed end
+        end
+    end
+    local tx, begin_error = db:begin()
+    if not tx or begin_error then db:release(); return fail("STORAGE", "open session binding removal") end
+    local removed, remove_error = binding_store.forget_subject(tx, session)
+    local grant_error = removed and authority.forget_requester(tx, "gateway_access", session) or nil
+    if not removed or grant_error then
+        tx:rollback(); db:release()
+        return fail("STORAGE", "remove session bindings: " .. tostring(remove_error or grant_error))
+    end
+    local committed, commit_error = tx:commit()
+    if not committed then tx:rollback() end
+    db:release()
+    if not committed then return fail("STORAGE", "commit session binding removal: " .. tostring(commit_error)) end
+    return succeed({bindings = removed})
 end
 -- renew_attempt: placement's supervision extends the bindings a live attempt
 -- holds at or below its carrier epoch by their recorded term once less than

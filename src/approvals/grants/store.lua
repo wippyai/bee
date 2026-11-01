@@ -247,6 +247,13 @@ end
 function M.retire_effect(tx: sql.Transaction | sql.DB, destination: string, effect: string): string?
     return execute(tx,"DELETE FROM bee_approval_grant_effects WHERE destination = ? AND effect_id = ?",{destination,effect})
 end
+-- forget_requester deletes the grants of one domain a requester holds, with
+-- their revocation effects; their history and uses go with them.
+function M.forget_requester(tx: sql.Transaction | sql.DB, domain: string, requester: string): string?
+    local err = execute(tx,"DELETE FROM bee_approval_grant_effects WHERE grant_id IN (SELECT grant_id FROM bee_approval_grants WHERE domain = ? AND requester_id = ?)",{domain,requester})
+    if err then return err end
+    return execute(tx,"DELETE FROM bee_approval_grants WHERE domain = ? AND requester_id = ?",{domain,requester})
+end
 function M.convert_decision(tx: sql.Transaction | sql.DB, record: Grant): string?
     local existing, err = M.read(tx,record.grant_id)
     if not existing then return err or "legacy decision grant is missing" end

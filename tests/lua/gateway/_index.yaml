@@ -387,3 +387,15 @@ entries:
     actions: [db.get]
     resources: [bee.tests.gateway:hook_occurrence_migration_db]
     effect: allow
+- name: forget_session_test
+  kind: function.lua
+  source: file://forget_session_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: 120s}
+  modules: [funcs, security, registry, time]
+  imports:
+    bounds: bee.drivers.values:bounds
+    test: wippy.test:test
+    principals: bee.tests.support.principals:bound
+    shared_authority: bee.tests.support:authority
+    harness: bee.tests.threads:harness

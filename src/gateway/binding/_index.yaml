@@ -120,6 +120,24 @@ entries:
     - bee.gateway.security:trait_registry_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
+- name: forget_session
+  kind: function.lua
+  meta:
+    type: bee.sessions.forget
+  source: file://forget_session_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:origin_cleanup_policy
+    - bee.gateway.security:address_call_policy
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:grant_context_policy
+    - bee.gateway.security:trait_registry_policy
+    - bee.gateway.security:address_policy
+    - bee.gateway.security:supervisor_policy
 - name: check
   kind: function.lua
   source: file://check_method.lua
@@ -588,6 +606,7 @@ entries:
     credential_store: bee.gateway.persist:credential_store
     subject_call: bee.gateway.security:subject_call
     hook_store: bee.gateway.persist:hook_store
+    authority: bee.approvals.grants:store
     part_model: bee.gateway.binding:model
     part_values: bee.gateway.binding:values
     part_records: bee.gateway.binding:records

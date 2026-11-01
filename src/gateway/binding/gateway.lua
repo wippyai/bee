@@ -53,6 +53,7 @@ M.reissue = part_credentials.reissue
 M.revoke = part_credentials.revoke
 M.seal = part_credentials.seal
 M.revoke_attempt = part_credentials.revoke_attempt
+M.forget_session = part_credentials.forget_session
 M.renew_attempt = part_credentials.renew_attempt
 M.check = part_credentials.check
 M.drain = part_listener.drain

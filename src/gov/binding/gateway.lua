@@ -101,7 +101,8 @@ local function granted_resources(_request: unknown): Reply
     for _, raw_grant in ipairs((record.capabilities or {})) do
         local grant = bounds.object(raw_grant)
         local scope = grant and bounds.object(grant.scope) or nil
-        if grant and scope and (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write") then
+        if grant and scope and (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write"
+            or grant.capability == "workspace.files.watch") then
             local id, id_error = files.volume_id(record.overlay_owner, record.folder, scope.subpath)
             if not id then return fail("UNAVAILABLE", tostring(id_error)) end
             volumes[scope.subpath] = id

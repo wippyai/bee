@@ -427,7 +427,7 @@ function M.render(catalog: Vocabulary, grants_raw: unknown): ({string}?, string?
             return printable(params[key])
         end)
         lines[#lines + 1] = rendered
-        if id == "workspace.files.read" then reads[#reads + 1] = "Workspace files under " .. printable(params.subpath) end
+        if id == "workspace.files.read" or id == "workspace.files.watch" then reads[#reads + 1] = "Workspace files under " .. printable(params.subpath) end
         if id == "threads.read" then reads[#reads + 1] = "Owned thread content" end
         if id == "app.database" then reads[#reads + 1] = "Application database " .. printable(params.name) end
         if id == "hive.call" then egress[#egress + 1] = "Hive nodes " .. printable(params.nodes) end

@@ -107,6 +107,13 @@ function M.expression(capability: unknown): boolean
     return type(capability) == "string" and EXPRESSION_CAPABILITIES[capability] == true
 end
 
+-- The workspace file capabilities and the operation each one grants.
+local WORKSPACE_FILE_OPERATIONS: {[string]: string} = {
+    ["workspace.files.read"] = "files.read",
+    ["workspace.files.write"] = "files.write",
+    ["workspace.files.watch"] = "files.watch",
+}
+
 -- Each installable catalog entry materializes into generated host entries: a
 -- policy plus the host-created volume, database or executor it authorizes. A
 -- Hive exposure grant materializes into an exposure-scope policy over exactly
@@ -124,12 +131,12 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
                 resources = {"bee.threads.binding:get", "bee.threads.binding:list",
                     "bee.threads.binding:read_after"}, effect = "allow"}}})
     end
-    if (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write")
-        and (grant.operation == "files.read" or grant.operation == "files.write")
+    if WORKSPACE_FILE_OPERATIONS[grant.capability] == grant.operation
         and grant.resource == "workspace" and type(scope.subpath) == "string" then
         local writable = grant.capability == "workspace.files.write"
+        local watch = grant.capability == "workspace.files.watch"
         local volume, volume_error = files.volume(owner, folder, scope.subpath, writable)
-        local generated, policy_error = volume and files.file_policy(owner, folder, scope.subpath, writable, id) or nil
+        local generated, policy_error = volume and files.file_policy(owner, folder, scope.subpath, writable, id, watch) or nil
         if not volume or not generated then
             return nil, volume_error or policy_error or "workspace file grant is not installable"
         end
@@ -255,7 +262,7 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
     local volumes: {Object} = table.create(1, 0)
     local databases: {Object} = table.create(1, 0)
     local executors: {Object} = table.create(1, 0)
-    local volume_ids: {[string]: boolean} = {}
+    local volume_ids: {[string]: integer} = {}
     local database_ids: {[string]: boolean} = {}
     local executor_ids: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
@@ -285,10 +292,15 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
         pairs_by_id[id] = {grant = resolved_operations[1], policy = generated.policy}
         ids[#ids + 1] = id
         if volume then
+            -- Grants on one folder share its volume; a writable grant's
+            -- volume serves the read-only grants on that folder too.
             local volume_id = (volume).id
-            if not volume_ids[volume_id] then
-                volume_ids[volume_id] = true
+            local index = volume_ids[volume_id]
+            if not index then
                 volumes[#volumes + 1] = volume
+                volume_ids[volume_id] = #volumes
+            elseif (bounds.object(volume.data) or {}).readonly ~= true then
+                volumes[index] = volume
             end
         end
         if database then

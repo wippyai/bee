@@ -265,16 +265,17 @@ end
 
 -- Acquisition is the policy boundary; the installed volume's readonly flag
 -- enforces the read-only mode below it. The same grant lets the application
--- read its own granted identities from the gateway.
+-- read its own granted identities from the gateway, and a watch grant lets the
+-- ioevents module subscribe to change notices for that volume.
 function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown, writable_raw: unknown,
-    policy_id_raw: unknown): (Policy?, string?)
+    policy_id_raw: unknown, watch_raw: unknown): (Policy?, string?)
     local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, writable_raw)
     local id = bounds.id(policy_id_raw)
     if not volume or not id then
         return nil, volume_error or "file grant policy identity is invalid"
     end
-    return policy(id, {"fs.get", "funcs.call"}, {volume.id, gateway.GRANTED_RESOURCES},
-        "Host-generated workspace file grant"), nil
+    local actions = watch_raw == true and {"fs.get", "ioevents.watch", "funcs.call"} or {"fs.get", "funcs.call"}
+    return policy(id, actions, {volume.id, gateway.GRANTED_RESOURCES}, "Host-generated workspace file grant"), nil
 end
 
 -- The application reaches only its own database through this policy; every

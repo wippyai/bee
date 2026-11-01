@@ -5,6 +5,7 @@ local process = require("process")
 local M = {}
 M.WAITER = "bee.tests.harness.app.remover"
 M.MARKER = "bee.tests.harness.app.removed"
+M.LISTENER = "bee.tests.harness.app.lister"
 M.KEPT, M.DOOMED = "bs:n:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:kept", "bs:n:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:doomed"
 local STAMP = "2026-09-29T10:00:00.000Z"
 local function snapshot(session: string, title: string, at: string): {[string]: unknown}
@@ -13,6 +14,8 @@ local function snapshot(session: string, title: string, at: string): {[string]: 
         effective_limits = {}, continuity = {mode = "fresh"}, actions = {}}
 end
 function M.list(_request: unknown): {[string]: unknown}
+    local listener = process.registry.lookup(M.LISTENER)
+    if listener then process.send(tostring(listener), "bee.tests.harness.app.listed", {}) end
     local items = {snapshot(M.DOOMED, "Doomed agent", STAMP)}
     if process.registry.lookup(M.MARKER) then items = {} end
     items[#items + 1] = snapshot(M.KEPT, "Kept agent", "2026-09-29T09:00:00.000Z")

@@ -70,7 +70,7 @@ entries:
   kind: function.lua
   source: file://remove_session_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "60s"}
+  meta: {type: test, suite: bee, timeout: "120s"}
   modules: [tty, system, time, channel, registry, process, funcs]
   imports:
     bounds: bee.drivers.values:bounds

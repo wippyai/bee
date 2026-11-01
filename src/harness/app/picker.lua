@@ -237,12 +237,16 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         return {session = entry.session, incarnation = entry.incarnation, node = entry.node,
             work_id = action == "stop" and conversation and agents.current_work(conversation) or nil}
     end
+    -- prompt is the question a pending confirmation asks; it shows in place
+    -- of the status line until the person answers it.
+    local prompt = ""
     local function ask_control(action: string, message: string)
         local target = control_target(action)
         if not target then return end
         local title = action == "stop" and "Stop current work?" or (action == "remove" or action == "remove_listed") and "Remove session?" or "Close session?"
         local opened, err = confirmation.open(review, action, target, "inline", title, message)
-        status = opened and message or err or "Confirmation is unavailable"
+        prompt = message
+        if not opened then status = err or "Confirmation is unavailable" end
         dirty = true
     end
     local function accept_control(gesture: "enter" | "space" | "click" | "shortcut"): boolean
@@ -318,11 +322,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 rows = edit_frame.rows
             elseif conversation then
                 client.review(launch, conversation.review)
-                session_frame = session_view.draw(width, height, preferences, conversation, draft, status, directory)
+                session_frame = session_view.draw(width, height, preferences, conversation, draft, confirmation.active(review) and prompt or status, directory)
                 frame.render(session_frame, menu, preferences)
                 rows = session_frame.rows
             elseif not catalog_open then
-                drawn = directory_view.draw(width, height, preferences, directory, selected, status, filtered, workspace_names, show_closed)
+                drawn = directory_view.draw(width, height, preferences, directory, selected, confirmation.active(review) and prompt or status, filtered, workspace_names, show_closed)
                 frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             elseif opening and launching then

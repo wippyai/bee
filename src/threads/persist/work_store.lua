@@ -53,6 +53,7 @@ M.session_describe = part_session_store.session_describe
 M.node_summary = part_session_store.node_summary
 M.session_scan = part_session_store.session_scan
 M.session_transition = part_session_store.session_transition
+M.session_remove = part_session_store.session_remove
 local part_work_records = require("part_work_records")
 local budget_json = part_work_records.budget_json
 type Turn = journal.Turn

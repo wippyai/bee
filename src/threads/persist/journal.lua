@@ -390,6 +390,36 @@ function M.settle_work(tx: sql.Transaction, next_revision: integer, checked_json
         "WHERE work_ref = ? AND phase = 'accepted'", {next_revision, checked_json, work_ref}, "settle work")
 end
 
+-- removal_requested reports whether a removal of the session waits for its
+-- close.
+function M.removal_requested(tx: sql.Transaction, session_ref: string): (boolean?, string?)
+    local row, err = query_one(tx, "SELECT COUNT(*) AS count FROM bee_session_operations WHERE operation = 'session_remove' AND target_ref = ?", {session_ref}, "session removal")
+    if err or not row then return nil, err or "read session removal" end
+    return (integer(row.count) or 0) > 0, nil
+end
+
+-- remove_session deletes the rows the journal keeps only for one closed
+-- session, children first. The session's thread, its records and the
+-- receipts of its removal stay.
+function M.remove_session(tx: sql.Transaction, session_ref: string): string?
+    for _, statement in ipairs({
+        "DELETE FROM bee_session_hook_originals WHERE session_ref = ?",
+        "DELETE FROM bee_session_hook_invocations WHERE session_ref = ?",
+        "DELETE FROM bee_session_trait_intervals WHERE session_ref = ?",
+        "DELETE FROM bee_session_traits WHERE session_ref = ?",
+        "DELETE FROM bee_session_operations WHERE operation <> 'session_remove' AND (target_ref = ?1 OR target_ref IN (SELECT work_ref FROM bee_session_work WHERE session_ref = ?1) OR target_ref IN (SELECT turn_ref FROM bee_session_turns WHERE session_ref = ?1))",
+        "DELETE FROM bee_session_work_cancellations WHERE work_ref IN (SELECT work_ref FROM bee_session_work WHERE session_ref = ?)",
+        "DELETE FROM bee_session_turns WHERE session_ref = ?",
+        "DELETE FROM bee_session_work WHERE session_ref = ?",
+        "DELETE FROM bee_thread_carriers WHERE checkpoint_json IS NOT NULL AND json_extract(checkpoint_json, '$.retained_session_ref') = ?",
+        "DELETE FROM bee_sessions WHERE session_ref = ?",
+    }) do
+        local err = execute(tx, statement, {session_ref}, "remove session")
+        if err then return err end
+    end
+    return nil
+end
+
 function M.save_context(tx: sql.Transaction, context_json: string, now: string, session_ref: string): string?
     return execute(tx, "UPDATE bee_sessions SET context_json = ?, updated_at = ? WHERE session_ref = ?", {context_json, now, session_ref}, "save session context")
 end

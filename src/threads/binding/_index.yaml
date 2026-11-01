@@ -700,6 +700,18 @@ entries:
     policies:
     - bee.threads.security:store
     - bee.threads.security:node_identity
+- name: session_remove
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_remove
+  imports:
+    boundary: bee.threads.service:boundary
+    work_store: bee.threads.persist:work_store
+    types: bee.threads:types
+  security:
+    policies:
+    - bee.threads.security:store
+    - bee.threads.security:node_identity
 - name: work_send
   kind: function.lua
   source: file://work_store_method.lua
@@ -1045,6 +1057,7 @@ entries:
       route_capability: bee.threads.binding:route_capability
       session_scan: bee.threads.binding:session_scan
       session_transition: bee.threads.binding:session_transition
+      session_remove: bee.threads.binding:session_remove
       work_send: bee.threads.binding:work_send
       work_describe: bee.threads.binding:work_describe
       work_await: bee.threads.binding:work_await

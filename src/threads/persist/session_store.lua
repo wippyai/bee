@@ -253,7 +253,9 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
             if ended == nil then return transaction.storage_failure(ended_error or "read attempt turns") end
             attempt_turn_ended = ended
         end
-        return transaction.success({session = session.session_ref, thread_ref = session.thread_id, workspace = session.workspace_id,
+        local removal, removal_error = journal.removal_requested(tx, session_ref)
+        if removal == nil then return transaction.storage_failure(removal_error or "read session removal") end
+        return transaction.success({session = session.session_ref, thread_ref = session.thread_id, workspace = session.workspace_id, removal_requested = removal,
             active_turn = active_turn and {turn = active_turn.turn_ref, claim = active_turn.claim_token, work = active_turn.work_ref,
                 owner_epoch = active_turn.owner_epoch, phase = active_turn.phase, last_progress_at_ms = active_turn.last_progress_at_ms} or nil,
             last_result = last_result, title = title, state = session.state, route = route,
@@ -385,6 +387,52 @@ function M.session_transition(db: sql.DB, actor: string, request: unknown): Resu
         local receipt = {session = session_ref, operation = op_ref, state = target, revision = revision,
             committed_at = now, sequence = sequence}
         return finish_operation(tx, caller, workspace, operation_key, op_ref, "session_transition", request_digest, session_ref, receipt, now)
+    end)
+end
+
+-- session_remove records a request to remove a session; the request stays
+-- as its receipt. With delete, a closed session whose removal was requested
+-- loses the rows the journal keeps only for it, and its thread records that
+-- it was removed.
+function M.session_remove(db: sql.DB, actor: string, request: unknown): Result
+    local caller, home, denied = authenticated(actor, true)
+    if denied then return denied end
+    local caller = assert(caller)
+    local input = object(request)
+    if not input or not has_only(input, {session = true, operation_key = true, delete = true}) then return missing_request() end
+    local session_ref, operation_key = ref(input.session), key(input.operation_key)
+    if not session_ref or not operation_key or (input.delete ~= nil and type(input.delete) ~= "boolean") then
+        return failure("INVALID_ARGUMENT", "session and operation_key are required")
+    end
+    local delete = input.delete == true
+    local workspace: string? = nil
+    if home then workspace = mutation_workspace(session_ref, home, "remove")
+    else workspace = session_ref:match("^[a-z]+:[^:]+:([^:]+):[^:]+$") end
+    if not workspace then return failure("DENIED", "session removal requires a host workspace grant") end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local request_digest, replay, context_error = operation_context(tx, caller, workspace, operation_key, "session_remove", {session = session_ref, delete = delete})
+        if context_error then return failure("INTERNAL", context_error) end
+        if replay then return replay end
+        local session, query_error = journal.session(tx, session_ref, target_workspace(session_ref, workspace))
+        if query_error then return transaction.storage_failure(query_error) end
+        if not session then return failure("NOT_FOUND", "session does not exist") end
+        local node, op_ref, reference_error = node_and_operation(nil, workspace)
+        if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
+        local now = transaction.now()
+        if not delete then
+            return finish_operation(tx, caller, workspace, operation_key, op_ref, "session_remove", request_digest, session_ref,
+                {session = session_ref, operation = op_ref, state = "removing", committed_at = now}, now)
+        end
+        if session.state ~= "closed" then return failure("CONFLICT", "only a closed session is deleted") end
+        local requested, requested_error = journal.removal_requested(tx, session_ref)
+        if requested == nil then return transaction.storage_failure(requested_error or "read session removal") end
+        if not requested then return failure("CONFLICT", "session removal was not requested") end
+        local _, sequence, event_error = append_event(tx, session, caller, op_ref, "session.removed", session_ref, session.revision + 1, {})
+        if not sequence then return failure("INTERNAL", event_error or "append removal event") end
+        local remove_error = journal.remove_session(tx, session_ref)
+        if remove_error then return failure("INTERNAL", remove_error) end
+        return finish_operation(tx, caller, workspace, operation_key, op_ref, "session_remove", request_digest, session_ref,
+            {session = session_ref, operation = op_ref, state = "removed", committed_at = now, sequence = sequence}, now)
     end)
 end
 

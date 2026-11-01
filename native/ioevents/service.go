@@ -6,12 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/syncthing/notify"
+	apierror "github.com/wippyai/runtime/api/error"
 )
 
 const (
@@ -69,10 +71,15 @@ func (manager *Manager) Start(ctx context.Context, owner, resource, root, relati
 	ctx, cancel := context.WithCancel(ctx)
 	watch := &Watch{cancel: cancel, done: make(chan struct{})}
 	manager.mu.Lock()
-	if manager.closed || len(manager.active) >= maxWatches || manager.owners[owner] >= maxOwnerWatches {
+	if manager.closed {
 		manager.mu.Unlock()
 		cancel()
-		return nil, fmt.Errorf("watch service stopped or watch limit reached")
+		return nil, apierror.New(apierror.Unavailable, "watch service stopped").WithRetryable(apierror.False)
+	}
+	if len(manager.active) >= maxWatches || manager.owners[owner] >= maxOwnerWatches {
+		manager.mu.Unlock()
+		cancel()
+		return nil, apierror.New(apierror.RateLimited, "watch limit reached").WithRetryable(apierror.False)
 	}
 	manager.active[watch] = owner
 	manager.owners[owner]++
@@ -104,7 +111,10 @@ func (manager *Manager) Start(ctx context.Context, owner, resource, root, relati
 	// Append a literal directory separator so valid names retain their meaning.
 	if err := notify.Watch(directory+string(os.PathSeparator), raw, notify.All); err != nil {
 		release()
-		return nil, err
+		if errors.Is(err, fs.ErrPermission) {
+			return nil, pathError(relative, err)
+		}
+		return nil, apierror.New(apierror.Unavailable, "native watch cannot start: "+relative).WithRetryable(apierror.False)
 	}
 	go func() {
 		defer release()
@@ -148,30 +158,43 @@ func watchEvents(ctx context.Context, raw <-chan notify.EventInfo, rescanInterva
 	}
 }
 
+// containedDirectory resolves relative under root. Its errors name no host
+// path: callers see only the paths of their own filesystem resource.
 func containedDirectory(root, relative string) (string, string, error) {
 	if !filepath.IsAbs(root) || !filepath.IsLocal(relative) {
-		return "", "", fmt.Errorf("watch requires a host root and a contained relative path")
+		return "", "", apierror.New(apierror.Invalid, "watch requires a contained relative path").WithRetryable(apierror.False)
 	}
 	canonicalRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return "", "", err
+		return "", "", pathError("filesystem root", err)
 	}
 	target, err := filepath.EvalSymlinks(filepath.Join(canonicalRoot, relative))
 	if err != nil {
-		return "", "", err
+		return "", "", pathError(relative, err)
 	}
 	within, err := filepath.Rel(canonicalRoot, target)
 	if err != nil || !filepath.IsLocal(within) {
-		return "", "", fmt.Errorf("watch path escapes filesystem root")
+		return "", "", apierror.New(apierror.PermissionDenied, "watch path escapes filesystem root: "+relative).WithRetryable(apierror.False)
 	}
 	info, err := os.Stat(target)
 	if err != nil {
-		return "", "", err
+		return "", "", pathError(relative, err)
 	}
 	if !info.IsDir() {
-		return "", "", fmt.Errorf("watch the containing directory of a file")
+		return "", "", apierror.New(apierror.Invalid, "watch the containing directory of a file: "+relative).WithRetryable(apierror.False)
 	}
 	return target, canonicalRoot, nil
+}
+
+func pathError(name string, err error) error {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return apierror.New(apierror.NotFound, "watch path not found: "+name).WithRetryable(apierror.False)
+	case errors.Is(err, fs.ErrPermission):
+		return apierror.New(apierror.PermissionDenied, "watch path is not readable: "+name).WithRetryable(apierror.False)
+	default:
+		return apierror.New(apierror.Invalid, "watch path cannot be resolved: "+name).WithRetryable(apierror.False)
+	}
 }
 
 func (manager *Manager) Stop(ctx context.Context) error {

@@ -4,12 +4,15 @@ package ioevents
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/syncthing/notify"
+	apierror "github.com/wippyai/runtime/api/error"
 )
 
 func stopManager(t *testing.T, manager *Manager) {
@@ -168,5 +171,52 @@ func TestWatchQuotaAndManagerShutdown(t *testing.T) {
 	stopManager(t, manager)
 	if _, err := manager.Start(context.Background(), "new-owner", "project:root", root, ".", func(Event) error { return nil }); err == nil {
 		t.Fatal("stopped service accepted watch")
+	}
+}
+
+func TestWatchFailuresCarryKindsWithoutHostPaths(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+		t.Skip(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "sealed"), 0); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]apierror.Kind{
+		"../outside": apierror.Invalid,
+		"escape":     apierror.PermissionDenied,
+		"missing":    apierror.NotFound,
+		"file":       apierror.Invalid,
+	}
+	if os.Geteuid() != 0 {
+		cases["sealed"] = apierror.PermissionDenied
+	}
+	manager := NewManager()
+	defer stopManager(t, manager)
+	start := func(owner, relative string) error {
+		_, err := manager.Start(context.Background(), owner, "project:root", root, relative, func(Event) error { return nil })
+		return err
+	}
+	for relative, kind := range cases {
+		err := start("owner", relative)
+		var typed apierror.Error
+		if !errors.As(err, &typed) || typed.Kind() != kind || typed.Retryable() != apierror.False {
+			t.Fatalf("%s: want %s, got %v", relative, kind, err)
+		}
+		if strings.Contains(err.Error(), root) || strings.Contains(err.Error(), outside) {
+			t.Fatalf("%s: error reveals a host path: %v", relative, err)
+		}
+	}
+	for range maxOwnerWatches {
+		if err := start("owner", "."); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var typed apierror.Error
+	if err := start("owner", "."); !errors.As(err, &typed) || typed.Kind() != apierror.RateLimited {
+		t.Fatalf("quota: want RateLimited, got %v", err)
 	}
 }

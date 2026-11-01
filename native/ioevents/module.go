@@ -184,7 +184,7 @@ func (manager *Manager) Handle(ctx context.Context, command dispatcher.Command, 
 	}
 	registry := fsapi.GetRegistry(ctx)
 	if registry == nil {
-		receiver.CompleteYield(tag, nil, fmt.Errorf("filesystem registry unavailable"))
+		receiver.CompleteYield(tag, nil, apierror.New(apierror.Internal, "filesystem registry unavailable"))
 		return nil
 	}
 	filesystem, ok := registry.GetFS(request.resource)
@@ -199,7 +199,7 @@ func (manager *Manager) Handle(ctx context.Context, command dispatcher.Command, 
 	}
 	node := relay.GetNode(ctx)
 	if node == nil {
-		receiver.CompleteYield(tag, nil, fmt.Errorf("process relay unavailable"))
+		receiver.CompleteYield(tag, nil, apierror.New(apierror.Internal, "process relay unavailable"))
 		return nil
 	}
 	root := host.RootPath()

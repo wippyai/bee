@@ -121,6 +121,8 @@ workspace or all, C shows closed sessions, R refreshes. The picker has search (`
 unavailable entries (U), setup (S), sort (Ctrl+S), edit or customize copy (E) and
 new profile (N). Esc goes back. Closing the window leaves its sessions running
 and addressable; each Agents window is a separate application instance.
+D in Sessions (Ctrl+R in an open session) removes a session after a confirmation: its agent is
+stopped first, and its thread history and the agent CLI's own files stay.
 
 The profile editor has Basic and Advanced fields (Ctrl+P), saves with Ctrl+S under
 the existing profile revision and operation keys, and shows Revoke Docker access

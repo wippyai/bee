@@ -758,6 +758,7 @@ entries:
     - session_list
     - session_cancel
     - session_close
+    - session_remove
     - thread_read
     - thread_message
     - question
@@ -811,6 +812,7 @@ entries:
     - session_list
     - session_cancel
     - session_close
+    - session_remove
     - thread_read
     - thread_message
     - question

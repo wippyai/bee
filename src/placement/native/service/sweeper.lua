@@ -21,10 +21,23 @@ local function dispatch(caller: string, raw: unknown)
     elseif attempt then ok, err = preparers.execute_cleanup(attempt, after) end
     process.send(caller, "bee.placement.preparer.reply", {request_id = id, ok = ok, error = err})
 end
+-- watch monitors the managed window owners a sweep reports, so an owner
+-- that ends wakes the next sweep. It reports whether every owner is watched;
+-- one already gone is not, and the sweep runs again to prove its child.
+local function watch(swept: service.Reply): boolean
+    local value = bounds.object(swept.value)
+    for _, owner in ipairs(bounds.ids(value and value.window_owners, true) or {}) do
+        local monitored, problem = process.monitor(owner)
+        if not monitored and not (problem and problem:kind() == errors.ALREADY_EXISTS) then return false end
+    end
+    return true
+end
 local function main()
-    worker.run({name = service.SWEEPER_NAME, demand = true, active = service.pending, dispatch = dispatch,
+    worker.run({name = service.SWEEPER_NAME, demand = true, active = service.pending, dispatch = dispatch, exits = true,
         every = tostring(service.SWEEP_INTERVAL_MS) .. "ms", pass = function(): boolean
-            return service.sweep().ok
+            local swept = service.sweep()
+            if swept.ok and not watch(swept) then swept = service.sweep() end
+            return swept.ok
         end})
 end
 return {main = main}

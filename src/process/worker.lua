@@ -23,6 +23,8 @@ type Options = {
     demand: boolean?,
     active: (() -> boolean)?,
     dispatch: ((string, unknown) -> ())?,
+    -- exits runs a pass when a process the worker monitors exits.
+    exits: boolean?,
 }
 
 function M.run(options: Options)
@@ -52,6 +54,10 @@ function M.run(options: Options)
         if not selected.ok then break end
         if selected.channel == lifecycle then
             if selected.value.kind == process.event.CANCEL then break end
+            if options.exits and selected.value.kind == process.event.EXIT then
+                retrying = not options.pass()
+                retry_ms = retrying and math.min(retry_ms * 2, M.RETRY_LAST_MS) or M.RETRY_FIRST_MS
+            end
         else
             if selected.channel == demanded then
                 local supervisor = process.registry.lookup(demand.SUPERVISOR, process.registry.LOCAL)

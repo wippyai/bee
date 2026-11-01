@@ -589,6 +589,10 @@ function M.sweep(): Reply
         return fail("STORAGE", "read live attempts")
     end
     local live: {types.Attempt} = {}
+    -- A managed window owns its child directly; no runner supervisor watches
+    -- that owner, so supervision proves the child's outcome once the owner
+    -- is gone and reports the live owners it watches.
+    local window_owners: {[string]: string} = {}
     for _, row in ipairs(rows) do
         local attempt_id = bounds.id(row.attempt_id)
         if not attempt_id then
@@ -601,20 +605,45 @@ function M.sweep(): Reply
             return fail("STORAGE", attempt_error or "live attempt row is corrupt")
         end
         live[#live + 1] = attempt
+        local started, started_error = db:query("SELECT a.runner_pid FROM bee_placement_attempts a JOIN bee_placement_evidence e ON e.attempt_id = a.attempt_id AND e.kind = 'window.started' WHERE a.attempt_id = ? LIMIT 1", {attempt_id})
+        if started_error or not started then
+            db:release()
+            return fail("STORAGE", "read window ownership")
+        end
+        local owner = started[1] and bounds.id(started[1].runner_pid)
+        if owner then window_owners[attempt_id] = owner end
     end
     db:release()
     local outcomes: {{attempt_id: string, ok: boolean, code: string?}} = {}
+    local watched: {string} = {}
     for index, attempt in ipairs(live) do
         local result: Reply
+        local owner = window_owners[attempt.attempt_id]
+        local present: boolean? = true
+        if owner and attempt.execution_state ~= "exited" then
+            local row = recorded_row(attempt.attempt_id)
+            if row then present = M.runner_present(row) else present = false end
+        end
         if attempt.execution_state == "exited" then result = M.cleanup_attempt(attempt, true)
+        elseif present == false then
+            result = M.reconcile_attempt(attempt)
+            local reconciled = result.ok and bounds.object(result.value) or nil
+            if reconciled and reconciled.execution_state == "exited" then
+                local db_after = store.open()
+                local settled = db_after and store.attempt(db_after, attempt.attempt_id) or nil
+                if db_after then db_after:release() end
+                if settled then result = M.cleanup_attempt(settled, true) end
+            end
         else
             result = M.supervise_grants(attempt) or transition(attempt.attempt_id, {
                 evidence = {kind = "reconcile.supervised", detail = "resource grants checked; child lifecycle belongs to its runtime owner"}})
+            if owner then watched[#watched + 1] = owner end
         end
         outcomes[index] = {attempt_id = attempt.attempt_id, ok = result.ok, code = result.error and result.error.code or nil}
     end
-    return succeed({reconciled = #live, outcomes = outcomes})
+    return succeed({reconciled = #live, outcomes = outcomes, window_owners = watched})
 end
+
 local function completion_observed(attempt: types.Attempt, row: store.Row): (boolean, string)
     if attempt.exit_source == "runner" or attempt.exit_source == "terminal" then
         return true, "exit observed by the runtime handle"

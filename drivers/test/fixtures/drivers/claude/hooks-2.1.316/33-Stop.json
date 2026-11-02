@@ -1,0 +1,15 @@
+{
+ "background_tasks": [],
+ "cwd": "/fixture/work",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "Stop",
+ "last_assistant_message": "ok",
+ "permission_mode": "default",
+ "prompt_id": "2d23afad-6e4f-4506-82ee-4f597413a529",
+ "session_crons": [],
+ "session_id": "b7d0279b-a65d-4983-9fa1-492e1552dab8",
+ "stop_hook_active": false,
+ "transcript_path": "/fixture/cfg/projects/-home-wolfy-j-wippy-bee-briefs-lanes-driveraudit-work-homes-claude-work/b7d0279b-a65d-4983-9fa1-492e1552dab8.jsonl"
+}

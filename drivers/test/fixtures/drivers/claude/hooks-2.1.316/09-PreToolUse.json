@@ -1,0 +1,17 @@
+{
+ "cwd": "/fixture/work",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PreToolUse",
+ "permission_mode": "default",
+ "prompt_id": "481690b6-d992-4a3b-b1d0-3d6d6e7b74ec",
+ "session_id": "b7d0279b-a65d-4983-9fa1-492e1552dab8",
+ "tool_input": {
+  "allow_large": true,
+  "file_path": "/fixture/work/big.txt"
+ },
+ "tool_name": "Read",
+ "tool_use_id": "toolu_01BDPoXj2Ne647Fg6JYstL7B",
+ "transcript_path": "/fixture/cfg/projects/-home-wolfy-j-wippy-bee-briefs-lanes-driveraudit-work-homes-claude-work/b7d0279b-a65d-4983-9fa1-492e1552dab8.jsonl"
+}

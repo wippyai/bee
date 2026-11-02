@@ -1,0 +1,20 @@
+{
+ "id": 6,
+ "jsonrpc": "2.0",
+ "method": "tools/call",
+ "params": {
+  "_meta": {
+   "progressToken": 5,
+   "threadId": "01a19d60-1825-7f60-b497-4d9a472a6474"
+  },
+  "arguments": {
+   "event": "PostToolUse",
+   "session_id": "01a19d60-1825-7f60-b497-4d9a472a6474",
+   "tool_name": "Bash",
+   "tool_response": "beta\n",
+   "tool_use_id": "exec-1729f7f0-8b92-4cde-bcba-f65bc399863f",
+   "turn_id": "01a19d60-1853-7a01-af5c-c9ce964a68ec"
+  },
+  "name": "hook"
+ }
+}

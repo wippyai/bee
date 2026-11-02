@@ -1,0 +1,17 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "PreToolUse",
+ "model": "muse-wonder-1.0",
+ "model_provider": "meta",
+ "permission_mode": "default",
+ "session_id": "01a19d62-daef-7081-97e2-629384805b25",
+ "tool_input": {
+  "command": "mkdir -p sub && touch sub/x",
+  "description": "Create sub directory and file",
+  "workdir": "/fixture/work"
+ },
+ "tool_name": "bash",
+ "tool_use_id": "call_01a19d62e96170cca7be4c9eb093f3bf",
+ "transcript_path": null,
+ "turn_id": "01a19d62-e058-7010-95b3-ed467306f850"
+}

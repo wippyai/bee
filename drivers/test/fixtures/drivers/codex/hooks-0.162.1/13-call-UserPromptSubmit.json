@@ -1,0 +1,18 @@
+{
+ "id": 3,
+ "jsonrpc": "2.0",
+ "method": "tools/call",
+ "params": {
+  "_meta": {
+   "progressToken": 2,
+   "threadId": "01a19d60-1825-7f60-b497-4d9a472a6474"
+  },
+  "arguments": {
+   "event": "UserPromptSubmit",
+   "prompt": "Read a.txt and b.txt in parallel (two tool calls in one step). Then print the whole file big.txt with cat. Then create the file c.txt containing gamma using apply_patch (request approval/escalation if needed). Reply done.",
+   "session_id": "01a19d60-1825-7f60-b497-4d9a472a6474",
+   "turn_id": "01a19d60-1853-7a01-af5c-c9ce964a68ec"
+  },
+  "name": "hook"
+ }
+}

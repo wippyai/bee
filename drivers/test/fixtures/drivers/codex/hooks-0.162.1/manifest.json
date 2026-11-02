@@ -1,0 +1,13 @@
+{
+  "executable": "codex",
+  "version": "0.162.1",
+  "source": "Subscription login in a scratch CODEX_HOME; Bee's session -c hook arguments (mcp_tool on server bee_hooks) against a recording MCP server",
+  "truncated": "truncated.json lists strings cut to 2048 bytes with their captured length",
+  "notes": [
+    "each file is one JSON-RPC request body to /hook/<action>/mcp",
+    "tools/call _meta carries threadId and progressToken",
+    "parallel PreToolUse calls arrive within one millisecond",
+    "PostToolUse tool_response for a shell command is the command's plain text output, a 54000-token output arrives truncated by Codex",
+    "exec resume: SessionStart source resume"
+  ]
+}

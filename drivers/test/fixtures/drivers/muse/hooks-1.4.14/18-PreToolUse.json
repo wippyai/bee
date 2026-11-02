@@ -1,0 +1,17 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "PreToolUse",
+ "model": "muse-wonder-1.0",
+ "model_provider": "meta",
+ "permission_mode": "default",
+ "session_id": "01a19d5b-a556-79d1-9ef7-492dcb275b1a",
+ "tool_input": {
+  "limit": 500,
+  "offset": 1812,
+  "path": "big.txt"
+ },
+ "tool_name": "read_file",
+ "tool_use_id": "call_01a19d5bf4a5769eb42d21d992c76e2c",
+ "transcript_path": null,
+ "turn_id": "01a19d5b-a80b-7a73-93ef-6e15a9a98ab5"
+}

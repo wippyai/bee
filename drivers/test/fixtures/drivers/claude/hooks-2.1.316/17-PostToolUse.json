@@ -1,0 +1,26 @@
+{
+ "cwd": "/fixture/work",
+ "duration_ms": 14,
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PostToolUse",
+ "permission_mode": "default",
+ "prompt_id": "99daac4b-4057-42dc-9d88-28ef3b53cbc6",
+ "session_id": "b7d0279b-a65d-4983-9fa1-492e1552dab8",
+ "tool_input": {
+  "content": "gamma",
+  "file_path": "/fixture/work/c.txt"
+ },
+ "tool_name": "Write",
+ "tool_response": {
+  "content": "gamma",
+  "filePath": "/fixture/work/c.txt",
+  "originalFile": null,
+  "structuredPatch": [],
+  "type": "create",
+  "userModified": false
+ },
+ "tool_use_id": "toolu_01TZ1GxB5cPLy7aSot2axw2W",
+ "transcript_path": "/fixture/cfg/projects/-home-wolfy-j-wippy-bee-briefs-lanes-driveraudit-work-homes-claude-work/b7d0279b-a65d-4983-9fa1-492e1552dab8.jsonl"
+}

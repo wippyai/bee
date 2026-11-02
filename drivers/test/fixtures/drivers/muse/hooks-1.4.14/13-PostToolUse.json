@@ -1,0 +1,17 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "PostToolUse",
+ "model": "muse-wonder-1.0",
+ "model_provider": "meta",
+ "permission_mode": "default",
+ "session_id": "01a19d5b-a556-79d1-9ef7-492dcb275b1a",
+ "tool_input": {
+  "limit": 2000,
+  "path": "big.txt"
+ },
+ "tool_name": "read_file",
+ "tool_response": "Read text file `big.txt`.\n1|line 00000 of a large fixture file used to produce a long tool response\n2|line 00001 of a large fixture file used to produce a long tool response\n3|line 00002 of a large fixture file used to produce a long tool response\n4|line 00003 of a large fixture file used to produce a long tool response\n5|line 00004 of a large fixture file used to produce a long tool response\n6|line 00005 of a large fixture file used to produce a long tool response\n7|line 00006 of a large fixture file used to produce a long tool response\n8|line 00007 of a large fixture file used to produce a long tool response\n9|line 00008 of a large fixture file used to produce a long tool response\n10|line 00009 of a large fixture file used to produce a long tool response\n11|line 00010 of a large fixture file used to produce a long tool response\n12|line 00011 of a large fixture file used to produce a long tool response\n13|line 00012 of a large fixture file used to produce a long tool response\n14|line 00013 of a large fixture file used to produce a long tool response\n15|line 00014 of a large fixture file used to produce a long tool response\n16|line 00015 of a large fixture file used to produce a long tool response\n17|line 00016 of a large fixture file used to produce a long tool response\n18|line 00017 of a large fixture file used to produce a long tool response\n19|line 00018 of a large fixture file used to produce a long tool response\n20|line 00019 of a large fixture file used to produce a long tool response\n21|line 00020 of a large fixture file used to produce a long tool response\n22|line 00021 of a large fixture file used to produce a long tool response\n23|line 00022 of a large fixture file used to produce a long tool response\n24|line 00023 of a large fixture file used to produce a long tool response\n25|line 00024 of a large fixture file used to produce a long tool response\n26|line 00025 of a large fixture file used to produce a long tool response\n27|line 00026 of a large fixture file used to produce a long tool response\n28|lin",
+ "tool_use_id": "call_01a19d5bc553745281188deff560d804",
+ "transcript_path": null,
+ "turn_id": "01a19d5b-a80b-7a73-93ef-6e15a9a98ab5"
+}

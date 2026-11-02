@@ -1,0 +1,10 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "SessionEnd",
+ "model": "muse-wonder-1.0",
+ "model_provider": "meta",
+ "permission_mode": "default",
+ "reason": "other",
+ "session_id": "01a19d62-daef-7081-97e2-629384805b25",
+ "transcript_path": null
+}

@@ -1,0 +1,8 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "SessionEnd",
+ "prompt_id": "2d23afad-6e4f-4506-82ee-4f597413a529",
+ "reason": "other",
+ "session_id": "b7d0279b-a65d-4983-9fa1-492e1552dab8",
+ "transcript_path": "/fixture/cfg/projects/-home-wolfy-j-wippy-bee-briefs-lanes-driveraudit-work-homes-claude-work/b7d0279b-a65d-4983-9fa1-492e1552dab8.jsonl"
+}

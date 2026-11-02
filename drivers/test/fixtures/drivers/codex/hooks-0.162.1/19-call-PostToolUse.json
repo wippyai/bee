@@ -1,0 +1,20 @@
+{
+ "id": 9,
+ "jsonrpc": "2.0",
+ "method": "tools/call",
+ "params": {
+  "_meta": {
+   "progressToken": 8,
+   "threadId": "01a19d60-1825-7f60-b497-4d9a472a6474"
+  },
+  "arguments": {
+   "event": "PostToolUse",
+   "session_id": "01a19d60-1825-7f60-b497-4d9a472a6474",
+   "tool_name": "Bash",
+   "tool_response": "Warning: truncated output (original token count: 54000)\nTotal output lines: 3000\n\nline 00000 of a large fixture file used to produce a long tool response\nline 00001 of a large fixture file used to produce a long tool response\nline 00002 of a large fixture file used to produce a long tool response\nline 00003 of a large fixture file used to produce a long tool response\nline 00004 of a large fixture file used to produce a long tool response\nline 00005 of a large fixture file used to produce a long tool response\nline 00006 of a large fixture file used to produce a long tool response\nline 00007 of a large fixture file used to produce a long tool response\nline 00008 of a large fixture file used to produce a long tool response\nline 00009 of a large fixture file used to produce a long tool response\nline 00010 of a large fixture file used to produce a long tool response\nline 00011 of a large fixture file used to produce a long tool response\nline 00012 of a large fixture file used to produce a long tool response\nline 00013 of a large fixture file used to produce a long tool response\nline 00014 of a large fixture file used to produce a long tool response\nline 00015 of a large fixture file used to produce a long tool response\nline 00016 of a large fixture file used to produce a long tool response\nline 00017 of a large fixture file used to produce a long tool response\nline 00018 of a large fixture file used to produce a long tool response\nline 00019 of a large fixture file used to produce a long tool response\nline 00020 of a large fixture file used to produce a long tool response\nline 00021 of a large fixture file used to produce a long tool response\nline 00022 of a large fixture file used to produce a long tool response\nline 00023 of a large fixture file used to produce a long tool response\nline 00024 of a large fixture file used to produce a long tool response\nline 00025 of a large fixture file used to produce a long tool response\nline 00026 of a large fixture file used to produce a long tool response\nline 00027 of a large ",
+   "tool_use_id": "exec-d9e6a9dd-35d6-4b75-89f0-c3d749e9c302",
+   "turn_id": "01a19d60-1853-7a01-af5c-c9ce964a68ec"
+  },
+  "name": "hook"
+ }
+}

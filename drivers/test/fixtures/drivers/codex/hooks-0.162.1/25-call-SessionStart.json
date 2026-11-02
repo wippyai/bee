@@ -1,0 +1,17 @@
+{
+ "id": 2,
+ "jsonrpc": "2.0",
+ "method": "tools/call",
+ "params": {
+  "_meta": {
+   "progressToken": 1,
+   "threadId": "01a19d60-1825-7f60-b497-4d9a472a6474"
+  },
+  "arguments": {
+   "event": "SessionStart",
+   "session_id": "01a19d60-1825-7f60-b497-4d9a472a6474",
+   "source": "resume"
+  },
+  "name": "hook"
+ }
+}

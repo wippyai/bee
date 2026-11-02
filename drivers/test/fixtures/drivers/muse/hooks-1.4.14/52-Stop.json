@@ -1,0 +1,12 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "Stop",
+ "last_assistant_message": "done",
+ "model": "muse-wonder-1.0",
+ "model_provider": "meta",
+ "permission_mode": "default",
+ "session_id": "01a19d62-daef-7081-97e2-629384805b25",
+ "stop_hook_active": false,
+ "transcript_path": null,
+ "turn_id": "01a19d62-e058-7010-95b3-ed467306f850"
+}

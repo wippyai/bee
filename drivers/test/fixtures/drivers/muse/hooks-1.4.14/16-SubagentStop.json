@@ -1,0 +1,14 @@
+{
+ "child_session_id": "01a19d5b-ca8b-70a2-8308-f0c65d87b549",
+ "cwd": "/fixture/work",
+ "hook_event_name": "SubagentStop",
+ "last_assistant_message": null,
+ "model": "muse-spark-1.3",
+ "model_provider": "meta",
+ "permission_mode": "default",
+ "session_id": "01a19d5b-ca8b-70a2-8308-f0c65d87b549",
+ "stop_hook_active": false,
+ "subagent_id": "skill-reminder",
+ "transcript_path": null,
+ "turn_id": "01a19d5b-ca8b-70a2-8308-f0c65d87b549"
+}

@@ -1,0 +1,23 @@
+{
+ "cwd": "/fixture/work",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PermissionRequest",
+ "permission_mode": "default",
+ "permission_suggestions": [
+  {
+   "destination": "session",
+   "mode": "acceptEdits",
+   "type": "setMode"
+  }
+ ],
+ "prompt_id": "99daac4b-4057-42dc-9d88-28ef3b53cbc6",
+ "session_id": "b7d0279b-a65d-4983-9fa1-492e1552dab8",
+ "tool_input": {
+  "content": "gamma",
+  "file_path": "/fixture/work/c.txt"
+ },
+ "tool_name": "Write",
+ "transcript_path": "/fixture/cfg/projects/-home-wolfy-j-wippy-bee-briefs-lanes-driveraudit-work-homes-claude-work/b7d0279b-a65d-4983-9fa1-492e1552dab8.jsonl"
+}

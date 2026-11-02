@@ -1,0 +1,21 @@
+{
+  "executable": "agy",
+  "version": "1.4.12",
+  "source": "Subscription login in a scratch HOME; workspace hooks at <cwd>/.agents/hooks.json; one recorder command per native event",
+  "hooks_file": {
+    "loaded": [
+      "~/.gemini/config/hooks.json",
+      "<workspace>/.agents/hooks.json"
+    ],
+    "not_loaded": [
+      "~/.agents/hooks.json when HOME is not the workspace or between it and its project root"
+    ]
+  },
+  "conversation": "ee6a08a2-71ef-462b-99a2-81fa84aa835e",
+  "transcript": "transcript_full.jsonl",
+  "notes": [
+    "01-09: first prompt; run_command denied by headless permission check after the PreToolUse gate allowed it; no Stop",
+    "10-16: the same conversation resumed with --conversation: no SessionStart, PreInvocation invocationNum 0 then 1, Stop with fullyIdle",
+    "PostToolUse carries toolCall and error but no tool result"
+  ]
+}

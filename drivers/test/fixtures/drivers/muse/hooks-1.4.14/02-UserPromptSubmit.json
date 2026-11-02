@@ -1,0 +1,11 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "UserPromptSubmit",
+ "model": "muse-wonder-1.0",
+ "model_provider": "meta",
+ "permission_mode": "default",
+ "prompt": "Read a.txt and b.txt in parallel. Then run the shell command 'printf hello'. Then read the whole file big.txt. Then create the file c.txt containing gamma. Reply done.",
+ "session_id": "01a19d5b-a556-79d1-9ef7-492dcb275b1a",
+ "transcript_path": null,
+ "turn_id": "01a19d5b-a80b-7a73-93ef-6e15a9a98ab5"
+}

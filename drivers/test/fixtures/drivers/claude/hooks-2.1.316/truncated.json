@@ -1,0 +1,11 @@
+{
+ "10-PostToolUse.json": {
+  "/tool_response/file/content": 216000
+ },
+ "27-SubagentStop.json": {
+  "/last_assistant_message": 5103
+ },
+ "29-PostCompact.json": {
+  "/compact_summary": 5103
+ }
+}

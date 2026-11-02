@@ -1,0 +1,19 @@
+{
+ "id": 0,
+ "jsonrpc": "2.0",
+ "method": "initialize",
+ "params": {
+  "capabilities": {
+   "elicitation": {
+    "form": {},
+    "url": {}
+   }
+  },
+  "clientInfo": {
+   "name": "codex-mcp-client",
+   "title": "Codex",
+   "version": "0.162.1"
+  },
+  "protocolVersion": "2025-06-18"
+ }
+}

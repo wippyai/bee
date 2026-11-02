@@ -1,0 +1,11 @@
+{
+  "executable": "muse",
+  "version": "1.4.14 (1.4.14-R7309.1)",
+  "source": "Subscription login in a scratch HOME; command hooks in ~/.config/muse/settings.json",
+  "truncated": "truncated.json lists strings cut to 2048 bytes with their captured length",
+  "notes": [
+    "01-40: muse exec --json, parallel read_file calls, a 100000-byte read_file PostToolUse, write_file",
+    "subagent hooks (skill-reminder, verify-reminder, goal-reminder) carry their own session_id and turn_id and run after Stop",
+    "41-59: muse exec --approval-mode untrusted --approval-judge off; PermissionRequest carries no tool_use_id"
+  ]
+}

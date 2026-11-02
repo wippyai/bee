@@ -1,0 +1,12 @@
+{
+  "executable": "claude",
+  "version": "2.1.316",
+  "source": "Subscription login in a scratch CLAUDE_CONFIG_DIR; command hooks via --settings",
+  "truncated": "truncated.json lists strings cut to 2048 bytes with their captured length",
+  "notes": [
+    "01-12: -p turn with parallel Read calls (hooks run in order) and a 216000-byte Read result",
+    "13-23: --resume turn with Write and Bash PermissionRequest (no tool_use_id) and PostToolUseFailure",
+    "24-29: /compact on resume: SessionStart resume, PreCompact, SubagentStop, SessionStart compact, PostCompact",
+    "30-34: resumed turn after compact"
+  ]
+}

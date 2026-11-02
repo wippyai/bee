@@ -1,0 +1,12 @@
+{
+ "artifactDirectoryPath": "/fixture/.gemini/antigravity-cli/brain/ee6a08a2-71ef-462b-99a2-81fa84aa835e",
+ "conversationId": "ee6a08a2-71ef-462b-99a2-81fa84aa835e",
+ "initialNumSteps": 10,
+ "invocationNum": 1,
+ "lastUserInput": "Read a.txt, then reply with its content.",
+ "modelName": "gemini-4-argon-medium",
+ "transcriptPath": "/fixture/.gemini/antigravity-cli/brain/ee6a08a2-71ef-462b-99a2-81fa84aa835e/.system_generated/logs/transcript_full.jsonl",
+ "workspacePaths": [
+  "/fixture/work"
+ ]
+}

@@ -1,0 +1,18 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "PostToolUse",
+ "model": "muse-wonder-1.0",
+ "model_provider": "meta",
+ "permission_mode": "default",
+ "session_id": "01a19d5b-a556-79d1-9ef7-492dcb275b1a",
+ "tool_input": {
+  "limit": 500,
+  "offset": 1812,
+  "path": "big.txt"
+ },
+ "tool_name": "read_file",
+ "tool_response": "Read text file `big.txt`.\n(1811 line(s) above)\n1812|line 01811 of a large fixture file used to produce a long tool response\n1813|line 01812 of a large fixture file used to produce a long tool response\n1814|line 01813 of a large fixture file used to produce a long tool response\n1815|line 01814 of a large fixture file used to produce a long tool response\n1816|line 01815 of a large fixture file used to produce a long tool response\n1817|line 01816 of a large fixture file used to produce a long tool response\n1818|line 01817 of a large fixture file used to produce a long tool response\n1819|line 01818 of a large fixture file used to produce a long tool response\n1820|line 01819 of a large fixture file used to produce a long tool response\n1821|line 01820 of a large fixture file used to produce a long tool response\n1822|line 01821 of a large fixture file used to produce a long tool response\n1823|line 01822 of a large fixture file used to produce a long tool response\n1824|line 01823 of a large fixture file used to produce a long tool response\n1825|line 01824 of a large fixture file used to produce a long tool response\n1826|line 01825 of a large fixture file used to produce a long tool response\n1827|line 01826 of a large fixture file used to produce a long tool response\n1828|line 01827 of a large fixture file used to produce a long tool response\n1829|line 01828 of a large fixture file used to produce a long tool response\n1830|line 01829 of a large fixture file used to produce a long tool response\n1831|line 01830 of a large fixture file used to produce a long tool response\n1832|line 01831 of a large fixture file used to produce a long tool response\n1833|line 01832 of a large fixture file used to produce a long tool response\n1834|line 01833 of a large fixture file used to produce a long tool response\n1835|line 01834 of a large fixture file used to produce a long tool response\n1836|line 01835 of a large fixture file used to produce a long tool response\n1837|line 01836 of a large fixture file used to produce a long tool response",
+ "tool_use_id": "call_01a19d5bf4a5769eb42d21d992c76e2c",
+ "transcript_path": null,
+ "turn_id": "01a19d5b-a80b-7a73-93ef-6e15a9a98ab5"
+}

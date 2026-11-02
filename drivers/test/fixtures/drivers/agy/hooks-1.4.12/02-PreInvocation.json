@@ -1,0 +1,12 @@
+{
+ "artifactDirectoryPath": "/fixture/.gemini/antigravity-cli/brain/ee6a08a2-71ef-462b-99a2-81fa84aa835e",
+ "conversationId": "ee6a08a2-71ef-462b-99a2-81fa84aa835e",
+ "initialNumSteps": 1,
+ "invocationNum": 0,
+ "lastUserInput": "Read a.txt and b.txt in parallel. Then run the shell command 'printf hello'. Then read the whole file big.txt. Then create the file c.txt containing gamma. Reply done.",
+ "modelName": "gemini-4-argon-medium",
+ "transcriptPath": "/fixture/.gemini/antigravity-cli/brain/ee6a08a2-71ef-462b-99a2-81fa84aa835e/.system_generated/logs/transcript_full.jsonl",
+ "workspacePaths": [
+  "/fixture/work"
+ ]
+}

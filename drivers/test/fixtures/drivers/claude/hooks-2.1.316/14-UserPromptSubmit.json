@@ -1,0 +1,9 @@
+{
+ "cwd": "/fixture/work",
+ "hook_event_name": "UserPromptSubmit",
+ "permission_mode": "default",
+ "prompt": "Use the Write tool to create c.txt containing gamma. Then run the Bash command 'mkdir -p sub && touch sub/x'. Then run Bash 'cat missing-file-zz'. Answer done.",
+ "prompt_id": "99daac4b-4057-42dc-9d88-28ef3b53cbc6",
+ "session_id": "b7d0279b-a65d-4983-9fa1-492e1552dab8",
+ "transcript_path": "/fixture/cfg/projects/-home-wolfy-j-wippy-bee-briefs-lanes-driveraudit-work-homes-claude-work/b7d0279b-a65d-4983-9fa1-492e1552dab8.jsonl"
+}

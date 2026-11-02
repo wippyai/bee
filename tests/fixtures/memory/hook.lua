@@ -22,6 +22,7 @@ function M.hook(point: string, raw: unknown): {[string]: unknown}
     if mode == "oversized" then return {kind = "add_context", text = string.rep("x", 20000)} end
     if mode == "budget" then assert(channel.new(1)):receive(); return {kind = "deny", reason = "late denial"} end
     if mode == "deny" then return {kind = "deny", reason = "fixture refuses this operation"} end
+    if turn.trait_id == "bee.tests.memory:output_hook" then return {kind = "add_context", text = "tool output: " .. tostring(turn.output)} end
     local actor = assert(security.actor())
     assert(actor:meta().definition_id == "bee.tests.memory:app", "hook inherits carrier authority")
     if turn.trait_id == "bee.tests.memory:remember_hook" and point == "prompt.submit" then

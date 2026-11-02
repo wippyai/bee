@@ -125,6 +125,10 @@ entries:
   kind: registry.entry
   meta: {type: agent.trait, title: Result hook, application_ref: 'bee.tests.memory:app'}
   data: {prompt: Review results., tools: [], hooks: [tool.after]}
+- name: output_hook
+  kind: registry.entry
+  meta: {type: agent.trait, title: Result reader, application_ref: 'bee.tests.memory:app'}
+  data: {prompt: Read results., tools: [], hooks: [tool.after]}
 - name: extension_hook
   kind: function.lua
   source: file://hook.lua

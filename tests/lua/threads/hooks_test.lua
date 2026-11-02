@@ -242,6 +242,15 @@ local function define_tests(group: string, selected_driver: string?)
             end
         end)
         end
+        if group == "driver" and selected_driver == "codex" then
+        test.it("hands an extension the tool output Codex reports", function()
+            local session = host.open(nil, "bee.tests.memory:output_hook", "codex")
+            harness.value(session.owner:call("session_attach", {session = session.session, attempt_id = session.binding.attempt_id, operation_key = harness.key()}))
+            local _, endpoint, token = host.transport(session)
+            local after = host.cli_hook(session, "PostToolUse", {tool_name = "Bash", tool_use_id = harness.key(), tool_response = "alpha\n"}, assert(token), endpoint, true)
+            test.eq(assert(bounds.object(after.hookSpecificOutput)).additionalContext, "tool output: alpha\n")
+        end)
+        end
         if group == "driver" and (selected_driver == "agy" or selected_driver == "muse" or selected_driver == "grok") then
         for _, driver in ipairs({assert(selected_driver)}) do
             test.it("captures " .. driver .. " tool rewrites and denials through its production hook boundary", function()

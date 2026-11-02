@@ -511,7 +511,6 @@ function M.hook_boundary(raw_request: unknown): Reply
         local tool_input: unknown = payload.tool_input
         local tool_output: unknown = payload.tool_response
         if type(tool_input) == "string" then tool_input = json.decode(tool_input) end
-        if type(tool_output) == "string" and route.provider == "codex" then tool_output = json.decode(tool_output) end
         local active_turn = bounds.object(stored.active_turn)
         local response, failure = funcs.call("bee.threads.hooks:dispatch", {session_ref = session, thread_id = stored.thread_ref,
             workspace_id = stored.workspace, point = point, occurrence_id = event_key, turn_ref = active_turn and active_turn.turn,

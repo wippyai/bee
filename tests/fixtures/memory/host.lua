@@ -251,7 +251,9 @@ function M.native(session: Session, prompt: string): {[string]: unknown}
     return assert(bounds.object(raw))
 end
 
-function M.cli_hook(session: Session, event: string, fields: {[string]: unknown}, token: string, endpoint: string, mcp: boolean?): {[string]: unknown}
+-- cli_hook posts one hook the way a CLI does and returns its decoded answer
+-- and the HTTP status it came with.
+function M.cli_hook(session: Session, event: string, fields: {[string]: unknown}, token: string, endpoint: string, mcp: boolean?): ({[string]: unknown}, integer)
     fields.event, fields.session_id = event, session.session
     local body: {[string]: unknown} = fields
     if mcp then body = {jsonrpc = "2.0", id = 1, method = "tools/call", params = {name = "hook", arguments = fields, _meta = {threadId = session.session}}} end
@@ -259,16 +261,17 @@ function M.cli_hook(session: Session, event: string, fields: {[string]: unknown}
         {headers = {["Content-Type"] = "application/json", Authorization = "Bearer " .. token}, body = assert(json.encode(body)), timeout = 5})
     assert(response and not err, "fixture hook transport failed")
     assert(response.status_code == 200 or response.status_code == 202, "fixture hook transport refused: " .. tostring(response.body))
-    if response.body == nil or response.body == "" then return {} end
+    local status = math.floor(response.status_code)
+    if response.body == nil or response.body == "" then return {}, status end
     local reply = assert(bounds.object(json.decode(tostring(response.body))))
     if mcp then
         assert(not reply.error, "fixture MCP hook error: " .. assert(json.encode(reply.error)))
         local result = assert(bounds.object(reply.result))
         local content = assert(bounds.array(result.content, 8))
-        if #content == 0 then return {} end
-        return assert(bounds.object(json.decode(assert(bounds.text(assert(bounds.object(content[1])).text)))))
+        if #content == 0 then return {}, status end
+        return assert(bounds.object(json.decode(assert(bounds.text(assert(bounds.object(content[1])).text))))), status
     end
-    return reply
+    return reply, status
 end
 
 return M

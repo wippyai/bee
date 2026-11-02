@@ -223,8 +223,9 @@ local function define_tests(group: string, selected_driver: string?)
                 local mcp = driver == "codex"
                 local _, endpoint, raw_token = host.transport(session)
                 local token = assert(raw_token)
-                local prompt = host.cli_hook(session, "UserPromptSubmit", {prompt = "hello", turn_id = harness.key()}, token, endpoint, mcp)
+                local prompt, prompt_status = host.cli_hook(session, "UserPromptSubmit", {prompt = "hello", turn_id = harness.key()}, token, endpoint, mcp)
                 test.eq(assert(bounds.object(prompt.hookSpecificOutput)).additionalContext, "fixture context:a")
+                if not mcp then test.eq(prompt_status, 202) end
                 local changed = host.cli_hook(session, "PreToolUse", {tool_name = "Bash", tool_use_id = harness.key(), tool_input = {command = "pwd"}}, token, endpoint, mcp)
                 test.eq(assert(bounds.object(assert(bounds.object(changed.hookSpecificOutput)).updatedInput)).command, "pwd:a")
                 local denied = host.cli_hook(session, "PreToolUse", {tool_name = "Bash", tool_use_id = harness.key(), tool_input = {mode = "deny"}}, token, endpoint, mcp)

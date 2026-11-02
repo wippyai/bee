@@ -58,8 +58,9 @@ local function submit(): nil
         refuse(response, status_of(refused.code), refused.code .. ": " .. refused.message)
         return nil
     end
-    if next(context) ~= nil then response:set_content_type(http.CONTENT.JSON); response:write_json(context) end
+    if next(context) ~= nil then response:set_content_type(http.CONTENT.JSON) end
     if outcome.status == "committed" then response:set_status(http.STATUS.OK) else response:set_status(http.STATUS.ACCEPTED) end
+    if next(context) ~= nil then response:write_json(context) end
     return nil
 end
 local function status(): nil

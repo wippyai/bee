@@ -404,7 +404,7 @@ local function home_tests()
             local function profile_call(operation: string, id: string, revision: integer): {[string]: unknown}
                 local input: {[string]: unknown} = {operation = operation, workspace_id = workspace, profile_id = id,
                     expected_revision = revision, idempotency_key = id .. ":" .. operation .. ":" .. tostring(revision)}
-                if operation == "put" then input.profile = {schema_revision = "bee.agent-profile@3", name = "Docker home fixture",
+                if operation == "put" then input.profile = {schema_revision = "bee.agent-profile@3", name = "Docker home " .. id:sub(-1),
                     definition_ref = "bee.driver.codex.profiles:research_batch", driver_binding_ref = "bee.drivers.codex.binding:binding",
                     provider = {}, bee = {mcp = {}}, placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}} end
                 local raw, err = client:call("bee.harness.binding:call", input)

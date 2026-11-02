@@ -1114,6 +1114,7 @@ entries:
   source: file://delivery.lua
   imports:
     bounds: bee.drivers.values:bounds
+    hook_limits: bee.drivers.binding:hook_limits
 ```
 
 ## drivers/src/opencode/observer/delivery.lua
@@ -1121,8 +1122,15 @@ entries:
 ```lua
 -- SPDX-License-Identifier: MIT
 local bounds = require("bounds")
+local hook_limits = require("hook_limits")
 local M = {}
 type Object = {[string]: unknown}
+-- timeout is how long one delivery waits for the hook endpoint: a permission
+-- waits for a person, any other event only for the host to record it.
+function M.timeout(event: unknown): string
+    if event == "PermissionRequest" then return tostring(hook_limits.PERMISSION_SECONDS) .. "s" end
+    return "10s"
+end
 type IO = {submit: (Object) -> Object?, permission: (string, Object) -> (), record: (string) -> ()}
 function M.send(io: IO, row: Object, auto: boolean?): boolean
     local ok = pcall(function()
@@ -1377,7 +1385,7 @@ local function main(input: observer_types.Input)
         if not admitted[tostring(row.hook_event_name)] and not (auto and row.hook_event_name == "PermissionRequest") then return end
         delivery.send({
             submit = function(payload: {[string]: unknown}): {[string]: unknown}?
-                local reply = http.post(input.hook_endpoint, {timeout = payload.hook_event_name == "PermissionRequest" and "240s" or "10s",
+                local reply = http.post(input.hook_endpoint, {timeout = delivery.timeout(payload.hook_event_name),
                     headers = {Authorization = "Bearer " .. input.hook_token, ["Content-Type"] = "application/json"}, body = json.encode(payload)})
                 if not reply or reply.status_code < 200 or reply.status_code >= 300 then error("hook endpoint refused delivery") end
                 return reply.body and reply.body ~= "" and bounds.object(json.decode(reply.body)) or nil

@@ -39,26 +39,19 @@ function M.define()
         local resolved = resolve(deps, spec)
         test.eq(resolved.context.entries["bee.host:descriptor"].references[1], "bee.host:db")
     end)
-    test.it("measures an owned activation append through existing preflight", function()
-        local deps, spec = driver_fixture()
-        local facts = resolve(deps, spec)
-        test.eq(facts.candidate.requirements[1].value, "bee.driver.stub.binding:binding")
-        test.eq(facts.candidate.requirements[1].targets[1], "bee.harness.launch:harness_activation")
-        local verdict = assert(preflight.check(facts.candidate, facts.context))
-        test.is_true(verdict.ready)
-    end)
     test.it("admits a driver by its declared harness binding under any component name", function()
-        local deps, spec = driver_fixture(nil, nil, "acme.adapter")
-        local facts = resolve(deps, spec)
-        test.eq(facts.candidate.requirements[1].value, "acme.adapter.binding:binding")
-        test.is_true(assert(preflight.check(facts.candidate, facts.context)).ready)
-        test.is_true(facts.context.driver_requirements ~= nil)
+        for _, base in ipairs({"bee.driver.stub", "acme.adapter"}) do
+            local deps, spec = driver_fixture(nil, nil, base)
+            local facts = resolve(deps, spec)
+            test.eq(#facts.candidate.requirements, 0)
+            test.is_true(assert(preflight.check(facts.candidate, facts.context)).ready)
+        end
         local refused_deps, refused_spec = driver_fixture(nil, "exec.run", "acme.adapter")
         local candidate, _, problem = resolver.resolve_with(refused_deps, refused_spec)
         test.is_nil(candidate)
         test.is_true(tostring(problem):find("descriptor", 1, true) ~= nil)
     end)
-    test.it("retains the exact driver append while normalizing activation evidence", function()
+    test.it("measures a driver's activation evidence from its binding alone", function()
         local deps, spec = driver_fixture()
         local facts = resolve(deps, spec)
         spec.plan_digest, spec.revision, spec.selection_revision = SHA, 1, 1
@@ -68,38 +61,23 @@ function M.define()
         local report = assert(bounds.object(measured.report))
         test.is_true(report.ready)
         test.eq(report.base_revision, 0)
-        facts.context.driver_requirements = nil
-        test.is_nil(activation_measure.measure(spec, facts.candidate, facts.context))
     end)
-    test.it("refuses a replacement of the host activation catalog", function()
-        local deps, spec = driver_fixture(".bindings")
-        local candidate, _, problem = resolver.resolve_with(deps, spec)
-        test.is_nil(candidate)
-        test.is_true(tostring(problem):find("may only append", 1, true) ~= nil)
-    end)
-    test.it("keeps the protected target closed without the exact host append measurement", function()
-        for _, change in ipairs({"missing", "binding", "digest"}) do
-            local deps, spec = driver_fixture()
-            local facts = resolve(deps, spec)
-            local appends = assert(facts.context.driver_requirements)
-            local append = assert(appends["bee.driver.stub.binding:activation"])
-            if change == "missing" then facts.context.driver_requirements = nil
-            elseif change == "binding" then append.binding = "bee.drivers.claude.binding:binding"
-            else append.digest = string.rep("b", 64) end
-            local verdict = assert(preflight.check(facts.candidate, facts.context))
-            test.is_false(verdict.ready)
-            local protected = false
-            for _, diagnostic in ipairs(verdict.diagnostics) do
-                if diagnostic.code == "PROTECTED_KERNEL" then protected = true end
-            end
-            test.is_true(protected)
+    test.it("refuses a driver requirement that selects into host activation", function()
+        for _, path in ipairs({".bindings +=", ".bindings"}) do
+            local deps, spec = driver_fixture(path)
+            local candidate, _, problem = resolver.resolve_with(deps, spec)
+            test.is_nil(candidate)
+            test.is_true(tostring(problem):find("activates through its approved harness binding", 1, true) ~= nil, tostring(problem))
         end
     end)
-    test.it("refuses editing the protected host entry even with an admitted append", function()
+    test.it("refuses editing the protected host entry", function()
         local deps, spec = driver_fixture()
         local facts = resolve(deps, spec)
         local protected = assert(facts.context.entries["bee.harness.launch:harness_activation"])
-        facts.candidate.entries[#facts.candidate.entries + 1] = protected
+        local edited: Object = {}
+        for field, value in pairs(facts.candidate.entries[1]) do edited[field] = value end
+        edited.id, edited.kind = protected.id, protected.kind
+        facts.candidate.entries[#facts.candidate.entries + 1] = edited
         local verdict = assert(preflight.check(facts.candidate, facts.context))
         test.is_false(verdict.ready)
         local refused = false

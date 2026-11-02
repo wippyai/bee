@@ -1,6 +1,5 @@
 -- MIT. Host validation of requirement targets.
 local bounds = require("bounds")
-local driver_admission = require("driver_admission")
 local requirements = require("requirements")
 local canonical = require("canonical")
 local hash = require("hash")
@@ -134,11 +133,7 @@ function M.resolve(entry: Entry, package: string, final: {[string]: Entry}, owne
         local default_meta = default_entry and object(default_entry.meta)
         local driver = default_entry and default_entry.kind == "contract.binding" and default_meta and default_meta.type == "harness.driver"
         if driver and not target_id:match("^" .. package:gsub("%.", "%%.") .. "[.:]") then
-            local binding_id = driver_admission.append(entry, final)
-            if not binding_id then
-                return nil, "workspace driver requirements may only append their own harness binding to host activation"
-            end
-            selected = binding_id
+            return nil, "a driver activates through its approved harness binding; remove requirement " .. tostring(entry.id)
         elseif configuration_digest then
             if not owned[target_id] then return nil, "configuration must target an owned entry: " .. target_id end
             local names, invalid = requirements.configuration_path(target.path)

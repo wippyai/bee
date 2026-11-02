@@ -17,6 +17,7 @@ local preflight = require("preflight")
 local materializer = require("materializer")
 local artifact = require("artifact")
 local driver_admission = require("driver_admission")
+local drivers = require("drivers")
 local migration_effect = require("migration_effect")
 local migration_runner = require("migration_runner")
 local activation_profiles = require("activation_profiles")
@@ -453,8 +454,29 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         volumes = proposed.volumes, databases = proposed.databases, executors = proposed.executors}, nil
 end
 
--- approved_drivers visits every consumed driver artifact whose host-selected
--- owner matches its desired slot and whose exact code overlay is present.
+local function visit_slot(config: Configuration, resource: string, workspace: string, owner_id: string, visit: ({Object}) -> string?): string?
+    local store, open_error = activations.open(resource, config.node_id, workspace)
+    if not store then return open_error end
+    local desired = activations.desired(store, owner_id)
+    activations.close(store)
+    if not desired.ok then return desired.message end
+    local intent = desired.ok and bounds.object(desired.value) or nil
+    local source = intent and bounds.id(intent.source_workspace) or nil
+    if not source then return nil end
+    local source_node = intent and bounds.id(intent.source_node) or nil
+    local profile = source_node and activation_profiles.select(config, workspace, source_node, source) or nil
+    if not profile or profile.overlay_owner ~= owner_id or not intent or intent.consumed_consumer_id ~= ACTOR then return nil end
+    local decoded, decode_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
+    if not decoded then return decode_error end
+    local present, present_error = materializer.matches(owner_id, decoded)
+    if present == nil then return present_error end
+    if not present then return nil end
+    return visit(decoded)
+end
+
+-- approved_drivers visits every consumed driver overlay artifact whose
+-- host-selected owner matches its desired slot and whose exact code overlay is
+-- present. Application overlays activate no driver.
 local function approved_drivers(config: Configuration, visit: ({Object}) -> string?): string?
     local resource, resource_error = resources.database()
     if not resource then return resource_error end
@@ -467,26 +489,9 @@ local function approved_drivers(config: Configuration, visit: ({Object}) -> stri
         local workspace = slot and bounds.id(slot.workspace_id) or nil
         local owner_id = slot and bounds.id(slot.overlay_owner) or nil
         if not workspace or not owner_id then return "desired driver slot is malformed" end
-        local store, open_error = activations.open(resource, config.node_id, workspace)
-        if not store then return open_error end
-        local desired = activations.desired(store, owner_id)
-        activations.close(store)
-        if not desired.ok then return desired.message end
-        local intent = desired.ok and bounds.object(desired.value) or nil
-        local source = intent and bounds.id(intent.source_workspace) or nil
-        if source then
-            local source_node = intent and bounds.id(intent.source_node) or nil
-            local profile = source_node and activation_profiles.select(config, workspace, source_node, source) or nil
-            if profile and profile.overlay_owner == owner_id and intent and intent.consumed_consumer_id == ACTOR then
-                local decoded, decode_error = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
-                if not decoded then return decode_error end
-                local present, present_error = materializer.matches(owner_id, decoded)
-                if present == nil then return present_error end
-                if present then
-                    local visit_error = visit(decoded)
-                    if visit_error then return visit_error end
-                end
-            end
+        if owner_id:sub(1, #drivers.OWNER_PREFIX) == drivers.OWNER_PREFIX then
+            local visit_error = visit_slot(config, resource, workspace, owner_id, visit)
+            if visit_error then return visit_error end
         end
     end
     return nil

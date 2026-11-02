@@ -411,14 +411,15 @@ profile configuration. Local `driver.<name>` overlays own `bee.driver.<name>`
 child namespaces; they do not create application admission records. Publication
 selects a component from the staging owner's authored overlay list and requires
 the host's driver publication rule or an explicit profile. The same
-freeze, delivery, review, exact approval and activation ledger applies. A driver
-requirement may append its own `harness.driver` binding to
-`bee.harness.launch:harness_activation` at `.bindings +=`; other host targets
-are refused. The appended binding is the requirement's `default`, a `contract.binding` whose
-`meta.type` is `harness.driver`, and the driver's login is each `bee.credential_format` entry's
-`meta.provider` with its file destination; admission reads these declared fields and places no
-requirement on entry identifiers. Raw overlay requirements remain declarations. The host selects
-`bee.gov.binding:driver_bindings` as the activation declaration's admission
+freeze, delivery, review, exact approval and activation ledger applies. A
+consumed driver overlay activates each of its own `contract.binding` entries whose
+`meta.type` is `harness.driver`; it declares no activation requirement, and a
+requirement selecting into `bee.harness.launch:harness_activation` is refused.
+Application overlays activate no driver. The driver's login is each
+`bee.credential_format` entry's `meta.provider` with its file destination;
+admission reads these declared fields and places no requirement on entry
+identifiers. The host selects `bee.gov.binding:driver_bindings` as the
+activation declaration's admission
 reader. The shared driver resolver combines the original host selection with
 bindings derived from consumed desired artifacts in the existing activation
 store whose exact code overlays are present. It adds no stored record or second

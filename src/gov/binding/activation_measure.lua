@@ -183,8 +183,7 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         applied_databases = context.applied_databases, generated_databases = context.generated_databases,
         exact_expansion = context.exact_expansion, migration_barrier = context.migration_barrier,
         auto_start = context.auto_start, super_edit = context.super_edit,
-        protected = context.protected, host_evidence = context.host_evidence,
-        driver_requirements = context.driver_requirements}
+        protected = context.protected, host_evidence = context.host_evidence}
     local artifact_blob: Blob = {bytes = plan.artifact_bytes, digest = plan.artifact_digest}
     local work, work_error, durable_report = migration_work.capture(durable_candidate,
         {schema_revision = artifact.SCHEMA, entries = entries, bytes = artifact_blob.bytes,

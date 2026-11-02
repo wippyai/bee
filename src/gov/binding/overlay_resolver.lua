@@ -11,7 +11,6 @@ local capability_model = require("capability_model")
 local protected_kernel = require("protected_kernel")
 local lists = require("lists")
 local resolution = require("resolution")
-local driver_admission = require("driver_admission")
 local requirement = require("requirement")
 local application_capabilities = require("application_capabilities")
 local workspace_applications = require("workspace_applications")
@@ -246,7 +245,6 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     table.sort(incoming, function(left: Entry, right: Entry): boolean return (left.id) < (right.id) end)
     local candidate_entries: {preflight.Entry} = {}
     local requirements: {preflight.Requirement} = {}
-    local driver_requirements: {[string]: preflight.DriverRequirement} = {}
     local candidate_migrations: {preflight.Migration} = {}
     local final: {[string]: Entry} = {}
     for id, entry in pairs(current_raw) do
@@ -298,15 +296,6 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             local item, item_error = requirement.resolve(entry, component, final, artifact_ids)
             if not item then return nil, nil, item_error, true end
             requirements[#requirements + 1] = item
-            if driver_artifact and item.value and #item.targets == 1
-                and item.targets[1] == driver_admission.TARGET then
-                for _, measured in ipairs(candidate_entries) do
-                    if measured.id == item.id then
-                        driver_requirements[item.id] = {binding = item.value, digest = measured.digest}
-                        break
-                    end
-                end
-            end
         end
     end
     local raw_catalog = current_raw["bee.capability:catalog"]
@@ -393,7 +382,6 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local context, context_error = policy_context(policy, captured, base_digest,
         current, installed, kernel, evidence)
     if not context then return nil, nil, context_error end
-    context.driver_requirements = driver_requirements
     context.module_capabilities = prepared.module_capabilities
     local dependencies: {string} = {}
     local artifacts: {preflight.Artifact} = {{component = component, version = version, digest = artifact_digest,

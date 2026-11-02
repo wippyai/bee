@@ -928,6 +928,7 @@ entries:
     test: wippy.test:test
     materializer: bee.gov.binding:materializer
     activation: bee.gov.types:driver_admission
+    drivers: bee.gov.types:drivers
     resolver: bee.drivers.binding:resolver
     bounds: bee.drivers.values:bounds
     activation_store: bee.gov.persist:activation_store

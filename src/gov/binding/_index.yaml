@@ -485,7 +485,6 @@ entries:
   - hash
   - json
   imports:
-    driver_admission: bee.gov.types:driver_admission
     canonical: bee.drivers.values:canonical
     lists: bee.gov.types:lists
     bounds: bee.drivers.values:bounds
@@ -555,7 +554,6 @@ entries:
     requirements: bee.hub.package:requirements
     canonical: bee.drivers.values:canonical
     bounds: bee.drivers.values:bounds
-    driver_admission: bee.gov.types:driver_admission
     preflight: bee.gov.binding:preflight
 - name: hub_resolver
   kind: library.lua
@@ -590,7 +588,6 @@ entries:
     workspace_applications: bee.gov.types:workspace_applications
     application_capabilities: bee.gov.binding:application_capabilities
     requirement: bee.gov.binding:requirement
-    driver_admission: bee.gov.types:driver_admission
     resolution: bee.gov.types:resolver
     artifact: bee.gov.types:artifact
     canonical: bee.drivers.values:canonical
@@ -697,6 +694,7 @@ entries:
   - time
   imports:
     driver_admission: bee.gov.types:driver_admission
+    drivers: bee.gov.types:drivers
     artifact: bee.gov.types:artifact
     bounds: bee.drivers.values:bounds
     resources: bee.gov.binding:staging_resources

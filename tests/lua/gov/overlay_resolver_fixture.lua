@@ -101,10 +101,12 @@ local function driver_fixture(target_path: string?, action: string?, base: strin
     local binding_id = name .. ".binding:binding"
     local items: {Entry} = {
         {id = binding_id, kind = "contract.binding", meta = {type = "harness.driver"}, data = {}},
-        {id = name .. ".binding:activation", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
-            data = {default = binding_id, targets = {{entry = "bee.harness.launch:harness_activation", path = target_path or ".bindings +="}}}},
         {id = name .. ".security:descriptor_read", kind = "security.policy", data = {policy = {effect = "allow", actions = {action or "registry.get"}, resources = {"*"}}}},
     }
+    if target_path then
+        items[#items + 1] = {id = name .. ".binding:activation", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
+            data = {default = binding_id, targets = {{entry = "bee.harness.launch:harness_activation", path = target_path}}}}
+    end
     local made = assert(artifact.create(items))
     local deps, spec, facts = fixture()
     facts.captured.entries[#facts.captured.entries + 1] = {id = "bee.harness.launch:harness_activation", kind = "registry.entry",

@@ -14,22 +14,23 @@ local hash = require("hash")
 local system = require("system")
 local resources = require("resources")
 local service = require("destination_service")
-local OWNER = "bee.gov:driver-link-proof"
+local drivers = require("drivers")
+local OWNER = drivers.OWNER_PREFIX .. "driver-owner-profile.bee.driver.ownerproof"
+local APPLICATION_OWNER = "bee.gov:driver-link-proof"
 local function values(): {unknown}
-    local entry = assert(registry.get(activation.TARGET))
+    local entry = assert(registry.get("bee.harness.launch:harness_activation"))
     return assert(bounds.dense_list(entry.data.bindings, 128, "driver bindings"))
 end
 local function define_tests()
     test.describe("Approved driver host selection", function()
-        test.it("admits exact consumed driver and credential entries from declared metadata", function()
+        local function consumed_case(owner: string, admitted: boolean)
+            local suffix = admitted and "driver" or "application"
             local node = assert(system.node.id())
             local workspace = "driver-owner-profile"
             local binding_id = "extensions.adapters:chosen"
             local builtin = assert(registry.get("bee.drivers.claude.binding:binding"))
             local entries: {{[string]: unknown}} = {
                 {id = binding_id, kind = "contract.binding", meta = {type = "harness.driver"}, data = builtin.data},
-                {id = "custom.admission:driver", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
-                    data = {default = binding_id, targets = {{entry = activation.TARGET, path = ".bindings +="}}}},
                 {id = "shared.logins:session", kind = "registry.entry",
                     meta = {type = "bee.credential_format", provider = "ownerproof"},
                     data = {schema_revision = "bee.credential-format@2", environments = {}, file = {path = ".ownerproof/auth.json", content_format = "json", initialize = {}}}},
@@ -41,8 +42,8 @@ local function define_tests()
                 entry.data = {profiles = {{workspace_id = workspace, source_node = node,
                     source_workspace = "driver.ownerproof", component = "bee.driver.ownerproof",
                     overlay_owner = owner, approval_policy = "workspace-application-delivery", resolver = "overlay",
-                    allow = {packages = {"bee.driver.ownerproof"}, namespaces = {"extensions.adapters", "custom.admission", "shared.logins"},
-                        kinds = {"contract.binding", "ns.requirement", "registry.entry"}, databases = {}, grants = {}, modules = {}}}}}
+                    allow = {packages = {"bee.driver.ownerproof"}, namespaces = {"extensions.adapters", "shared.logins"},
+                        kinds = {"contract.binding", "registry.entry"}, databases = {}, grants = {}, modules = {}}}}}
                 local changes = assert(registry.snapshot()):changes()
                 assert(changes:update(entry))
                 assert(changes:apply())
@@ -72,12 +73,12 @@ local function define_tests()
                 return {bytes = bytes, digest = assert(hash.sha256(bytes))}
             end
             local ok, problem = pcall(function()
-                configure(OWNER)
-                assert(materializer.reconcile(OWNER, entries))
+                configure(owner)
+                assert(materializer.reconcile(owner, entries))
                 test.is_false(selected(), "an overlay without consumed approval is not admitted")
                 local digest = string.rep("a", 64)
-                local prepared = record({operation = "prepare_activation", intent_id = "driver-owner-intent",
-                    expected_revision = 0, idempotency_key = "prepare-driver-owner", overlay_owner = OWNER,
+                local prepared = record({operation = "prepare_activation", intent_id = "driver-owner-intent-" .. suffix,
+                    expected_revision = 0, idempotency_key = "prepare-driver-owner-" .. suffix, overlay_owner = owner,
                     source_node = node, source_workspace = "driver.ownerproof", version = "v1",
                     plan_digest = digest, plan_revision = 1, selection_revision = 1, artifact = captured,
                     resolution = blob("resolution"), preflight = blob("preflight"),
@@ -86,26 +87,32 @@ local function define_tests()
                         policy_digest = digest, candidate_digest = digest, artifact_digest = captured.digest,
                         plan_digest = digest, migrations = {}, databases = {}})))})
                 local bound = record({operation = "bind_approval", intent_id = prepared.intent_id,
-                    expected_revision = prepared.revision, idempotency_key = "bind-driver-owner",
-                    approval_id = "driver-owner-approval", approval_proposal_digest = digest, approval_owner_incarnation = 1})
+                    expected_revision = prepared.revision, idempotency_key = "bind-driver-owner-" .. suffix,
+                    approval_id = "driver-owner-approval-" .. suffix, approval_proposal_digest = digest, approval_owner_incarnation = 1})
                 local consuming = record({operation = "begin_consume", intent_id = prepared.intent_id,
-                    expected_revision = bound.revision, idempotency_key = "consume-driver-owner"})
+                    expected_revision = bound.revision, idempotency_key = "consume-driver-owner-" .. suffix})
                 record({operation = "record_consumption", intent_id = prepared.intent_id,
-                    expected_revision = consuming.revision, idempotency_key = "receipt-driver-owner",
+                    expected_revision = consuming.revision, idempotency_key = "receipt-driver-owner-" .. suffix,
                     consumer_id = "bee.gov.activation", proposal_digest = digest, effect_key = prepared.effect_key})
-                test.is_true(selected(), "the host-selected owner and consumed artifact admit this exact binding")
+                test.eq(selected(), admitted, "a consumed driver overlay activates its own harness binding; an application overlay activates none")
                 configure("bee.gov:another-owner")
                 test.is_false(selected(), "a different host-selected owner does not admit the binding")
-                configure(OWNER)
-                assert(materializer.reconcile(OWNER, {}))
+                configure(owner)
+                assert(materializer.reconcile(owner, {}))
                 test.is_false(selected(), "consumption without the matching live artifact is not admitted")
             end)
             assert(store.close(state))
-            assert(materializer.reconcile(OWNER, {}))
+            assert(materializer.reconcile(owner, {}))
             local changes = assert(registry.snapshot()):changes()
             assert(changes:update(original))
             assert(changes:apply())
             if not ok then error(tostring(problem)) end
+        end
+        test.it("activates the harness binding of a consumed driver overlay", function()
+            consumed_case(OWNER, true)
+        end)
+        test.it("activates no harness binding an application overlay carries", function()
+            consumed_case(APPLICATION_OWNER, false)
         end)
         test.it("reads the declared login provider and rejects malformed format metadata", function()
             local format = {schema_revision = "bee.credential-format@2", environments = {}, file = {path = ".gem/creds.json", content_format = "json", initialize = {}}}
@@ -128,13 +135,12 @@ local function define_tests()
             test.is_nil(activation.logins({{id = "bee.driver.gem.credentials:credential_format", kind = "registry.entry",
                 meta = {type = "bee.credential_format", provider = "gem"}, data = {schema_revision = "bee.credential-format@2"}}}))
         end)
-        test.it("keeps raw requirements declarative and derives owned approved bindings", function()
+        test.it("derives the approved binding from the driver's own harness binding", function()
             local baseline = values()
             local builtin = assert(registry.get("bee.drivers.claude.binding:binding"))
             local entries: {{[string]: unknown}} = {
                 {id = "bee.driver.link.binding:binding", kind = "contract.binding", meta = {type = "harness.driver"}, data = builtin.data},
-                {id = "bee.driver.link.binding:activation", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
-                    data = {default = "bee.driver.link.binding:binding", targets = {{entry = activation.TARGET, path = ".bindings +="}}}},
+                {id = "bee.driver.link.binding:other", kind = "contract.binding", meta = {type = "application.binding"}, data = builtin.data},
             }
             assert(materializer.reconcile(OWNER, entries))
             local selected, problem = activation.bindings(entries)
@@ -143,7 +149,7 @@ local function define_tests()
             test.eq(assert(selected)[1], "bee.driver.link.binding:binding")
             local active, active_error = resolver.active(assert(resolver.pin()))
             test.is_nil(active_error)
-            test.is_nil(assert(active)["bee.driver.link.binding:binding"])
+            test.is_nil(assert(active)["bee.driver.link.binding:binding"], "an unconsumed artifact activates nothing")
             local unlinked = values()
             test.eq(#unlinked, #baseline)
             for index, value in ipairs(baseline) do test.eq(unlinked[index], value) end
@@ -166,13 +172,9 @@ local function define_tests()
                 test.is_true(bounds.ids(bindings, true) ~= nil)
             end
         end)
-        test.it("refuses a host-list replacement and a foreign binding before selection", function()
-            for _, path in ipairs({".bindings", ".bindings +="}) do
-                local entries = {{id = "bee.driver.link.binding:activation", kind = "ns.requirement",
-                    data = {default = "bee.drivers.claude.binding:binding", targets = {{entry = activation.TARGET, path = path}}}}}
-                local result = activation.bindings(entries)
-                test.is_nil(result)
-            end
+        test.it("refuses an ambiguous approved artifact", function()
+            local entry = {id = "bee.driver.link.binding:binding", kind = "contract.binding", meta = {type = "harness.driver"}, data = {}}
+            test.is_nil(activation.bindings({entry, entry}))
         end)
     end)
 end

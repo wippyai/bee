@@ -408,20 +408,22 @@ function M.reader(driver_id: string, resumed: boolean?): (Reader?, error?)
     if not selected then return nil, find_error end
     -- The codec is pinned for the reader's lifetime: a descriptor change
     -- applies to the next stream, never to state this one built.
-    local protocol = codec_registry.resolve(selected.descriptor.codec, bounds.object(selected.descriptor.json_paths) or {})
-    if not protocol then return nil, fail(errors.INTERNAL, selected.descriptor_ref .. " selects an unsupported codec " .. selected.descriptor.codec) end
+    local codec = selected.descriptor.codec
+    if not codec then return nil, fail(errors.INVALID, selected.descriptor_ref .. " declares no codec; it runs only in a window") end
+    local protocol = codec_registry.resolve(codec, bounds.object(selected.descriptor.json_paths) or {})
+    if not protocol then return nil, fail(errors.INTERNAL, selected.descriptor_ref .. " selects an unsupported codec " .. codec) end
     local decoder = stream_json.new(nil)
     local state = protocol.new(resumed == true)
     -- take decodes what the codec reported into typed records.
     local function take(step: Step, observations: {unknown}, terminal: unknown): error?
         for _, raw in ipairs(observations) do
             local decoded, decode_error = observation.decode(raw)
-            if not decoded then return fail(errors.INTERNAL, selected.descriptor.codec .. " produced an invalid observation: " .. tostring(decode_error)) end
+            if not decoded then return fail(errors.INTERNAL, codec .. " produced an invalid observation: " .. tostring(decode_error)) end
             step.observations[#step.observations + 1] = decoded
         end
         if terminal ~= nil then
             local decoded, decode_error = driver_types.decode_terminal(terminal)
-            if not decoded then return fail(errors.INTERNAL, selected.descriptor.codec .. " produced an invalid terminal report: " .. tostring(decode_error)) end
+            if not decoded then return fail(errors.INTERNAL, codec .. " produced an invalid terminal report: " .. tostring(decode_error)) end
             step.terminal = decoded
         end
         return nil

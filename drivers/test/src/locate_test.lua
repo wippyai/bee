@@ -77,7 +77,7 @@ local function define_tests()
                     test.eq(result.status, "ready")
                 end
                 local input = probe(false)
-                input.login_checks = login_evidence.probe(selected.login_evidence, {
+                input.login_checks = login_evidence.probe(assert(selected.login_evidence), {
                     file = function(_path, _variable, _directory) return false, nil end,
                     environment = function(_name) return false end,
                     status = function(_argv, _timeout) return 1 end})

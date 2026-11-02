@@ -12,6 +12,12 @@ A driver never runs anything. It turns a request into a declarative launch
 normalizes output. The host decides where the launch runs and describes that
 placement in each request.
 
+A window-only CLI declares only what it has: its `provider`, `executable`,
+`version_probe`, `configure`, `options` and a `window` launch template. An
+absent `login_evidence` means the CLI needs no account; an absent `platform`
+admits every platform; `json_paths`, `flags` and `provider_home` default to
+empty; `codec` is required only with a `first_turn` or `resume` template.
+
 ## Personal use of subscription logins
 
 A driver can run a CLI with the login a person made on their own machine

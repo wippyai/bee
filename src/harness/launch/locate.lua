@@ -223,11 +223,13 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
 
     local platform = platform_probe(cache)
     local supported = bounds.object(selected.platform) or {}
-    local os_values = type(supported.os) == "table" and supported.os or {}
-    local arch_values = type(supported.arch) == "table" and supported.arch or {}
+    -- A descriptor without an os or arch list admits every one.
+    local function admits(values: unknown, value: string): boolean
+        return type(values) ~= "table" or bounds.member(value, values) ~= nil
+    end
     local compatible: boolean? = nil
     if platform.os and platform.arch then
-        compatible = bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
+        compatible = admits(supported.os, assert(platform.os)) and admits(supported.arch, assert(platform.arch))
     end
     local executable_name = selected.executable
     local executable_path, executable_error = bound_executable(pinned, policy_ref, executable_name)
@@ -297,7 +299,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             else version = probe_version.read(executable_path, bounds.object(selected.version_probe) or {}, runtime_capture) end
             if probe_failure then return unknown(provider, probe_failure:gsub("[%c]", " "):sub(1, 512)) end
             platform = {os = bounds.line(image.os, 32), arch = bounds.line(image.arch, 32)}
-            compatible = platform.os ~= nil and platform.arch ~= nil and bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
+            compatible = platform.os ~= nil and platform.arch ~= nil and admits(supported.os, assert(platform.os)) and admits(supported.arch, assert(platform.arch))
         end
     end
     if not docker then
@@ -306,7 +308,9 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     local selected_profile = driver_resolver.profile(pinned, binding_ref, profile_id)
     local interactive = selected_profile and selected_profile.mode == "window" and selected_profile.protocol == "pty"
     local names = environment_names()
-    local checks = login_evidence.probe(selected.login_evidence, {
+    -- A CLI that declares no login evidence needs no account and has no checks.
+    local declared_login = selected.login_evidence
+    local checks = declared_login and login_evidence.probe(declared_login, {
         file = login_exists,
         environment = function(name)
             if not names then return nil end
@@ -319,7 +323,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             local _, code = capture(argv, timeout, true)
             return code
         end,
-    })
+    }) or {}
     local probe = {profile_id = profile_id, configured = true,
         executable = {present = executable_present, version = version}, login_checks = checks,
         platform = {os = platform.os, arch = platform.arch, compatible = compatible}}

@@ -449,6 +449,28 @@ local function define_tests()
             test.not_nil(decode_error)
         end)
 
+        test.it("decodes a window-only CLI from its name, command and options", function()
+            local minimal: Object = {schema_revision = "bee.driver.cli-descriptor@4", provider = "echoagent", executable = "echoagent",
+                version_probe = {argv = {"--version"}}, configure = "plain", options = {profiles = {"window"}, fields = {}},
+                argv_templates = {window = {argv = {}, readiness = "none"}}}
+            local decoded, decode_error = descriptor.decode(minimal)
+            test.is_nil(decode_error)
+            local selected = assert(decoded)
+            test.is_nil(selected.login_evidence, "a CLI with no login evidence needs no account")
+            test.is_nil(selected.codec)
+            test.eq(next(selected.json_paths), nil)
+            test.eq(next(selected.flags), nil)
+            test.eq(#assert(bounds.array(selected.provider_home.files, 16)), 0)
+            test.is_nil(bounds.object(selected.argv_templates).first_turn)
+            local batch = copy_object(minimal)
+            batch.argv_templates = {window = {argv = {}, readiness = "none"}, first_turn = {argv = {}, readiness = "none"}}
+            local refused, refused_error = descriptor.decode(batch)
+            test.is_nil(refused, "a CLI that runs turns decodes them with a codec")
+            test.not_nil(refused_error)
+            local none = copy_object(minimal)
+            none.argv_templates = {}
+            test.is_nil((descriptor.decode(none)), "a CLI declares at least one launch template")
+        end)
         test.it("rejects inert option metadata and reserved request fields", function()
             local claude = assert(bounds.object(assert(descriptor.load("bee.drivers.claude.descriptor:cli"))))
             local inert_metadata = copy_object(claude)

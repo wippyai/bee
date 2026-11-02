@@ -98,9 +98,9 @@ type Descriptor = {
     provider: string,
     executable: string,
     version_probe: Object,
-    login_evidence: login_evidence_types.Declaration,
+    login_evidence: login_evidence_types.Declaration?,
     platform: Object,
-    codec: string,
+    codec: string?,
     json_paths: Object,
     argv_templates: Object,
     options: Object,
@@ -479,8 +479,13 @@ function M.decode(value: unknown): (Descriptor?, string?)
     local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities", "endpoints", "subscription_variables"})
     if extra then return nil, "CLI descriptor: " .. extra end
     if item.schema_revision ~= M.SCHEMA then return nil, "CLI descriptor schema_revision is unsupported" end
-    local provider, executable, codec, configure = bounds.id(item.provider), bounds.id(item.executable), bounds.member(item.codec, M.CODECS), bounds.id(item.configure)
-    if not provider or not executable or not codec or not configure then return nil, "CLI descriptor identity is invalid" end
+    local provider, executable, configure = bounds.id(item.provider), bounds.id(item.executable), bounds.id(item.configure)
+    if not provider or not executable or not configure then return nil, "CLI descriptor identity is invalid" end
+    local codec: string? = nil
+    if item.codec ~= nil then
+        codec = bounds.member(item.codec, M.CODECS)
+        if not codec then return nil, "CLI descriptor codec is unsupported" end
+    end
 
     local probe, probe_error = object(item.version_probe, "CLI descriptor.version_probe")
     if not probe then return nil, probe_error end
@@ -490,19 +495,27 @@ function M.decode(value: unknown): (Descriptor?, string?)
     for _, arg in ipairs(probe_argv) do if not bounds.text(arg, 128) then return nil, "CLI descriptor.version_probe.argv contains invalid text" end end
     if probe.pattern ~= nil and (not bounds.text(probe.pattern, 128) or probe.pattern == "") then return nil, "CLI descriptor.version_probe.pattern is invalid" end
 
-    local login, login_error = login_evidence.decode(item.login_evidence)
-    if not login then return nil, "CLI descriptor.login_evidence: " .. tostring(login_error) end
+    -- A CLI that declares no login evidence needs no account.
+    local login: login_evidence_types.Declaration? = nil
+    if item.login_evidence ~= nil then
+        local decoded_login, login_error = login_evidence.decode(item.login_evidence)
+        if not decoded_login then return nil, "CLI descriptor.login_evidence: " .. tostring(login_error) end
+        login = decoded_login
+    end
 
-    local platform, platform_error = object(item.platform, "CLI descriptor.platform")
+    -- An absent platform, or an absent os or arch list, admits every one.
+    local platform, platform_error = object(item.platform == nil and {} or item.platform, "CLI descriptor.platform")
     if not platform then return nil, platform_error end
     if bounds.fields(platform, {"os", "arch"}) then return nil, "CLI descriptor.platform has unknown fields" end
     for _, name in ipairs({"os", "arch"}) do
-        local values, values_error = sequence(platform[name], "CLI descriptor.platform." .. name, 16)
-        if not values or #values == 0 then return nil, values_error or ("CLI descriptor.platform." .. name .. " is empty") end
-        for _, candidate in ipairs(values) do if not bounds.id(candidate) then return nil, "CLI descriptor.platform." .. name .. " contains an invalid value" end end
+        if platform[name] ~= nil then
+            local values, values_error = sequence(platform[name], "CLI descriptor.platform." .. name, 16)
+            if not values or #values == 0 then return nil, values_error or ("CLI descriptor.platform." .. name .. " is empty") end
+            for _, candidate in ipairs(values) do if not bounds.id(candidate) then return nil, "CLI descriptor.platform." .. name .. " contains an invalid value" end end
+        end
     end
 
-    local paths, paths_error = object(item.json_paths, "CLI descriptor.json_paths")
+    local paths, paths_error = object(item.json_paths == nil and {} or item.json_paths, "CLI descriptor.json_paths")
     if not paths then return nil, paths_error end
     if bounds.fields(paths, {"resume_id", "result_text", "errors", "usage"}) then return nil, "CLI descriptor.json_paths has unknown fields" end
     for _, name in ipairs({"resume_id", "result_text", "errors", "usage"}) do
@@ -520,9 +533,17 @@ function M.decode(value: unknown): (Descriptor?, string?)
     local templates, templates_error = object(item.argv_templates, "CLI descriptor.argv_templates")
     if not templates then return nil, templates_error end
     if bounds.fields(templates, {"window", "first_turn", "resume"}) then return nil, "CLI descriptor.argv_templates has unknown fields" end
+    local template_count = 0
     for _, name in ipairs({"window", "first_turn", "resume"}) do
-        local template_error = validate_template_record(templates[name], "CLI descriptor.argv_templates." .. name)
-        if template_error then return nil, template_error end
+        if templates[name] ~= nil then
+            template_count = template_count + 1
+            local template_error = validate_template_record(templates[name], "CLI descriptor.argv_templates." .. name)
+            if template_error then return nil, template_error end
+        end
+    end
+    if template_count == 0 then return nil, "CLI descriptor.argv_templates declares no launch template" end
+    if not codec and (templates.first_turn ~= nil or templates.resume ~= nil) then
+        return nil, "CLI descriptor.codec is required to decode turn output"
     end
 
     local options, options_error = object(item.options, "CLI descriptor.options")
@@ -750,7 +771,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
         end
     end
 
-    local flags, flags_error = object(item.flags, "CLI descriptor.flags")
+    local flags, flags_error = object(item.flags == nil and {} or item.flags, "CLI descriptor.flags")
     if not flags then return nil, flags_error end
     if bounds.fields(flags, {"permission"}) then return nil, "CLI descriptor.flags has unknown fields" end
     for name, raw_flag in pairs(flags) do
@@ -766,7 +787,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
         end
     end
 
-    local home, home_error = object(item.provider_home, "CLI descriptor.provider_home")
+    local home, home_error = object(item.provider_home == nil and {files = {}} or item.provider_home, "CLI descriptor.provider_home")
     if not home then return nil, home_error end
     if bounds.fields(home, {"variable", "directory", "extra_variables", "files", "required_profile_file"}) then return nil, "CLI descriptor.provider_home has unknown fields" end
     if home.variable ~= nil and not bounds.id(home.variable) then return nil, "CLI descriptor.provider_home.variable is invalid" end

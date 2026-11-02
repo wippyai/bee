@@ -470,6 +470,7 @@ local function build_launch(selected: Descriptor, request: Request): (types.Laun
     if template.provider_home_private ~= nil then launch.provider_home = provider_home(selected, template.provider_home_private == true, request) end
     if template.login == true then
         local evidence = selected.login_evidence
+        if not evidence then return nil, "CLI descriptor declares a login template without login evidence" end
         local files: {types.RequiredFile} = {}
         for _, alternative in ipairs(evidence.any_of) do
             if alternative.kind == "file_exists" then
@@ -631,7 +632,9 @@ local function codec_selector<T>(ref: string, bind: (string, Object) -> T?): () 
         local descriptor, load_error = descriptor_reader.load_from(pinned, ref)
         if not descriptor then error(tostring(load_error or "CLI descriptor is unavailable")) end
         local json_paths = bounds.object(descriptor.json_paths) or {}
-        local selected = bind(descriptor.codec, json_paths)
+        local codec = descriptor.codec
+        if not codec then error("CLI descriptor " .. ref .. " declares no codec; its window output is not decoded") end
+        local selected = bind(codec, json_paths)
         if not selected then error("CLI descriptor selects an unsupported codec") end
         declaration, cached = current, selected
         return selected

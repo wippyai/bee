@@ -31,13 +31,15 @@ end
 local function key(viewport: tty.Viewport, kind: string, value: string?)
     assert(viewport:send({type = "key", action = "press", key_type = kind, key = value or ""}))
 end
-local function event(events: channel.Channel<process.Message>, kind: string): {[string]: unknown}
+-- event waits for the kind of event about the instance id; events about
+-- other instances, such as an earlier case's closing window, pass by.
+local function event(events: channel.Channel<process.Message>, kind: string, id: string): {[string]: unknown}
     local deadline = time.after("10s")
     while true do
         local selected = channel.select({events:case_receive(), deadline:case_receive()})
-        assert(selected.channel ~= deadline, "no " .. kind .. " event")
+        assert(selected.channel ~= deadline, "no " .. kind .. " event for " .. id)
         local data = bounds.object(selected.value:payload():data())
-        if data and data.kind == kind then return data end
+        if data and data.kind == kind and data.id == id then return data end
     end
 end
 -- swap makes the node's sessions owner binding the default for body, listing
@@ -144,23 +146,31 @@ local function define_tests()
                 local state = assert(client.state(call("watch", {})))
                 local doomed = tostring(call("open", {app = "bee.harness.app:app", desktop = state.desktop, args = {arguments = {"--session", owner.DOOMED}}}).id)
                 local kept = tostring(call("open", {app = "bee.harness.app:app", desktop = state.desktop, args = {arguments = {"--session", owner.KEPT}}}).id)
-                local raw, err = funcs.call("bee.harness.binding:forget_session_windows", {session = owner.DOOMED, thread_id = "thread-doomed", owner_id = "bee.test.owner"})
-                if err then error(tostring(err)) end
-                local reply = assert(bounds.object(raw))
-                test.is_true(reply.ok == true)
-                test.eq(#assert(bounds.array(assert(bounds.object(reply.value)).closed, 8)), 1)
-                local closed = event(events, "closed")
-                test.eq(closed.id, doomed)
-                local running = false
-                for _, item in ipairs(assert(bounds.array(call("instances", {app = "bee.harness.app:app"}).instances, 64))) do
-                    local instance = assert(bounds.object(item))
-                    if instance.id == kept then running = true end
-                    test.is_false(instance.id == doomed)
+                local ok, failure = pcall(function()
+                    local raw, err = funcs.call("bee.harness.binding:forget_session_windows", {session = owner.DOOMED, thread_id = "thread-doomed", owner_id = "bee.test.owner"})
+                    if err then error(tostring(err)) end
+                    local reply = assert(bounds.object(raw))
+                    test.is_true(reply.ok == true)
+                    local closed = assert(bounds.array(assert(bounds.object(reply.value)).closed, 8))
+                    test.eq(#closed, 1)
+                    test.eq(closed[1], doomed)
+                    event(events, "closed", doomed)
+                    local running = false
+                    for _, item in ipairs(assert(bounds.array(call("instances", {app = "bee.harness.app:app"}).instances, 64))) do
+                        local instance = assert(bounds.object(item))
+                        if instance.id == kept then running = true end
+                        test.is_false(instance.id == doomed)
+                    end
+                    test.is_true(running)
+                end)
+                for _, id in ipairs({doomed, kept}) do
+                    for _, item in ipairs(assert(bounds.array(call("instances", {app = "bee.harness.app:app"}).instances, 64))) do
+                        if assert(bounds.object(item)).id == id then call("close", {id = id, force = true}) end
+                    end
                 end
-                test.is_true(running)
-                call("close", {id = kept, force = true})
                 call("leave", {})
                 process.unlisten(events)
+                if not ok then error(tostring(failure)) end
             end)
         end)
     end)

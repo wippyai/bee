@@ -16,7 +16,7 @@ local MORE = frame.hints({{key = "Enter", verb = "start agent"}, {key = "Esc", v
 local function tag(item: agents.Entry): string
     if item.needs_setup then return "needs setup" end
     if not item.ready then return text.bound(item.status, 40) end
-    if item.kind == "profile" then return "saved profile" end
+    if item.kind == "profile" then return item.driver and (item.driver .. " profile") or "saved profile" end
     return ""
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,

@@ -415,7 +415,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if result.conversation then
                     if result.conversation.session.snapshot.terminal == true and not result.conversation.node then
                         output:close()
-                        client.title(launch, text.bound(result.conversation.title, 76))
+                        client.title(launch, text.bound(agents.label(result.conversation.session.snapshot.provider, result.conversation.title), 76))
                         local closing, view_error = terminal_view.run(launch, result.conversation.session:ref(), input, lifecycle, closes)
                         if closing then return finish(nil, view_error) end
                         client.title(launch, "Agents")
@@ -437,7 +437,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     ticks = 0
                     if ticker then ticker:stop() end
                     ticker = time.ticker("1s")
-                    client.title(launch, text.bound(conversation.title, 76))
+                    client.title(launch, text.bound(agents.label(conversation.session.snapshot.provider, conversation.title), 76))
                 else
                     status = result.error or "Agent session did not open"
                 end
@@ -450,7 +450,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 for index, row in ipairs(directory) do
                     if row.session == conversation.session:ref() then directory[index] = conversation.session.snapshot end
                 end
-                client.title(launch, text.bound(conversation.title, 76))
+                client.title(launch, text.bound(agents.label(conversation.session.snapshot.provider, conversation.title), 76))
                 if result.error then status = "Session operation failed: " .. result.error end
                 if removed then
                     removed = false
@@ -666,10 +666,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 local options = launch_options
                 launch_options = nil
                 opening = true
-                launching = entry.title
+                launching = agents.label(entry.driver, entry.title)
                 status = "Opening session…"
                 dirty = true
-                client.title(launch, text.bound(entry.title, 76))
+                client.title(launch, text.bound(launching, 76))
                 coroutine.spawn(function()
                     local definition = entry.ref
                     local profile: {id: string, revision: integer}? = nil

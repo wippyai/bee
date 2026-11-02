@@ -105,6 +105,13 @@ function M.profile_drivers(listing: Listing): {{definition_ref: string, title: s
     return choices
 end
 
+-- A session on screen: the driver it runs, then its title, which is its
+-- profile's name unless the person named the session.
+function M.label(driver: string?, title: string): string
+    if driver and driver ~= "" then return driver .. " · " .. title end
+    return title
+end
+
 local function conversation(session: sessions.Session): Conversation
     local snapshot = session.snapshot
     local turns: {Turn} = {}

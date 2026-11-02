@@ -139,7 +139,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         for slot = 1, window.capacity do
             local index = window.offset + slot
             local item = sidebar[index]
-            if item then frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(item.title, 128), index == selected, "sidebar_session", index, "") end
+            if item then frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(agents.label(item.provider, item.title), 128), index == selected, "sidebar_session", index, "") end
         end
         frame.fill(rail, height)
         frame.put(rail, 2, height, "Esc sessions", rail_width - 2, rail.theme.muted)
@@ -157,7 +157,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
-    frame.header(painter, "SESSION", (conv.node and ("Bee " .. conv.node .. " · ") or "") .. text.bound(conv.title, 128))
+    frame.header(painter, "SESSION", (conv.node and ("Bee " .. conv.node .. " · ") or "") .. text.bound(agents.label(conv.session.snapshot.provider, conv.title), 128))
     local badge = conv.activity .. (conv.queued > 0 and (" · " .. tostring(conv.queued) .. " queued") or "")
     if height >= 3 then
         frame.badge(painter, 2, 2, badge, ACTIVITY_ROLE[conv.activity])

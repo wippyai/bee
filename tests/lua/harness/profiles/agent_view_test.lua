@@ -128,8 +128,31 @@ local function define_tests()
             local text = screen(picker_view.draw(120, 20, appearance.defaults(), empty, 0, "", false, false).rows)
             test.is_true(text:find("No profiles are ready on this node", 1, true) ~= nil)
         end)
+        test.it("shows a saved profile by the person's name beside its driver", function()
+            local listing: agents.Listing = {items = {
+                {ref = "f:agy", kind = "definition", title = "Antigravity CLI", status = "ready", ready = true, reason = "", driver = "agy"},
+                {ref = "p:unsafe", kind = "profile", revision = 1, title = "unsafe agy", status = "ready", ready = true, reason = "", driver = "agy"}}, unavailable = 0, notes = {}}
+            local rows = picker_view.draw(120, 20, appearance.defaults(), listing, 2, "", false, false).rows
+            test.is_true(rows[3]:find("unsafe agy", 1, true) ~= nil)
+            test.is_true(rows[3]:find("agy profile", 1, true) ~= nil)
+            test.is_nil((rows[2]:find("profile", 1, true)))
+        end)
     end)
     test.describe("Sessions list", function()
+        test.it("names each session by its driver and profile in the list, the session header and the sidebar", function()
+            test.eq(agents.label("agy", "unsafe agy"), "agy · unsafe agy")
+            test.eq(agents.label(nil, "Worker"), "Worker")
+            local row = fixtures.fixture_snapshot("bs:n:w:unsafe", "unsafe agy", "idle", 0)
+            row.provider = "agy"
+            local listed = screen(directory_view.draw(120, 20, appearance.defaults(), {row}, 1, "", false).rows)
+            test.is_true(listed:find("agy · unsafe agy", 1, true) ~= nil)
+            local conv = conversation("idle", {}, "bs:n:w:unsafe")
+            conv.title, conv.session.snapshot.title, conv.session.snapshot.provider = "unsafe agy", "unsafe agy", "agy"
+            local opened = screen(session_view.draw(120, 36, appearance.defaults(), conv, "", "", {row}).rows)
+            test.is_true(opened:find("SESSION", 1, true) ~= nil)
+            local _, count = opened:gsub("agy · unsafe agy", "")
+            test.eq(count, 2)
+        end)
         test.it("shows the create operation and exact deadline cause as a failed launch", function()
             local cause = 'containers/create: context deadline exceeded: daemon create refused'
             local conv = conversation("idle", {{input = "start Docker session", state = "failed", text = "failed start: " .. cause,

@@ -947,7 +947,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local suffix = prepared.notice and " · Login needed" or ""
         if published_activity then suffix = suffix .. " · " .. published_activity end
         if checkpoint_error then suffix = suffix .. " · Save unconfirmed" end
-        local title = text.bound(admitted.plan.title, 77 - #suffix) .. suffix
+        local title = text.bound(agents.label(admitted.plan.driver_id, admitted.plan.title), 77 - #suffix) .. suffix
         if title ~= published_title and client.title(launch, title) then published_title = title end
     end
     publish_title()

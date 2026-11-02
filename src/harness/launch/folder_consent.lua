@@ -6,6 +6,7 @@ local time = require("time")
 local bounds = require("bounds")
 local admission = require("admission")
 local profile_values = require("profile_values")
+local profiles = require("profiles")
 local definitions = require("definitions")
 local resources = require("resources")
 local trust = require("trust")
@@ -21,6 +22,10 @@ local function call(target: string, request: Object): (Object?, string?)
     local fault = reply and bounds.object(reply.error)
     if err or not reply or reply.ok ~= true then return nil, tostring(err or (fault and fault.message) or "Folder consent owner did not answer") end
     return bounds.object(reply.value), nil
+end
+-- The Needs you question names the saved profile the approval stays with.
+function M.prompt(driver: string, profile: string, folder: string): string
+    return "Trust this folder for " .. driver .. " · " .. profile .. "?\n" .. folder .. "\nBee remembers your approval for this profile and folder until you revoke it."
 end
 function M.run(plan: admission.Plan, workspace: string, workdir: string?, executor: funcs.Executor): string?
     local profile = plan.effective_profile
@@ -63,7 +68,9 @@ function M.run(plan: admission.Plan, workspace: string, workdir: string?, execut
     if not physical then return physical_error end
     local saved, save_error = call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = plan.saved_profile_id})
     local parent_id = saved and bounds.id(saved.grant_id)
-    if not saved or not parent_id or saved.revision ~= plan.saved_profile_revision then return save_error or "Selected profile changed" end
+    local saved_profile = saved and bounds.object(saved.profile)
+    local saved_name = saved_profile and bounds.line(saved_profile.name, profiles.MAX_NAME_BYTES)
+    if not saved or not parent_id or not saved_name or saved.revision ~= plan.saved_profile_revision then return save_error or "Selected profile changed" end
     local db, open_error = database.open()
     if not db then return open_error end
     local parent, parent_error = grants.read(db, parent_id)
@@ -79,7 +86,7 @@ function M.run(plan: admission.Plan, workspace: string, workdir: string?, execut
         idempotency_key = "folder-consent:" .. assert(uuid.v7()), request_kind = "permission", policy = "configuration-setup",
         presentation = "inbox", proposal = {kind = "operation", ref = "bee.approvals:confirmation", revision = "1",
             payload = {action = "profile.folder_trust", target = target}}, scope = {type = "exact", parameters = target},
-        prompt = {text = "Trust this folder for " .. profile.name .. "?\n" .. physical .. "\nBee remembers your approval for this profile and folder until you revoke it."}})
+        prompt = {text = M.prompt(plan.driver_id, saved_name, physical)}})
     if not requested then return request_error end
     local approval = bounds.id(requested.approval_id)
     if not approval then return "Folder consent has no approval identity" end

@@ -277,6 +277,7 @@ entries:
     admission: bee.harness.launch:admission
     definitions: bee.harness.launch:definitions
     profile_values: bee.drivers.descriptor:profile_values
+    profiles: bee.harness.profiles:protocol
     bounds: bee.drivers.values:bounds
     resources: bee.placement.native.env:resources
     trust: bee.driver.descriptor:trust

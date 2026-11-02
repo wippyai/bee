@@ -7,6 +7,7 @@ local bounds = require("bounds")
 local host = require("host")
 local editor = require("editor")
 local protocol = require("protocol")
+local folder_consent = require("folder_consent")
 local WORKSPACE = "saved-profile-workspace"
 local function caller(id: string, grant: string?): funcs.Executor
     local policies: {security.Policy} = {}
@@ -342,6 +343,10 @@ local function define_tests()
             test.eq(value(call(writer, other_driver)).revision, 1)
             local listed = value(call(reader, {operation = "list", workspace_id = WORKSPACE, query = "careful codex"}))
             test.eq(#assert(bounds.array(listed.items, 64)), 2)
+        end)
+        test.it("asks the person to trust a folder for the saved profile by its driver and name", function()
+            local prompt = folder_consent.prompt("agy", "unsafe agy", "/work/bee")
+            test.eq(prompt:sub(1, #"Trust this folder for agy · unsafe agy?\n/work/bee\n"), "Trust this folder for agy · unsafe agy?\n/work/bee\n")
         end)
     end)
 end

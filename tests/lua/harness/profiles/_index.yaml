@@ -42,6 +42,7 @@ entries:
     test: wippy.test:test
     bounds: bee.drivers.values:bounds
     host: bee.tests.memory:host
+    folder_consent: bee.harness.launch:folder_consent
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: selection_test
   kind: function.lua
@@ -270,6 +271,7 @@ entries:
     test: wippy.test:test
     bounds: bee.drivers.values:bounds
     host: bee.tests.memory:host
+    folder_consent: bee.harness.launch:folder_consent
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: names_migration_db
   kind: db.sql.sqlite

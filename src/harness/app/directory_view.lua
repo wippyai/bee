@@ -46,7 +46,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             y = y + 1
             previous_bee = bee
         end
-        frame.row(painter, y, frame.tagged(width, text.bound(item.title, 512), state(item)), index == selected, "session", index, "", nil, true, 2)
+        frame.row(painter, y, frame.tagged(width, text.bound(agents.label(item.provider, item.title), 512), state(item)), index == selected, "session", index, "", nil, true, 2)
         local last = item.last_result
         local home = agents.home(item.session)
         local workspace = home and names[home]

@@ -26,6 +26,8 @@ Bee derives the rest:
   `launch_id` is its registry id, and `schema_revision` may be left out.
 - A launch policy defaults to process-group cleanup, independent exit
   observation and native placement.
+- A descriptor without login evidence needs no account, without a platform
+  admits every one, and without a codec runs only in a window.
 - Readiness in Agents probes the executable the policy binds, so the CLI need
   not be on PATH.
 - The profile editor builds its controls from the descriptor's
@@ -70,16 +72,7 @@ flag in `--help`. This `entries.json` is the whole driver:
       "provider": "echoagent",
       "executable": "echoagent",
       "version_probe": {"argv": ["--version"]},
-      "login_evidence": {
-        "command": "echoagent",
-        "any_of": [{"kind": "auth_status", "argv": ["--version"], "success_exit_code": 0, "timeout_ms": 5000}]
-      },
-      "platform": {"os": ["linux", "darwin"], "arch": ["x86_64", "amd64", "arm64", "aarch64"]},
-      "codec": "claude-stream-json",
       "configure": "plain",
-      "json_paths": {},
-      "flags": {},
-      "provider_home": {"files": []},
       "options": {
         "profiles": ["window"],
         "fields": {
@@ -105,11 +98,7 @@ flag in `--help`. This `entries.json` is the whole driver:
           }
         }
       },
-      "argv_templates": {
-        "window": {"argv": [{"render": "greeting", "context": "window"}], "readiness": "none"},
-        "first_turn": {"argv": [], "readiness": "none"},
-        "resume": {"argv": [], "readiness": "none"}
-      }
+      "argv_templates": {"window": {"argv": [{"render": "greeting", "context": "window"}], "readiness": "none"}}
     }
   },
   {
@@ -252,8 +241,8 @@ Do not copy a codec.
 - `version_probe.argv` must print a version; `pattern` (optional) extracts it.
 - `login_evidence` says how readiness learns the CLI is signed in:
   `file_exists` for a login file, `env_present` for a key variable,
-  `auth_status` for a status command. A CLI without an account declares its
-  version command as `auth_status`, as above; a window does not wait for it.
+  `auth_status` for a status command. Leave it out for a CLI with no account.
+- `platform` restricts `os` and `arch`; leave it out to admit every platform.
 - `options.fields` holds one editor control per option: `value_schema`,
   `label`, `section`, `group`, `security_class` (`free` for a person's own
   choice), `support` (the `--help` flag that proves the installed CLI accepts
@@ -261,20 +250,44 @@ Do not copy a codec.
   each option a person may set; others show as disabled by host policy.
 - `argv_templates.window.argv` is the window command line;
   `{"render": "<field>", "context": "window"}` inserts an option's tokens.
-  Every template names its `readiness` (`none` when the CLI reports nothing);
-  `first_turn` and `resume` stay empty for a window-only CLI.
-- `codec` names a shared stream decoder. A window-only CLI names any listed
-  codec (`claude-stream-json`) because a window decodes no stream.
-  `json_paths`, `flags` and `provider_home.files` stay empty unless the CLI
-  has them.
+  Every template names its `readiness` (`none` when the CLI reports nothing).
+  A window-only CLI declares only `window`.
+- `codec` names a shared stream decoder and is required once the CLI runs
+  turns (`first_turn` or `resume`); a window decodes no stream. `json_paths`,
+  `flags` and `provider_home` default to empty.
 - `configure` names the configure renderer; `plain` delivers nothing. The
   configure method reads the descriptor, so it names the overlay's
   `descriptor_read` policy, which may grant only `registry.get` and
   `registry.snapshot`.
 
-Batch and session profiles, hooks, MCP, credentials, logins and endpoints
-follow the shipped drivers: see `reference_drivers/opencode` and
-`component/driver`.
+## Hooks
+
+A driver without a hook declaration answers no hook point: extensions that
+need one are refused with that reason, and the CLI runs normally. A CLI whose
+hooks Bee can answer declares them in one `registry.entry` with
+`meta.type: bee.driver_hooks` and `meta.driver_id: <name>`, named
+`bee.driver.<name>.descriptor:hooks`:
+
+```json
+{"id": "bee.driver.echoagent.descriptor:hooks", "kind": "registry.entry",
+ "meta": {"type": "bee.driver_hooks", "driver_id": "echoagent"},
+ "data": {"response": "hook_specific_output", "transport": "command",
+          "points": {"tool.before": {"results": ["pass", "change", "deny"],
+                                     "reason": "PreToolUse updatedInput and permissionDecision=deny"}}}}
+```
+
+`points` names `session.start`, `prompt.submit`, `tool.before` and
+`tool.after` with the results Bee may return (`pass`, `add_context`,
+`change`, `deny`); `transport` (`command`, `http` or `mcp`, per point or for
+all) bounds the hook chain; `response` is the answer format
+(`hook_specific_output` as Claude Code reads it, `agy`, or `host` for an
+in-process driver). Optional rules: `allow_on_change` adds
+`permissionDecision=allow` to a change, `input` (`command` or `additive`)
+restricts changed tool input, `input_bytes` and `output_bytes` bound changes,
+`unsupported` explains the points not listed, and `mcp_meta` names the request
+metadata fields a CLI sets on MCP hook-engine and model calls. The shipped
+drivers' declarations are in `reference_drivers/opencode` and the
+`bee.driver.<name>.descriptor` entries.
 
 ## When it does not appear
 

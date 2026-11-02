@@ -364,6 +364,15 @@ local function define_tests()
             test.eq(s.form.draft.provider.system_prompt_append, "Use small changes.\nVerify them.")
             test.is_nil(s.form.pending)
         end)
+        test.it("saves no instructions for a driver that declares none", function()
+            local draft, err = editor.new({schema_revision = "bee.agent-profile@3", name = "Agent", definition_ref = "host:agent",
+                driver_binding_ref = "bee.drivers.codex.binding:binding", provider = {}, bee = {mcp = {}}},
+                {options = {}, mcp_tools = {}, instructions = false})
+            if not draft then error(tostring(err)) end
+            local s = view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"}, ask)
+            test.eq(view.action(s, "save"), "save", tostring(s.status))
+            test.is_nil(s.form.draft.provider.system_prompt_append)
+        end)
         test.it("requires confirmation for removal and keeps submitted values frozen", function()
             local s = state()
             test.is_nil(view.action(s, "remove"))

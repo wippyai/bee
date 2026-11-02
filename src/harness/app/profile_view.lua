@@ -275,8 +275,10 @@ function M.action(state: State, action: string, gesture: "enter" | "space" | "cl
         if not assigned then state.status = role_error or "Invalid role"; return nil end
         local contextual, context_error = editor.set_context(state.form.draft, state.context_rows)
         if not contextual then state.status = context_error or "Invalid context"; return nil end
-        local guided, guidance_error = editor.set_guidance(state.form.draft, state.guidance)
-        if not guided then state.status = guidance_error or "Invalid instructions"; return nil end
+        if state.form.draft._allowed.instructions then
+            local guided, guidance_error = editor.set_guidance(state.form.draft, state.guidance)
+            if not guided then state.status = guidance_error or "Invalid instructions"; return nil end
+        end
         for name, value in pairs(state.option_text) do
             local changed, option_error = editor.set_text_option(state.form.draft, name, value)
             if not changed then state.status = option_error or "Invalid option"; return nil end

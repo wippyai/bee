@@ -4,8 +4,9 @@ local registry = require("registry")
 local capabilities = require("capabilities")
 local response = require("response")
 local security = require("security")
-local ID = "bee.tests.echoagent.descriptor:hooks"
-local MISNAMED = "bee.tests.threads:echo_hooks"
+local funcs = require("funcs")
+local ID = "bee.tests.threads:echo_hooks"
+local READ = "bee.threads.sessions.security:owner_registry_read_policy"
 local function declare(data: {[string]: unknown}?, id: string?)
     local selected = id or ID
     local changes = assert(registry.snapshot()):changes()
@@ -44,25 +45,32 @@ local function define_tests()
             declare(nil)
             if not ok then error(tostring(err)) end
         end)
-        test.it("lets a hook transport read hook declarations and no other entry", function()
-            local scope = security.new_scope({assert(security.policy("bee.threads.hooks:declaration_read"))})
-            local actor = security.new_actor("fixture:hook-endpoint", {})
-            test.eq(scope:evaluate(actor, "registry.get", "bee.driver.claude.descriptor:hooks"), "allow")
-            test.eq(scope:evaluate(actor, "registry.get", "bee.driver.echoagent.descriptor:hooks"), "allow")
-            test.is_false(scope:evaluate(actor, "registry.get", "bee.driver.claude.descriptor:command") == "allow")
-            test.is_false(scope:evaluate(actor, "registry.get", "bee.drivers.claude.binding:binding") == "allow")
-            test.is_false(scope:evaluate(actor, "registry.get", "bee.gateway:external_profile") == "allow")
-        end)
-        test.it("refuses a declaration a hook transport could not read", function()
+        test.it("is found by meta under any id with the Agents stack's registry read", function()
             local ok, err = pcall(function()
                 declare({response = "hook_specific_output", transport = "command",
-                    points = {["tool.before"] = {results = {"pass"}, reason = "misnamed"}}}, MISNAMED)
-                local before = assert(capabilities.at("echoagent", "tool.before"))
-                test.is_false(before.supported)
-                test.is_true(before.reason:find("descriptor:hooks", 1, true) ~= nil, before.reason)
+                    points = {["tool.before"] = {results = {"pass", "deny"}, reason = "Echo PreToolUse"}}})
+                local scope = security.new_scope({assert(security.policy(READ))})
+                local actor = security.new_actor("fixture:hook-endpoint", {})
+                local found, find_error = funcs.new():with_actor(actor):with_scope(scope):call("bee.tests.threads:hook_declaration_probe", "echoagent")
+                test.is_nil(find_error, tostring(find_error))
+                test.eq(found, "Echo PreToolUse")
             end)
-            declare(nil, MISNAMED)
+            declare(nil)
             if not ok then error(tostring(err)) end
+        end)
+        test.it("gives the registry read to the hook endpoints and not to a launched agent's tool scope", function()
+            for _, id in ipairs({"bee.gateway.api:hook_http", "bee.gateway.api:hook_mcp_http"}) do
+                local entry = assert(registry.get(id)) :: {[string]: any}
+                local granted = false
+                for _, policy in ipairs(entry.data.security.policies) do if policy == READ then granted = true end end
+                test.is_true(granted, id .. " reads the drivers' hook declarations")
+            end
+            local actor = security.new_actor("fixture:agent-session", {})
+            local agent = security.new_scope({assert(security.policy("bee.security.gateway:gateway_tool_session_policy"))})
+            test.is_false(agent:evaluate(actor, "registry.get", "bee.drivers.claude.binding:binding") == "allow",
+                "an agent session's gateway tool scope reads no arbitrary entry")
+            local stack = security.new_scope({assert(security.policy(READ))})
+            test.eq(stack:evaluate(actor, "registry.get", "bee.drivers.claude.binding:binding"), "allow")
         end)
         test.it("keeps each built-in driver's declared semantics", function()
             test.eq(#assert(capabilities.at("claude", "tool.after")).allowed_results, 3)

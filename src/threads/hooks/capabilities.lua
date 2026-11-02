@@ -5,9 +5,6 @@ local bounds = require("bounds")
 local hook_limits = require("hook_limits")
 local M = {}
 M.TYPE = "bee.driver_hooks"
--- Hook transports may read only entries with this name, so a declaration
--- carries it wherever it is read.
-M.NAME = "^[a-z][a-z0-9.]*%.descriptor:hooks$"
 M.POINTS = {"session.start", "prompt.submit", "tool.before", "tool.after"}
 M.EVENTS = {SessionStart = "session.start", UserPromptSubmit = "prompt.submit", PreToolUse = "tool.before", PostToolUse = "tool.after"}
 M.RESULTS = {"pass", "add_context", "change", "deny"}
@@ -124,8 +121,6 @@ function M.declaration(driver: string): (Declaration, string?)
     if #found == 0 then return none, nil end
     if #found > 1 then return none, "driver " .. driver .. " declares hooks more than once" end
     local entry = bounds.object(found[1])
-    local id = entry and bounds.id(entry.id) or ""
-    if not id:match(M.NAME) then return none, id .. ": a hook declaration is named <component>.descriptor:hooks" end
     local decoded, decode_error = M.decode(entry and entry.data)
     if not decoded then return none, tostring(entry and bounds.id(entry.id) or driver) .. ": " .. tostring(decode_error) end
     return decoded, nil
@@ -170,8 +165,7 @@ function M.mcp_meta(): ({McpMeta}?, string?)
     local rules: {McpMeta} = {}
     for _, raw in ipairs(found) do
         local entry = bounds.object(raw)
-        local id = entry and bounds.id(entry.id) or ""
-        local decoded = entry and id:match(M.NAME) and M.decode(entry.data) or nil
+        local decoded = entry and M.decode(entry.data) or nil
         if decoded and decoded.mcp_meta then rules[#rules + 1] = decoded.mcp_meta end
     end
     return rules, nil

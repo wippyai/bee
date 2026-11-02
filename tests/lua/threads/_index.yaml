@@ -584,13 +584,26 @@ entries:
   kind: function.lua
   source: file://hook_declaration_test.lua
   method: run
-  modules: [registry, security]
+  modules: [registry, security, funcs]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
     capabilities: bee.threads.hooks:capabilities
     response: bee.threads.hooks:response
-  security: {policies: [bee.tests.harness:apply_test_policy]}
+  security: {policies: [bee.tests.harness:apply_test_policy, bee.tests.threads:hook_declaration_test_policy]}
+- name: hook_declaration_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, funcs.security, security.policy.get, security.scope.create, security.actor.create, registry.find, registry.get, registry.snapshot]
+    resources: '*'
+    effect: allow
+- name: hook_declaration_probe
+  kind: function.lua
+  source: file://hook_declaration_probe.lua
+  method: handle
+  meta: {type: test_support}
+  imports: {capabilities: bee.threads.hooks:capabilities}
 - name: hooks_test
   kind: function.lua
   source: file://hooks_test.lua

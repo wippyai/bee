@@ -108,8 +108,10 @@ entries:
 - name: owner_registry_read_policy
   kind: security.policy
   meta:
-    comment: The Sessions owner reads admitted driver, definition and launch policy metadata from one pinned catalog; this
-      grants no registry mutation or launch permission
+    comment: The Agents application stack (the Sessions owner and its hook endpoints) reads the whole registry because drivers
+      and their hook declarations are declarations it discovers by meta; the registry holds definitions, not secrets. It
+      grants no registry mutation or launch permission and belongs to these host functions only, never to a scope handed
+      to a launched agent
   policy:
     actions:
     - registry.get

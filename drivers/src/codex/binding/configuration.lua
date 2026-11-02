@@ -170,7 +170,7 @@ local function hook_projection(events: {string}): ({ProjectedHook}?, string?)
     for index, event in ipairs(events) do
         local template, label = HOOK_TEMPLATES[event], HOOK_LABELS[event]
         if not template or not label then return nil, "Codex does not support gateway hook event " .. event end
-        local handler: HookHandler = {type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = event == "PermissionRequest" and 650 or hook_limits.MCP_SECONDS}
+        local handler: HookHandler = {type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = event == "PermissionRequest" and hook_limits.PERMISSION_SECONDS or hook_limits.MCP_SECONDS}
         local identity, identity_error = canonical.encode({event_name = label, hooks = {handler}})
         if not identity then return nil, identity_error end
         local digest, digest_error = hash.sha256(identity)

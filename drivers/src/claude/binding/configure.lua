@@ -27,7 +27,7 @@ local function gateway_delivery(gateway: configure_protocol.GatewayInput?): (con
             event_handler = {type = "command", command = quote.line({gateway.hook_command, "hook-post", gateway.endpoint, gateway.action_id, hook_token, event}), timeout = hook_limits.COMMAND_SECONDS}
         else
             event_handler = {type = handler.type, url = handler.url, headers = handler.headers,
-                allowedEnvVars = handler.allowedEnvVars, timeout = event == "PermissionRequest" and 650 or hook_limits.HTTP_SECONDS}
+                allowedEnvVars = handler.allowedEnvVars, timeout = event == "PermissionRequest" and hook_limits.PERMISSION_SECONDS or hook_limits.HTTP_SECONDS}
         end
         events[event] = {{matcher = "", hooks = {event_handler}}}
     end

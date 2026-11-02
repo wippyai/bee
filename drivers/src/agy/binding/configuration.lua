@@ -61,7 +61,7 @@ function M.hooks_file(gateway: configure_protocol_types.GatewayInput): (configur
         local native_event = event == "UserPromptSubmit" and "PreInvocation" or (event == "PermissionRequest" and "PreToolUse" or event)
         local command_event = (event == "UserPromptSubmit" or event == "Stop" or event == "PermissionRequest" or event == "PreToolUse") and ("agy:" .. event) or event
         local command = quote.line({executable, "hook-post", gateway.endpoint, gateway.action_id, hook_token, command_event})
-        local handler = {type = "command", command = command, timeout = event == "PermissionRequest" and 600 or hook_limits.COMMAND_SECONDS}
+        local handler = {type = "command", command = command, timeout = event == "PermissionRequest" and hook_limits.PERMISSION_SECONDS or hook_limits.COMMAND_SECONDS}
         if event == "Stop" or event == "UserPromptSubmit" or event == "SessionStart" then
             selected[native_event] = {handler}
         else

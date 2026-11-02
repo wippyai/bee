@@ -1,7 +1,14 @@
 -- SPDX-License-Identifier: MIT
 local bounds = require("bounds")
+local hook_limits = require("hook_limits")
 local M = {}
 type Object = {[string]: unknown}
+-- timeout is how long one delivery waits for the hook endpoint: a permission
+-- waits for a person, any other event only for the host to record it.
+function M.timeout(event: unknown): string
+    if event == "PermissionRequest" then return tostring(hook_limits.PERMISSION_SECONDS) .. "s" end
+    return "10s"
+end
 type IO = {submit: (Object) -> Object?, permission: (string, Object) -> (), record: (string) -> ()}
 function M.send(io: IO, row: Object, auto: boolean?): boolean
     local ok = pcall(function()

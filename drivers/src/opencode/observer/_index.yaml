@@ -42,3 +42,4 @@ entries:
   source: file://delivery.lua
   imports:
     bounds: bee.drivers.values:bounds
+    hook_limits: bee.drivers.binding:hook_limits

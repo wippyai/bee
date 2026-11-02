@@ -9,6 +9,7 @@ local registry = require("registry")
 local configuration = require("configuration")
 local driver_configuration = require("driver_configuration")
 local configure = require("configure")
+local hook_limits = require("hook_limits")
 local function gateway(tools: {string}, hooks: {string}): configuration.Gateway
     return {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = tools, hooks = hooks,
         token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN",
@@ -26,7 +27,7 @@ local function define_tests()
             local hooks = assert(bounds.object(document.hooks))
             local permission = assert(bounds.object(assert(bounds.array(hooks.PermissionRequest, 1))[1]))
             local stop = assert(bounds.object(assert(bounds.array(hooks.Stop, 1))[1]))
-            test.eq(assert(bounds.object(assert(bounds.array(permission.hooks, 1))[1])).timeout, 600)
+            test.eq(assert(bounds.object(assert(bounds.array(permission.hooks, 1))[1])).timeout, hook_limits.PERMISSION_SECONDS)
             test.eq(assert(bounds.object(assert(bounds.array(stop.hooks, 1))[1])).timeout, 3)
         end)
         test.it("renders one settings file with scoped MCP and command hooks", function()

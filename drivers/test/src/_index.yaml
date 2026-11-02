@@ -140,6 +140,7 @@ entries:
     configuration: bee.drivers.muse.binding:configuration
     driver_configuration: bee.drivers.binding:configuration
     configure: bee.drivers.muse.binding:configure
+    hook_limits: bee.drivers.binding:hook_limits
 
 - name: host_values_test
   kind: function.lua
@@ -218,3 +219,18 @@ entries:
   imports:
     test: wippy.test:test
     format: bee.drivers.credentials:format
+- name: permission_hook_test
+  kind: function.lua
+  source: file://permission_hook_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    hook_limits: bee.drivers.binding:hook_limits
+    claude: bee.drivers.claude.binding:configure
+    codex: bee.drivers.codex.binding:configuration
+    agy: bee.drivers.agy.binding:configure
+    muse: bee.drivers.muse.binding:configuration
+    delivery: bee.drivers.opencode.observer:delivery

@@ -32,9 +32,11 @@ local function define_tests()
         end)
         test.it("explains how an approved driver becomes selectable in Agents", function()
             local text = guide.driver_delivery()
-            for _, needle in ipairs({"presentation.start_menu = true", "session_resource = session", "Agents", "N", "E", "default_mode window", "docker_credentials"}) do
-                test.not_nil((string.find(text, needle, 1, true)))
+            for _, needle in ipairs({"docs/add_driver", "presentation.start_menu = true", "Agents", "N", "E", "default_mode window",
+                "docker_credentials", "profile_restrictions", "declares no activation requirement"}) do
+                test.not_nil((string.find(text, needle, 1, true)), needle)
             end
+            test.is_nil((string.find(text, "session_resource", 1, true)), "a window keeps its session without naming the resource")
             local steps, next_app = guide.delivery_steps("driver.stubagent")
             test.eq(next_app, "Agents")
             test.not_nil((string.find(steps[#steps], "N", 1, true)))

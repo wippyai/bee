@@ -14,7 +14,7 @@ checks that they match the files.
 | Drawing, layout, styles, input and the application client | `toolkit` |
 | Agents with apps: start an app, send it a message, call app tools, the bound thread | `docs/agents_and_apps` |
 | Copyable application screens | `reference_apps/index` and one page per application |
-| Writing an agent driver for another CLI | `reference_drivers/opencode`, `component/driver` |
+| Adding a driver for a new agent CLI, from inside Bee or as a component | `docs/add_driver`, then `reference_drivers/opencode` and `component/driver` |
 | Application admission, launch, messages and recovery | `docs/application_contracts`, `component/app`, `component/app:threads` |
 | Delivering an application or driver as a governed overlay | `docs/distributed_app_delivery`, `component/gov` |
 | Threads, timeline, subscriptions and delivery | `docs/threads`, `component/threads`, `component/sessions` |

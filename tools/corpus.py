@@ -41,15 +41,11 @@ def page(driver: str, title: str) -> str:
         "dispatch, normalize, configure and locate functions implement the driver contract "
         "(`component/driver`).",
         "",
-        "To write a driver for another CLI, author an overlay named `driver.<name>` (for example "
-        "`driver.gemini`) and copy these files into it with every namespace renamed from "
-        f"`bee.drivers.{driver}` to `bee.driver.<name>`. An overlay driver defines its entries in "
-        "`bee.driver.<name>.binding`, `.descriptor`, `.profiles`, `.security`, `.types` and `.credentials`. "
-        "Its credential format is one `bee.credential_format` entry whose `meta.provider` is `<name>`; the "
-        "activation requirement is an `ns.requirement` with `value_kind: contract.binding` whose `default` is the "
-        "`contract.binding` of `meta.type: harness.driver` and whose single target appends to "
-        "`bee.harness.launch:harness_activation` at `.bindings +=`. Admission reads these declared fields, so "
-        "their identifiers may use any namespace the overlay owns. Its `.credentials` holds exactly one "
+        "To add a driver for a new agent CLI, start from the minimal example in `docs/add_driver`; this page "
+        "shows the full shape a batch-capable CLI with hooks, MCP and a login uses. An overlay driver is named "
+        "`driver.<name>` and defines its entries in `bee.driver.<name>.binding`, `.descriptor`, `.profiles`, "
+        "`.security`, `.types` and `.credentials`. Approving it activates its `harness.driver` binding; it "
+        "declares no activation requirement. Its `.credentials` holds exactly one "
         "`bee.credential_format` for provider `<name>`: the login file "
         "under the home and any files to initialize beside it; profiles name the credential `<name>_login`, and "
         "the descriptor's `provider_home.files` list exactly those files: the login file with kind `login` "
@@ -59,10 +55,7 @@ def page(driver: str, title: str) -> str:
         "Approving the driver lets its sessions use the person's machine login for that provider, and no "
         "other. The executable path is host configuration: leave `env/_index.yaml` out, and in each launch policy replace "
         "`executable_env` with `executables: {<executable>: <absolute path>}` naming the installed CLI, "
-        "which the person reviews with the overlay. Change the descriptor, "
-        "argv rendering and output "
-        "normalization to the new CLI, then freeze and deliver it. The person approves the overlay "
-        "and admits the new binding through harness activation (`component/harness`).",
+        "which the person reviews with the overlay.",
         "",
     ]
     for path in files:

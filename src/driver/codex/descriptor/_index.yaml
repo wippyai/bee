@@ -12,3 +12,29 @@ entries:
     arguments:
     - bee.driver.codex.profiles:default_window
     fullscreen: true
+- name: hooks
+  kind: registry.entry
+  meta:
+    type: bee.driver_hooks
+    driver_id: codex
+  data:
+    response: hook_specific_output
+    transport: mcp
+    allow_on_change: true
+    input: command
+    mcp_meta:
+      hook: [threadId]
+      model: [callId, x-codex-turn-metadata]
+    points:
+      session.start:
+        results: [pass, add_context]
+        reason: SessionStart additionalContext through the CLI hook response.
+      prompt.submit:
+        results: [pass, add_context, deny]
+        reason: UserPromptSubmit additionalContext and decision=block.
+      tool.before:
+        results: [pass, add_context, change, deny]
+        reason: PreToolUse updatedInput changes shell command input only; permissionDecision=deny refuses execution.
+      tool.after:
+        results: [pass, add_context]
+        reason: PostToolUse additionalContext; this CLI rejects output replacement and cannot refuse an already executed call.

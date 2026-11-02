@@ -6,6 +6,7 @@ local hooks = require("hooks")
 local transport_admission = require("admission")
 local boundary = require("session_boundary")
 local bounds = require("bounds")
+local hook_capabilities = require("hook_capabilities")
 type Object = {[string]: unknown}
 local function answer(response: http.Response, status: number, body: Object)
     response:set_status(status)
@@ -43,11 +44,13 @@ local function handle(): nil
     if call.method == "tools/list" then answer(response, http.STATUS.OK, mcp.result(call.id, {tools = {HOOK_TOOL}})); return nil end
     if call.method ~= "tools/call" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.METHOD_NOT_FOUND, "method not found")); return nil end
     if call.params.name ~= "hook" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "only the hook tool is served here")); return nil end
-    local class, reason = hooks.classify(call.params._meta)
+    local rules, rules_error = hook_capabilities.mcp_meta()
+    if not rules then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INTERNAL_ERROR, tostring(rules_error))); return nil end
+    local class, reason = hooks.classify(call.params._meta, rules)
     if class ~= "hook_engine" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "request metadata is not a hook-engine call (" .. class .. "): " .. reason)); return nil end
     local arguments = call.params.arguments
     if type(arguments) ~= "table" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "arguments must be an object")); return nil end
-    local reply = gateway.submit_hook(binding, bounds.object(arguments) or {}, "codex:" .. class)
+    local reply = gateway.submit_hook(binding, bounds.object(arguments) or {}, "mcp:" .. class)
     if not reply.ok then
         local fault = reply.error or {code = "STORAGE", message = "hook"}
         answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, fault.code .. ": " .. fault.message)); return nil

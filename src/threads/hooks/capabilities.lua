@@ -1,67 +1,141 @@
+-- MIT. A driver's hook semantics come from its bee.driver_hooks declaration,
+-- found by meta.driver_id. A driver without one answers no hook point.
+local registry = require("registry")
+local bounds = require("bounds")
+local hook_limits = require("hook_limits")
 local M = {}
+M.TYPE = "bee.driver_hooks"
 M.POINTS = {"session.start", "prompt.submit", "tool.before", "tool.after"}
 M.EVENTS = {SessionStart = "session.start", UserPromptSubmit = "prompt.submit", PreToolUse = "tool.before", PostToolUse = "tool.after"}
+M.RESULTS = {"pass", "add_context", "change", "deny"}
+M.RESPONSES = {"hook_specific_output", "agy", "host"}
+M.TRANSPORTS = {command = hook_limits.COMMAND_SECONDS, http = hook_limits.HTTP_SECONDS, mcp = hook_limits.MCP_SECONDS}
+M.UNDECLARED = "The driver declares no synchronous hook response."
 type Capability = {point: string, supported: boolean, allowed_results: {string}, reason: string}
+type Point = {results: {string}, reason: string, transport: string?}
+type McpMeta = {hook: {string}, model: {string}}
+type Declaration = {
+    response: string?,
+    unsupported: string,
+    points: {[string]: Point},
+    allow_on_change: boolean,
+    input: string?,
+    input_bytes: integer?,
+    output_bytes: integer?,
+    mcp_meta: McpMeta?,
+}
+
+local function names(raw: unknown, label: string): ({string}?, string?)
+    local list = bounds.ids(raw, true)
+    if not list or #list == 0 or #list > 8 then return nil, label .. " must name one to eight fields" end
+    return list, nil
+end
+
+local function transport(raw: unknown, label: string): (string?, string?)
+    if raw == nil then return nil, nil end
+    if type(raw) ~= "string" or M.TRANSPORTS[raw] == nil then return nil, label .. " must be command, http or mcp" end
+    return raw, nil
+end
+
+-- decode reads one declaration's data strictly; a field it does not know is
+-- refused rather than ignored.
+function M.decode(raw: unknown): (Declaration?, string?)
+    local data = bounds.object(raw)
+    if not data then return nil, "hook declaration data must be an object" end
+    local extra = bounds.fields(data, {"response", "transport", "unsupported", "points", "allow_on_change", "input",
+        "input_bytes", "output_bytes", "mcp_meta"})
+    if extra then return nil, "hook declaration: " .. extra end
+    local response: string? = nil
+    if data.response ~= nil then
+        response = bounds.member(data.response, M.RESPONSES)
+        if not response then return nil, "hook declaration response must be hook_specific_output, agy or host" end
+    end
+    local default_transport, transport_error = transport(data.transport, "hook declaration transport")
+    if transport_error then return nil, transport_error end
+    local unsupported = M.UNDECLARED
+    if data.unsupported ~= nil then
+        local text = bounds.line(data.unsupported, 512)
+        if not text or text == "" then return nil, "hook declaration unsupported must be one line" end
+        unsupported = text
+    end
+    local points: {[string]: Point} = {}
+    local declared = bounds.object(data.points == nil and {} or data.points)
+    if not declared then return nil, "hook declaration points must be an object" end
+    for name, raw_point in pairs(declared) do
+        if not bounds.member(name, M.POINTS) then return nil, "hook declaration names unknown point " .. tostring(name) end
+        local point = bounds.object(raw_point)
+        if not point or bounds.fields(point, {"results", "reason", "transport"}) then return nil, "hook point " .. name .. " is malformed" end
+        local results = bounds.ids(point.results, true)
+        if not results or #results == 0 then return nil, "hook point " .. name .. " names no results" end
+        for _, result in ipairs(results) do
+            if not bounds.member(result, M.RESULTS) then return nil, "hook point " .. name .. " names unknown result " .. result end
+        end
+        local reason = bounds.line(point.reason, 512)
+        if not reason or reason == "" then return nil, "hook point " .. name .. " needs a one-line reason" end
+        local selected, selected_error = transport(point.transport, "hook point " .. name .. " transport")
+        if selected_error then return nil, selected_error end
+        selected = selected or default_transport
+        if response ~= "host" and not selected then return nil, "hook point " .. name .. " names no transport" end
+        points[name] = {results = results, reason = reason, transport = selected}
+    end
+    if next(points) ~= nil and not response then return nil, "a hook declaration with points names its response" end
+    if data.allow_on_change ~= nil and type(data.allow_on_change) ~= "boolean" then return nil, "allow_on_change must be a boolean" end
+    local input: string? = nil
+    if data.input ~= nil then
+        input = bounds.member(data.input, {"command", "additive"})
+        if not input then return nil, "hook declaration input must be command or additive" end
+    end
+    local input_bytes = data.input_bytes ~= nil and bounds.count(data.input_bytes) or nil
+    if data.input_bytes ~= nil and (not input_bytes or input_bytes < 1) then return nil, "input_bytes must be a positive integer" end
+    local output_bytes = data.output_bytes ~= nil and bounds.count(data.output_bytes) or nil
+    if data.output_bytes ~= nil and (not output_bytes or output_bytes < 1) then return nil, "output_bytes must be a positive integer" end
+    local mcp_meta: McpMeta? = nil
+    if data.mcp_meta ~= nil then
+        local meta = bounds.object(data.mcp_meta)
+        if not meta or bounds.fields(meta, {"hook", "model"}) then return nil, "mcp_meta names hook and model fields" end
+        local hook, hook_error = names(meta.hook, "mcp_meta.hook")
+        if not hook then return nil, hook_error end
+        local model, model_error = names(meta.model, "mcp_meta.model")
+        if not model then return nil, model_error end
+        mcp_meta = {hook = hook, model = model}
+    end
+    return {response = response, unsupported = unsupported, points = points, allow_on_change = data.allow_on_change == true,
+        input = input, input_bytes = input_bytes, output_bytes = output_bytes, mcp_meta = mcp_meta}, nil
+end
+
+local function declarations(query: {[string]: unknown}): ({unknown}?, string?)
+    local pinned, pin_error = registry.snapshot()
+    if not pinned then return nil, "hook declarations are unreadable: " .. tostring(pin_error) end
+    query[".kind"], query["meta.type"] = "registry.entry", M.TYPE
+    local found, find_error = pinned:find(query)
+    if find_error or not found then return nil, "hook declarations are unreadable: " .. tostring(find_error) end
+    return found, nil
+end
+
+-- declaration returns the driver's hook declaration; a driver that declares
+-- none has no hook points.
+function M.declaration(driver: string): (Declaration, string?)
+    local none: Declaration = {unsupported = M.UNDECLARED, points = {}, allow_on_change = false}
+    local found, find_error = declarations({["meta.driver_id"] = driver})
+    if not found then return none, find_error end
+    if #found == 0 then return none, nil end
+    if #found > 1 then return none, "driver " .. driver .. " declares hooks more than once" end
+    local entry = bounds.object(found[1])
+    local decoded, decode_error = M.decode(entry and entry.data)
+    if not decoded then return none, tostring(entry and bounds.id(entry.id) or driver) .. ": " .. tostring(decode_error) end
+    return decoded, nil
+end
+
 function M.for_driver(driver: string): {Capability}
+    local declared, problem = M.declaration(driver)
     local result: {Capability} = {}
     for _, point in ipairs(M.POINTS) do
-        local allowed: {string} = {}
-        local reason = "The driver has no verified synchronous hook response transport."
-        if driver == "wippy" then
-            allowed = {"pass", "add_context", "change", "deny"}
-            reason = "The host owns model requests, tool execution and result insertion."
-        elseif driver == "claude" or driver == "codex" then
-            allowed = {"pass", "add_context"}
-            reason = "SessionStart additionalContext through the CLI hook response."
-            if point == "prompt.submit" then
-                allowed = {"pass", "add_context", "deny"}
-                reason = "UserPromptSubmit additionalContext and decision=block."
-            elseif point == "tool.before" then
-                allowed = {"pass", "add_context", "change", "deny"}
-                reason = driver == "codex" and "PreToolUse updatedInput changes shell command input only; permissionDecision=deny refuses execution."
-                    or "Claude 2.1.296 PreToolUse updatedInput and permissionDecision=deny; CLI input validation, protected tools and host authorization still apply."
-            elseif point == "tool.after" then
-                if driver == "claude" then
-                    allowed = {"pass", "add_context", "change"}
-                    reason = "Claude 2.1.296 PostToolUse updatedToolOutput replaces the model's tool result subject to CLI output-shape validation and protected-tool restrictions; an executed call cannot be denied retroactively."
-                else
-                    reason = "PostToolUse additionalContext; this CLI rejects output replacement and cannot refuse an already executed call."
-                end
-            end
-        elseif driver == "agy" then
-            reason = "Agy's installed contract has no synchronous response for this point."
-            if point == "prompt.submit" then
-                allowed = {"pass", "add_context"}
-                reason = "PreInvocation injectSteps.ephemeralMessage adds transient model context."
-            elseif point == "tool.before" then
-                allowed = {"pass", "change", "deny"}
-                reason = "PreToolUse decision=deny blocks execution; overwrite merges top-level arguments. Changes cannot remove existing fields. Host authorization still applies."
-            end
-        elseif driver == "muse" then
-            reason = "Muse 1.4.4 has no verified response semantics for this point."
-            if point == "tool.before" then
-                allowed = {"pass", "add_context", "change", "deny"}
-                reason = "Muse 1.4.4 PreToolUse validates additionalContext, updatedInput with permissionDecision=allow, and denial with permissionDecisionReason; authorization and correction restrictions still apply."
-            elseif point == "tool.after" then
-                allowed = {"pass", "add_context"}
-                reason = "Muse 1.4.4 PostToolUse accepts context and explicitly rejects output replacement; an executed call cannot be denied retroactively."
-            end
-        elseif driver == "grok" then
-            reason = "Grok 1.0.30 ignores SessionStart stdout."
-            if point == "prompt.submit" then
-                allowed = {"pass", "deny"}
-                reason = "UserPromptSubmit decision=block refuses typed prompts; allowing stdout/context is discarded, and auto-wake/subagent prompts are observation-only."
-            elseif point == "tool.before" then
-                allowed = {"pass", "add_context", "change", "deny"}
-                reason = "Grok 1.0.30 command hooks support updatedInput, additionalContext and permissionDecision=deny before normal permission and tool validation."
-            elseif point == "tool.after" then
-                allowed = {"pass", "add_context", "change"}
-                reason = "Grok 1.0.30 command hooks replace model-facing output through updatedToolOutput with native output-shape and protected-tool validation. An executed call cannot be denied retroactively."
-            end
-        elseif driver == "opencode" then
-            reason = "OpenCode observes tool events after execution; its permission transport does not provide these synchronous hook points."
+        local selected = declared.points[point]
+        if selected then
+            result[#result + 1] = {point = point, supported = true, allowed_results = selected.results, reason = selected.reason}
+        else
+            result[#result + 1] = {point = point, supported = false, allowed_results = {}, reason = problem or declared.unsupported}
         end
-        result[#result + 1] = {point = point, supported = #allowed > 0, allowed_results = allowed, reason = reason}
     end
     return result
 end
@@ -74,5 +148,26 @@ end
 function M.allows(capability: Capability, result: string): boolean
     for _, allowed in ipairs(capability.allowed_results) do if allowed == result then return true end end
     return false
+end
+-- seconds bounds a hook chain by the transport the driver answers the point on.
+function M.seconds(driver: string, point: string): integer?
+    local declared = M.declaration(driver)
+    local selected = declared.points[point]
+    local name = selected and selected.transport
+    if not name then return nil end
+    return M.TRANSPORTS[name]
+end
+-- mcp_meta lists the request metadata fields each driver answering over the
+-- MCP hook transport sets on its hook-engine and model calls.
+function M.mcp_meta(): ({McpMeta}?, string?)
+    local found, find_error = declarations({})
+    if not found then return nil, find_error end
+    local rules: {McpMeta} = {}
+    for _, raw in ipairs(found) do
+        local entry = bounds.object(raw)
+        local decoded = entry and M.decode(entry.data) or nil
+        if decoded and decoded.mcp_meta then rules[#rules + 1] = decoded.mcp_meta end
+    end
+    return rules, nil
 end
 return M

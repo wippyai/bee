@@ -1,9 +1,11 @@
 local bounds = require("bounds")
+local capabilities = require("capabilities")
 local M = {}
 type Object = {[string]: unknown}
 function M.render(event: string, raw: unknown, driver: string): Object
     local result = assert(bounds.object(raw))
-    if driver == "agy" then
+    local declared = capabilities.declaration(driver)
+    if declared.response == "agy" then
         if event == "PreToolUse" and result.denied == true then return {decision = "deny", reason = result.reason} end
         if event == "PreToolUse" and result.changed == true then return {overwrite = result.input} end
         local context = bounds.text(result.additional_context, 24576)
@@ -20,7 +22,7 @@ function M.render(event: string, raw: unknown, driver: string): Object
         else response.decision, response.reason = "block", result.reason end
     elseif event == "PreToolUse" and result.changed == true and result.input ~= nil then
         specific.updatedInput = result.input
-        if driver == "codex" or driver == "muse" then specific.permissionDecision = "allow" end
+        if declared.allow_on_change then specific.permissionDecision = "allow" end
     elseif event == "PostToolUse" and #(bounds.array(result.original_refs, 16) or {}) > 0 then
         specific.updatedToolOutput = result.output
     end

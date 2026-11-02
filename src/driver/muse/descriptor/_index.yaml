@@ -12,3 +12,20 @@ entries:
     arguments:
     - bee.driver.muse.profiles:default_window
     fullscreen: true
+- name: hooks
+  kind: registry.entry
+  meta:
+    type: bee.driver_hooks
+    driver_id: muse
+  data:
+    response: hook_specific_output
+    transport: command
+    allow_on_change: true
+    unsupported: Muse 1.4.4 has no verified response semantics for this point.
+    points:
+      tool.before:
+        results: [pass, add_context, change, deny]
+        reason: Muse 1.4.4 PreToolUse validates additionalContext, updatedInput with permissionDecision=allow, and denial with permissionDecisionReason; authorization and correction restrictions still apply.
+      tool.after:
+        results: [pass, add_context]
+        reason: Muse 1.4.4 PostToolUse accepts context and explicitly rejects output replacement; an executed call cannot be denied retroactively.

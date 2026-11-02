@@ -12,3 +12,22 @@ entries:
     arguments:
     - bee.driver.grok.profiles:default_window
     fullscreen: true
+- name: hooks
+  kind: registry.entry
+  meta:
+    type: bee.driver_hooks
+    driver_id: grok
+  data:
+    response: hook_specific_output
+    transport: command
+    unsupported: Grok 1.0.30 ignores SessionStart stdout.
+    points:
+      prompt.submit:
+        results: [pass, deny]
+        reason: UserPromptSubmit decision=block refuses typed prompts; allowing stdout/context is discarded, and auto-wake/subagent prompts are observation-only.
+      tool.before:
+        results: [pass, add_context, change, deny]
+        reason: Grok 1.0.30 command hooks support updatedInput, additionalContext and permissionDecision=deny before normal permission and tool validation.
+      tool.after:
+        results: [pass, add_context, change]
+        reason: Grok 1.0.30 command hooks replace model-facing output through updatedToolOutput with native output-shape and protected-tool validation. An executed call cannot be denied retroactively.

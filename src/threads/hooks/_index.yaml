@@ -4,6 +4,10 @@ entries:
 - name: capabilities
   kind: library.lua
   source: file://capabilities.lua
+  modules: [registry]
+  imports:
+    bounds: bee.drivers.values:bounds
+    hook_limits: bee.drivers.binding:hook_limits
 - name: dispatcher
   kind: library.lua
   source: file://dispatcher.lua
@@ -23,7 +27,7 @@ entries:
   modules: [funcs, channel, time, process, registry]
   imports:
     bounds: bee.drivers.values:bounds
-    hook_limits: bee.drivers.binding:hook_limits
+    capabilities: bee.threads.hooks:capabilities
 - name: budget
   kind: registry.entry
   meta: {type: bee.session.hook_budget}
@@ -55,7 +59,7 @@ entries:
 - name: response
   kind: library.lua
   source: file://response.lua
-  imports: {bounds: bee.drivers.values:bounds}
+  imports: {bounds: bee.drivers.values:bounds, capabilities: bee.threads.hooks:capabilities}
 - name: original
   kind: library.lua
   source: file://original.lua
@@ -65,3 +69,11 @@ entries:
     transaction: bee.threads.persist:transaction
     traits: bee.threads.delivery:traits
     supervisor: bee.threads.hooks:supervisor
+- name: declaration_read
+  kind: security.policy
+  meta:
+    comment: A hook transport reads the drivers' bee.driver_hooks declarations from a registry snapshot, which shows only entries the caller may get
+  policy:
+    actions: [registry.snapshot, registry.get]
+    resources: '*'
+    effect: allow

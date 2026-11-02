@@ -4,7 +4,7 @@ local time = require("time")
 local process = require("process")
 local registry = require("registry")
 local bounds = require("bounds")
-local hook_limits = require("hook_limits")
+local capabilities = require("capabilities")
 local M = {}
 M.MAX_INVOCATIONS = 16
 M.MAX_REPLY_BYTES = 16384
@@ -24,7 +24,7 @@ function M.budget(driver: string, point: string): Budget
     local invocation = assert(bounds.integer(declared.invocation_ms))
     local chain = assert(bounds.integer(declared.chain_ms))
     assert(invocation > 0 and invocation <= 60000 and chain > 0 and chain <= 60000, "invalid host hook budget")
-    local seconds = hook_limits.seconds(driver, point)
+    local seconds = capabilities.seconds(driver, point)
     if seconds then chain = math.min(chain, seconds * 1000) end
     return {invocation_ms = math.min(invocation, chain), chain_ms = chain}
 end

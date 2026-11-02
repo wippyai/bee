@@ -145,16 +145,18 @@ local function decode(raw: unknown, request: Request, capability: capabilities.C
     elseif request.point == "tool.before" then
         local input = bounds.object(reply.input)
         if not input or bounds.fields(reply, {"kind", "input"}) then return nil, "change requires tool input" end
-        if driver == "wippy" and not canonical.encode(input, 8192) then return nil, "tool input exceeds native driver bound" end
-        if driver == "agy" then
+        local declared = capabilities.declaration(driver)
+        if declared.input_bytes and not canonical.encode(input, declared.input_bytes) then return nil, "tool input exceeds the driver's bound" end
+        if declared.input == "additive" then
             for key in pairs(bounds.object(prior.input) or {}) do
-                if input[key] == nil then return nil, "Agy overwrite cannot remove an existing input field" end
+                if input[key] == nil then return nil, "this driver's change cannot remove an existing input field" end
             end
         end
-        if driver == "codex" and type(input.command) ~= "string" then return nil, "Codex changes require a shell command input" end
+        if declared.input == "command" and type(input.command) ~= "string" then return nil, "this driver's changes require a shell command input" end
     elseif request.point == "tool.after" then
         if reply.output == nil or bounds.fields(reply, {"kind", "output"}) then return nil, "change requires tool output" end
-        if driver == "wippy" and not canonical.encode(reply.output, 3000) then return nil, "tool output exceeds native driver bound" end
+        local declared = capabilities.declaration(driver)
+        if declared.output_bytes and not canonical.encode(reply.output, declared.output_bytes) then return nil, "tool output exceeds the driver's bound" end
     else
         if not bounds.text(reply.text, supervisor.MAX_REPLY_BYTES) or bounds.fields(reply, {"kind", "text"}) then return nil, "change requires prompt text" end
     end
@@ -274,7 +276,7 @@ function M.dispatch(request: Request): (Result?, string?)
         or not (security.can("bee.sessions.hook_boundary", request.session_ref) or security.can("bee.threads.carrier", request.thread_id)) then
         return nil, "hook dispatch requires the authenticated execution owner"
     end
-    if not capabilities.at("wippy", request.point) or not bounds.id(request.occurrence_id) then return nil, "invalid hook occurrence" end
+    if not bounds.member(request.point, capabilities.POINTS) or not bounds.id(request.occurrence_id) then return nil, "invalid hook occurrence" end
     local db, err = database.open()
     if not db then return nil, err end
     local ok, result, failure = pcall(run, db, request)

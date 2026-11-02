@@ -12,3 +12,10 @@ entries:
     arguments:
     - bee.driver.opencode.profiles:default_window
     fullscreen: true
+- name: hooks
+  kind: registry.entry
+  meta:
+    type: bee.driver_hooks
+    driver_id: opencode
+  data:
+    unsupported: OpenCode observes tool events after execution; its permission transport does not provide these synchronous hook points.

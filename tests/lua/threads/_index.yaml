@@ -580,6 +580,17 @@ entries:
     harness: bee.tests.threads:harness
     bounds: bee.drivers.values:bounds
 
+- name: hook_declaration_test
+  kind: function.lua
+  source: file://hook_declaration_test.lua
+  method: run
+  modules: [registry]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    capabilities: bee.threads.hooks:capabilities
+    response: bee.threads.hooks:response
+  security: {policies: [bee.tests.harness:apply_test_policy]}
 - name: hooks_test
   kind: function.lua
   source: file://hooks_test.lua

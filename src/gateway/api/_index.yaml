@@ -53,6 +53,7 @@ entries:
     bounds: bee.drivers.values:bounds
   security:
     policies:
+    - bee.threads.hooks:declaration_read
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:grant_context_policy
@@ -78,6 +79,7 @@ entries:
     bounds: bee.drivers.values:bounds
   security:
     policies:
+    - bee.threads.hooks:declaration_read
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:grant_context_policy
@@ -104,8 +106,10 @@ entries:
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
     bounds: bee.drivers.values:bounds
+    hook_capabilities: bee.threads.hooks:capabilities
   security:
     policies:
+    - bee.threads.hooks:declaration_read
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
     - bee.gateway.security:grant_context_policy
@@ -140,6 +144,7 @@ entries:
     subject_call: bee.gateway.security:subject_call
   security:
     policies:
+    - bee.threads.hooks:declaration_read
     - bee.resources.security:resource_resolve_policy
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy

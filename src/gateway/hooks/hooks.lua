@@ -199,16 +199,24 @@ function M.normalize(event: string, payload: Object): (Submission?, string?)
     if not digest then return nil, digest_error end
     return {event = event, occurrence = occurrence, ambiguous = ambiguous, digest = digest, fields = fields}, nil
 end
--- classify: what a Codex MCP request's metadata says about its origin.
--- Version-pinned validation of a shape the executable sets, never an
--- authenticated origin: a hook-engine call carries threadId and no model
--- call fields; a model call carries callId and turn metadata.
-function M.classify(meta: unknown): (string, string)
+type MetaRule = {hook: {string}, model: {string}}
+local function carries(object: {[string]: unknown}, fields: {string}): boolean
+    for _, field in ipairs(fields) do if object[field] ~= nil then return true end end
+    return false
+end
+-- classify: what an MCP hook request's metadata says about its origin, by
+-- the fields each driver answering over this transport declares it sets.
+-- Validation of a shape the executable sets, never an authenticated origin:
+-- a hook-engine call carries hook fields and no model call fields.
+function M.classify(meta: unknown, rules: {MetaRule}): (string, string)
     local object = bounds.object(meta)
     if not object then return "unclassified", "no request metadata" end
-    local hook = object.threadId ~= nil
-    local model = object.callId ~= nil or object["x-codex-turn-metadata"] ~= nil
-    if hook and not model then return "hook_engine", "threadId without model call fields" end
+    local hook, model = false, false
+    for _, rule in ipairs(rules) do
+        hook = hook or carries(object, rule.hook)
+        model = model or carries(object, rule.model)
+    end
+    if hook and not model then return "hook_engine", "hook fields without model call fields" end
     if model and not hook then return "model", "model call fields" end
     if hook and model then return "mixed", "hook and model call fields together" end
     return "unclassified", "neither hook nor model call fields"

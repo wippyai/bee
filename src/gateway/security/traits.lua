@@ -52,7 +52,7 @@ function M.supported(declared: Declaration, session: string, workspace: string, 
     for _, point in ipairs(declared.hooks or {}) do
         local capability = hook_capabilities.at(driver, point)
         if not capability or not capability.supported then return point .. ": " .. (capability and capability.reason or "unknown hook point") end
-        if driver ~= "wippy" then
+        if hook_capabilities.declaration(driver).response ~= "host" then
             local delivered = false
             for _, event in ipairs(admitted_hooks or {}) do
                 if hook_capabilities.EVENTS[event] == point then delivered = true end

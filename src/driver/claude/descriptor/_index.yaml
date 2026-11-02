@@ -12,3 +12,25 @@ entries:
     arguments:
     - bee.driver.claude.profiles:default_window
     fullscreen: true
+- name: hooks
+  kind: registry.entry
+  meta:
+    type: bee.driver_hooks
+    driver_id: claude
+  data:
+    response: hook_specific_output
+    transport: http
+    points:
+      session.start:
+        results: [pass, add_context]
+        reason: SessionStart additionalContext through the CLI hook response.
+        transport: command
+      prompt.submit:
+        results: [pass, add_context, deny]
+        reason: UserPromptSubmit additionalContext and decision=block.
+      tool.before:
+        results: [pass, add_context, change, deny]
+        reason: Claude 2.1.296 PreToolUse updatedInput and permissionDecision=deny; CLI input validation, protected tools and host authorization still apply.
+      tool.after:
+        results: [pass, add_context, change]
+        reason: Claude 2.1.296 PostToolUse updatedToolOutput replaces the model's tool result subject to CLI output-shape validation and protected-tool restrictions; an executed call cannot be denied retroactively.

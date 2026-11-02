@@ -12,6 +12,7 @@ M.SCHEMA = "bee.launch-definition@1"
 M.TYPE = "bee.launch_definition"
 M.MODES = {"window", "session", "batch"}
 M.OVERRIDES = {"mode", "workdir", "thread", "brief", "placement"}
+M.SESSION_RESOURCE = "session"
 type WorkdirKind = "caller_workspace" | "declared_resource" | "required"
 type ThreadKind = "new" | "caller" | "named"
 type WorkdirPolicy = {kind: WorkdirKind, resource_ref: string?}
@@ -88,8 +89,9 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
         "allowed_overrides", "workdir_policy", "thread_policy", "session_resource", "credentials", "private_credentials", "docker_credentials", "presentation",
         "allow_wider_tools", "unconfined", "options", "worktree"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
-    if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
-    local launch_id, binding_ref, profile_id, policy_ref = bounds.id(data.launch_id), bounds.id(data.binding_ref), bounds.id(data.profile_id), bounds.id(data.policy_ref)
+    if data.schema_revision ~= nil and data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
+    local launch_id = bounds.id(data.launch_id == nil and ref or data.launch_id)
+    local binding_ref, profile_id, policy_ref = bounds.id(data.binding_ref), bounds.id(data.profile_id), bounds.id(data.policy_ref)
     if not launch_id then return nil, ref .. ": launch_id is not an identifier" end
     if not binding_ref then return nil, ref .. ": binding_ref is not an identifier" end
     if not profile_id then return nil, ref .. ": profile_id is not an identifier" end
@@ -114,7 +116,9 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if not workdir then return nil, ref .. ": " .. tostring(workdir_error) end
     local thread, thread_error = decode_thread(data.thread_policy)
     if not thread then return nil, ref .. ": " .. tostring(thread_error) end
-    local session_resource: string? = nil
+    -- A window retains its session; the host's session resource holds it
+    -- unless the definition names another.
+    local session_resource: string? = mode == "window" and M.SESSION_RESOURCE or nil
     if data.session_resource ~= nil then
         session_resource = bounds.id(data.session_resource)
         if not session_resource then return nil, ref .. ": session_resource is not an identifier" end

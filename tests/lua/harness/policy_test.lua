@@ -2,6 +2,7 @@
 -- boundary, fences their values in its digest, and refuses unavailable names.
 local test = require("test")
 local policy = require("policy")
+local definitions = require("definitions")
 local bounds = require("bounds")
 
 type Entry = {[string]: unknown}
@@ -28,6 +29,33 @@ local function resolve(values: {[string]: string}): Resolver
 end
 
 local function define_tests()
+    test.describe("Minimal driver declarations", function()
+        test.it("decodes a launch policy that names only its executable", function()
+            local decoded = assert(policy.decode("test:minimal", {id = "test:minimal", kind = "registry.entry",
+                meta = {type = "bee.launch_policy"}, data = {executables = {echoagent = "/bin/sh"}}}))
+            test.eq(decoded.required_cleanup, "process_group")
+            test.eq(decoded.required_exit_observation, "independent")
+            test.eq(decoded.executables.echoagent, "/bin/sh")
+            test.eq(decoded.placement_profiles[1], "bee.placement.profiles:native")
+            local stale, stale_error = policy.decode("test:minimal", {id = "test:minimal", kind = "registry.entry",
+                meta = {type = "bee.launch_policy"}, data = {schema_revision = "bee.launch-policy@1", executables = {}}})
+            test.is_nil(stale)
+            test.not_nil(stale_error)
+        end)
+        test.it("decodes a window definition that names its binding, profile, policy and title", function()
+            local ref = "bee.driver.echoagent.profiles:window"
+            local decoded = assert(definitions.decode(ref, {id = ref, kind = "registry.entry", meta = {type = "bee.launch_definition"},
+                data = {title = "Echo agent", binding_ref = "bee.driver.echoagent.binding:binding", profile_id = "window",
+                    policy_ref = "bee.driver.echoagent.security:window", default_mode = "window", presentation = {start_menu = true}}}))
+            test.eq(decoded.launch_id, ref)
+            test.eq(decoded.session_resource, "session", "a window retains its session in the host session resource")
+            test.is_true(decoded.presentation.start_menu)
+            local batch = assert(definitions.decode(ref, {id = ref, kind = "registry.entry", meta = {type = "bee.launch_definition"},
+                data = {title = "Echo batch", binding_ref = "bee.driver.echoagent.binding:binding", profile_id = "batch",
+                    policy_ref = "bee.driver.echoagent.security:window", default_mode = "batch"}}))
+            test.is_nil(batch.session_resource)
+        end)
+    end)
     test.describe("Launch-policy executable environment", function()
         test.it("retires the persisted revision-two startup deadline explicitly", function()
             local raw = entry({sh = "/bin/sh"})

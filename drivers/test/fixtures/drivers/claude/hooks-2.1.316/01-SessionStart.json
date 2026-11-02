@@ -3,5 +3,5 @@
  "hook_event_name": "SessionStart",
  "session_id": "b7d0279b-a65d-4983-9fa1-492e1552dab8",
  "source": "startup",
- "transcript_path": "/fixture/cfg/projects/-home-wolfy-j-wippy-bee-briefs-lanes-driveraudit-work-homes-claude-work/b7d0279b-a65d-4983-9fa1-492e1552dab8.jsonl"
+ "transcript_path": "/fixture/cfg/projects/-fixture-work/b7d0279b-a65d-4983-9fa1-492e1552dab8.jsonl"
 }

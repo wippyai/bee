@@ -4,14 +4,15 @@ local json = require("json")
 local hooks = require("hooks")
 local subject_call = require("subject_call")
 local hook_response = require("hook_response")
+local gateway = require("gateway")
 local M = {}
 type Object = {[string]: unknown}
 type Fault = {code: string, message: string}
 local function fault(code: string, message: string): (Object?, Fault?) return nil, {code = code, message = message} end
--- deliver hands one recorded hook occurrence to its session owner and returns
+-- answer hands one recorded hook occurrence to its session owner and returns
 -- the hook's answer. A refused Bee permission answer reaches the agent as a
 -- denial with its reason; any other refusal keeps the owner's error code.
-function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Object?, transport: string?): (Object?, Fault?)
+local function answer(binding: subject_call.Binding, outcome: Object, payload: Object?, transport: string?): (Object?, Fault?)
     local event, event_id = outcome.event, bounds.id(outcome.event_id)
     if event ~= "SessionStart" and event ~= "UserPromptSubmit" and event ~= "PreToolUse" and event ~= "PostToolUse" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest" then return {}, nil end
     if not event_id then return fault("INVALID", "hook occurrence omitted its identity") end
@@ -67,5 +68,19 @@ function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Obje
     local context = bounds.text(value.additional_context, 24576)
     if not context then return fault("INTERNAL", "session boundary context exceeds its bound") end
     return {hookSpecificOutput = {hookEventName = "UserPromptSubmit", additionalContext = context}}, nil
+end
+-- deliver answers one hook. A window session takes every occurrence as it
+-- is delivered, so delivery settles it in the gateway's record.
+function M.deliver(binding: subject_call.Binding, outcome: Object, payload: Object?, transport: string?): (Object?, Fault?)
+    local context, refused = answer(binding, outcome, payload, transport)
+    local event_id = bounds.id(outcome.event_id)
+    if binding.subject:sub(1, 3) == "bs:" and event_id and outcome.status == "queued" then
+        local settled = gateway.hook_delivered(binding.binding_id, event_id, refused and (refused.code .. ": " .. refused.message) or nil)
+        if not settled.ok then
+            local fault = settled.error or {code = "STORAGE", message = "settle delivered hook"}
+            return nil, {code = fault.code, message = fault.message}
+        end
+    end
+    return context, refused
 end
 return M

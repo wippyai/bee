@@ -243,6 +243,18 @@ local function define_tests(group: string, selected_driver: string?)
             end
         end)
         end
+        if group == "driver" and (selected_driver == "claude" or selected_driver == "codex") then
+        test.it("answers every hook of a window session longer than the gateway's hook queue", function()
+            local session = host.open(nil, "bee.tests.memory:tools_hook", selected_driver)
+            harness.value(session.owner:call("session_attach", {session = session.session, attempt_id = session.binding.attempt_id, operation_key = harness.key()}))
+            local _, endpoint, token = host.transport(session)
+            for index = 1, 80 do
+                local changed = host.cli_hook(session, "PreToolUse", {tool_name = "Bash", tool_use_id = harness.key(), tool_input = {command = "pwd"}},
+                    assert(token), endpoint, selected_driver == "codex")
+                test.eq(assert(bounds.object(assert(bounds.object(changed.hookSpecificOutput)).updatedInput)).command, "pwd:b", "hook " .. tostring(index))
+            end
+        end)
+        end
         if group == "driver" and selected_driver == "codex" then
         test.it("hands an extension the tool output Codex reports", function()
             local session = host.open(nil, "bee.tests.memory:output_hook", "codex")

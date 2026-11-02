@@ -74,6 +74,13 @@ function M.acknowledge(tx: sql.Transaction, at: string, event_id: string, bindin
     return tx:execute("UPDATE bee_gateway_hooks SET status = 'committed', updated_at = ? WHERE event_id = ? AND binding_id = ? AND status = 'queued' AND claimed_epoch = ?", {at, event_id, binding_id, carrier_epoch})
 end
 
+function M.settle_delivered(db: sql.DB, at: string, event_id: string, binding_id: string, reason: string?)
+    if reason then
+        return db:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = ?, updated_at = ? WHERE event_id = ? AND binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {reason, at, event_id, binding_id})
+    end
+    return db:execute("UPDATE bee_gateway_hooks SET status = 'committed', updated_at = ? WHERE event_id = ? AND binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {at, event_id, binding_id})
+end
+
 function M.reject_binding(tx: sql.Transaction, at: string, reason: string, binding_id: string)
     return tx:execute("UPDATE bee_gateway_hooks SET status = 'rejected', rejected_reason = ?, updated_at = ? WHERE binding_id = ? AND status = 'queued' AND claimed_epoch = 0", {reason, at, binding_id})
 end

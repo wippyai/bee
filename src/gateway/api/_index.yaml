@@ -11,6 +11,7 @@ entries:
     bounds: bee.drivers.values:bounds
     subject_call: bee.gateway.security:subject_call
     hook_response: bee.threads.hooks:response
+    gateway: bee.gateway.binding:gateway
 - name: admission
   kind: library.lua
   source: file://admission.lua

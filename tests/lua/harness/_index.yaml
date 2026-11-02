@@ -2789,6 +2789,7 @@ entries:
     placement_store: bee.placement.native.persist:store
     bounds: bee.drivers.values:bounds
     fixture: bee.tests.harness:launch_fixture
+    executables: bee.tests.harness:executables
 - name: launch_overrides_test
   kind: function.lua
   source: file://launch_overrides_test.lua

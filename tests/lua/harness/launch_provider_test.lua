@@ -7,6 +7,7 @@ local machine = require("machine")
 local placement_store = require("placement_store")
 local bounds = require("bounds")
 local fixture = require("fixture")
+local executables = require("executables")
 local DEFINITION = fixture.DEFINITION
 local SHIPPED_SHAPE_DEFINITION = fixture.SHIPPED_SHAPE_DEFINITION
 local SHIPPED_BATCH_POLICY = fixture.SHIPPED_BATCH_POLICY
@@ -101,7 +102,7 @@ local function define_tests()
             policy_data.allow_host_home = true
             policy_data.environment = {CLAUDE_CONFIG_DIR = "/fixture/host-home/.claude"}
             policy_data.environment_refs = {}
-            policy_data.executables = {claude = "/bin/true"}
+            policy_data.executables = {claude = executables.fixture_bin() .. "/claude"}
             policy_data.executable_env = {}
             policy_data.gateway_tools = {}
             policy_data.gateway_hooks = {}

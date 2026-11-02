@@ -2,7 +2,11 @@
 
 A saved `bee.agent-profile@3` has `name`, optional `role` (256 bytes),
 `active_traits`, `requestable`, and `context`, alongside its driver, provider,
-Bee permissions and placement choices. Each trait list holds at most 16 IDs.
+Bee permissions and placement choices. `name` (80 bytes) is the person's name
+for the profile, distinct among a workspace's profiles of one driver ignoring
+case; a new profile starts as its agent and placement (`Claude Code · local`),
+and Agents shows it as `driver · name` on session rows and window titles.
+Each trait list holds at most 16 IDs.
 Context holds at most 24 printable keys (128 bytes each), scalar string, finite
 number or boolean values, and 8192 encoded bytes. Keys beginning `bee.` belong
 to the host and are refused in profiles and spawn overrides.

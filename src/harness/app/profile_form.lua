@@ -21,7 +21,10 @@ local M = {}
 -- profile, whose own definition applies.
 type Subject = {definition_ref: string?, title: string, saved_profile_id: string?, saved_profile_revision: integer?}
 type TraitRow = {id: string, title: string, gated: boolean}
-type Form = {traits: {TraitRow}?,permission_transport: boolean?, driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
+-- How Bee named a new profile: the name it proposed among the names the
+-- driver's saved profiles hold, and the agent title a proposal derives from.
+type Naming = {title: string?, taken: {string}, proposed: string}
+type Form = {naming: Naming?, traits: {TraitRow}?,permission_transport: boolean?, driver_name: string?, placement_names: {[string]: string}?, leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
     credential_keys: {[string]: boolean}?, definition_digest: string?, credential_definition: definition.Definition?, default_private_home: boolean?,
     save_key: string, remove_key: string, pending: string?, submitted: protocol.Profile?,
     fields: {[string]: {label: string, section: string, order: integer, group: string?, default: unknown, default_source: string?, value_schema: {[string]: unknown}?}}?, unsupported: {string}?,
@@ -87,6 +90,39 @@ local function call(request: unknown): ({[string]: unknown}?, string?)
     return value, nil
 end
 
+-- The names the workspace's saved profiles of one driver hold.
+local function names(workspace: string, driver: string): ({string}?, string?)
+    local taken: {string} = {}
+    local after: string? = nil
+    local cursor: integer? = nil
+    repeat
+        local page, err = call({operation = "list", workspace_id = workspace, limit = 64, after_key = after, expected_cursor = cursor})
+        if not page then return nil, err end
+        for _, raw in ipairs(bounds.array(page.items, 64) or {}) do
+            local item = bounds.object(raw)
+            local profile = item and bounds.object(item.profile)
+            local name = profile and bounds.line(profile.name, protocol.MAX_NAME_BYTES)
+            if profile and name and profile.driver_binding_ref == driver then taken[#taken + 1] = name end
+        end
+        cursor = bounds.count(page.cursor)
+        after = page.complete ~= true and bounds.id(page.next_key) or nil
+    until not after
+    return taken, nil
+end
+
+local function docker(profile: protocol.Profile): boolean
+    return profile.placement ~= nil and profile.placement.kind == "docker"
+end
+
+-- The name a new profile takes after its placement changes: Bee's proposal
+-- follows the placement until the person writes a name of their own.
+function M.placement_name(form: Form, current: string): string
+    local naming = form.naming
+    if not naming or not naming.title or current ~= naming.proposed then return current end
+    naming.proposed = protocol.free_name(protocol.default_name(naming.title, docker(form.draft)), naming.taken)
+    return naming.proposed
+end
+
 -- The saved profile at the selected revision, or the reason it cannot be used.
 function M.refresh(form: Form): (Form?, string?)
     if form.pending or form.repair_json then return nil, "Finish the pending save or definition repair first" end
@@ -96,6 +132,7 @@ function M.refresh(form: Form): (Form?, string?)
     if not refreshed then return nil, refresh_error end
     refreshed.profile_id, refreshed.revision = form.profile_id, form.revision
     refreshed.save_key, refreshed.remove_key = form.save_key, form.remove_key
+    refreshed.naming = form.naming
     return refreshed, nil
 end
 
@@ -130,7 +167,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
             diagnostic = {source = profile, reasons = {reason or "Agent definition is missing"}}
         end
         if not diagnostic or not migration_draft then return nil, reason or "Agent definition is missing" end
-        local base: protocol.Profile = {schema_revision = protocol.SCHEMA, definition_ref = definition_ref or "migration:repair", driver_binding_ref = "migration:repair", name = bounds.line(migration_draft.name, 80) or "Migration repair", provider = {}, bee = {}}
+        local base: protocol.Profile = {schema_revision = protocol.SCHEMA, definition_ref = definition_ref or "migration:repair", driver_binding_ref = "migration:repair", name = bounds.line(migration_draft.name, protocol.MAX_NAME_BYTES) or "Migration repair", provider = {}, bee = {}}
         local draft, err = editor.new(base, {options = {}, mcp_tools = {}, instructions = false, placements = {}})
         if not draft then return nil, err end
         if duplicate then
@@ -164,10 +201,18 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     local base: protocol.Profile = {schema_revision = protocol.SCHEMA, name = choice.title,
         definition_ref = definition_ref, driver_binding_ref = decoded.binding_ref, provider = {}, bee = {mcp = mcp}}
     if profile then base = profile end
+    local naming: Naming? = nil
     if duplicate or id == "" then
         local fresh, fresh_error = uuid.v7()
         if not fresh then return nil, tostring(fresh_error) end
         id, revision = fresh, 0
+        if not initial then
+            local taken, taken_error = names(workspace, base.driver_binding_ref)
+            if not taken then return nil, taken_error end
+            local title = not profile and choice.title or nil
+            base.name = protocol.free_name(title and protocol.default_name(title, docker(base)) or base.name, taken)
+            naming = {title = title, taken = taken, proposed = base.name}
+        end
     end
     -- A folder or thread choice is offered only where the definition and its
     -- launch policy both allow the override; admission checks it again.
@@ -297,7 +342,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
         end
     end
     table.sort(traits, function(a: TraitRow, b: TraitRow): boolean return a.title < b.title end)
-    return {traits = traits, workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
+    return {naming = naming, traits = traits, workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
         permission_transport = policy_data.permission_exchange ~= nil,
         driver_name = driver_name, placement_names = placement_names, leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
         save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported, credentials = credential_choices,
@@ -364,7 +409,8 @@ function M.save(form: Form): (boolean, string?)
     local saved, save_error = call({operation = "put", workspace_id = form.workspace_id,
         profile_id = form.profile_id, expected_revision = form.revision, idempotency_key = form.save_key, profile = profile})
     if not saved then
-        if save_error and save_error:match("^CONFLICT:") then form.pending = nil; form.submitted = nil; form.conflict = true end
+        if save_error and save_error:match("^CONFLICT:") then form.pending = nil; form.submitted = nil; form.conflict = true
+        elseif save_error and save_error:match("^INVALID_ARGUMENT:") then form.pending = nil; form.submitted = nil end
         return false, save_error
     end
     if saved.workspace_id ~= form.workspace_id or saved.profile_id ~= form.profile_id
@@ -378,6 +424,10 @@ function M.copy(form: Form): (boolean, string?)
     local id, err = uuid.v7()
     local save_key, key_error = uuid.v7()
     if not id or not save_key then return false, tostring(err or key_error) end
+    local taken, taken_error = names(form.workspace_id, form.draft.driver_binding_ref)
+    if not taken then return false, taken_error end
+    local named, name_error = editor.set_title(form.draft, protocol.free_name(form.draft.name, taken))
+    if not named then return false, name_error end
     form.profile_id, form.revision, form.save_key = id, 0, save_key
     form.pending, form.submitted, form.conflict = nil, nil, nil
     return true, nil

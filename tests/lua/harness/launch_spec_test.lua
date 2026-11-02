@@ -114,7 +114,7 @@ local function define_tests()
                 for _, selected in ipairs({{id = parent_id, definition = DEFINITION}, {id = child_id, definition = RETAINED_DEFINITION}}) do
                     value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = selected.id,
                         expected_revision = 0, idempotency_key = fresh("put"), profile = {schema_revision = "bee.agent-profile@3",
-                            definition_ref = selected.definition, driver_binding_ref = "bee.drivers.claude.binding:binding", name = "Saved",
+                            definition_ref = selected.definition, driver_binding_ref = "bee.drivers.claude.binding:binding", name = selected.id == child_id and "Saved child" or "Saved parent",
                             role = "Parent", provider = {}, bee = {mcp = mcp}, active_traits = {"bee.tests.memory:review"},
                             requestable = selected.id == child_id and {"bee.tests.memory:trait", "bee.tests.memory:outside"} or {"bee.tests.memory:trait"}, context = {project = "Bee", child_profile = child_id, child_definition = RETAINED_DEFINITION}}}))
                 end
@@ -151,7 +151,11 @@ local function define_tests()
                 test.not_nil(consent.approval_id)
                 test.eq(consent.approval_id, value(principals.reply(report.consent_again)).approval_id)
                 test.not_nil(value(principals.reply(report.profile_get)).profile)
-                test.not_nil(value(principals.reply(report.profile_list)).items)
+                local names: {[string]: boolean} = {}
+                for _, item in ipairs(principals.objects(value(principals.reply(report.profile_list)).items)) do
+                    names[tostring(assert(bounds.object(item.profile)).name)] = true
+                end
+                test.is_true(names["Saved parent"] == true and names["Saved child"] == true)
                 test.not_nil(value(principals.reply(report.profile_put)).profile)
                 local after = value(principals.reply(report.spec_after_put))
                 test.eq(#assert(bounds.ids(after.active_traits, true)), 1)

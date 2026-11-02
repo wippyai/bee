@@ -110,8 +110,9 @@ local function get(store: sync.Store, tx: sql.Transaction, input: Request, feed_
     return transaction.success(value, false)
 end
 
-local function list(store: sync.Store, tx: sql.Transaction, input: Request, feed_name: string, owner: string): Result
-    local collected: {Stored} = {}
+-- every visits each projection of the workspace feed in key order and
+-- returns the feed cursor, or the failure that stopped the walk.
+local function every(store: sync.Store, tx: sql.Transaction, input: Request, feed_name: string, visit: (Stored) -> ()): (integer?, Result?)
     local cursor: integer? = nil
     local after: string? = nil
     repeat
@@ -119,34 +120,43 @@ local function list(store: sync.Store, tx: sql.Transaction, input: Request, feed
         if not result.ok then
             if result.code == "RESET_REQUIRED" then
                 local raw = bounds.object(result.value)
-                return failure("RESET_REQUIRED", "profile cursor changed", {workspace_id = input.workspace_id,
+                return nil, failure("RESET_REQUIRED", "profile cursor changed", {workspace_id = input.workspace_id,
                     cursor = raw and bounds.count(raw.cursor), reset_required = true})
             end
-            return clean(result)
+            return nil, clean(result)
         end
         local page = bounds.object(result.value)
         local rows = page and bounds.array(page.items, 64)
-        if not page or not rows then return failure("INTERNAL", "profile snapshot is malformed") end
+        if not page or not rows then return nil, failure("INTERNAL", "profile snapshot is malformed") end
         cursor = bounds.count(page.cursor)
-        if not cursor then return failure("INTERNAL", "profile cursor is malformed") end
+        if not cursor then return nil, failure("INTERNAL", "profile cursor is malformed") end
         for _, row in ipairs(rows) do
             local item, err = projection(row)
-            if not item then return err or failure("INTERNAL", "profile row is invalid") end
-            local profile = item.profile
-            local diagnostic = item.migration_diagnostic
-            local draft = diagnostic and bounds.object(diagnostic.draft)
-            local definition_ref = profile and profile.definition_ref or (draft and bounds.id(draft.definition_ref))
-            local name = profile and profile.name or (draft and bounds.line(draft.name, 80)) or item.profile_id
-            if (not input.definition_ref or input.definition_ref == definition_ref)
-                and (not input.query or name:lower():find(input.query:lower(), 1, true)) then collected[#collected + 1] = item end
+            if not item then return nil, err or failure("INTERNAL", "profile row is invalid") end
+            visit(item)
         end
         if page.complete == true then after = nil
         else
             local next_key = bounds.id(page.next_key)
-            if not next_key or (after and next_key <= after) then return failure("INTERNAL", "profile continuation does not advance") end
+            if not next_key or (after and next_key <= after) then return nil, failure("INTERNAL", "profile continuation does not advance") end
             after = next_key
         end
     until not after
+    return cursor, nil
+end
+
+local function list(store: sync.Store, tx: sql.Transaction, input: Request, feed_name: string, owner: string): Result
+    local collected: {Stored} = {}
+    local cursor, walk_failure = every(store, tx, input, feed_name, function(item: Stored)
+        local profile = item.profile
+        local diagnostic = item.migration_diagnostic
+        local draft = diagnostic and bounds.object(diagnostic.draft)
+        local definition_ref = profile and profile.definition_ref or (draft and bounds.id(draft.definition_ref))
+        local name = profile and profile.name or (draft and bounds.line(draft.name, protocol.MAX_NAME_BYTES)) or item.profile_id
+        if (not input.definition_ref or input.definition_ref == definition_ref)
+            and (not input.query or name:lower():find(input.query:lower(), 1, true)) then collected[#collected + 1] = item end
+    end)
+    if walk_failure then return walk_failure end
     table.sort(collected, function(left: Stored, right: Stored): boolean
         local a, b = left.profile, right.profile
         local x, y = a and a.name:lower() or left.profile_id, b and b.name:lower() or right.profile_id
@@ -190,6 +200,14 @@ local function put(store: sync.Store, tx: sql.Transaction, input: Request, node:
     local revision = value and bounds.count(value.revision) or nil
     if not revision then return failure("INTERNAL", "profile append omitted revision") end
     if not result.replayed then
+        local taken: string? = nil
+        local _, walk_failure = every(store, tx, input, feed_name, function(item: Stored)
+            local other = item.profile
+            if other and item.profile_id ~= input.profile_id and other.driver_binding_ref == profile.driver_binding_ref
+                and protocol.same_name(other.name, profile.name) then taken = other.name end
+        end)
+        if walk_failure then return walk_failure end
+        if taken then return failure("INVALID_ARGUMENT", "Another profile for this agent is already named " .. taken .. ". Choose a different name.") end
         local retired = authority.retire(tx,node,input.workspace_id,input.profile_id,actor,approving and approving.grant_id or nil)
         if retired then return failure("STORAGE",retired) end
         local stored = assert(protocol.storage(profile))

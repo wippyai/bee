@@ -248,6 +248,7 @@ entries:
     folder_picker: bee.ui.picker:folder
     editor: bee.harness.app:profile_editor
     forms: bee.harness.app:profile_form
+    protocol: bee.harness.profiles:protocol
 - name: directory_view
   kind: library.lua
   source: file://directory_view.lua

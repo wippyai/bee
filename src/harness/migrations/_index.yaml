@@ -82,3 +82,14 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-24T00:04:00Z'}
   imports:
     migration: wippy.migration:migration
+- name: profile_names
+  kind: function.lua
+  source: file://profile_names.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-11-01T00:01:00Z'}
+  modules: [json, registry]
+  imports:
+    migration: wippy.migration:migration
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    protocol: bee.harness.profiles:protocol

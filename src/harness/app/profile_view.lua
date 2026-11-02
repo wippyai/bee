@@ -15,6 +15,7 @@ local settings = require("settings")
 local bounds = require("bounds")
 local confirmation = require("confirmation")
 local option_controls = require("option_controls")
+local protocol = require("protocol")
 local M = {}
 M.THREADS = "bee.threads.binding:list"
 M.THREAD_PAGE = 64
@@ -531,7 +532,8 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
                 ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
                 if ok then
                     local refreshed, refresh_error = forms.refresh(state.form)
-                    if refreshed then state.form = refreshed else ok, err = false, refresh_error end
+                    if refreshed then state.form = refreshed; state.title = forms.placement_name(refreshed, state.title)
+                    else ok, err = false, refresh_error end
                 end
             elseif field.kind == "refresh" then
                 local ready = M.action(state, "save") == "save"
@@ -569,7 +571,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
             if "mcp." .. item.tool == field.name then value = canonical.encode(item.scope) or "{}" end
         end
     end
-    local limit = field.kind == "role" and 256 or field.kind == "context_key" and 128 or field.kind == "context_value" and 8192 or field.kind == "credential_value" and 65536 or field.kind == "scope" and 8192 or field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
+    local limit = field.kind == "role" and 256 or field.kind == "context_key" and 128 or field.kind == "context_value" and 8192 or field.kind == "credential_value" and 65536 or field.kind == "scope" and 8192 or field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and protocol.MAX_NAME_BYTES
         or (field.kind == "option" and (field.max_bytes or editor.MAX_INSTRUCTIONS_BYTES) or editor.MAX_INSTRUCTIONS_BYTES)
     if event.type == "paste" then value = value .. event.text
     elseif event.type == "key" and event.action == "press" then

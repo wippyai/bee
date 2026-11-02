@@ -11,7 +11,6 @@ local protocol = require("protocol")
 local json = require("json")
 local canonical = require("canonical")
 local M = {}
-M.MAX_TITLE_BYTES = 80
 M.MAX_INSTRUCTIONS_BYTES = preferences.MAX_INSTRUCTIONS_BYTES
 
 type Scalar = string | number | boolean
@@ -204,9 +203,9 @@ end
 function M.set_title(draft: Draft, value: unknown): (boolean, string?)
     local base, base_error = current(draft)
     if not base then return false, base_error end
-    local title = bounds.line(value, M.MAX_TITLE_BYTES)
+    local title = bounds.line(value, protocol.MAX_NAME_BYTES)
     if not title or title:match("^%s*$") then
-        return false, "title must contain 1 to 80 printable bytes"
+        return false, "Name must contain 1 to " .. tostring(protocol.MAX_NAME_BYTES) .. " printable bytes"
     end
     -- `current` has already copied and validated every other field. Keep the
     -- assignment direct so the checker retains the protocol's profile type.

@@ -489,7 +489,8 @@ func runGatewayAt(url, authorization string) int {
 		if listing := mustObject(mustObject(report["profile_list"])["value"]); listing != nil {
 			if items, ok := listing["items"].([]any); ok {
 				for _, raw := range items {
-					delete(mustObject(raw), "profile")
+					item := mustObject(raw)
+					item["profile"] = object{"name": mustObject(item["profile"])["name"]}
 				}
 			}
 		}
@@ -573,6 +574,7 @@ func reportSpecRegression(client *httpClient, url, authorization string, report 
 			copied["active_traits"], copied["requestable"] = []string{}, []string{}
 		}
 		profile += "-cleared"
+		copied["name"] = fmt.Sprint(copied["name"]) + " (" + mode + ")"
 		put := call("profile_put", object{"profile_id": profile, "expected_revision": 0, "idempotency_key": "traits:" + profile, "profile": copied}, 106)
 		report["put_ok"] = put["ok"]
 		report["put_error"] = put["error"]

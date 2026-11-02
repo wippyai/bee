@@ -140,7 +140,7 @@ local function define_tests()
                     local saved_id = fresh("trait-profile")
                     value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
                         expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3",
-                            name = "Remember", definition_ref = route.definition, driver_binding_ref = "bee.drivers.claude.binding:binding",
+                            name = "Remember " .. saved_id, definition_ref = route.definition, driver_binding_ref = "bee.drivers.claude.binding:binding",
                             provider = {}, bee = {mcp = {}}, active_traits = {"bee.tests.memory:trait"},
                             role = "Remember facts", context = {project = "Bee", readonly = false}}}))
                     local measured = value(call("bee.tests.harness.launch:resolve", {definition_ref = route.definition, workspace_id = workspace,

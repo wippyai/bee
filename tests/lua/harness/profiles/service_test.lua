@@ -46,8 +46,8 @@ local function define_tests()
     test.describe("Saved profile owner facade", function()
         test.after_all(host.close_all)
         test.it("refuses delegated Codex yolo values even under the exact person grant", function()
-            for _, options in ipairs({{sandbox = "danger-full-access"}, {approval_policy = "never"}, {dangerously_bypass_approvals_and_sandbox = true}}) do
-                local request = put(fresh(), 0, fresh(), "Container Codex")
+            for index, options in ipairs({{sandbox = "danger-full-access"}, {approval_policy = "never"}, {dangerously_bypass_approvals_and_sandbox = true}}) do
+                local request = put(fresh(), 0, fresh(), "Container Codex " .. tostring(index))
                 local profile = assert(bounds.object(request.profile))
                 profile.provider = {options = options}
                 profile.placement = {kind = "docker", profile_ref = "bee.placement.docker.profiles:coding"}
@@ -282,13 +282,13 @@ local function define_tests()
             local writer = caller("profile-writer", "bee.tests.harness.profiles:test_write")
             local reader = caller("profile-reader", "bee.tests.harness.profiles:test_read")
             local id, key = fresh(), fresh()
-            local request = put(id, 0, key, "Original")
+            local request = put(id, 0, key, "Shared original")
             test.eq(value(call(writer, request)).revision, 1)
             local saved = value(call(reader, {operation = "get", workspace_id = WORKSPACE, profile_id = id}))
             test.eq(saved.revision, 1)
             local profile = bounds.object(saved.profile)
             if not profile then error("missing profile") end
-            test.eq(profile.name, "Original")
+            test.eq(profile.name, "Shared original")
             local replay = call(writer, request)
             test.eq(replay.replayed, true)
             test.eq(value(replay).revision, 1)
@@ -321,6 +321,28 @@ local function define_tests()
             test.eq(reset.workspace_id, WORKSPACE)
             test.is_nil(reset.owner_id)
         end)
+        test.it("keeps the person's profile name through a rename and refuses one a profile of the same driver holds", function()
+            local writer = caller("profile-name-writer", "bee.tests.harness.profiles:test_write")
+            local reader = caller("profile-name-reader", "bee.tests.harness.profiles:test_read")
+            local id = fresh()
+            value(call(writer, put(id, 0, fresh(), "unsafe codex")))
+            local renamed = value(call(writer, put(id, 1, fresh(), "careful codex")))
+            test.eq(renamed.revision, 2)
+            local read = value(call(reader, {operation = "get", workspace_id = WORKSPACE, profile_id = id}))
+            test.eq(assert(bounds.object(read.profile)).name, "careful codex")
+            local freed = value(call(writer, put(fresh(), 0, fresh(), "unsafe codex")))
+            test.eq(freed.revision, 1)
+            local duplicate = call(writer, put(fresh(), 0, fresh(), "  Careful CODEX "))
+            test.eq(duplicate.ok, false)
+            test.eq(duplicate.code, "INVALID_ARGUMENT")
+            test.is_true(tostring(duplicate.message):find("already named careful codex", 1, true) ~= nil)
+            local other_driver = put(fresh(), 0, fresh(), "careful codex")
+            local profile = assert(bounds.object(other_driver.profile))
+            profile.definition_ref, profile.driver_binding_ref = "bee.driver.claude.profiles:default_window", "bee.drivers.claude.binding:binding"
+            test.eq(value(call(writer, other_driver)).revision, 1)
+            local listed = value(call(reader, {operation = "list", workspace_id = WORKSPACE, query = "careful codex"}))
+            test.eq(#assert(bounds.array(listed.items, 64)), 2)
+        end)
     end)
 end
 local function define_allowall_tests()
@@ -337,8 +359,8 @@ local function define_allowall_tests()
                 {driver = "opencode", provider = {options = {auto = true}}},
             }
             for _, placement in ipairs({"native", "docker"}) do
-                for _, case in ipairs(cases) do
-                    local request = put(fresh(), 0, fresh(), "All allowed")
+                for index, case in ipairs(cases) do
+                    local request = put(fresh(), 0, fresh(), "All allowed " .. placement .. " " .. tostring(index))
                     local profile = assert(bounds.object(request.profile))
                     profile.definition_ref = "bee.driver." .. case.driver .. ".profiles:default_window"
                     profile.driver_binding_ref = "bee.drivers." .. case.driver .. ".binding:binding"

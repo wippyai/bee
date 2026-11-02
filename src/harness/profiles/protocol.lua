@@ -9,6 +9,7 @@ M.SCHEMA = "bee.agent-profile@3"
 M.PRIOR = "bee.agent-profile@2"
 M.RETIRED = {"presentation", "budgets", "supervision"}
 M.MAX_OPTIONS = 128
+M.MAX_NAME_BYTES = 80
 type Context = {[string]: string | number | boolean}
 type Object = {[string]: unknown}
 type Workdir = {root_ref: string, path: string}
@@ -127,7 +128,7 @@ function M.overrides(value: unknown): (Overrides?, string?)
     if not raw or bounds.fields(raw, {"name", "role", "traits", "context", "workdir", "workspace", "input"}) then return nil, "invalid spawn overrides" end
     local result: Overrides = {}
     if raw.name ~= nil then
-        local name = bounds.line(raw.name, 80)
+        local name = bounds.line(raw.name, M.MAX_NAME_BYTES)
         if not name or name:match("^%s*$") then return nil, "name must contain 1 to 80 printable bytes" end
         result.name = name
     end
@@ -202,13 +203,53 @@ function M.upgrade(value: unknown): unknown
     result.schema_revision = M.SCHEMA
     return result
 end
+local function trimmed(name: string): string
+    return (name:match("^%s*(.-)%s*$")) or name
+end
+-- Two profile names are the same when they differ only in letter case or
+-- surrounding spaces; a driver's saved profiles carry distinct names.
+function M.same_name(left: string, right: string): boolean
+    return trimmed(left):lower() == trimmed(right):lower()
+end
+-- The name Bee proposes for a profile: its agent's title and where it runs.
+function M.default_name(title: string, docker: boolean): string
+    local suffix = docker and " · Docker" or " · local"
+    return M.bounded_name(title, suffix)
+end
+-- name, or name followed by the first number that no taken name holds.
+function M.free_name(name: string, taken: {string}): string
+    local function used(candidate: string): boolean
+        for _, other in ipairs(taken) do
+            if M.same_name(other, candidate) then return true end
+        end
+        return false
+    end
+    if not used(name) then return name end
+    local base = trimmed(name)
+    for number = 2, #taken + 2 do
+        local candidate = M.bounded_name(base, " " .. tostring(number))
+        if not used(candidate) then return candidate end
+    end
+    return name
+end
+-- base shortened at a character boundary so base .. suffix fits a name.
+function M.bounded_name(base: string, suffix: string): string
+    local room = M.MAX_NAME_BYTES - #suffix
+    if #base <= room then return base .. suffix end
+    local lead = room
+    while lead > 1 and base:byte(lead) >= 128 and base:byte(lead) < 192 do lead = lead - 1 end
+    local first = base:byte(lead)
+    local width = first >= 240 and 4 or first >= 224 and 3 or first >= 192 and 2 or 1
+    local cut = base:sub(1, lead + width - 1 <= room and room or lead - 1)
+    return trimmed(cut) .. suffix
+end
 function M.profile(value: unknown): (Profile?, string?)
     local raw = bounds.object(value)
     if not raw then return nil, "profile must be an object" end
     local extra = bounds.fields(raw, {"schema_revision", "definition_ref", "driver_binding_ref", "name", "provider", "bee", "placement", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "active_traits", "requestable", "role", "context"})
     if extra then return nil, extra end
     if raw.schema_revision ~= M.SCHEMA then return nil, "profile.schema_revision must be " .. M.SCHEMA end
-    local definition, driver, name = bounds.id(raw.definition_ref), bounds.id(raw.driver_binding_ref), bounds.line(raw.name, 80)
+    local definition, driver, name = bounds.id(raw.definition_ref), bounds.id(raw.driver_binding_ref), bounds.line(raw.name, M.MAX_NAME_BYTES)
     if not definition or not driver or not name or name:match("^%s*$") then return nil, "profile requires definition_ref, driver_binding_ref and name" end
     local provider_input = bounds.object(raw.provider)
     if provider_input and provider_input.schema_ref then

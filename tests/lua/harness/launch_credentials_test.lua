@@ -32,7 +32,7 @@ local function define_tests()
             for _, refs in ipairs({{}, {"anthropic"}}) do
                 local saved_id = fresh("credential-profile")
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
-                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Selected credentials",
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Selected credentials " .. saved_id,
                         definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {},
                         bee = {mcp = {}, credential_refs = refs, files = {{workspace_id = workspace, resource = "project", subpath = "", access = "read"}}}}}))
                 local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
@@ -80,7 +80,7 @@ local function define_tests()
                 local environment: {[string]: unknown} = {}
                 environment[item.name] = item.literal and {kind = "literal", value = "fixture-value"} or {kind = "credential", credential_ref = "anthropic"}
                 value(call("bee.harness.binding:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
-                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Environment",
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@3", name = "Environment " .. saved_id,
                         definition_ref = DEFINITION, driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
                 local plan = value(call("bee.tests.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
                 replies[index] = call("bee.tests.harness.launch:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,

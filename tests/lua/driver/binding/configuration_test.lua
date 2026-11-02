@@ -12,6 +12,7 @@ local claude = require("claude")
 local codex = require("codex")
 local grok = require("grok")
 local agy = require("agy")
+local hook_limits = require("hook_limits")
 local PROVIDER = "fixture:provider"
 local function file(content: string?): {[string]: unknown}
     local body = content or '{"model":"fixture"}\n'
@@ -173,7 +174,7 @@ local function define_tests()
             test.eq(doc.bee.Stop[1].type, "command")
             test.is_nil(doc.bee.Stop[1].hooks)
             test.is_true(doc.bee.Stop[1].command:find("hook-post 127.0.0.1:4312 action-a HOOK_TOKEN agy:Stop", 1, true) ~= nil)
-            test.eq(doc.bee.PreToolUse[2].hooks[1].timeout, 600)
+            test.eq(doc.bee.PreToolUse[2].hooks[1].timeout, hook_limits.PERMISSION_SECONDS)
             test.is_true(doc.bee.PreToolUse[2].hooks[1].command:find("HOOK_TOKEN agy:PermissionRequest", 1, true) ~= nil)
             test.is_true(doc.bee.Stop[1].command:find("MCP_TOKEN", 1, true) == nil)
             local original = measured_digest({fixture = false, gateway = selected}, "bee.drivers.agy.binding:configure")

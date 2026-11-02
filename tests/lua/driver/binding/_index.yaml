@@ -20,6 +20,7 @@ entries:
     grok: bee.drivers.grok.binding:configure
     agy: bee.drivers.agy.binding:configure
     configuration_types: bee.drivers:configuration_types
+    hook_limits: bee.drivers.binding:hook_limits
 - name: fixture_builder_ok
   kind: function.lua
   source: file://fixture_builder.lua

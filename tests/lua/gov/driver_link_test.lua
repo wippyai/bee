@@ -91,7 +91,7 @@ local function define_tests()
                     approval_id = "driver-owner-approval-" .. suffix, approval_proposal_digest = digest, approval_owner_incarnation = 1})
                 local consuming = record({operation = "begin_consume", intent_id = prepared.intent_id,
                     expected_revision = bound.revision, idempotency_key = "consume-driver-owner-" .. suffix})
-                record({operation = "record_consumption", intent_id = prepared.intent_id,
+                local consumed = record({operation = "record_consumption", intent_id = prepared.intent_id,
                     expected_revision = consuming.revision, idempotency_key = "receipt-driver-owner-" .. suffix,
                     consumer_id = "bee.gov.activation", proposal_digest = digest, effect_key = prepared.effect_key})
                 test.eq(selected(), admitted, "a consumed driver overlay activates its own harness binding; an application overlay activates none")
@@ -100,6 +100,14 @@ local function define_tests()
                 configure(owner)
                 assert(materializer.reconcile(owner, {}))
                 test.is_false(selected(), "consumption without the matching live artifact is not admitted")
+                -- The node keeps no installed generation of this proof: boot
+                -- recovery on the same node restores every desired slot.
+                local settled = record({operation = "record_outcome", intent_id = prepared.intent_id,
+                    expected_revision = consumed.revision, idempotency_key = "settle-driver-owner-" .. suffix,
+                    outcome = "blocked", diagnostics = "the driver link proof ends"})
+                record({operation = "remove_activation", overlay_owner = owner, expected_revision = settled.slot_revision,
+                    idempotency_key = "remove-driver-owner-" .. suffix, diagnostics = "the driver link proof ends"})
+                test.eq(store.desired(state, owner).code, "NOT_FOUND")
             end)
             assert(store.close(state))
             assert(materializer.reconcile(owner, {}))

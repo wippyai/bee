@@ -5,7 +5,8 @@
   "hooks_file": {
     "loaded": [
       "~/.gemini/config/hooks.json",
-      "<workspace>/.agents/hooks.json"
+      "<workspace>/.agents/hooks.json",
+      "<--add-dir root>/.agents/hooks.json"
     ],
     "not_loaded": [
       "~/.agents/hooks.json when HOME is not the workspace or between it and its project root"

@@ -199,3 +199,44 @@ func TestAgyInvocationAfterAnAnsweredPromptIsNoPrompt(t *testing.T) {
 		t.Fatalf("an answered prompt became new work: %s %v", result, err)
 	}
 }
+
+// Antigravity 1.4.12 resumed with --conversation: the prompt and answer of the
+// resumed turn come from the captured transcript of the whole conversation.
+func TestAgyCapturedResumedTurn(t *testing.T) {
+	fixtures := "../../drivers/test/fixtures/drivers/agy/hooks-1.4.12"
+	data, err := os.ReadFile(filepath.Join(fixtures, "transcript_full.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := filepath.Join(t.TempDir(), "brain", "ee6a08a2-71ef-462b-99a2-81fa84aa835e")
+	transcript := filepath.Join(artifact, ".system_generated", "logs", "transcript_full.jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcript), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(transcript, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ capture, event, field, text string }{
+		{"10-PreInvocation.json", "UserPromptSubmit", "prompt", "Read a.txt, then reply with its content."},
+		{"16-Stop.json", "Stop", "last_assistant_message", "alpha"},
+	} {
+		raw, err := os.ReadFile(filepath.Join(fixtures, tc.capture))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			t.Fatal(err)
+		}
+		fields["artifactDirectoryPath"], fields["transcriptPath"] = artifact, transcript
+		raw, _ = json.Marshal(fields)
+		result, err := agyPayload(raw, tc.event)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got map[string]any
+		if err := json.Unmarshal(result, &got); err != nil || got[tc.field] != tc.text || got["prompt_id"] != "6" {
+			t.Fatalf("%s: unexpected boundary %s", tc.capture, result)
+		}
+	}
+}

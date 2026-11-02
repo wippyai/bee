@@ -684,6 +684,7 @@ entries:
   - channel
   - time
   - registry
+  - hostprocess
   security:
     policies:
     - bee.tests.placement.native:apply_test_policy

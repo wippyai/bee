@@ -6,6 +6,7 @@ local process = require("process")
 local channel = require("channel")
 local time = require("time")
 local registry = require("registry")
+local hostprocess = require("hostprocess")
 local service = require("service")
 local store = require("store")
 local protocol = require("protocol")
@@ -118,6 +119,7 @@ local function cleanup_tests()
                 if not db then error("store") end
                 local row = store.row(db, prepared.attempt_id)
                 local runner = tostring(row and row.runner_pid)
+                local group = assert(bounds.integer(row and row.pgid))
                 local _, clear_error = db:execute("UPDATE bee_placement_attempts SET runner_pid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
                 db:release()
                 if clear_error then error("clear runner: " .. tostring(clear_error)) end
@@ -135,8 +137,11 @@ local function cleanup_tests()
                     local event = selected.value
                     if event.kind == process.event.EXIT and tostring(event.from) == runner then break end
                 end
-                -- The runner's exit ends the child it owned; the empty
+                -- The runtime ends the child the runner owned when it releases
+                -- the runner's handles, after the runner's EXIT; the empty
                 -- recorded group, not the pid, proves the tree gone.
+                test.is_true(native_fixture.wait_for(function() return hostprocess.group_present(group) == false end, 15000),
+                    "the released runner's child group ends")
                 local outcome = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
                 test.eq(outcome.execution_state, "exited")
                 test.eq(outcome.exit_source, "reconcile")

@@ -1,0 +1,25 @@
+version: '1.0'
+namespace: bee.driver.wippy.descriptor
+entries:
+- name: hooks
+  kind: registry.entry
+  meta:
+    type: bee.driver_hooks
+    driver_id: wippy
+  data:
+    response: host
+    input_bytes: 8192
+    output_bytes: 3000
+    points:
+      session.start:
+        results: [pass, add_context, change, deny]
+        reason: The host owns model requests, tool execution and result insertion.
+      prompt.submit:
+        results: [pass, add_context, change, deny]
+        reason: The host owns model requests, tool execution and result insertion.
+      tool.before:
+        results: [pass, add_context, change, deny]
+        reason: The host owns model requests, tool execution and result insertion.
+      tool.after:
+        results: [pass, add_context, change, deny]
+        reason: The host owns model requests, tool execution and result insertion.

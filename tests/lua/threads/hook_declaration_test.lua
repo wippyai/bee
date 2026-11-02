@@ -3,12 +3,15 @@ local test = require("test")
 local registry = require("registry")
 local capabilities = require("capabilities")
 local response = require("response")
-local ID = "bee.tests.threads:echo_hooks"
-local function declare(data: {[string]: unknown}?)
+local security = require("security")
+local ID = "bee.tests.echoagent.descriptor:hooks"
+local MISNAMED = "bee.tests.threads:echo_hooks"
+local function declare(data: {[string]: unknown}?, id: string?)
+    local selected = id or ID
     local changes = assert(registry.snapshot()):changes()
-    local entry = {id = ID, kind = "registry.entry", meta = {type = capabilities.TYPE, driver_id = "echoagent"}, data = data}
-    if registry.get(ID) then
-        if data then changes:update(entry) else changes:delete(ID) end
+    local entry = {id = selected, kind = "registry.entry", meta = {type = capabilities.TYPE, driver_id = "echoagent"}, data = data}
+    if registry.get(selected) then
+        if data then changes:update(entry) else changes:delete(selected) end
     elseif data then changes:create(entry) end
     assert(changes:apply())
 end
@@ -39,6 +42,26 @@ local function define_tests()
                 test.is_true(refused.reason:find("names its response", 1, true) ~= nil, refused.reason)
             end)
             declare(nil)
+            if not ok then error(tostring(err)) end
+        end)
+        test.it("lets a hook transport read hook declarations and no other entry", function()
+            local scope = security.new_scope({assert(security.policy("bee.threads.hooks:declaration_read"))})
+            local actor = security.new_actor("fixture:hook-endpoint", {})
+            test.eq(scope:evaluate(actor, "registry.get", "bee.driver.claude.descriptor:hooks"), "allow")
+            test.eq(scope:evaluate(actor, "registry.get", "bee.driver.echoagent.descriptor:hooks"), "allow")
+            test.is_false(scope:evaluate(actor, "registry.get", "bee.driver.claude.descriptor:command") == "allow")
+            test.is_false(scope:evaluate(actor, "registry.get", "bee.drivers.claude.binding:binding") == "allow")
+            test.is_false(scope:evaluate(actor, "registry.get", "bee.gateway:external_profile") == "allow")
+        end)
+        test.it("refuses a declaration a hook transport could not read", function()
+            local ok, err = pcall(function()
+                declare({response = "hook_specific_output", transport = "command",
+                    points = {["tool.before"] = {results = {"pass"}, reason = "misnamed"}}}, MISNAMED)
+                local before = assert(capabilities.at("echoagent", "tool.before"))
+                test.is_false(before.supported)
+                test.is_true(before.reason:find("descriptor:hooks", 1, true) ~= nil, before.reason)
+            end)
+            declare(nil, MISNAMED)
             if not ok then error(tostring(err)) end
         end)
         test.it("keeps each built-in driver's declared semantics", function()

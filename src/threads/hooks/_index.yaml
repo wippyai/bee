@@ -70,10 +70,12 @@ entries:
     traits: bee.threads.delivery:traits
     supervisor: bee.threads.hooks:supervisor
 - name: declaration_read
-  kind: security.policy
+  kind: security.policy.expr
   meta:
-    comment: A hook transport reads the drivers' bee.driver_hooks declarations from a registry snapshot, which shows only entries the caller may get
+    comment: A hook transport reads the drivers' hook declarations, each named <component>.descriptor:hooks, and no other registry entry;
+      the runtime checks registry.get by entry id only, so the name carries the scope
   policy:
+    expression: action == "registry.snapshot" || (action == "registry.get" && resource matches "^[a-z][a-z0-9]*([.][a-z][a-z0-9]*)*[.]descriptor:hooks$")
     actions: [registry.snapshot, registry.get]
     resources: '*'
     effect: allow

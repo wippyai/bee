@@ -7,6 +7,8 @@
 #   make test      run the Lua suites in tests/ against the application source,
 #                  then the drivers module suites
 #   make test-drivers  lint and run the bee/drivers module suites in drivers/test
+#   make drivers-release  publish drivers/ at the version drivers/wippy.yaml names
+#                  and pin wippy.lock and wippy.build.json to the published digest
 #   make build     pack the application, record its checksum, build dist/bee
 #   make install   install dist/bee as ~/.local/bin/bee (previous kept as bee.prev)
 #   make runtime-pin RUNTIME_VERSION=<commit>  pin the release build to one runtime commit
@@ -50,7 +52,7 @@ CACHE_ROOT := $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)
 LUA_CACHE ?= $(CACHE_ROOT)/bee-lua/$(shell python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --key)
 LINT_FLAGS := --memory-limit 1G --set lua.cache.dir=$(LUA_CACHE) --set lua.cache.max_bytes=4294967296
 
-.PHONY: tools-key check boot-check fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test build release-pack install binary-identity hub-publish test-python
+.PHONY: tools-key check boot-check fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test build release-pack install binary-identity hub-publish drivers-release test-python
 
 tools: .wippy/build/lua-parse
 	python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --bin $(BIN)
@@ -92,6 +94,16 @@ binary-identity: tools
 
 hub-publish:
 	python3 build/hub_publish.py --version "$(VERSION)" --wippy "$(abspath $(WIPPY))"
+
+# drivers-release publishes drivers/ at the version drivers/wippy.yaml names
+# and pins wippy.lock and wippy.build.json to the published digest.
+drivers-release: tools
+	set -eo pipefail; version=$$(sed -n 's/^version: //p' drivers/wippy.yaml); \
+	digest=$$(cd drivers && TMPDIR=$(abspath .wippy) $(abspath $(WIPPY)) publish --version $$version 2>&1 | tee /dev/stderr | sed -n 's/.*Digest: sha256://p'); \
+	test -n "$$digest"; \
+	sed -i -E "/- name: bee\/drivers/{n;s/version: .*/version: $$version/;n;s/hash: .*/hash: $$digest/}" wippy.lock; \
+	jq --indent 2 --arg v "$$version" --arg d "$$digest" '(.application.packs[] | select(.module == "bee/drivers")) |= (.version = $$v | .path = ".wippy/vendor/bee/drivers-\($$v).wapp" | .sha256 = $$d)' wippy.build.json > wippy.build.json.next; \
+	mv wippy.build.json.next wippy.build.json
 
 agent-corpus-local:
 	python3 tools/corpus.py

@@ -120,3 +120,14 @@ func TestPermissionHookCancellationInterruptsDecisionWait(t *testing.T) {
 		t.Fatal("permission wait outlived cancellation")
 	}
 }
+
+// A host answers a permission within ten minutes, an expired request
+// included; the hook waits past that so the answer reaches the agent.
+func TestPermissionHookWaitsPastTheHostAnswerWindow(t *testing.T) {
+	if requestTimeout("PermissionRequest") <= 10*time.Minute {
+		t.Fatalf("permission hook gives up after %s", requestTimeout("PermissionRequest"))
+	}
+	if requestTimeout("Stop") != RequestTimeout {
+		t.Fatalf("observation hook deadline is %s", requestTimeout("Stop"))
+	}
+}

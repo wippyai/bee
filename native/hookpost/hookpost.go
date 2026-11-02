@@ -31,6 +31,9 @@ const (
 	MaxTokenFileBytes = 8192
 	MaxTokenBytes     = 4096
 	RequestTimeout    = 3 * time.Second
+	// PermissionTimeout matches the drivers' permission hook window: a host
+	// answers within ten minutes, an expired request included.
+	PermissionTimeout = 650 * time.Second
 )
 
 var knownEvents = map[string]struct{}{
@@ -78,11 +81,7 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 		return tokenError
 	}
 
-	timeout := RequestTimeout
-	if event == "PermissionRequest" {
-		timeout = 10 * time.Minute
-	}
-	requestCtx, cancel := context.WithTimeout(ctx, timeout)
+	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout(event))
 	defer cancel()
 	if err := requestCtx.Err(); err != nil {
 		return err
@@ -149,6 +148,15 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 		return permissionResponseFor(data, stdout, agyTranscript)
 	}
 	return extensionResponse(data, stdout, event, agyTranscript)
+}
+
+// requestTimeout is how long one event waits for the gateway: a permission
+// waits for a person, any other event only for the host to record it.
+func requestTimeout(event string) time.Duration {
+	if event == "PermissionRequest" {
+		return PermissionTimeout
+	}
+	return RequestTimeout
 }
 
 func resolveToken(source string) (string, error) {

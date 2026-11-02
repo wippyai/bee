@@ -18,8 +18,12 @@ import (
 	"time"
 )
 
+// MaxPayloadBytes bounds one hook payload and one gateway answer. It is the
+// gateway's transport ceiling for one hook submission (hooks.MAX_PAYLOAD_BYTES):
+// a PostToolUse carries the tool's whole result and a PreToolUse answer may
+// carry the tool's whole changed input.
 const (
-	MaxPayloadBytes   = 32768
+	MaxPayloadBytes   = 4 << 20
 	MaxActionBytes    = 128
 	MaxEndpointBytes  = 128
 	MaxEnvNameBytes   = 128
@@ -314,7 +318,7 @@ func readBounded(ctx context.Context, stdin io.ReadCloser) ([]byte, error) {
 	select {
 	case result := <-results:
 		if len(result.data) > MaxPayloadBytes {
-			return nil, errors.New("hook-post: input exceeds 32768 bytes")
+			return nil, errors.New("hook-post: input exceeds " + strconv.Itoa(MaxPayloadBytes) + " bytes")
 		}
 		if result.err != nil {
 			return nil, errors.New("hook-post: input could not be read")
@@ -355,7 +359,7 @@ func payload(raw []byte, event string) ([]byte, error) {
 	fields["hook_event_name"] = encodedEvent
 	body, err := json.Marshal(fields)
 	if err != nil || len(body) > MaxPayloadBytes {
-		return nil, errors.New("hook-post: input exceeds 32768 bytes")
+		return nil, errors.New("hook-post: input exceeds " + strconv.Itoa(MaxPayloadBytes) + " bytes")
 	}
 	return body, nil
 }

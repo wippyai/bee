@@ -323,7 +323,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             local _, code = capture(argv, timeout, true)
             return code
         end,
-    }) or {}
+    }) or nil
     local probe = {profile_id = profile_id, configured = true,
         executable = {present = executable_present, version = version}, login_checks = checks,
         platform = {os = platform.os, arch = platform.arch, compatible = compatible}}

@@ -35,6 +35,26 @@ return test.run_cases(function()
             if not ok then error(tostring(err)) end
         end)
     end)
+    test.describe("Account-free CLI", function()
+        test.it("is ready without login evidence", function()
+            local descriptor_ref = "bee.drivers.claude.descriptor:cli"
+            local original = assert(registry.get(descriptor_ref))
+            local changed = assert(registry.get(descriptor_ref))
+            local data = assert(bounds.object(changed.data))
+            data.login_evidence = nil
+            local templates = assert(bounds.object(data.argv_templates))
+            local window = assert(bounds.object(templates.window))
+            window.login = nil
+            update({changed})
+            local ok, err = pcall(function()
+                local result = assert(locate.locate(assert(registry.snapshot()), BINDING, "window", locate.new_cache()))
+                test.eq(result.status, "ready", tostring(result.reason))
+                test.eq(result.login.evidence, "not_required")
+            end)
+            update({original})
+            if not ok then error(tostring(err)) end
+        end)
+    end)
     test.describe("Bound descriptor discovery", function()
         test.it("reads the binding's descriptor without decoding unrelated providers", function()
             local original_binding = assert(registry.get(BINDING))

@@ -207,7 +207,7 @@ local function put(store: sync.Store, tx: sql.Transaction, input: Request, node:
                 and protocol.same_name(other.name, profile.name) then taken = other.name end
         end)
         if walk_failure then return walk_failure end
-        if taken then return failure("INVALID_ARGUMENT", "Another profile for this agent is already named " .. taken .. ". Choose a different name.") end
+        if taken then return failure("INVALID_ARGUMENT", "Another profile of this agent is already named " .. taken) end
         local retired = authority.retire(tx,node,input.workspace_id,input.profile_id,actor,approving and approving.grant_id or nil)
         if retired then return failure("STORAGE",retired) end
         local stored = assert(protocol.storage(profile))

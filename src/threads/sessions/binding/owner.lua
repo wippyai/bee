@@ -543,10 +543,10 @@ function M.hook_boundary(raw_request: unknown): Reply
     if event == "PermissionRequest" then
         local permission = bounds.object(request.permission)
         local active = bounds.object(stored.active_turn)
-        if not permission or not active then return fail("CONFLICT", "permission requires a current interactive turn", event_key) end
+        if not permission then return fail("INVALID", "permission hook omitted its request", event_key) end
         local fields: Object = {session = session, definition = route.definition, plan_digest = route.plan_digest,
             attempt_id = attempt, thread_id = stored.thread_ref, action_id = permission.action_id, binding_id = permission.binding_id,
-            turn = active.turn, claim = active.claim, event_id = event_key, payload = permission.payload,
+            turn = active and active.turn, claim = active and active.claim, event_id = event_key, payload = permission.payload,
             saved_profile_id = route.saved_profile_id, saved_profile_revision = route.saved_profile_revision, transport = permission.transport}
         local response, response_error = funcs.call("bee.harness.permission.external.binding:answer_hook", fields)
         if response_error then return unavailable(tostring(response_error), event_key) end

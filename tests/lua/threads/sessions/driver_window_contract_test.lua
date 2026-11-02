@@ -80,6 +80,71 @@ local function define_tests()
                 if provider ~= "grok" then muse.with_host(provider, run) else run(nil) end
             end)
         end
+        for _, provider in ipairs({"agy", "claude", "muse"}) do
+            test.it(provider .. " leaves a permission to the provider when its profile answers permissions there, with or without a Bee turn", function()
+                muse.with_host(provider, function(admitted: admission.Plan?)
+                local plan = assert(admitted)
+                test.eq(plan.permission_answers, "provider")
+                local journal = harness.session_owner(WORKSPACE)
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(),
+                    route = {delivery = "hook", definition = plan.definition_ref, plan_digest = plan.plan_digest}}))
+                local stored = harness.value(journal:call("session_describe", {session = opened.session}))
+                local mark = ({agy = "c", claude = "d", muse = "e"})[provider]
+                local attempt = "attempt:" .. string.rep(mark, 64)
+                local action = "action:" .. string.rep(mark, 64)
+                harness.value(journal:call("session_attach", {session = opened.session, attempt_id = attempt, operation_key = harness.key()}))
+                local binding_id = muse.binding(provider, tostring(opened.session), tostring(stored.thread_ref), attempt, action)
+                local function permission(): Object
+                    local raw, err = funcs.new():with_scope(security.new_scope({})):with_actor(assert(security.new_actor("gateway"))):call(
+                        "bee.tests.threads.sessions:hook_boundary_probe", {binding = {binding_id = binding_id, subject = opened.session,
+                            action_id = action, attempt_id = attempt, thread_id = stored.thread_ref, workspace_id = WORKSPACE},
+                            outcome = {event = "PermissionRequest", event_id = harness.key()}, payload = muse.capture("agy", "PermissionRequest"),
+                            transport = "hook_http"})
+                    if err then error(tostring(err)) end
+                    return assert(bounds.object(raw))
+                end
+                local idle = permission()
+                test.is_nil(idle.error)
+                test.eq(idle.ok, true)
+                test.eq(next(assert(bounds.object(idle.value))), nil)
+                harness.value(journal:call("work_send", {session = opened.session, input = "Fixture prompt.", operation_key = harness.key()}))
+                harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+                local reserved = permission()
+                test.is_nil(reserved.error)
+                test.eq(next(assert(bounds.object(reserved.value))), nil)
+                end, "provider")
+            end)
+        end
+        for _, provider in ipairs({"agy", "claude"}) do
+            test.it(provider .. " is told a refused Bee permission answer as a denial with its reason", function()
+                muse.with_host(provider, function(admitted: admission.Plan?)
+                local plan = assert(admitted)
+                test.eq(plan.permission_answers, "ask")
+                local journal = harness.session_owner(WORKSPACE)
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(),
+                    route = {delivery = "hook", definition = plan.definition_ref, plan_digest = plan.plan_digest}}))
+                local stored = harness.value(journal:call("session_describe", {session = opened.session}))
+                local mark = ({agy = "f", claude = "9"})[provider]
+                local attempt = "attempt:" .. string.rep(mark, 64)
+                local action = "action:" .. string.rep(mark, 64)
+                harness.value(journal:call("session_attach", {session = opened.session, attempt_id = attempt, operation_key = harness.key()}))
+                local binding_id = muse.binding(provider, tostring(opened.session), tostring(stored.thread_ref), attempt, action)
+                local raw, err = funcs.new():with_scope(security.new_scope({})):with_actor(assert(security.new_actor("gateway"))):call(
+                    "bee.tests.threads.sessions:hook_boundary_probe", {binding = {binding_id = binding_id, subject = opened.session,
+                        action_id = action, attempt_id = attempt, thread_id = stored.thread_ref, workspace_id = WORKSPACE},
+                        outcome = {event = "PermissionRequest", event_id = harness.key()}, payload = muse.capture("agy", "PermissionRequest"),
+                        transport = "hook_http"})
+                if err then error(tostring(err)) end
+                local reply = assert(bounds.object(raw))
+                test.is_nil(reply.error)
+                local output = assert(bounds.object(assert(bounds.object(reply.value)).hookSpecificOutput))
+                test.eq(output.hookEventName, "PermissionRequest")
+                local decision = assert(bounds.object(output.decision))
+                test.eq(decision.behavior, "deny")
+                test.eq(decision.message, "Bee answers this permission only within the session's current turn")
+                end)
+            end)
+        end
     end)
 end
 return test.run_cases(define_tests)

@@ -27,7 +27,10 @@ local function value(caller: funcs.Executor, target: string, input: Object): Obj
     if reply.ok ~= true then error(tostring(assert(bounds.object(reply.error)).message)) end
     return assert(bounds.object(reply.value))
 end
-function M.with_host(provider: string, body: (admission.Plan?) -> ())
+-- with_host admits the provider's window on the fixture executable. Bee
+-- answers its permissions through the accepted exchange unless answers is
+-- "provider", which leaves them to the provider's own prompt.
+function M.with_host(provider: string, body: (admission.Plan?) -> (), answers: string?)
     local POLICY = "bee.driver." .. provider .. ".security:launch_policy_" .. provider .. "_window"
     local DEFINITION = "bee.driver." .. provider .. ".profiles:default_window"
     local BINDING = "bee.drivers." .. provider .. ".binding:binding"
@@ -57,8 +60,10 @@ function M.with_host(provider: string, body: (admission.Plan?) -> ())
             adapter_ref = declaration.id, adapter_digest = decoded.digest, fixture_digest = string.rep("a", 64),
             executable_revision = measured.revision, executable_kind = measured.kind, executable_digest = measured.digest,
             proof_revision = "bee.permission-proof@1", accepted_by = "fixture-operator", accepted_at = "2026-10-08T00:00:00.000Z"}}}
-    data.permission_exchange = {adapter_ref = declaration.id, acceptance_ref = ACCEPTANCE, fixture_digest = string.rep("a", 64),
-        approver_policy = "workspace-application-delivery", poll_ms = 50, ttl_ms = 60000}
+    if answers ~= "provider" then
+        data.permission_exchange = {adapter_ref = declaration.id, acceptance_ref = ACCEPTANCE, fixture_digest = string.rep("a", 64),
+            approver_policy = "workspace-application-delivery", poll_ms = 50, ttl_ms = 60000}
+    end
     local changes = assert(registry.snapshot()):changes()
     assert(changes:create(acceptance)); assert(changes:update(changed)); assert(changes:apply())
     local ok, failure = pcall(function()

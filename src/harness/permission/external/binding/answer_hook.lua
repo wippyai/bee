@@ -55,7 +55,7 @@ local function handle(raw: unknown): Reply
     local payload = bounds.object(request.payload)
     local transport = bounds.member(request.transport, {"hook_http", "hook_mcp"})
     if not session or not caller_id or caller_id ~= session or not workspace or not definition or not attempt_id or not action_id or not thread_id
-        or not binding_id or not turn or not claim or not event_id or not plan_digest or not payload or not transport
+        or not binding_id or not event_id or not plan_digest or not payload or not transport
         or not security.can("bee.harness.permission.answer", caller_id) then return fail("hook is not an authenticated session boundary") end
     local saved_profile_id: string? = nil
     local saved_profile_revision: integer? = nil
@@ -67,6 +67,8 @@ local function handle(raw: unknown): Reply
     local pinned, resolution_error = admission.resolve(definition, "window", workspace, saved_profile_id, saved_profile_revision)
     if not pinned then return fail(tostring(resolution_error and resolution_error.error and resolution_error.error.message or "hook admission unavailable")) end
     if pinned.plan_digest ~= plan_digest then return fail("window admission changed") end
+    if pinned.permission_answers == "provider" then return {ok = true, value = {}} end
+    if not turn or not claim then return fail("Bee answers this permission only within the session's current turn") end
     local snapshot, snapshot_error = catalog.pin()
     if not snapshot then return fail(tostring(snapshot_error)) end
     local candidates, candidate_error = catalog.read(snapshot, nil)
@@ -83,7 +85,6 @@ local function handle(raw: unknown): Reply
     if not policy_entry then return fail("host permission policy is unavailable") end
     local selected_policy, policy_error = policy.decode(pinned.policy_ref, policy_entry)
     if not selected_policy then return fail(tostring(policy_error)) end
-    if pinned.permission_answers == "provider" then return {ok = true, value = {}} end
     local declaration = selected_policy.permission_exchange
     if not declaration then return {ok = true, value = {}} end
     local capabilities, capability_error = descriptor.find_provider(snapshot, selected.driver_id)

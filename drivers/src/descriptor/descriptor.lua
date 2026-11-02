@@ -319,9 +319,8 @@ local function validate_template_record(value: unknown, label: string): string?
     if item.stdin_eof ~= nil and type(item.stdin_eof) ~= "boolean" then return label .. ".stdin_eof must be boolean" end
     if item.provider_home_private ~= nil and type(item.provider_home_private) ~= "boolean" then return label .. ".provider_home_private must be boolean" end
     if item.login ~= nil and type(item.login) ~= "boolean" then return label .. ".login must be boolean" end
-    for _, name in ipairs({"session_end", "readiness"}) do
-        if item[name] ~= nil and not bounds.text(item[name], 128) then return label .. "." .. name .. " must be bounded text" end
-    end
+    if not bounds.id(item.readiness) then return label .. ".readiness must name how the launch reports readiness" end
+    if item.session_end ~= nil and not bounds.text(item.session_end, 128) then return label .. ".session_end must be bounded text" end
     return nil
 end
 

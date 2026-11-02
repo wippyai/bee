@@ -415,6 +415,16 @@ local function define_tests()
             test.is_nil(decoded)
             test.not_nil(decode_error)
 
+            local unready = copy_object(claude)
+            local unready_templates = copy_object(assert(bounds.object(claude.argv_templates)))
+            local unready_window = copy_object(assert(bounds.object(unready_templates.window)))
+            unready_window.readiness = nil
+            unready_templates.window = unready_window
+            unready.argv_templates = unready_templates
+            decoded, decode_error = descriptor.decode(unready)
+            test.is_nil(decoded, "prepare needs every launch template's readiness")
+            test.not_nil(decode_error)
+
             local cyclic_flag = copy_object(claude)
             local flags = copy_object(assert(bounds.object(claude.flags)))
             local permission: Object = {field = "permission_mode", argv = {{option = "permission"}}}

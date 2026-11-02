@@ -15,7 +15,9 @@ end
 local function status_of(code: string): number
     if code == "INVALID" then return http.STATUS.BAD_REQUEST end
     if code == "DENIED" then return http.STATUS.FORBIDDEN end
-    if code == "CONFLICT" then return http.STATUS.CONFLICT end
+    if code == "CONFLICT" or code == "STALE" then return http.STATUS.CONFLICT end
+    if code == "NOT_FOUND" then return http.STATUS.NOT_FOUND end
+    if code == "UNAVAILABLE" then return http.STATUS.SERVICE_UNAVAILABLE end
     if code == "UNAUTHENTICATED" then return http.STATUS.UNAUTHORIZED end
     if code == "OVERLOAD" then return http.STATUS.TOO_MANY_REQUESTS end
     return http.STATUS.INTERNAL_ERROR
@@ -51,7 +53,11 @@ local function submit(): nil
     -- and plain text, never a body a harness could act on.
     if outcome.status == "rejected" then refuse(response, http.STATUS.GONE, "rejected: " .. tostring(outcome.rejected_reason or "no reason")); return nil end
     local context, boundary_error = boundary.deliver(binding, outcome, payload, "hook_http")
-    if not context then refuse(response, http.STATUS.INTERNAL_ERROR, boundary_error or "session boundary failed"); return nil end
+    if not context then
+        local refused = boundary_error or {code = "INTERNAL", message = "session boundary failed"}
+        refuse(response, status_of(refused.code), refused.code .. ": " .. refused.message)
+        return nil
+    end
     if next(context) ~= nil then response:set_content_type(http.CONTENT.JSON); response:write_json(context) end
     if outcome.status == "committed" then response:set_status(http.STATUS.OK) else response:set_status(http.STATUS.ACCEPTED) end
     return nil

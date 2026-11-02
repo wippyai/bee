@@ -56,7 +56,11 @@ local function handle(): nil
     -- JSON there, so an empty content list is the proven answer.
     local outcome = reply.value
     local context, boundary_error = boundary.deliver(binding, outcome, bounds.object(arguments), "hook_mcp")
-    if not context then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INTERNAL_ERROR, boundary_error or "session boundary failed")); return nil end
+    if not context then
+        local refused = boundary_error or {code = "INTERNAL", message = "session boundary failed"}
+        answer(response, http.STATUS.OK, mcp.failure(call.id, refused.code == "INTERNAL" and mcp.INTERNAL_ERROR or mcp.INVALID_PARAMS, refused.code .. ": " .. refused.message))
+        return nil
+    end
     local content: {Object} = {}
     if next(context) ~= nil then
         local encoded, encode_error = json.encode(context)

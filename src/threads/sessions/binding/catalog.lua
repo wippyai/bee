@@ -176,7 +176,7 @@ local function measured_candidate(cache: locate.Cache, readiness_cache: readines
         runtime_identity = "local", availability_revision = tostring(route_generation or generation)}
     local value, locate_error = locate.locate(cache, input, function(_: locate.CandidateInput): (locate.LocateObservation?, string?)
         local placement_profile_ref = plan_object and bounds.id(plan_object.placement_profile_ref) or nil
-        local probe = readiness.probe(selected.binding_ref, selected.profile_id, readiness_cache, placement_profile_ref)
+        local probe = readiness.probe(selected.binding_ref, selected.profile_id, readiness_cache, placement_profile_ref, selected.policy_ref)
         if probe.error then return nil, probe.error end
         if not probe.located or not probe.result then return nil, "The active driver does not provide readiness evidence." end
         local reasons: {string} = {}

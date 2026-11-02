@@ -52,7 +52,7 @@ entries:
   meta: {type: test, suite: bee, timeout: '120s'}
   modules: [funcs, registry, json]
   security:
-    policies: [bee.tests.threads.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.tests.harness.profiles:test_read, bee.tests.harness.profiles:test_write]
+    policies: [bee.tests.threads.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.security:carrier_environment_policy, bee.tests.harness.profiles:test_read, bee.tests.harness.profiles:test_write]
   imports:
     principals: bee.tests.support.principals:bound
     bounds: bee.drivers.values:bounds
@@ -66,7 +66,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   security:
-    policies: [bee.tests.threads.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.tests.harness.profiles:test_read, bee.tests.harness.profiles:test_write]
+    policies: [bee.tests.threads.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.security:carrier_environment_policy, bee.tests.harness.profiles:test_read, bee.tests.harness.profiles:test_write]
   imports:
     test: wippy.test:test
     catalog: bee.threads.sessions.binding:catalog_service

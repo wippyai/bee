@@ -80,29 +80,22 @@ entries:
     resources: '*'
     effect: allow
 - name: carrier_environment_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
-    comment: The managed harness boundary reads declared nonsecret executable and configuration-directory variables while resolving host launch policy, so admission resolves the executable_env and environment_refs
-      of the definitions it admits
+    comment: The managed harness boundary reads the nonsecret executable and configuration-directory variables a driver
+      declares, so admission and readiness resolve the executable_env and environment_refs of the launch policies they read
   policy:
+    expression: action == "env.get" && resource matches "^bee[.]drivers?[.][a-z][a-z0-9]*[.]env:(executable|config_home)$"
     actions:
     - env.get
-    resources:
-    - bee.drivers.claude.env:executable
-    - bee.drivers.codex.env:executable
-    - bee.drivers.agy.env:executable
-    - bee.drivers.grok.env:executable
-    - bee.drivers.muse.env:executable
-    - bee.drivers.opencode.env:executable
-    - bee.drivers.claude.env:config_home
-    - bee.drivers.codex.env:config_home
+    resources: '*'
     effect: allow
 - name: launch_locate_probe_policy
   kind: security.policy.expr
   meta:
     comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings, and alternative login metadata without reading credential contents
   policy:
-    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action == "env.get" && (resource matches "^bee[.]drivers?[.][a-z][a-z0-9]*[.]env:executable$" || resource == "bee.harness.launch:host_environment_names"
+    expression: (action == "funcs.call" && resource == "bee.gov.binding:driver_bindings") || (action == "env.get" && (resource == "bee.harness.launch:host_environment_names"
       || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || (action == "exec.get" && resource == "bee.placement.native.env:placement_executor") || (action == "exec.run" && meta.executor == "bee.placement.native.env:placement_executor")
       || (action == "fs.get" && resource == "bee.env:machine_login_source")
       || (action == "fs.get" && resource == "bee.placement.native.env:placement_host_files") || action == "fs.stat"

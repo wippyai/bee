@@ -18,7 +18,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [registry]
   security:
-    policies: [bee.tests.harness:apply_test_policy, bee.harness.security:launch_locate_probe_policy]
+    policies: [bee.tests.harness:apply_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.security:carrier_environment_policy]
   imports:
     test: wippy.test:test
     bounds: bee.drivers.values:bounds

@@ -43,6 +43,7 @@ entries:
   security:
     policies:
     - bee.harness.security:launch_locate_probe_policy
+    - bee.harness.security:carrier_environment_policy
     - bee.harness.security:launch_docker_readiness_policy
 - name: setup_backend
   kind: function.lua

@@ -105,7 +105,8 @@ local function assert_catalog(page: Object)
     for _, row in ipairs(candidate_rows(page)) do
         if row.ref == "bee.driver.codex.profiles:default_window" then
             local features = assert(bounds.array(row.features, 128))
-            test.is_true(#features > 64)
+            local reasons = assert(bounds.array(row.reasons, 64))
+            test.is_true(#features > 64, tostring(row.status) .. ": " .. tostring(reasons[1]))
             local history = false
             for _, feature in ipairs(features) do
                 if feature == "supported:provider.options.history_persistence" then history = true end

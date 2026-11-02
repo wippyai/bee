@@ -86,6 +86,7 @@ entries:
     probe_version: bee.harness.launch:probe_version
     login_evidence: bee.drivers.locate:login_evidence
     probe_cache: bee.harness.launch:probe_cache
+    launch_policy: bee.harness.carrier:policy
 - name: probe_cache
   kind: library.lua
   source: file://probe_cache.lua

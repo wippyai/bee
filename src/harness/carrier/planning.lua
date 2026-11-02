@@ -222,7 +222,7 @@ local function measure(request: Request): (Measured?, string?)
         local descriptor = option_descriptor
         if request.preferences and not descriptor then return nil, schema_error or "Driver option schema is unavailable" end
         if descriptor then
-            local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref)
+            local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref, request.policy_ref)
             local capabilities = probed.result and probed.result.capabilities or {}
             local values: Object = {}
             if request.preferences then

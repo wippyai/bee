@@ -35,7 +35,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [registry, json]
-  security: {policies: [bee.tests.driver:docker_probe_policy, bee.harness.security:launch_locate_probe_policy]}
+  security: {policies: [bee.tests.driver:docker_probe_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.security:carrier_environment_policy]}
   imports: {test: wippy.test:test, probe: bee.placement.docker.service:runtime_probe, bounds: bee.drivers.values:bounds, locate: bee.harness.launch:locate}
 - name: docker_probe_policy
   kind: security.policy

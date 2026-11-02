@@ -1450,6 +1450,7 @@ entries:
   security:
     policies:
     - bee.harness.security:launch_locate_probe_policy
+    - bee.harness.security:carrier_environment_policy
   imports:
     test: wippy.test:test
     probe_capture: bee.drivers.locate:probe_capture

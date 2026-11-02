@@ -163,17 +163,30 @@ local function unknown(provider: string, reason: string): driver_types.LocateRes
     return result
 end
 
--- A driver keeps its executable variable in the .env namespace beside its
--- .binding namespace: bee.drivers.<name> for library drivers and
--- bee.driver.<name> for overlay drivers.
-function M.executable_ref(binding_ref: string): string?
-    local root = binding_ref:match("^(.+)%.binding:[^:]+$")
-    if not root then return nil end
-    return root .. ".env:executable"
+-- The executable a launch under policy_ref runs for the descriptor's
+-- executable name: the policy's binding of that name, else the name itself,
+-- found on PATH, as planning selects it.
+local function bound_executable(pinned: registry.Snapshot, policy_ref: string?, name: string): (string?, string?)
+    if not policy_ref then return name, nil end
+    local entry, entry_error = pinned:get(policy_ref)
+    local object = not entry_error and bounds.object(entry) or nil
+    if not object then return nil, "launch policy " .. policy_ref .. " is not in the registry" end
+    -- An unset host variable leaves the name to PATH, as an unconfigured
+    -- executable does before the host selects one.
+    local decoded, decode_error = launch_policy.decode(policy_ref, object, function(ref: string): (string?, string?)
+        local value, value_error = env.get(ref)
+        if value_error and value_error:kind() == errors.NOT_FOUND then return "", nil end
+        if value_error then return nil, tostring(value_error) end
+        return value, nil
+    end)
+    if not decoded then return nil, decode_error or ("launch policy " .. policy_ref .. " is invalid") end
+    local bound = decoded.executables[name]
+    if bound and bound ~= "" then return bound, nil end
+    return name, nil
 end
 
-function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: string, cache: Cache, placement_profile_ref: string?): driver_types.LocateResult?
-    local cache_key = binding_ref .. "\n" .. profile_id .. "\n" .. (placement_profile_ref or "")
+function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: string, cache: Cache, placement_profile_ref: string?, policy_ref: string?): driver_types.LocateResult?
+    local cache_key = binding_ref .. "\n" .. profile_id .. "\n" .. (placement_profile_ref or "") .. "\n" .. (policy_ref or "")
     local binding_raw, binding_error = pinned:get(binding_ref)
     local binding = not binding_error and bounds.object(binding_raw) or nil
     local meta = binding and bounds.object(binding.meta) or nil
@@ -217,16 +230,12 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
         compatible = bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
     end
     local executable_name = selected.executable
-    local executable_ref = M.executable_ref(binding_ref)
-    if not executable_ref then
-        local result = unknown(provider, "driver binding " .. binding_ref .. " is outside a .binding namespace")
+    local executable_path, executable_error = bound_executable(pinned, policy_ref, executable_name)
+    if not executable_path then
+        local result = unknown(provider, executable_error or "the launch policy binds no executable")
         cache.drivers[cache_key] = result
         return result
     end
-    local configured_path, executable_error = env.get(executable_ref)
-    local configured = type(configured_path) == "string" and configured_path ~= ""
-    local executable_path = executable_name
-    if configured then executable_path = configured_path end
     local executable_present: boolean? = nil
     local version: string? = nil
     local docker = false
@@ -291,7 +300,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             compatible = platform.os ~= nil and platform.arch ~= nil and bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
         end
     end
-    if not docker and (not executable_error or executable_error:kind() == errors.NOT_FOUND) then
+    if not docker then
         version, executable_present = executable_version(executable_path, bounds.object(selected.version_probe) or {})
     end
     local selected_profile = driver_resolver.profile(pinned, binding_ref, profile_id)

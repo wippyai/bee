@@ -227,7 +227,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     if not descriptor_ref then return repair_only("Driver descriptor is missing") end
     local descriptor, descriptor_error = descriptors.load_from(pinned, descriptor_ref)
     if not descriptor then return repair_only(descriptor_error) end
-    local probed = readiness.probe(decoded.binding_ref, decoded.profile_id, readiness.new_cache(), editor.placement_ref(base))
+    local probed = readiness.probe(decoded.binding_ref, decoded.profile_id, readiness.new_cache(), editor.placement_ref(base), decoded.policy_ref)
     local capabilities = probed.result and probed.result.capabilities or {}
     local option_placement, placement_error = placement_profiles.placement(editor.placement_ref(base))
     if not option_placement then return repair_only(placement_error) end

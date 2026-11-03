@@ -264,7 +264,8 @@ local function op_withdraw(tx: sql.Transaction, actor: string, object: Object, n
 end
 -- forget_session: a removed session's Needs-you requests end. Its pending
 -- requests are withdrawn; when its thread is removed with it, no request
--- names that thread and no undelivered thread post waits for it.
+-- names that thread or carries its thread binding, and no undelivered thread
+-- post waits for it.
 local function op_forget_session(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
     local unknown_field = bounds.fields(object, {"session", "thread_id", "owner_id", "history"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
@@ -290,7 +291,7 @@ local function op_forget_session(tx: sql.Transaction, actor: string, object: Obj
     if object.history == true then
         local _, outbox_error = tx:execute("DELETE FROM bee_approval_outbox WHERE thread_id = ?", {thread})
         if outbox_error then return storage("remove approval posts to the removed thread") end
-        local _, request_error = tx:execute("UPDATE bee_approval_requests SET thread_id = NULL WHERE thread_id = ?", {thread})
+        local _, request_error = tx:execute("UPDATE bee_approval_requests SET thread_id = NULL, binding_json = NULL WHERE thread_id = ?", {thread})
         if request_error then return storage("detach approvals from the removed thread") end
     end
     return success({withdrawn = withdrawn}, false)

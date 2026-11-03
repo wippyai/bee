@@ -52,8 +52,8 @@ entries:
 - name: codec_calls
   kind: security.policy
   meta:
-    comment: The shared normalize method reads the descriptor and calls the codec function a driver package registers for it
+    comment: The shared normalize method calls the codec function a driver package registers for the descriptor it reads
   policy:
-    actions: [registry.snapshot, registry.get, funcs.call]
+    actions: [funcs.call]
     resources: '*'
     effect: allow

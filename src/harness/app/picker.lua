@@ -304,8 +304,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 end)
             end
         else
-            local name = session_view.edit(target.name, data)
-            if #name <= sessions_protocol.MAX_NAME_BYTES then target.name = name end
+            local name, refused = session_view.edit(target.name, data, sessions_protocol.MAX_NAME_BYTES)
+            target.name = name
+            if refused then status = refused end
         end
         dirty = true
     end
@@ -630,8 +631,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "rename_session" then start_rename(conversation.session.snapshot, false)
                         elseif kind == "stop_work" then ask_control("stop", "Stop current work? Enter confirms · Esc keeps it") end
                     else
-                        local next_draft = not conversation.read_only and session_view.edit(draft, data) or draft
-                        if next_draft ~= draft then draft = next_draft; dirty = true end
+                        if not conversation.read_only then
+                            local next_draft, refused = session_view.edit(draft, data)
+                            if refused then status = refused; dirty = true end
+                            if next_draft ~= draft then draft = next_draft; dirty = true end
+                        end
                     end
                 elseif not catalog_open then
                     local kind = ""

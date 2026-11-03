@@ -70,8 +70,10 @@ end
 
 -- The draft after one input event: printable text and paste append, Backspace
 -- removes one character, Ctrl+U clears. Anything else leaves it unchanged.
-function M.edit(draft: string, event: {[string]: unknown}): string
-    local limit = 4096
+-- limit is the most bytes the draft holds, by default what one session input
+-- carries; an insertion past it leaves the draft as it was and returns why.
+function M.edit(draft: string, event: {[string]: unknown}, limit: integer?): (string, string?)
+    local bound = limit or protocol.MAX_TEXT_BYTES
     local value = draft
     if event.type == "paste" then
         value = draft .. tostring(event.text)
@@ -87,8 +89,12 @@ function M.edit(draft: string, event: {[string]: unknown}): string
             value = draft .. key
         end
     end
-    if #value > limit then return draft end
-    return value
+    if #value > bound then
+        local added = #value - #draft
+        return draft, (event.type == "paste" and "Paste" or "Typing") .. " of " .. tostring(added) .. " bytes refused: the draft holds "
+            .. tostring(#draft) .. " of at most " .. tostring(bound) .. " bytes"
+    end
+    return value, nil
 end
 
 -- Transcript rows: each input, then its state or result.

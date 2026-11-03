@@ -105,7 +105,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local open_key, open_target = "", ""
     local close_key: string? = nil
     local remove_key: string? = nil
-    local remove_history = false
     -- renaming is the session whose name the person is typing; listed says
     -- it was chosen in the session list rather than the open session.
     local renaming: {session: string, node: string?, title: string, name: string, listed: boolean}? = nil
@@ -182,7 +181,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             return fault
         end)
     end
-    local function remove_listed(entry: sessions_protocol.SessionSnapshot?, history: boolean)
+    -- remove_listed deletes a listed session with its history, which stays
+    -- when its thread is shared.
+    local function remove_listed(entry: sessions_protocol.SessionSnapshot?)
+        local history = entry ~= nil and entry.thread_shared ~= true
         control_listed(entry, "Deleting session…", function(owner: sessions.Client, session: string, key: string): sessions.Fault?
             local _, fault = owner:remove({session = session, history = history or nil, operation_key = key})
             return fault
@@ -269,16 +271,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         if not accepted then status = err or "Confirmation failed"; dirty = true end
         return accepted
     end
-    -- accept_history answers a pending removal with its second choice: the
-    -- person confirms removing the session together with its history.
-    local function accept_history(): boolean
-        local action = confirmation.action(review) .. "_history"
-        local target = control_target(action)
-        if not target then confirmation.cancel(review); status = "Session is unavailable"; dirty = true; return false end
-        local opened, err = confirmation.open(review, action, target, "inline", "Delete session and its history?", prompt)
-        if not opened then status = err or "Confirmation is unavailable"; dirty = true; return false end
-        return accept_control("shortcut")
-    end
     -- start_rename opens the name line for a session, holding its explicit
     -- name; an automatic title starts the line empty.
     local function start_rename(entry: sessions_protocol.SessionSnapshot?, listed: boolean)
@@ -318,11 +310,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if agents.close(current, close_key) then agents.refresh(current) end
         end)
     end
-    local function remove_session(history: boolean)
+    -- remove_session deletes the open session with its history, which stays
+    -- when its thread is shared.
+    local function remove_session()
         start_task(function(current: agents.Conversation)
-            if remove_history ~= history then remove_key, remove_history = nil, history end
             remove_key = remove_key or assert(uuid.v7())
-            if agents.remove(current, remove_key, history) then
+            if agents.remove(current, remove_key, current.session.snapshot.thread_shared ~= true) then
                 remove_key = nil
                 removed = true
             end
@@ -589,12 +582,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                             local work_id = conversation and agents.current_work(conversation)
                             if accept_control("enter") then status = ""; stop_work(work_id) end
                         elseif confirmation.matches(review, "close") then if accept_control("enter") then status = ""; close_session() end
-                        elseif confirmation.matches(review, "remove") then if accept_control("enter") then status = ""; remove_session(false) end
+                        elseif confirmation.matches(review, "remove") then if accept_control("enter") then status = ""; remove_session() end
                         elseif conversation.lifecycle == "closed" then start_from_session()
                         else submit() end
-                    elseif data.type == "key" and data.action == "press" and not data.ctrl and data.key:lower() == "h" and confirmation.matches(review, "remove")
-                        and not conversation.session.snapshot.thread_shared then
-                        if accept_history() then status = ""; remove_session(true) end
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then conversation.details = not conversation.details; dirty = true
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "x" then ask_control("close", "Close session? Accepted work finishes; new work is refused. Enter confirms · Esc keeps it")
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "r" then
@@ -627,8 +617,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                             elseif data.key_type == "esc" or data.key_type == "escape" then confirmation.cancel(review); status = ""; dirty = true end
                         elseif confirmation.matches(review, "remove_listed") then
                             local entry = directory[selected]
-                            if data.key_type == "enter" then if accept_control("enter") then remove_listed(entry, false) end
-                            elseif key == "h" and not data.ctrl and entry and not entry.thread_shared then if accept_history() then remove_listed(entry, true) end
+                            if data.key_type == "enter" then if accept_control("enter") then remove_listed(entry) end
                             elseif data.key_type == "esc" or data.key_type == "escape" then confirmation.cancel(review); status = ""; dirty = true end
                         elseif data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); dirty = true
                         elseif data.key_type == "down" then selected = math.floor(math.min(#directory, selected + 1)); dirty = true

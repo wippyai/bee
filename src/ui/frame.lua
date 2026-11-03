@@ -955,7 +955,8 @@ end
 
 -- Declares the actions a row offers: a right click on the row's target
 -- (kind, index, key) or Shift+F10 on the selected row opens them as a popup
--- menu. Each action is a Button; choosing one reaches the app as a press on
+-- menu; a right click also reaches the app as a left press on the row, so
+-- the app selects it. Each action is a Button; choosing one reaches the app as a press on
 -- a target of the action's kind carrying the row's index and key.
 function M.row_actions(painter: Painter, row: RowActions)
     painter.controls.rows[#painter.controls.rows + 1] = row
@@ -990,20 +991,14 @@ local function context_items(buttons: {Button}): {MenuItem}
     return items
 end
 
--- The row's actions drawn over the screen at the context's anchor with the
--- row marked "›"; false when the row offers none.
+-- The row's actions drawn over the screen at the context's anchor; false
+-- when the row offers none.
 local function render_context(view: View, menu: Menu, preferences: appearance.Preferences): boolean
     local context = menu.context
     local buttons = choices(menu)
     if not context or #buttons == 0 then return false end
     local painter = M.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
     painter.canvas:put_rows(1, 1, view.rows)
-    for _, hit in ipairs(view.hits) do
-        if hit.kind == context.kind and hit.index == context.index and hit.key == context.key then
-            M.put(painter, hit.x, hit.y, MARKER, 1, painter.theme.accent)
-            break
-        end
-    end
     local items = context_items(buttons)
     local panel = popup.panel(painter.width, painter.height, items, context.state)
     context.state, context.panel = popup.fit(context.state, panel, items), panel
@@ -1187,7 +1182,10 @@ function M.route(menu: Menu, value: unknown, text_entry: boolean?): (tty.TTYEven
     if menu.mode == "" and event.type == "mouse" and event.action == "press" and event.button == "right" then
         local hit = M.hit(menu.hits, event.x or 0, event.y or 0)
         local row = hit and row_at(menu, hit)
-        if row then open_context(menu, row, event.x or 1, (event.y or 1) + 1); return nil, true end
+        if row then
+            open_context(menu, row, event.x or 1, (event.y or 1) + 1)
+            return {type = "mouse", action = "press", button = "left", x = event.x, y = event.y, ctrl = false, alt = false, shift = false}, true
+        end
     end
     if event.type == "key" and event.action ~= "release" then
         local key, letter = event.key_type or "", event.key or ""

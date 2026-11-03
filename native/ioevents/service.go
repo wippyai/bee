@@ -223,7 +223,7 @@ func (manager *Manager) release(watch *Watch) {
 	manager.watches.Done()
 }
 
-// end stops a watch whose notices can no longer be complete. Its owner sees
+// end stops a watch whose notices cannot be complete. Its owner sees
 // the watch close and opens it again.
 func (manager *Manager) end(watch *Watch) {
 	watch.ended = true

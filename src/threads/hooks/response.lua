@@ -77,12 +77,13 @@ function M.decode(raw: unknown): (Shape?, string?)
     return {parts = parts, permission = data.permission}, nil
 end
 
--- shape returns the response entry a driver's hook declaration names.
+-- shape returns the response entry a driver's hook declaration names; a
+-- driver that names none takes no synchronous answer, so its shape is empty.
 function M.shape(driver: string): (Shape?, string?)
     local declared, problem = capabilities.declaration(driver)
     if problem then return nil, problem end
     local ref = declared.response
-    if not ref then return nil, "driver " .. driver .. " names no hook response" end
+    if not ref then return {parts = {}}, nil end
     local entry, get_error = registry.get(ref)
     local item = bounds.object(entry)
     local meta = item and bounds.object(item.meta)

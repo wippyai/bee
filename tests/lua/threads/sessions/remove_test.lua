@@ -167,7 +167,7 @@ local function define_tests()
         test.it("stops a running window session first and removes it once placement proves its exit", function()
             local journal = harness.session_owner(WORKSPACE)
             local methods = {reconcile = "bee.tests.threads.sessions:removal_placement", stop = "bee.tests.threads.sessions:removal_placement"}
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", placement_methods = methods,
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude", placement_methods = methods,
                 owner_id = "sessions-owner", workspace_id = WORKSPACE}}))
             local session = assert(bounds.id(opened.session))
             local attempt = "removal-" .. harness.key()
@@ -247,7 +247,7 @@ local function define_tests()
         test.it("stops a running session first and removes its history once placement proves its exit", function()
             local journal = harness.session_owner(WORKSPACE)
             local methods = {reconcile = "bee.tests.threads.sessions:removal_placement", stop = "bee.tests.threads.sessions:removal_placement"}
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", placement_methods = methods,
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude", placement_methods = methods,
                 owner_id = "sessions-owner", workspace_id = WORKSPACE}}))
             local session = assert(bounds.id(opened.session))
             local thread = assert(bounds.id(harness.value(journal:call("session_describe", {session = session})).thread_ref))

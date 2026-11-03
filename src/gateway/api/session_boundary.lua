@@ -62,7 +62,9 @@ local function answer(binding: subject_call.Binding, outcome: Object, payload: O
         return decoded, nil
     end
     if value.extension_response ~= nil then
-        local rendered, render_error = hook_response.render(tostring(event), value.extension_response, bounds.id(value.hook_driver) or "unknown")
+        local driver = bounds.id(value.hook_driver)
+        if not driver then return fault("INTERNAL", "a hook answer names no session driver") end
+        local rendered, render_error = hook_response.render(tostring(event), value.extension_response, driver)
         if not rendered then return fault("INTERNAL", tostring(render_error)) end
         return rendered, nil
     end

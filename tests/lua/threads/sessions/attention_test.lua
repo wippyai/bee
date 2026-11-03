@@ -27,7 +27,7 @@ local function define_tests()
             end
             local before = object(summary(workspace).value).count
             if type(before) ~= "number" then error("count unavailable") end
-            local opened = object(harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}})))
+            local opened = object(harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}})))
             local session = text(opened, "session")
             harness.value(journal:call("work_send", {session = session, input = "work", operation_key = harness.key()}))
             local reserved = object(harness.value(journal:call("turn_reserve", {session = session, operation_key = harness.key()})))

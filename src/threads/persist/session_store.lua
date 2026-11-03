@@ -45,6 +45,12 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
     if not operation_key or not title or not route_json or type(input.route or {}) ~= "table" then
         return failure("INVALID_ARGUMENT", route_error or "operation_key, title or route is invalid")
     end
+    -- A hook-delivered session answers its CLI's hooks in the shape that
+    -- CLI's driver declares, so it names that driver as its provider.
+    local route = object(input.route) or {}
+    if route.delivery == "hook" and not ref(route.provider) then
+        return failure("INVALID_ARGUMENT", "a hook-delivered session names its driver in route.provider")
+    end
     local route_digest = digest(route_json)
     if not route_digest then return failure("INTERNAL", "measure pinned session route") end
     local existing_thread = input.thread_id == nil and nil or text(input.thread_id, 160)

@@ -23,7 +23,7 @@ local function define_tests()
                 test.not_nil(bounds.member("UserPromptSubmit", delivered))
                 test.not_nil(bounds.member("Stop", delivered))
                 local journal = harness.session_owner(WORKSPACE)
-                local route: Object = {delivery = "hook"}
+                local route: Object = {delivery = "hook", provider = provider}
                 if plan then route.definition = plan.definition_ref; route.plan_digest = plan.plan_digest end
                 local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = route}))
                 local stored = harness.value(journal:call("session_describe", {session = opened.session}))
@@ -87,7 +87,7 @@ local function define_tests()
                 test.eq(plan.permission_answers, "provider")
                 local journal = harness.session_owner(WORKSPACE)
                 local opened = harness.value(journal:call("session_create", {operation_key = harness.key(),
-                    route = {delivery = "hook", definition = plan.definition_ref, plan_digest = plan.plan_digest}}))
+                    route = {delivery = "hook", provider = provider, definition = plan.definition_ref, plan_digest = plan.plan_digest}}))
                 local stored = harness.value(journal:call("session_describe", {session = opened.session}))
                 local mark = ({agy = "c", claude = "d", muse = "e"})[provider]
                 local attempt = "attempt:" .. string.rep(mark, 64)
@@ -122,7 +122,7 @@ local function define_tests()
                 test.eq(plan.permission_answers, "ask")
                 local journal = harness.session_owner(WORKSPACE)
                 local opened = harness.value(journal:call("session_create", {operation_key = harness.key(),
-                    route = {delivery = "hook", definition = plan.definition_ref, plan_digest = plan.plan_digest}}))
+                    route = {delivery = "hook", provider = provider, definition = plan.definition_ref, plan_digest = plan.plan_digest}}))
                 local stored = harness.value(journal:call("session_describe", {session = opened.session}))
                 local mark = ({agy = "f", claude = "9"})[provider]
                 local attempt = "attempt:" .. string.rep(mark, 64)

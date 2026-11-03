@@ -11,7 +11,7 @@ local function define_tests()
         for _, endpoint in ipairs({"hook_http", "hook_mcp_http"}) do
             test.it("journals a native prompt under " .. endpoint .. " attribution scope", function()
                 local journal = harness.session_owner(WORKSPACE)
-                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
                 harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "boundary-attempt", operation_key = harness.key()}))
                 local description = harness.value(journal:call("session_describe", {session = opened.session}))
                 local entry = assert(bounds.object(registry.get("bee.gateway.api:" .. endpoint)))

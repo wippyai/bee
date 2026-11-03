@@ -116,7 +116,7 @@ local function define_tests()
     test.describe("Interactive Sessions", function()
         test.it("accepts a typed message through the gateway subject boundary and settles it with the agent's reply", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
             local attempt = "attempt:" .. string.rep("a", 64)
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = attempt, operation_key = harness.key()}))
             local work = harness.value(journal:call("work_send", {session = opened.session, input = "peer boundary message", operation_key = harness.key()}))
@@ -152,7 +152,7 @@ local function define_tests()
         end)
         test.it("resumes the terminal of a session whose typed message waits after a restart", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "before-restart", operation_key = harness.key()}))
             harness.value(journal:call("work_send", {session = opened.session, input = "typed before the restart", operation_key = harness.key()}))
             harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
@@ -216,7 +216,7 @@ local function define_tests()
             local created: {[string]: boolean} = {}
             local reply = string.rep("r", 4096)
             for _ = 1, 20 do
-                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
                 local work = harness.value(journal:call("work_send", {session = opened.session, input = "a long answer", operation_key = harness.key()}))
                 local turn = harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
                 local pulled = harness.value(journal:call("turn_pull", {turn = turn.turn, claim = turn.claim}))
@@ -253,7 +253,7 @@ local function define_tests()
         end)
         test.it("keeps a message for a terminal whose agent has finished no turn queued, and types it once that agent ends its first turn", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "starting-terminal", operation_key = harness.key()}))
             local session_ref = assert(bounds.id(opened.session))
             with_window_probes(function(resumed: process.Listener, typed: process.Listener, activity: process.Listener)
@@ -291,7 +291,7 @@ local function define_tests()
         end)
         test.it("gives a starting terminal the message waiting for it as its prompt, the same message each time it asks", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", definition = "interactive-fixture"}}))
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude", definition = "interactive-fixture"}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "fresh-terminal", operation_key = harness.key()}))
             local actor = assert(security.new_actor("window", {workspace_id = WORKSPACE}))
             local window = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.tests.threads.sessions:interactive_lifecycle_policy"))}))
@@ -323,7 +323,7 @@ local function define_tests()
             local function window_session(activity: string?): unknown
                 local methods: {[string]: unknown} = {}
                 if activity then methods.activity = "bee.tests.threads.sessions:interactive_" .. activity end
-                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude",
                     definition = "interactive-fixture", placement_methods = methods, owner_id = "bee.application:" .. WORKSPACE .. ":idle-owner",
                     workspace_id = WORKSPACE}}))
                 harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "idle-terminal", operation_key = harness.key()}))
@@ -345,7 +345,7 @@ local function define_tests()
         end)
         test.it("rejects an open key already used for another operation", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
             local used = harness.key()
             harness.value(journal:call("work_send", {session = opened.session, input = "taken", operation_key = used}))
             local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
@@ -385,7 +385,7 @@ local function define_tests()
         test.it("keeps idle window close pending until placement proves exit", function()
             local journal = harness.session_owner(WORKSPACE)
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {
-                delivery = "hook", placement_methods = {reconcile = "bee.tests.threads.sessions:interactive_running", stop = "bee.tests.threads.sessions:interactive_running"}}}))
+                delivery = "hook", provider = "claude", placement_methods = {reconcile = "bee.tests.threads.sessions:interactive_running", stop = "bee.tests.threads.sessions:interactive_running"}}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "idle-live", operation_key = harness.key()}))
             local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
             local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")), assert(security.policy("bee.tests.threads.sessions:interactive_lifecycle_policy"))})
@@ -398,7 +398,7 @@ local function define_tests()
             for _, phase in ipairs({"queued", "reserved", "accepted"}) do
                 local journal = harness.session_owner(WORKSPACE)
                 local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {
-                    delivery = "hook", placement_methods = {reconcile = "bee.tests.threads.sessions:interactive_exited"}}}))
+                    delivery = "hook", provider = "claude", placement_methods = {reconcile = "bee.tests.threads.sessions:interactive_exited"}}}))
                 harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "interactive-lifecycle", operation_key = harness.key()}))
                 local work = harness.value(journal:call("work_send", {session = opened.session, input = "queued", operation_key = harness.key()}))
                 if phase ~= "queued" then
@@ -421,7 +421,7 @@ local function define_tests()
 
         test.it("journals a native prompt as the current turn without repeating it as peer context", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "native-prompt", operation_key = harness.key()}))
             local session = assert(bounds.id(opened.session))
             local actor = assert(security.new_actor(session, {workspace_id = WORKSPACE}))
@@ -447,7 +447,7 @@ local function define_tests()
         test.it("suspends only a proved exited attachment and preserves unfinished Work as uncertain", function()
             for _, state in ipairs({"running", "exited"}) do
                 local journal = harness.session_owner(WORKSPACE)
-                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude",
                     definition = "interactive-fixture", placement_methods = {reconcile = "bee.tests.threads.sessions:interactive_" .. state}}}))
                 harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "interactive-lifecycle", operation_key = harness.key()}))
                 local work = harness.value(journal:call("work_send", {session = opened.session, input = "unfinished", operation_key = harness.key()}))
@@ -470,7 +470,7 @@ local function define_tests()
         end)
         test.it("reports a suspended window's restore facts only to a host-granted caller", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude",
                 definition = "interactive-fixture", plan_digest = "plan-1", origin_request_id = "origin-1", operation_key = "window-open-1",
                 saved_profile_id = "profile-1", saved_profile_revision = 2,
                 placement_methods = {reconcile = "bee.tests.threads.sessions:interactive_exited"}}}))
@@ -502,14 +502,14 @@ local function define_tests()
 
             local headless = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {definition = "interactive-fixture"}}))
             test.eq(assert(bounds.object(restore(granted, headless.session).error)).code, "INVALID")
-            local unrecorded = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+            local unrecorded = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude",
                 definition = "interactive-fixture", plan_digest = "plan-1"}}))
             harness.value(journal:call("session_attach", {session = unrecorded.session, attempt_id = "attempt:unrecorded", operation_key = harness.key()}))
             test.eq(assert(bounds.object(restore(granted, unrecorded.session).error)).code, "UNAVAILABLE")
         end)
         test.it("reports a session recorded with a v2 profile in the current profile schema", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude",
                 definition = "interactive-fixture", effective_profile = {schema_revision = "bee.agent-profile@2", name = "Recorded",
                     definition_ref = "interactive-fixture", driver_binding_ref = "bee.drivers.claude.binding:binding", provider = {}, bee = {mcp = {}},
                     presentation = "window", budgets = {turn = {tokens = 10}}, supervision = {quiet_period_ms = 1000}}}}))
@@ -524,7 +524,7 @@ local function define_tests()
         end)
         test.it("accepts only the message typed for the reserved turn, returns the agent's reply and settles a message no terminal can take", function()
             local journal = harness.session_owner(WORKSPACE)
-            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "interactive-one", operation_key = harness.key()}))
             local session_ref = assert(bounds.id(opened.session))
             local peer = harness.principal("bs:node:" .. WORKSPACE .. ":peer", {"bee.threads.security:sessions_owner"}, WORKSPACE)

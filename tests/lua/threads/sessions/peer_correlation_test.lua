@@ -11,7 +11,7 @@ local function define_tests()
         for _, via_hook in ipairs({false, true}) do
             test.it("commits one inbox request and its correlated reply with the durable work" .. (via_hook and " through observer hooks" or ""), function()
                 local owner = harness.session_owner(WORKSPACE)
-                local opened = harness.value(owner:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))
+                local opened = harness.value(owner:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
                 if via_hook then harness.value(owner:call("session_attach", {session = opened.session, attempt_id = "fixture", operation_key = harness.key()})) end
                 local described = harness.value(owner:call("session_describe", {session = opened.session}))
                 local source = "bs:source-bee:" .. WORKSPACE .. ":agent"

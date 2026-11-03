@@ -9,7 +9,7 @@ local function define_tests()
         test.it("finishes a pending close on proven exit without an await observer", function()
             local journal = harness.session_owner(WORKSPACE)
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {
-                delivery = "hook", definition = "interactive-fixture",
+                delivery = "hook", provider = "claude", definition = "interactive-fixture",
                 placement_methods = {reconcile = "bee.tests.threads.sessions:interactive_exited"}}}))
             harness.value(journal:call("session_attach", {session = opened.session,
                 attempt_id = "speed-exit", operation_key = harness.key()}))

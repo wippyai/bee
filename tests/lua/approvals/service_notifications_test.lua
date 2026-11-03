@@ -34,7 +34,7 @@ local function define_tests()
             install_policy()
             local workspace = string.rep("d", 32)
             local journal = thread_harness.session_owner(workspace)
-            local opened = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", definition = "bee.harness.app:app"}}))
+            local opened = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", provider = "claude", definition = "bee.harness.app:app"}}))
             local agent = caller(tostring(opened.session), {"bee.security.approvals:approval_request_policy"}, {workspace_id = workspace})
             local created = value(call(agent, "request", {workspace_id = workspace, idempotency_key = key(), policy = POLICY,
                 request_kind = "permission", proposal = proposal(), prompt = {text = "Review this session?"}}))
@@ -59,7 +59,7 @@ local function define_tests()
             install_policy()
             local workspace = string.rep("c", 32)
             local journal = thread_harness.session_owner(workspace)
-            local opened = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", definition = "bee.harness.app:app"}}))
+            local opened = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", provider = "claude", definition = "bee.harness.app:app"}}))
             local session = assert(bounds.id(opened.session))
             local stored = thread_harness.value(journal:call("session_describe", {session = session}))
             local thread = assert(bounds.id(stored.thread_ref))
@@ -148,7 +148,7 @@ local function define_tests()
         test.it("delivers and acknowledges a compound completion event beyond the principal ID bound", function()
             local workspace = string.rep("d", 32)
             local journal = thread_harness.session_owner(workspace)
-            local session = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", definition = "bee.harness.app:app"}})).session
+            local session = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", provider = "claude", definition = "bee.harness.app:app"}})).session
             local db = open_test_store()
             local created = executed(service.execute(db, "bee.gov.activation", "request", request_of(workspace,
                 {proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "1", payload = {}},
@@ -178,7 +178,7 @@ local function define_tests()
         test.it("tells the requesting session one notice for an approved request whose effect completes", function()
             local workspace = string.rep("e", 32)
             local journal = thread_harness.session_owner(workspace)
-            local session = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", definition = "bee.harness.app:app"}})).session
+            local session = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", provider = "claude", definition = "bee.harness.app:app"}})).session
             local db = open_test_store()
             local created = executed(service.execute(db, "bee.gov.activation", "request", request_of(workspace,
                 {proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "1", payload = {}},

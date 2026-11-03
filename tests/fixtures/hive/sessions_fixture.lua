@@ -93,7 +93,7 @@ local function proof(): Object
     lookup("bee.e2e.sdk/ready/" .. label)
     local owner = executor("bee.application:" .. WORKSPACE .. ":session-fixture", "bee.harness.app:app")
     local opened = journal(owner, "session_create", {operation_key = "fixture/create", title = "Agent on " .. label,
-        route = {delivery = "hook", definition = "bee.e2e.sdk:session_fixture"}})
+        route = {delivery = "hook", provider = "claude", definition = "bee.e2e.sdk:session_fixture"}})
     journal(owner, "session_attach", {session = opened.session, attempt_id = "fixture-attached", operation_key = "fixture/attach"})
     warm(owner, tostring(opened.session))
     if label == "beta" then

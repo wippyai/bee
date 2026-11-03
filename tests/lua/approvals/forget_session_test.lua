@@ -21,7 +21,7 @@ local remover = caller("bee.test.remover", {"bee.tests.approvals:forget_session_
 
 local function opened(workspace: string): (string, string, funcs.Executor)
     local journal = thread_harness.session_owner(workspace)
-    local created = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", definition = "bee.harness.app:app"}}))
+    local created = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", provider = "claude", definition = "bee.harness.app:app"}}))
     local session = assert(bounds.id(created.session))
     local thread = assert(bounds.id(thread_harness.value(journal:call("session_describe", {session = session})).thread_ref))
     local agent = caller(session, {"bee.security.approvals:approval_request_policy", "bee.threads.security:observe"}, {workspace_id = workspace})

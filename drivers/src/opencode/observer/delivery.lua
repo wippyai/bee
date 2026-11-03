@@ -11,7 +11,7 @@ function M.timeout(event: unknown): string
 end
 type IO = {submit: (Object) -> Object?, permission: (string, Object) -> (), record: (string) -> ()}
 function M.send(io: IO, row: Object, auto: boolean?): boolean
-    local ok = pcall(function()
+    local ok, problem = pcall(function()
         if auto and row.hook_event_name == "PermissionRequest" then
             io.permission(tostring(row.permission_id), {reply = "once"})
             return
@@ -24,7 +24,7 @@ function M.send(io: IO, row: Object, auto: boolean?): boolean
             io.permission(tostring(row.permission_id), {reply = decision.behavior == "allow" and "once" or "reject", message = decision.message})
         end
     end)
-    if not ok then io.record(tostring(row.hook_event_name) .. ": hook delivery failed") end
+    if not ok then io.record(tostring(row.hook_event_name) .. ": hook delivery failed: " .. tostring(problem)) end
     return ok
 end
 return M

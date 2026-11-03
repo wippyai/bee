@@ -16,7 +16,7 @@ local function define_tests()
                 test.eq(reply.message, "Decision reason")
             end
         end)
-        test.it("records delivery and permission API failures without throwing or poisoning later events", function()
+        test.it("records delivery and permission API failures with their reasons without throwing or poisoning later events", function()
             local failures: {string} = {}
             local calls = {attempts = 0}
             local io = {submit = function(_: {[string]: unknown}): {[string]: unknown}?
@@ -29,6 +29,9 @@ local function define_tests()
             test.is_false(delivery.send(io, {hook_event_name = "PermissionRequest", permission_id = "p"}))
             test.is_true(delivery.send(io, {hook_event_name = "Stop"}))
             test.eq(#failures, 2)
+            test.is_true(failures[1]:find("UserPromptSubmit: hook delivery failed: ", 1, true) == 1, failures[1])
+            test.is_true(failures[1]:find("fixture HTTP failure", 1, true) ~= nil, failures[1])
+            test.is_true(failures[2]:find("fixture permission API failure", 1, true) ~= nil, failures[2])
             test.eq(calls.attempts, 3)
         end)
     end)

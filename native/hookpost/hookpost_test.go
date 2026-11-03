@@ -82,9 +82,10 @@ func TestRunPeerTimeoutAndCancellation(t *testing.T) {
 	}
 }
 
-func TestRunPostsGenericPayloadAndOnlyAcceptsSuccess(t *testing.T) {
+func TestRunPostsStdinUnchangedAndOnlyAcceptsSuccess(t *testing.T) {
 	var calls atomic.Int32
-	var received map[string]json.RawMessage
+	var received []byte
+	var event string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		if r.Method != http.MethodPost || r.URL.Path != "/hook/action:request-1" {
@@ -93,22 +94,22 @@ func TestRunPostsGenericPayloadAndOnlyAcceptsSuccess(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer hook-secret" {
 			t.Errorf("authorization = %q", got)
 		}
-		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
-			t.Errorf("decode body: %v", err)
-		}
+		event = r.Header.Get(EventHeader)
+		received, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	defer server.Close()
 	t.Setenv("BEE_TOKEN", "hook-secret")
-	err := Run(context.Background(), io.NopCloser(strings.NewReader(`{"session_id":"s1","tool_input":{"secret":"raw"},"hook_event_name":"Stop"}`)), strings.TrimPrefix(server.URL, "http://"), "action:request-1", "BEE_TOKEN", "Stop")
+	input := `{"session_id":"s1","tool_input":{"secret":"raw"}}`
+	err := Run(context.Background(), io.NopCloser(strings.NewReader(input)), strings.TrimPrefix(server.URL, "http://"), "action:request-1", "BEE_TOKEN", "Stop")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("calls = %d, want one", calls.Load())
 	}
-	if string(received["hook_event_name"]) != `"Stop"` || string(received["session_id"]) != `"s1"` || received["tool_input"] == nil {
-		t.Fatalf("payload = %s", mustJSON(received))
+	if string(received) != input || event != "Stop" {
+		t.Fatalf("payload = %s event = %s", received, event)
 	}
 }
 
@@ -248,7 +249,7 @@ func TestRunDoesNotFollowRedirectOrLeakCredentials(t *testing.T) {
 	}
 }
 
-func TestRunRejectsMalformedBoundsAndEventConflicts(t *testing.T) {
+func TestRunRejectsMalformedCommandValues(t *testing.T) {
 	t.Setenv("BEE_TOKEN", "token")
 	cases := []struct {
 		name, endpoint, action, tokenEnv, event, input string
@@ -258,9 +259,9 @@ func TestRunRejectsMalformedBoundsAndEventConflicts(t *testing.T) {
 		{"action", "127.0.0.1:1234", "../action", "BEE_TOKEN", "Stop", `{}`},
 		{"event", "127.0.0.1:1234", "action", "BEE_TOKEN", "Unknown", `{}`},
 		{"environment", "127.0.0.1:1234", "action", "bad-name", "Stop", `{}`},
-		{"malformed", "127.0.0.1:1234", "action", "BEE_TOKEN", "Stop", `{`},
-		{"multiple documents", "127.0.0.1:1234", "action", "BEE_TOKEN", "Stop", `{} {}`},
-		{"event conflict", "127.0.0.1:1234", "action", "BEE_TOKEN", "Stop", `{"hook_event_name":"PreToolUse"}`},
+		{"qualified unknown event", "127.0.0.1:1234", "action", "BEE_TOKEN", "agy:Unknown", `{}`},
+		{"qualifier", "127.0.0.1:1234", "action", "BEE_TOKEN", "../agy:Stop", `{}`},
+		{"two qualifiers", "127.0.0.1:1234", "action", "BEE_TOKEN", "a:b:Stop", `{}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -268,7 +269,7 @@ func TestRunRejectsMalformedBoundsAndEventConflicts(t *testing.T) {
 			if err == nil {
 				t.Fatal("Run succeeded")
 			}
-			if strings.Contains(err.Error(), "token") && tc.name != "environment" && tc.name != "event conflict" {
+			if strings.Contains(err.Error(), "token") && tc.name != "environment" {
 				t.Fatalf("unexpected sensitive error: %v", err)
 			}
 		})
@@ -304,18 +305,15 @@ func TestRunCancelsActualPipeRead(t *testing.T) {
 	}
 }
 
-func TestRunToForwardsOnlyBoundedAuthenticatedContext(t *testing.T) {
+func TestRunToWritesTheGatewayAnswerWithinItsBound(t *testing.T) {
 	t.Setenv("BEE_TOKEN", "context-test-token")
 	cases := []struct {
-		name, body string
-		valid      bool
+		name, body, output string
+		valid              bool
 	}{
-		{"context", `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"message from peer"}}`, true},
-		{"decision", `{"decision":"allow","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"message"}}`, false},
-		{"wrong event", `{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"message"}}`, false},
-		{"nested decision", `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"message","decision":"allow"}}`, false},
-		{"extra document", `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"message"}}{}`, false},
-		{"oversized", strings.Repeat("x", MaxPayloadBytes+1), false},
+		{"answer", " {\"injectSteps\":[{\"ephemeralMessage\":\"message from peer\"}]}\n", "{\"injectSteps\":[{\"ephemeralMessage\":\"message from peer\"}]}\n", true},
+		{"empty", " \n", "", true},
+		{"oversized", strings.Repeat("x", MaxPayloadBytes+1), "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -325,13 +323,9 @@ func TestRunToForwardsOnlyBoundedAuthenticatedContext(t *testing.T) {
 			}))
 			defer server.Close()
 			var output strings.Builder
-			err := RunTo(context.Background(), io.NopCloser(strings.NewReader(`{}`)), &output, strings.TrimPrefix(server.URL, "http://"), "action", "BEE_TOKEN", "UserPromptSubmit")
-			if tc.valid {
-				if err != nil || !strings.Contains(output.String(), "message from peer") {
-					t.Fatalf("context transport: %v", err)
-				}
-			} else if err == nil || output.Len() != 0 {
-				t.Fatal("unsafe response was forwarded")
+			err := RunTo(context.Background(), io.NopCloser(strings.NewReader(`{}`)), &output, strings.TrimPrefix(server.URL, "http://"), "action", "BEE_TOKEN", "agy:UserPromptSubmit")
+			if (err == nil) != tc.valid || output.String() != tc.output {
+				t.Fatalf("answer transport: %v %q", err, output.String())
 			}
 		})
 	}

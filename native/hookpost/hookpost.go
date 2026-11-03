@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-// Package hookpost provides bounded command hook transport to the gateway.
+// Package hookpost carries one command hook's stdin to the gateway and the
+// gateway's answer to stdout, byte for byte. The gateway reads the payload and
+// shapes the answer from the driver's declarations.
 package hookpost
 
 import (
@@ -36,6 +38,10 @@ const (
 	PermissionTimeout = 650 * time.Second
 )
 
+// EventHeader carries the command's hook event, "[driver:]Event": a driver
+// that qualifies the event names the declarations that read its stdin.
+const EventHeader = "X-Bee-Hook-Event"
+
 var knownEvents = map[string]struct{}{
 	"SessionStart":       {},
 	"UserPromptSubmit":   {},
@@ -48,14 +54,14 @@ var knownEvents = map[string]struct{}{
 	"SessionEnd":         {},
 }
 
-// Run validates the command values, reads one bounded JSON object from stdin,
-// and submits it once. stdin must be closeable so cancellation can interrupt a
-// blocked read (os.Stdin satisfies this contract).
+// Run validates the command values, reads stdin within its bound, and submits
+// it once. stdin must be closeable so cancellation can interrupt a blocked
+// read (os.Stdin satisfies this contract).
 func Run(ctx context.Context, stdin io.ReadCloser, endpoint, actionID, tokenSource, event string) error {
 	return RunTo(ctx, stdin, io.Discard, endpoint, actionID, tokenSource, event)
 }
 
-// RunTo forwards a bounded response to the hook caller.
+// RunTo writes the gateway's answer to the hook caller.
 func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint, actionID, tokenSource, event string) error {
 	if ctx == nil {
 		return errors.New("hook-post: context is required")
@@ -69,11 +75,8 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 	if !safeSegment(actionID, MaxActionBytes) {
 		return errors.New("hook-post: invalid action id")
 	}
-	agyTranscript := strings.HasPrefix(event, "agy:")
-	if agyTranscript {
-		event = strings.TrimPrefix(event, "agy:")
-	}
-	if _, ok := knownEvents[event]; !ok {
+	hookEvent, ok := commandEvent(event)
+	if !ok {
 		return errors.New("hook-post: invalid event")
 	}
 	token, tokenError := resolveToken(tokenSource)
@@ -81,7 +84,7 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 		return tokenError
 	}
 
-	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout(event))
+	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout(hookEvent))
 	defer cancel()
 	if err := requestCtx.Err(); err != nil {
 		return err
@@ -90,30 +93,18 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 	if err != nil {
 		return err
 	}
-	if agyTranscript {
-		raw, err = agyPayload(raw, event)
-		if err != nil {
-			return err
-		}
-		if raw == nil {
-			return nil
-		}
-	}
-	body, err := payload(raw, event)
-	if err != nil {
-		return err
-	}
 	if err := requestCtx.Err(); err != nil {
 		return err
 	}
 
 	url := "http://" + endpoint + "/hook/" + actionID
-	request, err := http.NewRequestWithContext(requestCtx, http.MethodPost, url, bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
 		return errors.New("hook-post: request could not be created")
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(EventHeader, event)
 	client := &http.Client{
 		Transport: &http.Transport{
 			Proxy:             nil,
@@ -141,13 +132,28 @@ func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint,
 	if err != nil || len(data) > MaxPayloadBytes {
 		return errors.New("hook-post: response exceeds its bound or could not be read")
 	}
-	if len(bytes.TrimSpace(data)) == 0 {
+	answer := bytes.TrimSpace(data)
+	if len(answer) == 0 {
 		return nil
 	}
-	if event == "PermissionRequest" {
-		return permissionResponseFor(data, stdout, agyTranscript)
+	if stdout == nil {
+		return errors.New("hook-post: stdout is required")
 	}
-	return extensionResponse(data, stdout, event, agyTranscript)
+	_, err = stdout.Write(append(answer, '\n'))
+	return err
+}
+
+// commandEvent returns the hook event a command's "[driver:]Event" names.
+func commandEvent(value string) (string, bool) {
+	event := value
+	if driver, named, qualified := strings.Cut(value, ":"); qualified {
+		if !safeSegment(driver, MaxActionBytes) || strings.Contains(named, ":") {
+			return "", false
+		}
+		event = named
+	}
+	_, known := knownEvents[event]
+	return event, known
 }
 
 // requestTimeout is how long one event waits for the gateway: a permission
@@ -338,77 +344,4 @@ func readBounded(ctx context.Context, stdin io.ReadCloser) ([]byte, error) {
 		_ = stdin.Close()
 		return nil, ctx.Err()
 	}
-}
-
-func payload(raw []byte, event string) ([]byte, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	fields := map[string]json.RawMessage{}
-	if err := decoder.Decode(&fields); err != nil || fields == nil {
-		return nil, errors.New("hook-post: input is not a JSON object")
-	}
-	var extra json.RawMessage
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return nil, errors.New("hook-post: input contains multiple JSON documents")
-	}
-	for _, name := range []string{"hook_event_name", "event"} {
-		value, exists := fields[name]
-		if !exists {
-			continue
-		}
-		var claimed string
-		if err := json.Unmarshal(value, &claimed); err != nil || claimed != event {
-			return nil, errors.New("hook-post: input event conflicts with command event")
-		}
-	}
-	encodedEvent, err := json.Marshal(event)
-	if err != nil {
-		return nil, errors.New("hook-post: input could not be prepared")
-	}
-	fields["hook_event_name"] = encodedEvent
-	body, err := json.Marshal(fields)
-	if err != nil || len(body) > MaxPayloadBytes {
-		return nil, errors.New("hook-post: input exceeds " + strconv.Itoa(MaxPayloadBytes) + " bytes")
-	}
-	return body, nil
-}
-
-func permissionResponse(data []byte, stdout io.Writer) error {
-	return permissionResponseFor(data, stdout, false)
-}
-
-func permissionResponseFor(data []byte, stdout io.Writer, agy bool) error {
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(data, &fields) == nil && fields != nil && len(fields) == 0 {
-		return nil
-	}
-	var envelope struct {
-		Output *struct {
-			Event    string `json:"hookEventName"`
-			Decision *struct {
-				Behavior string `json:"behavior"`
-				Message  string `json:"message,omitempty"`
-			} `json:"decision"`
-		} `json:"hookSpecificOutput"`
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&envelope) != nil || envelope.Output == nil || envelope.Output.Event != "PermissionRequest" ||
-		envelope.Output.Decision == nil || (envelope.Output.Decision.Behavior != "allow" && envelope.Output.Decision.Behavior != "deny") ||
-		len(envelope.Output.Decision.Message) > 4096 {
-		return errors.New("hook-post: invalid permission response")
-	}
-	var extra json.RawMessage
-	if decoder.Decode(&extra) != io.EOF {
-		return errors.New("hook-post: multiple response documents")
-	}
-	if stdout == nil {
-		return errors.New("hook-post: stdout is required")
-	}
-	if agy {
-		return json.NewEncoder(stdout).Encode(struct {
-			Decision string `json:"decision"`
-			Reason   string `json:"reason,omitempty"`
-		}{envelope.Output.Decision.Behavior, envelope.Output.Decision.Message})
-	}
-	return json.NewEncoder(stdout).Encode(envelope)
 }

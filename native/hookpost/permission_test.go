@@ -4,7 +4,6 @@ package hookpost
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -38,7 +37,7 @@ func TestPermissionHookDecisionRoundTrip(t *testing.T) {
 func TestPermissionHookWithoutHostExchangeRetainsProviderDecision(t *testing.T) {
 	t.Setenv("BEE_TOKEN", "fixture-hook-token")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, `{ }`)
+		_, _ = io.Copy(io.Discard, r.Body)
 	}))
 	defer server.Close()
 	var output strings.Builder
@@ -49,42 +48,28 @@ func TestPermissionHookWithoutHostExchangeRetainsProviderDecision(t *testing.T) 
 	}
 }
 
-func TestAgyPermissionGateUsesBeeHookDecision(t *testing.T) {
+// A driver-qualified permission gate reaches the gateway as the CLI wrote it
+// and waits as long as any permission; the gateway reads and answers it.
+func TestQualifiedPermissionGateReachesTheGatewayUnchanged(t *testing.T) {
 	t.Setenv("BEE_TOKEN", "fixture-hook-token")
+	input := `{"conversationId":"fixture-session","stepIdx":19,"toolCall":{"name":"run_command","args":{"CommandLine":"printf fixture-tool"}}}`
+	answer := `{"decision":"allow","reason":"person approved"}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var payload map[string]any
-		if json.NewDecoder(r.Body).Decode(&payload) != nil || payload["hook_event_name"] != "PermissionRequest" ||
-			payload["session_id"] != "fixture-session" || payload["tool_name"] != "run_command" {
-			t.Error("Agy permission did not reach the common hook shape")
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != input || r.Header.Get(EventHeader) != "agy:PermissionRequest" {
+			t.Error("qualified permission did not reach the gateway unchanged")
 		}
-		_, _ = io.WriteString(w, `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow","message":"person approved"}}}`)
+		_, _ = io.WriteString(w, answer)
 	}))
 	defer server.Close()
 	var output strings.Builder
-	err := RunTo(context.Background(), io.NopCloser(strings.NewReader(`{"conversationId":"fixture-session","stepIdx":19,"toolCall":{"name":"run_command","args":{"CommandLine":"printf fixture-tool"}}}`)),
+	err := RunTo(context.Background(), io.NopCloser(strings.NewReader(input)),
 		&output, strings.TrimPrefix(server.URL, "http://"), "action", "BEE_TOKEN", "agy:PermissionRequest")
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || output.String() != answer+"\n" {
+		t.Fatalf("wrong permission answer: %v %s", err, output.String())
 	}
-	var decision map[string]any
-	if json.Unmarshal([]byte(output.String()), &decision) != nil || decision["decision"] != "allow" || decision["reason"] != "person approved" {
-		t.Fatalf("wrong Agy permission response: %s", output.String())
-	}
-}
-
-func TestPermissionHookRejectsMalformedDecisions(t *testing.T) {
-	for _, response := range []string{
-		`null`,
-		`{"hookSpecificOutput":null}`,
-		`{"hookSpecificOutput":{"hookEventName":"Stop","decision":{"behavior":"allow"}}}`,
-		`{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"approve"}}}`,
-		`{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow","extra":"value"}}}`,
-		`{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}{}`,
-	} {
-		var output strings.Builder
-		if err := permissionResponse([]byte(response), &output); err == nil || output.Len() != 0 {
-			t.Fatalf("accepted malformed decision: %v", err)
-		}
+	if event, _ := commandEvent("agy:PermissionRequest"); requestTimeout(event) != PermissionTimeout {
+		t.Fatal("a qualified permission does not wait for the person")
 	}
 }
 

@@ -14,7 +14,8 @@ type Binding = {
 type Point = {x: integer, y: integer}
 type Span = {start: Point, finish: Point}
 type Snapshot = {binding: Binding, rows: {string}}
-type State = {snapshot: Snapshot, anchor: Point?, focus: Point?, dragging: boolean}
+-- lines widens the range to whole rows, as a line-wise selection does.
+type State = {snapshot: Snapshot, anchor: Point?, focus: Point?, dragging: boolean, lines: boolean}
 
 local MAX_VIEWPORT_CELLS: integer = 262144
 local MAX_SNAPSHOT_BYTES: integer = 2 * 1024 * 1024
@@ -38,10 +39,13 @@ local function copy_point(point: Point?): Point?
     return {x = point.x, y = point.y}
 end
 
-local function copy_state(value: State, anchor: Point?, focus: Point?, dragging: boolean): State
+local function copy_state(value: State, anchor: Point?, focus: Point?, dragging: boolean, lines: boolean?): State
     -- Strings are immutable and this snapshot was copied during capture. Drag
     -- updates must not recopy a full viewport for every pointer motion.
-    return {snapshot = value.snapshot, anchor = copy_point(anchor), focus = copy_point(focus), dragging = dragging}
+    local line_wise = value.lines
+    if lines ~= nil then line_wise = lines end
+    return {snapshot = value.snapshot, anchor = copy_point(anchor), focus = copy_point(focus), dragging = dragging,
+        lines = line_wise}
 end
 
 local function point(value: State, x: integer, y: integer): Point
@@ -77,7 +81,8 @@ function M.capture(binding: Binding, rows: {string}): (State?, string?)
         if tty.text.width(row) > binding.width then return nil, "Viewport row exceeds selection geometry" end
     end
 
-    return {snapshot = {binding = copy_binding(binding), rows = copy_rows(rows)}, anchor = nil, focus = nil, dragging = false}, nil
+    return {snapshot = {binding = copy_binding(binding), rows = copy_rows(rows)}, anchor = nil, focus = nil, dragging = false,
+        lines = false}, nil
 end
 
 function M.active(value: State?): boolean return value ~= nil end
@@ -113,6 +118,9 @@ function M.drag(value: State, x: integer, y: integer): State
     return copy_state(value, value.anchor, point(value, x, y), value.dragging)
 end
 
+-- dragging is whether a press began a range the pointer still moves.
+function M.dragging(value: State): boolean return value.dragging end
+
 function M.motion(value: State, x: integer, y: integer): State
     if not value.dragging then return value end
     return M.drag(value, x, y)
@@ -122,15 +130,6 @@ function M.release(value: State, x: integer, y: integer): State
     if not value.dragging then return value end
     local moved = M.drag(value, x, y)
     return copy_state(moved, moved.anchor, moved.focus, false)
-end
-
-function M.range(value: State): Span?
-    local anchor, focus = value.anchor, value.focus
-    if not anchor or not focus then return nil end
-    if before_or_equal(anchor, focus) then
-        return {start = {x = anchor.x, y = anchor.y}, finish = {x = focus.x, y = focus.y}}
-    end
-    return {start = {x = focus.x, y = focus.y}, finish = {x = anchor.x, y = anchor.y}}
 end
 
 -- whole_cells widens the cell interval [first, last) of row to whole
@@ -145,6 +144,104 @@ local function whole_cells(row: string, first: integer, last: integer, width: in
     return start, finish
 end
 
+function M.range(value: State): Span?
+    local anchor, focus = value.anchor, value.focus
+    if not anchor or not focus then return nil end
+    local first, last = anchor, focus
+    if not before_or_equal(anchor, focus) then first, last = focus, anchor end
+    if value.lines then
+        return {start = {x = 1, y = first.y}, finish = {x = value.snapshot.binding.width, y = last.y}}
+    end
+    return {start = {x = first.x, y = first.y}, finish = {x = last.x, y = last.y}}
+end
+
+-- span selects from anchor to focus, both clamped to the snapshot; lines
+-- makes the selection line-wise.
+function M.span(value: State, anchor: Point, focus: Point, lines: boolean): State
+    return copy_state(value, point(value, anchor.x, anchor.y), point(value, focus.x, focus.y), false, lines)
+end
+
+-- clear drops the range and keeps the snapshot.
+function M.clear(value: State): State
+    return copy_state(value, nil, nil, false, false)
+end
+
+function M.width(value: State): integer return value.snapshot.binding.width end
+function M.height(value: State): integer return value.snapshot.binding.height end
+
+-- plain is row y of the snapshot without styling.
+function M.plain(value: State, y: integer): string
+    return text.plain(value.snapshot.rows[y] or "")
+end
+
+-- WORD_BREAK holds the characters that end a word for a double click, so a
+-- path, URL or id selects whole while brackets and quotes around it stay out.
+local WORD_BREAK = "[%s\"'`()%[%]{}<>,;|]"
+
+-- cell_text is the character covering cell x of row y, or "" past the row.
+local function cell_text(value: State, x: integer, y: integer): string
+    local row = value.snapshot.rows[y] or ""
+    local first, last = whole_cells(row, x - 1, x, value.snapshot.binding.width)
+    return text.plain(text.cut(row, first, last))
+end
+
+local function word_cell(value: State, x: integer, y: integer): boolean
+    local found = cell_text(value, x, y)
+    return found ~= "" and not found:find(WORD_BREAK)
+end
+
+-- word selects the word covering cell x of row y; a cell between words
+-- selects only itself.
+function M.word(value: State, x: integer, y: integer): State
+    local at = point(value, x, y)
+    if not word_cell(value, at.x, at.y) then return M.span(value, at, at, false) end
+    local first, last = at.x, at.x
+    while first > 1 and word_cell(value, first - 1, at.y) do first = first - 1 end
+    while last < value.snapshot.binding.width and word_cell(value, last + 1, at.y) do last = last + 1 end
+    return M.span(value, {x = first, y = at.y}, {x = last, y = at.y}, false)
+end
+
+-- line selects row y whole.
+function M.line(value: State, y: integer): State
+    local at = point(value, 1, y)
+    return M.span(value, at, at, true)
+end
+
+-- cell is the first cell of byte offset index in plain row text.
+local function cell(row: string, index: integer): integer
+    return text.width(row:sub(1, index - 1)) + 1
+end
+
+-- find returns the cell where the next match of query starts after from, or
+-- before it when step is -1, wrapping around the snapshot. A query without
+-- capitals matches case-insensitively.
+function M.find(value: State, query: string, from: Point, step: integer): Point?
+    if query == "" then return nil end
+    local folded = query:lower() == query
+    local height = value.snapshot.binding.height
+    local matches: {Point} = {}
+    for y = 1, height do
+        local row = M.plain(value, y)
+        if folded then row = row:lower() end
+        local index = row:find(query, 1, true)
+        while index do
+            matches[#matches + 1] = {x = cell(row, index), y = y}
+            index = row:find(query, index + 1, true)
+        end
+    end
+    if #matches == 0 then return nil end
+    if step < 0 then
+        for index = #matches, 1, -1 do
+            if before_or_equal(matches[index], from) and not (matches[index].x == from.x and matches[index].y == from.y) then return matches[index] end
+        end
+        return matches[#matches]
+    end
+    for _, found in ipairs(matches) do
+        if not before_or_equal(found, from) then return found end
+    end
+    return matches[1]
+end
+
 function M.text(value: State): (string?, string?)
     local span = M.range(value)
     if not span then return nil end
@@ -157,7 +254,7 @@ function M.text(value: State): (string?, string?)
         local first = y == span.start.y and span.start.x - 1 or 0
         local last = y == span.finish.y and span.finish.x or width
         first, last = whole_cells(rows[y], first, last, width)
-        local part = text.plain(text.cut(rows[y], first, last))
+        local part = (text.plain(text.cut(rows[y], first, last)):gsub("%s+$", ""))
         output_bytes = output_bytes + #part + (y == span.start.y and 0 or 1)
         if output_bytes > MAX_SNAPSHOT_BYTES then return nil, "Selected text is too large" end
         parts[#parts + 1] = part

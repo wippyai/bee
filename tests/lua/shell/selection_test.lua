@@ -69,11 +69,14 @@ local function define_tests()
         end)
 
         test.it("moves only while the left press remains active", function()
+            test.is_false(selection.dragging(captured({"alpha", "bravo", "charlie"})))
             local state = selection.press(captured({"alpha", "bravo", "charlie"}), 2, 1)
+            test.is_true(selection.dragging(state))
             state = selection.motion(state, 4, 2)
             test.eq(selection.text(state), "lpha\nbrav")
             state = selection.release(state, 5, 2)
             test.eq(selection.text(state), "lpha\nbravo")
+            test.is_false(selection.dragging(state))
             -- A later hover must leave the completed range unchanged.
             state = selection.motion(state, 1, 3)
             test.eq(selection.text(state), "lpha\nbravo")
@@ -96,6 +99,44 @@ local function define_tests()
             test.eq(selection.text(selection.press(wide, 3, 1)), "界")
             test.eq(selection.text(selection.drag(selection.press(wide, 3, 1), 4, 1)), "界B")
             test.eq(selection.text(selection.drag(selection.press(wide, 1, 1), 2, 1)), "A界")
+        end)
+
+        test.it("selects a whole word, path or URL on a double click and the row on a triple click", function()
+            local rows = {"open (/srv/me1/a.lua) now", "see https://x.io/p?q=1, ok", "   "}
+            local state = captured(rows, binding("view", "mount", 1, 26, 3))
+            test.eq(selection.text(selection.word(state, 10, 1)), "/srv/me1/a.lua")
+            test.eq(selection.text(selection.word(state, 2, 1)), "open")
+            test.eq(selection.text(selection.word(state, 8, 2)), "https://x.io/p?q=1")
+            test.eq(selection.text(selection.word(state, 5, 1)), "")
+            test.eq(selection.text(selection.line(state, 2)), "see https://x.io/p?q=1, ok")
+            local span = selection.range(selection.line(state, 1))
+            test.not_nil(span)
+            if span then test.eq(span.start.x, 1); test.eq(span.finish.x, 26) end
+        end)
+
+        test.it("copies rows without the padding after their text", function()
+            local state = captured({"one   ", "two   ", "      "}, binding("view", "mount", 1, 6, 3))
+            test.eq(selection.text(selection.span(state, {x = 1, y = 1}, {x = 6, y = 3}, false)), "one\ntwo\n")
+            test.eq(selection.text(selection.span(state, {x = 3, y = 1}, {x = 2, y = 2}, true)), "one\ntwo")
+            test.is_nil(selection.range(selection.clear(selection.line(state, 1))))
+        end)
+
+        test.it("finds a query forward and backward, wrapping, case-insensitively without capitals", function()
+            local state = captured({"alpha Beta", "beta gamma", "界 beta"}, binding("view", "mount", 1, 10, 3))
+            local found = selection.find(state, "beta", {x = 1, y = 1}, 1)
+            test.not_nil(found)
+            if found then test.eq(found.x, 7); test.eq(found.y, 1) end
+            found = selection.find(state, "beta", {x = 7, y = 1}, 1)
+            if found then test.eq(found.x, 1); test.eq(found.y, 2) end
+            found = selection.find(state, "beta", {x = 1, y = 2}, 1)
+            if found then test.eq(found.x, 4); test.eq(found.y, 3) end
+            found = selection.find(state, "beta", {x = 4, y = 3}, 1)
+            if found then test.eq(found.x, 7); test.eq(found.y, 1) end
+            found = selection.find(state, "beta", {x = 7, y = 1}, -1)
+            if found then test.eq(found.x, 4); test.eq(found.y, 3) end
+            found = selection.find(state, "Beta", {x = 7, y = 1}, 1)
+            if found then test.eq(found.x, 7); test.eq(found.y, 1) end
+            test.is_nil(selection.find(state, "delta", {x = 1, y = 1}, 1))
         end)
 
         test.it("invalidates a captured range for a different view, mount, or geometry", function()

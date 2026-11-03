@@ -653,6 +653,27 @@ local function define_tests()
             test.eq(r_val.state, "ended")
         end)
 
+        test.it("a cancel that waits returns the run's cancelled end once the run settles", function()
+            local thread_id = new_thread("Cancel Wait Thread")
+            local action_id = "act-can-wait"
+            local attempt_id = "att-can-wait"
+            prepare(thread_id, action_id, attempt_id)
+            test.eq(assert(bounds.object(driver_call("cancel", {thread_id = thread_id, attempt_id = attempt_id}).value)).state, "cancelling")
+            local cancelled = channel.new(1)
+            coroutine.spawn(function()
+                cancelled:send(raw_call("bee.driver.wippy.binding:run", {operation = "cancel", thread_id = thread_id, attempt_id = attempt_id, wait_ms = 30000}))
+            end)
+            local run_res = driver_call("run", {thread_id = thread_id, action_id = action_id, attempt_id = attempt_id,
+                agent_ref = "bee.tests.driver.wippy:test_agent", brief = "Should not finish",
+                host_config = {endpoint = get_mock_url(), model = "default", stream = false}})
+            test.eq(assert(bounds.object(run_res.value)).outcome, "cancelled")
+            local reply = assert(bounds.object((cancelled:receive())))
+            if not reply.ok then error("waiting cancel: " .. json.encode(reply)) end
+            local value = assert(bounds.object(reply.value))
+            test.eq(value.state, "ended")
+            test.eq(value.outcome, "cancelled")
+        end)
+
         test.it("restarts and continues existing thread with epoch fencing", function()
             local url = get_mock_url()
             local thread_id = new_thread("Restart Thread")

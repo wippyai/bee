@@ -1,8 +1,8 @@
 -- MIT. A test app: presents the theme and the label it was opened with, the
 -- workspace it runs in, the principal it runs as and whether its launch is a
 -- bee.app launch, which owner authority it holds, the workspace its host
--- context names, the last key it received and the appearance changes it
--- receives, until cancelled.
+-- context names, the last key and mouse press it received and the appearance
+-- changes it receives, until cancelled.
 local tty = require("tty")
 local process = require("process")
 local channel = require("channel")
@@ -19,6 +19,7 @@ local function main(options: unknown)
     local input = assert(tty.events())
     local surface = assert(tty.surface({}))
     local last_key = "none"
+    local last_mouse = "none"
     local label, workspace = "", ""
     if type(options) == "table" and type(options.args) == "table" and type(options.args.label) == "string" then
         label = options.args.label
@@ -45,7 +46,7 @@ local function main(options: unknown)
             "actor " .. (kind or principal), "of " .. (of or "none"), "instance " .. (instance or "none"),
             "acts for " .. actor_workspace, launched, "authority " .. authority,
             "args " .. (launch and table.concat(launch.arguments, " ") or ""),
-            "context " .. tostring(ctx.get("bee.workspace_id")), "key " .. last_key})
+            "context " .. tostring(ctx.get("bee.workspace_id")), "key " .. last_key, "mouse " .. last_mouse})
     end
     local theme = appearance.chosen(options).theme.id
     present(theme)
@@ -59,6 +60,9 @@ local function main(options: unknown)
             local event = selected.value
             if event.type == "key" and event.action == "press" then
                 last_key = event.key_type == "runes" and event.key or event.key_type
+                present(theme)
+            elseif event.type == "mouse" and event.action == "press" then
+                last_mouse = event.button .. (event.shift and " shift" or "")
                 present(theme)
             end
             goto continue

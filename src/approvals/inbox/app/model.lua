@@ -931,8 +931,9 @@ function M.permission_lines(value: unknown): {string}
         local target = M.text(payload.title or payload.target, M.LINE_LIMIT)
         lines[#lines + 1] = "App updates: " .. (target:match("([^:]+)$") or target)
         if ttl and ttl > 0 then
-            local words = ttl % 86400 == 0 and (tostring(ttl // 86400) .. " days") or (ttl % 3600 == 0 and (tostring(ttl // 3600) .. " hours")
-                or (ttl % 60 == 0 and (tostring(ttl // 60) .. " minutes") or (tostring(ttl) .. " seconds")))
+            local function count(amount: integer, unit: string): string return tostring(amount) .. " " .. unit .. (amount == 1 and "" or "s") end
+            local words = ttl % 86400 == 0 and count(ttl // 86400, "day") or (ttl % 3600 == 0 and count(ttl // 3600, "hour")
+                or (ttl % 60 == 0 and count(ttl // 60, "minute") or count(ttl, "second")))
             lines[#lines + 1] = "Lasts: " .. words .. " from the moment it is granted (not this request's expiry)"
         else
             lines[#lines + 1] = "Lasts: no expiry"

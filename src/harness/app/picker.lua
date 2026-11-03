@@ -30,6 +30,8 @@ local text = require("text")
 local restore_view = require("restore_view")
 local M = {}
 type Channel = channel.Channel
+-- The kinds a session row's menu chooses; each carries the row's index.
+local ROW_ACTIONS: {[string]: boolean} = {open = true, rename_listed = true, close_listed = true, remove_listed = true}
 -- The form's owner calls run as this Agent's own actor.
 local function ask(target: string, request: {[string]: unknown}): caller.Reply
     local raw, err = funcs.call(target, request)
@@ -105,13 +107,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local open_key, open_target = "", ""
     local close_key: string? = nil
     local remove_key: string? = nil
-    local remove_history = false
     -- renaming is the session whose name the person is typing; listed says
     -- it was chosen in the session list rather than the open session.
     local renaming: {session: string, node: string?, title: string, name: string, listed: boolean}? = nil
     -- removed is set once the open session is removed; the picker then
     -- returns to the session list.
     local removed = false
+    -- sidebar_mark is the sidebar session a right click selected while
+    -- another session stays open; opening a session clears it.
+    local sidebar_mark: string? = nil
     local reload_pending = false
     local editing: profile_view.State? = nil
     local edit_frame: profile_view.Frame = {rows = {}, hits = {}}
@@ -182,8 +186,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             return fault
         end)
     end
-    local function remove_listed(entry: sessions_protocol.SessionSnapshot?, history: boolean)
-        control_listed(entry, "Removing session…", function(owner: sessions.Client, session: string, key: string): sessions.Fault?
+    -- remove_listed deletes a listed session with its history, which stays
+    -- when its thread is shared.
+    local function remove_listed(entry: sessions_protocol.SessionSnapshot?)
+        local history = entry ~= nil and entry.thread_shared ~= true
+        control_listed(entry, "Deleting session…", function(owner: sessions.Client, session: string, key: string): sessions.Fault?
             local _, fault = owner:remove({session = session, history = history or nil, operation_key = key})
             return fault
         end)
@@ -256,7 +263,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local function ask_control(action: string, message: string)
         local target = control_target(action)
         if not target then return end
-        local title = action == "stop" and "Stop current work?" or action:sub(1, 6) == "remove" and "Remove session?" or "Close session?"
+        local title = action == "stop" and "Stop current work?" or action:sub(1, 6) == "remove" and "Delete session?" or "Close session?"
         local opened, err = confirmation.open(review, action, target, "inline", title, message)
         prompt = message
         if not opened then status = err or "Confirmation is unavailable" end
@@ -268,16 +275,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         local accepted, err = confirmation.accept(review, target, gesture)
         if not accepted then status = err or "Confirmation failed"; dirty = true end
         return accepted
-    end
-    -- accept_history answers a pending removal with its second choice: the
-    -- person confirms removing the session together with its history.
-    local function accept_history(): boolean
-        local action = confirmation.action(review) .. "_history"
-        local target = control_target(action)
-        if not target then confirmation.cancel(review); status = "Session is unavailable"; dirty = true; return false end
-        local opened, err = confirmation.open(review, action, target, "inline", "Remove session and its history?", prompt)
-        if not opened then status = err or "Confirmation is unavailable"; dirty = true; return false end
-        return accept_control("shortcut")
     end
     -- start_rename opens the name line for a session, holding its explicit
     -- name; an automatic title starts the line empty.
@@ -318,11 +315,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if agents.close(current, close_key) then agents.refresh(current) end
         end)
     end
-    local function remove_session(history: boolean)
+    -- remove_session deletes the open session with its history, which stays
+    -- when its thread is shared.
+    local function remove_session()
         start_task(function(current: agents.Conversation)
-            if remove_history ~= history then remove_key, remove_history = nil, history end
             remove_key = remove_key or assert(uuid.v7())
-            if agents.remove(current, remove_key, history) then
+            if agents.remove(current, remove_key, current.session.snapshot.thread_shared ~= true) then
                 remove_key = nil
                 removed = true
             end
@@ -332,6 +330,20 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         start_task(function(current: agents.Conversation)
             agents.stop(current, function(): string return assert(uuid.v7()) end, expected_work)
         end)
+    end
+    -- act_listed asks for or starts a listed session's Close, Delete or
+    -- Rename on the selected row; false for any other kind.
+    local function act_listed(kind: string): boolean
+        local entry = directory[selected]
+        if kind == "close_listed" then
+            if entry and entry.lifecycle ~= "closed" and entry.lifecycle ~= "closing" then
+                ask_control("close_listed", "Close " .. entry.title .. "? Accepted work finishes first. Enter confirms · Esc keeps it")
+            end
+        elseif kind == "remove_listed" then
+            if entry then ask_control("remove_listed", agents.removal_message(entry.title, entry.lifecycle, entry.thread_shared == true)) end
+        elseif kind == "rename_listed" then start_rename(entry, true)
+        else return false end
+        return true
     end
     local function open_existing(index: integer)
         local entry = directory[index]
@@ -380,7 +392,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             elseif conversation then
                 client.review(launch, conversation.review)
                 local line = renaming and agents.rename_message(renaming.title, renaming.name) or confirmation.active(review) and prompt or status
-                session_frame = session_view.draw(width, height, preferences, conversation, draft, line, directory)
+                session_frame = session_view.draw(width, height, preferences, conversation, draft, line, directory, sidebar_mark)
                 frame.render(session_frame, menu, preferences)
                 rows = session_frame.rows
             elseif not catalog_open then
@@ -589,12 +601,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                             local work_id = conversation and agents.current_work(conversation)
                             if accept_control("enter") then status = ""; stop_work(work_id) end
                         elseif confirmation.matches(review, "close") then if accept_control("enter") then status = ""; close_session() end
-                        elseif confirmation.matches(review, "remove") then if accept_control("enter") then status = ""; remove_session(false) end
+                        elseif confirmation.matches(review, "remove") then if accept_control("enter") then status = ""; remove_session() end
+                        elseif confirmation.matches(review, "close_listed") then if accept_control("enter") then status = ""; close_listed(directory[selected]) end
+                        elseif confirmation.matches(review, "remove_listed") then if accept_control("enter") then status = ""; remove_listed(directory[selected]) end
                         elseif conversation.lifecycle == "closed" then start_from_session()
                         else submit() end
-                    elseif data.type == "key" and data.action == "press" and not data.ctrl and data.key:lower() == "h" and confirmation.matches(review, "remove")
-                        and not conversation.session.snapshot.thread_shared then
-                        if accept_history() then status = ""; remove_session(true) end
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then conversation.details = not conversation.details; dirty = true
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "x" then ask_control("close", "Close session? Accepted work finishes; new work is refused. Enter confirms · Esc keeps it")
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "r" then
@@ -604,8 +615,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                         local hit = frame.hit(session_frame.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         local kind = hit and hit.kind or ""
-                        if kind == "sidebar_session" and hit and not session_busy then
-                            selected = hit.index; open_existing(selected)
+                        if hit and ROW_ACTIONS[kind] and directory[hit.index] then selected = hit.index end
+                        if kind == "sidebar_select" and hit and directory[hit.index] then
+                            selected, sidebar_mark = hit.index, directory[hit.index].session; dirty = true
+                        elseif (kind == "sidebar_session" or (kind == "open" and hit and hit.index > 0)) and hit and not session_busy then
+                            selected, sidebar_mark = hit.index, nil; open_existing(selected)
+                        elseif act_listed(kind) then
                         elseif kind == "back" then leave_session()
                         elseif kind == "details" then conversation.details = not conversation.details; dirty = true
                         elseif kind == "new_from_session" then start_from_session()
@@ -627,8 +642,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                             elseif data.key_type == "esc" or data.key_type == "escape" then confirmation.cancel(review); status = ""; dirty = true end
                         elseif confirmation.matches(review, "remove_listed") then
                             local entry = directory[selected]
-                            if data.key_type == "enter" then if accept_control("enter") then remove_listed(entry, false) end
-                            elseif key == "h" and not data.ctrl and entry and not entry.thread_shared then if accept_history() then remove_listed(entry, true) end
+                            if data.key_type == "enter" then if accept_control("enter") then remove_listed(entry) end
                             elseif data.key_type == "esc" or data.key_type == "escape" then confirmation.cancel(review); status = ""; dirty = true end
                         elseif data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); dirty = true
                         elseif data.key_type == "down" then selected = math.floor(math.min(#directory, selected + 1)); dirty = true
@@ -647,6 +661,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                         local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         kind = hit and hit.kind or ""
+                        if hit and ROW_ACTIONS[kind] and directory[hit.index] then selected = hit.index end
                         if kind == "session" and hit then
                             selected = hit.index; dirty = true
                             if frame.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then open = true end
@@ -654,11 +669,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "refresh" then refresh = true end
                     end
                     if kind == "new_session" or kind == "profiles" then catalog_open = true; client.title(launch, "Agents"); selected = 0; refresh = true
-                    elseif kind == "close_listed" and directory[selected] and directory[selected].lifecycle ~= "closed" and directory[selected].lifecycle ~= "closing" then
-                        ask_control("close_listed", "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it")
-                    elseif kind == "remove_listed" and directory[selected] then
-                        ask_control("remove_listed", agents.removal_message(directory[selected].title, directory[selected].lifecycle, directory[selected].thread_shared == true))
-                    elseif kind == "rename_listed" then start_rename(directory[selected], true)
+                    elseif act_listed(kind) then
                     elseif kind == "allowances" then allowances = allowance_form.new(launch.workspace_id); dirty = true
                     elseif kind == "mcp_clients" then client.navigate(launch, "bee.gateway.app:app", {})
                     elseif kind == "closed" then show_closed = not show_closed; refresh = true

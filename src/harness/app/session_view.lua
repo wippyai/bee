@@ -9,6 +9,7 @@ local appearance = require("appearance")
 local frame = require("frame")
 local text = require("text")
 local agents = require("agents")
+local directory_view = require("directory_view")
 local protocol = require("protocol")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
@@ -34,7 +35,7 @@ function M.permission_status(snapshot: protocol.SessionSnapshot): string
 end
 
 local MORE = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+K", verb = "stop work"},
-    {key = "Ctrl+X", verb = "close session"}, {key = "Ctrl+R", verb = "remove session"}, {key = "Ctrl+E", verb = "rename session"}, {key = "Esc", verb = "sessions"}})
+    {key = "Ctrl+X", verb = "close session"}, {key = "Ctrl+R", verb = "delete session"}, {key = "Ctrl+E", verb = "rename session"}, {key = "Esc", verb = "sessions"}})
 local ACTIVITY_ROLE = {idle = "muted", working = "accent", blocked = "warn", stalled = "warn"}
 local STATE_ROLE = {starting = "muted", queued = "muted", working = "muted", ready = "text", failed = "error", blocked = "warn", uncertain = "warn", budget_exceeded = "error"}
 local STATE_LABEL = {starting = "starting", queued = "queued", working = "working", ready = "", failed = "", blocked = "blocked", uncertain = "uncertain", budget_exceeded = "budget exceeded"}
@@ -128,18 +129,22 @@ function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
 end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, conv: agents.Conversation,
-    draft: string, status: string, sidebar: {protocol.SessionSnapshot}?): Frame
+    draft: string, status: string, sidebar: {protocol.SessionSnapshot}?, marked: string?): Frame
     if sidebar and #sidebar > 0 and width >= 120 then
         local rail_width = 26
         local rail = frame.new(rail_width, height, preferences)
         frame.header(rail, "SESSIONS")
         local selected = 0
-        for index, item in ipairs(sidebar) do if item.session == conv.session:ref() then selected = index end end
+        local mark = marked or conv.session:ref()
+        for index, item in ipairs(sidebar) do if item.session == mark then selected = index end end
         local window = frame.window(#sidebar, height - 4, selected, 0)
         for slot = 1, window.capacity do
             local index = window.offset + slot
             local item = sidebar[index]
-            if item then frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(agents.label(item.provider, item.title), 128), index == selected, "sidebar_session", index, "") end
+            if item then
+                frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(agents.label(item.provider, item.title), 128), index == selected, "sidebar_session", index, item.session)
+                frame.row_actions(rail, {kind = "sidebar_session", index = index, key = item.session, actions = directory_view.actions(item), select = "sidebar_select"})
+            end
         end
         frame.fill(rail, height)
         frame.put(rail, 2, height, "Esc sessions", rail_width - 2, rail.theme.muted)
@@ -152,7 +157,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         for _, hit in ipairs(body.hits) do
             hits[#hits + 1] = {kind = hit.kind, index = hit.index, key = hit.key, x = hit.x + rail_width, y = hit.y, width = hit.width, height = hit.height}
         end
-        return {rows = rows, hits = hits, controls = body.controls}
+        local controls: frame.Controls? = body.controls
+        if controls then
+            for _, row in ipairs(frame.controls(rail).rows) do controls.rows[#controls.rows + 1] = row end
+        end
+        return {rows = rows, hits = hits, controls = controls}
     end
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
@@ -194,7 +203,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true, more = true},
             {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = (not conv.node or conv.peer_scope == "open") and agents.pending(conv)},
             {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = (not conv.node or conv.peer_scope == "open") and conv.lifecycle == "active"},
-            {kind = "remove_session", key = "Ctrl+R", label = "Remove session", enabled = not conv.node or conv.peer_scope == "open", more = true},
+            {kind = "remove_session", key = "Ctrl+R", label = "Delete session", enabled = not conv.node or conv.peer_scope == "open", more = true},
             {kind = "rename_session", key = "Ctrl+E", label = "Rename session", enabled = not conv.node or conv.peer_scope == "open", more = true},
         }
     end
@@ -209,7 +218,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.line(painter, input_row, text.bound(question, 512), theme.text)
         frame.line(painter, height - 2, text.bound(answer, 512), theme.text)
     elseif height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
-    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start agent"}, {key = "Ctrl+R", verb = "remove session"}, {key = "Ctrl+E", verb = "rename session"}, {key = "Esc", verb = "sessions"}}) or MORE, footer_buttons) end
+    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start agent"}, {key = "Ctrl+R", verb = "delete session"}, {key = "Ctrl+E", verb = "rename session"}, {key = "Esc", verb = "sessions"}}) or MORE, footer_buttons) end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

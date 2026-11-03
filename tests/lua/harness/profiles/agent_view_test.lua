@@ -153,6 +153,35 @@ local function define_tests()
             local _, count = opened:gsub("agy · unsafe agy", "")
             test.eq(count, 2)
         end)
+        test.it("selects another sidebar session on a right click without switching the open session and offers its menu", function()
+            local row = fixtures.fixture_snapshot("bs:n:w:other", "Other agent", "idle", 0)
+            local conv = conversation("idle", {}, "bs:n:w:unsafe")
+            local drawn = session_view.draw(140, 36, appearance.defaults(), conv, "", "", {row})
+            local menu = frames.menu()
+            frames.render(drawn, menu, appearance.defaults())
+            local target: frames.Hit? = nil
+            for _, hit in ipairs(drawn.hits) do if hit.kind == "sidebar_session" then target = hit end end
+            local hit = assert(target)
+            test.eq(hit.key, "bs:n:w:other")
+            local pressed, handled = frames.route(menu, {type = "mouse", action = "press", button = "right", x = hit.x + 1, y = hit.y})
+            test.is_true(handled)
+            local event = assert(pressed)
+            local chosen = assert(frames.hit(drawn.hits, assert(event.x), assert(event.y)))
+            test.eq(chosen.kind, "sidebar_select")
+            test.eq(chosen.key, "bs:n:w:other")
+            local again = session_view.draw(140, 36, appearance.defaults(), conv, "", "", {row}, "bs:n:w:other")
+            frames.render(again, menu, appearance.defaults())
+            local shown = screen(again.rows)
+            test.contains(shown, "Delete…")
+            test.contains(shown, "Rename…")
+            test.contains(tty.text.plain(again.rows[1]), "Worker")
+            local marked = ""
+            for _, line in ipairs(again.rows) do
+                local plain = tty.text.plain(line)
+                if plain:sub(1, #"›") == "›" then marked = plain end
+            end
+            test.contains(marked, "Other agent")
+        end)
         test.it("shows the create operation and exact deadline cause as a failed launch", function()
             local cause = 'containers/create: context deadline exceeded: daemon create refused'
             local conv = conversation("idle", {{input = "start Docker session", state = "failed", text = "failed start: " .. cause,

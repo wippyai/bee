@@ -70,6 +70,186 @@ local function define_tests()
             test.eq(layout.work.y + layout.work.height, layout.footer)
         end)
     end)
+    test.describe("Row actions", function()
+        local prefs = appearance.defaults()
+        -- A list of three sessions, each offering its own actions; the third
+        -- cannot be closed.
+        local function listing(selected: integer): frame.View
+            local painter = frame.new(60, 14, prefs)
+            for index = 1, 3 do
+                frame.row(painter, 2 + index, "Session " .. tostring(index), index == selected, "session", index, "s" .. tostring(index))
+                frame.row_actions(painter, {kind = "session", index = index, key = "s" .. tostring(index), selected = index == selected, actions = {
+                    {kind = "rename", key = "E", label = "Rename", enabled = true},
+                    {kind = "close", key = "X", label = "Close", enabled = index ~= 3},
+                    {kind = "delete", key = "D", label = "Delete…", enabled = true},
+                }})
+            end
+            frame.footer(painter, "", "Esc back")
+            return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
+        end
+        local function plain(view: frame.View): string
+            return tty.text.plain(table.concat(view.rows, "\n"))
+        end
+        local function right(x: integer, y: integer): {[string]: unknown}
+            return {type = "mouse", action = "press", button = "right", x = x, y = y}
+        end
+        local function press(key_type: string, key: string?, shift: boolean?): {[string]: unknown}
+            return {type = "key", action = "press", key_type = key_type, key = key or "", shift = shift == true}
+        end
+
+        test.it("names the keyboard gesture in the footer when rows offer actions", function()
+            test.contains(plain(listing(1)), "Shift+F10 actions")
+            local painter = frame.new(60, 14, prefs)
+            frame.footer(painter, "", "Esc back")
+            test.is_nil((tty.text.plain(table.concat(frame.rows(painter), "\n")):find("Shift+F10", 1, true)))
+        end)
+
+        test.it("opens the right-clicked row's actions anchored at the clicked cell", function()
+            local menu = frame.menu()
+            local view = listing(1)
+            frame.render(view, menu, prefs)
+            local event, handled = frame.route(menu, right(10, 4))
+            test.is_true(handled)
+            local selecting = assert(event)
+            test.eq(selecting.button, "left")
+            local row = assert(frame.hit(view.hits, assert(selecting.x), assert(selecting.y)))
+            test.eq(row.kind, "session")
+            test.eq(row.index, 2)
+            view = listing(2)
+            frame.render(view, menu, prefs)
+            local rows = tty.text.plain(table.concat(view.rows, "\n"))
+            test.contains(rows, "Rename")
+            test.contains(rows, "Delete…")
+            test.contains(view.rows[4], "Session 2")
+            local panel_top = 0
+            for y, row in ipairs(view.rows) do
+                if panel_top == 0 and tty.text.plain(row):find("╭", 1, true) then panel_top = y end
+            end
+            test.eq(panel_top, 5)
+            test.eq(tty.text.width(assert(tty.text.plain(view.rows[panel_top]):match("^(.-)╭"))), 9)
+            test.contains(view.rows[3], "Session 1")
+            local marked = 0
+            for _, line in ipairs(view.rows) do if tty.text.plain(line):sub(1, #"›") == "›" then marked = marked + 1 end end
+            test.eq(marked, 1)
+            test.eq(tty.text.plain(view.rows[4]):sub(1, #"›"), "›")
+        end)
+
+        test.it("chooses an action through the app's mouse path with the row it belongs to", function()
+            local menu = frame.menu()
+            local view = listing(1)
+            frame.render(view, menu, prefs)
+            frame.route(menu, right(10, 4))
+            view = listing(1)
+            frame.render(view, menu, prefs)
+            frame.route(menu, press("down"))
+            view = listing(1)
+            frame.render(view, menu, prefs)
+            local event, handled = frame.route(menu, press("enter"))
+            test.is_true(handled)
+            local chosen = assert(event)
+            test.eq(chosen.type, "mouse")
+            test.eq(chosen.button, "left")
+            local hit = assert(frame.hit(view.hits, assert(chosen.x), assert(chosen.y)))
+            test.eq(hit.kind, "close")
+            test.eq(hit.index, 2)
+            test.eq(hit.key, "s2")
+            test.eq(menu.mode, "")
+        end)
+
+        test.it("chooses an action by its key and refuses a disabled one", function()
+            local menu = frame.menu()
+            local view = listing(3)
+            frame.render(view, menu, prefs)
+            frame.route(menu, right(10, 5))
+            view = listing(3)
+            frame.render(view, menu, prefs)
+            local refused, held = frame.route(menu, press("runes", "x"))
+            test.is_nil(refused)
+            test.is_true(held)
+            test.eq(menu.mode, "context")
+            local event = assert((frame.route(menu, press("runes", "d"))))
+            local hit = assert(frame.hit(view.hits, assert(event.x), assert(event.y)))
+            test.eq(hit.kind, "delete")
+            test.eq(hit.index, 3)
+        end)
+
+        test.it("opens the selected row's actions on Shift+F10 and closes on Escape", function()
+            local menu = frame.menu()
+            local view = listing(2)
+            frame.render(view, menu, prefs)
+            local _, handled = frame.route(menu, press("f10", "", true))
+            test.is_true(handled)
+            test.eq(menu.mode, "context")
+            view = listing(2)
+            frame.render(view, menu, prefs)
+            test.contains(plain(view), "Rename")
+            local event = assert((frame.route(menu, press("enter"))))
+            local hit = assert(frame.hit(view.hits, assert(event.x), assert(event.y)))
+            test.eq(hit.kind, "rename")
+            test.eq(hit.index, 2)
+            frame.route(menu, press("f10", "", true))
+            frame.render(listing(2), menu, prefs)
+            frame.route(menu, press("esc"))
+            test.eq(menu.mode, "")
+            view = listing(2)
+            frame.render(view, menu, prefs)
+            test.is_nil((plain(view):find("Rename", 1, true)))
+        end)
+
+        test.it("closes the menu on a click outside it and passes nothing to the app", function()
+            local menu = frame.menu()
+            frame.render(listing(1), menu, prefs)
+            frame.route(menu, right(10, 3))
+            frame.render(listing(1), menu, prefs)
+            local event, handled = frame.route(menu, {type = "mouse", action = "press", button = "left", x = 2, y = 13})
+            test.is_nil(event)
+            test.is_true(handled)
+            test.eq(menu.mode, "")
+        end)
+
+        test.it("leaves a right click on a row without actions to the app", function()
+            local menu = frame.menu()
+            local painter = frame.new(60, 14, prefs)
+            frame.row(painter, 3, "Plain", true, "plain", 1, "")
+            frame.footer(painter, "", "Esc back")
+            local view: frame.View = {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
+            frame.render(view, menu, prefs)
+            local event, handled = frame.route(menu, right(5, 3))
+            test.is_false(handled)
+            test.eq(assert(event).button, "right")
+            test.eq(menu.mode, "")
+        end)
+    end)
+    test.describe("Help", function()
+        test.it("names each key once, puts the tabs on one line and lists keyless buttons as clicks", function()
+            local prefs = appearance.defaults()
+            local function screen(): frame.View
+                local painter = frame.new(80, 20, prefs)
+                frame.tabs(painter, 2, {{kind = "installed", label = "Installed"}, {kind = "shared", label = "Shared"}}, "installed")
+                frame.footer(painter, "", "Tab view · / search", frame.hints({{key = "Enter", verb = "start agent"}, {key = "Esc", verb = "back"}}), {
+                    {kind = "open", key = "Enter", label = "Start agent", enabled = true, primary = true},
+                    {kind = "apply", label = "Apply", enabled = false},
+                    {kind = "close", key = "Esc", label = "Sessions", enabled = true},
+                })
+                return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
+            end
+            local menu = frame.menu()
+            frame.render(screen(), menu, prefs)
+            frame.route(menu, {type = "key", action = "press", key_type = "runes", key = "?"})
+            local view = screen()
+            frame.render(view, menu, prefs)
+            local shown = tty.text.plain(table.concat(view.rows, "\n"))
+            test.contains(shown, "Tabs  Installed · Shared")
+            test.contains(shown, "Enter  Start agent")
+            test.contains(shown, "Esc  Sessions")
+            test.contains(shown, "Click  Apply · unavailable")
+            test.contains(shown, "/  search")
+            test.is_nil((shown:find("start agent", 1, true)))
+            test.is_nil((shown:find("Esc  back", 1, true)))
+            test.is_nil((shown:find("?  Help", 1, true)))
+            test.is_nil((shown:find("F10  More actions", 1, true)))
+        end)
+    end)
     test.describe("Frame gestures", function()
         test.it("treats a second press on the same row within the double-click window as a double click", function()
             local memory = frame.clicks()

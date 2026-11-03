@@ -10,7 +10,8 @@
 -- focused app, F11 full pane, Alt+F9 minimize, F12 reload, Ctrl+Q quit the
 -- display (apps keep running). The mouse focuses, moves and resizes windows
 -- by their frame, uses their controls, and opens context menus on a right
--- click on a window, a tab or the desktop.
+-- click on a window's frame, a tab or the desktop; a right click inside a
+-- window goes to its app, and Shift+Right there opens the window's menu.
 --
 -- The display follows the node's owner process and closes when it stops. The
 -- shell is upgradable: on new code it hands its desktop and windows to the new
@@ -942,7 +943,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
                     current = scene()
                 end
                 if event.action == "press" and event.button == "right"
-                    and (event.shift ~= true or win.mode == "collapsed" or not layout.contains(body, x, y)) then
+                    and (event.shift == true or win.mode == "collapsed" or not layout.contains(body, x, y)) then
                     start = {selected = 1, offset = 0, kind = "window", target = win.id, x = x, y = y}
                     return
                 end

@@ -49,7 +49,7 @@ function M.scope_digest(proposal: {[string]: unknown}): (string?, string?)
     return digest, nil
 end
 function M.duration(ttl_ms: integer): string
-    if ttl_ms % 3600000 == 0 then return tostring(ttl_ms // 3600000) .. " hours" end
+    if ttl_ms % 3600000 == 0 then return tostring(ttl_ms // 3600000) .. (ttl_ms == 3600000 and " hour" or " hours") end
     if ttl_ms % 60000 == 0 then return tostring(ttl_ms // 60000) .. " min" end
     return tostring(ttl_ms // 1000) .. " sec"
 end

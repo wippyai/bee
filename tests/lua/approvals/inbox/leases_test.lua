@@ -285,7 +285,7 @@ local function define_tests()
             for index = 1, 16 do
                 test.is_true(seen:find("directory-number-" .. tostring(index) .. " ", 1, true) ~= nil)
             end
-            test.is_true(seen:find("Lasts: 1 hours", 1, true) ~= nil)
+            test.is_true(seen:find("Lasts: 1 hour from", 1, true) ~= nil)
             test.is_true(seen:find("Maximum updates: 3", 1, true) ~= nil)
             local last = view.draw(60, 12, appearance.defaults(), state, model.rows(state), 0, "", slice)
             for _, hit in ipairs(last.hits) do if hit.kind == "approve" then approve_enabled = true end end

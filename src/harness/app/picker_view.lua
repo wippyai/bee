@@ -9,7 +9,7 @@ type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capa
 -- The footer names only keys the buttons above it do not show; help lists
 -- them all.
 local HINTS = frame.hints({{key = "/", verb = "search"}})
-local MORE = frame.hints({{key = "Enter", verb = "start agent"}, {key = "Esc", verb = "back"}, {key = "↑↓", verb = "select"}, {key = "E", verb = "customize copy or edit"}, {key = "N", verb = "new profile"},
+local MORE = frame.hints({{key = "Enter", verb = "start agent"}, {key = "Esc", verb = "sessions"}, {key = "↑↓", verb = "select"}, {key = "E", verb = "customize copy or edit"}, {key = "N", verb = "new profile"},
     {key = "S", verb = "setup"}, {key = "U", verb = "unavailable"}, {key = "R", verb = "refresh"}, {key = "Ctrl+S", verb = "sort"}})
 -- The right column names what kind of choice a row is: a saved profile, or
 -- why an agent cannot open.
@@ -25,7 +25,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
     local count = #listing.items
-    frame.header(painter, "PROFILES", count > 0 and (tostring(count) .. " profiles") or nil)
+    frame.header(painter, "PROFILES", count > 0 and (tostring(count) .. (count == 1 and " profile" or " profiles")) or nil)
     local filtering = searching or (query ~= nil and query ~= "")
     local first = filtering and 3 or 2
     if filtering and height >= 5 then frame.line(painter, 2, "Search: " .. (query or ""), searching and theme.text or theme.muted) end
@@ -38,7 +38,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if not item then break end
         frame.row(painter, first + slot - 1, frame.tagged(width, text.bound(item.title, 512), tag(item)), index == selected, "choice", index, "", not item.ready and theme.muted or nil)
     end
-    if count == 0 and status == "" and height >= 5 then
+    if count == 0 and status == "" and height >= 5 and query ~= nil and query ~= "" then
+        frame.empty(painter, first, "No profiles match " .. text.bound(query, 64), height >= 7 and "/ edits the search; clear it to see every profile" or nil)
+    elseif count == 0 and status == "" and height >= 5 then
         frame.empty(painter, first, "No profiles are ready on this node",
             height >= 7 and "Install a harness and log in, then R refresh, or U to see unavailable profiles" or nil)
     elseif count == 0 and height >= 5 then
@@ -57,7 +59,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             {kind = item and (not item.ready or item.needs_setup) and "setup" or "open", key = "Enter", label = item and (not item.ready or item.needs_setup) and "Setup" or "Start agent", enabled = not busy and chosen, primary = true},
             {kind = "edit", key = "E", label = item and item.kind == "profile" and "Edit" or "Customize", enabled = not busy and chosen},
             {kind = "new", key = "N", label = "New profile", enabled = not busy and chosen and item ~= nil and (item.ready or item.status == "unconfigured")},
-            {kind = "close", key = "Esc", label = "Back", enabled = true},
+            {kind = "close", key = "Esc", label = "Sessions", enabled = true},
         }
     end
     if height >= 2 then frame.footer(painter, "", HINTS, MORE, footer_buttons) end

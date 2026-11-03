@@ -19,7 +19,7 @@ contract. When a rule and a wish conflict, follow the rule.
 - No borders around regions. A region is named by a muted uppercase title on
   its first row (`frame.panel`). A full-width `border` rule (`frame.rule`) may
   separate the navigation from the work once per screen. The one exception is
-  an overlay (`frame.modal`, `frame.palette`): it floats above the anatomy and
+  an overlay (`frame.modal`, `palette.palette`): it floats above the anatomy and
   a `border` box separates it from the screen beneath.
 
 ## 2. Anatomy
@@ -76,6 +76,14 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
 - Buttons marked `more = true` stay in More at every size. When the bar overflows, primary actions keep space and `F10 More` opens
   the remaining buttons. Arrow keys or Tab select, Enter chooses, Escape
   returns; clicking More and an enabled choice uses the same action path.
+- Actions that belong to one row of a list go in the row's menu, not the
+  footer: `frame.row_actions(painter, {kind, index, key, actions, selected})`
+  beside the row, before `frame.footer`. A right click on the row or
+  `Shift+F10` on the selected row opens them at the cell; the footer then
+  names `Shift+F10 actions`. A chosen action reaches the app as a press on a
+  target of the action's kind carrying the row's index and key, so the
+  existing click handler acts on that row. The popup (`bee.ui:popup`) is the one the
+  shell uses for its Start, window and desktop menus.
 - Destructive work asks first: the footer becomes
   `Stop selected app? Enter confirms · Esc cancels` and the destructive button
   becomes the primary until the choice is made.
@@ -350,8 +358,9 @@ tokens); `diagram.flame` for a call tree or a workflow's step durations.
 ### Overlays
 
 `frame.modal(painter, width, height, title)` returns the inner rectangle for a
-confirmation or form; `frame.palette` draws the command palette from a query
-and the choices the process filtered with `frame.fuzzy`; `frame.toast` shows
+confirmation or form; `palette.palette` (`bee.ui:palette`) draws the command
+palette from a query and the choices the process filtered with
+`palette.ranked` or `palette.fuzzy`; `frame.toast` shows
 one transient row and the process decides when to stop drawing it. Esc
 dismisses every overlay.
 

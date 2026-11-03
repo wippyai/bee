@@ -159,6 +159,7 @@ entries:
   - tty
   - registry
   imports:
+    directory_view: bee.harness.app:directory_view
     descriptor: bee.drivers.descriptor:descriptor
     preferences: bee.drivers.descriptor:effective
     profile_protocol: bee.harness.profiles:protocol

@@ -98,6 +98,19 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         if hooks_error then error("hooks: " .. tostring(hooks_error)) end
     end
     drain_hooks()
+    -- Held permission hooks: the carrier answers each pending hook once, when
+    -- its exchange writes the response or the attempt ends.
+    local held: {{to: string, topic: string, event_id: string}} = {}
+    local function answer_held()
+        local waiting: {{to: string, topic: string, event_id: string}} = {}
+        for _, hook in ipairs(held) do
+            local line, err = machine.permission_hook_response(io, session, hook.event_id)
+            if line or err then
+                process.send(hook.to, hook.topic, {ok = line ~= nil, value = line and {permission_response = line} or nil, error = err})
+            else waiting[#waiting + 1] = hook end
+        end
+        held = waiting
+    end
     local drain_elapsed = session.runner == nil
     local settlement: unknown = nil
     local queued: {{write_id: string, data: string}} = {}
@@ -203,7 +216,13 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             local topic = data and bounds.text(data.reply_topic, 128)
             if topic and topic:match("^bee%.carrier%.permission%.reply/[a-zA-Z0-9%-]+$") then
                 local answer, err = machine.permission_hook(io, session, data)
-                process.send(tostring(message:from()), topic, {ok = answer ~= nil, value = answer, error = err})
+                local event_id = data and bounds.id(data.event_id)
+                if answer and answer.pending == true and event_id then
+                    held[#held + 1] = {to = tostring(message:from()), topic = topic, event_id = event_id}
+                else
+                    process.send(tostring(message:from()), topic, {ok = answer ~= nil,
+                        value = answer and {permission_response = answer.permission_response} or nil, error = err})
+                end
             end
         elseif selected.channel == extension_hooks then
             local message = selected.value
@@ -245,6 +264,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         end
         if selected.channel ~= poll_timer:channel() and not (hints and selected.channel == hints:channel()) then advance(false) end
         drain_hooks()
+        answer_held()
         if not ended and not session.terminal then
             for _, permission in ipairs(session.checkpoint.permissions) do
                 if permission.phase == "closed" then end_session(false); break end
@@ -272,6 +292,9 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         end
     end
     if settlement then end_session(false) end
+    for _, hook in ipairs(held) do
+        process.send(hook.to, hook.topic, {ok = false, error = "the attempt ended before the permission was answered"})
+    end
     if session.runner then process.unmonitor(session.runner) end
     process.unlisten(outputs)
     process.unlisten(exits)

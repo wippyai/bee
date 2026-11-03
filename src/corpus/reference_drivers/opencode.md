@@ -1063,7 +1063,7 @@ function M.timeout(event: unknown): string
 end
 type IO = {submit: (Object) -> Object?, permission: (string, Object) -> (), record: (string) -> ()}
 function M.send(io: IO, row: Object, auto: boolean?): boolean
-    local ok = pcall(function()
+    local ok, problem = pcall(function()
         if auto and row.hook_event_name == "PermissionRequest" then
             io.permission(tostring(row.permission_id), {reply = "once"})
             return
@@ -1076,7 +1076,7 @@ function M.send(io: IO, row: Object, auto: boolean?): boolean
             io.permission(tostring(row.permission_id), {reply = decision.behavior == "allow" and "once" or "reject", message = decision.message})
         end
     end)
-    if not ok then io.record(tostring(row.hook_event_name) .. ": hook delivery failed") end
+    if not ok then io.record(tostring(row.hook_event_name) .. ": hook delivery failed: " .. tostring(problem)) end
     return ok
 end
 return M
@@ -1359,8 +1359,8 @@ local function main(input: observer_types.Input)
                     if prompt and session_id then
                         local body: {[string]: unknown} = {parts = {{type = "text", text = prompt}}}
                         if model then local provider, name = model:match("^([^/]+)/(.+)$"); if provider then body.model = {providerID = provider, modelID = name} end end
-                        local ok = pcall(post, "/session/" .. session_id .. "/prompt_async", body)
-                        if not ok then report("prompt_failed", "OpenCode initial prompt submission failed") end
+                        local ok, problem = pcall(post, "/session/" .. session_id .. "/prompt_async", body)
+                        if not ok then report("prompt_failed", "OpenCode initial prompt submission failed: " .. tostring(problem)) end
                     end
                 else
                     stopping = true

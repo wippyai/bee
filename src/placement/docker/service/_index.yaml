@@ -31,6 +31,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_runner_policy
     - bee.credentials.security:credential_materialize_policy
@@ -100,6 +101,7 @@ entries:
         id: bee.placement.docker.image
       policies:
       - bee.placement.native.security:placement_store_policy
+      - bee.placement.native.security:placement_preparer_lock_policy
       - bee.placement.native.security:placement_exec_policy
       - bee.placement.native.security:placement_runner_policy
       - bee.placement.docker.security:docker_policy

@@ -212,7 +212,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
                 store.transition(db, attempt_id, {evidence = {kind = kind, detail = detail}})
             end)
         end)
-        if observer_ok then observed = handle else store.transition(db, attempt_id, {evidence = {kind = "observer.failed", detail = "observer setup failed; ordinary CLI launch continues"}}) end
+        if observer_ok then observed = handle else store.transition(db, attempt_id, {evidence = {kind = "observer.failed", detail = "observer setup failed: " .. tostring(handle) .. "; ordinary CLI launch continues"}}) end
         if observed then
             argv = {request.launch.executable}
             for _, argument in ipairs(observed.arguments) do argv[#argv + 1] = argument end
@@ -407,7 +407,8 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
             local cleaned, backend_error = backend.cleanup(attempt, false)
             if not cleaned then cleanup_error = backend_error or "cleanup failed" end
         elseif attempt then
-            service.cleanup_attempt(attempt, true)
+            local cleaned = service.cleanup_attempt(attempt, true)
+            if not cleaned.ok then cleanup_error = cleaned.error and cleaned.error.message or "workdir cleanup failed" end
         end
         service.wake_supervision(row.placement_kind)
         db:release()

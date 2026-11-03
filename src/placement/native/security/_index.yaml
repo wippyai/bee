@@ -40,6 +40,17 @@ entries:
     - bee.placement.native.env:placement_executor
     - cwd
     effect: allow
+- name: placement_preparer_lock_policy
+  kind: security.policy.expr
+  meta:
+    comment: An attempt's preparer cleanup runs under a process name the runtime
+      releases with its holder
+  policy:
+    expression: resource startsWith "bee.placement.preparers/"
+    actions:
+    - process.registry.register
+    resources: '*'
+    effect: allow
 - name: placement_exec_policy
   kind: security.policy
   meta:

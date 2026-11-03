@@ -25,6 +25,7 @@ entries:
     - bee.placement.docker.security:home_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua

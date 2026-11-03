@@ -37,20 +37,36 @@ function M.readiness(receive: () -> {[string]: unknown}?, record: (string, strin
 end
 function M.lifecycle(io: IO, declaration: Declaration): Handle?
     local server_ok, endpoint, close_server = pcall(function() return io.server(declaration.server_arguments) end)
-    if not server_ok or not endpoint or not close_server then io.record("observer.failed", "local server did not report an endpoint"); return nil end
-    local spawned, spawn_ok = pcall(function() return io.spawn(endpoint) end)
-    if not spawned or not spawn_ok then close_server(); io.record("observer.failed", "observer could not start"); return nil end
-    local ready_ok, arguments = pcall(function() return io.ready() end)
-    if not ready_ok or not arguments then pcall(io.stop); close_server(); io.record("observer.failed", "observer did not become ready"); return nil end
+    if not server_ok then io.record("observer.failed", "local server failed: " .. tostring(endpoint)); return nil end
+    if not endpoint or not close_server then io.record("observer.failed", "local server did not report an endpoint"); return nil end
+    local function abandon(reason: string): nil
+        local closed_ok, close_error = pcall(close_server)
+        if not closed_ok then reason = reason .. "; local server shutdown failed: " .. tostring(close_error) end
+        io.record("observer.failed", reason)
+        return nil
+    end
+    local spawn_called, spawned = pcall(function() return io.spawn(endpoint) end)
+    if not spawn_called then return abandon("observer could not start: " .. tostring(spawned)) end
+    if not spawned then return abandon("observer could not start") end
+    local ready_called, arguments = pcall(function() return io.ready() end)
+    if not ready_called or not arguments then
+        local reason = ready_called and "observer did not become ready" or "observer did not become ready: " .. tostring(arguments)
+        local stopped_ok, stop_error = pcall(io.stop)
+        if not stopped_ok then reason = reason .. "; observer shutdown failed: " .. tostring(stop_error) end
+        return abandon(reason)
+    end
     io.record("observer.ready", "event subscription ready at " .. endpoint)
     local stopped = false
     return {arguments = arguments, release = io.release, stop = function()
         if stopped then return end
         stopped = true
-        local stopped_ok = pcall(function() io.stop() end)
-        local closed_ok = pcall(function() close_server() end)
-        if not stopped_ok or not closed_ok then io.record("observer.stop_failed", "observer or local server shutdown failed") end
-        io.record("observer.stopped", "window observer and local server stopped")
+        local stopped_ok, stop_error = pcall(io.stop)
+        local closed_ok, close_error = pcall(close_server)
+        local failures: {string} = {}
+        if not stopped_ok then failures[#failures + 1] = "observer shutdown failed: " .. tostring(stop_error) end
+        if not closed_ok then failures[#failures + 1] = "local server shutdown failed: " .. tostring(close_error) end
+        if #failures > 0 then io.record("observer.stop_failed", table.concat(failures, "; "))
+        else io.record("observer.stopped", "window observer and local server stopped") end
     end}
 end
 function M.discover(request: Request): (Declaration?, string?)

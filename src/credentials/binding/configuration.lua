@@ -1,7 +1,7 @@
 -- MIT. Credential availability and provider configuration setup.
 local sql = require("sql")
 local hash = require("hash")
-local time = require("time")
+local events = require("events")
 local uuid = require("uuid")
 local security = require("security")
 local env = require("env")
@@ -17,6 +17,7 @@ local funcs = require("funcs")
 local configuration_admission = require("configuration_admission")
 local identity = require("identity")
 local M = {}
+local ATTENTION = "bee.attention"
 M.MANAGE = "bee.credentials.manage"
 M.MATERIALIZE = "bee.credentials.materialize"
 M.MAX_FILE_BYTES = credential_protocol.MAX_FILE_BYTES
@@ -268,7 +269,22 @@ local function configuration_io(workspace: string, provider: string, base_path: 
         end,
         receipt = function(approval: string): ({[string]: unknown}?, string?) return store.configuration_receipt(db, approval) end,
         call = function(target: string, value: {[string]: unknown}): (unknown, string?) return funcs.call(target, value) end,
-        wait = function() time.sleep("100ms") end,
+        changes = function(): (configuration_admission.Changes?, string?)
+            local subscription, subscribe_error = events.subscribe(ATTENTION)
+            if not subscription then return nil, "Needs you announcements are unavailable: " .. tostring(subscribe_error) end
+            return {
+                next = function(approval_id: string): string?
+                    while true do
+                        local event, ok = subscription:channel():receive()
+                        if not ok then return "Needs you stopped announcing changes before the configuration setup completed." end
+                        local data = type(event) == "table" and bounds.object(event.data) or nil
+                        local changed = data and bounds.object(data.request)
+                        if changed and changed.approval_id == approval_id then return nil end
+                    end
+                end,
+                close = function() subscription:close() end,
+            }, nil
+        end,
     }
     return io, db, setup, nil
 end

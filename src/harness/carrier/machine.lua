@@ -677,6 +677,11 @@ function M.permission_hook(io: IO, session: Session, raw: unknown): (Object?, st
     if response_error then return nil, response_error end
     return {pending = line == nil, permission_response = line}, nil
 end
+-- permission_hook_response: the response a held permission hook is waiting
+-- for, once the exchange has written it; nil while the decision is pending.
+function M.permission_hook_response(io: IO, session: Session, event_id: string): (string?, string?)
+    return hook_exchange.response(permission_context(io, session), event_id)
+end
 function M.extension_hook(io: IO, session: Session, raw: unknown): (Object?, string?)
     local input = bounds.object(raw)
     local payload = input and bounds.object(input.payload)

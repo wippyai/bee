@@ -10,10 +10,10 @@ local types = require("types")
 local resources = require("resources")
 local store = require("store")
 local process = require("process")
-local uuid = require("uuid")
+local cdc = require("cdc")
+local channel = require("channel")
 
 local M = {}
-M.OWNER = "bee.placement.sweeper"
 type Preparer = {binding_id: string, plan: string, setup: string, cleanup: string}
 
 local function resolve_preparer(binding_ref: string): (Preparer?, string?)
@@ -163,27 +163,97 @@ function M.setup(db: sql.DB, request: types.LaunchRequest, attempt_id: string, i
     return current_work_dir, extra_roots, nil
 end
 
-function M.cleanup(attempt: types.Attempt): (boolean, string?)
-    if tostring(process.registry.lookup(M.OWNER, process.registry.LOCAL)) == tostring(process.pid()) then
-        return M.execute_cleanup(attempt, nil)
+-- An attempt's preparer cleanup runs under its lock: a process name the
+-- runtime releases when its holder ends, so one cleanup runs at a time and a
+-- crashed holder frees the attempt for the next caller. A process name admits
+-- every coroutine of its process, so the attempts a process holds are kept in
+-- held as well.
+M.LOCK = "bee.placement.preparers/"
+M.ENDED = "workdir_preparer.cleanup_ended"
+local held: {[string]: boolean} = {}
+-- locked runs the cleanup when the caller takes the attempt's lock and
+-- reports busy while another live caller holds it. Each run ends with an
+-- M.ENDED evidence row recorded after the lock is free, which wakes every
+-- caller waiting on it.
+local function locked(attempt: types.Attempt, lock: string, after: integer?): (boolean?, string?, boolean)
+    local taken, take_error = process.registry.register(lock)
+    if not taken then
+        if take_error and take_error:kind() == errors.ALREADY_EXISTS then return nil, nil, true end
+        return false, "take the attempt's cleanup lock: " .. tostring(take_error), false
     end
+    if held[lock] then return nil, nil, true end
+    held[lock] = true
+    local called, cleaned, cleanup_error = pcall(M.execute_cleanup, attempt, after)
+    held[lock] = nil
+    process.registry.unregister(lock, process.registry.LOCAL)
+    local ok = called and cleaned == true
+    local problem: string? = nil
+    if not called then problem = tostring(cleaned) elseif not ok then problem = cleanup_error or "preparer cleanup failed" end
+    local db, open_error = store.open()
+    local ended_error = open_error
+    if db then
+        ended_error = record(db, attempt.attempt_id, M.ENDED, problem or "complete")
+        db:release()
+    end
+    if ended_error then
+        return false, (problem and problem .. "; " or "") .. "record the cleanup's end: " .. tostring(ended_error), false
+    end
+    return ok, problem, false
+end
+-- cleanup runs the attempt's preparer cleanups in the caller. While another
+-- caller holds the attempt's lock this one follows it: the end the holder
+-- records, any outcome it records, or the holder process's exit is a reason
+-- to try the lock again, and a failure recorded meanwhile is this call's
+-- outcome too.
+function M.cleanup(attempt: types.Attempt): (boolean, string?)
+    local lock = M.LOCK .. attempt.attempt_id
     local db, open_error = store.open()
     if not db then return false, open_error end
     local row = store.row(db, attempt.attempt_id)
-    if not row then db:release(); return false, "cleanup attempt is not recorded" end
-    local after = assert(bounds.count(row.evidence_count))
-    local id = tostring(uuid.v7())
-    local recorded = record(db, attempt.attempt_id, "workdir_preparer.cleanup_requested", id .. ": " .. tostring(after))
     db:release()
-    if recorded then return false, recorded end
-    local result, err = funcs.call("bee.placement.native.service:cleanup_request", attempt.attempt_id, after, id)
-    local reply = bounds.object(result)
-    return reply ~= nil and reply.ok == true, err and tostring(err) or (reply and bounds.text(reply.error, 65536))
+    if not row then return false, "cleanup attempt is not recorded" end
+    local after = bounds.count(row.evidence_count)
+    local cleaned, cleanup_error, busy = locked(attempt, lock, nil)
+    if not busy then return cleaned == true, cleanup_error end
+    local changes, stream_error = cdc.stream("bee:changes", {tables = {"bee_placement_evidence"}, ops = {"insert"}})
+    if not changes then return false, "follow the attempt's cleanup: " .. tostring(stream_error) end
+    local events = assert(process.events())
+    local own = tostring(process.pid())
+    local watched: string? = nil
+    local function finish(ok: boolean, problem: string?): (boolean, string?)
+        changes:close()
+        if watched then process.unmonitor(watched) end
+        return ok, problem
+    end
+    while true do
+        cleaned, cleanup_error, busy = locked(attempt, lock, after)
+        if not busy then return finish(cleaned == true, cleanup_error) end
+        local holder = process.registry.lookup(lock, process.registry.LOCAL)
+        local holder_id = holder and tostring(holder)
+        local follow = holder_id ~= nil
+        -- A holder in this process ends with the M.ENDED row; another
+        -- process's holder is also followed to its exit. A holder that has
+        -- already exited has released the lock, so the caller tries again.
+        if holder_id and holder_id ~= own and holder_id ~= watched then
+            if watched then process.unmonitor(watched) end
+            watched = nil
+            local monitored, monitor_error = process.monitor(holder_id)
+            if monitored then watched = holder_id
+            elseif monitor_error and monitor_error:kind() == errors.NOT_FOUND then follow = false
+            else return finish(false, "follow the attempt's cleanup holder: " .. tostring(monitor_error)) end
+        end
+        if follow then
+            local cases = {changes:channel():case_receive()}
+            if watched then cases[#cases + 1] = events:case_receive() end
+            local selected = channel.select(cases)
+            if not selected.ok then return finish(false, "the attempt's cleanup could not be followed") end
+        end
+    end
 end
 
 function M.execute_cleanup(attempt: types.Attempt, after: integer?): (boolean, string?)
-    if tostring(process.registry.lookup(M.OWNER, process.registry.LOCAL)) ~= tostring(process.pid()) then
-        return false, "preparer cleanup belongs to the sweeper"
+    if tostring(process.registry.lookup(M.LOCK .. attempt.attempt_id, process.registry.LOCAL)) ~= tostring(process.pid()) then
+        return false, "preparer cleanup runs under the attempt's cleanup lock"
     end
     local db, open_error = store.open()
     if not db then return false, open_error end
@@ -206,12 +276,22 @@ function M.execute_cleanup(attempt: types.Attempt, after: integer?): (boolean, s
         if row.kind ~= "workdir_preparer.failed" then completed[binding] = true
         elseif after and (bounds.count(row.sequence) or 0) > after then failed[binding] = detail end
     end
+    -- A preparer's cleanup runs outside the store: the connection is held
+    -- only to record each outcome.
+    db:release()
+    local function note(kind: string, detail: string): string?
+        local recorder, recorder_error = store.open()
+        if not recorder then return recorder_error or "open placement store" end
+        local noted = record(recorder, attempt.attempt_id, kind, detail)
+        recorder:release()
+        return noted
+    end
     local failures: {string} = {}
     for index = #pending, 1, -1 do
         local saved = pending[index]
         local binding = bounds.id(saved.binding_id)
         local target = bounds.id(saved.cleanup)
-        if not binding or not target then db:release(); return false, "invalid cleanup binding" end
+        if not binding or not target then return false, "invalid cleanup binding" end
         if failed[binding] then failures[#failures + 1] = failed[binding]
         elseif not completed[binding] then
             local input: types.WorkdirPreparerCleanupInput = {attempt_id = attempt.attempt_id, owner_id = attempt.owner_id,
@@ -223,17 +303,16 @@ function M.execute_cleanup(attempt: types.Attempt, after: integer?): (boolean, s
                 elseif value.retained then
                     local reason = bounds.text(value.reason, 8192)
                     if not reason then err = "missing retention reason"
-                    else err = record(db, attempt.attempt_id, "workdir_preparer.retained", binding .. ": " .. reason) end
-                else err = record(db, attempt.attempt_id, "workdir_preparer.cleaned", binding) end
+                    else err = note("workdir_preparer.retained", binding .. ": " .. reason) end
+                else err = note("workdir_preparer.cleaned", binding) end
             end
             if err then
                 local failure = binding .. ": " .. err
-                local evidence_error = record(db, attempt.attempt_id, "workdir_preparer.failed", failure)
+                local evidence_error = note("workdir_preparer.failed", failure)
                 failures[#failures + 1] = evidence_error or failure
             end
         end
     end
-    db:release()
     if #failures > 0 then return false, table.concat(failures, "; ") end
     return true, nil
 end

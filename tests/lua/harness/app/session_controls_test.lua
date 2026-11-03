@@ -264,8 +264,9 @@ local function define_tests()
                     await(viewport, "Rename Doomed agent:")
                     assert(viewport:send({type = "paste", text = "Release"}))
                     assert(viewport:send({type = "key", action = "press", key_type = "space", key = " "}))
-                    for _, letter in ipairs({"c", "h", "e", "c", "k", "s"}) do key(viewport, "runes", letter) end
-                    await(viewport, "Rename Doomed agent: Release checks")
+                    assert(viewport:send({type = "key", action = "press", key_type = "runes", key = "C", shift = true}))
+                    for _, letter in ipairs({"h", "e", "c", "k", "s"}) do key(viewport, "runes", letter) end
+                    await(viewport, "Rename Doomed agent: Release Checks")
                     key(viewport, "enter")
                     local asked = channel.select({renames:case_receive(), time.after("10s"):case_receive()})
                     assert(asked.channel == renames, "Enter did not rename the session")

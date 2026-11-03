@@ -8,8 +8,13 @@ M.DESTINATION = "credentials.configuration"
 type Object = {[string]: unknown}
 type Base = {path: string, content: string, digest: string}
 type Status = {needs_setup: boolean, path: string}
+-- Changes: the approval owner's announcements of changed requests, heard
+-- from before a request is filed. next blocks until the named request
+-- changes and returns why it cannot when the announcements end.
+type Changes = {next: (string) -> string?, close: () -> ()}
 type IO = {measure: () -> (Base?, string?), admitted: (Base) -> (boolean?, string?),
-    finish: (Base?, string, Object) -> string?, receipt: (string) -> (Object?, string?), call: (string, Object) -> (unknown, string?), wait: () -> ()}
+    finish: (Base?, string, Object) -> string?, receipt: (string) -> (Object?, string?), call: (string, Object) -> (unknown, string?),
+    changes: () -> (Changes?, string?)}
 local function call(io: IO, target: string, request: Object): (Object?, string?)
     local raw, err = io.call(target, request)
     local reply = bounds.object(raw)
@@ -26,12 +31,9 @@ function M.status(io: IO): (Status?, string?)
     if admitted == nil then return nil, admission_error end
     return {needs_setup = not admitted, path = base.path}, nil
 end
-function M.ensure(io: IO, workspace: string, provider: string, attempt: string?, base_path: string?): (Base?, string?)
-    local base, err = io.measure()
-    if not base then return nil, err end
-    local admitted, admission_error = io.admitted(base)
-    if admitted == nil then return nil, admission_error end
-    if admitted then return base, nil end
+-- await_effect files the setup request and follows the owner's announced
+-- changes of it until its effect completes.
+local function await_effect(io: IO, changes: Changes, workspace: string, provider: string, attempt: string?, base_path: string?, base: Base): (Object?, string?)
     local proposal: Object = {kind = "operation", ref = "bee.credentials.binding:configuration_setup", revision = "1",
         input_digest = base.digest, payload = {workspace_id = workspace, provider = provider, path = base.path, digest = base.digest, base_path = base_path}}
     local identity = canonical.encode(proposal)
@@ -48,12 +50,26 @@ function M.ensure(io: IO, workspace: string, provider: string, attempt: string?,
     if not approval_id then return nil, "Needs you did not return a configuration setup request." end
     local view = requested
     while view.effect_completed_at == nil do
-        io.wait()
+        local closed = changes.next(approval_id)
+        if closed then return nil, closed end
         local observed, read_error = call(io, "bee.approvals.binding:read", {approval_id = approval_id})
         if not observed then return nil, read_error end
         if observed.approval_id ~= approval_id then return nil, "Needs you returned a different configuration setup request." end
         view = observed
     end
+    return view, nil
+end
+function M.ensure(io: IO, workspace: string, provider: string, attempt: string?, base_path: string?): (Base?, string?)
+    local base, err = io.measure()
+    if not base then return nil, err end
+    local admitted, admission_error = io.admitted(base)
+    if admitted == nil then return nil, admission_error end
+    if admitted then return base, nil end
+    local changes, changes_error = io.changes()
+    if not changes then return nil, changes_error end
+    local view, wait_error = await_effect(io, changes, workspace, provider, attempt, base_path, base)
+    changes.close()
+    if not view then return nil, wait_error end
     local result = bounds.object(view.effect_result)
     if not result or result.ok ~= true then
         return nil, result and bounds.text(result.message, 4096) or "Configuration setup did not complete. Choose Setup in Agents to try again."

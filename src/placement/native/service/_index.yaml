@@ -50,21 +50,12 @@ entries:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     resources: bee.placement.native.env:resources
-- name: cleanup_request
-  kind: function.lua
-  source: file://cleanup_request.lua
-  method: main
-  modules:
-  - process
-  - channel
-  imports:
-    demand: bee.process:demand
-    bounds: bee.drivers.values:bounds
 - name: workdir_preparers
   kind: library.lua
   source: file://workdir_preparers.lua
   modules:
-  - uuid
+  - cdc
+  - channel
   - process
   - registry
   - funcs
@@ -166,6 +157,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_runner_policy
     - bee.credentials.security:credential_materialize_policy
@@ -200,8 +192,6 @@ entries:
   - process
   imports:
     bounds: bee.drivers.values:bounds
-    store: bee.placement.native.persist:store
-    workdir_preparers: bee.placement.native.service:workdir_preparers
     worker: bee.process:worker
     service: bee.placement.native.service:service
 - name: sweeper_service
@@ -222,6 +212,7 @@ entries:
         id: bee.placement.sweeper
       policies:
       - bee.placement.native.security:placement_store_policy
+      - bee.placement.native.security:placement_preparer_lock_policy
       - bee.placement.native.security:placement_exec_policy
       - bee.placement.native.security:placement_service_policy
       - bee.resources.security:resource_resolve_policy
@@ -283,6 +274,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_resolve_policy
@@ -340,6 +332,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_service_policy
   imports:
     protocol: bee.placement.native:protocol

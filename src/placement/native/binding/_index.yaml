@@ -30,6 +30,7 @@ entries:
   security:
     policies: &id001
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_resolve_policy
@@ -86,6 +87,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_resolve_policy
@@ -168,6 +170,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_resolve_policy
     - bee.placement.native.security:hook_file_policy

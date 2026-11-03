@@ -158,9 +158,11 @@ local function main(options: unknown)
         if busy then return end
         busy = true
         coroutine.spawn(function()
-            pcall(operation)
+            local ok, problem = pcall(operation)
             busy = false
-            if running then wake() end
+            if not running then return end
+            if not ok then failure(tostring(problem)) end
+            wake()
         end)
     end
     local actions = delivery_actions.new(state, review, wake, {running = function(): boolean return running end, gesture = function() return effect_gesture end})

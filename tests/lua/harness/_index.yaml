@@ -554,6 +554,7 @@ entries:
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.credentials.security:credential_store_policy
   imports:
     bounds: bee.drivers.values:bounds
@@ -873,6 +874,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
   imports:
     processes: bee.tests.support:processes
@@ -1397,6 +1399,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     principals: bee.tests.support.principals:bound
     bounds: bee.drivers.values:bounds
@@ -1989,6 +1992,7 @@ entries:
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.credentials.security:credential_store_policy
   imports:
     bounds: bee.drivers.values:bounds
@@ -2079,6 +2083,7 @@ entries:
     - bee.security.approvals:approval_store_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
@@ -2157,6 +2162,7 @@ entries:
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.credentials.security:credential_store_policy
   imports:
     bounds: bee.drivers.values:bounds
@@ -2611,6 +2617,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -2640,6 +2647,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -2663,6 +2671,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     carrier_fixtures: bee.tests.harness:carrier_fixtures
@@ -2691,6 +2700,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -2716,6 +2726,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -2740,6 +2751,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -2762,6 +2774,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     carrier_fixtures: bee.tests.harness:carrier_fixtures
@@ -2787,6 +2800,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -2833,6 +2847,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     carrier_fixtures: bee.tests.harness:carrier_fixtures
@@ -2859,6 +2874,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound

@@ -23,9 +23,10 @@ local WATCH = DELIVERY .. ":watch"
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
 type Run = {thread_id: string, attempt_id: string}
 type Status = {thread_id: string, attempt_id: string, state: string, outcome: string?, answer: string?, error: {[string]: unknown}?}
+type Stop = ({[string]: unknown}) -> (boolean, Reply?)
 type StatusOptions = {carrier_epoch_starts: boolean?, cancel_status_first: boolean?,
     cancel_status_pending: boolean?, tolerate_checkpoint_failure: boolean?, reconcile_prestart: boolean?}
-type CancelOptions = {prestart: string?}
+type CancelOptions = {prestart: string?, stop: Stop?}
 type Context = {thread_id: string, action_id: string, attempt_id: string, carrier_epoch: integer,
     checkpoint_revision: integer, checkpoint: unknown, cancelled: () -> boolean,
     commit: (string, {{[string]: unknown}}, {[string]: unknown}) -> (boolean, string?)}
@@ -33,10 +34,6 @@ type ExecutionResult = {outcome: string, answer: string?, error: string?, settle
 type Adapter = (Context, {[string]: unknown}) -> ExecutionResult
 type ExecutionRequest = {thread_id: string, action_id: string, attempt_id: string,
     idempotency_key: string?, carrier_epoch: integer?}
-
-local function now_ms(): integer
-    return math.floor(time.now():unix_nano() / 1000000)
-end
 
 local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
@@ -340,25 +337,55 @@ function M.cancel(run: Run, wait_ms: integer?, idempotency_key: string?, options
         end
         local intent_refused = record_intent(run, "cancelling", nil, idempotency_key)
         if intent_refused then return intent_refused end
+        if opts.stop then
+            local stopped, stop_refused = opts.stop(stored or {})
+            if not stopped then return stop_refused or fail("UNAVAILABLE", "stop failed") end
+        end
         return {ok = true, error = nil, value = {thread_id = run.thread_id, attempt_id = run.attempt_id, state = "cancelling"}}
     end
 
     local intent_refused = record_intent(run, "cancelling", nil, idempotency_key)
     if intent_refused then return intent_refused end
-    -- The attempt ends through its carrier, which reads the intent; each
-    -- thread commit is a reason to look again until the caller's wait ends.
-    local started = now_ms()
-    while true do
-        local remaining = math.max(0, budget - (now_ms() - started))
-        local reply = M.wait(run, remaining)
-        if not reply.ok then return reply end
-        local current = bounds.object(reply.value)
-        if current and current.state == "ended" then return reply end
-        if remaining == 0 then
-            return {ok = true, error = nil, value = {thread_id = run.thread_id, attempt_id = run.attempt_id,
-                state = "cancelling", cancel_intent = true}}
+    local deadline = math.floor(time.now():unix_nano() / 1000000) + budget
+    local stopped = false
+    local uncertain_stop = false
+    while math.floor(time.now():unix_nano() / 1000000) < deadline do
+        if not stopped then
+            local live, _, cur_stored = M.status(run)
+            if live and live.state == "ended" then return {ok = true, error = nil, value = live} end
+            if live and (live.state == "running" or live.state == "cancelling") and cur_stored then
+                if opts.stop then
+                    local ok_stop, stop_refused = opts.stop(cur_stored)
+                    if ok_stop then
+                        stopped = true
+                    elseif stop_refused and stop_refused.error and stop_refused.error.code == "DENIED" then
+                        return stop_refused
+                    else
+                        uncertain_stop = true
+                        stopped = true
+                    end
+                else
+                    stopped = true
+                end
+            else
+                time.sleep("50ms")
+            end
+        else
+            local remaining = deadline - math.floor(time.now():unix_nano() / 1000000)
+            if remaining <= 0 then break end
+            local wait_slice = remaining > 1000 and 1000 or remaining
+            local wait_reply = M.wait(run, wait_slice)
+            if wait_reply.ok and wait_reply.value then
+                local after = bounds.object(wait_reply.value)
+                if after and after.state == "ended" then return {ok = true, error = nil, value = after} end
+            end
         end
     end
+
+    local final_status = M.status(run)
+    if final_status and final_status.state == "ended" then return {ok = true, error = nil, value = final_status} end
+    return {ok = true, error = nil, value = {thread_id = run.thread_id, attempt_id = run.attempt_id,
+        state = "cancelling", cancel_intent = true, uncertain = uncertain_stop or nil}}
 end
 
 function M.cancelled(run: Run): boolean
@@ -424,17 +451,9 @@ function M.execute(request: ExecutionRequest, adapter: Adapter): {[string]: unkn
     local outcome = bounds.member(result.outcome, {"succeeded", "failed", "cancelled", "uncertain"}) or "failed"
     local terminal_checkpoint = result.checkpoint or bounds.object(context.checkpoint) or {}
     terminal_checkpoint.terminal = {outcome = outcome, answer = result.answer}
-    local finalized, final_error = context.commit(idempotency_key .. "-final", {}, terminal_checkpoint)
-    if not finalized then return failed("record the terminal checkpoint: " .. tostring(final_error)) end
-    local receipt: {[string]: unknown} = {scope = "attempt", outcome = outcome, evidence_refs = {}}
-    if outcome ~= "succeeded" then
-        receipt.error = {code = outcome, message = result.error or ("the run ended " .. outcome), retryable = false}
-    end
-    local _, receipt_refused = call(RECEIPT, {thread_id = thread_id, action_id = action_id, attempt_id = attempt_id, carrier_epoch = epoch,
-        idempotency_key = idempotency_key .. "-terminal-receipt", receipt = receipt})
-    if receipt_refused then
-        return failed("record the terminal receipt: " .. tostring(receipt_refused.error and receipt_refused.error.message or "receipt refused"))
-    end
+    context.commit(idempotency_key .. "-final", {}, terminal_checkpoint)
+    call(RECEIPT, {thread_id = thread_id, action_id = action_id, attempt_id = attempt_id, carrier_epoch = epoch,
+        idempotency_key = idempotency_key .. "-terminal-receipt", receipt = {scope = "attempt", outcome = outcome, evidence_refs = {}}})
     local final_receipt = {scope = "attempt", thread_id = thread_id, action_id = action_id,
         attempt_id = attempt_id, state = "ended", idempotency_key = idempotency_key}
     return {ok = outcome ~= "failed", error = result.error, outcome = outcome, answer = result.answer,

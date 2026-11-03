@@ -1,5 +1,5 @@
 -- MIT. Folded gateway tools: a saved selection, binding or grant that names
--- a tool another tool now carries moves to that carrier, restricted to the
+-- a tool another tool carries moves to that carrier, restricted to the
 -- operations it named, and the old name is retired.
 local test = require("test")
 local sql = require("sql")

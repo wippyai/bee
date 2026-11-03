@@ -330,17 +330,16 @@ An approved contract call retains the original application actor and enters the
 private `bee.gov.security:gateway_callee_scope`, whose policy grants nothing.
 Only the callee's declared policies apply; caller and gateway permissions do not
 flow into it, and the application retains its custom-scope creation denial.
-Preflight also refuses edits to the host `bee.security.gov:protected_kernel` trust map, its
-transitive code dependencies and requirement selectors aimed at it. That map
-names every shipped namespace a host-selected scope lives in or is reached from
-(`bee.app`, `bee.approvals`, `bee.apps`, `bee.capability`, `bee.credentials`,
-`bee.deps`, `bee.docs`, the shared `bee.drivers` core, `bee.env`,
-`bee.gateway`, `bee.git`, `bee.gov`, `bee.harness`, `bee.hive`, `bee.hub`,
-`bee.node`, `bee.persist`, `bee.placement`, `bee.resources`, `bee.security`,
-`bee.shell`, `bee.sync`, `bee.threads`, `bee.ui`, `bee.drivers.values`), and its
-`super_edit` list is the host's explicit carve-out of protected namespaces. Bee
-selects `bee.apps.settings` and `bee.shell` there. Each driver's own `bee.driver.<name>` and
-`bee.drivers.<name>` namespaces stay under governance. A super-edit profile row carries `expires_at`; it is admitted only
+Preflight also refuses edits to the protected kernel, its transitive code
+dependencies and requirement selectors aimed at it. Each kernel component
+declares its namespace with a `bee.kernel` registry entry (`scope: tree` or
+`scope: namespace`) that covers only the entries its own module ships there;
+governance builds the protected set from the registry at decision time. The
+host trust map `bee.gov:protected_kernel` keeps the `super_edit` list of exact
+entries the host opens to a super-edit profile; Bee selects the
+`bee.apps.settings` and `bee.shell` entries. Each driver's own
+`bee.driver.<name>` and `bee.drivers.<name>` namespaces stay under governance.
+A super-edit profile row carries `expires_at`; it is admitted only
 while unexpired, must set `allow.auto_start: false`, must name a dedicated
 `super-edit`-prefixed approver policy declared with `confirm: explicit`, and may
 not carry `allow.grants` for `security.*`, `funcs.security`, `process.security`

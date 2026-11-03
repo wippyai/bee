@@ -48,11 +48,9 @@ receipt.
 Governed authoring stages bounded files in a durable overlay, freezes an
 immutable candidate, shows its definitions and capability effects, obtains an
 exact approval, and applies through the destination owner with restart
-recovery. An applied overlay is not a durable registry publication. Core
-namespaces named by `bee.gov:protected_kernel` change only through the host
-composition and a native upgrade, apart from the namespaces the host
-explicitly opens to a time-bounded super-edit profile. A bundled baseline stays
-recoverable (`bee gov` reverts a governed overlay).
+recovery. An applied overlay is not a durable registry publication. Kernel
+components, declared with `bee.kernel` entries, change only through the host
+composition and a native upgrade. A bundled baseline stays recoverable (`bee gov` reverts a governed overlay).
 
 Each change distinguishes staging, resolution, validation, authorization,
 application, activation, verification and receipt. Intent and step outcomes are

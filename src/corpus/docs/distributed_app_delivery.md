@@ -114,39 +114,46 @@ the one-operation duration, and removal lasting until edit mode is enabled again
 
 ### Protected kernel
 
-The host-owned `bee.gov:protected_kernel` entry is the trust map no activation
-profile can open, however permissive. It names every shipped namespace a
-host-selected security scope lives in or is reached from (`bee.app`,
-`bee.approvals`, `bee.apps`, `bee.capability`, `bee.credentials`, `bee.deps`,
-`bee.docs`, `bee.env`, `bee.gateway`, `bee.git`, `bee.gov`,
-`bee.harness`, `bee.hive`, `bee.hub`, `bee.node`, `bee.persist`,
-`bee.placement`, `bee.resources`, `bee.security`, `bee.shell`, `bee.sync`,
-`bee.threads`, `bee.ui`, `bee.drivers.values` and the shared driver namespaces
-`bee.drivers.binding`, `.codec`, `.descriptor`, `.locate`, `.permission`,
-`.profiles` and `.transport`), each covering its child namespaces. Each
-driver's own `bee.driver.<name>` and `bee.drivers.<name>` namespaces stay under governance so workspace
-drivers can be delivered. The kernel also names exact host entries: itself,
-`bee.gov:activation_profiles`, `bee.gov:publication_profiles`,
-`bee.drivers:types`, `bee.drivers:driver`, `bee.drivers:locate_facet` and the
-host bindings `bee:definition`, `bee:workers`, `bee:terminal`, `bee:os`,
-`bee:env_path`, `bee:env`, `bee:role`, `bee:db_path` and `bee:db`. Its
-`super_edit` list is the host's explicit carve-out: Bee selects
-`bee.apps.settings` and `bee.shell`. A namespace the host deliberately names
-there is the only protected namespace a super-edit profile may replace; an
-empty list opens nothing. An exact admitted super-edit grant keeps that opened
-namespace out of transitive kernel dependency traversal. Explicitly named kernel
-entries stay protected even within a carve-out.
-Both destination resolvers read it from the destination registry, include it in
-the approval base, and pass it to preflight, which fails closed without it. Preflight computes the
-kernel as the named definitions plus the code and wiring they reference
-transitively (registry records and policies are protected by name only, so an
-application they describe stays upgradable) and reports `PROTECTED_KERNEL` for
-a plan that defines or replaces a kernel entry or dependency, declares a
-protected namespace, updates a package that owns kernel definitions, or aims a
+The protected kernel is the set of shipped definitions no activation profile
+can open, however permissive. Each kernel component declares its namespace
+where its entries live, with a registry entry of `meta.type: bee.kernel` whose
+`data.scope` is `tree` (the namespace and every descendant) or `namespace`
+(that namespace only). A declaration covers the entries the module that ships
+it ships there. Registry provenance names that module, so another module's
+entries and overlay-authored entries are never covered, and an overlay cannot
+declare one. An entry added to or moved within a declared component is
+protected without editing a list. Bee declares `bee` (namespace) and, as trees,
+`bee.app`, `bee.approvals`, `bee.apps.help.app`, `bee.apps.library`,
+`bee.apps.processes`, `bee.apps.terminal`, `bee.capability`,
+`bee.credentials`, `bee.deps`, `bee.docs`, `bee.driver.descriptor`, `bee.env`,
+`bee.gateway`, `bee.git.worktree`, `bee.gov`, `bee.harness`, `bee.hive`,
+`bee.hub`, `bee.node`, `bee.persist`, `bee.placement`, `bee.process`,
+`bee.resources`, `bee.security`, `bee.sync`, `bee.threads` and `bee.ui`. The
+`bee/drivers` module declares `bee.drivers` (namespace) and its shared core
+trees `bee.drivers.binding`, `.codec`, `.credentials`, `.descriptor`,
+`.locate`, `.permission`, `.profiles`, `.records`, `.security`, `.transport`,
+`.universal` and `.values`. Each driver's own `bee.driver.<name>` and
+`bee.drivers.<name>` namespaces stay under governance so workspace drivers can
+be delivered, and `bee.apps.settings` and `bee.shell` stay open to super edit.
+
+The host trust map `bee.gov:protected_kernel` holds the `super_edit` list:
+exact entries the host opens to a super-edit profile. Bee selects the Settings
+and desktop shell entries; an empty list opens nothing. An exact admitted
+super-edit grant keeps an opened entry out of transitive kernel dependency
+traversal, and a declared kernel entry stays protected even when listed.
+Both destination resolvers build the kernel from the destination registry at
+decision time, include the trust map and every declaration in the approval
+base, and pass it to preflight, which fails closed without it. A malformed
+trust map, or a malformed or repeated declaration, refuses the decision.
+Preflight computes the kernel as the declared definitions plus the code and
+wiring they reference transitively (registry records and policies are
+protected by name only, so an application they describe stays upgradable) and
+reports `PROTECTED_KERNEL` for a plan that defines or replaces a kernel entry
+or dependency, updates a package that owns kernel definitions, or aims a
 requirement target into the kernel. The kernel changes only through the host
 composition and a person-confirmed native upgrade.
 
-A host may open a protected namespace to one narrow, time-bounded profile: a row in `bee.gov:activation_profiles` that carries `expires_at`. Such a
+A host may open a namespace outside the kernel to one narrow, time-bounded profile: a row in `bee.gov:activation_profiles` that carries `expires_at`. Such a
 super-edit row is refused unless it withholds auto start
 (`allow.auto_start: false`), names a dedicated approver policy whose name
 begins `super-edit` and which the host declares with `confirm: explicit` and at

@@ -36,12 +36,19 @@ entries:
     actions: [registry.apply]
     resources: '*'
     effect: allow
+- name: forget_session_test_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The Sessions owner removing a session forgets the grants issued to it}
+  policy:
+    actions: [bee.resources.forget_session]
+    resources: '*'
+    effect: allow
 - name: client_test_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.resources.binding:revoke_all, bee.resources.binding:resolve, bee.resources.binding:renew_attempt, bee.resources.binding:list, bee.resources.binding:capabilities]
+    resources: [bee.resources.binding:associate, bee.resources.binding:grant, bee.resources.binding:revoke, bee.resources.binding:revoke_all, bee.resources.binding:forget_session, bee.resources.binding:resolve, bee.resources.binding:renew_attempt, bee.resources.binding:list, bee.resources.binding:capabilities]
     effect: allow
 - name: authority_test
   kind: function.lua

@@ -51,6 +51,17 @@ entries:
     policies:
     - bee.resources.security:resource_store_policy
     - bee.resources.security:resource_revoke_stop_policy
+- name: forget_session
+  kind: function.lua
+  meta:
+    type: bee.sessions.forget
+  source: file://forget_session_method.lua
+  method: handle
+  imports:
+    authority: bee.resources.persist:authority
+  security:
+    policies:
+    - bee.resources.security:resource_store_policy
 - name: revoke_all
   kind: function.lua
   source: file://revoke_all_method.lua

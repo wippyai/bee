@@ -101,11 +101,11 @@ entries:
   meta:
     comment: Removing a session asks each owner to forget what it keeps for that session
   policy:
-    actions: [registry.find, funcs.call, bee.gateway.manage, bee.approvals.forget_session]
+    actions: [registry.find, funcs.call, bee.gateway.manage, bee.approvals.forget_session, bee.resources.forget_session]
     resources: '*'
     expression: (action == "registry.find" && resource == "*") || (action == "bee.gateway.manage" && resource == "bindings") || (action == "funcs.call" && resource in ["bee.placement.native.binding:forget_session",
-      "bee.gateway.binding:forget_session", "bee.harness.binding:forget_session_windows", "bee.approvals.binding:forget_session"])
-      || (action == "bee.approvals.forget_session" && resource startsWith "bs:")
+      "bee.gateway.binding:forget_session", "bee.harness.binding:forget_session_windows", "bee.approvals.binding:forget_session",
+      "bee.resources.binding:forget_session"]) || (action in ["bee.approvals.forget_session", "bee.resources.forget_session"] && resource startsWith "bs:")
     effect: allow
 - name: owner_registry_read_policy
   kind: security.policy

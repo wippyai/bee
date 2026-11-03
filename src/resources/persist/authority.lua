@@ -18,6 +18,8 @@ local M = {}
 M.MANAGE = "bee.resources.manage"
 M.GRANT = "bee.resources.grant"
 M.GRANT_THREAD = "bee.resources.grant_thread"
+-- Removing a session forgets the grants issued to it; the resource is the session ref.
+M.FORGET_SESSION = "bee.resources.forget_session"
 M.RESOLVE = "bee.resources.resolve"
 M.MAX_TTL_MS = 86400000
 M.DEFAULT_TTL_MS = 3600000
@@ -425,6 +427,24 @@ function M.revoke_all(value: unknown): Reply
     if upsert_error then return fail("STORAGE", "advance authorization epoch") end
     return succeed({workspace_id = workspace_id, authorization_epoch = epoch + 1,
         fenced_attempts = revocation.fenced_attempts, revocation = revocation})
+end
+-- forget_session: the Sessions owner removing a session deletes the grants
+-- issued to that session. Its agent has exited, so no attempt holds them.
+function M.forget_session(value: unknown): Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"session", "thread_id", "owner_id", "history"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local session = bounds.id(object.session)
+    if not session or session:sub(1, 3) ~= "bs:" then return fail("INVALID", "session is not a session ref") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    if not security.can(M.FORGET_SESSION, session) then return fail("DENIED", "caller does not remove this session") end
+    local db, open_failure = open()
+    if not db then return open_failure end
+    local result, delete_error = db:execute("DELETE FROM bee_resource_grants WHERE subject = ?", {session})
+    db:release()
+    if delete_error or not result then return fail("STORAGE", "forget session grants") end
+    return succeed({grants = bounds.count(result.rows_affected) or 0})
 end
 -- resolve: a placement asks with the subject and audience it admitted
 -- itself; every binding of the grant is re-checked against the present.

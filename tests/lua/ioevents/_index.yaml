@@ -35,7 +35,7 @@ entries:
   meta: {type: test_support}
   source: file://probe.lua
   method: probe
-  modules: [ioevents]
+  modules: [fs, ioevents]
 - name: probe_call_policy
   kind: security.policy
   meta: {type: test_support}

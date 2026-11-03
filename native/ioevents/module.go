@@ -21,6 +21,7 @@ import (
 	luaapi "github.com/wippyai/runtime/api/runtime/lua"
 	"github.com/wippyai/runtime/runtime/lua/engine"
 	"github.com/wippyai/runtime/runtime/lua/engine/value"
+	fsmod "github.com/wippyai/runtime/runtime/lua/modules/fs"
 	"github.com/wippyai/runtime/runtime/security"
 )
 
@@ -76,35 +77,48 @@ func watchClose(l *lua.LState) int {
 }
 
 func watchDirectory(l *lua.LState) int {
-	resourceName := l.CheckString(1)
-	relative := l.OptString(2, ".")
-	if resourceName == "" || len(resourceName) > 256 || len(relative) > 4096 {
+	fail := func(kind lua.Kind, message string) int {
 		l.Push(lua.LNil)
-		l.Push(lua.NewLuaError(l, "invalid filesystem resource or watch path").WithKind(lua.Invalid))
+		l.Push(lua.NewLuaError(l, message).WithKind(kind).WithRetryable(false))
 		return 2
+	}
+	handle, _ := l.Get(1).(*lua.LUserData)
+	var files *fsmod.FS
+	if handle != nil {
+		files, _ = handle.Value.(*fsmod.FS)
+	}
+	if files == nil {
+		return fail(lua.Invalid, "watch expects a filesystem from fs.get")
+	}
+	path := l.OptString(2, ".")
+	if len(path) > 4096 {
+		return fail(lua.Invalid, "watch path is too long")
+	}
+	relative, err := files.Resolve(path)
+	if err != nil {
+		return fail(lua.Invalid, "watch requires a contained relative path")
 	}
 	recursive, invalid := watchOptions(l.Get(3))
 	if invalid != "" {
+		return fail(lua.Invalid, invalid)
+	}
+	// The caller's frame context carries its actor and policy scope and the
+	// registries its fs handle came from; the dispatcher context the command
+	// handler runs under carries none of them.
+	ctx := l.Context()
+	resource, root, err := watchSource(ctx, files.Backend())
+	if err != nil {
 		l.Push(lua.LNil)
-		l.Push(lua.NewLuaError(l, invalid).WithKind(lua.Invalid).WithRetryable(false))
+		l.Push(lua.WrapErrorWithLua(l, err, "watch directory"))
 		return 2
 	}
-	// The caller's frame context carries its actor and policy scope; the
-	// dispatcher context the command handler runs under carries neither.
-	// Watching is its own authority: it reports names and operations and never
-	// hands the caller the filesystem.
-	ctx := l.Context()
-	if !security.IsAllowed(ctx, "ioevents.watch", resourceName, nil) {
-		l.Push(lua.LNil)
-		l.Push(lua.NewLuaError(l, "filesystem watch is not permitted: "+resourceName).WithKind(lua.PermissionDenied).WithRetryable(false))
-		return 2
+	if !security.IsAllowed(ctx, "ioevents.watch", resource, nil) {
+		return fail(lua.PermissionDenied, "filesystem watch is not permitted: "+resource)
 	}
 	process := engine.GetProcess(l)
 	owner, ok := runtimeapi.GetFramePID(ctx)
 	if process == nil || !ok {
-		l.Push(lua.LNil)
-		l.Push(lua.NewLuaError(l, "filesystem watches require a process").WithKind(lua.Invalid))
-		return 2
+		return fail(lua.Invalid, "filesystem watches require a process")
 	}
 	topic := fmt.Sprintf("ioevents@%d", sequence.Add(1))
 	channel, id, generation, err := process.SubscribeRouted(topic, eventBuffer)
@@ -113,25 +127,68 @@ func watchDirectory(l *lua.LState) int {
 		l.Push(lua.WrapErrorWithLua(l, err, "subscribe"))
 		return 2
 	}
-	process.SetTopicHandler(topic, delivery(channel, Event{Kind: EventRescan, Resource: resourceName,
-		Path: filepath.ToSlash(filepath.Clean(relative))}))
-	watchContext, cancel := context.WithCancel(l.Context())
+	process.SetTopicHandler(topic, delivery(channel, Event{Kind: EventRescan, Resource: resource, Path: relative}))
+	watchContext, cancel := context.WithCancel(ctx)
 	process.SetSubscriptionCleanup(channel, cancel)
 	operation := &watchYield{channel: channel, cancel: cancel, command: startCommand{
-		context: watchContext, resource: resourceName, relative: relative, recursive: recursive, owner: owner,
-		topic: topic, epoch: process.Epoch(), id: id, generation: generation,
+		context: watchContext, resource: resource, root: root, relative: filepath.FromSlash(relative), recursive: recursive,
+		owner: owner, topic: topic, epoch: process.Epoch(), id: id, generation: generation,
 	}}
 	l.Push(operation)
 	return -1
 }
 
+// watchSource names the registry volume an fs handle came from and the host
+// directory behind it. The handle's backend is the instance the filesystem
+// registry holds for exactly one fs.directory entry. A host-backed volume is
+// watched at its root; a read-only volume withholds its host directory, so
+// the one host-backed fs.directory whose meta.watch_for names the volume
+// serves its watches, and the caller never acquires it.
+func watchSource(ctx context.Context, backend fsapi.FS) (string, string, error) {
+	filesystems, finder := fsapi.GetRegistry(ctx), registryapi.GetFinder(ctx)
+	if filesystems == nil || finder == nil {
+		return "", "", apierror.New(apierror.Internal, "filesystem registry unavailable")
+	}
+	volumes, err := finder.Find(attrs.Bag{".kind": "fs.directory"})
+	if err != nil {
+		return "", "", apierror.New(apierror.Unavailable, "registry cannot be read").WithRetryable(apierror.True)
+	}
+	resource := ""
+	for _, volume := range volumes {
+		if filesystem, ok := filesystems.GetFS(volume.ID.String()); ok && filesystem == backend {
+			resource = volume.ID.String()
+			break
+		}
+	}
+	unwatchable := apierror.New(apierror.Invalid, "filesystem is not a watchable volume").WithRetryable(apierror.False)
+	if resource == "" {
+		return "", "", unwatchable
+	}
+	if host, ok := backend.(fsapi.HostPathFS); ok {
+		return resource, host.RootPath(), nil
+	}
+	sources, err := finder.Find(attrs.Bag{".kind": "fs.directory", "meta.watch_for": resource})
+	if err != nil {
+		return "", "", apierror.New(apierror.Unavailable, "registry cannot be read").WithRetryable(apierror.True)
+	}
+	if len(sources) != 1 {
+		return "", "", unwatchable
+	}
+	source, ok := filesystems.GetFS(sources[0].ID.String())
+	host, hosted := source.(fsapi.HostPathFS)
+	if !ok || !hosted {
+		return "", "", unwatchable
+	}
+	return resource, host.RootPath(), nil
+}
+
 type startCommand struct {
-	context                   context.Context
-	resource, relative, topic string
-	recursive                 bool
-	owner                     pid.PID
-	epoch, id                 uint64
-	generation                *atomic.Uint64
+	context                         context.Context
+	resource, root, relative, topic string
+	recursive                       bool
+	owner                           pid.PID
+	epoch, id                       uint64
+	generation                      *atomic.Uint64
 }
 
 func (*startCommand) CmdID() dispatcher.CommandID { return watchCommand }
@@ -235,54 +292,10 @@ func eventRecord(l *lua.LState, event Event) lua.LValue {
 	return record
 }
 
-// watchRoot is the host directory behind a filesystem resource. A read-only
-// volume withholds its host directory; the host-backed fs.directory entry
-// whose meta.watch_for names that volume serves its watches, and the caller
-// never acquires it.
-func watchRoot(ctx context.Context, resource string) (string, error) {
-	filesystems := fsapi.GetRegistry(ctx)
-	if filesystems == nil {
-		return "", apierror.New(apierror.Internal, "filesystem registry unavailable")
-	}
-	filesystem, ok := filesystems.GetFS(resource)
-	if !ok {
-		return "", apierror.New(apierror.NotFound, "filesystem resource not found").WithRetryable(apierror.False)
-	}
-	if host, ok := filesystem.(fsapi.HostPathFS); ok {
-		return host.RootPath(), nil
-	}
-	unsupported := apierror.New(apierror.Invalid, "filesystem provider does not support native watches").WithRetryable(apierror.False)
-	finder := registryapi.GetFinder(ctx)
-	if finder == nil {
-		return "", unsupported
-	}
-	entries, err := finder.Find(attrs.Bag{".kind": "fs.directory", "meta.watch_for": resource})
-	if err != nil {
-		return "", apierror.New(apierror.Unavailable, "registry cannot be read").WithRetryable(apierror.True)
-	}
-	if len(entries) != 1 {
-		return "", unsupported
-	}
-	source, ok := filesystems.GetFS(entries[0].ID.String())
-	if !ok {
-		return "", apierror.New(apierror.NotFound, "watch source of filesystem resource not found").WithRetryable(apierror.False)
-	}
-	host, ok := source.(fsapi.HostPathFS)
-	if !ok {
-		return "", unsupported
-	}
-	return host.RootPath(), nil
-}
-
 func (manager *Manager) Handle(ctx context.Context, command dispatcher.Command, tag uint64, receiver dispatcher.ResultReceiver) error {
 	request, ok := command.(*startCommand)
 	if !ok {
 		return fmt.Errorf("unexpected I/O events command")
-	}
-	root, err := watchRoot(ctx, request.resource)
-	if err != nil {
-		receiver.CompleteYield(tag, nil, err)
-		return nil
 	}
 	node := relay.GetNode(ctx)
 	if node == nil {
@@ -300,7 +313,7 @@ func (manager *Manager) Handle(ctx context.Context, command dispatcher.Command, 
 		return node.Send(message)
 	}
 	go func() {
-		watch, err := manager.Start(request.context, fmt.Sprintf("%s/%d", request.owner.String(), request.epoch), request.resource, root, request.relative, request.recursive, func(event Event) error {
+		watch, err := manager.Start(request.context, fmt.Sprintf("%s/%d", request.owner.String(), request.epoch), request.resource, request.root, request.relative, request.recursive, func(event Event) error {
 			return send(payload.NewPayload(event, payload.Golang), len(event.Path)+len(event.Resource)+len(event.Operation)+64)
 		})
 		receiver.CompleteYield(tag, watch, err)

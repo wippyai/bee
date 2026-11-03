@@ -7,28 +7,28 @@ when the consumer falls behind, path containment, owner cancellation, quotas
 and shutdown.
 
 The build manifest links `ioevents.Component()` into the native component list.
-Lua entries must declare `ioevents` in `modules`. A process needs only the
-`ioevents.watch` grant for the named filesystem resource: a watch reports names
-and operations and never hands the caller the filesystem. A host-backed
-resource is watched directly. A read-only volume withholds its host directory;
-the one host-backed `fs.directory` entry whose `meta.watch_for` names that
-volume serves its watches, and the caller never acquires it.
+Lua entries must declare `ioevents` in `modules`. `ioevents.watch` takes the
+filesystem `fs.get` returned, as the runtime's archive module does, and watches
+the registry volume that handle came from: the fs.directory entry whose
+registered filesystem is the handle's backend. The caller needs the
+`ioevents.watch` grant on that volume, besides the `fs.get` grant that gave it
+the handle. A host-backed volume is watched at its root. A read-only volume
+withholds its host directory; the one host-backed `fs.directory` entry whose
+`meta.watch_for` names that volume serves its watches, and no grant lets the
+caller acquire it.
 
 An application receives this through an approved `workspace.files.watch`
-capability. The application gets one name for the folder,
-`launch.resources.volumes[<subpath>]` from `client.launch` (`bee.app:client`;
-functions read the same map from `bee.gov.binding:granted_resources`): it reads the folder with `fs.get`,
-read-only, and watches it with `ioevents.watch`. The host-backed watch source
-behind it admits no filesystem operation.
+capability. The grant installs the folder as a read-only `fs.directory` in the
+application's own namespace, named by the subpath (`docs` of `app.notes:app` is
+`app.notes:docs`), the host-backed watch source behind it, and a policy that
+admits `fs.get` and `ioevents.watch` on the folder only.
 
 ```lua
-local function main(value)
-    local launch = assert(client.launch(value))
-    local folder = launch.resources.volumes["docs"]
-    local files, err = fs.get(folder)
+local function main()
+    local files, err = fs.get("app.notes:docs")
     if not files then return nil, err end
     local watch
-    watch, err = ioevents.watch(folder, ".", {recursive = true})
+    watch, err = ioevents.watch(files, ".", {recursive = true})
     if not watch then return nil, err end
     local inbox = process.inbox()
     while true do
@@ -36,10 +36,10 @@ local function main(value)
         if selected.channel == inbox then
             if selected.value:topic() == "stop" then break end
         elseif not selected.ok then
-            watch, err = ioevents.watch(folder, ".", {recursive = true})
+            watch, err = ioevents.watch(files, ".", {recursive = true})
             if not watch then return nil, err end
         elseif selected.value.kind == "rescan" then
-            local entries, list_err = files:readdir("/" .. selected.value.path)
+            local entries, list_err = files:readdir(selected.value.path)
             if entries then
                 for entry in entries do
                     -- reconcile entry.name under selected.value.path
@@ -55,15 +55,16 @@ local function main(value)
 end
 ```
 
-`ioevents.watch(resource, path, options)` watches one directory, `path`
-relative to the resource (default `.`). With `{recursive = true}` it follows
+`ioevents.watch(files, path, options)` watches one directory, `path`
+resolved like the handle's own paths (default `.`). With `{recursive = true}` it follows
 every directory below it, including directories created or moved in later;
 symbolic links are never followed. Containment is resolved when the watch
 starts and when a directory is followed; a path component replaced by an
 outside symlink between that check and the native install is watched where it
-points. Failures return `nil, err` with a kind: `Invalid` for a bad path, a
-bad option or a file, `PermissionDenied` for a symlink escape or an unreadable
-directory, `NotFound`, `RateLimited` at a quota and `Unavailable` after
+points. Failures return `nil, err` with a kind: `Invalid` for a value that is not a
+registry volume's filesystem, a volume that is not watchable, a bad path, a
+bad option or a file, `PermissionDenied` without the watch grant, for a symlink escape or an
+unreadable directory, `NotFound`, `RateLimited` at a quota and `Unavailable` after
 shutdown or when the native backend cannot start. Messages name only paths
 relative to the resource. This provider uses host filesystem paths; native
 code and the OS account remain outside Lua permission isolation, as with Bee's

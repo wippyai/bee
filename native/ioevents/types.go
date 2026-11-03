@@ -6,6 +6,7 @@ import (
 	"github.com/wippyai/go-lua/types/io"
 	"github.com/wippyai/go-lua/types/typ"
 	"github.com/wippyai/runtime/runtime/lua/engine"
+	fsmod "github.com/wippyai/runtime/runtime/lua/modules/fs"
 )
 
 // ModuleTypes describes every exported value to the Wippy type checker.
@@ -17,6 +18,10 @@ func ModuleTypes() *io.Manifest {
 		Field("operation", typ.String).
 		Build()
 	options := typ.NewRecord().OptField("recursive", typ.Boolean).Build()
+	files, ok := fsmod.ModuleTypes().LookupType("FS")
+	if !ok {
+		panic("runtime fs.FS type is unavailable")
+	}
 	channel, ok := engine.ChannelModuleTypes().LookupType("Channel")
 	if !ok {
 		panic("runtime Channel type is unavailable")
@@ -32,7 +37,7 @@ func ModuleTypes() *io.Manifest {
 	})
 	manifest := io.NewManifest("ioevents")
 	manifest.SetExport(typ.NewInterface("ioevents", []typ.Method{
-		{Name: "watch", Type: typ.Func().Param("resource", typ.String).OptParam("path", typ.String).OptParam("options", options).Returns(typ.NewOptional(watch), typ.NewOptional(typ.LuaError)).Build()},
+		{Name: "watch", Type: typ.Func().Param("files", files).OptParam("path", typ.String).OptParam("options", options).Returns(typ.NewOptional(watch), typ.NewOptional(typ.LuaError)).Build()},
 	}))
 	return manifest
 }

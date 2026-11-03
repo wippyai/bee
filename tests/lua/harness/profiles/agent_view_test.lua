@@ -7,10 +7,12 @@ local agents = require("agents")
 local directory_view = require("directory_view")
 local protocol = require("protocol")
 local fixtures = require("fixtures")
+local message_draft = require("message_draft")
 local tty = require("tty")
 local frames = require("frames")
 type Object = {[string]: unknown}
 local function screen(rows: {string}): string return table.concat(rows, "\n") end
+local function typed(value: string): message_draft.Draft return message_draft.new(protocol.MAX_INPUT_BYTES, true, value) end
 local function conversation(activity: string, turns: {agents.Turn}, ref: string?, evidence: protocol.ActivityEvidence?): agents.Conversation
     local session_ref = ref or "bs:n:w:worker"
     local snapshot = fixtures.fixture_snapshot(session_ref, "Worker", activity, 1, nil, evidence)
@@ -28,21 +30,21 @@ local function define_tests()
                 provider = {permission_mode = "bypassPermissions"}, bee = {},
             }
             conv.details = true
-            test.contains(screen(session_view.draw(100, 25, appearance.defaults(), conv, "", "").rows), "All allowed")
+            test.contains(screen(session_view.draw(100, 25, appearance.defaults(), conv, typed(""), "").rows), "All allowed")
         end)
         test.it("reports provider-owned contexts on the session screen", function()
             local conv = conversation("idle", {})
             conv.session.snapshot.provider = "codex"
             conv.session.snapshot.terminal = false
             conv.details = true
-            test.contains(screen(session_view.draw(100, 25, appearance.defaults(), conv, "", "").rows), "Provider-owned")
+            test.contains(screen(session_view.draw(100, 25, appearance.defaults(), conv, typed(""), "").rows), "Provider-owned")
         end)
     end)
     test.describe("Peer session screen", function()
         test.it("shows its bee and disables messaging for list-only access", function()
             local conv = conversation("idle", {})
             conv.node, conv.read_only = "bee-peer", true
-            local drawn = session_view.draw(100, 25, appearance.defaults(), conv, "hello", "")
+            local drawn = session_view.draw(100, 25, appearance.defaults(), conv, typed("hello"), "")
             test.contains(screen(drawn.rows), "bee-peer")
             test.contains(screen(drawn.rows), "Read-only")
             for _, hit in ipairs(drawn.hits) do test.is_true(hit.kind ~= "send") end
@@ -148,7 +150,7 @@ local function define_tests()
             test.is_true(listed:find("agy · unsafe agy", 1, true) ~= nil)
             local conv = conversation("idle", {}, "bs:n:w:unsafe")
             conv.title, conv.session.snapshot.title, conv.session.snapshot.provider = "unsafe agy", "unsafe agy", "agy"
-            local opened = screen(session_view.draw(120, 36, appearance.defaults(), conv, "", "", {row}).rows)
+            local opened = screen(session_view.draw(120, 36, appearance.defaults(), conv, typed(""), "", {row}).rows)
             test.is_true(opened:find("SESSION", 1, true) ~= nil)
             local _, count = opened:gsub("agy · unsafe agy", "")
             test.eq(count, 2)
@@ -156,7 +158,7 @@ local function define_tests()
         test.it("selects another sidebar session on a right click without switching the open session and offers its menu", function()
             local row = fixtures.fixture_snapshot("bs:n:w:other", "Other agent", "idle", 0)
             local conv = conversation("idle", {}, "bs:n:w:unsafe")
-            local drawn = session_view.draw(140, 36, appearance.defaults(), conv, "", "", {row})
+            local drawn = session_view.draw(140, 36, appearance.defaults(), conv, typed(""), "", {row})
             local menu = frames.menu()
             frames.render(drawn, menu, appearance.defaults())
             local target: frames.Hit? = nil
@@ -169,7 +171,7 @@ local function define_tests()
             local chosen = assert(frames.hit(drawn.hits, assert(event.x), assert(event.y)))
             test.eq(chosen.kind, "sidebar_select")
             test.eq(chosen.key, "bs:n:w:other")
-            local again = session_view.draw(140, 36, appearance.defaults(), conv, "", "", {row}, "bs:n:w:other")
+            local again = session_view.draw(140, 36, appearance.defaults(), conv, typed(""), "", {row}, "bs:n:w:other")
             frames.render(again, menu, appearance.defaults())
             local shown = screen(again.rows)
             test.contains(shown, "Delete…")
@@ -186,7 +188,7 @@ local function define_tests()
             local cause = 'containers/create: context deadline exceeded: daemon create refused'
             local conv = conversation("idle", {{input = "start Docker session", state = "failed", text = "failed start: " .. cause,
                 work = fixtures.fixture_work("bw:docker-start", {})}})
-            local shown = screen(session_view.draw(120, 24, appearance.defaults(), conv, "", "").rows)
+            local shown = screen(session_view.draw(120, 24, appearance.defaults(), conv, typed(""), "").rows)
             test.is_true(shown:find(cause, 1, true) ~= nil)
             test.is_true(shown:find("failed start:", 1, true) ~= nil)
             test.is_nil((shown:find("exited", 1, true)))
@@ -201,7 +203,7 @@ local function define_tests()
             local listing = directory_view.draw(120, 36, appearance.defaults(), {item}, 1, "", false)
             test.is_true(screen(listing.rows):find("stalled", 1, true) ~= nil)
 
-            local detail = session_view.draw(80, 16, appearance.defaults(), conversation("stalled", {}, nil, evidence), "", "")
+            local detail = session_view.draw(80, 16, appearance.defaults(), conversation("stalled", {}, nil, evidence), typed(""), "")
             test.is_true(screen(detail.rows):find("No progress for 51000 ms · bt:n:w:t1", 1, true) ~= nil)
         end)
         test.it("renders addressable stopped sessions and stable help at 120 and 80", function()
@@ -226,7 +228,7 @@ local function define_tests()
     test.describe("Agent session screen", function()
         test.it("explains CLI write refusals without promising an approval", function()
             local conv = conversation("idle", {{input = "write a file", state = "ready", text = "The workspace is read-only.", work = fixtures.fixture_work("bw:1", {})}})
-            local shown = table.concat(session_view.draw(80, 24, appearance.defaults(), conv, "", "").rows, "\n")
+            local shown = table.concat(session_view.draw(80, 24, appearance.defaults(), conv, typed(""), "").rows, "\n")
             test.is_true(shown:find("Choose a writable profile or folder", 1, true) ~= nil)
             test.is_true(shown:find("CLI refusals are not Bee approvals", 1, true) ~= nil)
         end)
@@ -241,7 +243,7 @@ local function define_tests()
             local conv = conversation("idle", {{input = "hello", state = "ready", text = "done", work = fixtures.fixture_work("bw:1", {})}})
             conv.lifecycle = "closed"
             for _, size in ipairs({{120, 36}, {80, 24}}) do
-                local shown = session_view.draw(size[1], size[2], appearance.defaults(), conv, "", "")
+                local shown = session_view.draw(size[1], size[2], appearance.defaults(), conv, typed(""), "")
                 test.is_true(screen(shown.rows):find("Start agent", 1, true) ~= nil)
                 test.is_true(screen(shown.rows):find("Closed · history remains available", 1, true) ~= nil)
                 test.is_true(screen(shown.rows):find("done", 1, true) ~= nil)
@@ -252,7 +254,7 @@ local function define_tests()
                 {input = "hello", state = "ready", text = "line one\nline two", work = fixtures.fixture_work("bw:1", {})},
                 {input = "next", state = "queued", text = "", work = fixtures.fixture_work("bw:1", {})},
             })
-            local shown = session_view.draw(80, 16, appearance.defaults(), conv, "draft", "")
+            local shown = session_view.draw(80, 16, appearance.defaults(), conv, typed("draft"), "")
             local text = screen(shown.rows)
             test.is_true(text:find("working · 1 queued", 1, true) ~= nil)
             test.is_true(text:find("> hello", 1, true) ~= nil)
@@ -263,7 +265,7 @@ local function define_tests()
         test.it("keeps conversation identity, stop control and help in rendered frames", function()
             for _, size in ipairs({{120, 36}, {80, 24}}) do
                 local shown = session_view.draw(size[1], size[2], appearance.defaults(), conversation("working", {
-                    {input = "Fix API", state = "working", text = "", work = fixtures.fixture_work("bw:1", {})}}), "next", "Working")
+                    {input = "Fix API", state = "working", text = "", work = fixtures.fixture_work("bw:1", {})}}), typed("next"), "Working")
                 test.eq(#shown.rows, size[2])
                 for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), size[1]) end
                 test.is_true(screen(shown.rows):find("Conversation", 1, true) ~= nil)
@@ -284,13 +286,13 @@ local function define_tests()
             local decoded = protocol.decode_snapshot({session = "bs:n:w:worker", revision = 1, incarnation = 1, title = "Fix API", lifecycle = "active", activity = "blocked", queue_count = 0,
                 execution = {state = "absent", evidence_at = "2026-09-30T12:00:00.000Z", stale = false}, effective_limits = {}, continuity = {mode = "fresh"}, actions = {}})
             rows[1] = assert(decoded)
-            local shown = session_view.draw(120, 36, appearance.defaults(), conv, "", "", rows)
+            local shown = session_view.draw(120, 36, appearance.defaults(), conv, typed(""), "", rows)
             test.is_true(screen(shown.rows):find("blocked", 1, true) ~= nil)
         end)
         test.it("shows the session rail on a wide conversation and preserves mouse coordinates", function()
             local conv = conversation("working", {{input = "fix", state = "working", text = "", work = fixtures.fixture_work("bw:1", {})}}, "bs:n:w:s")
             local rows = {fixtures.fixture_snapshot("bs:n:w:s", "Fix API", "idle", 0), fixtures.fixture_snapshot("bs:n:w:other", "Review docs", "idle", 0)}
-            local shown = session_view.draw(120, 36, appearance.defaults(), conv, "draft", "", rows)
+            local shown = session_view.draw(120, 36, appearance.defaults(), conv, typed("draft"), "", rows)
             test.eq(#shown.rows, 36)
             for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), 120) end
             test.is_true(screen(shown.rows):find("Review docs", 1, true) ~= nil)
@@ -309,8 +311,8 @@ local function define_tests()
             local screens = {
                 picker_view.draw(80, 24, appearance.defaults(), listing, 1, "", false, false),
                 directory_view.draw(80, 24, appearance.defaults(), sessions, 1, "", false),
-                session_view.draw(80, 24, appearance.defaults(), conv, "draft", ""),
-                session_view.draw(120, 24, appearance.defaults(), conv, "draft", "", sessions),
+                session_view.draw(80, 24, appearance.defaults(), conv, typed("draft"), ""),
+                session_view.draw(120, 24, appearance.defaults(), conv, typed("draft"), "", sessions),
             }
             for _, shown in ipairs(screens) do
                 local controls = assert(shown.controls)
@@ -341,35 +343,29 @@ local function define_tests()
             test.eq(lines[2].text, "  " .. string.rep("x", 10))
             test.eq(lines[4].text, "  " .. string.rep("x", 5))
         end)
-        test.it("edits the draft by character and clears it", function()
-            local draft = ""
-            draft = session_view.edit(draft, {type = "key", action = "press", key = "h", key_type = "rune"})
-            draft = session_view.edit(draft, {type = "key", action = "press", key = "é", key_type = "rune"})
-            test.eq(draft, "hé")
-            draft = session_view.edit(draft, {type = "key", action = "press", key = "", key_type = "backspace"})
-            test.eq(draft, "h")
-            draft = session_view.edit(draft, {type = "paste", text = "ello"})
-            test.eq(draft, "hello")
-            draft = session_view.edit(draft, {type = "key", action = "press", key = "u", key_type = "rune", ctrl = true})
-            test.eq(draft, "")
-        end)
-        test.it("takes a paste up to the session input bound and refuses a larger one, saying why and how big", function()
-            local long = string.rep("line of pasted text\n", 400)
-            local draft, refused = session_view.edit("", {type = "paste", text = long})
-            test.eq(draft, long)
-            test.is_nil(refused)
-            local full = string.rep("x", protocol.MAX_INPUT_BYTES - 2)
-            local kept, reason = session_view.edit(full, {type = "paste", text = "abc"})
-            test.eq(kept, full)
-            test.not_nil(reason)
-            test.contains(tostring(reason), "3 bytes")
-            test.contains(tostring(reason), tostring(protocol.MAX_INPUT_BYTES))
-            local typed, typed_reason = session_view.edit(string.rep("x", protocol.MAX_INPUT_BYTES), {type = "key", action = "press", key = "y", key_type = "rune"})
-            test.eq(#typed, protocol.MAX_INPUT_BYTES)
-            test.not_nil(typed_reason)
-            local name, name_reason = session_view.edit("abc", {type = "paste", text = "defg"}, 5)
-            test.eq(name, "abc")
-            test.contains(tostring(name_reason), "5")
+        test.it("shows a long paste in the draft as its chip and its text read-only once opened", function()
+            local rows: {string} = {}
+            for index = 1, 200 do rows[index] = "pasted log line " .. tostring(index) end
+            local log = table.concat(rows, "\n") .. "\n"
+            local draft = typed("check ")
+            message_draft.edit(draft, {type = "paste", text = log})
+            local conv = conversation("idle", {})
+            local drawn = screen(session_view.draw(120, 30, appearance.defaults(), conv, draft, "").rows)
+            test.contains(drawn, "> check [Pasted text #1 · 200 lines · ")
+            test.is_nil((drawn:find("pasted log line", 1, true)))
+            message_draft.edit(draft, {type = "key", action = "press", key = "", key_type = "left"})
+            test.contains(screen(session_view.draw(120, 30, appearance.defaults(), conv, draft, "").rows), "Enter shows pasted text #1")
+            test.is_true(message_draft.open(draft))
+            local opened = screen(session_view.draw(120, 30, appearance.defaults(), conv, draft, "").rows)
+            test.contains(opened, "Pasted text #1 · 200 lines")
+            test.contains(opened, "read-only")
+            test.contains(opened, "pasted log line 1 ")
+            test.is_nil((opened:find("pasted log line 30", 1, true)))
+            message_draft.preview_input(draft, {type = "key", action = "press", key = "", key_type = "pgdown"})
+            local scrolled = screen(session_view.draw(120, 30, appearance.defaults(), conv, draft, "").rows)
+            test.contains(scrolled, "pasted log line 11")
+            test.is_nil((scrolled:find("pasted log line 10 ", 1, true)))
+            test.eq(message_draft.text(draft), "check " .. log)
         end)
     end)
 end

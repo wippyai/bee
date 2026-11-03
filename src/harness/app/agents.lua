@@ -202,9 +202,10 @@ function M.removal_message(title: string, lifecycle: string, shared: boolean): s
     return "Delete " .. title .. " and its history?\nEnter deletes · Esc cancels" .. stopped
 end
 
--- rename_message shows the name being typed for a session, then its keys.
-function M.rename_message(title: string, name: string): string
-    return "Rename " .. title .. ": " .. name .. "▏\nEnter saves · an empty name returns the automatic title · Esc keeps the name"
+-- rename_message shows the name line being typed for a session, with its
+-- cursor, then its keys.
+function M.rename_message(title: string, line: string): string
+    return "Rename " .. title .. ": " .. line .. "\nEnter saves · an empty name returns the automatic title · Esc keeps the name"
 end
 
 local function render(value: unknown): string

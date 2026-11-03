@@ -11,6 +11,7 @@ local text = require("text")
 local agents = require("agents")
 local directory_view = require("directory_view")
 local protocol = require("protocol")
+local message_draft = require("message_draft")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 -- The footer names only keys the buttons above it do not show; help lists
@@ -68,35 +69,6 @@ local function wrap(value: string, room: integer): {string}
     return out
 end
 
--- The draft after one input event: printable text and paste append, Backspace
--- removes one character, Ctrl+U clears. Anything else leaves it unchanged.
--- limit is the most bytes the draft holds, by default what one session input
--- carries; an insertion past it leaves the draft as it was and returns why.
-function M.edit(draft: string, event: {[string]: unknown}, limit: integer?): (string, string?)
-    local bound = limit or protocol.MAX_INPUT_BYTES
-    local value = draft
-    if event.type == "paste" then
-        value = draft .. tostring(event.text)
-    elseif event.type == "key" and event.action == "press" then
-        local name, key = tostring(event.key_type), tostring(event.key)
-        if event.ctrl == true then
-            if key == "u" then value = "" end
-        elseif name == "backspace" or name == "backspace2" then
-            value = draft:gsub("[^\128-\191][\128-\191]*$", "")
-        elseif name == "space" and event.alt ~= true then
-            value = draft .. " "
-        elseif event.alt ~= true and key ~= "" and not key:find("%c") then
-            value = draft .. key
-        end
-    end
-    if #value > bound then
-        local added = #value - #draft
-        return draft, (event.type == "paste" and "Paste" or "Typing") .. " of " .. tostring(added) .. " bytes refused: the draft holds "
-            .. tostring(#draft) .. " of at most " .. tostring(bound) .. " bytes"
-    end
-    return value, nil
-end
-
 -- Transcript rows: each input, then its state or result.
 function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
     local lines: {frame.LogLine} = {}
@@ -135,7 +107,7 @@ function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
 end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, conv: agents.Conversation,
-    draft: string, status: string, sidebar: {protocol.SessionSnapshot}?, marked: string?): Frame
+    draft: message_draft.Draft, status: string, sidebar: {protocol.SessionSnapshot}?, marked: string?): Frame
     if sidebar and #sidebar > 0 and width >= 120 then
         local rail_width = 26
         local rail = frame.new(rail_width, height, preferences)
@@ -181,8 +153,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local input_row = height - 3
     local last = input_row - 1
     local lines = M.lines(conv, math.floor(math.max(1, width - 2)))
-    if height >= 7 then frame.line(painter, 3, "Conversation · " .. (conv.session.snapshot.provider or "Agent"), theme.muted) end
-    if conv.details then
+    local shown = draft.shown
+    if shown then
+        -- An opened chip shows its pasted text, read-only, in place of the
+        -- conversation.
+        lines = {}
+        for _, row in ipairs(wrap((shown.text:gsub("\n$", "")), width - 2)) do lines[#lines + 1] = {text = row} end
+        if height >= 7 then frame.line(painter, 3, message_draft.describe(shown) .. " · read-only", theme.muted) end
+    elseif height >= 7 then frame.line(painter, 3, "Conversation · " .. (conv.session.snapshot.provider or "Agent"), theme.muted) end
+    if conv.details and not shown then
         lines = {{text = "Session: " .. conv.session:ref()}, {text = "Definition: " .. (conv.session.snapshot.definition or "Unavailable")},
             {text = "Workspace: " .. (conv.session.snapshot.workspace or "Unavailable")}}
         for _, row in ipairs(wrap(M.permission_status(conv.session.snapshot), width - 4)) do
@@ -198,13 +177,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if #lines == 0 and height >= 9 then
         frame.empty(painter, 4, "Ready for work", "Type below, then Enter sends work to this session")
     end
+    local offset = math.floor(math.max(0, #lines - (last - 4)))
+    if shown then offset = math.floor(math.min(draft.offset, offset)) end
     if last >= 3 then
-        frame.log(painter, 4, last - 1, {lines = lines, selected = 0, offset = math.floor(math.max(0, #lines - (last - 4))), focused = false})
+        frame.log(painter, 4, last - 1, {lines = lines, selected = 0, offset = offset, focused = false})
     end
     if height >= 5 then
-        frame.line(painter, input_row, conv.read_only and "Read-only · messaging is not allowed by this bee" or conv.lifecycle == "closed" and "Closed · history remains available" or "> " .. text.bound(draft, 512) .. "▏", theme.text)
+        frame.line(painter, input_row, conv.read_only and "Read-only · messaging is not allowed by this bee" or conv.lifecycle == "closed" and "Closed · history remains available" or "> " .. message_draft.line(draft, width - 4), theme.text)
         footer_buttons = {
-            {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start agent" or "Send", enabled = not conv.read_only and (conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active"), primary = true},
+            {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start agent" or "Send", enabled = not conv.read_only and (conv.lifecycle == "closed" or not message_draft.empty(draft) and conv.lifecycle == "active"), primary = true},
             {kind = "back", key = "Esc", label = "Sessions", enabled = true},
             {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true, more = true},
             {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = (not conv.node or conv.peer_scope == "open") and agents.pending(conv)},
@@ -214,6 +195,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         }
     end
     local message = status ~= "" and status or conv.notice
+    local selected = draft.shown == nil and message == "" and message_draft.selected(draft)
+    if shown then message = "Esc or Enter closes the pasted text · Up, Down, PgUp and PgDn scroll it"
+    elseif selected then message = "Enter shows pasted text #" .. tostring(selected.number) .. " · Delete removes it" end
     if message == "" and conv.activity == "stalled" and conv.activity_evidence then
         message = "No progress for " .. tostring(conv.activity_evidence.quiet_for_ms) .. " ms · " .. conv.activity_evidence.turn
     end

@@ -17,6 +17,7 @@ local agents = require("agents")
 local directory_reader = require("directory")
 local view = require("view")
 local session_view = require("session_view")
+local message_draft = require("message_draft")
 local directory_view = require("directory_view")
 local allowance_form = require("allowance_form")
 local sessions_protocol = require("sessions_protocol")
@@ -92,7 +93,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local show_closed = false
     local clicks = frame.clicks()
     local conversation: agents.Conversation? = nil
-    local draft = ""
+    local draft = message_draft.new(sessions_protocol.MAX_INPUT_BYTES, true)
     local session_busy = false
     local session_frame: session_view.Frame = {rows = {}, hits = {}}
     local menu = frame.menu()
@@ -109,7 +110,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local remove_key: string? = nil
     -- renaming is the session whose name the person is typing; listed says
     -- it was chosen in the session list rather than the open session.
-    local renaming: {session: string, node: string?, title: string, name: string, listed: boolean}? = nil
+    local renaming: {session: string, node: string?, title: string, name: message_draft.Draft, listed: boolean}? = nil
     -- removed is set once the open session is removed; the picker then
     -- returns to the session list.
     local removed = false
@@ -211,7 +212,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     end
     local function leave_session()
         client.review(launch, nil)
-        conversation, draft, status, session_busy = nil, "", "", false
+        conversation, status, session_busy = nil, "", false
+        message_draft.clear(draft)
         queued_tasks, queued_text = {}, nil
         catalog_open = false
         client.title(launch, "Agents")
@@ -233,13 +235,13 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     end
     local function submit()
         if conversation and conversation.lifecycle ~= "active" then status = "This session is closed to new work. Esc returns to Sessions."; dirty = true; return end
-        local text = draft
+        local text = message_draft.text(draft)
         if text == "" or queued_text == text then return end
         queued_text = text
         start_task(function(current: agents.Conversation)
             queued_text = nil
             if agents.submit(current, text, function(): string return assert(uuid.v7()) end) then
-                if draft == text then draft = "" end
+                if message_draft.text(draft) == text then message_draft.clear(draft) end
                 agents.refresh(current)
             end
         end)
@@ -281,7 +283,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local function start_rename(entry: sessions_protocol.SessionSnapshot?, listed: boolean)
         if not entry then return end
         if entry.node and entry.peer_scope ~= "open" then status = "Session control is not allowed by this bee"; dirty = true; return end
-        renaming = {session = entry.session, node = entry.node, title = entry.title, name = entry.name or "", listed = listed}
+        renaming = {session = entry.session, node = entry.node, title = entry.title, name = message_draft.new(sessions_protocol.MAX_NAME_BYTES, false, entry.name), listed = listed}
         dirty = true
     end
     local function rename_input(data: {[string]: unknown})
@@ -290,7 +292,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         if data.type == "key" and data.action == "press" and (data.key_type == "esc" or data.key_type == "escape") then renaming = nil
         elseif data.type == "key" and data.action == "press" and data.key_type == "enter" then
             renaming = nil
-            local name: string = target.name
+            local name = message_draft.text(target.name)
             if target.listed then
                 local listed: sessions_protocol.SessionSnapshot? = nil
                 for _, row in ipairs(directory) do if row.session == target.session and row.node == target.node then listed = row end end
@@ -304,8 +306,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 end)
             end
         else
-            local name, refused = session_view.edit(target.name, data, sessions_protocol.MAX_NAME_BYTES)
-            target.name = name
+            local _, refused = message_draft.edit(target.name, data)
             if refused then status = refused end
         end
         dirty = true
@@ -392,12 +393,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 rows = edit_frame.rows
             elseif conversation then
                 client.review(launch, conversation.review)
-                local line = renaming and agents.rename_message(renaming.title, renaming.name) or confirmation.active(review) and prompt or status
+                local line = renaming and agents.rename_message(renaming.title, message_draft.line(renaming.name, sessions_protocol.MAX_NAME_BYTES)) or confirmation.active(review) and prompt or status
                 session_frame = session_view.draw(width, height, preferences, conversation, draft, line, directory, sidebar_mark)
                 frame.render(session_frame, menu, preferences)
                 rows = session_frame.rows
             elseif not catalog_open then
-                local line = renaming and agents.rename_message(renaming.title, renaming.name) or confirmation.active(review) and prompt or status
+                local line = renaming and agents.rename_message(renaming.title, message_draft.line(renaming.name, sessions_protocol.MAX_NAME_BYTES)) or confirmation.active(review) and prompt or status
                 drawn = directory_view.draw(width, height, preferences, directory, selected, line, filtered, workspace_names, show_closed)
                 frame.render(drawn, menu, preferences)
                 rows = drawn.rows
@@ -498,7 +499,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         goto next_iteration
                     end
                     open_target = ""
-                    conversation, draft, status, close_key, session_busy = result.conversation, "", "", nil, false
+                    conversation, status, close_key, session_busy = result.conversation, "", nil, false
+                    message_draft.clear(draft)
                     local ref = result.conversation.session:ref()
                     remembered[ref] = result.conversation
                     local found = false
@@ -595,7 +597,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     dirty = true
                 elseif renaming and not catalog_open then rename_input(data)
                 elseif conversation then
-                    if data.type == "key" and data.action == "press" and (data.key_type == "escape" or data.key_type == "esc") then
+                    if message_draft.preview_input(draft, data) then dirty = true
+                    elseif data.type == "key" and data.action == "press" and (data.key_type == "escape" or data.key_type == "esc") then
                         if confirmation.active(review) then confirmation.cancel(review); status = ""; dirty = true else leave_session() end
                     elseif data.type == "key" and data.action == "press" and data.key_type == "enter" then
                         if confirmation.matches(review, "stop") then
@@ -606,6 +609,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif confirmation.matches(review, "close_listed") then if accept_control("enter") then status = ""; close_listed(directory[selected]) end
                         elseif confirmation.matches(review, "remove_listed") then if accept_control("enter") then status = ""; remove_listed(directory[selected]) end
                         elseif conversation.lifecycle == "closed" then start_from_session()
+                        elseif message_draft.open(draft) then dirty = true
                         else submit() end
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then conversation.details = not conversation.details; dirty = true
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "x" then ask_control("close", "Close session? Accepted work finishes; new work is refused. Enter confirms · Esc keeps it")
@@ -632,9 +636,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "stop_work" then ask_control("stop", "Stop current work? Enter confirms · Esc keeps it") end
                     else
                         if not conversation.read_only then
-                            local next_draft, refused = session_view.edit(draft, data)
+                            local changed, refused = message_draft.edit(draft, data)
                             if refused then status = refused; dirty = true end
-                            if next_draft ~= draft then draft = next_draft; dirty = true end
+                            if changed then dirty = true end
                         end
                     end
                 elseif not catalog_open then

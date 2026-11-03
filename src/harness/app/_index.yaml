@@ -152,6 +152,11 @@ entries:
     appearance: bee.ui:appearance
     text: bee.ui:text
     agents: bee.harness.app:agents
+- name: message_draft
+  kind: library.lua
+  source: file://message_draft.lua
+  modules:
+  - tty
 - name: session_view
   kind: library.lua
   source: file://session_view.lua
@@ -159,6 +164,7 @@ entries:
   - tty
   - registry
   imports:
+    message_draft: bee.harness.app:message_draft
     directory_view: bee.harness.app:directory_view
     descriptor: bee.drivers.descriptor:descriptor
     preferences: bee.drivers.descriptor:effective
@@ -194,6 +200,7 @@ entries:
     session_view: bee.harness.app:session_view
     directory_view: bee.harness.app:directory_view
     sessions_protocol: bee.threads.sessions.types:protocol
+    message_draft: bee.harness.app:message_draft
     view: bee.harness.app:picker_view
     text: bee.ui:text
     forms: bee.harness.app:profile_form

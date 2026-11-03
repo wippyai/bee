@@ -110,3 +110,13 @@ entries:
     bounds: bee.drivers.values:bounds
     direct: bee.harness.app:direct
     admission: bee.harness.launch:admission
+- name: message_draft_test
+  kind: function.lua
+  source: file://message_draft_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [tty]
+  imports:
+    test: wippy.test:test
+    message_draft: bee.harness.app:message_draft
+    protocol: bee.threads.sessions.types:protocol

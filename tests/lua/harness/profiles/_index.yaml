@@ -143,6 +143,7 @@ entries:
     session_view: bee.harness.app:session_view
     agents: bee.harness.app:agents
     appearance: bee.ui:appearance
+    message_draft: bee.harness.app:message_draft
 - name: view_test
   kind: function.lua
   source: file://view_test.lua

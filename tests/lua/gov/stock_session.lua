@@ -39,7 +39,6 @@ local listener_open = false
 function M.open(workspace: string, label: string): Session
     local decoded = assert(launch_policy.decode(STOCK_POLICY, assert(registry.get(STOCK_POLICY)),
         function(_ref: string): (string?, string?) return "/usr/bin/claude-fixture", nil end))
-    local surface = assert(launch_policy.with_workspace(decoded.gateway_surface, workspace))
     local subject = "bee.tests.session_" .. (label:gsub("-", "_"))
     local address = tostring((assert(bounds.object((assert(registry.get("bee.gateway.api:gateway_endpoint"))).data))).address)
     if not listener_open then
@@ -61,7 +60,7 @@ function M.open(workspace: string, label: string): Session
             placement_attempt_id = label .. "-placement", plan_digest = "stock"}})
     local admitted = gateway_call(subject, workspace, "bee.gateway.binding:admit", {subject = subject, action_id = action_id,
         attempt_id = attempt_id, thread_id = thread.thread_id, owner_incarnation = 1, carrier_epoch = 1,
-        tools = decoded.gateway_tools, hooks = {}, surface = surface, policy_ref = STOCK_POLICY, workspace_id = workspace})
+        tools = decoded.gateway_tools, hooks = {}, surface = decoded.gateway_surface, policy_ref = STOCK_POLICY, workspace_id = workspace})
     local binding_id = tostring((assert(bounds.object(admitted.binding))).binding_id)
     local authorized = gateway_call(subject, workspace, "bee.gateway.binding:authorize_materialization",
         {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id})

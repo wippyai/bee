@@ -75,21 +75,6 @@
     "reason": "Describes an immutable bound, scope, role or host-selected value."
   },
   {
-    "path": "src/harness/carrier/machine.lua",
-    "text": "-- binding surface's fixed context: a bound tool reads which workspace it",
-    "reason": "Describes an immutable bound, scope, role or host-selected value."
-  },
-  {
-    "path": "src/harness/carrier/machine.lua",
-    "text": "-- still travels as host-selected fixed context.",
-    "reason": "Describes an immutable bound, scope, role or host-selected value."
-  },
-  {
-    "path": "src/harness/carrier/policy.lua",
-    "text": "-- gateway surface's fixed context. A bound subject reads it as host-selected",
-    "reason": "Describes an immutable bound, scope, role or host-selected value."
-  },
-  {
     "path": "src/harness/launch/admission.lua",
     "text": "-- legacy routes without an agent reference.",
     "reason": "Admission still accepts routes without an agent reference."

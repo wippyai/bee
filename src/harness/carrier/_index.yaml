@@ -89,7 +89,6 @@ entries:
   - json
   imports:
     bounds: bee.drivers.values:bounds
-    policy: bee.harness.carrier:policy
     checkpoint: bee.harness.carrier:checkpoint
     settle: bee.harness.carrier:settle
     stream_json: bee.drivers.transport:stream_json

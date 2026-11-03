@@ -8,7 +8,6 @@ local checkpoint_types = require("checkpoint_types")
 local json = require("json")
 local bounds = require("bounds")
 local record_bounds = require("record_bounds")
-local policy = require("policy")
 local checkpoint = require("checkpoint")
 local prestart = require("prestart")
 local settle = require("settle")
@@ -152,20 +151,9 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
     local gateway = plan.gateway
     if not gateway then return nil, nil end
     local request = plan.request
-    -- The admitted attempt's workspace is host-selected, so it travels with the
-    -- binding surface's fixed context: a bound tool reads which workspace it
-    -- belongs to and no tool argument can replace a host key.
+    -- The admitted attempt's workspace is host-selected and travels as the
+    -- binding's workspace: every call the bound subject makes carries it.
     local surface_value = plan.policy.gateway_surface
-    if request.workspace_id then
-        -- A policy may declare no surface; the binding then admits with the
-        -- same default surface gateway.admit would build, so the workspace
-        -- still travels as host-selected fixed context.
-        if not surface_value then
-            surface_value = {tools = {}, traits = {}, base_tools = gateway.tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
-        end
-        surface_value = policy.with_workspace(surface_value, request.workspace_id)
-        if not surface_value then return nil, "gateway admit: cannot compose the launch workspace" end
-    end
     if request.preferences then
         local composed: Object = {}
         for key, value in pairs(surface_value or {tools = {}, traits = {}, base_tools = gateway.tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}) do composed[key] = value end

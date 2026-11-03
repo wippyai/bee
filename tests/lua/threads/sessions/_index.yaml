@@ -438,6 +438,13 @@ entries:
     bounds: bee.drivers.values:bounds
     harness: bee.tests.threads:harness
     session_tools: bee.gateway.catalog:session_tools
+- name: window_profile_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.harness.profiles.read, bee.harness.profiles.write, bee.approvals.decide, bee.approvals.request, bee.approvals.consume]
+    resources: [aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]
+    effect: allow
 - name: driver_window_contract_test
   kind: function.lua
   source: file://driver_window_contract_test.lua
@@ -445,7 +452,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, registry]
   security:
-    policies: [bee.tests.harness:apply_test_policy, bee.placement.native.security:placement_exec_policy]
+    policies: [bee.tests.harness:apply_test_policy, bee.placement.native.security:placement_exec_policy, bee.tests.threads.sessions:window_profile_test_policy]
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness

@@ -115,6 +115,44 @@ local function define_tests()
                 end, "provider")
             end)
         end
+        test.it("agy answers a permission hook under the saved profile its window was admitted with", function()
+            muse.with_host("agy", function(_: admission.Plan?)
+            local raw_saved, save_error = funcs.call("bee.harness.binding:call", {operation = "put", workspace_id = WORKSPACE,
+                profile_id = "window-saved-profile", expected_revision = 0, idempotency_key = harness.key(),
+                profile = {schema_revision = "bee.agent-profile@3", name = "Saved Agy window",
+                    definition_ref = "bee.driver.agy.profiles:default_window", driver_binding_ref = "bee.drivers.agy.binding:binding",
+                    provider = {}, bee = {permission_answers = "provider"}, placement = {kind = "native", home = "machine"}}})
+            if save_error then error(tostring(save_error)) end
+            local saved = assert(bounds.object(raw_saved))
+            test.eq(saved.ok, true, tostring(saved.error and assert(bounds.object(saved.error)).message))
+            local plan, refused = admission.resolve("bee.driver.agy.profiles:default_window", "window", WORKSPACE, "window-saved-profile", 1)
+            assert(plan, tostring(refused and refused.error and refused.error.message))
+            test.eq(plan.permission_answers, "provider")
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(),
+                route = {delivery = "hook", provider = "agy", definition = plan.definition_ref, plan_digest = plan.plan_digest,
+                    saved_profile_id = "window-saved-profile", saved_profile_revision = 1}}))
+            local stored = harness.value(journal:call("session_describe", {session = opened.session}))
+            local attempt = "attempt:" .. string.rep("7", 64)
+            local action = "action:" .. string.rep("7", 64)
+            harness.value(journal:call("session_attach", {session = opened.session, attempt_id = attempt, operation_key = harness.key()}))
+            local binding_id = muse.binding("agy", tostring(opened.session), tostring(stored.thread_ref), attempt, action)
+            local raw, err = funcs.new():with_scope(security.new_scope({})):with_actor(assert(security.new_actor("gateway"))):call(
+                "bee.tests.threads.sessions:hook_boundary_probe", {binding = {binding_id = binding_id, subject = opened.session,
+                    action_id = action, attempt_id = attempt, thread_id = stored.thread_ref, workspace_id = WORKSPACE},
+                    outcome = {event = "PermissionRequest", event_id = harness.key()}, payload = muse.capture("agy", "PermissionRequest"),
+                    transport = "hook_http"})
+            if err then error(tostring(err)) end
+            local reply = assert(bounds.object(raw))
+            test.is_nil(reply.error)
+            test.eq(reply.ok, true)
+            local value = assert(bounds.object(reply.value))
+            local output = bounds.object(value.hookSpecificOutput)
+            local decision = output and bounds.object(output.decision)
+            test.is_nil(decision and decision.message)
+            test.eq(next(value), nil, "the provider answers the permission; Bee adds no decision")
+            end, "provider")
+        end)
         for _, provider in ipairs({"agy", "claude"}) do
             test.it(provider .. " is told a refused Bee permission answer as a denial with its reason", function()
                 muse.with_host(provider, function(admitted: admission.Plan?)

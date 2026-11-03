@@ -285,30 +285,6 @@ local function define_tests()
             test.is_nil(policy.decode("test:policy", raw))
         end)
 
-        test.it("composes the host-selected workspace into the binding surface fixed context", function()
-            local source: Entry = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {project = "one"}, dynamic_keys = {},
-                access = {policy = "research", traits = {"research:read"}}}
-            local composed = policy.with_workspace(source, "workspace-one")
-            if not composed then error("compose surface") end
-            local fixed = assert(bounds.object(composed.fixed_context))
-            test.eq(fixed["bee.workspace_id"], "workspace-one")
-            test.eq(fixed.project, "one")
-            -- The approval workspace is the binding's, so access carries none.
-            test.is_nil(assert(bounds.object(composed.access)).workspace_id)
-            test.eq(assert(bounds.object(composed.access)).policy, "research")
-            -- The helper copies: a launch policy's surface is host-owned and shared.
-            test.is_nil(assert(bounds.object(source.fixed_context))["bee.workspace_id"])
-            local absent = policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, dynamic_keys = {}}, "workspace-two")
-            if not absent then error("compose surface without context") end
-            test.eq(assert(bounds.object(absent.fixed_context))["bee.workspace_id"], "workspace-two")
-            test.is_nil(policy.with_workspace(nil, "workspace-one"))
-            -- A malformed declared context refuses rather than silently dropping it.
-            test.is_nil(policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = "broken", dynamic_keys = {}}, "workspace-one"))
-            -- Access is the gateway's to decode; it passes through untouched and a malformed one is refused at admission.
-            local carried = policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {}, access = "broken"}, "workspace-one")
-            if not carried then error("compose surface with undecoded access") end
-            test.eq(carried.access, "broken")
-        end)
         test.it("measures hooks independently from the MCP tool grant", function()
             local raw = entry({claude = "/bin/claude"})
             local data = assert(bounds.object(raw.data))

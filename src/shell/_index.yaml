@@ -49,6 +49,10 @@ entries:
   kind: library.lua
   source: file://selection.lua
   modules: [tty]
+- name: hints
+  kind: library.lua
+  source: file://hints.lua
+  modules: [tty]
 - name: workspace_menu
   kind: library.lua
   source: file://workspace_menu.lua

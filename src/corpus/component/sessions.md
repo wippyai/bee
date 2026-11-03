@@ -17,7 +17,7 @@ placement suspends the session and marks unfinished Work uncertain.
 
 | Entry | Responsibility |
 |---|---|
-| `bee.threads.sessions:contract` | Methods `open`, `run`, `send`, `await`, `join`, `get`, `list`, `history`, `cancel`, `close`, `remove` |
+| `bee.threads.sessions:contract` | Methods `open`, `run`, `send`, `await`, `join`, `get`, `list`, `history`, `cancel`, `close`, `remove`, `rename` |
 | `bee.threads.sessions:catalog` | Method `list`: admitted definitions and saved profiles with executor readiness |
 | `bee.threads.sessions.binding:owner_binding` | Default binding of `contract` (`meta.type: bee.sessions.owner_binding`) |
 | `bee.threads.sessions.binding:catalog_binding` | Default binding of `catalog` (`meta.type: bee.sessions.catalog_binding`) |
@@ -36,8 +36,9 @@ refuses another workspace).
 - `run{spec, input?, output?, operation_key}` opens a session and queues its first work in one operation. Supply input either at the top level or in `spec.overrides`, never both.
 - `send{session, input, output?, operation_key}` queues work and returns its receipt. The agent replies in text, so `output` is `bee:Text@1` or absent. A session whose lifecycle is not `active` or `suspended` refuses work.
 - `await`, `join`, `get`, `list`, `history`, `cancel`, `close` as described under the client below.
-- `remove{session, operation_key}` closes the session first, stopping its agent, then deletes the session and what Bee keeps only for it; it returns `{operation, session, state}` with state `removing` until the agent's exit is proven, then `removed`. Its thread and records stay; the same key repeats as a no-op.
-- A snapshot carries lifecycle (`opening`, `active`, `suspended`, `closing`, `closed`), activity (`idle`, `working`, `blocked`, `stalled`), `activity_evidence` for a quiet stall, the thread ref, workspace, driver, definition, the effective profile with its digest and the last result summary.
+- `remove{session, history?, operation_key}` closes the session first, stopping its agent, then deletes the session and what Bee keeps only for it; it returns `{operation, session, state}` with state `removing` until the agent's exit is proven, then `removed`. Its thread and records stay; `history = true` removes them too, which a snapshot's `thread_shared` thread refuses with `CONFLICT`. The same key repeats as a no-op.
+- `rename{session, name, operation_key}` names the session: its title shows the name and the automatic first-prompt title never replaces it; an empty name returns the automatic title. It returns `{operation, session, title, name?}`.
+- A snapshot carries lifecycle (`opening`, `active`, `suspended`, `closing`, `closed`), activity (`idle`, `working`, `blocked`, `stalled`), `activity_evidence` for a quiet stall, the thread ref and whether other sessions, apps or peers share the thread (`thread_shared`), an explicit `name`, workspace, driver, definition, the effective profile with its digest and the last result summary.
 
 `overrides = {name?, role?, traits?, context?, workdir?, workspace?, input?}` is
 shared by the owner, MCP `session_open` / `session_run`, and Lua client. It

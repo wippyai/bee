@@ -122,7 +122,9 @@ unavailable entries (U), setup (S), sort (Ctrl+S), edit or customize copy (E) an
 new profile (N). Esc goes back. Closing the window leaves its sessions running
 and addressable; each Agents window is a separate application instance.
 D in Sessions (Ctrl+R in an open session) removes a session after a confirmation: its agent is
-stopped first, and its thread history and the agent CLI's own files stay.
+stopped first and the agent CLI's own files stay; Enter keeps its thread history, H removes it too
+unless the thread is shared with other sessions, apps or peers.
+E in Sessions (Ctrl+E in an open session) renames a session; an empty name returns its automatic title.
 
 The profile editor has Basic and Advanced fields (Ctrl+P), saves with Ctrl+S under
 the existing profile revision and operation keys, and shows Revoke Docker access

@@ -348,12 +348,12 @@ local function define_tests()
         end)
     end)
     test.describe("Native interactive launch specifications", function()
-        test.it("renders Muse model effort and approval selections for first and resumed windows", function()
+        test.it("renders Muse model, provider, effort and approval selections for first and resumed windows", function()
             for _, resume in ipairs({"", "native-session"}) do
                 local request = assert(muse_launch.decode({profile_id = "window", brief = "", model = "muse-model",
-                    effort = "high", approval_mode = "untrusted", resume_ref = resume ~= "" and resume or nil}))
+                    effort = "high", approval_mode = "untrusted", model_provider = "local", resume_ref = resume ~= "" and resume or nil}))
                 local command = quote.line(muse_launch.specification(request).argv)
-                test.eq(command, "--approval-mode untrusted --model muse-model --reasoning-effort high" ..
+                test.eq(command, "--approval-mode untrusted --model muse-model --provider local --reasoning-effort high" ..
                     (resume ~= "" and " resume native-session" or ""))
             end
         end)
@@ -615,25 +615,25 @@ local function define_tests()
             if not request then error(tostring(err)) end
             local launch = muse_launch.specification(request)
             test.eq(launch.executable, "muse")
-            test.eq(quote.line(launch.argv), "exec --json --approval-mode on-request -- 'say ok'")
+            test.eq(quote.line(launch.argv), "exec --json --approval-mode on-request --provider meta -- 'say ok'")
             test.eq(launch.readiness, "protocol:runtime.command.accepted")
             test.is_nil(launch.stdin)
             local full, full_error = muse_launch.decode({profile_id = "batch", brief = "say ok", approval_mode = "never",
                 model = "muse-spark-1.3", effort = "high"})
             if not full then error(tostring(full_error)) end
             test.eq(quote.line(muse_launch.specification(full).argv),
-                "exec --json --approval-mode never --model muse-spark-1.3 --reasoning-effort high -- 'say ok'")
+                "exec --json --approval-mode never --model muse-spark-1.3 --provider meta --reasoning-effort high -- 'say ok'")
             local worker, worker_error = muse_launch.decode({profile_id = "batch", brief = "read traits", approval_mode = "on-request"})
             if not worker then error(tostring(worker_error)) end
             test.eq(quote.line(muse_launch.specification(worker).argv),
-                "exec --json --approval-mode on-request -- 'read traits'")
+                "exec --json --approval-mode on-request --provider meta -- 'read traits'")
             local unbounded, unbounded_error = muse_launch.decode({profile_id = "batch", brief = "say ok"})
             if not unbounded then error(tostring(unbounded_error)) end
             test.is_true(table.concat(muse_launch.specification(unbounded).argv, " "):find("--max-model-steps", 1, true) == nil)
             local resumed, resumed_error = muse_launch.decode({profile_id = "batch", brief = "next", resume_ref = "01a0ad3f-1bad-7bb1-9290-d73200470b9e"})
             if not resumed then error(tostring(resumed_error)) end
             test.eq(quote.line(muse_launch.specification(resumed).argv),
-                "exec --json --approval-mode on-request --session-id 01a0ad3f-1bad-7bb1-9290-d73200470b9e -- next")
+                "exec --json --approval-mode on-request --provider meta --session-id 01a0ad3f-1bad-7bb1-9290-d73200470b9e -- next")
             local _, mode_error = muse_launch.decode({profile_id = "batch", brief = "x", approval_mode = "bypass"})
             test.eq(mode_error, "approval_mode is not one Bee admits")
             local _, effort_error = muse_launch.decode({profile_id = "batch", brief = "x", effort = "turbo"})
@@ -650,14 +650,14 @@ local function define_tests()
             local window, window_error = muse_launch.decode({profile_id = "window", brief = ""})
             if not window then error(tostring(window_error)) end
             local native = muse_launch.specification(window)
-            test.eq(quote.line(native.argv), "--approval-mode on-request")
+            test.eq(quote.line(native.argv), "--approval-mode on-request --provider meta")
             test.eq(native.readiness, "terminal:attached")
             local prompted, prompted_error = muse_launch.decode({profile_id = "window", brief = "--help"})
             if not prompted then error(tostring(prompted_error)) end
-            test.eq(quote.line(muse_launch.specification(prompted).argv), "--approval-mode on-request -- --help")
+            test.eq(quote.line(muse_launch.specification(prompted).argv), "--approval-mode on-request --provider meta -- --help")
             local native_resume, native_resume_error = muse_launch.decode({profile_id = "window", brief = "", resume_ref = "native-session"})
             if not native_resume then error(tostring(native_resume_error)) end
-            test.eq(quote.line(muse_launch.specification(native_resume).argv), "--approval-mode on-request resume native-session")
+            test.eq(quote.line(muse_launch.specification(native_resume).argv), "--approval-mode on-request --provider meta resume native-session")
             local native_both, native_both_error = muse_launch.decode({profile_id = "window", brief = "--help", resume_ref = "native-session"})
             test.is_nil(native_both)
             test.eq(native_both_error, "window resume cannot carry a brief")

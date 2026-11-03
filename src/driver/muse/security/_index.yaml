@@ -51,6 +51,10 @@ entries:
     - bee.placement.docker.profiles:coding
     profile_restrictions:
       provider.options.yolo: {kind: declared}
+      provider.model:
+        kind: declared
+      provider.options.model_provider:
+        kind: declared
       provider.options.approval_mode: {kind: declared}
       provider.effort:
       - low
@@ -128,6 +132,8 @@ entries:
     profile_restrictions:
       provider.options.yolo: {kind: declared}
       provider.model:
+        kind: declared
+      provider.options.model_provider:
         kind: declared
       provider.options.approval_mode:
         kind: declared

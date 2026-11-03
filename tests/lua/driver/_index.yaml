@@ -159,3 +159,5 @@ entries:
     configuration: bee.drivers.muse.binding:configuration
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
+    descriptors: bee.drivers.descriptor:descriptor
+    effective: bee.drivers.descriptor:effective

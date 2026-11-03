@@ -7,6 +7,8 @@ local registry = require("registry")
 local configuration = require("configuration")
 local placement_configuration = require("placement_configuration")
 local placement_types = require("placement_types")
+local descriptors = require("descriptors")
+local effective = require("effective")
 local function gateway(tools: {string}, hooks: {string}): configuration.Gateway
     return {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = tools, hooks = hooks,
         token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN",
@@ -61,6 +63,17 @@ local function define_tests()
                 "{\"mcpServers\":{\"bee\":{\"url\":\"http://user\"}}}"}) do
                 local refused = placement_configuration.render(file, {BEE_GATEWAY_TOKEN = "private-token"}, selected, base)
                 test.is_nil(refused)
+            end
+        end)
+        test.it("admits the person's Muse settings under both shipped launch policies", function()
+            local cli = assert(descriptors.load("bee.drivers.muse.descriptor:cli"))
+            local person = json.encode({schema_version = 1, provider = "meta", model = "muse-wonder-1.0",
+                model_reasoning_efforts = {["muse-wonder-1.0"] = "high"}, tui = {foreign_context_notice_shown = true},
+                contributor_mode_enabled = false, contributor_mode_disclosure_acknowledged = true})
+            for _, ref in ipairs({"bee.driver.muse.security:launch_policy_muse_window", "bee.driver.muse.security:launch_policy_muse_batch"}) do
+                local policy = assert(bounds.object(assert(registry.get(ref)).data))
+                local err = effective.check_config(cli, policy, ".config/muse/.bee-global-settings.json", person)
+                test.is_nil(err, ref .. ": " .. tostring(err))
             end
         end)
         test.it("materializes the attempt hook credential file with the hook token", function()

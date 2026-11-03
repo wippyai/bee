@@ -192,9 +192,52 @@ entries:
               then:
               - --model
               - field: model
+          config_aliases:
+          - format: json
+            path:
+            - model
           id: model
           group: model/provider
           security_class: free
+        model_provider:
+          default: meta
+          invalid: model_provider is not one Muse accepts
+          path: provider.options.model_provider
+          value_schema:
+            type: string
+            enum:
+            - meta
+            - echo
+            - local
+          label: Model provider
+          description: 'Muse backend: meta for the Meta service, local for local models, echo for the offline echo backend'
+          section: advanced
+          order: 3
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --provider
+          render:
+          - kind: argv
+            contexts:
+            - window
+            - first_turn
+            - resume
+            tokens:
+            - --provider
+            - field: model_provider
+          config_aliases:
+          - format: json
+            path:
+            - provider
+          id: model_provider
+          group: model/provider
+          security_class: host-ceiling
         effort:
           invalid: effort is not one Bee admits
           path: provider.effort
@@ -328,6 +371,8 @@ entries:
           context: window
         - render: model
           context: window
+        - render: model_provider
+          context: window
         - render: effort
           context: window
         - if: resume_ref
@@ -350,6 +395,8 @@ entries:
           context: first_turn
         - render: model
           context: first_turn
+        - render: model_provider
+          context: first_turn
         - render: effort
           context: first_turn
         - --
@@ -363,6 +410,8 @@ entries:
         - render: approval_mode
           context: resume
         - render: model
+          context: resume
+        - render: model_provider
           context: resume
         - render: effort
           context: resume

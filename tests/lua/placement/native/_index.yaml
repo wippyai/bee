@@ -147,17 +147,6 @@ entries:
     protocol: bee.placement.native:protocol
     resource_resolution: bee.placement.native.service:resource_resolution
     types: bee.placement:types
-- name: writable_roots_adapter_test
-  kind: function.lua
-  source: file://writable_roots_adapter_test.lua
-  method: run
-  meta:
-    type: test
-    suite: bee
-  imports:
-    bounds: bee.drivers.values:bounds
-    test: wippy.test:test
-    writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
 - name: preparer_owner
   kind: process.lua
   source: file://preparer_owner.lua
@@ -1101,3 +1090,27 @@ entries:
     test: wippy.test:test
     measurements: bee.placement.native.persist:measurements
     native_fixture: bee.tests.placement.native:native_fixture
+- name: writable_roots_migration_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/placement-writable-roots-migration-test.db
+  lifecycle: {auto_start: true}
+- name: writable_roots_migration_test
+  kind: function.lua
+  source: file://writable_roots_migration_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [sql, funcs, json]
+  imports:
+    test: wippy.test:test
+    canonical: bee.drivers.values:canonical
+    descriptor: bee.drivers.descriptor:descriptor
+  security:
+    policies: [bee.tests.placement.native:writable_roots_migration_policy, bee.tests.support:schema_policy]
+- name: writable_roots_migration_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.tests.placement.native:writable_roots_migration_db]
+    effect: allow

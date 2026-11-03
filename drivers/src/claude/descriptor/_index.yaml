@@ -42,6 +42,15 @@ entries:
       - arm64
       - aarch64
     codec: claude-stream-json
+    writable_roots:
+      when_argv:
+      - [--permission-mode, default]
+      - [--permission-mode, acceptEdits]
+      - [--permission-mode, dontAsk]
+      - [--permission-mode=default]
+      - [--permission-mode=acceptEdits]
+      - [--permission-mode=dontAsk]
+      argv_each: [--add-dir, "{root}"]
     json_paths:
       resume_id:
       - session_id

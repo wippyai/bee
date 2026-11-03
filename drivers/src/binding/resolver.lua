@@ -8,6 +8,7 @@ local bounds = require("bounds")
 local profile_codec = require("profile")
 local descriptor = require("descriptor")
 local driver_types = require("types")
+local writable_roots = require("writable_roots")
 local M = {}
 M.HOST = "bee.drivers:host"
 M.ACTIVATION_TYPE = "bee.harness_activation"
@@ -302,6 +303,16 @@ function M.profile(pinned: registry.Snapshot, binding_ref: string, profile_id: s
     local selected = profile_codec.find(decoded, profile_id)
     if not selected then return nil, "binding " .. binding_ref .. " has no profile " .. profile_id end
     return selected, nil
+end
+-- writable_roots: the writable roots declaration of the binding's descriptor
+-- when the selected profile admits Git metadata roots.
+function M.writable_roots(pinned: registry.Snapshot, binding_ref: string, profile: driver_types.Profile?): (writable_roots.Declaration?, string?)
+    if not profile or profile.sandbox.git_writable_roots ~= true then return nil, nil end
+    local _, renderer_error, selected = M.configure_renderer(pinned, binding_ref, nil)
+    if renderer_error then return nil, renderer_error end
+    local declared = selected and selected.writable_roots
+    if not declared then return nil, "binding " .. binding_ref .. " profile " .. profile.id .. " admits Git writable roots its CLI descriptor does not declare" end
+    return declared, nil
 end
 function M.select_hooks(profile: driver_types.Profile?, requested: {string}): {string}
     local supported: {[string]: boolean} = {}

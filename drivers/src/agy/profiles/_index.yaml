@@ -50,7 +50,7 @@ entries:
         sandbox:
           providers: []
           required_placement_features: []
-          git_writable_roots_adapter: agy_add_dir
+          git_writable_roots: true
         permission_exchange:
           mode: adapter
           adapter_ref: bee.drivers.permission:permission_request_hook
@@ -88,7 +88,7 @@ entries:
         sandbox:
           providers: []
           required_placement_features: []
-          git_writable_roots_adapter: agy_add_dir
+          git_writable_roots: true
         permission_exchange:
           mode: adapter
           adapter_ref: bee.drivers.permission:permission_request_hook

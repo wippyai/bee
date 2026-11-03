@@ -6,6 +6,7 @@ entries:
   source: file://types.lua
   imports:
     driver_types: bee.drivers:types
+    writable_roots: bee.drivers.descriptor:writable_roots
     preferences: bee.drivers.descriptor:effective
     composition: bee.drivers.binding:composition
 - name: request

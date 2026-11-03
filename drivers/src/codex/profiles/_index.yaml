@@ -59,7 +59,7 @@ entries:
           providers:
           - codex-sandbox
           required_placement_features: []
-          git_writable_roots_adapter: codex_workspace_write
+          git_writable_roots: true
       - id: named_batch
         mode: batch
         hooks:
@@ -103,7 +103,7 @@ entries:
           providers:
           - codex-sandbox
           required_placement_features: []
-          git_writable_roots_adapter: codex_workspace_write
+          git_writable_roots: true
       - id: window
         mode: window
         hooks:
@@ -137,7 +137,7 @@ entries:
           providers:
           - codex-sandbox
           required_placement_features: []
-          git_writable_roots_adapter: codex_workspace_write
+          git_writable_roots: true
         permission_exchange:
           mode: adapter
           adapter_ref: bee.drivers.permission:permission_request_hook

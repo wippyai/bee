@@ -16,7 +16,7 @@ local placement_resolver = require("placement_resolver")
 local placement_profiles = require("placement_profiles")
 local configuration_protocol = require("configuration")
 local preferences = require("preferences")
-local driver_types = require("driver_types")
+local writable_roots = require("writable_roots")
 local materialization = require("materialization")
 local gateway_protocol = require("gateway_protocol")
 local service_reply = require("service_reply")
@@ -229,7 +229,7 @@ end
 -- Configuration inputs come from one host snapshot, not caller-authored
 -- files. The renderer receives the final owner-derived HOME only when a new
 -- intent is recorded; replay uses that intent's frozen delivery.
-local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest, context: LocalPreparation?): (configuration_types.Request?, string?, string?, driver_types.GitWritableRootsAdapter?)
+local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest, context: LocalPreparation?): (configuration_types.Request?, string?, string?, writable_roots.Declaration?)
     local policy_entry, policy_error = resolver.entry(pinned, request.policy_ref)
     if policy_error then return nil, nil, policy_error end
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
@@ -269,6 +269,8 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if not target then return nil, nil, target_error or "binding is not activated" end
     local selected_profile, profile_error = resolver.profile(pinned, request.binding_ref, request.profile_id)
     if profile_error then return nil, nil, profile_error end
+    local roots, roots_error = resolver.writable_roots(pinned, request.binding_ref, selected_profile)
+    if roots_error then return nil, nil, roots_error end
     local provider: {[string]: unknown}? = nil
     if provider_ref then
         local provider_error: string?
@@ -301,8 +303,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     -- maps: their raw allocation shape is not a host option selection.
     local option_values, options_error = preferences.decode_prepare_options(data.prepare_options)
     if not option_values then return nil, nil, options_error end
-    return {placement = option_placement, option_provenance = bounds.object(data.option_provenance), option_values = option_values, context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
-        selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil
+    return {placement = option_placement, option_provenance = bounds.object(data.option_provenance), option_values = option_values, context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil, roots
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)
     local path: string? = nil
@@ -366,7 +367,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
         return fail("CONFLICT", "native placement binding changed since admission")
     end
-    local configuration, configure_target, configuration_error, git_writable_roots_adapter = configuration_input(prepare_pinned, request, context)
+    local configuration, configure_target, configuration_error, git_writable_roots = configuration_input(prepare_pinned, request, context)
     if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
     local home_authorization_error = host_home_authorization(prepare_pinned, request)
     if home_authorization_error then return fail("DENIED", home_authorization_error) end
@@ -458,7 +459,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     configuration.attempt_id = request.attempt_id
     local delivery, delivery_error = configuration_protocol.call(request.binding_ref, configure_target, configuration)
     if not delivery then db:release(); return fail("DENIED", delivery_error and tostring(delivery_error) or "configuration rendering failed") end
-    delivery.git_writable_roots_adapter = git_writable_roots_adapter
+    delivery.git_writable_roots = git_writable_roots
     -- Keep the admitted request unchanged: its digest excludes this private
     -- delivery, while the durable payload includes the validated driver output.
     local stored: {[string]: unknown} = {}

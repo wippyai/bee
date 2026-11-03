@@ -271,7 +271,6 @@
   "bee.tests.placement.native:retirement_test": 0.857,
   "bee.tests.placement.native:startup_test": 1.105,
   "bee.tests.placement.native:workdir_preparer_test": 32.399,
-  "bee.tests.placement.native:writable_roots_adapter_test": 0.901,
   "bee.tests.placement.docker.service:demand_dispatch_test": 0.876,
   "bee.tests.placement.docker.service:docker_owner_test": 0.855,
   "bee.tests.placement.native.persist:eligibility_test": 0.842,

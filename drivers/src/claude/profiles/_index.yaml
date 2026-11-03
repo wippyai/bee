@@ -58,7 +58,7 @@ entries:
         sandbox:
           providers: []
           required_placement_features: []
-          git_writable_roots_adapter: claude_add_dir
+          git_writable_roots: true
         permission_exchange:
           mode: adapter
           adapter_ref: bee.drivers.claude.permission:permission_adapter
@@ -114,7 +114,7 @@ entries:
         sandbox:
           providers: []
           required_placement_features: []
-          git_writable_roots_adapter: claude_add_dir
+          git_writable_roots: true
         permission_exchange:
           mode: adapter
           adapter_ref: bee.drivers.claude.permission:permission_adapter
@@ -159,7 +159,7 @@ entries:
         sandbox:
           providers: []
           required_placement_features: []
-          git_writable_roots_adapter: claude_add_dir
+          git_writable_roots: true
         permission_exchange:
           mode: adapter
           adapter_ref: bee.drivers.permission:permission_request_hook

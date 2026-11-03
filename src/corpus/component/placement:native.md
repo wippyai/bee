@@ -14,7 +14,7 @@ selects a different resource.
 |---|---|
 | `bee.placement.native` | `protocol`: the runner/service wire protocol |
 | `bee.placement.native.binding` | The contract binding, one function per contract method plus `stop_revoked`, and `process_backend` |
-| `bee.placement.native.service` | `service` (operations), `runner`, `startup` supervision, `window`, `materialization`, `homes`, `identity`, `capability`, `executable`, `workdir_preparers`, `writable_roots_adapter`, `provider_projection`, `sweeper_service` |
+| `bee.placement.native.service` | `service` (operations), `runner`, `startup` supervision, `window`, `materialization`, `homes`, `identity`, `capability`, `executable`, `workdir_preparers`, `provider_projection`, `sweeper_service` |
 | `bee.placement.native.persist` | `store`: attempts and append-only evidence |
 | `bee.placement.native.migrations` | Immutable schema migrations (`attempts`, `complete`) |
 | `bee.placement.native.env` | Root, executor, host files, admitted roots, resource mode and preparer entries; `resources` and `configuration` libraries |
@@ -110,10 +110,13 @@ write-granted roots, update the working directory (such as creating a dedicated 
 and preserve planned ownership state between setup and cleanup. Failures are recorded as placement evidence
 (`workdir_preparer.failed`).
 
-The per-CLI argument rendering stays owned by placement's `writable_roots_adapter`.
-When extra writable roots are contributed and remain inside host-admitted write roots,
-placement renders the driver profile's `git_writable_roots_adapter`: Codex receives
-`sandbox_workspace_write.writable_roots`; Claude Code and Agy receive `--add-dir` for each path.
+The CLI descriptor declares its argument rendering in `writable_roots`: the argv
+token sequences that put the CLI in a mode honoring extra roots, and the arguments
+naming them (`argv` once with `{roots}`, or `argv_each` per root with `{root}`).
+When extra writable roots are contributed, remain inside host-admitted write roots,
+and the driver profile sets `sandbox.git_writable_roots`, placement renders that
+declaration: Codex receives `sandbox_workspace_write.writable_roots`; Claude Code and
+Agy receive `--add-dir` for each path.
 Placement resolves physical directories (including symlinks and parent components)
 and refuses malformed roots or roots and changed workdirs outside write grants.
 Cleanup preserves uncertainty when process absence cannot be proven. It records

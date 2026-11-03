@@ -50,12 +50,6 @@ entries:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     resources: bee.placement.native.env:resources
-- name: writable_roots_adapter
-  kind: library.lua
-  source: file://writable_roots_adapter.lua
-  imports:
-    canonical: bee.drivers.values:canonical
-    driver_types: bee.drivers:types
 - name: cleanup_request
   kind: function.lua
   source: file://cleanup_request.lua
@@ -136,7 +130,7 @@ entries:
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
     workdir_preparers: bee.placement.native.service:workdir_preparers
-    writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
+    writable_roots: bee.drivers.descriptor:writable_roots
     bounds: bee.drivers.values:bounds
     configuration: bee.placement.native.env:configuration
     provider_projection: bee.placement.native.service:provider_projection
@@ -367,7 +361,7 @@ entries:
     configuration: bee.drivers.binding:configuration
     preferences: bee.drivers.descriptor:effective
     resolver: bee.drivers.binding:resolver
-    driver_types: bee.drivers:types
+    writable_roots: bee.drivers.descriptor:writable_roots
     placement_resolver: bee.placement.binding:resolver
     bounds: bee.drivers.values:bounds
     types: bee.placement:types

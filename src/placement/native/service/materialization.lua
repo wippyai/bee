@@ -21,7 +21,7 @@ local service_reply = require("service_reply")
 local formats = require("formats")
 local configuration = require("configuration")
 local workdir_preparers = require("workdir_preparers")
-local writable_roots_adapter = require("writable_roots_adapter")
+local writable_roots = require("writable_roots")
 local provider_projection = require("provider_projection")
 local profile_values = require("profile_values")
 local placement_profiles = require("placement_profiles")
@@ -301,18 +301,18 @@ local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRe
         return nil, nil, preparer_error or "workdir preparation failed"
     end
     local delivery = request.delivery
-    local adapter = delivery and delivery.git_writable_roots_adapter or nil
-    if not adapter or #extra_roots == 0 then
+    local declared = delivery and delivery.git_writable_roots or nil
+    if not declared or #extra_roots == 0 then
         return work_dir, {}, nil
     end
     local writable_workdir = false
     for _, grant in ipairs(request.resources) do
         if grant.name == request.launch.working_directory_ref and grant.access == "write" then writable_workdir = true end
     end
-    if not writable_workdir or not writable_roots_adapter.enabled(adapter, request.launch.argv) then
+    if not writable_workdir or not writable_roots.enabled(declared, request.launch.argv) then
         return work_dir, {}, nil
     end
-    local sandbox_args, args_error = writable_roots_adapter.arguments(adapter, extra_roots)
+    local sandbox_args, args_error = writable_roots.arguments(declared, extra_roots)
     if not sandbox_args then
         return nil, nil, args_error or "render writable roots arguments"
     end

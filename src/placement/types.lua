@@ -3,6 +3,7 @@
 local driver_types = require("driver_types")
 local preferences = require("preferences")
 local composition = require("composition")
+local writable_roots = require("writable_roots")
 type Preferences = preferences.Value
 type Capability = "direct_process" | "process_group" | "contained_tree"
 -- How a runtime lets the runner learn the exit: independently of the pipes,
@@ -32,7 +33,7 @@ type SecretField = {path: {string}, environment: string, prefix: string}
 type JsonOperation = {kind: "default" | "insert" | "append" | "set", path: {string}}
 type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}, append_text: boolean?} | {kind: "json_patch" | "toml_patch", base_path: string, operations: {JsonOperation}}
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
-type ConfigurationDelivery = {environment: {[string]: string}?,arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
+type ConfigurationDelivery = {environment: {[string]: string}?,arguments: {string}, files: {Configuration}, git_writable_roots: writable_roots.Declaration?}
 -- The file version a measurement was taken from, as the OS identifies it:
 -- device, inode and change times as decimal text.
 type ExecutableIdentity = {dev: string, ino: string, size: integer, ctime_ns: string, mtime_ns: string}

@@ -41,6 +41,11 @@ entries:
       - arm64
       - aarch64
     codec: codex-jsonl
+    writable_roots:
+      when_argv:
+      - [--sandbox=workspace-write]
+      - [--sandbox, workspace-write]
+      argv: [--config, "sandbox_workspace_write.writable_roots={roots}"]
     json_paths:
       resume_id:
       - thread_id

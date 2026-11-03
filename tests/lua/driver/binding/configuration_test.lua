@@ -80,16 +80,17 @@ local function define_tests()
             item.secret_fields = {{path = {"auth"}, environment = "BEE_GATEWAY_TOKEN", prefix = "Bearer "}, {path = {"auth"}, environment = "BEE_GATEWAY_TOKEN", prefix = "Bearer "}}
             test.is_nil(configuration.decode_file(item))
         end)
-        test.it("keeps the Git roots adapter private to native placement's stored delivery", function()
-            local private = {arguments = {}, files = {}, git_writable_roots_adapter = "codex_workspace_write"}
+        test.it("keeps the Git writable roots declaration private to native placement's stored delivery", function()
+            local declared = {when_argv = {{"--sandbox"}}, argv_each = {"--add-dir", "{root}"}}
+            local private: {[string]: unknown} = {arguments = {}, files = {}, git_writable_roots = declared}
             test.is_nil(configuration.decode_reply({ok = true, delivery = private}))
             local stored, stored_error = configuration.decode_stored_delivery(private)
             if not stored then error(tostring(stored_error)) end
-            test.eq(stored.git_writable_roots_adapter, "codex_workspace_write")
-            private.git_writable_roots_adapter = "arbitrary-cli-option"
+            test.eq(assert(assert(stored.git_writable_roots).argv_each)[1], "--add-dir")
+            private.git_writable_roots = "codex_workspace_write"
             local invalid, invalid_error = configuration.decode_stored_delivery(private)
             test.is_nil(invalid)
-            test.eq(invalid_error, "delivery.git_writable_roots_adapter is not supported")
+            test.eq(invalid_error, "delivery.git_writable_roots: writable_roots must be an object")
         end)
         test.it("refuses nonempty secret targets and oversized materialized content without exposing values", function()
             local item = file('{"auth":"existing"}')

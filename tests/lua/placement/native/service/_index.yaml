@@ -60,7 +60,7 @@ entries:
     resources: bee.placement.native.env:resources
     homes: bee.tests.placement.native.service:homes
     workdir_preparers: bee.placement.native.service:workdir_preparers
-    writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
+    writable_roots: bee.drivers.descriptor:writable_roots
     bounds: bee.drivers.values:bounds
     configuration: bee.placement.native.env:configuration
     provider_projection: bee.placement.native.service:provider_projection

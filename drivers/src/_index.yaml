@@ -143,7 +143,7 @@ entries:
   kind: library.lua
   source: file://configuration_types.lua
   imports:
-    driver_types: bee.drivers:types
+    writable_roots: bee.drivers.descriptor:writable_roots
 - name: drivers
   kind: library.lua
   meta:

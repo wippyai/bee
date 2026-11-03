@@ -33,6 +33,11 @@ entries:
       - arm64
       - aarch64
     codec: agy-stream-json
+    writable_roots:
+      when_argv:
+      - [--sandbox]
+      - [--sandbox=true]
+      argv_each: [--add-dir, "{root}"]
     json_paths:
       resume_id:
       - conversation_id

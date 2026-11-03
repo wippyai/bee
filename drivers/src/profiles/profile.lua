@@ -269,19 +269,14 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
     if profile.sandbox ~= nil then
         local declared, declared_error = object(profile.sandbox, what .. ".sandbox")
         if not declared then return nil, declared_error end
-        local unknown_sandbox = bounds.fields(declared, {"providers", "required_placement_features", "git_writable_roots_adapter"})
+        local unknown_sandbox = bounds.fields(declared, {"providers", "required_placement_features", "git_writable_roots"})
         if unknown_sandbox then return nil, what .. ".sandbox: " .. unknown_sandbox end
         local providers, providers_error = bounds.ids(declared.providers or {}, true)
         if not providers then return nil, what .. ".sandbox.providers: " .. tostring(providers_error) end
         local features, features_error = bounds.ids(declared.required_placement_features or {}, true)
         if not features then return nil, what .. ".sandbox.required_placement_features: " .. tostring(features_error) end
-        local roots_adapter: types.GitWritableRootsAdapter? = nil
-        if declared.git_writable_roots_adapter ~= nil then
-            local selected_adapter = types.git_writable_roots_adapter(declared.git_writable_roots_adapter)
-            if not selected_adapter then return nil, what .. ".sandbox.git_writable_roots_adapter is not supported" end
-            roots_adapter = selected_adapter
-        end
-        sandbox = {providers = providers, required_placement_features = features, git_writable_roots_adapter = roots_adapter}
+        if declared.git_writable_roots ~= nil and type(declared.git_writable_roots) ~= "boolean" then return nil, what .. ".sandbox.git_writable_roots must be a boolean" end
+        sandbox = {providers = providers, required_placement_features = features, git_writable_roots = declared.git_writable_roots == true or nil}
     end
     local exchange: types.PermissionExchange = {mode = "none"}
     if profile.permission_exchange ~= nil then

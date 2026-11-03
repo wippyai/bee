@@ -27,6 +27,7 @@ entries:
     profile: bee.drivers.profiles:profile
     descriptor: bee.drivers.descriptor:descriptor
     types: bee.drivers:types
+    writable_roots: bee.drivers.descriptor:writable_roots
 - name: quote
   kind: library.lua
   source: file://quote.lua
@@ -56,11 +57,11 @@ entries:
   - json
   - toml
   imports:
+    writable_roots: bee.drivers.descriptor:writable_roots
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     driver_resolver: bee.drivers.binding:resolver
     descriptors: bee.drivers.descriptor:descriptor
-    types: bee.drivers:types
     instructions: bee.drivers.profiles:instructions
     vocabulary: bee.drivers:configuration_types
 - name: option_render

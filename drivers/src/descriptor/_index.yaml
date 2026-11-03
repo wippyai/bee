@@ -14,6 +14,7 @@ entries:
   - registry
   imports:
     codec_registry: bee.drivers.codec:codec_registry
+    writable_roots: bee.drivers.descriptor:writable_roots
     bounds: bee.drivers.values:bounds
     login_evidence: bee.drivers.locate:login_evidence
     schema_values: bee.drivers.descriptor:schema_values
@@ -49,3 +50,9 @@ entries:
     type: bee.kernel
   data:
     scope: tree
+- name: writable_roots
+  kind: library.lua
+  source: file://writable_roots.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical

@@ -19,8 +19,9 @@ type Interrupt = {methods: {InterruptMethod}, adapter_ref: string?}
 type McpTransport = "stdio" | "streamable_http" | "sse" | "ws"
 type ToolFilter = {syntax: string, adapter_ref: string}
 type Mcp = {client_transports: {McpTransport}, bridge_ref: string?, tool_filter: ToolFilter?, initialize_timeout_ms: integer?, call_timeout_ceiling_ms: integer?}
-type GitWritableRootsAdapter = "codex_workspace_write" | "claude_add_dir" | "agy_add_dir"
-type Sandbox = {providers: {string}, required_placement_features: {string}, git_writable_roots_adapter: GitWritableRootsAdapter?}
+-- git_writable_roots: the profile admits Git metadata roots as extra writable
+-- roots, in the arguments its CLI descriptor declares.
+type Sandbox = {providers: {string}, required_placement_features: {string}, git_writable_roots: boolean?}
 -- A permission exchange is enabled only by an adapter pinned by reference
 -- and digest; none means a permission-denied outcome stays terminal.
 type PermissionMode = "none" | "adapter"
@@ -115,25 +116,6 @@ local login_evidence = require("login_evidence")
 local M = {}
 -- Executable-backed provider login flows remain an explicit integration gate.
 M.AUTHENTICATION_STATUS = "unproven"
-type GitWritableRootsAdapters = {
-    CODEX_WORKSPACE_WRITE: "codex_workspace_write",
-    CLAUDE_ADD_DIR: "claude_add_dir",
-    AGY_ADD_DIR: "agy_add_dir",
-}
-local git_writable_roots_adapters: GitWritableRootsAdapters = {
-    CODEX_WORKSPACE_WRITE = "codex_workspace_write",
-    CLAUDE_ADD_DIR = "claude_add_dir",
-    AGY_ADD_DIR = "agy_add_dir",
-}
-M.GIT_WRITABLE_ROOTS_ADAPTERS = git_writable_roots_adapters
-function M.git_writable_roots_adapter(value: unknown): GitWritableRootsAdapter?
-    if value == git_writable_roots_adapters.CODEX_WORKSPACE_WRITE
-        or value == git_writable_roots_adapters.CLAUDE_ADD_DIR
-        or value == git_writable_roots_adapters.AGY_ADD_DIR then
-        return value
-    end
-    return nil
-end
 function M.decode_terminal(value: unknown): (Terminal?, string?)
     local object = bounds.object(value)
     if not object then return nil, "terminal must be an object" end

@@ -237,3 +237,12 @@ entries:
     profile: bee.drivers.profiles:profile
     universal: bee.drivers.binding:universal
     bounds: bee.drivers.values:bounds
+- name: writable_roots_test
+  kind: function.lua
+  source: file://writable_roots_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    descriptor: bee.drivers.descriptor:descriptor
+    writable_roots: bee.drivers.descriptor:writable_roots

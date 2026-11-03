@@ -9,7 +9,7 @@ local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
 local driver_resolver = require("driver_resolver")
-local driver_types = require("types")
+local writable_roots = require("writable_roots")
 local descriptors = require("descriptors")
 local instructions = require("instructions")
 local M = {}
@@ -336,22 +336,22 @@ function M.decode_delivery(value: unknown): (vocabulary.Delivery?, string?)
     end
     return {environment = environment, arguments = arguments, files = files}, nil
 end
--- Native placement appends this private field after validating the selected
--- driver profile. Provider configure replies cannot choose the adapter.
+-- Native placement appends the writable roots declaration of the selected
+-- driver profile's descriptor. Provider configure replies cannot supply it.
 function M.decode_stored_delivery(value: unknown): (vocabulary.Delivery?, string?)
     local item = bounds.object(value)
     if not item then return nil, "delivery must be an object" end
-    local unexpected = bounds.fields(item, {"arguments", "files", "environment", "git_writable_roots_adapter"})
+    local unexpected = bounds.fields(item, {"arguments", "files", "environment", "git_writable_roots"})
     if unexpected then return nil, "delivery: " .. unexpected end
-    local adapter: driver_types.GitWritableRootsAdapter? = nil
-    if item.git_writable_roots_adapter ~= nil then
-        local selected_adapter = driver_types.git_writable_roots_adapter(item.git_writable_roots_adapter)
-        if not selected_adapter then return nil, "delivery.git_writable_roots_adapter is not supported" end
-        adapter = selected_adapter
+    local roots: writable_roots.Declaration? = nil
+    if item.git_writable_roots ~= nil then
+        local declared, roots_error = writable_roots.decode(item.git_writable_roots)
+        if not declared then return nil, "delivery.git_writable_roots: " .. tostring(roots_error) end
+        roots = declared
     end
     local decoded, decode_error = M.decode_delivery({environment = item.environment, arguments = item.arguments, files = item.files})
     if not decoded then return nil, decode_error end
-    local retained: vocabulary.Delivery = {environment = decoded.environment, arguments = decoded.arguments, files = decoded.files, git_writable_roots_adapter = adapter}
+    local retained: vocabulary.Delivery = {environment = decoded.environment, arguments = decoded.arguments, files = decoded.files, git_writable_roots = roots}
     return retained, nil
 end
 local function prompt_file(file: vocabulary.Configuration, instructions: string): boolean

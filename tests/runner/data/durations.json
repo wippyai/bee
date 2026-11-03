@@ -139,7 +139,6 @@
   "bee.tests.placement.native:retirement_test": 0.857,
   "bee.tests.placement.native:startup_test": 1.105,
   "bee.tests.placement.native:workdir_preparer_test": 32.399,
-  "bee.tests.placement.native:writable_roots_adapter_test": 0.901,
   "bee.tests.placement.native.service:configuration_setup_test": 1.474,
   "bee.tests.placement.native.service:publication_test": 0.896,
   "bee.tests.placement.native.service:required_file_test": 0.876,

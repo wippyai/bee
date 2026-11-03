@@ -5,6 +5,7 @@ local registry = require("registry")
 local login_evidence = require("login_evidence")
 local schema_values = require("schema_values")
 local codec_registry = require("codec_registry")
+local writable_roots = require("writable_roots")
 local M = {}
 type PermissionAnswer = {transport: string, adapter_ref: string?, reason: string?}
 type Capabilities = {permission_answers: {[string]: PermissionAnswer}}
@@ -111,6 +112,9 @@ type Descriptor = {
     endpoints: {EndpointMapping},
     -- subscription_variables: credential variables that carry a person's
     -- subscription login rather than an API key.
+    -- writable_roots: how the CLI admits extra writable roots, for profiles
+    -- that opt into Git metadata roots.
+    writable_roots: writable_roots.Declaration?,
     subscription_variables: {string},
 }
 
@@ -474,7 +478,7 @@ end
 function M.decode(value: unknown): (Descriptor?, string?)
     local item, object_error = object(value, "CLI descriptor")
     if not item then return nil, object_error end
-    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities", "endpoints", "subscription_variables"})
+    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities", "endpoints", "subscription_variables", "writable_roots"})
     if extra then return nil, "CLI descriptor: " .. extra end
     if item.schema_revision ~= M.SCHEMA then return nil, "CLI descriptor schema_revision is unsupported" end
     local provider, executable, configure = bounds.id(item.provider), bounds.id(item.executable), bounds.id(item.configure)
@@ -914,10 +918,16 @@ function M.decode(value: unknown): (Descriptor?, string?)
             subscription_variables[#subscription_variables + 1] = name
         end
     end
+    local roots: writable_roots.Declaration? = nil
+    if item.writable_roots ~= nil then
+        local decoded_roots, roots_error = writable_roots.decode(item.writable_roots)
+        if not decoded_roots then return nil, "CLI descriptor." .. tostring(roots_error) end
+        roots = decoded_roots
+    end
     return {schema_revision = M.SCHEMA, provider = provider, executable = executable, version_probe = probe,
         login_evidence = login, platform = platform, codec = codec, json_paths = paths, argv_templates = templates,
         options = options, flags = flags, provider_home = home, configure = configure, capabilities = declared,
-        endpoints = mappings, subscription_variables = subscription_variables}, nil
+        endpoints = mappings, subscription_variables = subscription_variables, writable_roots = roots}, nil
 end
 
 function M.permission_answer(item: Descriptor, context: string): PermissionAnswer

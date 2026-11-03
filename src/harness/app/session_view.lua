@@ -9,6 +9,7 @@ local appearance = require("appearance")
 local frame = require("frame")
 local text = require("text")
 local agents = require("agents")
+local directory_view = require("directory_view")
 local protocol = require("protocol")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
@@ -139,7 +140,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         for slot = 1, window.capacity do
             local index = window.offset + slot
             local item = sidebar[index]
-            if item then frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(agents.label(item.provider, item.title), 128), index == selected, "sidebar_session", index, "") end
+            if item then
+                frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(agents.label(item.provider, item.title), 128), index == selected, "sidebar_session", index, item.session)
+                frame.row_actions(rail, {kind = "sidebar_session", index = index, key = item.session, actions = directory_view.actions(item)})
+            end
         end
         frame.fill(rail, height)
         frame.put(rail, 2, height, "Esc sessions", rail_width - 2, rail.theme.muted)
@@ -152,7 +156,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         for _, hit in ipairs(body.hits) do
             hits[#hits + 1] = {kind = hit.kind, index = hit.index, key = hit.key, x = hit.x + rail_width, y = hit.y, width = hit.width, height = hit.height}
         end
-        return {rows = rows, hits = hits, controls = body.controls}
+        local controls: frame.Controls? = body.controls
+        if controls then
+            for _, row in ipairs(frame.controls(rail).rows) do controls.rows[#controls.rows + 1] = row end
+        end
+        return {rows = rows, hits = hits, controls = controls}
     end
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}

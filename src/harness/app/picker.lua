@@ -30,6 +30,8 @@ local text = require("text")
 local restore_view = require("restore_view")
 local M = {}
 type Channel = channel.Channel
+-- The kinds a session row's menu chooses; each carries the row's index.
+local ROW_ACTIONS: {[string]: boolean} = {open = true, rename_listed = true, close_listed = true, remove_listed = true}
 -- The form's owner calls run as this Agent's own actor.
 local function ask(target: string, request: {[string]: unknown}): caller.Reply
     local raw, err = funcs.call(target, request)
@@ -326,6 +328,20 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             agents.stop(current, function(): string return assert(uuid.v7()) end, expected_work)
         end)
     end
+    -- act_listed asks for or starts a listed session's Close, Delete or
+    -- Rename on the selected row; false for any other kind.
+    local function act_listed(kind: string): boolean
+        local entry = directory[selected]
+        if kind == "close_listed" then
+            if entry and entry.lifecycle ~= "closed" and entry.lifecycle ~= "closing" then
+                ask_control("close_listed", "Close " .. entry.title .. "? Accepted work finishes first. Enter confirms · Esc keeps it")
+            end
+        elseif kind == "remove_listed" then
+            if entry then ask_control("remove_listed", agents.removal_message(entry.title, entry.lifecycle, entry.thread_shared == true)) end
+        elseif kind == "rename_listed" then start_rename(entry, true)
+        else return false end
+        return true
+    end
     local function open_existing(index: integer)
         local entry = directory[index]
         if not entry or opening then return end
@@ -583,6 +599,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                             if accept_control("enter") then status = ""; stop_work(work_id) end
                         elseif confirmation.matches(review, "close") then if accept_control("enter") then status = ""; close_session() end
                         elseif confirmation.matches(review, "remove") then if accept_control("enter") then status = ""; remove_session() end
+                        elseif confirmation.matches(review, "close_listed") then if accept_control("enter") then status = ""; close_listed(directory[selected]) end
+                        elseif confirmation.matches(review, "remove_listed") then if accept_control("enter") then status = ""; remove_listed(directory[selected]) end
                         elseif conversation.lifecycle == "closed" then start_from_session()
                         else submit() end
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then conversation.details = not conversation.details; dirty = true
@@ -594,8 +612,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                         local hit = frame.hit(session_frame.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         local kind = hit and hit.kind or ""
-                        if kind == "sidebar_session" and hit and not session_busy then
+                        if hit and ROW_ACTIONS[kind] and directory[hit.index] then selected = hit.index end
+                        if (kind == "sidebar_session" or (kind == "open" and hit and hit.index > 0)) and hit and not session_busy then
                             selected = hit.index; open_existing(selected)
+                        elseif act_listed(kind) then
                         elseif kind == "back" then leave_session()
                         elseif kind == "details" then conversation.details = not conversation.details; dirty = true
                         elseif kind == "new_from_session" then start_from_session()
@@ -636,7 +656,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                         local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         kind = hit and hit.kind or ""
-                        if hit and kind ~= "session" and hit.index > 0 and directory[hit.index] then selected = hit.index end
+                        if hit and ROW_ACTIONS[kind] and directory[hit.index] then selected = hit.index end
                         if kind == "session" and hit then
                             selected = hit.index; dirty = true
                             if frame.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then open = true end
@@ -644,11 +664,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "refresh" then refresh = true end
                     end
                     if kind == "new_session" or kind == "profiles" then catalog_open = true; client.title(launch, "Agents"); selected = 0; refresh = true
-                    elseif kind == "close_listed" and directory[selected] and directory[selected].lifecycle ~= "closed" and directory[selected].lifecycle ~= "closing" then
-                        ask_control("close_listed", "Close " .. directory[selected].title .. "? Accepted work finishes first. Enter confirms · Esc keeps it")
-                    elseif kind == "remove_listed" and directory[selected] then
-                        ask_control("remove_listed", agents.removal_message(directory[selected].title, directory[selected].lifecycle, directory[selected].thread_shared == true))
-                    elseif kind == "rename_listed" then start_rename(directory[selected], true)
+                    elseif act_listed(kind) then
                     elseif kind == "allowances" then allowances = allowance_form.new(launch.workspace_id); dirty = true
                     elseif kind == "mcp_clients" then client.navigate(launch, "bee.gateway.app:app", {})
                     elseif kind == "closed" then show_closed = not show_closed; refresh = true

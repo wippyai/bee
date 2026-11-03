@@ -129,7 +129,7 @@ local function fields(state: State): {Field}
         for _, option in ipairs(options or {}) do
             local field = metadata[option.name]
             if field and (field.group or "advanced") == group then
-                if not shown then result[#result + 1] = {kind = "info", name = "", label = group}; shown = true end
+                if not shown then result[#result + 1] = {kind = "info", name = "", label = string.upper(group)}; shown = true end
                 local allowed = state.form.draft._allowed.options[option.name]
                 if allowed and allowed.kind == "declared" and field.value_schema then
                     for index, control in ipairs(option_controls.rows(option.name, field.value_schema, state.structured[option.name])) do
@@ -604,7 +604,7 @@ local THREAD_HINTS = frame.hints({{key = "Enter", verb = "choose"}, {key = "Esc"
 local function draw_folders(painter: frame.Painter, state: State, picker: folder_picker.Picker): Frame
     local layout = frame.layout(painter, false, false)
     local location = folder_picker.location(picker)
-    frame.header(painter, "AGENT FOLDER", location ~= "" and location or "Choose a root")
+    frame.header(painter, "AGENT FOLDER")
     local work = layout.work
     if work.height >= 1 then
         local held = picker.held and " · a workspace" or ""

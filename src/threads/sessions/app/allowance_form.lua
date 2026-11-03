@@ -97,8 +97,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     for index, field in ipairs(state.form.fields) do sizes[index] = forms.rows(field) end
     local rects = frame.stack({x = 2, y = y, width = math.floor(math.max(1, width - 2)), height = math.floor(math.max(1, height - y - 3))}, sizes, 0)
     for index, rect in ipairs(rects) do forms.draw(painter, rect, state.form, index) end
-    frame.footer(painter, state.status, frame.hints({{key = "Tab", verb = "next"}, {key = "Ctrl+S", verb = "apply"}, {key = "Esc", verb = "back"}}), nil,
-        {{kind = "submit", label = "Apply", enabled = true, primary = true}, {kind = "cancel", label = "Back", enabled = true}})
+    frame.footer(painter, state.status, frame.hints({{key = "Tab", verb = "next"}}), nil,
+        {{kind = "submit", key = "Ctrl+S", label = "Apply", enabled = true, primary = true}, {kind = "cancel", key = "Esc", label = "Cancel", enabled = true}})
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?

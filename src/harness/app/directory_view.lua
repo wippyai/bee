@@ -13,8 +13,9 @@ local HINTS = frame.hints({{key = "Esc", verb = "back"}})
 local MORE = frame.hints({{key = "Enter", verb = "open"}, {key = "N", verb = "start agent"}, {key = "X", verb = "close"}, {key = "D", verb = "delete"}, {key = "E", verb = "rename"}, {key = "↑↓", verb = "select"},
     {key = "W", verb = "this workspace or all"}, {key = "C", verb = "closed sessions"}, {key = "R", verb = "refresh"}, {key = "A", verb = "agent allowances"}})
 
--- actions are what a session row offers on a right click or Shift+F10.
-local function actions(item: protocol.SessionSnapshot): {frame.Button}
+-- actions are what a session row offers on a right click or Shift+F10, in
+-- the session list and in an open session's sidebar.
+function M.actions(item: protocol.SessionSnapshot): {frame.Button}
     local controlled = not item.node or item.peer_scope == "open"
     return {
         {kind = "open", key = "Enter", label = "Open", enabled = true},
@@ -40,8 +41,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
     local layout = frame.layout(painter, false, true)
-    local scope = filtered and "this workspace" or nil
-    frame.header(painter, "SESSIONS", tostring(#rows) .. (#rows == 1 and " session" or " sessions") .. (scope and (" · " .. scope) or ""))
+    local scope = filtered and " · this workspace" or ""
+    frame.header(painter, "SESSIONS", tostring(#rows) .. (#rows == 1 and " session" or " sessions") .. scope .. (show_closed and " · closed shown" or ""))
     local names: {[string]: agents.Workspace} = workspaces or {}
     -- A status of two lines, such as a question and its choices, takes one
     -- more row above the status row.
@@ -61,7 +62,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             previous_bee = bee
         end
         frame.row(painter, y, frame.tagged(width, text.bound(agents.label(item.provider, item.title), 512), state(item)), index == selected, "session", index, item.session, nil, true, 2)
-        frame.row_actions(painter, {kind = "session", index = index, key = item.session, selected = index == selected, actions = actions(item)})
+        frame.row_actions(painter, {kind = "session", index = index, key = item.session, selected = index == selected, actions = M.actions(item)})
         local last = item.last_result
         local home = agents.home(item.session)
         local workspace = home and names[home]
@@ -69,7 +70,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.line(painter, y + 1, text.bound(detail, 512), painter.theme.muted)
         y = y + 2
     end
-    if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "N start agent · P profiles") end
+    if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "Start an agent to open one") end
     if height >= 7 and question and answer then
         frame.line(painter, height - 3, text.bound(question, 512), painter.theme.text)
         frame.line(painter, height - 2, text.bound(answer, 512), painter.theme.text)
@@ -83,7 +84,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         buttons[#buttons + 1] = {kind = "mcp_clients", key = "M", label = "MCP clients", enabled = true, more = true}
         footer_buttons = buttons
     end
-    frame.footer(painter, "", HINTS, MORE .. (show_closed and " · closed shown" or ""), footer_buttons)
+    frame.footer(painter, "", HINTS, MORE, footer_buttons)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

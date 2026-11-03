@@ -49,21 +49,21 @@ function M.list(client: sessions.Client, include_unavailable: boolean, query: st
             for _, feature in ipairs(candidate.features) do if feature == "presentation:start_menu" then person_launchable = true end end
             if person_launchable then
                 local ready = candidate.status == "ready"
-                local needs_setup = false
-                for _, feature in ipairs(candidate.features) do if feature == "configuration:needs_setup" then needs_setup = true end end
-                local reason = candidate.reasons[1] or (ready and "" or candidate.status)
+                local needs_setup, login_refused, diagnostic = false, false, false
                 local provider = ""
-                for _, feature in ipairs(candidate.features) do provider = feature:match("^driver:(.+)$") or provider end
-                if not needs_setup then
-                    if not ready and reason:find("bee.permission_answers=", 1, true) then
-                        reason = reason:gsub("bee.permission_answers=", "Permission answers: ")
-                    elseif not ready and reason:find("owner_safe:", 1, true) then
-                        reason = "Login needed · " .. reason
-                    elseif provider ~= "" then
-                        if candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."
-                        elseif candidate.status == "unconfigured" then reason = "Run " .. provider .. " to sign in, then refresh."
-                        elseif reason:find("bee.", 1, true) then reason = "This agent cannot run with the current setup. Check its folder and permissions." end
-                    elseif reason:find("bee.", 1, true) then reason = "This agent's setup is unavailable. Check installation, folder and permissions." end
+                for _, feature in ipairs(candidate.features) do
+                    if feature == "configuration:needs_setup" then needs_setup = true end
+                    if feature == "login:refused" then login_refused = true end
+                    if feature == "reason:diagnostic" then diagnostic = true end
+                    provider = feature:match("^driver:(.+)$") or provider
+                end
+                local reason = candidate.reasons[1] or (ready and "" or candidate.status)
+                if not needs_setup and not ready then
+                    if login_refused then reason = "Login needed · " .. reason
+                    elseif provider ~= "" and candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."
+                    elseif provider ~= "" and candidate.status == "unconfigured" then reason = "Run " .. provider .. " to sign in, then refresh."
+                    elseif diagnostic and provider ~= "" then reason = "This agent cannot run with the current setup. Check its folder and permissions."
+                    elseif diagnostic then reason = "This agent's setup is unavailable. Check installation, folder and permissions." end
                 end
                 if not ready then listing.unavailable = listing.unavailable + 1 end
                 if ready or include_unavailable then

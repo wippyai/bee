@@ -339,7 +339,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
             saved_preferences = validated
         end
         local decoded, policy_error = policy.decode(launch.policy_ref, policy_entry, nil, saved_preferences)
-        if not decoded then return nil, fail("INVALID", policy_error or "policy") end
+        if not decoded then return nil, fail(saved_preferences and "UNSUPPORTED_CAPABILITY" or "INVALID", policy_error or "policy") end
         launch_policy = decoded
     end
     -- Resolve placement alongside the driver and policy from this immutable

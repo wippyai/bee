@@ -18,6 +18,7 @@ entries:
     bounds: bee.drivers.values:bounds
     login_evidence: bee.drivers.locate:login_evidence
     login_evidence_types: bee.drivers:login_types
+    types: bee.drivers:types
 - name: kernel
   kind: registry.entry
   meta:

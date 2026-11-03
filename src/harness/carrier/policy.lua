@@ -211,7 +211,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: vocabulary.
     end
     local answer_mode = exchange and "ask" or "provider"
     if selected and selected.bee and selected.bee.permission_answers then answer_mode = selected.bee.permission_answers end
-    if answer_mode ~= "provider" and not exchange then return nil, "bee.permission_answers=" .. answer_mode .. " requires a host-accepted permission transport" end
+    if answer_mode ~= "provider" and not exchange then return nil, "Permission answers: " .. answer_mode .. " requires a host-accepted permission transport" end
     if answer_mode == "provider" then exchange = nil end
     local digest_input: {[string]: unknown} = {}
     for key, value in pairs(data) do digest_input[key] = value end

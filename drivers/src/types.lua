@@ -66,7 +66,9 @@ type LoginEvidence = {provider: string, command: string, files: {RequiredFile}, 
 type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
 type LocatePlatform = {os: string?, arch: string?, compatible: boolean?}
 type LocateExecutable = {name: string, present: boolean?, version: string?}
-type LocateLogin = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?}
+-- refused marks a login check whose evidence the host refused to read, such
+-- as a login file with unsafe permissions; reason carries the refusal.
+type LocateLogin = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?, refused: boolean?}
 type LocateResult = {capabilities: {[string]: {supported: boolean, reason: string?}}?, provider: string, status: LocateStatus, executable: LocateExecutable,
     login: LocateLogin, platform: LocatePlatform, checked_at: string?, reason: string?}
 type ProviderHomeFile =

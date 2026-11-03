@@ -10,7 +10,7 @@ local materialization = require("materialization")
 local json = require("json")
 
 type Object = {[string]: unknown}
-type Candidate = {ref: string, kind: string, status: string, reasons: {string}}
+type Candidate = {ref: string, kind: string, status: string, reasons: {string}, features: {string}}
 type Page = {items: {Candidate}, next: string?, complete: boolean, unavailable_count: integer,
     diagnostics: {Object}}
 
@@ -40,7 +40,8 @@ local function define_tests()
             for _, candidate in ipairs(page.items) do
                 if candidate.ref == "edited-profile" then
                     test.eq(candidate.status, "incompatible", table.concat(candidate.reasons, "; "))
-                    test.eq(candidate.reasons[1], "bee.permission_answers=ask requires a host-accepted permission transport")
+                    test.eq(candidate.reasons[1], "Permission answers: ask requires a host-accepted permission transport")
+                    for _, feature in ipairs(candidate.features) do test.neq(feature, "reason:diagnostic", "the refusal is the person's to act on") end
                     found = true
                 end
             end

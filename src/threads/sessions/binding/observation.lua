@@ -521,15 +521,6 @@ M.ref = ref
 M.finish_closing = finish_closing
 M.finish_removal = finish_removal
 M.describe = describe
-M.work_value = work_value
-M.operation_state = operation_state
-M.observed = observed
-M.work_observation = work_observation
-M.awaited = awaited
-M.now_ms = now_ms
-M.timeout_of = timeout_of
-M.op_descriptor = op_descriptor
-M.operation_receipt = operation_receipt
 M.internal_key = internal_key
 M.cancel_settle_key = cancel_settle_key
 return M

@@ -300,9 +300,6 @@ local function reply_of(answer: unknown): string
     return "The agent ended its turn; its reply is shown in its terminal"
 end
 
--- message_text is what a queued message types into the agent's prompt; a
--- message from another session or a person names its sender the way
--- Sessions lists it.
 local HEADER = "[Bee message from "
 -- prompt_text is a message's input as the text typed for it.
 local function prompt_text(value: unknown): string?
@@ -310,7 +307,10 @@ local function prompt_text(value: unknown): string?
     return (canonical.encode(value, 16384, 16))
 end
 
-function M.message_text(input: unknown, sender: Object?, session: string): string?
+-- message_text is what a queued message types into the agent's prompt; a
+-- message from another session or a person names its sender the way
+-- Sessions lists it.
+local function message_text(input: unknown, sender: Object?, session: string): string?
     local prompt = prompt_text(input)
     if not prompt then return nil end
     if not sender or sender.id == session then return prompt end
@@ -386,7 +386,7 @@ function M.launch_prompt(raw_request: unknown): Reply
     end
     local pulled, pull_error = journal.invoke("turn_pull", {turn = turn, claim = claim})
     local input = object(pulled)
-    local text = input and M.message_text(input.input, object(input.sender), session)
+    local text = input and message_text(input.input, object(input.sender), session)
     if pull_error or not input or not text then return unavailable(pull_error or "the waiting message is unreadable", nil) end
     return succeed({prompt = text})
 end
@@ -457,7 +457,7 @@ deliver = function(session: string, key_seed: string): string?
     local turn, claim = tostring(next_turn.turn), tostring(next_turn.claim)
     local pulled, pull_error = journal.invoke("turn_pull", {turn = turn, claim = claim})
     local input = object(pulled)
-    local text = input and M.message_text(input.input, object(input.sender), session)
+    local text = input and message_text(input.input, object(input.sender), session)
     if pull_error or not input or not text then return pull_error or "the queued message is unreadable" end
     local typed, type_error = funcs.call(TYPE, {session = session, text = text})
     local reply = object(typed)

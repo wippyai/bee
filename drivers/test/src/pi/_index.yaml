@@ -10,10 +10,7 @@ entries:
   imports:
     test: wippy.test:test
     codec: bee.drivers.codec:pi_json
-    normalize: bee.drivers.pi.binding:normalize
-    prepare: bee.drivers.pi.binding:prepare
-    dispatch: bee.drivers.pi.binding:dispatch
-    configure: bee.drivers.pi.binding:configure
+    host_methods: bee.drivers.tests.support:host_methods
     descriptor: bee.drivers.descriptor:descriptor
     profile: bee.drivers.profiles:profile
     format: bee.drivers.credentials:format

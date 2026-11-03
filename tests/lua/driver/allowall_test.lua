@@ -52,7 +52,8 @@ local function define_tests()
                         for name, value in pairs(assert(bounds.object(applied.prepare_options))) do request[name] = value end
                         request.profile_id, request.brief, request.placement = context == "window" and "window" or "batch", "Fixture", placed
                         if context == "resume" then request.resume_ref = "fixture-session" end
-                        local reply = universal.prepare(ref)(request)
+                        request.descriptor_ref = ref
+                        local reply = universal.prepare(request)
                         assert(reply.ok == true, tostring(reply.error))
                         local argv = assert(bounds.ids(assert(bounds.object(reply.launch)).argv, false))
                         local found = false

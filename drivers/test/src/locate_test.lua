@@ -2,13 +2,18 @@
 local login_evidence_types = require("login_evidence_types")
 local test = require("test")
 local locate = require("locate")
-local claude = require("claude")
-local codex = require("codex")
-local opencode = require("opencode")
-local agy = require("agy")
-local grok = require("grok")
-local muse = require("muse")
-local pi = require("pi")
+local methods = require("methods")
+
+-- The shared locate method, called as a host calls it for one shipped binding.
+local function bound(provider: string)
+    return {handle = function(input: {[string]: unknown})
+        local request: {[string]: unknown} = {descriptor_ref = "bee.drivers." .. provider .. ".descriptor:cli"}
+        for key, value in pairs(input) do request[key] = value end
+        return methods.locate(request)
+    end}
+end
+local claude, codex, opencode, agy = bound("claude"), bound("codex"), bound("opencode"), bound("agy")
+local grok, muse, pi = bound("grok"), bound("muse"), bound("pi")
 local descriptor = require("descriptor")
 local login_evidence = require("login_evidence")
 

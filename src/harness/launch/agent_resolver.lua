@@ -18,7 +18,6 @@ M.TRAIT_TYPE = "agent.trait"
 -- whose meta declares whether it accepts a model. No driver id is listed
 -- here: an installed driver package routes the moment its binding is
 -- activated and its accepts_model declaration is read.
-M.DRIVER_BINDING_TYPE = "harness.driver"
 M.MAX_DRIVER_BINDINGS = 64
 M.MAX_PROMPT_BYTES = 16384
 M.MAX_CONTEXT_KEYS = 16
@@ -241,9 +240,8 @@ local function resolve_cli_route(pinned: Pinned, driver_id: string): (boolean, b
     if driver_id == "" then return false, false, nil end
     local active, active_error = driver_resolver.active(pinned)
     if not active then return false, false, active_error end
-    local found, find_error = pinned:find({[".kind"] = "contract.binding", ["meta.type"] = M.DRIVER_BINDING_TYPE})
-    if find_error then return false, false, "read driver bindings for " .. driver_id end
-    if not found then return false, false, nil end
+    local found, find_error = driver_resolver.drivers(pinned)
+    if not found then return false, false, tostring(find_error) .. " for " .. driver_id end
     local count = 0
     for _, raw in ipairs(found) do
         count = count + 1

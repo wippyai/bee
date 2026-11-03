@@ -240,7 +240,7 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
     end
     local candidate, candidate_error = measured_candidate(cache, readiness_cache, kind, candidate_ref, title, revision, decoded, plan, refused, generation)
     if not candidate then return nil, candidate_error end
-    local binding = harness_catalog.entry(pinned, decoded.binding_ref)
+    local binding = harness_catalog.binding(pinned, decoded.binding_ref)
     local binding_meta = binding and bounds.object(binding.meta)
     local driver = binding_meta and bounds.id(binding_meta.driver_id) or "unknown"
     local result: locate.Candidate = {ref = candidate.ref, kind = candidate.kind, revision = candidate.revision,

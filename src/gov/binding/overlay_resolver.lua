@@ -16,6 +16,7 @@ local application_capabilities = require("application_capabilities")
 local workspace_applications = require("workspace_applications")
 
 local source_check = require("source_check")
+local driver_resolver = require("driver_resolver")
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {[string]: unknown}
@@ -250,28 +251,14 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     for id, entry in pairs(current_raw) do
         if not (captured.overlay_ids and captured.overlay_ids[id]) then final[id] = entry end
     end
-    local driver_artifact = false
-    for _, entry in ipairs(incoming) do
-        local meta = object(entry.meta)
-        if entry.kind == "contract.binding" and meta and meta.type == "harness.driver" then driver_artifact = true end
-    end
+    local driver_artifact = #driver_resolver.driver_refs(incoming) > 0
     for _, entry in ipairs(incoming) do
         -- Incoming registry metadata is neither ownership evidence nor an
         -- overlay instruction. Keep the exact public definition ID and body.
         local clean: Entry = {}
         for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
         if driver_artifact and (clean.kind == "security.policy" or clean.kind == "security.policy.expr") then
-            local data = object(clean.data)
-            local policy_data = data and object(data.policy) or nil
-            local actions = policy_data and bounds.dense_list(policy_data.actions, 2, "driver descriptor actions") or nil
-            if not policy_data or policy_data.effect ~= "allow" or not actions or #actions == 0 then
-                return nil, nil, "workspace driver policies must be descriptor read policies"
-            end
-            for _, action in ipairs(actions) do
-                if action ~= "registry.get" and action ~= "registry.snapshot" then
-                    return nil, nil, "workspace driver policies may only read registry descriptors"
-                end
-            end
+            return nil, nil, "a workspace driver declares no security policy; its methods receive their descriptor from the host"
         end
         final[clean.id] = clean
         local measured, measured_error = measured_entry(clean, component)

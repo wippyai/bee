@@ -58,10 +58,8 @@ function M.discover(request: Request): (Declaration?, string?)
     local profile, err = resolver.profile(pinned, request.binding_ref, request.profile_id)
     if not profile then return nil, err end
     if not profile.observer then return nil, nil end
-    local binding = assert(pinned:get(request.binding_ref))
-    local binding_meta = assert(bounds.object(binding.meta))
-    local profiles_ref = assert(bounds.id(binding_meta.profiles_ref))
-    local profile_entry = assert(pinned:get(profiles_ref))
+    local binding = assert(resolver.binding(pinned, request.binding_ref))
+    local profile_entry = assert(resolver.declaration(pinned, binding))
     local profile_data = assert(bounds.object(profile_entry.data))
     local measurements, measurement_error = observer_protocol.collect(pinned, request.binding_ref, profile_data)
     if not measurements then return nil, measurement_error end

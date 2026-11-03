@@ -46,6 +46,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json, funcs]
   imports:
+    described: bee.tests.support.driver:configure
     principals: bee.tests.support.principals:bound
     bounds: bee.drivers.values:bounds
     test: wippy.test:test

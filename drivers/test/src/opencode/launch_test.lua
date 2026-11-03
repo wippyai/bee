@@ -4,8 +4,8 @@
 -- `opencode run --help`).
 local test = require("test")
 local launch = require("launch")
-local prepare = require("prepare")
-local dispatch = require("dispatch")
+local prepare = require("host_methods").prepare("opencode")
+local dispatch = require("host_methods").dispatch("opencode")
 local quote = require("quote")
 local function define_tests()
     test.describe("OpenCode launch", function()

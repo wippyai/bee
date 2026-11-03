@@ -8,6 +8,8 @@ type Configuration = {secret_fields: {SecretField}?, composition: Composition?, 
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
 type Delivery = {environment: {[string]: string}?,arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
-type Request = {placement: Object?, option_provenance: Object?, configure_renderer: string?, option_values: Object?, context: string?,instructions_path: string?, instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, private_home: boolean?, attempt_id: string?, fixture: boolean}
+-- descriptor: the CLI descriptor declaration the driver binding names, which
+-- the host reads for a configure method that runs without registry authority.
+type Request = {placement: Object?, option_provenance: Object?, configure_renderer: string?, descriptor: Object?, option_values: Object?, context: string?,instructions_path: string?, instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, private_home: boolean?, attempt_id: string?, fixture: boolean}
 
 return {}

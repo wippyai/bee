@@ -307,6 +307,7 @@ function M.plan(io: IO, request: Request, prompt: string?): (Plan?, string?)
         return nil, "launch policy does not authorize host HOME"
     end
     local prepare_request: {[string]: unknown} = {}
+    prepare_request.descriptor_ref = binding.descriptor_ref
     prepare_request.placement = measured.placement
     prepare_request.option_provenance = launch_policy.option_provenance
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end

@@ -34,7 +34,7 @@ function M.permission_summary(form: Form): string?
     local profile = form.draft
     local pinned = catalog.pin()
     if not pinned then return nil end
-    local binding = catalog.entry(pinned, profile.driver_binding_ref)
+    local binding = catalog.binding(pinned, profile.driver_binding_ref)
     local meta = binding and bounds.object(binding.meta)
     local ref = meta and bounds.id(meta.descriptor_ref)
     local descriptor = ref and descriptors.load_from(pinned, ref)
@@ -47,7 +47,7 @@ function M.review(form: Form): (string?, string?)
     if not profile then return nil, invalid end
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
-    local binding = catalog.entry(pinned, profile.driver_binding_ref)
+    local binding = catalog.binding(pinned, profile.driver_binding_ref)
     local meta = binding and bounds.object(binding.meta)
     local ref = meta and bounds.id(meta.descriptor_ref)
     if not ref then return nil, "Driver descriptor is missing" end
@@ -220,7 +220,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     local function allows(name: string): boolean
         return definition.allows(decoded, name) and bounds.member(name, admitted) ~= nil
     end
-    local binding_entry = catalog.entry(pinned, decoded.binding_ref)
+    local binding_entry = catalog.binding(pinned, decoded.binding_ref)
     local binding_meta = binding_entry and bounds.object(binding_entry.meta)
     local driver_name = binding_meta and bounds.id(binding_meta.driver_id)
     local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
@@ -355,7 +355,7 @@ function M.option_errors(form: Form): ({[string]: string}, string?)
     if not profile then return {}, invalid end
     local pinned, pin_error = catalog.pin()
     if not pinned then return {}, pin_error end
-    local binding = catalog.entry(pinned, profile.driver_binding_ref)
+    local binding = catalog.binding(pinned, profile.driver_binding_ref)
     local meta = binding and bounds.object(binding.meta)
     local descriptor_ref = meta and bounds.id(meta.descriptor_ref)
     if not descriptor_ref then return {}, "Driver descriptor is missing" end

@@ -874,18 +874,6 @@ entries:
 version: '1.0'
 namespace: bee.drivers.opencode.binding
 entries:
-- name: prepare
-  kind: function.lua
-  source: file://prepare.lua
-  method: handle
-  imports:
-    universal: bee.drivers.binding:universal
-- name: dispatch
-  kind: function.lua
-  source: file://dispatch.lua
-  method: handle
-  imports:
-    universal: bee.drivers.binding:universal
 - name: configure
   kind: function.lua
   source: file://configure.lua
@@ -896,32 +884,6 @@ entries:
     bounds: bee.drivers.values:bounds
     configure_protocol: bee.drivers:configuration_types
     universal: bee.drivers.binding:universal
-  security:
-    policies:
-    - bee.drivers.opencode.binding:configuration_policy
-- name: locate
-  kind: function.lua
-  source: file://locate.lua
-  method: handle
-  imports:
-    universal: bee.drivers.binding:universal
-- name: normalize
-  kind: function.lua
-  source: file://normalize.lua
-  method: handle
-  imports:
-    universal: bee.drivers.binding:universal
-- name: configuration_policy
-  kind: security.policy.expr
-  policy:
-    effect: allow
-    actions:
-    - registry.get
-    - registry.snapshot
-    - funcs.call
-    resources:
-    - '*'
-    expression: (action == "registry.get" && resource == "bee.drivers.opencode.descriptor:cli") || action == "registry.snapshot"
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -936,13 +898,13 @@ entries:
   contracts:
   - contract: bee.drivers:driver
     methods:
-      prepare: bee.drivers.opencode.binding:prepare
-      dispatch: bee.drivers.opencode.binding:dispatch
-      normalize: bee.drivers.opencode.binding:normalize
+      prepare: bee.drivers.universal:prepare
+      dispatch: bee.drivers.universal:dispatch
+      normalize: bee.drivers.universal:normalize
       configure: bee.drivers.opencode.binding:configure
   - contract: bee.drivers:locate_facet
     methods:
-      locate: bee.drivers.opencode.binding:locate
+      locate: bee.drivers.universal:locate
   meta:
     type: harness.driver
     driver_id: opencode
@@ -1040,38 +1002,7 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     end
     return {ok = true, delivery = {arguments = {}, files = files}}
 end
-return {handle = universal.configure("opencode", {opencode = handle}, "bee.drivers.opencode.descriptor:cli")}
-```
-
-## drivers/src/opencode/binding/dispatch.lua
-
-```lua
--- MIT. The universal driver implements this contract method.
-local universal = require("universal")
-return {handle = universal.dispatch("bee.drivers.opencode.descriptor:cli")}
-```
-
-## drivers/src/opencode/binding/locate.lua
-
-```lua
--- MIT. The universal driver implements this contract method.
-local universal = require("universal")
-return {handle = universal.locate("bee.drivers.opencode.descriptor:cli")}
-```
-
-## drivers/src/opencode/binding/normalize.lua
-
-```lua
-local universal = require("universal")
-return {handle = universal.normalize("bee.drivers.opencode.descriptor:cli")}
-```
-
-## drivers/src/opencode/binding/prepare.lua
-
-```lua
--- MIT. The universal driver implements this contract method.
-local universal = require("universal")
-return {handle = universal.prepare("bee.drivers.opencode.descriptor:cli")}
+return {handle = universal.configure("opencode", {opencode = handle})}
 ```
 
 ## drivers/src/opencode/observer/_index.yaml

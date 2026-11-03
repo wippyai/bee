@@ -187,8 +187,7 @@ end
 
 function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: string, cache: Cache, placement_profile_ref: string?, policy_ref: string?): driver_types.LocateResult?
     local cache_key = binding_ref .. "\n" .. profile_id .. "\n" .. (placement_profile_ref or "") .. "\n" .. (policy_ref or "")
-    local binding_raw, binding_error = pinned:get(binding_ref)
-    local binding = not binding_error and bounds.object(binding_raw) or nil
+    local binding = driver_resolver.binding(pinned, binding_ref)
     local meta = binding and bounds.object(binding.meta) or nil
     local provider = meta and bounds.id(meta.driver_id) or nil
     if not binding or not provider then return nil end

@@ -39,4 +39,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.gateway and #request.gateway.hooks > 0 then arguments = {"--profile", "bee"} end
     return {ok = true, delivery = {arguments = arguments, files = files}}
 end
-return {handle = universal.configure("codex", {codex = handle}, "bee.drivers.codex.descriptor:cli")}
+return {handle = universal.configure("codex", {codex = handle})}

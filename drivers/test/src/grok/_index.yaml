@@ -11,9 +11,7 @@ entries:
   imports:
     test: wippy.test:test
     launch: bee.drivers.tests.support.driver:grok_launch
-    prepare: bee.drivers.grok.binding:prepare
-    configure: bee.drivers.grok.binding:configure
-    dispatch: bee.drivers.grok.binding:dispatch
+    host_methods: bee.drivers.tests.support:host_methods
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua
@@ -25,7 +23,7 @@ entries:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     protocol: bee.drivers.tests.support.driver:grok_protocol
-    normalize: bee.drivers.grok.binding:normalize
+    host_methods: bee.drivers.tests.support:host_methods
 - name: configuration_test
   kind: function.lua
   source: file://configuration_test.lua
@@ -37,7 +35,7 @@ entries:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     configuration: bee.drivers.grok.binding:configuration
-    configure: bee.drivers.grok.binding:configure
+    host_methods: bee.drivers.tests.support:host_methods
 - name: acp_test
   kind: function.lua
   source: file://acp_test.lua
@@ -47,6 +45,4 @@ entries:
   imports:
     test: wippy.test:test
     bounds: bee.drivers.values:bounds
-    normalize: bee.drivers.grok.binding:normalize
-    prepare: bee.drivers.grok.binding:prepare
-    configure: bee.drivers.grok.binding:configure
+    host_methods: bee.drivers.tests.support:host_methods

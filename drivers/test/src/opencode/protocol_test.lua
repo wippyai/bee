@@ -7,7 +7,7 @@ local bounds = require("bounds")
 local fs = require("fs")
 local stream_json = require("stream_json")
 local protocol = require("protocol")
-local normalize = require("normalize")
+local normalize = require("host_methods").normalize("opencode")
 local observation = require("observation")
 local function fixture(path: string): string
     local volume, err = fs.get("bee.drivers.tests:fixtures")

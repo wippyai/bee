@@ -55,6 +55,117 @@ function M.entry(pinned: registry.Snapshot, ref: string): (Entry?, string?)
     if not entry then return nil, nil end
     return bounds.object(entry), nil
 end
+
+-- A CLI descriptor that no harness.driver binding names is a whole driver: it
+-- is its own binding, whose methods are the shared implementation and whose
+-- one profile is a window on a PTY. A driver that needs its own methods or
+-- profiles declares a binding naming the descriptor.
+M.BINDING_TYPE = "harness.driver"
+M.METHODS = {prepare = "bee.drivers.universal:prepare", dispatch = "bee.drivers.universal:dispatch",
+    normalize = "bee.drivers.universal:normalize", configure = "bee.drivers.universal:configure"}
+M.LOCATE = "bee.drivers.universal:locate"
+
+local function is_binding(entry: Entry): boolean
+    local meta = bounds.object(entry.meta)
+    return entry.kind == "contract.binding" and meta ~= nil and meta.type == M.BINDING_TYPE
+end
+
+local function is_descriptor(entry: Entry): boolean
+    local meta = bounds.object(entry.meta)
+    return entry.kind == "registry.entry" and meta ~= nil and meta.type == descriptor.TYPE
+end
+
+local function descriptor_binding(id: string, entry: Entry): Entry
+    local data = bounds.object(entry.data) or {}
+    return {id = id, kind = "contract.binding",
+        meta = {type = M.BINDING_TYPE, driver_id = bounds.id(data.provider), descriptor_ref = id, profiles_ref = id, accepts_model = false},
+        data = {contracts = {
+            {contract = "bee.drivers:driver", methods = {prepare = M.METHODS.prepare, dispatch = M.METHODS.dispatch,
+                normalize = M.METHODS.normalize, configure = M.METHODS.configure}},
+            {contract = "bee.drivers:locate_facet", methods = {locate = M.LOCATE}},
+        }}}
+end
+
+-- driver_refs: the drivers a list of entries declares, its harness.driver
+-- bindings and the descriptors none of them names, in id order.
+function M.driver_refs(entries: {Entry}): {string}
+    local named: {[string]: boolean} = {}
+    for _, entry in ipairs(entries) do
+        local meta = bounds.object(entry.meta)
+        local ref = meta and bounds.id(meta.descriptor_ref)
+        if ref and is_binding(entry) then named[ref] = true end
+    end
+    local refs: {string} = {}
+    for _, entry in ipairs(entries) do
+        local id = bounds.id(entry.id)
+        if id and (is_binding(entry) or (is_descriptor(entry) and not named[id])) then refs[#refs + 1] = id end
+    end
+    table.sort(refs)
+    return refs
+end
+
+-- binding: the harness binding a driver reference names. A descriptor that is
+-- its own driver yields the binding it implies; any other entry comes back as
+-- it is, for the caller to refuse.
+function M.binding(pinned: registry.Snapshot, ref: string): (Entry?, string?)
+    local entry, entry_error = M.entry(pinned, ref)
+    if not entry then return nil, entry_error end
+    if not is_descriptor(entry) then return entry, nil end
+    local claims, find_error = pinned:find({[".kind"] = "contract.binding", ["meta.type"] = M.BINDING_TYPE, ["meta.descriptor_ref"] = ref})
+    if find_error or not claims then return nil, "read driver bindings naming " .. ref end
+    for _, raw in ipairs(claims) do
+        local claim = bounds.object(raw)
+        if claim and is_binding(claim) then return entry, nil end
+    end
+    return descriptor_binding(ref, entry), nil
+end
+
+-- drivers: every driver binding in the snapshot, declared or implied by a
+-- descriptor, in id order.
+function M.drivers(pinned: registry.Snapshot): ({Entry}?, string?)
+    local bindings, binding_error = pinned:find({[".kind"] = "contract.binding", ["meta.type"] = M.BINDING_TYPE})
+    if binding_error or not bindings then return nil, "read driver bindings" end
+    local descriptors, descriptor_error = pinned:find({[".kind"] = "registry.entry", ["meta.type"] = descriptor.TYPE})
+    if descriptor_error or not descriptors then return nil, "read CLI descriptors" end
+    local entries: {Entry} = {}
+    local by_id: {[string]: Entry} = {}
+    for _, list in ipairs({bindings, descriptors}) do
+        for _, raw in ipairs(list) do
+            local entry = bounds.object(raw)
+            local id = entry and bounds.id(entry.id)
+            if entry and id and (is_binding(entry) or is_descriptor(entry)) then
+                entries[#entries + 1] = entry
+                by_id[id] = entry
+            end
+        end
+    end
+    local found: {Entry} = {}
+    for _, id in ipairs(M.driver_refs(entries)) do
+        local entry = by_id[id]
+        found[#found + 1] = is_descriptor(entry) and descriptor_binding(id, entry) or entry
+    end
+    return found, nil
+end
+
+-- declaration: the harness.profile record of a driver binding. A descriptor
+-- driver's record declares its one window profile.
+function M.declaration(pinned: registry.Snapshot, binding: Entry): (Entry?, string?)
+    local meta = bounds.object(binding.meta) or {}
+    local profiles_ref = bounds.id(meta.profiles_ref)
+    if not profiles_ref then return nil, nil end
+    local id = bounds.id(binding.id)
+    if not id or profiles_ref ~= id or meta.descriptor_ref ~= id then return M.entry(pinned, profiles_ref) end
+    local source, source_error = M.entry(pinned, id)
+    if not source then return nil, source_error end
+    local data = bounds.object(source.data) or {}
+    return {id = id, kind = "registry.entry", meta = {type = "harness.profile", driver_ref = id},
+        data = {driver = {schema_revision = profile_codec.SCHEMA_REVISION, kind = "harness",
+            title = bounds.id(data.provider) or id, implementation_version = bounds.id(data.schema_revision) or descriptor.SCHEMA,
+            default_profile = "window",
+            profiles = {{id = "window", mode = "window", protocol = "pty", protocol_revision = "native-window-1",
+                answer_path = {strategy = "none"}, resume = {strategy = "none", portable = false}, inbound = {},
+                interrupt = {methods = {"signal_group"}}}}}}}, nil
+end
 -- activation_ref names the host's activation declaration, as the activation
 -- requirement bound it in the same registry generation.
 function M.activation_ref(pinned: registry.Snapshot): (string?, string?)
@@ -92,7 +203,7 @@ end
 function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, string?, string?)
     local active, active_error = M.active(pinned)
     if not active or not active[binding_ref] then return nil, active_error or "binding " .. binding_ref .. " is not activated", nil end
-    local binding, binding_error = M.entry(pinned, binding_ref)
+    local binding, binding_error = M.binding(pinned, binding_ref)
     if binding_error then return nil, binding_error, nil end
     local meta = binding and bounds.object(binding.meta) or nil
     if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" then return nil, "binding " .. binding_ref .. " is not an activated driver", nil end
@@ -137,11 +248,13 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
     return target, nil, driver_id
 end
 
-function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, target: string?, decoded: descriptor.Descriptor?): (string?, string?, descriptor.Descriptor?)
+-- configure_renderer: the renderer the binding's descriptor selects, the decoded
+-- descriptor, and its declaration as the configure method receives it.
+function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, target: string?, decoded: descriptor.Descriptor?): (string?, string?, descriptor.Descriptor?, Entry?)
     local declared, declaration_error = M.configure(pinned, binding_ref)
     if not declared then return nil, declaration_error end
     if target ~= nil and target ~= declared then return nil, "configuration target differs from the selected driver binding" end
-    local binding, binding_error = M.entry(pinned, binding_ref)
+    local binding, binding_error = M.binding(pinned, binding_ref)
     if binding_error then return nil, binding_error end
     local meta = binding and bounds.object(binding.meta) or nil
     local provider = meta and bounds.id(meta.driver_id) or nil
@@ -154,8 +267,11 @@ function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, ta
     local selected, descriptor_error = decoded, nil
     if not selected then selected, descriptor_error = descriptor.load_from(pinned, descriptor_ref) end
     if descriptor_error then return nil, descriptor_error end
+    local source, source_error = M.entry(pinned, descriptor_ref)
+    if not source then return nil, source_error or "CLI descriptor " .. descriptor_ref .. " is unavailable" end
+    local declaration = bounds.object(source.data)
     if selected and selected.provider ~= provider then return nil, "driver binding descriptor provider does not match driver_id" end
-    return selected and selected.configure or nil, nil, selected
+    return selected and selected.configure or nil, nil, selected, declaration
 end
 
 -- The selected immutable driver profile may name a typed CLI adapter for
@@ -164,7 +280,7 @@ end
 function M.profile(pinned: registry.Snapshot, binding_ref: string, profile_id: string): (driver_types.Profile?, string?)
     local active, active_error = M.active(pinned)
     if not active or not active[binding_ref] then return nil, active_error or "binding " .. binding_ref .. " is not activated" end
-    local binding, binding_error = M.entry(pinned, binding_ref)
+    local binding, binding_error = M.binding(pinned, binding_ref)
     if binding_error then return nil, binding_error end
     local meta = binding and bounds.object(binding.meta) or nil
     if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" then
@@ -174,7 +290,7 @@ function M.profile(pinned: registry.Snapshot, binding_ref: string, profile_id: s
     -- Legacy and fixture drivers without declarative profiles cannot opt into
     -- additional sandbox roots; they retain their existing configure path.
     if not profiles_ref then return nil, nil end
-    local profiles_entry, profiles_error = M.entry(pinned, profiles_ref)
+    local profiles_entry, profiles_error = M.declaration(pinned, binding)
     if profiles_error then return nil, profiles_error end
     local profiles_meta = profiles_entry and bounds.object(profiles_entry.meta) or nil
     local profiles_data = profiles_entry and bounds.object(profiles_entry.data) or nil

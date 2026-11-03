@@ -34,6 +34,8 @@ function M.binding(input: Input): vocabulary.Binding
     if driver_id == "" then fail("meta.driver_id is not an identifier") end
     local profiles_ref = bounds.id(meta.profiles_ref) or ""
     if profiles_ref == "" then fail("meta.profiles_ref is not an identifier") end
+    local descriptor_ref = bounds.id(meta.descriptor_ref)
+    if meta.descriptor_ref ~= nil and not descriptor_ref then fail("meta.descriptor_ref is not an identifier") end
     if entry.kind ~= "contract.binding" then fail("binding must be a contract.binding") end
     local data = bounds.object(entry.data) or {}
     local contracts: unknown = data.contracts
@@ -146,7 +148,7 @@ function M.binding(input: Input): vocabulary.Binding
     end
     local state: "compatible" | "incompatible" = "compatible"
     if #diagnostics > 0 then state = "incompatible" end
-    return {binding_id = binding_id, driver_id = driver_id, title = title, implementation_version = version, profiles_ref = profiles_ref,
+    return {binding_id = binding_id, driver_id = driver_id, title = title, implementation_version = version, profiles_ref = profiles_ref, descriptor_ref = descriptor_ref,
         binding_digest = {entry = binding_digest or "", scope = "entry"}, profile_digest = {entry = profile_digest, scope = "entry"},
         default_profile = default_profile, profiles = profiles, methods = mapped, state = state, activated = input.activated, diagnostics = diagnostics}
 end

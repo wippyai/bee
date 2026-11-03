@@ -1,0 +1,43 @@
+version: '1.0'
+namespace: bee.drivers.universal
+entries:
+- name: prepare
+  kind: function.lua
+  meta:
+    comment: Launch specification for the profile and brief, rendered from the CLI descriptor the request names
+  source: file://methods.lua
+  method: prepare
+  imports:
+    universal: bee.drivers.binding:universal
+- name: dispatch
+  kind: function.lua
+  meta:
+    comment: Continuation launch for a retained conversation, rendered from the CLI descriptor the request names
+  source: file://methods.lua
+  method: dispatch
+  imports:
+    universal: bee.drivers.binding:universal
+- name: normalize
+  kind: function.lua
+  meta:
+    comment: Folds one output envelope through the codec the CLI descriptor the request names selects
+  source: file://methods.lua
+  method: normalize
+  imports:
+    universal: bee.drivers.binding:universal
+- name: configure
+  kind: function.lua
+  meta:
+    comment: Configuration delivery the descriptor's options render, for a descriptor whose configure renderer is plain
+  source: file://methods.lua
+  method: configure
+  imports:
+    universal: bee.drivers.binding:universal
+- name: locate
+  kind: function.lua
+  meta:
+    comment: Readiness of the CLI the request's descriptor names from host-probed executable, login and platform facts
+  source: file://methods.lua
+  method: locate
+  imports:
+    universal: bee.drivers.binding:universal

@@ -96,13 +96,21 @@ local function changes(spec: Object, entries: {Entry})
     spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
 end
 
-local function driver_fixture(target_path: string?, action: string?, base: string?): (Deps, Object)
+-- driver_fixture: a workspace driver artifact. It declares a harness binding,
+-- or only a CLI descriptor when descriptor_only is set; action adds a security
+-- policy granting that action.
+local function driver_fixture(target_path: string?, action: string?, base: string?, descriptor_only: boolean?): (Deps, Object)
     local name = base or "bee.driver.stub"
     local binding_id = name .. ".binding:binding"
-    local items: {Entry} = {
-        {id = binding_id, kind = "contract.binding", meta = {type = "harness.driver"}, data = {}},
-        {id = name .. ".security:descriptor_read", kind = "security.policy", data = {policy = {effect = "allow", actions = {action or "registry.get"}, resources = {"*"}}}},
-    }
+    local items: {Entry} = {}
+    if descriptor_only then
+        items[1] = {id = name .. ".descriptor:cli", kind = "registry.entry", meta = {type = "bee.driver.cli_descriptor"}, data = {provider = "stub"}}
+    else
+        items[1] = {id = binding_id, kind = "contract.binding", meta = {type = "harness.driver"}, data = {}}
+    end
+    if action then
+        items[#items + 1] = {id = name .. ".security:access", kind = "security.policy", data = {policy = {effect = "allow", actions = {action}, resources = {"*"}}}}
+    end
     if target_path then
         items[#items + 1] = {id = name .. ".binding:activation", kind = "ns.requirement", meta = {value_kind = "contract.binding"},
             data = {default = binding_id, targets = {{entry = "bee.harness.launch:harness_activation", path = target_path}}}}
@@ -120,9 +128,9 @@ local function driver_fixture(target_path: string?, action: string?, base: strin
     deps.root = function(_: unknown): (resolver.Root?, string?) return {component = name, version = "v1"}, nil end
     deps.policy = function(_: unknown, _: resolver.Captured, _: resolver.Root): (Policy?, string?)
         return {node_id = "node-destination", policy_digest = SHA, packages = {[name] = true},
-            namespaces = {[name .. ".binding"] = true, [name .. ".security"] = true},
-            kinds = {["contract.binding"] = true, ["ns.requirement"] = true, ["security.policy"] = true},
-            databases = {}, grants = {[name .. ".security:descriptor_read"] = true}, modules = {}, applied = {}, migration_barrier = false}, nil
+            namespaces = {[name .. ".binding"] = true, [name .. ".descriptor"] = true, [name .. ".security"] = true},
+            kinds = {["contract.binding"] = true, ["registry.entry"] = true, ["ns.requirement"] = true, ["security.policy"] = true},
+            databases = {}, grants = {[name .. ".security:access"] = true}, modules = {}, applied = {}, migration_barrier = false}, nil
     end
     spec.artifact_bytes, spec.artifact_digest = made.bytes, made.digest
     return deps, spec

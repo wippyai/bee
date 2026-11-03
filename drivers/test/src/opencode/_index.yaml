@@ -11,8 +11,7 @@ entries:
   imports:
     test: wippy.test:test
     launch: bee.drivers.tests.support.driver:opencode_launch
-    prepare: bee.drivers.opencode.binding:prepare
-    dispatch: bee.drivers.opencode.binding:dispatch
+    host_methods: bee.drivers.tests.support:host_methods
     quote: bee.drivers.binding:quote
 - name: protocol_test
   kind: function.lua
@@ -27,7 +26,7 @@ entries:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     protocol: bee.drivers.tests.support.driver:opencode_protocol
-    normalize: bee.drivers.opencode.binding:normalize
+    host_methods: bee.drivers.tests.support:host_methods
     stream_json: bee.drivers.transport:stream_json
     observation: bee.drivers.records:observation
 - name: delivery_test

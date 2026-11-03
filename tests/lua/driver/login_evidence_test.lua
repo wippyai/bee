@@ -54,7 +54,7 @@ local function define_tests()
                 test.eq(login.files[1].variable, case.variable)
                 test.eq(login.files[1].default_directory, case.directory)
                 test.eq(login.files[1].path, case.path)
-                local found = assert(universal.locate("bee.drivers." .. case.provider .. ".descriptor:cli")({
+                local found = assert(universal.locate({descriptor_ref = "bee.drivers." .. case.provider .. ".descriptor:cli", 
                     profile_id = "window", configured = true, executable = {present = true, version = "1.2.3"},
                     login_checks = (function(): {{present: boolean?, exit_code: integer?}}
                         local checks: {{present: boolean?, exit_code: integer?}} = {}

@@ -13,6 +13,9 @@ entries:
     - bee.drivers.*.binding:prepare
     - bee.drivers.*.binding:dispatch
     - bee.drivers.*.binding:normalize
+    - bee.drivers.universal:prepare
+    - bee.drivers.universal:dispatch
+    - bee.drivers.universal:normalize
     - bee.threads.binding:turn_observation
     - bee.harness.binding:call
     - bee.approvals.binding:runtime_lease

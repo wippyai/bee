@@ -171,9 +171,9 @@ local function define_tests()
             local launch: unknown
             local reply: Object = {}
             if selected then
-                launch = universal.prepare(ref)({profile_id = "batch", brief = "Fixture", extra_mode = "careful", settings = {enabled = false}})
-                reply = universal.configure("fixture", {fixture = function(_request: configuration_types.Request): Object return {ok = true, delivery = {arguments = {}, files = {}}} end}, ref)
-                    ({fixture = false, option_values = {extra_mode = "careful", settings = {enabled = false}}})
+                launch = universal.prepare({descriptor_ref = ref, profile_id = "batch", brief = "Fixture", extra_mode = "careful", settings = {enabled = false}})
+                reply = universal.configure("fixture", {fixture = function(_request: configuration_types.Request): Object return {ok = true, delivery = {arguments = {}, files = {}}} end})
+                    ({fixture = false, descriptor = entry.data, option_values = {extra_mode = "careful", settings = {enabled = false}}})
             end
             entry.data = assert(json.decode(original))
             changes = registry.snapshot():changes(); assert(changes:update(entry)); assert(changes:apply())

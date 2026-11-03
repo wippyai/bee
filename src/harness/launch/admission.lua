@@ -198,7 +198,7 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     return {context = selected and selected.profile.context or nil, requestable = selected and selected.profile.requestable or nil, active_traits = selected and selected.profile.active_traits or nil,authority_grant_id = selected and selected.grant_id or nil,bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
 local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, placement_override: profiles.Placement?, spawn_overrides: profiles.Overrides?): (Plan?, Reply?, placement_types.Preferences?)
-    local binding_entry = catalog.entry(pinned, launch.binding_ref)
+    local binding_entry = catalog.binding(pinned, launch.binding_ref)
     local binding_meta = binding_entry and bounds.object(binding_entry.meta)
     local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
     local descriptor = descriptor_ref and descriptors.load_from(pinned, descriptor_ref)

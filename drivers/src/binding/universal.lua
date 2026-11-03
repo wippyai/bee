@@ -536,18 +536,38 @@ function M.launch(ref: string, placement: Object?): LaunchAPI
     }
 end
 
-function M.prepare(ref: string): (unknown) -> Object
-    return function(raw: unknown): Object return launch_reply(ref, raw, false) end
+-- The shared driver methods serve every binding: the host names the
+-- binding's descriptor in each request as descriptor_ref, and the method reads
+-- the rest of the request against that descriptor.
+local function descriptor_request(raw: unknown): (string?, Object?, string?)
+    local object = bounds.object(raw)
+    if not object then return nil, nil, "request must be an object" end
+    local ref = bounds.id(object.descriptor_ref)
+    if not ref then return nil, nil, "request names no CLI descriptor in descriptor_ref" end
+    local rest: Object = {}
+    for key, value in pairs(object) do
+        if key ~= "descriptor_ref" then rest[key] = value end
+    end
+    return ref, rest, nil
 end
 
-function M.dispatch(ref: string): (unknown) -> Object
-    return function(raw: unknown): Object return launch_reply(ref, raw, true) end
+function M.prepare(raw: unknown): Object
+    local ref, request, request_error = descriptor_request(raw)
+    if not ref then return {ok = false, error = request_error} end
+    return launch_reply(ref, request, false)
+end
+
+function M.dispatch(raw: unknown): Object
+    local ref, request, request_error = descriptor_request(raw)
+    if not ref then return {ok = false, error = request_error} end
+    return launch_reply(ref, request, true)
 end
 
 -- The contract's configure boundary decodes once and dispatches through the
 -- descriptor's renderer id. Renderers contain only the CLI-specific format
--- operation; decoding, bounds, and refusal shape stay in bee.drivers.
-function M.configure(default_renderer: string, renderers: {[string]: ConfigureRenderer}, descriptor_ref: string): (unknown) -> Object
+-- operation; decoding, bounds, and refusal shape stay in bee.drivers. The
+-- method runs without registry authority: the host hands it the descriptor.
+function M.configure(default_renderer: string, renderers: {[string]: ConfigureRenderer}): (unknown) -> Object
     if not bounds.id(default_renderer) or renderers[default_renderer] == nil then error("default configure renderer is unsupported") end
     return function(raw: unknown): Object
         local request, decode_error = configuration.decode_request(raw)
@@ -555,8 +575,9 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
         local selected = request.configure_renderer or default_renderer
         local renderer = renderers[selected]
         if not renderer then return {ok = false, error = "CLI descriptor selects an unsupported configure renderer"} end
-        local descriptor, descriptor_error = descriptor_reader.load(descriptor_ref)
-        if not descriptor then return {ok = false, error = descriptor_error or "Configuration descriptor is unavailable"} end
+        if not request.descriptor then return {ok = false, error = "Configuration descriptor is unavailable"} end
+        local descriptor, descriptor_error = descriptor_reader.decode(request.descriptor)
+        if not descriptor then return {ok = false, error = "CLI descriptor: " .. tostring(descriptor_error)} end
         local fields = bounds.object(descriptor.options.fields) or {}
         local generic: Object = {}
         for name, value in pairs(request.option_values or {}) do generic[name] = value end
@@ -602,15 +623,13 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
     end
 end
 
-function M.locate(ref: string): (unknown) -> (types.LocateResult?, string?)
-    return function(raw: unknown): (types.LocateResult?, string?)
-        local loaded, load_error = descriptor_reader.load(ref)
-        if not loaded then return nil, load_error end
-        local selected = loaded
-        local result, result_error = locate.evaluate({provider = selected.provider, executable = selected.executable,
-            login_evidence = selected.login_evidence}, raw)
-        return result, result_error
-    end
+function M.locate(raw: unknown): (types.LocateResult?, string?)
+    local ref, request, request_error = descriptor_request(raw)
+    if not ref then return nil, request_error end
+    local selected, load_error = descriptor_reader.load(ref)
+    if not selected then return nil, load_error end
+    return locate.evaluate({provider = selected.provider, executable = selected.executable,
+        login_evidence = selected.login_evidence}, request)
 end
 
 type DeferredProtocol = {
@@ -657,11 +676,21 @@ function M.protocol(ref: string): DeferredProtocol
     return setmetatable(protocol, {__index = function(_self: unknown, name: string): unknown return selected()[name] end})
 end
 
-function M.normalize(ref: string): (unknown) -> unknown
-    local selected = codec_selector(ref, codec_registry.bind)
-    return function(request: unknown): unknown
-        return selected()(request)
+local normalizers: {[string]: () -> (unknown) -> unknown} = {}
+function M.normalize(raw: unknown): unknown
+    local ref, request, request_error = descriptor_request(raw)
+    if not ref then return {ok = false, error = request_error} end
+    local selected = normalizers[ref]
+    if not selected then
+        selected = codec_selector(ref, codec_registry.bind)
+        normalizers[ref] = selected
     end
+    return selected()(request)
 end
+
+-- plain_configure delivers nothing beyond what the descriptor's options render.
+M.plain_configure = M.configure("plain", {plain = function(_: ConfigureRequest): Object
+    return {ok = true, delivery = {files = {}, arguments = {}}}
+end})
 
 return M

@@ -180,6 +180,13 @@ local function define_tests()
                 test.is_true(bounds.ids(bindings, true) ~= nil)
             end
         end)
+        test.it("activates a CLI descriptor that no approved binding names as its own driver", function()
+            local descriptor = {id = "bee.driver.solo.descriptor:cli", kind = "registry.entry", meta = {type = "bee.driver.cli_descriptor"}, data = {provider = "solo"}}
+            test.eq(table.concat(assert(activation.bindings({descriptor})), ","), "bee.driver.solo.descriptor:cli")
+            local named = {id = "bee.driver.solo.binding:binding", kind = "contract.binding",
+                meta = {type = "harness.driver", descriptor_ref = "bee.driver.solo.descriptor:cli"}, data = {}}
+            test.eq(table.concat(assert(activation.bindings({descriptor, named})), ","), "bee.driver.solo.binding:binding")
+        end)
         test.it("refuses an ambiguous approved artifact", function()
             local entry = {id = "bee.driver.link.binding:binding", kind = "contract.binding", meta = {type = "harness.driver"}, data = {}}
             test.is_nil(activation.bindings({entry, entry}))

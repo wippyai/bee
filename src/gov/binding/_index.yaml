@@ -584,6 +584,7 @@ entries:
   - registry
   - hash
   imports:
+    driver_resolver: bee.drivers.binding:resolver
     source_check: bee.gov.binding:source_check
     workspace_applications: bee.gov.types:workspace_applications
     application_capabilities: bee.gov.binding:application_capabilities

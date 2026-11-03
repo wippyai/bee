@@ -14,6 +14,10 @@ local quote = require("quote")
 local bounds = require("bounds")
 local record_bounds = require("record_bounds")
 
+local function agy_descriptor(): {[string]: unknown}
+    return assert(bounds.object(assert(registry.get("bee.drivers.agy.descriptor:cli")).data))
+end
+
 local function has(list: {string}, item: string): boolean
     for _, candidate in ipairs(list) do
         if candidate == item then return true end
@@ -39,7 +43,7 @@ local function define_tests()
                 local decoded, err = launch.decode({profile_id = context == "window" and "window" or "batch", brief = "say pong",
                     model_provider = "gemini", resume_ref = context == "resume" and "session-1" or nil})
                 if not decoded then error(tostring(err)) end
-                local reply, configure_error = funcs.call("bee.drivers.agy.binding:configure", {
+                local reply, configure_error = funcs.call("bee.drivers.agy.binding:configure", {descriptor = agy_descriptor(), 
                     fixture = false, context = context, option_values = {model_provider = "gemini"},
                 })
                 if configure_error then error(tostring(configure_error)) end
@@ -140,7 +144,7 @@ local function define_tests()
         end)
 
         test.it("prepares the hidden Gemini batch profile and delivers its admitted HTTP MCP configuration", function()
-            local prepared, prepare_error = funcs.call("bee.drivers.agy.binding:prepare", {
+            local prepared, prepare_error = funcs.call("bee.drivers.universal:prepare", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 profile_id = "batch",
                 brief = "Use the admitted Bee overlay tool once.",
                 model = "gemini-3.8-flash",
@@ -166,7 +170,7 @@ local function define_tests()
                 hooks = {},
                 token_environment = "BEE_GATEWAY_TOKEN",
             }
-            local configured, configure_error = funcs.call("bee.drivers.agy.binding:configure", {
+            local configured, configure_error = funcs.call("bee.drivers.agy.binding:configure", {descriptor = agy_descriptor(), 
                 gateway = gateway,
                 home_directory = "/private/agy-batch-session",
                 fixture = false,
@@ -239,7 +243,7 @@ local function define_tests()
             test.is_true(spec.stdin:find("continue turn") ~= nil)
 
             -- Dispatch method requires resume_ref
-            local fail_reply, call_err = funcs.call("bee.drivers.agy.binding:dispatch", {
+            local fail_reply, call_err = funcs.call("bee.drivers.universal:dispatch", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 profile_id = "session",
                 brief = "missing resume",
             })
@@ -247,7 +251,7 @@ local function define_tests()
             test.is_false(fail_reply.ok)
             test.eq(fail_reply.error, "a dispatched turn needs resume_ref")
 
-            local ok_reply, ok_err = funcs.call("bee.drivers.agy.binding:dispatch", {
+            local ok_reply, ok_err = funcs.call("bee.drivers.universal:dispatch", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 profile_id = "session",
                 brief = "has resume",
                 resume_ref = "f30fe2e7-e321-4839-8e4c-bbda9d2f9c4b",
@@ -316,7 +320,7 @@ local function define_tests()
 
     test.describe("normalize_method structural validation of state and booleans", function()
         test.it("validates eof and resumed boolean flags", function()
-            local bad_eof, err1 = funcs.call("bee.drivers.agy.binding:normalize", {
+            local bad_eof, err1 = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 eof = "true",
             })
@@ -324,7 +328,7 @@ local function define_tests()
             test.is_false(bad_eof.ok)
             test.eq(bad_eof.error, "eof must be a boolean")
 
-            local bad_resumed, err2 = funcs.call("bee.drivers.agy.binding:normalize", {
+            local bad_resumed, err2 = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 resumed = 1,
                 envelope = {event = "init", conversation_id = "c1"},
@@ -336,7 +340,7 @@ local function define_tests()
 
         test.it("structurally validates incoming state against malformed shapes and bounds", function()
             -- Non-object state
-            local not_obj, err1 = funcs.call("bee.drivers.agy.binding:normalize", {
+            local not_obj, err1 = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = "invalid",
                 envelope = {event = "init", conversation_id = "c1"},
@@ -346,7 +350,7 @@ local function define_tests()
             test.eq(not_obj.error, "state must be an object")
 
             -- Unknown fields in state
-            local unknown_state, err2 = funcs.call("bee.drivers.agy.binding:normalize", {
+            local unknown_state, err2 = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {started = true, resumed = false, foreign_key = "leak"},
                 envelope = {event = "init", conversation_id = "c1"},
@@ -356,7 +360,7 @@ local function define_tests()
             test.eq(unknown_state.error, "state: unknown field foreign_key")
 
             -- Non-boolean started / resumed in state
-            local bad_started, err3 = funcs.call("bee.drivers.agy.binding:normalize", {
+            local bad_started, err3 = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {started = "yes", resumed = false},
                 envelope = {event = "init", conversation_id = "c1"},
@@ -366,7 +370,7 @@ local function define_tests()
             test.eq(bad_started.error, "state.started must be a boolean")
 
             -- Invalid session_id in state
-            local bad_session, err4 = funcs.call("bee.drivers.agy.binding:normalize", {
+            local bad_session, err4 = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {started = true, resumed = false, session_id = ""},
                 envelope = {event = "step_update", step_update = {}},
@@ -376,7 +380,7 @@ local function define_tests()
             test.eq(bad_session.error, "state.session_id is not an identifier")
 
             -- Oversized answer in state
-            local bad_answer, err5 = funcs.call("bee.drivers.agy.binding:normalize", {
+            local bad_answer, err5 = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, answer = string.rep("x", record_bounds.MAX_RECORD_BYTES + 1)},
                 envelope = {event = "step_update", step_update = {}},
@@ -386,7 +390,7 @@ local function define_tests()
             test.eq(bad_answer.error, "state.answer exceeds maximum record bytes")
 
             -- Valid bounded state succeeds
-            local valid_reply, err6 = funcs.call("bee.drivers.agy.binding:normalize", {
+            local valid_reply, err6 = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, session_id = "conv-valid", answer = "prior"},
                 envelope = {
@@ -406,7 +410,7 @@ local function define_tests()
 
             -- Terminal checkpoints are decoded field by field, including
             -- nested usage and fault values.
-            local terminal_reply, terminal_err = funcs.call("bee.drivers.agy.binding:normalize", {
+            local terminal_reply, terminal_err = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {
                     started = true,
@@ -434,7 +438,7 @@ local function define_tests()
             test.eq(terminal_reply.state.terminal.usage.cost_decimal, "1.25")
             test.eq(terminal_reply.state.terminal.error.message, "bounded fault")
 
-            local bad_terminal_answer, bad_terminal_answer_call_error = funcs.call("bee.drivers.agy.binding:normalize", {
+            local bad_terminal_answer, bad_terminal_answer_call_error = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "succeeded", answer = string.rep("x", record_bounds.MAX_RECORD_BYTES + 1)}},
                 envelope = {event = "step_update", step_update = {}},
@@ -442,7 +446,7 @@ local function define_tests()
             if bad_terminal_answer_call_error then error(tostring(bad_terminal_answer_call_error)) end
             test.eq(bad_terminal_answer.error, "state.terminal.answer exceeds maximum record bytes")
 
-            local bad_terminal_usage, bad_terminal_usage_call_error = funcs.call("bee.drivers.agy.binding:normalize", {
+            local bad_terminal_usage, bad_terminal_usage_call_error = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "succeeded", usage = {input_tokens = -1}}},
                 envelope = {event = "step_update", step_update = {}},
@@ -450,7 +454,7 @@ local function define_tests()
             if bad_terminal_usage_call_error then error(tostring(bad_terminal_usage_call_error)) end
             test.eq(bad_terminal_usage.error, "state.terminal.usage.input_tokens must be a nonnegative integer")
 
-            local bad_terminal_error, bad_terminal_error_call_error = funcs.call("bee.drivers.agy.binding:normalize", {
+            local bad_terminal_error, bad_terminal_error_call_error = funcs.call("bee.drivers.universal:normalize", {descriptor_ref = "bee.drivers.agy.descriptor:cli", 
                 index = 1,
                 state = {started = true, resumed = false, answer_truncated = false, terminal = {outcome = "failed", error = {code = "failed", message = "x", retryable = "no"}}},
                 envelope = {event = "step_update", step_update = {}},
@@ -826,7 +830,7 @@ local function define_tests()
 
     test.describe("Antigravity CLI configuration and verified MCP delivery", function()
         test.it("refuses provider configurations and hooks without a host command", function()
-            local reply1, err1 = funcs.call("bee.drivers.agy.binding:configure", {
+            local reply1, err1 = funcs.call("bee.drivers.agy.binding:configure", {descriptor = agy_descriptor(), 
                 provider_ref = "bee:provider_custom",
                 provider = {model = "custom"},
                 fixture = false,
@@ -835,7 +839,7 @@ local function define_tests()
             test.is_false(reply1.ok)
             test.eq(reply1.error, "agy accepts no provider configuration")
 
-            local reply2, err2 = funcs.call("bee.drivers.agy.binding:configure", {
+            local reply2, err2 = funcs.call("bee.drivers.agy.binding:configure", {descriptor = agy_descriptor(), 
                 gateway = {
                     endpoint = "127.0.0.1:18790",
                     action_id = "act-1",
@@ -853,7 +857,7 @@ local function define_tests()
 
         test.it("renders gateway MCP with an admitted private credential field", function()
             test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
-            local reply_mcp, err_mcp = funcs.call("bee.drivers.agy.binding:configure", {
+            local reply_mcp, err_mcp = funcs.call("bee.drivers.agy.binding:configure", {descriptor = agy_descriptor(), 
                 gateway = {
                     endpoint = "127.0.0.1:18790",
                     action_id = "act-test",

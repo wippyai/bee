@@ -66,7 +66,7 @@ local function fail(kind: string, message: string): error
 end
 
 local function selected_in(pinned: registry.Snapshot, ref: string): (Selected?, error?)
-    local binding, binding_error = resolver.entry(pinned, ref)
+    local binding, binding_error = resolver.binding(pinned, ref)
     if binding_error then return nil, fail(errors.INTERNAL, binding_error) end
     local meta = binding and bounds.object(binding.meta)
     local driver_id = meta and bounds.id(meta.driver_id)
@@ -94,7 +94,7 @@ local function index(pinned: registry.Snapshot): ({[string]: string}?, error?)
     if not active then return nil, fail(errors.INTERNAL, tostring(active_error)) end
     local by_id: {[string]: string} = {}
     for ref in pairs(active) do
-        local binding, binding_error = resolver.entry(pinned, ref)
+        local binding, binding_error = resolver.binding(pinned, ref)
         if binding_error then return nil, fail(errors.INTERNAL, binding_error) end
         local meta = binding and bounds.object(binding.meta)
         local driver_id = meta and bounds.id(meta.driver_id)
@@ -211,7 +211,8 @@ local function driver_of(pinned: registry.Snapshot, selected: Selected): (Driver
         credentials = credentials, endpoints = {}}
     for _, mapping in ipairs(selected.descriptor.endpoints) do result.endpoints[#result.endpoints + 1] = mapping.protocol end
     if selected.profiles_ref then
-        local entry, entry_error = resolver.entry(pinned, selected.profiles_ref)
+        local binding = assert(resolver.binding(pinned, selected.binding_ref))
+        local entry, entry_error = resolver.declaration(pinned, binding)
         if entry_error then return nil, fail(errors.INTERNAL, entry_error) end
         local data = entry and bounds.object(entry.data)
         local decoded, decode_error = profile_codec.decode(data and data.driver)
@@ -336,7 +337,7 @@ function M.launch(driver_id: string, request: LaunchRequest): (Launch?, error?)
         values = merged
     end
 
-    local prepare: Object = {profile_id = request.profile_id or "batch", brief = brief, resume_ref = request.resume_ref, placement = request.placement}
+    local prepare: Object = {descriptor_ref = selected.descriptor_ref, profile_id = request.profile_id or "batch", brief = brief, resume_ref = request.resume_ref, placement = request.placement}
     for name, value in pairs(values) do prepare[name] = value end
     if request.gateway then
         prepare.gateway_tools = request.gateway.tools

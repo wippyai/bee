@@ -31,10 +31,10 @@ local function define_tests()
             local original = binding.data
             binding.data = {contracts = {
                 {contract = "bee.drivers:driver", methods = {
-                    prepare = "bee.drivers.claude.binding:prepare", dispatch = "bee.drivers.claude.binding:dispatch",
-                    normalize = "bee.drivers.claude.binding:normalize", configure = "bee.tests.harness:configuration_probe",
+                    prepare = "bee.drivers.universal:prepare", dispatch = "bee.drivers.universal:dispatch",
+                    normalize = "bee.drivers.universal:normalize", configure = "bee.tests.harness:configuration_probe",
                 }},
-                {contract = "bee.drivers:locate_facet", methods = {locate = "bee.drivers.claude.binding:locate"}},
+                {contract = "bee.drivers:locate_facet", methods = {locate = "bee.drivers.universal:locate"}},
             }}
             local ok, failure = pcall(function()
                 apply(binding)

@@ -2,6 +2,7 @@
 local registry = require("registry")
 local bounds = require("bounds")
 local descriptors = require("descriptors")
+local driver_resolver = require("driver_resolver")
 local agent_trait = require("agent_trait")
 local protocol = require("protocol")
 local preferences = require("preferences")
@@ -27,7 +28,7 @@ function M.check(pinned: registry.Snapshot, profile: protocol.Profile, decoded: 
     local definition = pinned:get(profile.definition_ref)
     local definition_data = definition and bounds.object(definition.data)
     if not definition_data or definition_data.binding_ref ~= profile.driver_binding_ref then return "Definition has no matching admitted driver binding" end
-    local binding = pinned:get(profile.driver_binding_ref)
+    local binding = driver_resolver.binding(pinned, profile.driver_binding_ref)
     local meta = binding and bounds.object(binding.meta)
     local ref = meta and bounds.id(meta.descriptor_ref)
     if not ref then return "Driver has no CLI descriptor" end
@@ -56,7 +57,7 @@ function M.ceiling(pinned: registry.Snapshot, profile: protocol.Profile, parent:
     end
     local selected, selection_error = protocol.preferences(profile)
     if not selected then return selection_error end
-    local binding = pinned:get(profile.driver_binding_ref)
+    local binding = driver_resolver.binding(pinned, profile.driver_binding_ref)
     local meta = binding and bounds.object(binding.meta)
     local schema_ref = meta and bounds.id(meta.descriptor_ref)
     local descriptor = schema_ref and descriptors.load_from(pinned, schema_ref)

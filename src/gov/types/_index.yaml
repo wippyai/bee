@@ -170,6 +170,7 @@ entries:
   kind: library.lua
   source: file://driver_admission.lua
   imports:
+    resolver: bee.drivers.binding:resolver
     bounds: bee.drivers.values:bounds
     format: bee.drivers.credentials:format
 - name: drivers

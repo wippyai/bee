@@ -115,7 +115,7 @@ end
 function M.decode_request(value: unknown): (vocabulary.Request?, string?)
     local request = bounds.object(value)
     if not request then return nil, "configuration request must be an object" end
-    local unexpected = bounds.fields(request, {"placement", "option_provenance", "configure_renderer", "provider_ref", "provider", "gateway", "home_directory", "private_home", "attempt_id", "fixture", "instructions", "instruction_builder", "option_values", "context"})
+    local unexpected = bounds.fields(request, {"placement", "option_provenance", "configure_renderer", "descriptor", "provider_ref", "provider", "gateway", "home_directory", "private_home", "attempt_id", "fixture", "instructions", "instruction_builder", "option_values", "context"})
     if unexpected then return nil, "configuration request: " .. unexpected end
     if request.placement ~= nil and not bounds.object(request.placement) then return nil, "configuration placement must be an object" end
     local configure_renderer: string? = nil
@@ -123,6 +123,8 @@ function M.decode_request(value: unknown): (vocabulary.Request?, string?)
         configure_renderer = bounds.id(request.configure_renderer)
         if not configure_renderer or configure_renderer:find("%s") then return nil, "configuration request.configure_renderer is not an identifier" end
     end
+    local declared_descriptor = bounds.object(request.descriptor)
+    if request.descriptor ~= nil and not declared_descriptor then return nil, "configuration request.descriptor must be an object" end
     if type(request.fixture) ~= "boolean" then return nil, "configuration request.fixture must be a boolean" end
     local instructions, instructions_error = M.instructions(request.instructions)
     if instructions_error then return nil, instructions_error end
@@ -163,7 +165,7 @@ function M.decode_request(value: unknown): (vocabulary.Request?, string?)
     if request.option_values ~= nil and not option_values then return nil, "configuration option_values must be an object" end
     local context = request.context == nil and nil or bounds.member(request.context, {"window", "first_turn", "resume"})
     if request.context ~= nil and not context then return nil, "configuration context is invalid" end
-    return {placement = bounds.object(request.placement), option_provenance = bounds.object(request.option_provenance), configure_renderer = configure_renderer, option_values = option_values or {}, context = context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = private_home, attempt_id = attempt_id, fixture = request.fixture}, nil
+    return {placement = bounds.object(request.placement), option_provenance = bounds.object(request.option_provenance), configure_renderer = configure_renderer, descriptor = declared_descriptor, option_values = option_values or {}, context = context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = private_home, attempt_id = attempt_id, fixture = request.fixture}, nil
 end
 local function sequence(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
@@ -557,12 +559,14 @@ function M.execute(binding_ref: string?, target: string, request_value: unknown)
     if binding_ref ~= nil and not bounds.id(binding_ref) then return nil, "driver binding is not an identifier" end
     local configure_renderer: string? = nil
     local option_fields: vocabulary.Object? = nil
+    local declaration: vocabulary.Object? = nil
     local pinned, pin_error = registry.snapshot()
     if binding_ref then
         if not pinned or pin_error then return nil, "configuration registry snapshot is unavailable" end
-        local resolved, resolve_error, selected = driver_resolver.configure_renderer(pinned, binding_ref, target)
+        local resolved, resolve_error, selected, declared = driver_resolver.configure_renderer(pinned, binding_ref, target)
         if resolve_error then return nil, resolve_error end
         configure_renderer = resolved
+        declaration = declared
         if selected then option_fields = bounds.object(selected.options.fields) end
     end
     local scoped, scope_error = funcs.new():with_scope(security.new_scope({}))
@@ -591,6 +595,7 @@ function M.execute(binding_ref: string?, target: string, request_value: unknown)
     local driver_request = {
         placement = request.placement, option_provenance = request.option_provenance, option_values = request.option_values, context = request.context,
         configure_renderer = configure_renderer,
+        descriptor = declaration,
         instructions = final_instructions,
         provider_ref = request.provider_ref,
         provider = request.provider,

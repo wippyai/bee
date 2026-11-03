@@ -33,6 +33,7 @@ entries:
   source: file://profile_values.lua
   modules: [registry, json]
   imports:
+    resolver: bee.drivers.binding:resolver
     bounds: bee.drivers.values:bounds
     descriptors: bee.drivers.descriptor:descriptor
     effective: bee.drivers.descriptor:effective

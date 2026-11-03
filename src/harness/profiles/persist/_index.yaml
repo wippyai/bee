@@ -6,6 +6,7 @@ entries:
   source: file://migration.lua
   modules: [registry]
   imports:
+    driver_resolver: bee.drivers.binding:resolver
     driver_profile: bee.drivers.profiles:profile
     bounds: bee.drivers.values:bounds
     protocol: bee.harness.profiles:protocol

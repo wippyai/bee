@@ -33,4 +33,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     return {ok = true, delivery = {arguments = arguments, files = files}}
 end
 
-return {handle = universal.configure("agy", {agy = handle}, "bee.drivers.agy.descriptor:cli")}
+return {handle = universal.configure("agy", {agy = handle})}

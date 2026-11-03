@@ -44,4 +44,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     if not delivery then return {ok = false, error = tostring(delivery_error)} end
     return {ok = true, delivery = delivery}
 end
-return {handle = universal.configure("claude", {claude = handle}, "bee.drivers.claude.descriptor:cli")}
+return {handle = universal.configure("claude", {claude = handle})}

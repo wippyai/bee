@@ -45,7 +45,7 @@ local function define_tests()
                 {profile = "window", expected = '--sandbox danger-full-access -c approval_policy="never" --dangerously-bypass-approvals-and-sandbox -- Fixture'},
                 {profile = "batch", resume = "fixture-thread", expected = '--sandbox danger-full-access -c approval_policy="never" --dangerously-bypass-approvals-and-sandbox exec resume fixture-thread --json --skip-git-repo-check -'},
             }) do
-                local reply = assert(bounds.object(universal.prepare("bee.drivers.codex.descriptor:cli")({profile_id = case.profile, brief = "Fixture", resume_ref = case.resume,
+                local reply = assert(bounds.object(universal.prepare({descriptor_ref = "bee.drivers.codex.descriptor:cli", profile_id = case.profile, brief = "Fixture", resume_ref = case.resume,
                     placement = placements.DOCKER, sandbox = "danger-full-access", approval_policy = "never",
                     dangerously_bypass_approvals_and_sandbox = true})))
                 assert(reply.ok == true, tostring(reply.error))
@@ -54,7 +54,7 @@ local function define_tests()
             end
         end)
         test.it("renders the same person-selected Codex bypass on native placement", function()
-            local reply = assert(bounds.object(universal.prepare("bee.drivers.codex.descriptor:cli")({profile_id = "batch", brief = "Fixture",
+            local reply = assert(bounds.object(universal.prepare({descriptor_ref = "bee.drivers.codex.descriptor:cli", profile_id = "batch", brief = "Fixture",
                 placement = placements.NATIVE, sandbox = "danger-full-access", approval_policy = "never",
                 dangerously_bypass_approvals_and_sandbox = true})))
             test.eq(reply.ok, true)
@@ -77,7 +77,8 @@ local function define_tests()
             local options = assert(bounds.object(applied.prepare_options))
             options.profile_id, options.brief = "batch", "Fixture"
             options.option_provenance = applied.option_provenance
-            local reply = assert(bounds.object(universal.prepare("bee.drivers.claude.descriptor:cli")(options)))
+            options.descriptor_ref = "bee.drivers.claude.descriptor:cli"
+            local reply = assert(bounds.object(universal.prepare(options)))
             test.eq(reply.ok, true)
             local argv = assert(bounds.ids(assert(bounds.object(reply.launch)).argv, true))
             test.eq(assert(bounds.object(applied.option_provenance)).permission_mode, "host policy")

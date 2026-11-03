@@ -1,8 +1,8 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
-local normalize = require("normalize")
-local prepare = require("prepare")
-local configure = require("configure")
+local normalize = require("host_methods").normalize("grok")
+local prepare = require("host_methods").prepare("grok")
+local configure = require("host_methods").configure("grok")
 local bounds = require("bounds")
 local json = require("json")
 type Object = {[string]: unknown}

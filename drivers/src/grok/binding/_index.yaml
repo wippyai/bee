@@ -8,10 +8,16 @@ entries:
   imports:
     universal: bee.drivers.binding:universal
     acp: bee.drivers.grok.binding:acp
-    bounds: bee.drivers.values:bounds
 - name: dispatch
   kind: function.lua
   source: file://dispatch.lua
+  method: handle
+  imports:
+    universal: bee.drivers.binding:universal
+    acp: bee.drivers.grok.binding:acp
+- name: normalize
+  kind: function.lua
+  source: file://normalize.lua
   method: handle
   imports:
     universal: bee.drivers.binding:universal
@@ -25,34 +31,6 @@ entries:
     configuration: bee.drivers.grok.binding:configuration
     configure_protocol: bee.drivers:configuration_types
     universal: bee.drivers.binding:universal
-  security:
-    policies:
-    - bee.drivers.grok.binding:configuration_policy
-- name: locate
-  kind: function.lua
-  source: file://locate.lua
-  method: handle
-  imports:
-    universal: bee.drivers.binding:universal
-- name: normalize
-  kind: function.lua
-  source: file://normalize.lua
-  method: handle
-  imports:
-    universal: bee.drivers.binding:universal
-    acp: bee.drivers.grok.binding:acp
-    bounds: bee.drivers.values:bounds
-- name: configuration_policy
-  kind: security.policy.expr
-  policy:
-    effect: allow
-    actions:
-    - registry.get
-    - registry.snapshot
-    - funcs.call
-    resources:
-    - '*'
-    expression: (action == "registry.get" && resource == "bee.drivers.grok.descriptor:cli") || action == "registry.snapshot"
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -76,7 +54,7 @@ entries:
       configure: bee.drivers.grok.binding:configure
   - contract: bee.drivers:locate_facet
     methods:
-      locate: bee.drivers.grok.binding:locate
+      locate: bee.drivers.universal:locate
   meta:
     type: harness.driver
     driver_id: grok

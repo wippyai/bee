@@ -8,7 +8,7 @@ local json = require("json")
 local registry = require("registry")
 local configuration = require("configuration")
 local driver_configuration = require("driver_configuration")
-local configure = require("configure")
+local configure = require("host_methods").configure("muse")
 local hook_limits = require("hook_limits")
 local function gateway(tools: {string}, hooks: {string}): configuration.Gateway
     return {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = tools, hooks = hooks,

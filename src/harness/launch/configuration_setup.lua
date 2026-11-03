@@ -26,7 +26,7 @@ function M.requirements(plan: Plan): ({Requirement}?, string?)
     local private = true
     local placement = effective and bounds.object(effective.placement)
     if placement and placement.kind == "native" then private = placement.home == "private" end
-    local binding, binding_error = resolver.entry(pinned, plan.binding_ref)
+    local binding, binding_error = resolver.binding(pinned, plan.binding_ref)
     if binding_error then return nil, binding_error end
     local meta = binding and bounds.object(binding.meta)
     local descriptor_ref = meta and bounds.id(meta.descriptor_ref)

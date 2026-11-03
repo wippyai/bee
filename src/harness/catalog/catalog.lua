@@ -11,7 +11,7 @@ local resolver = require("resolver")
 local observers = require("observers")
 local M = {}
 M.ACTIVATION_ENTRY = "bee.harness.launch:harness_activation"
-M.BINDING_TYPE = "harness.driver"
+M.BINDING_TYPE = resolver.BINDING_TYPE
 M.MAX_BINDINGS = 64
 type Entry = {[string]: unknown}
 type Snapshot = {generation: integer, complete: boolean, bindings: {classify_types.Binding}, diagnostics: {string}}
@@ -88,9 +88,9 @@ function M.read(pinned: Pinned, limit: integer?, selected_binding: string?): (Sn
     local cap = limit or M.MAX_BINDINGS
     local snapshot: Snapshot = {generation = current, complete = true, bindings = {}, diagnostics = {}}
     local active = active_bindings(pinned, snapshot.diagnostics)
-    local found, find_error = pinned:find({[".kind"] = "contract.binding", ["meta.type"] = M.BINDING_TYPE})
-    if find_error or not found then return nil, "read driver bindings" end
-    local selected = selected_binding and entry(pinned, selected_binding)
+    local found, find_error = resolver.drivers(pinned)
+    if not found then return nil, find_error end
+    local selected = selected_binding and resolver.binding(pinned, selected_binding)
     local selected_meta = selected and bounds.object(selected.meta)
     local selected_driver = selected_meta and bounds.id(selected_meta.driver_id)
     local count = 0
@@ -107,9 +107,7 @@ function M.read(pinned: Pinned, limit: integer?, selected_binding: string?): (Sn
                 end
                 local binding_id = bounds.id(candidate.id) or ""
                 if not selected_binding or binding_id == selected_binding or (selected_driver and bounds.id(meta.driver_id) == selected_driver) then
-                    local declaration: Entry? = nil
-                    local profiles_ref = bounds.id(meta.profiles_ref)
-                    if profiles_ref then declaration = entry(pinned, profiles_ref) end
+                    local declaration = resolver.declaration(pinned, candidate)
                     local measurements = declaration and observers.collect(pinned, binding_id, bounds.object(declaration.data) or {}) or nil
                     snapshot.bindings[#snapshot.bindings + 1] = classify.binding({binding = candidate, declaration = declaration,
                         methods = method_targets(pinned, candidate), adapters = adapter_entries(pinned, declaration), observers = measurements, activated = active[binding_id] == true})
@@ -136,6 +134,12 @@ function M.pin(): (Pinned?, string?)
 end
 function M.entry(pinned: Pinned, id: string): Entry?
     return entry(pinned, id)
+end
+-- binding: the driver binding a reference names, declared or implied by a
+-- descriptor that is its own driver.
+function M.binding(pinned: Pinned, id: string): Entry?
+    local found = resolver.binding(pinned, id)
+    return found
 end
 -- Compatible and activated bindings only: what a launch may resolve. An
 -- incomplete catalog resolves nothing.

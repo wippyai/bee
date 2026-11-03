@@ -11,6 +11,7 @@ type Binding = {
     title: string,
     implementation_version: string,
     profiles_ref: string,
+    descriptor_ref: string?,
     binding_digest: Digest,
     profile_digest: Digest,
     default_profile: string,

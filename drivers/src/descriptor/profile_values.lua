@@ -2,6 +2,7 @@ local registry = require("registry")
 local json = require("json")
 local bounds = require("bounds")
 local descriptors = require("descriptors")
+local resolver = require("resolver")
 local effective = require("effective")
 local M = {}
 type Object = {[string]: unknown}
@@ -10,7 +11,7 @@ function M.schema(binding_ref: string, snapshot: registry.Snapshot?): (descripto
     local pinned, err = snapshot, nil
     if not pinned then pinned, err = registry.snapshot() end
     if not pinned then return nil, nil, tostring(err) end
-    local binding = pinned:get(binding_ref)
+    local binding = resolver.binding(pinned, binding_ref)
     local meta = binding and bounds.object(binding.meta)
     local ref = meta and bounds.id(meta.descriptor_ref)
     if not ref then return nil, nil, "Driver has no option schema" end

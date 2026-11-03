@@ -32,9 +32,9 @@ entries:
   contracts:
   - contract: bee.drivers:driver
     methods:
-      prepare: bee.drivers.claude.binding:prepare
-      dispatch: bee.drivers.claude.binding:dispatch
-      normalize: bee.drivers.claude.binding:normalize
+      prepare: bee.drivers.universal:prepare
+      dispatch: bee.drivers.universal:dispatch
+      normalize: bee.drivers.universal:normalize
       configure: bee.drivers.claude.binding:configure
 - name: fake_profiles
   kind: registry.entry
@@ -67,9 +67,9 @@ entries:
   contracts:
   - contract: bee.drivers:driver
     methods:
-      prepare: bee.drivers.claude.binding:prepare
-      dispatch: bee.drivers.claude.binding:dispatch
-      normalize: bee.drivers.claude.binding:normalize
+      prepare: bee.drivers.universal:prepare
+      dispatch: bee.drivers.universal:dispatch
+      normalize: bee.drivers.universal:normalize
       configure: bee.drivers.claude.binding:configure
 - name: apply_test_policy
   kind: security.policy
@@ -753,8 +753,8 @@ entries:
     - bee.placement.native.binding:cleanup
     - bee.placement.native.binding:evidence
     - bee.placement.native.binding:attach
-    - bee.drivers.claude.binding:prepare
-    - bee.drivers.claude.binding:normalize
+    - bee.drivers.universal:prepare
+    - bee.drivers.universal:normalize
     - bee.drivers.claude.binding:configure
     - bee.drivers.codex.binding:configure
     - bee.tests.harness:configuration_probe
@@ -2246,9 +2246,9 @@ entries:
   contracts:
   - contract: bee.drivers:driver
     methods:
-      prepare: bee.drivers.claude.binding:prepare
-      dispatch: bee.drivers.claude.binding:dispatch
-      normalize: bee.drivers.claude.binding:normalize
+      prepare: bee.drivers.universal:prepare
+      dispatch: bee.drivers.universal:dispatch
+      normalize: bee.drivers.universal:normalize
       configure: bee.drivers.claude.binding:configure
 - name: fixture_open_cli_profiles
   kind: registry.entry
@@ -2282,9 +2282,9 @@ entries:
   contracts:
   - contract: bee.drivers:driver
     methods:
-      prepare: bee.drivers.claude.binding:prepare
-      dispatch: bee.drivers.claude.binding:dispatch
-      normalize: bee.drivers.claude.binding:normalize
+      prepare: bee.drivers.universal:prepare
+      dispatch: bee.drivers.universal:dispatch
+      normalize: bee.drivers.universal:normalize
       configure: bee.drivers.claude.binding:configure
 - name: fixture_open_cli_no_model_profiles
   kind: registry.entry

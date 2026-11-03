@@ -15,6 +15,7 @@ entries:
     configuration: bee.drivers.opencode.binding:configuration
     driver_configuration: bee.drivers.binding:configuration
     configure: bee.drivers.opencode.binding:configure
+    described: bee.tests.support.driver:configure
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
     policy: bee.harness.carrier:policy

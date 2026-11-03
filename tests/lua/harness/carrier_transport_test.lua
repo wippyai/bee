@@ -339,7 +339,7 @@ local function define_tests()
                 local io: machine.IO = {
                     call = function(target: string, value: unknown): (unknown, string?)
                         calls = calls + 1
-                        test.eq(target, "bee.drivers.claude.binding:prepare")
+                        test.eq(target, "bee.drivers.universal:prepare")
                         return response, nil
                     end,
                     send = function(target: string, topic: string, value: unknown) error("unexpected send") end,

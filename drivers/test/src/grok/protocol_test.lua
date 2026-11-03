@@ -4,7 +4,7 @@
 local test = require("test")
 local bounds = require("bounds")
 local protocol = require("protocol")
-local normalize = require("normalize")
+local normalize = require("host_methods").normalize("grok")
 
 local function define_tests()
     test.describe("Grok protocol", function()

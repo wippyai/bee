@@ -16,6 +16,15 @@ local interrupted = require("interrupted")
 local placement_fixture = require("placement_fixture")
 local PLACEMENT = placement_fixture.resolve()
 local PLACEMENT_METHODS = PLACEMENT.methods
+-- dispatched: the request the shared dispatch method reads, after it checks
+-- that the host named the binding's descriptor.
+local function dispatched(input: unknown): {[string]: unknown}
+    local request: {[string]: unknown} = {}
+    for key, value in pairs(assert(bounds.object(input))) do request[key] = value end
+    test.eq(request.descriptor_ref, "bee.drivers.claude.descriptor:cli")
+    request.descriptor_ref = nil
+    return request
+end
 local function observation(sequence: integer, session: string, binding: string, ambiguous: boolean, attempt: string): {[string]: unknown}
     local batch, err = hook_records.batch(binding, nil, {{event_id = "event:" .. tostring(sequence), event = "SessionStart",
         occurrence = "session:" .. session, ambiguous = ambiguous, provenance = "fixture", sequence = sequence,
@@ -543,8 +552,8 @@ local function define_tests()
                     elseif target == PLACEMENT_METHODS.measure_executable then
                         return {ok = false, error = {code = "UNAVAILABLE", message = "fixture"}}, nil
                     end
-                    test.eq(target, "bee.drivers.claude.binding:dispatch")
-                    return {ok = true, launch = claude.specification(assert(claude.decode(input)))}, nil
+                    test.eq(target, "bee.drivers.universal:dispatch")
+                    return {ok = true, launch = claude.specification(assert(claude.decode(dispatched(input))))}, nil
                 end,
                 send = function(_: string, _: string, _: unknown) error("unexpected send") end,
                 self_pid = function(): string return "test" end,
@@ -586,8 +595,8 @@ local function define_tests()
                             return {ok = true, value = {revision = "bee.executable-measurement@1", path = path, kind = "elf", size = 4096,
                                 digest = string.rep("b", 64), identity = identity}}, nil
                         end
-                        test.eq(target, "bee.drivers.claude.binding:dispatch")
-                        return {ok = true, launch = claude.specification(assert(claude.decode(input)))}, nil
+                        test.eq(target, "bee.drivers.universal:dispatch")
+                        return {ok = true, launch = claude.specification(assert(claude.decode(dispatched(input))))}, nil
                     end,
                     send = function(_: string, _: string, _: unknown) error("unexpected send") end,
                     self_pid = function(): string return "test" end,
@@ -653,7 +662,7 @@ local function define_tests()
                     elseif target == "bee.threads.binding:read_after" then
                         return {ok = true, value = {records = {observation(1, "provider-session", "old-binding", false, "previous")}, scanned_through = 1, has_more = false}}, nil
                     end
-                    test.eq(target, "bee.drivers.claude.binding:dispatch")
+                    test.eq(target, "bee.drivers.universal:dispatch")
                     local request = assert(bounds.object(input))
                     test.eq(request.profile_id, "window")
                     test.eq(request.resume_ref, "provider-session")

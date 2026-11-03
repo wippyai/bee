@@ -29,4 +29,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     end
     return {ok = true, delivery = {arguments = {}, files = files}}
 end
-return {handle = universal.configure("opencode", {opencode = handle}, "bee.drivers.opencode.descriptor:cli")}
+return {handle = universal.configure("opencode", {opencode = handle})}

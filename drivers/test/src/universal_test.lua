@@ -8,6 +8,19 @@ local registry = require("registry")
 local security = require("security")
 local funcs = require("funcs")
 
+-- A normalizer as a host calls the shared method for one descriptor.
+local function normalizer(ref: string): (unknown) -> unknown
+    return function(request: unknown): unknown
+        local named: {[string]: unknown} = {descriptor_ref = ref}
+        for key, value in pairs(assert(bounds.object(request))) do named[key] = value end
+        return universal.normalize(named)
+    end
+end
+
+local function declaration(ref: string): {[string]: unknown}
+    return assert(bounds.object(assert(registry.get(ref)).data))
+end
+
 local function define_tests()
     test.describe("Universal external driver", function()
         test.it("resolves each streaming codec once per unchanged declaration and rejects replacements", function()
@@ -20,7 +33,7 @@ local function define_tests()
                 return decode(raw)
             end
             local ok, problem = pcall(function()
-                local normalize = universal.normalize(ref)
+                local normalize = normalizer(ref)
                 local protocol = universal.protocol(ref)
                 local state: unknown = nil
                 local direct = protocol.new(false)
@@ -55,8 +68,8 @@ local function define_tests()
             assert(ok, tostring(problem))
         end)
         test.it("rechecks descriptor read permission for a reused normalizer", function()
-            local target = "bee.drivers.tests:normalize_probe"
-            local input = {index = 1, envelope = {type = "stream_event", event = {type = "content_block_delta", index = 0,
+            local target = "bee.drivers.universal:normalize"
+            local input = {descriptor_ref = "bee.drivers.claude.descriptor:cli", index = 1, envelope = {type = "stream_event", event = {type = "content_block_delta", index = 0,
                 delta = {type = "text_delta", text = "x"}}}}
             test.eq(assert(bounds.object(funcs.call(target, input))).ok, true)
             local scope = security.new_scope({assert(security.policy("bee.drivers.tests:descriptor_denied"))})
@@ -75,7 +88,7 @@ local function define_tests()
             assert(overlay:apply())
             local ok, problem = pcall(function()
                 local version = assert(registry.snapshot()):version():id()
-                local normalize = universal.normalize(ref)
+                local normalize = normalizer(ref)
                 local protocol = universal.protocol(ref)
                 test.eq(assert(bounds.object(normalize({index = 0, eof = true}))).ok, true)
                 test.eq(protocol.revision(), "stream-json-2")
@@ -105,15 +118,21 @@ local function define_tests()
                     error("descriptor-selected renderer was bypassed")
                 end,
             }
-            local handle = universal.configure("claude", renderers, "bee.drivers.claude.descriptor:cli")
-            local invalid = handle({configure_renderer = "claude", fixture = "false"})
+            local handle = universal.configure("claude", renderers)
+            local claude = declaration("bee.drivers.claude.descriptor:cli")
+            local invalid = handle({configure_renderer = "claude", fixture = "false", descriptor = claude})
             test.eq(invalid.ok, false)
             test.is_false(called)
-            local valid = handle({configure_renderer = "claude", fixture = false})
+            local valid = handle({configure_renderer = "claude", fixture = false, descriptor = claude})
             test.eq(valid.ok, true)
             test.is_true(called)
-            local unsupported = handle({configure_renderer = "unknown", fixture = false})
+            local unsupported = handle({configure_renderer = "unknown", fixture = false, descriptor = claude})
             test.eq(unsupported.ok, false)
+            called = false
+            local undeclared = handle({configure_renderer = "claude", fixture = false})
+            test.eq(undeclared.ok, false)
+            test.eq(undeclared.error, "Configuration descriptor is unavailable")
+            test.is_false(called)
         end)
         test.it("refuses malformed configuration objects and renderer selectors", function()
             local called = false
@@ -122,8 +141,9 @@ local function define_tests()
                     called = true
                     return {ok = true, delivery = {arguments = {}, files = {}}}
                 end,
-            }, "bee.drivers.claude.descriptor:cli")
+            })
             test.eq(handle("invalid").ok, false)
+            test.eq(handle({configure_renderer = "claude", fixture = false, descriptor = {provider = "claude"}}).ok, false)
             test.eq(handle({configure_renderer = "not a renderer"}).ok, false)
             test.is_false(called)
         end)
@@ -136,7 +156,7 @@ local function define_tests()
             end
             test.eq(legacy_property(protocol, "PROTOCOL_REVISION"), protocol.revision())
             test.eq(legacy_property(protocol, "MAX_ANSWER_BYTES"), protocol.max_answer_bytes())
-            local handle = universal.normalize("bee.drivers.opencode.descriptor:cli")
+            local handle = normalizer("bee.drivers.opencode.descriptor:cli")
             local started = handle({index = 0, envelope = {type = "step_start", sessionID = "ses_universal"}})
             local reply = assert(bounds.object(started))
             test.eq(reply.ok, true)
@@ -158,7 +178,7 @@ local function define_tests()
 
         test.it("settles Muse failure and cancellation terminal envelopes", function()
             for _, outcome in ipairs({"failed", "cancelled"}) do
-                local handle = universal.normalize("bee.drivers.muse.descriptor:cli")
+                local handle = normalizer("bee.drivers.muse.descriptor:cli")
                 local accepted = assert(bounds.object(handle({index = 1, envelope = {payload_type = "runtime.command.accepted", stream = {id = "muse-session"}, payload = {}}})))
                 local started = assert(bounds.object(handle({state = accepted.state, index = 2, envelope = {payload_type = "run.lifecycle.started", payload = {}}})))
                 local ended = assert(bounds.object(handle({state = started.state, index = 3, envelope = {payload_type = "run.terminal." .. outcome,

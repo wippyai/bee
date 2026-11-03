@@ -2,6 +2,7 @@
 local bounds = require("bounds")
 local protocol = require("protocol")
 local driver_profile = require("driver_profile")
+local driver_resolver = require("driver_resolver")
 local M = {}
 M.ID = "bee.agent-profile@3"
 M.DIAGNOSTIC = "bee.agent-profile-migration@1"
@@ -126,10 +127,8 @@ function M.registered(value: unknown, pinned: registry.Snapshot, validate: ((pro
         local entry = pinned:get(ref)
         local definition = entry and bounds.object(entry.data)
         local binding_ref = definition and bounds.id(definition.binding_ref)
-        local binding = binding_ref and pinned:get(binding_ref)
-        local meta = binding and bounds.object(binding.meta)
-        local profiles_ref = meta and bounds.id(meta.profiles_ref)
-        local declaration = profiles_ref and pinned:get(profiles_ref)
+        local binding = binding_ref and driver_resolver.binding(pinned, binding_ref)
+        local declaration = binding and driver_resolver.declaration(pinned, binding)
         local data = declaration and bounds.object(declaration.data)
         local driver = data and driver_profile.decode(data.driver)
         local profile_id = definition and bounds.id(definition.profile_id)

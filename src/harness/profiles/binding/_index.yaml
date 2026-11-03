@@ -7,6 +7,7 @@ entries:
   modules:
   - registry
   imports:
+    driver_resolver: bee.drivers.binding:resolver
     app_traits: bee.node:app_traits
     preferences: bee.drivers.descriptor:effective
     mcp: bee.gateway.api:mcp

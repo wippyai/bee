@@ -6,7 +6,7 @@ local principals = require("principals")
 local bounds = require("bounds")
 local json = require("json")
 local configuration = require("configuration")
-local configure = require("configure")
+local configure = require("host_methods").configure("grok")
 
 local function define_tests()
     test.describe("Grok configuration", function()

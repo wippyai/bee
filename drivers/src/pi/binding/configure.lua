@@ -43,4 +43,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
         digest = digest, provider_ref = request.provider_ref,
     }}}}
 end
-return {handle = universal.configure("pi", {pi = handle}, "bee.drivers.pi.descriptor:cli")}
+return {handle = universal.configure("pi", {pi = handle})}

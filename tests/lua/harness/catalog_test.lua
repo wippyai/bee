@@ -68,6 +68,35 @@ local function define_tests()
                 test.is_true(snapshot.bindings[index - 1].binding_id < snapshot.bindings[index].binding_id)
             end
         end)
+        test.it("lists a CLI descriptor that no binding names as its own window driver", function()
+            local ref = "bee.tests.harness.solo:cli"
+            local created = registry.snapshot():changes()
+            created:create({id = ref, kind = "registry.entry", meta = {type = "bee.driver.cli_descriptor"}, data = {
+                schema_revision = "bee.driver.cli-descriptor@4", provider = "solo", executable = "solo-agent",
+                version_probe = {argv = {"--version"}}, configure = "plain", options = {profiles = {"window"}, fields = {}},
+                argv_templates = {window = {argv = {}, readiness = "none"}}}})
+            assert(created:apply())
+            local ok, failure = pcall(function()
+                local snapshot = assert(catalog.snapshot())
+                local solo = find(snapshot, ref)
+                assert(solo.state == "compatible", table.concat(solo.diagnostics, "; "))
+                test.eq(solo.driver_id, "solo")
+                test.eq(solo.descriptor_ref, ref)
+                test.is_false(solo.activated)
+                test.eq(solo.default_profile, "window")
+                test.eq(#solo.profiles, 1)
+                test.eq(solo.profiles[1].mode, "window")
+                test.eq(solo.profiles[1].protocol, "pty")
+                test.eq(solo.methods.prepare, "bee.drivers.universal:prepare")
+                test.eq(solo.methods.configure, "bee.drivers.universal:configure")
+                test.eq(solo.methods.locate, "bee.drivers.universal:locate")
+                for _, item in ipairs(snapshot.bindings) do test.is_false(item.binding_id == "bee.drivers.claude.descriptor:cli") end
+            end)
+            local removed = registry.snapshot():changes()
+            removed:delete(ref)
+            assert(removed:apply())
+            assert(ok, tostring(failure))
+        end)
         test.it("moves to the next generation on replacement and removal without mixing", function()
             local before, before_error = catalog.snapshot()
             if not before then error(tostring(before_error)) end

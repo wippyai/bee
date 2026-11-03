@@ -63,3 +63,9 @@ entries:
   imports:
     mapper: bee.drivers.opencode.observer:events
     delivery: bee.drivers.opencode.observer:delivery
+- name: configure
+  kind: library.lua
+  source: file://configure.lua
+  meta:
+    type: test_support
+  modules: [registry]

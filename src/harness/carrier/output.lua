@@ -160,7 +160,7 @@ local function decode_normalized(value: unknown): (Normalized?, string?)
     return {state = state, observations = observations, terminal = terminal, writes = writes}, nil
 end
 local function normalize(io: IO, session: Session, index: integer, envelope: {[string]: unknown}?, eof: boolean): ({record_types.Observation}?, driver_types.Terminal?, string?, {string}?)
-    local input: Object = {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false}
+    local input: Object = {descriptor_ref = session.plan.binding.descriptor_ref, state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false}
     if session.plan.exchange and session.plan.exchange.transport == "stdio" then
         input.context = {permission_exchange = true, brief = session.plan.request.brief, resume_ref = session.plan.resume_ref,
             options = session.plan.policy.prepare_options}

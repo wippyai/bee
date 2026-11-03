@@ -79,13 +79,7 @@ entries:
     locate: bee.drivers.locate:locate
     descriptor: bee.drivers.descriptor:descriptor
     login_evidence: bee.drivers.locate:login_evidence
-    claude: bee.drivers.claude.binding:locate
-    codex: bee.drivers.codex.binding:locate
-    opencode: bee.drivers.opencode.binding:locate
-    agy: bee.drivers.agy.binding:locate
-    grok: bee.drivers.grok.binding:locate
-    muse: bee.drivers.muse.binding:locate
-    pi: bee.drivers.pi.binding:locate
+    methods: bee.drivers.universal:locate
     login_evidence_types: bee.drivers:login_types
 - name: descriptor_discovery_policy
   kind: security.policy
@@ -139,7 +133,7 @@ entries:
     registry: registry
     configuration: bee.drivers.muse.binding:configuration
     driver_configuration: bee.drivers.binding:configuration
-    configure: bee.drivers.muse.binding:configure
+    host_methods: bee.drivers.tests.support:host_methods
     hook_limits: bee.drivers.binding:hook_limits
 
 - name: host_values_test
@@ -196,12 +190,6 @@ entries:
   modules: [registry]
   imports:
     resolver: bee.drivers.binding:resolver
-- name: normalize_probe
-  kind: function.lua
-  source: file://normalize_probe.lua
-  method: handle
-  meta: {type: test_support}
-  imports: {universal: bee.drivers.binding:universal}
 - name: activation_unreadable
   kind: security.policy
   meta:
@@ -229,8 +217,20 @@ entries:
     test: wippy.test:test
     bounds: bee.drivers.values:bounds
     hook_limits: bee.drivers.binding:hook_limits
-    claude: bee.drivers.claude.binding:configure
+    host_methods: bee.drivers.tests.support:host_methods
     codex: bee.drivers.codex.binding:configuration
-    agy: bee.drivers.agy.binding:configure
     muse: bee.drivers.muse.binding:configuration
     delivery: bee.drivers.opencode.observer:delivery
+- name: driver_declaration_test
+  kind: function.lua
+  source: file://driver_declaration_test.lua
+  security: {policies: [bee.drivers.tests:descriptor_discovery_policy]}
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test
+    resolver: bee.drivers.binding:resolver
+    profile: bee.drivers.profiles:profile
+    universal: bee.drivers.binding:universal
+    bounds: bee.drivers.values:bounds

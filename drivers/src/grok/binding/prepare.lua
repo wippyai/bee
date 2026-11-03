@@ -1,5 +1,4 @@
--- SPDX-License-Identifier: MIT
+-- MIT. Grok prepares through the shared method and adds its ACP launch.
 local universal = require("universal")
 local acp = require("acp")
-local prepare = universal.prepare("bee.drivers.grok.descriptor:cli")
-return {handle = function(raw: unknown): unknown return acp.launch(raw, prepare) end}
+return {handle = function(raw: unknown): unknown return acp.launch(raw, universal.prepare) end}

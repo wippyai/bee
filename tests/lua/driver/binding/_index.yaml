@@ -10,6 +10,7 @@ entries:
   security:
     policies: [bee.resources.security:resource_resolve_policy, bee.placement.native.security:placement_store_policy]
   imports:
+    described: bee.tests.support.driver:configure
     test: wippy.test:test
     placement_types: bee.placement:types
     placement_configuration: bee.placement.native.env:configuration

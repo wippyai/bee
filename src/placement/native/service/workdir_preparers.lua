@@ -165,25 +165,46 @@ end
 
 -- An attempt's preparer cleanup runs under its lock: a process name the
 -- runtime releases when its holder ends, so one cleanup runs at a time and a
--- crashed holder frees the attempt for the next caller.
+-- crashed holder frees the attempt for the next caller. A process name admits
+-- every coroutine of its process, so the attempts a process holds are kept in
+-- held as well.
 M.LOCK = "bee.placement.preparers/"
+M.ENDED = "workdir_preparer.cleanup_ended"
+local held: {[string]: boolean} = {}
 -- locked runs the cleanup when the caller takes the attempt's lock and
--- reports busy while another live caller holds it.
+-- reports busy while another live caller holds it. Each run ends with an
+-- M.ENDED evidence row recorded after the lock is free, which wakes every
+-- caller waiting on it.
 local function locked(attempt: types.Attempt, lock: string, after: integer?): (boolean?, string?, boolean)
     local taken, take_error = process.registry.register(lock)
     if not taken then
         if take_error and take_error:kind() == errors.ALREADY_EXISTS then return nil, nil, true end
         return false, "take the attempt's cleanup lock: " .. tostring(take_error), false
     end
+    if held[lock] then return nil, nil, true end
+    held[lock] = true
     local called, cleaned, cleanup_error = pcall(M.execute_cleanup, attempt, after)
+    held[lock] = nil
     process.registry.unregister(lock, process.registry.LOCAL)
-    if not called then return false, tostring(cleaned), false end
-    return cleaned, cleanup_error, false
+    local ok = called and cleaned == true
+    local problem: string? = nil
+    if not called then problem = tostring(cleaned) elseif not ok then problem = cleanup_error or "preparer cleanup failed" end
+    local db, open_error = store.open()
+    local ended_error = open_error
+    if db then
+        ended_error = record(db, attempt.attempt_id, M.ENDED, problem or "complete")
+        db:release()
+    end
+    if ended_error then
+        return false, (problem and problem .. "; " or "") .. "record the cleanup's end: " .. tostring(ended_error), false
+    end
+    return ok, problem, false
 end
 -- cleanup runs the attempt's preparer cleanups in the caller. While another
--- caller holds the attempt's lock this one follows it: each outcome the
--- holder records, or the holder's exit, is a reason to try the lock again,
--- and a failure recorded meanwhile is this call's outcome too.
+-- caller holds the attempt's lock this one follows it: the end the holder
+-- records, any outcome it records, or the holder process's exit is a reason
+-- to try the lock again, and a failure recorded meanwhile is this call's
+-- outcome too.
 function M.cleanup(attempt: types.Attempt): (boolean, string?)
     local lock = M.LOCK .. attempt.attempt_id
     local db, open_error = store.open()
@@ -197,6 +218,7 @@ function M.cleanup(attempt: types.Attempt): (boolean, string?)
     local changes, stream_error = cdc.stream("bee:changes", {tables = {"bee_placement_evidence"}, ops = {"insert"}})
     if not changes then return false, "follow the attempt's cleanup: " .. tostring(stream_error) end
     local events = assert(process.events())
+    local own = tostring(process.pid())
     local watched: string? = nil
     local function finish(ok: boolean, problem: string?): (boolean, string?)
         changes:close()
@@ -207,12 +229,21 @@ function M.cleanup(attempt: types.Attempt): (boolean, string?)
         cleaned, cleanup_error, busy = locked(attempt, lock, after)
         if not busy then return finish(cleaned == true, cleanup_error) end
         local holder = process.registry.lookup(lock, process.registry.LOCAL)
-        if holder then
+        local holder_id = holder and tostring(holder)
+        local follow = holder_id ~= nil
+        -- A holder in this process ends with the M.ENDED row; another
+        -- process's holder is also followed to its exit. A holder that has
+        -- already exited has released the lock, so the caller tries again.
+        if holder_id and holder_id ~= own and holder_id ~= watched then
+            if watched then process.unmonitor(watched) end
+            watched = nil
+            local monitored, monitor_error = process.monitor(holder_id)
+            if monitored then watched = holder_id
+            elseif monitor_error and monitor_error:kind() == errors.NOT_FOUND then follow = false
+            else return finish(false, "follow the attempt's cleanup holder: " .. tostring(monitor_error)) end
+        end
+        if follow then
             local cases = {changes:channel():case_receive()}
-            if tostring(holder) ~= tostring(process.pid()) and tostring(holder) ~= watched then
-                if watched then process.unmonitor(watched) end
-                watched = process.monitor(tostring(holder)) and tostring(holder) or nil
-            end
             if watched then cases[#cases + 1] = events:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then return finish(false, "the attempt's cleanup could not be followed") end

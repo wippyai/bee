@@ -693,6 +693,14 @@ def observe_preparer_cleanup(src):
     local db, open_error = store.open()
     if not db then return false, open_error end
     local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)''')
+    replace_once(src / "placement/native/service/workdir_preparers.lua",
+                 "            local selected = channel.select(cases)\n            if not selected.ok then return finish(false, \"the attempt's cleanup could not be followed\") end",
+                 """            local waiting = registry.get("bee.tests.placement.native:preparer_fixture_config")
+            if waiting and waiting.data and type(waiting.data.cleanup_waiter) == "string" then
+                assert(process.send(waiting.data.cleanup_waiter, "bee.test.preparer.waiting", {holder = tostring(holder)}))
+            end
+            local selected = channel.select(cases)
+            if not selected.ok then return finish(false, "the attempt's cleanup could not be followed") end""")
 
 
 def hold_docker_cleanup(src):

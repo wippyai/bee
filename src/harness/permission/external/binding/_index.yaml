@@ -22,6 +22,7 @@ entries:
     - bee.harness.security:carrier_environment_policy
     - bee.harness.security:profile_workspace_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_runner_policy
     - bee.resources.security:resource_grant_policy

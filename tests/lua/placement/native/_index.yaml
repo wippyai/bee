@@ -147,6 +147,30 @@ entries:
     protocol: bee.placement.native:protocol
     resource_resolution: bee.placement.native.service:resource_resolution
     types: bee.placement:types
+- name: cleanup_caller
+  kind: process.lua
+  source: file://cleanup_caller.lua
+  method: main
+  meta:
+    type: test_support
+  modules:
+  - process
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
+    - bee.placement.native.security:placement_runner_policy
+  imports:
+    workdir_preparers: bee.placement.native.service:workdir_preparers
+    types: bee.placement:types
+- name: name_holder
+  kind: process.lua
+  source: file://name_holder.lua
+  method: main
+  meta:
+    type: test_support
+  modules:
+  - process
 - name: preparer_owner
   kind: process.lua
   source: file://preparer_owner.lua
@@ -181,6 +205,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
   imports:
@@ -200,6 +225,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_service_policy
   imports:
     bounds: bee.drivers.values:bounds
@@ -230,10 +256,12 @@ entries:
   - env
   - process
   - channel
+  - events
   security:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.placement.native.security:placement_runner_policy
@@ -456,6 +484,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -493,6 +522,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -524,6 +554,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -562,6 +593,7 @@ entries:
     - bee.security.approvals:approval_decide_policy
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -605,6 +637,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -640,6 +673,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -678,6 +712,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -707,6 +742,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -772,6 +808,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.credentials.security:credential_materialize_policy
@@ -905,6 +942,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -989,6 +1027,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_service_policy
   imports:
     protocol: bee.placement.native:protocol
@@ -1080,6 +1119,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -1128,6 +1168,7 @@ entries:
     - bee.tests.placement.native:agy_hook_reader_policy
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy

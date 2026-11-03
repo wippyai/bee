@@ -674,12 +674,13 @@ def hold_test_runner_quiet(src):
 
 def observe_preparer_cleanup(src):
     replace_once(src / "placement/native/service/workdir_preparers.lua",
-                 "local after = assert(bounds.count(row.evidence_count))",
-                 """local after = assert(bounds.count(row.evidence_count))
-    local fixture = registry.get("bee.tests.placement.native:preparer_fixture_config")
+                 "    local taken, take_error = process.registry.register(lock)\n    if not taken then",
+                 """local fixture = registry.get("bee.tests.placement.native:preparer_fixture_config")
     if fixture and fixture.data and type(fixture.data.cleanup_observer) == "string" then
         assert(process.send(fixture.data.cleanup_observer, "bee.test.preparer.observed", {}))
-    end""")
+    end
+    local taken, take_error = process.registry.register(lock)
+    if not taken then""")
     replace_once(src / "placement/native/service/workdir_preparers.lua",
                  'local db, open_error = store.open()\n    if not db then return false, open_error end\n    local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)',
                  '''local fixture = registry.get("bee.tests.placement.native:preparer_fixture_config")

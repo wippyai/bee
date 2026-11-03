@@ -26,6 +26,7 @@ entries:
     policies:
     - bee.tests.placement.native:apply_test_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_store_policy
@@ -138,6 +139,7 @@ entries:
   security:
     policies:
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_service_policy
     - bee.tests.placement.native:apply_test_policy
     - bee.credentials.security:credential_materialize_policy

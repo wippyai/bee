@@ -985,7 +985,6 @@ return {
     "bee.placement.native.security:window_observer_policy",
     "bee.placement.native.service:backlog",
     "bee.placement.native.service:capability",
-    "bee.placement.native.service:cleanup_request",
     "bee.placement.native.service:executable",
     "bee.placement.native.service:executable_stream",
     "bee.placement.native.service:homes",

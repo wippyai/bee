@@ -61,6 +61,7 @@ entries:
     - bee.threads.security:create
     - bee.harness.security:harness_setup_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_runner_policy
     - bee.placement.native.security:window_observer_policy
@@ -120,6 +121,7 @@ entries:
     - bee.threads.security:create
     - bee.harness.security:harness_setup_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_runner_policy
     - bee.placement.native.security:window_observer_policy
@@ -169,6 +171,7 @@ entries:
     - bee.threads.security:create
     - bee.harness.security:harness_setup_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_runner_policy
     - bee.placement.native.security:window_observer_policy
@@ -218,6 +221,7 @@ entries:
     - bee.threads.security:create
     - bee.harness.security:harness_setup_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_runner_policy
     - bee.placement.native.security:window_observer_policy
@@ -267,6 +271,7 @@ entries:
     - bee.threads.security:create
     - bee.harness.security:harness_setup_policy
     - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
     - bee.placement.native.security:placement_runner_policy
     - bee.placement.native.security:window_observer_policy

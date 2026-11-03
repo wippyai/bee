@@ -64,7 +64,7 @@ entries:
       && resource in ["bee.credentials.binding:configuration_setup", "bee.harness.binding:setup", "bee.harness.binding:set_credential", "bee.gov.binding:driver_bindings"])
       || (action == "contract.get" && (resource == "bee.threads.sessions:contract" || resource == "bee.threads.sessions:catalog"))
       || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel",
-      "close", "remove"]) || (action == "contract.open" && (resource == "bee.threads.sessions.binding:owner_binding" || resource ==
+      "close", "remove", "rename"]) || (action == "contract.open" && (resource == "bee.threads.sessions.binding:owner_binding" || resource ==
       "bee.threads.sessions.binding:catalog_binding")) || (action == "funcs.call" && resource == "bee.node.binding:read")
       || (action == "bee.node.workspace.read" && resource == actor.meta.workspace_id) || action == "bee.harness.launch" ||
       action == "bee.sessions.remote" || (action == "funcs.call" && resource == "bee.hive.binding:call")

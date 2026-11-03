@@ -34,7 +34,7 @@ function M.permission_status(snapshot: protocol.SessionSnapshot): string
 end
 
 local MORE = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+K", verb = "stop work"},
-    {key = "Ctrl+X", verb = "close session"}, {key = "Ctrl+R", verb = "remove session"}, {key = "Esc", verb = "sessions"}})
+    {key = "Ctrl+X", verb = "close session"}, {key = "Ctrl+R", verb = "remove session"}, {key = "Ctrl+E", verb = "rename session"}, {key = "Esc", verb = "sessions"}})
 local ACTIVITY_ROLE = {idle = "muted", working = "accent", blocked = "warn", stalled = "warn"}
 local STATE_ROLE = {starting = "muted", queued = "muted", working = "muted", ready = "text", failed = "error", blocked = "warn", uncertain = "warn", budget_exceeded = "error"}
 local STATE_LABEL = {starting = "starting", queued = "queued", working = "working", ready = "", failed = "", blocked = "blocked", uncertain = "uncertain", budget_exceeded = "budget exceeded"}
@@ -195,6 +195,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = (not conv.node or conv.peer_scope == "open") and agents.pending(conv)},
             {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = (not conv.node or conv.peer_scope == "open") and conv.lifecycle == "active"},
             {kind = "remove_session", key = "Ctrl+R", label = "Remove session", enabled = not conv.node or conv.peer_scope == "open", more = true},
+            {kind = "rename_session", key = "Ctrl+E", label = "Rename session", enabled = not conv.node or conv.peer_scope == "open", more = true},
         }
     end
     local message = status ~= "" and status or conv.notice
@@ -202,7 +203,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         message = "No progress for " .. tostring(conv.activity_evidence.quiet_for_ms) .. " ms · " .. conv.activity_evidence.turn
     end
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
-    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start agent"}, {key = "Ctrl+R", verb = "remove session"}, {key = "Esc", verb = "sessions"}}) or MORE, footer_buttons) end
+    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start agent"}, {key = "Ctrl+R", verb = "remove session"}, {key = "Ctrl+E", verb = "rename session"}, {key = "Esc", verb = "sessions"}}) or MORE, footer_buttons) end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

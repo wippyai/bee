@@ -165,11 +165,11 @@ function M.close(conv: Conversation, key: string): boolean
     return true
 end
 
--- Removes the session, stopping its agent first; its thread stays. The key
--- makes a retry resolve the same removal.
-function M.remove(conv: Conversation, key: string): boolean
+-- Removes the session, stopping its agent first; its thread stays unless
+-- history removes it too. The key makes a retry resolve the same removal.
+function M.remove(conv: Conversation, key: string, history: boolean): boolean
     if conv.node and conv.peer_scope ~= "open" then conv.notice = "Session control is not allowed by this bee"; return false end
-    local removal, fault = conv.session:remove({operation_key = key})
+    local removal, fault = conv.session:remove({operation_key = key, history = history or nil})
     if not removal then
         conv.notice = describe(fault)
         return false
@@ -178,10 +178,33 @@ function M.remove(conv: Conversation, key: string): boolean
     return true
 end
 
--- removal_message names what removing a session takes away and what stays.
-function M.removal_message(title: string, lifecycle: string): string
-    local stopped = lifecycle ~= "closed" and " Its agent is stopped first." or ""
-    return "Remove session " .. title .. "? Its thread history stays." .. stopped .. " Enter confirms · Esc keeps it"
+-- Names the session, or returns it to its automatic title with an empty
+-- name. The key makes a retry resolve the same rename.
+function M.rename(conv: Conversation, key: string, name: string): boolean
+    if conv.node and conv.peer_scope ~= "open" then conv.notice = "Session control is not allowed by this bee"; return false end
+    local renamed, fault = conv.session:rename({operation_key = key, name = name})
+    if not renamed then
+        conv.notice = describe(fault)
+        return false
+    end
+    conv.notice = ""
+    return true
+end
+
+-- removal_message asks how to remove a session: keeping its history, or
+-- removing it too, which a thread shared with others does not offer.
+function M.removal_message(title: string, lifecycle: string, shared: boolean): string
+    local stopped = lifecycle ~= "closed" and " · its agent stops first" or ""
+    if shared then
+        return "Remove session " .. title .. "? Its thread is shared with other sessions, apps or peers, so its history stays."
+            .. " Enter: Remove session · Esc keeps it" .. stopped
+    end
+    return "Remove session " .. title .. "? Enter: Remove session (keep its history) · H: Remove session and its history · Esc keeps it" .. stopped
+end
+
+-- rename_message shows the name being typed for a session.
+function M.rename_message(title: string, name: string): string
+    return "Rename " .. title .. ": " .. name .. "▏ · Enter saves · empty returns the automatic title · Esc keeps it"
 end
 
 local function render(value: unknown): string

@@ -66,9 +66,9 @@ entries:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     client: bee.node:client
-- name: remove_session_test
+- name: session_controls_test
   kind: function.lua
-  source: file://remove_session_test.lua
+  source: file://session_controls_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "120s"}
   modules: [tty, system, time, channel, registry, process, funcs]
@@ -87,6 +87,12 @@ entries:
   kind: function.lua
   source: file://removable_owner.lua
   method: remove
+  meta: {type: test_support}
+  modules: [process]
+- name: removable_rename
+  kind: function.lua
+  source: file://removable_owner.lua
+  method: rename
   meta: {type: test_support}
   modules: [process]
 - name: removable_owner

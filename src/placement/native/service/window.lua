@@ -401,13 +401,16 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
         stop_observer()
         retire_gateway("terminal process completed")
         executor:release()
-        local attempt = store.attempt(db, attempt_id)
+        -- A native window's workdir preparers belong to the sweeper: the
+        -- recorded exit puts the attempt in its backlog, which it cleans while
+        -- the node runs or on the node's next start.
         local cleanup_error: string? = nil
-        if attempt and backend then
-            local cleaned, backend_error = backend.cleanup(attempt, false)
-            if not cleaned then cleanup_error = backend_error or "cleanup failed" end
-        elseif attempt then
-            service.cleanup_attempt(attempt, true)
+        if backend then
+            local attempt = store.attempt(db, attempt_id)
+            if attempt then
+                local cleaned, backend_error = backend.cleanup(attempt, false)
+                if not cleaned then cleanup_error = backend_error or "cleanup failed" end
+            end
         end
         service.wake_supervision(row.placement_kind)
         db:release()

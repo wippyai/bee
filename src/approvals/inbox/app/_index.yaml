@@ -9,13 +9,13 @@ entries:
   - tty
   - process
   - channel
-  - time
   - cdc
   - uuid
   - funcs
   - registry
   - system
   - json
+  - events
   imports:
     frame: bee.ui:frame
     client: bee.app:client
@@ -60,6 +60,7 @@ entries:
     - bee.approvals.inbox.security:changes_policy
     - bee.approvals.inbox.security:client_policy
     - bee.approvals.inbox.security:display_discovery_policy
+    - bee.approvals.inbox.security:remote_watch_policy
     - bee.approvals.inbox.security:session_names_policy
     - bee.approvals.inbox.security:grants_policy
     - bee.node.security:workspace_catalog_read_policy

@@ -193,6 +193,15 @@ entries:
     - cluster
     - bee:role
     effect: allow
+- name: approval_hive_watch
+  kind: security.policy.expr
+  meta:
+    comment: The approvals hive service follows this node's approval attention events and monitors the peer inboxes that watch them
+  policy:
+    actions: [events.subscribe, process.monitor, process.unmonitor]
+    resources: '*'
+    expression: (action == "events.subscribe" && resource == "bee.attention") || action == "process.monitor" || action == "process.unmonitor"
+    effect: allow
 - name: approval_hive_admission
   kind: security.policy
   meta:

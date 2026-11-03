@@ -33,9 +33,11 @@ entries:
   - funcs
   - security
   - logger
+  - events
   imports:
     protocol: bee.hive:protocol
     worker: bee.process:worker
+    bounds: bee.drivers.values:bounds
 - name: hive_route
   kind: registry.entry
   meta:
@@ -77,6 +79,7 @@ entries:
       policies:
       - bee.security.approvals:approval_hive_names
       - bee.security.approvals:approval_hive_admission
+      - bee.security.approvals:approval_hive_watch
       - bee.hive.security:messaging
     restart:
       max_attempts: 10

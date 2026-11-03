@@ -294,7 +294,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local scope = not one_time and (row.view.window_max_ttl_ms or 0) >= 1800000 and "once/30 min" or "once"
         if row.view.window_grant then
             local grant = row.view.window_grant
-            scope = windows.duration(grant.until_ms - grant.granted_ms) .. " until " .. clock.local_deadline(grant.until_at)
+            scope = windows.duration(grant.until_ms - grant.granted_ms) .. " · ends " .. clock.local_deadline(grant.until_at)
         end
         local separator = width < 60 and " " or " · "
         local lasting = row.view.proposal.ref == "bee.gateway:access" and model.duration(row.view) or scope

@@ -57,7 +57,8 @@ The terminal supplies the monospace typeface. Design in cells.
   supplementary key hints and clickable `? help` at the right. Keys already
   shown in footer buttons are omitted from hints. Hints give way to actions on
   narrow windows; items never wrap. Status appears above the footer.
-  Overflow actions appear in `F10 More`.
+  Overflow actions appear in `F10 More`; a row's own actions appear in its
+  menu (right click or `Shift+F10`).
 - Write key hints as key then lowercase verb, joined with ` · `
   (`frame.hints`): `↑↓ select · Enter open · Esc close`.
 - Truncate by display width with an ellipsis; every frame call does this. Byte
@@ -122,7 +123,7 @@ information, and never use animation as the only evidence that work continues.
 
 Every mouse action has a keyboard route. Arrow keys move within a collection;
 Tab changes panes; Enter performs the selected primary action; Escape backs out
-or closes. Letter shortcuts accept either case outside text fields. `F10` opens More and `?` opens shared Help. Ignore key-release events. A resize repaints from model state and
+or closes. Letter shortcuts accept either case outside text fields. `F10` opens More, `Shift+F10` the selected row's menu and `?` opens shared Help. Ignore key-release events. A resize repaints from model state and
 must not trigger remote work.
 
 Treat all external text as hostile presentation data. Pass it through

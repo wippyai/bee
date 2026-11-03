@@ -76,6 +76,14 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
 - Buttons marked `more = true` stay in More at every size. When the bar overflows, primary actions keep space and `F10 More` opens
   the remaining buttons. Arrow keys or Tab select, Enter chooses, Escape
   returns; clicking More and an enabled choice uses the same action path.
+- Actions that belong to one row of a list go in the row's menu, not the
+  footer: `frame.row_actions(painter, {kind, index, key, actions, selected})`
+  beside the row, before `frame.footer`. A right click on the row or
+  `Shift+F10` on the selected row opens them at the cell; the footer then
+  names `Shift+F10 actions`. A chosen action reaches the app as a press on a
+  target of the action's kind carrying the row's index and key, so the
+  existing click handler acts on that row. The popup is the same one the
+  shell uses for its Start, window and desktop menus.
 - Destructive work asks first: the footer becomes
   `Stop selected app? Enter confirms · Esc cancels` and the destructive button
   becomes the primary until the choice is made.

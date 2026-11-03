@@ -183,7 +183,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end)
     end
     local function remove_listed(entry: sessions_protocol.SessionSnapshot?, history: boolean)
-        control_listed(entry, "Removing session…", function(owner: sessions.Client, session: string, key: string): sessions.Fault?
+        control_listed(entry, "Deleting session…", function(owner: sessions.Client, session: string, key: string): sessions.Fault?
             local _, fault = owner:remove({session = session, history = history or nil, operation_key = key})
             return fault
         end)
@@ -256,7 +256,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local function ask_control(action: string, message: string)
         local target = control_target(action)
         if not target then return end
-        local title = action == "stop" and "Stop current work?" or action:sub(1, 6) == "remove" and "Remove session?" or "Close session?"
+        local title = action == "stop" and "Stop current work?" or action:sub(1, 6) == "remove" and "Delete session?" or "Close session?"
         local opened, err = confirmation.open(review, action, target, "inline", title, message)
         prompt = message
         if not opened then status = err or "Confirmation is unavailable" end
@@ -275,7 +275,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         local action = confirmation.action(review) .. "_history"
         local target = control_target(action)
         if not target then confirmation.cancel(review); status = "Session is unavailable"; dirty = true; return false end
-        local opened, err = confirmation.open(review, action, target, "inline", "Remove session and its history?", prompt)
+        local opened, err = confirmation.open(review, action, target, "inline", "Delete session and its history?", prompt)
         if not opened then status = err or "Confirmation is unavailable"; dirty = true; return false end
         return accept_control("shortcut")
     end
@@ -647,6 +647,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                         local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         kind = hit and hit.kind or ""
+                        if hit and kind ~= "session" and hit.index > 0 and directory[hit.index] then selected = hit.index end
                         if kind == "session" and hit then
                             selected = hit.index; dirty = true
                             if frame.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then open = true end

@@ -201,7 +201,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             frame.line(painter, 5, "Editing applies only to this workspace.", theme.muted)
             frame.line(painter, 6, "Each activation needs your approval · up to 24 hours.", theme.muted)
             if state.problem ~= "" then frame.empty(painter, 7, "Edit grants unavailable", "R read again")
-            elseif #state.grants == 0 then frame.empty(painter, 7, "No active edit grants", "E enable editing for an area")
+            elseif #state.grants == 0 then frame.empty(painter, 7, "No active edit grants", "Editing stays off until you enable an area")
             else
                 frame.line(painter, 7, "ACTIVE EDIT GRANTS", theme.muted)
                 for index, grant in ipairs(state.grants) do

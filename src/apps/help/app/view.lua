@@ -16,7 +16,7 @@ local PANES: {Pane} = {"desktop", "windows", "workspaces", "mouse", "manuals"}
 M.PANES = PANES
 local TABS: {frame.Tab} = {{kind = "desktop", label = "Desktop", short = "Desk"}, {kind = "windows", label = "Windows", short = "Win"},
     {kind = "workspaces", label = "Bees", short = "Bees"}, {kind = "mouse", label = "Mouse", short = "Mouse"}, {kind = "manuals", label = "Agent manuals", short = "Manuals"}}
-local HINTS = frame.hints({{key = "↑↓", verb = "scroll"}, {key = "Tab", verb = "switch"}})
+local HINTS = frame.hints({{key = "↑↓", verb = "scroll"}, {key = "Tab", verb = "switch"}, {key = "Ctrl+W", verb = "close"}})
 local KEY_WIDTH = 14
 
 type Bindings = {desktop: {Binding}, windows: {Binding}, workspaces: {Binding}, mouse: {Binding}}
@@ -24,11 +24,11 @@ local BINDINGS: Bindings = {
     desktop = {
         {group = "Start and switch", key = "F1", action = "Open or close the Start menu"},
         {group = "Start and switch", key = "F3", action = "Desktops, workspaces and hive nodes"},
-        {group = "Start and switch", key = "F4", action = "Open the Needs you request"},
+        {group = "Start and switch", key = "F4", action = "Open Needs you"},
         {group = "Start and switch", key = "Alt+Tab", action = "Focus the next window"},
         {group = "Start and switch", key = "Alt+Shift+Tab", action = "Focus the previous window"},
         {group = "Display", key = "F12", action = "Reload this display"},
-        {group = "Display", key = "Ctrl+Q", action = "Close this display; apps keep running"},
+        {group = "Display", key = "Ctrl+Q", action = "Exit this display; apps keep running"},
     },
     windows = {
         {group = "Focused window", key = "Ctrl+W", action = "Close the focused app"},

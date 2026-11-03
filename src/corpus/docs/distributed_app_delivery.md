@@ -405,7 +405,7 @@ paths and Bee state (`.wippy`) are refused, including ancestor subroots that
 would expose them. A database grant installs a host-provisioned dedicated
 SQLite store under `bee.capability:app_databases` (rooted at `BEE_APP_DATABASE_ROOT`, default `.wippy/app-db`), outside the readable tree, with a `db.get`-only policy on that store.
 An approved folder is an `fs.directory` entry in the application's own
-namespace named by its subpath (`docs` of `app.notes:app` is `app.notes:docs`),
+namespace named by its subpath (`docs` of `app.notes.app:app` is `app.notes.app:docs`),
 so the application opens it by that name with `fs.get`; one overlay owner
 holds an application namespace on a node, so the name resolves to that
 workspace's folder. An application reads the identities of its databases (by

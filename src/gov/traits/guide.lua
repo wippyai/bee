@@ -684,7 +684,7 @@ function M.workspace_delivery(): string
         .. " with the capability that authorizes it: declare the exec module with an approved process.exec"
         .. " request, the contract module with an approved contract.call or agents.launch request, and the"
         .. " ioevents module with an approved workspace.files.watch request: its folder is the fs.directory named by the"
-        .. " subpath in your namespace (docs of app.x:app is app.x:docs); read it with fs.get and watch it with"
+        .. " subpath in your application entry's namespace (docs of app.x.app:app is app.x.app:docs); read it with fs.get and watch it with"
         .. " ioevents.watch(files, dir, {recursive = true}), a channel of change and rescan notices;"
         .. " preflight reports MODULE_DENIED naming the capability to request otherwise. At run time, open an approved"
         .. " folder by that name and call bee.gov.binding:granted_resources for the identities of your"

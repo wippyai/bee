@@ -116,7 +116,7 @@ end
 
 -- The registry ID of an approved folder: an fs.directory entry in the
 -- application's own namespace, named by the subpath with its segments joined
--- by dots, so docs/notes of app.notes:app is app.notes:docs.notes. The
+-- by dots, so docs/notes of app.notes.app:app is app.notes.app:docs.notes. The
 -- application reads it with fs.get and watches it with ioevents.watch by that
 -- ID. One overlay owner holds an application namespace on a node, so the ID
 -- names one workspace's folder.

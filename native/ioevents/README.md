@@ -19,13 +19,13 @@ caller acquire it.
 
 An application receives this through an approved `workspace.files.watch`
 capability. The grant installs the folder as a read-only `fs.directory` in the
-application's own namespace, named by the subpath (`docs` of `app.notes:app` is
-`app.notes:docs`), the host-backed watch source behind it, and a policy that
+application's own namespace, named by the subpath (`docs` of `app.notes.app:app` is
+`app.notes.app:docs`), the host-backed watch source behind it, and a policy that
 admits `fs.get` and `ioevents.watch` on the folder only.
 
 ```lua
 local function main()
-    local files, err = fs.get("app.notes:docs")
+    local files, err = fs.get("app.notes.app:docs")
     if not files then return nil, err end
     local watch
     watch, err = ioevents.watch(files, ".", {recursive = true})

@@ -206,12 +206,22 @@ function M.execute_cleanup(attempt: types.Attempt, after: integer?): (boolean, s
         if row.kind ~= "workdir_preparer.failed" then completed[binding] = true
         elseif after and (bounds.count(row.sequence) or 0) > after then failed[binding] = detail end
     end
+    -- A preparer's cleanup runs outside the store: the connection is held
+    -- only to record each outcome.
+    db:release()
+    local function note(kind: string, detail: string): string?
+        local recorder, recorder_error = store.open()
+        if not recorder then return recorder_error or "open placement store" end
+        local noted = record(recorder, attempt.attempt_id, kind, detail)
+        recorder:release()
+        return noted
+    end
     local failures: {string} = {}
     for index = #pending, 1, -1 do
         local saved = pending[index]
         local binding = bounds.id(saved.binding_id)
         local target = bounds.id(saved.cleanup)
-        if not binding or not target then db:release(); return false, "invalid cleanup binding" end
+        if not binding or not target then return false, "invalid cleanup binding" end
         if failed[binding] then failures[#failures + 1] = failed[binding]
         elseif not completed[binding] then
             local input: types.WorkdirPreparerCleanupInput = {attempt_id = attempt.attempt_id, owner_id = attempt.owner_id,
@@ -223,17 +233,16 @@ function M.execute_cleanup(attempt: types.Attempt, after: integer?): (boolean, s
                 elseif value.retained then
                     local reason = bounds.text(value.reason, 8192)
                     if not reason then err = "missing retention reason"
-                    else err = record(db, attempt.attempt_id, "workdir_preparer.retained", binding .. ": " .. reason) end
-                else err = record(db, attempt.attempt_id, "workdir_preparer.cleaned", binding) end
+                    else err = note("workdir_preparer.retained", binding .. ": " .. reason) end
+                else err = note("workdir_preparer.cleaned", binding) end
             end
             if err then
                 local failure = binding .. ": " .. err
-                local evidence_error = record(db, attempt.attempt_id, "workdir_preparer.failed", failure)
+                local evidence_error = note("workdir_preparer.failed", failure)
                 failures[#failures + 1] = evidence_error or failure
             end
         end
     end
-    db:release()
     if #failures > 0 then return false, table.concat(failures, "; ") end
     return true, nil
 end

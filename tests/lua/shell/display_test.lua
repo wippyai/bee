@@ -130,6 +130,17 @@ local function bar(view: tty.Viewport): string
     return (snapshot.rows[1]:gsub("\27%[[0-9;]*m", ""))
 end
 
+-- cell is the one-based column and row where text starts on the screen.
+local function cell(view: tty.Viewport, text: string): (integer, integer)
+    local snapshot = assert(view:snapshot())
+    for y, row in ipairs(snapshot.rows) do
+        local plain = tty.text.plain(row)
+        local at = plain:find(text, 1, true)
+        if at then return tty.text.width(plain:sub(1, at - 1)) + 1, y end
+    end
+    error("the screen does not show " .. text .. "\n" .. screen(view))
+end
+
 local function running(): integer
     local state = assert(client.state(assert(client.call(assert(system.node.id()), "list", {}))))
     return #state.running
@@ -359,6 +370,24 @@ local function define_tests()
             test.eq(running(), before)
 
             exits(lifecycle, {first_pid, second_pid})
+        end)
+
+        display_case("gives a right click inside a window to its app and opens the window menu with Shift", function(fixture: Fixture)
+            local lifecycle = assert(process.events())
+            local viewport, pid = fixture:start()
+            expect(viewport, "the desktop opens", " BEE ", true)
+            open_probe(viewport)
+            local x, y = cell(viewport, "label ")
+            assert(viewport:send({type = "mouse", action = "press", button = "right", x = x, y = y}))
+            assert(viewport:send({type = "mouse", action = "release", button = "right", x = x, y = y}))
+            expect(viewport, "the app receives the right click", "mouse right", true)
+            expect(viewport, "no window menu covers the app", "Snap left", false)
+            assert(viewport:send({type = "mouse", action = "press", button = "right", x = x, y = y, shift = true}))
+            expect(viewport, "Shift+Right opens the window menu", "Snap left", true)
+            test.is_nil((screen(viewport):find("mouse right shift", 1, true)))
+            key(viewport, "esc")
+            expect(viewport, "Esc closes the window menu", "Snap left", false)
+            exits(lifecycle, {pid})
         end)
 
         display_case("opens the app a command names full-pane when bee runs with that command", function(fixture: Fixture)

@@ -51,8 +51,8 @@ local BINDINGS: Bindings = {
         {group = "Windows", key = "Left click", action = "Focus a window; use its title-bar controls"},
         {group = "Windows", key = "Drag title", action = "Move a window"},
         {group = "Windows", key = "Drag edge", action = "Resize a window"},
-        {group = "Menus", key = "Right click", action = "Menu of a window, a tab or the desktop"},
-        {group = "Menus", key = "Shift+Right", action = "Pass a right click inside a window to its app"},
+        {group = "Menus", key = "Right click", action = "Menu of a window's frame, a tab or the desktop; inside a window, the app's menu"},
+        {group = "Menus", key = "Shift+Right", action = "Window menu from inside a window"},
         {group = "Menus", key = "Bar", action = "Start, tabs and the desktop label"},
     },
 }

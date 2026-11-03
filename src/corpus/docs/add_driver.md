@@ -9,23 +9,29 @@ what the registry declares.
 
 ## What a driver is
 
+A window CLI is three declarations:
+
 | Entry | Kind and `meta.type` | What it says |
 |---|---|---|
 | CLI descriptor | `registry.entry`, `bee.driver.cli_descriptor` | the executable, its version probe, its options and how they render as arguments |
-| Profiles | `registry.entry`, `harness.profile` | the modes the CLI runs in; an interactive CLI has one `window` profile on `pty` |
-| Binding | `contract.binding`, `harness.driver` | `driver_id`, `descriptor_ref`, `profiles_ref` and five one-line methods over the shared implementation |
-| Launch definition | `registry.entry`, `bee.launch_definition` | what Agents lists: title, binding, profile, policy, working folder |
+| Launch definition | `registry.entry`, `bee.launch_definition` | what Agents lists: title, driver, profile, policy, working folder |
 | Launch policy | `registry.entry`, `bee.launch_policy` | the absolute executable the person approves and the options a person may set |
 
-Bee derives the rest:
+The descriptor is the whole driver. Bee derives the rest:
 
-- Approving the `driver.<name>` overlay activates its `harness.driver`
-  binding. A driver declares no activation requirement; one selecting into
-  `bee.harness.launch:harness_activation` is refused.
+- A descriptor that no `harness.driver` binding names is its own driver: its
+  id is the driver's id (the definition's `binding_ref`), its methods are the
+  shared implementation in `bee.drivers.universal`, and its one profile is a
+  `window` on a PTY.
+- Approving the `driver.<name>` overlay activates that driver. A driver
+  declares no activation requirement and no security policy; one selecting
+  into `bee.harness.launch:harness_activation` or carrying a policy is
+  refused.
 - A window definition keeps its session in the host session resource, its
   `launch_id` is its registry id, and `schema_revision` may be left out.
 - A launch policy defaults to process-group cleanup, independent exit
-  observation and native placement.
+  observation and native placement, and leaves the overrides its definition
+  allows in force; `allowed_overrides` in the policy restricts them.
 - A descriptor without login evidence needs no account, without a platform
   admits every one, and without a codec runs only in a window.
 - Readiness in Agents probes the executable the policy binds, so the CLI need
@@ -34,14 +40,21 @@ Bee derives the rest:
   `options.fields`; Agents lists every definition with
   `presentation.start_menu: true`.
 
+A CLI that runs turns, or needs its own methods, declares a `contract.binding`
+with `meta.type: harness.driver`, `driver_id`, `descriptor_ref` naming the
+descriptor and `profiles_ref` naming a `harness.profile` record. Its methods
+may name the shared ones; Bee passes each the binding's descriptor
+(`descriptor_ref`, and the declaration as `descriptor` to `configure`). The
+shipped drivers in `bee.drivers` are written this way.
+
 ## From inside Bee
 
 1. Work as an agent session with the authoring tools, or pair an external MCP
    client (`docs/external_mcp`) and request the `bee.mcp:authoring` trait.
 2. `overlay {operation: "create", overlay_id: "driver.<name>", expected_revision: 0, idempotency_key}`.
    The name is a lowercase letter followed by lowercase letters or digits.
-   Entries live in `bee.driver.<name>.binding`, `.descriptor`, `.profiles`
-   and `.security`.
+   Entries live in `bee.driver.<name>.descriptor`, `.profiles` and
+   `.security`.
 3. `overlay {operation: "put", path: "entries.json", content}` with the JSON
    list below, then `overlay {operation: "freeze"}`. The reply's `digest` is
    the snapshot digest.
@@ -102,113 +115,12 @@ flag in `--help`. This `entries.json` is the whole driver:
     }
   },
   {
-    "id": "bee.driver.echoagent.binding:prepare",
-    "kind": "function.lua",
-    "data": {
-      "source": "local universal = require(\"universal\")\nreturn {handle = universal.prepare(\"bee.driver.echoagent.descriptor:cli\")}\n",
-      "method": "handle",
-      "imports": {"universal": "bee.drivers.binding:universal"}
-    }
-  },
-  {
-    "id": "bee.driver.echoagent.binding:dispatch",
-    "kind": "function.lua",
-    "data": {
-      "source": "local universal = require(\"universal\")\nreturn {handle = universal.dispatch(\"bee.driver.echoagent.descriptor:cli\")}\n",
-      "method": "handle",
-      "imports": {"universal": "bee.drivers.binding:universal"}
-    }
-  },
-  {
-    "id": "bee.driver.echoagent.binding:normalize",
-    "kind": "function.lua",
-    "data": {
-      "source": "local universal = require(\"universal\")\nreturn {handle = universal.normalize(\"bee.driver.echoagent.descriptor:cli\")}\n",
-      "method": "handle",
-      "imports": {"universal": "bee.drivers.binding:universal"}
-    }
-  },
-  {
-    "id": "bee.driver.echoagent.binding:locate",
-    "kind": "function.lua",
-    "data": {
-      "source": "local universal = require(\"universal\")\nreturn {handle = universal.locate(\"bee.driver.echoagent.descriptor:cli\")}\n",
-      "method": "handle",
-      "imports": {"universal": "bee.drivers.binding:universal"}
-    }
-  },
-  {
-    "id": "bee.driver.echoagent.binding:configure",
-    "kind": "function.lua",
-    "data": {
-      "source": "local universal = require(\"universal\")\nreturn {handle = universal.configure(\"plain\", {plain = function(_: unknown): {[string]: unknown} return {ok = true, delivery = {files = {}, arguments = {}}} end}, \"bee.driver.echoagent.descriptor:cli\")}\n",
-      "method": "handle",
-      "imports": {"universal": "bee.drivers.binding:universal"},
-      "security": {"policies": ["bee.driver.echoagent.security:descriptor_read"]}
-    }
-  },
-  {
-    "id": "bee.driver.echoagent.security:descriptor_read",
-    "kind": "security.policy",
-    "data": {"policy": {"effect": "allow", "actions": ["registry.get", "registry.snapshot"], "resources": ["*"]}}
-  },
-  {
-    "id": "bee.driver.echoagent.binding:binding",
-    "kind": "contract.binding",
-    "meta": {
-      "type": "harness.driver",
-      "driver_id": "echoagent",
-      "descriptor_ref": "bee.driver.echoagent.descriptor:cli",
-      "profiles_ref": "bee.driver.echoagent.profiles:profiles"
-    },
-    "data": {
-      "contracts": [
-        {
-          "contract": "bee.drivers:driver",
-          "methods": {
-            "prepare": "bee.driver.echoagent.binding:prepare",
-            "dispatch": "bee.driver.echoagent.binding:dispatch",
-            "normalize": "bee.driver.echoagent.binding:normalize",
-            "configure": "bee.driver.echoagent.binding:configure"
-          }
-        },
-        {"contract": "bee.drivers:locate_facet", "methods": {"locate": "bee.driver.echoagent.binding:locate"}}
-      ]
-    }
-  },
-  {
-    "id": "bee.driver.echoagent.profiles:profiles",
-    "kind": "registry.entry",
-    "meta": {"type": "harness.profile", "driver_ref": "bee.driver.echoagent.binding:binding"},
-    "data": {
-      "driver": {
-        "schema_revision": "bee.driver@1",
-        "kind": "harness",
-        "title": "Echo agent",
-        "implementation_version": "1.0.0",
-        "default_profile": "window",
-        "profiles": [
-          {
-            "id": "window",
-            "mode": "window",
-            "protocol": "pty",
-            "protocol_revision": "native-window-1",
-            "answer_path": {"strategy": "none"},
-            "resume": {"strategy": "none", "portable": false},
-            "inbound": [],
-            "interrupt": {"methods": ["signal_group"]}
-          }
-        ]
-      }
-    }
-  },
-  {
     "id": "bee.driver.echoagent.profiles:window",
     "kind": "registry.entry",
     "meta": {"type": "bee.launch_definition"},
     "data": {
       "title": "Echo agent",
-      "binding_ref": "bee.driver.echoagent.binding:binding",
+      "binding_ref": "bee.driver.echoagent.descriptor:cli",
       "profile_id": "window",
       "default_mode": "window",
       "policy_ref": "bee.driver.echoagent.security:window",
@@ -223,7 +135,6 @@ flag in `--help`. This `entries.json` is the whole driver:
     "meta": {"type": "bee.launch_policy"},
     "data": {
       "executables": {"echoagent": "/opt/echoagent/bin/echoagent"},
-      "allowed_overrides": ["workdir"],
       "profile_restrictions": {"provider.options.greeting": {"kind": "declared"}}
     }
   }
@@ -231,9 +142,7 @@ flag in `--help`. This `entries.json` is the whole driver:
 ```
 
 To write a driver for your CLI, replace `echoagent` in every id, the title, the
-executable path and the descriptor's options and argv. Keep the binding
-methods as written: they select the shared implementation for your descriptor.
-Do not copy a codec.
+executable path and the descriptor's options and argv. Do not copy a codec.
 
 ## Descriptor fields
 
@@ -255,10 +164,9 @@ Do not copy a codec.
 - `codec` names a shared stream decoder and is required once the CLI runs
   turns (`first_turn` or `resume`); a window decodes no stream. `json_paths`,
   `flags` and `provider_home` default to empty.
-- `configure` names the configure renderer; `plain` delivers nothing. The
-  configure method reads the descriptor, so it names the overlay's
-  `descriptor_read` policy, which may grant only `registry.get` and
-  `registry.snapshot`.
+- `configure` names the configure renderer; `plain` delivers nothing beyond
+  what the options render. A descriptor driver supports `plain`; a CLI with its
+  own configuration format declares a binding with its own `configure`.
 
 ## Hooks
 

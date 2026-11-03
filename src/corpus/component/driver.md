@@ -31,8 +31,12 @@ and alternative provider login evidence. Results are `ready`, `missing`,
 `unconfigured`, `incompatible`, or `unknown`. Login contents are never read;
 file or config existence and environment presence are setup evidence, not proof that a login is valid.
 
-The six external CLI packages (`bee.drivers.<claude|codex|agy|grok|muse|opencode>`) use the shared `bee.drivers.binding:universal`
-implementation. Each contributes a strict `bee.driver.cli_descriptor` registry
+The external CLI packages (`bee.drivers.<claude|codex|agy|grok|muse|opencode|pi>`) bind the shared
+methods in `bee.drivers.universal` (`prepare`, `dispatch`, `normalize`, `locate`, and `configure`
+for a `plain` descriptor). The host names the binding's descriptor in every
+request: `descriptor_ref` for `prepare`, `dispatch`, `normalize` and `locate`,
+and the declaration itself as `descriptor` for `configure`, which runs without
+registry authority. Each package contributes a strict `bee.driver.cli_descriptor` registry
 entry (`bee.driver.cli-descriptor@4`) with executable and version probe, an any-of login evidence declaration, launch templates,
 OptionSpec value schemas, form labels, contexts, capability evidence and renders, JSON paths, and a codec ID. The same declaration supplies form choices, argv, structured configuration and environment delivery; there is no separate profile-options map. Locate reports capabilities established by version/help probes. The host validates the
 descriptor before using it. CLI-specific configuration rendering remains in
@@ -56,6 +60,10 @@ The Harness catalog discovers `contract.binding` entries with `meta.type: harnes
 Each declares `driver_id`, `profiles_ref` and the four `bee.drivers:driver`
 methods. CLI bindings also name `descriptor_ref`. The profiles entry has
 `meta.type: harness.profile` and `meta.driver_ref` naming that exact binding.
+A CLI descriptor that no binding names is a driver on its own: its binding id
+is the descriptor id, its methods are `bee.drivers.universal`, and its one
+profile is a `window` on a `pty`. `bee.drivers.binding:resolver` reads a
+driver either way (`binding`, `declaration`, `drivers`).
 The binding ID and method targets may belong to different namespaces and use
 different entry names. Threads sessions resolve the declared targets from one pinned
 registry snapshot and requires `function.lua` entries. Configuration resolves
@@ -71,8 +79,8 @@ Metadata discovery, installation and a matching name confer no launch
 authority. An unselected binding returns `binding <id> is not activated`.
 External turns re-admit through the host and use its planned normalize target.
 
-An agent authors typed method functions, binding metadata, profiles and, for a
-CLI, a descriptor plus provider configuration renderer. Existing executions keep
+An agent authors a CLI descriptor; a CLI that needs its own methods, profiles
+or configuration renderer adds a binding and profiles that name it. Existing executions keep
 their pinned route; a changed target takes effect for new routes after
 authorized registry publication.
 

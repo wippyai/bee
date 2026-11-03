@@ -335,7 +335,7 @@ local function driver_profile(rule: Template?, workspace_id: string, source_node
         overlay_owner = identity.overlay_owner, approval_policy = rule.approval_policy,
         resolver = "overlay", parameters = empty_list(), allow = {
             packages = {identity.component}, namespaces = identity.namespaces, kinds = rule.kinds,
-            databases = empty_list(), grants = {identity.component .. ".security:descriptor_read"},
+            databases = empty_list(), grants = empty_list(),
             modules = rule.modules, auto_start = false}})
 end
 

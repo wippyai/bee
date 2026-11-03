@@ -53,7 +53,7 @@ entries:
       hive: true
     workspace_drivers:
       approval_policy: workspace-application-delivery
-      kinds: [function.lua, library.lua, registry.entry, contract.binding, ns.requirement, security.policy, security.policy.expr]
+      kinds: [function.lua, library.lua, registry.entry, contract.binding, ns.requirement]
       modules: [json, hash, registry, time]
       policies: []
       thread_access: none

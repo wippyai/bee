@@ -1,7 +1,6 @@
 local bounds = require("bounds")
 local security = require("security")
 local funcs = require("funcs")
-local hash = require("hash")
 local channel = require("channel")
 local M = {}
 function M.hook(point: string, raw: unknown): {[string]: unknown}
@@ -25,29 +24,7 @@ function M.hook(point: string, raw: unknown): {[string]: unknown}
     if turn.trait_id == "bee.tests.memory:output_hook" then return {kind = "add_context", text = "tool output: " .. tostring(turn.output)} end
     local actor = assert(security.actor())
     assert(actor:meta().definition_id == "bee.tests.memory:app", "hook inherits carrier authority")
-    if turn.trait_id == "bee.tests.memory:remember_hook" and point == "prompt.submit" then
-        local workspace = assert(bounds.id(actor:meta().workspace_id))
-        local index = "memory:" .. assert(hash.sha256(workspace .. ":bee.tests.memory:app"))
-        local raw_reply, err = funcs.call("bee.threads.binding:read_after", {thread_id = index, cursor = 0, limit = 64})
-        assert(not err, tostring(err))
-        local reply = assert(bounds.object(raw_reply))
-        assert(reply.ok == true, "hook memory read failed: " .. tostring(assert(bounds.object(reply.error or {})).message))
-        local value = assert(bounds.object(reply.value))
-        local facts: {string} = {}
-        for _, raw_record in ipairs(assert(bounds.array(value.records, 64))) do
-            local record = assert(bounds.object(raw_record))
-            local body = bounds.object(record.body)
-            local data = body and bounds.object(body.data)
-            local text = data and bounds.text(data.text)
-            if text then facts[#facts + 1] = text end
-        end
-        return {kind = "add_context", text = table.concat(facts, "\n")}
-    end
     local suffix = turn.trait_id == "bee.tests.memory:hooks_a" and ":a" or ":b"
-    if mode == "large_output" then
-        if point == "tool.after" then return {kind = "change", output = "digest" .. suffix} end
-        return {kind = "pass"}
-    end
     if point == "tool.before" then
         if input and type(input.command) == "string" then return {kind = "change", input = {command = input.command .. suffix}} end
         return {kind = "change", input = {text = tostring(input and input.text or "") .. suffix}}

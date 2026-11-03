@@ -176,7 +176,6 @@ entries:
     - bee.drivers.grok.binding:binding
     - bee.drivers.muse.binding:binding
     - bee.drivers.opencode.binding:binding
-    - bee.driver.wippy.binding:binding
 - name: harness_setup
   kind: registry.entry
   meta:

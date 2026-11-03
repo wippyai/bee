@@ -229,9 +229,6 @@ function M.resolve(pinned: Pinned, agent_ref: string): (Closure?, string?, strin
         delegates = delegates, memory = agent.memory, model = agent.model, tuning = agent.tuning,
         declinable = agent.declinable}, nil, nil
 end
-local function native_driver(driver_id: string): boolean
-    return driver_id == "wippy"
-end
 -- Discover one CLI harness route: the driver contract.binding is activated
 -- by the host's harness_activation declaration and declares whether it
 -- accepts a model. Absence of a matching activated binding is not routable;
@@ -262,26 +259,18 @@ local function resolve_cli_route(pinned: Pinned, driver_id: string): (boolean, b
     end
     return false, false, nil
 end
--- check_route: admit one resolved closure for a CLI or native harness route.
+-- check_route: admit one resolved closure for a CLI harness route.
 -- Optional tuning hints pass only when the agent owner lists them as
 -- declinable; every other unrepresentable capability is refused, never
--- dropped. The native route proves memory by committing memory control
--- events under the attempt's fenced epoch; it proves no trait behavior,
--- contract, wrapper, hook, option or delegate capability.
+-- dropped.
 function M.check_route(pinned: Pinned, closure: Closure, route: Route): (Checked?, string?, string?)
     local agent_ref, driver_id = closure.ref, route.driver_id
-    local native = native_driver(driver_id)
-    local cli = false
-    local accepts_model = false
-    if not native then
-        local resolved_cli, resolved_model, resolve_error = resolve_cli_route(pinned, driver_id)
-        if resolve_error then return nil, "UNAVAILABLE", resolve_error end
-        cli, accepts_model = resolved_cli, resolved_model
+    local cli, accepts_model, resolve_error = resolve_cli_route(pinned, driver_id)
+    if resolve_error then return nil, "UNAVAILABLE", resolve_error end
+    if not cli then
+        return nil, "INVALID", "driver " .. driver_id .. " is not an activated CLI harness route"
     end
-    if not native and not cli then
-        return nil, "INVALID", "driver " .. driver_id .. " is not an activated CLI or native harness route"
-    end
-    if #closure.memory > 0 and not native then
+    if #closure.memory > 0 then
         return nil, "UNSUPPORTED_CAPABILITY", "agent definition " .. agent_ref .. " requires memory the " .. driver_id .. " route cannot prove"
     end
     for _, trait in ipairs(closure.traits) do
@@ -312,7 +301,7 @@ function M.check_route(pinned: Pinned, closure: Closure, route: Route): (Checked
         if not mapped then
             return nil, "UNSUPPORTED_CAPABILITY", "host policy maps no driver model for agent model " .. closure.model
         end
-        if not (accepts_model or native) then
+        if not accepts_model then
             return nil, "UNSUPPORTED_CAPABILITY", "driver " .. driver_id .. " takes no model mapping for agent model " .. closure.model
         end
         if not mapped:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then

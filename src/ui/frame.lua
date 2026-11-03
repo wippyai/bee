@@ -17,11 +17,22 @@ type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, w
 type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?, more: boolean?}
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
-type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?}
+-- The actions one row offers; selected marks the row Shift+F10 opens.
+type RowActions = {kind: string, index: integer, key: string, actions: {Button}, selected: boolean?}
+type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?, rows: {RowActions}}
 type Bar = {x: integer, buttons: {Button}}
 type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}, controls: Controls, bars: {[integer]: Bar}}
 type View = {rows: {string}, hits: {Hit}, controls: Controls?}
-type Menu = {mode: string, selected: integer, offset: integer, controls: Controls, hits: {Hit}, signature: string, count: integer}
+-- A popup menu item; an item with children opens a submenu and group marks
+-- the first item of a group.
+type MenuItem = {label: string, action: string, enabled: boolean, shortcut: string?, children: {MenuItem}?, group: boolean?}
+type PopupState = {selected: integer, offset: integer, kind: string?, target: string?, x: integer?, y: integer?, path: {integer}?}
+type Panel = {x: integer, y: integer, width: integer, height: integer, capacity: integer, inset: integer}
+type PopupResponse = {state: PopupState, action: string, close: boolean}
+-- context is the row whose actions are open, anchored at the cell (x, y).
+-- panel is where it was last drawn.
+type Context = {kind: string, key: string, index: integer, x: integer, y: integer, selected: integer, offset: integer, panel: Panel?}
+type Menu = {mode: string, selected: integer, offset: integer, controls: Controls, hits: {Hit}, signature: string, count: integer, context: Context?}
 
 type Window = {offset: integer, capacity: integer}
 type ListCard = {glyph: string, title: string, requester: string, summary: string, meta: string}
@@ -85,7 +96,7 @@ function M.new(width: integer, height: integer, preferences: appearance.Preferen
     local theme = preferences.theme
     local canvas = tty.canvas(maximum(1, width), maximum(1, height))
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-    local controls: Controls = {buttons = {}, overflow = {}, hints = {}, status = ""}
+    local controls: Controls = {buttons = {}, overflow = {}, hints = {}, status = "", rows = {}}
     local bars: {[integer]: Bar} = {}
     return {width = width, height = height, theme = theme, canvas = canvas, hits = {}, controls = controls, bars = bars}
 end
@@ -301,6 +312,7 @@ function M.footer(painter: Painter, status: string, hints: string, more: string?
     painter.controls.status = status
     if y < 1 then return end
     local actions = buttons or {}
+    if #painter.controls.rows > 0 then hints = hints ~= "" and ("Shift+F10 actions · " .. hints) or "Shift+F10 actions" end
     local listed = hints
     if more and more ~= "" then listed = hints .. " · " .. more end
     for part in listed:gmatch("[^·]+") do
@@ -1009,22 +1021,253 @@ function M.palette(painter: Painter, width: integer, height: integer, value: Pal
     return window
 end
 
+-- A popup menu anchored at a cell: the shell's Start, window and desktop
+-- menus and an app's row actions. A rule separates a group from the items
+-- above it. The layout is used unchanged by drawing and input.
+
+-- popup_lines lays items out as drawn rows: each item's index, with 0 for
+-- the rule before an item that starts a group.
+local function popup_lines(items: {MenuItem}): {integer}
+    local laid: {integer} = {}
+    for index, item in ipairs(items) do
+        if item.group and index > 1 then laid[#laid + 1] = 0 end
+        laid[#laid + 1] = index
+    end
+    return laid
+end
+local function popup_line(laid: {integer}, index: integer): integer
+    for line, item in ipairs(laid) do
+        if item == index then return line end
+    end
+    return 1
+end
+local function popup_state(state: PopupState, selected: integer, offset: integer, path: {integer}?): PopupState
+    return {selected = selected, offset = offset, kind = state.kind, target = state.target, x = state.x, y = state.y, path = path}
+end
+
+-- The panel for items at the state's anchor cell (x, y), kept on the
+-- canvas at or below row top (default 1). size is the panel's width; by
+-- default it fits the widest item.
+function M.popup_panel(width: integer, height: integer, items: {MenuItem}, state: PopupState, size: integer?, top: integer?): Panel
+    local first = maximum(1, minimum(top or 1, height))
+    local inset = state.path and #state.path > 0 and 1 or 0
+    local fitted = 0
+    for _, item in ipairs(items) do
+        local hint = item.children and "›" or (item.shortcut or "")
+        fitted = maximum(fitted, tty.text.width(item.label) + (hint ~= "" and tty.text.width(hint) + 2 or 0) + 4)
+    end
+    local w = minimum(size or maximum(fitted, 12), width)
+    local h = maximum(1, minimum(#popup_lines(items) + 2 + inset, height - first + 1))
+    local x = maximum(1, minimum(state.x or 1, width - w + 1))
+    local y = maximum(first, minimum(state.y or first, height - h + 1))
+    return {x = x, y = y, width = w, height = h, capacity = maximum(0, h - 2 - inset), inset = inset}
+end
+
+-- popup_fit clamps the selection to items and scrolls the drawn rows
+-- (offset) to keep it in view.
+function M.popup_fit(state: PopupState, panel: Panel, items: {MenuItem}): PopupState
+    local laid = popup_lines(items)
+    local selected = maximum(1, minimum(#items, state.selected))
+    local offset = maximum(0, minimum(state.offset, #laid - panel.capacity))
+    local line = popup_line(laid, selected)
+    if line <= offset then offset = line - 1 end
+    if line > offset + panel.capacity then offset = maximum(0, line - panel.capacity) end
+    return popup_state(state, selected, offset, state.path)
+end
+
+-- popup_move steps the selection to the next enabled item, wrapping.
+function M.popup_move(state: PopupState, step: integer, items: {MenuItem}, panel: Panel): PopupState
+    if #items == 0 then return state end
+    local index = state.selected
+    for _ = 1, #items do
+        index = (index - 1 + step + #items) % #items + 1
+        if items[index].enabled then break end
+    end
+    return M.popup_fit(popup_state(state, index, state.offset, state.path), panel, items)
+end
+
+-- The item drawn at the cell (x, y), if any.
+function M.popup_hit(panel: Panel, state: PopupState, x: integer, y: integer, items: {MenuItem}): integer?
+    if x <= panel.x or x >= panel.x + panel.width - 1 or y < panel.y + 1 + panel.inset or y >= panel.y + panel.height - 1 then return nil end
+    local index = popup_lines(items)[state.offset + y - panel.y - panel.inset]
+    if index and index >= 1 then return index end
+    return nil
+end
+
+-- popup_respond answers one input event: navigation keys, the pointer,
+-- Enter on an item (its action), a submenu's Back, and Esc or a click outside
+-- the panel (close).
+function M.popup_respond(state: PopupState, panel: Panel, items: {MenuItem}, event: unknown): PopupResponse
+    local next_state = M.popup_fit(state, panel, items)
+    local action, close = "", false
+    local function back()
+        local path: {integer} = {}
+        for _, index in ipairs(next_state.path or {}) do path[#path + 1] = index end
+        if #path == 0 then close = true; return end
+        local selected = table.remove(path)
+        next_state = popup_state(state, selected or 1, 0, path)
+    end
+    local function activate(index: integer)
+        local item = items[index]
+        if not item or not item.enabled then return end
+        if item.children then
+            local path: {integer} = {}
+            for _, parent in ipairs(next_state.path or {}) do path[#path + 1] = parent end
+            path[#path + 1] = index
+            next_state = popup_state(state, 1, 0, path)
+        else action = item.action end
+    end
+    if type(event) ~= "table" then return {state = next_state, action = action, close = close} end
+    if event.type == "key" and event.action ~= "release" then
+        local key = event.key_type
+        if key == "up" then next_state = M.popup_move(next_state, -1, items, panel)
+        elseif key == "down" or key == "tab" then next_state = M.popup_move(next_state, 1, items, panel)
+        elseif key == "pgup" or key == "pgdown" then
+            local direction = key == "pgup" and -1 or 1
+            local index = maximum(1, minimum(#items, next_state.selected + direction * maximum(1, panel.capacity)))
+            next_state = M.popup_fit(popup_state(state, index, next_state.offset, state.path), panel, items)
+            if items[index] and not items[index].enabled then next_state = M.popup_move(next_state, direction, items, panel) end
+        elseif key == "home" then next_state = M.popup_fit(popup_state(state, 1, 0, state.path), panel, items)
+        elseif key == "end" then next_state = M.popup_fit(popup_state(state, #items, 0, state.path), panel, items)
+        elseif key == "enter" then activate(next_state.selected)
+        elseif key == "right" then
+            local item = items[next_state.selected]
+            if item and item.children then activate(next_state.selected) end
+        elseif key == "left" or key == "backspace" or key == "esc" or key == "escape" then back() end
+    elseif event.type == "mouse" and type(event.x) == "number" and type(event.y) == "number" then
+        local x, y = math.floor(event.x), math.floor(event.y)
+        local index = M.popup_hit(panel, next_state, x, y, items)
+        if event.action == "motion" and index and items[index].enabled then
+            next_state = M.popup_fit(popup_state(state, index, next_state.offset, state.path), panel, items)
+        elseif event.action == "wheel" then
+            local up = event.button == "wheel_up" or event.button == "up"
+            next_state = M.popup_move(next_state, up and -1 or 1, items, panel)
+        elseif event.action == "press" and event.button == "right" then
+            close = true
+        elseif event.action == "press" and event.button == "left" then
+            if panel.inset > 0 and y == panel.y + 1 and x > panel.x and x < panel.x + panel.width - 1 then back()
+            elseif index and items[index].enabled then
+                next_state = M.popup_fit(popup_state(state, index, next_state.offset, state.path), panel, items)
+                activate(index)
+            elseif x < panel.x or x >= panel.x + panel.width or y < panel.y or y >= panel.y + panel.height then close = true end
+        end
+    end
+    return {state = next_state, action = action, close = close}
+end
+
+-- Draws the panel: a rounded border, a submenu's Back row, rules between
+-- groups, and each item's label with its shortcut, or "›" for a submenu,
+-- aligned right. The selected enabled item takes the selection pair and
+-- disabled items are muted.
+function M.popup_draw(canvas: tty.Canvas, panel: Panel, state: PopupState, items: {MenuItem}, theme: appearance.Theme)
+    local normal = appearance.style(theme.text, theme.surface)
+    local border = appearance.style(theme.border, theme.surface)
+    local inside = maximum(0, panel.width - 2)
+    for y = panel.y, panel.y + panel.height - 1 do
+        local edge = y == panel.y or y == panel.y + panel.height - 1
+        local row = "│" .. string.rep(" ", inside) .. "│"
+        if edge then row = (y == panel.y and "╭" or "╰") .. string.rep("─", inside) .. (y == panel.y and "╮" or "╯") end
+        canvas:put(panel.x, y, border .. row .. RESET, panel.width)
+    end
+    if panel.height < 3 or panel.width < 4 then return end
+    if panel.inset > 0 then
+        canvas:put(panel.x + 1, panel.y + 1, appearance.style(theme.muted, theme.surface) .. " ‹ Back" .. RESET, inside)
+    end
+    local laid = popup_lines(items)
+    local muted = appearance.style(theme.muted, theme.surface)
+    for row = 1, panel.capacity do
+        local index = laid[state.offset + row]
+        local item = index and items[index]
+        local y = panel.y + panel.inset + row
+        if index == 0 then
+            canvas:put(panel.x, y, border .. "├" .. string.rep("─", inside) .. "┤" .. RESET, panel.width)
+        elseif index and item then
+            local style = item.enabled and normal or muted
+            local hint_style = muted
+            if index == state.selected and item.enabled then
+                style = appearance.style(appearance.selection_text(theme), appearance.selection_background(theme))
+                hint_style = style
+            end
+            local available = maximum(0, inside - 2)
+            local hint = item.children and "›" or (item.shortcut or "")
+            if tty.text.width(hint) + 4 > available then hint = "" end
+            local hint_width = tty.text.width(hint)
+            local label = tty.text.truncate(item.label, maximum(0, available - hint_width - (hint ~= "" and 2 or 0)), ELLIPSIS)
+            local gap = string.rep(" ", maximum(0, available - tty.text.width(label) - hint_width))
+            canvas:put(panel.x + 1, y, style .. " " .. label .. gap .. hint_style .. hint .. style .. " " .. RESET, inside)
+        end
+    end
+end
+
+-- Declares the actions a row offers: a right click on the row's target
+-- (kind, index, key) or Shift+F10 on the selected row opens them as a popup
+-- menu. Each action is a Button; choosing one reaches the app as a press on
+-- a target of the action's kind carrying the row's index and key.
+function M.row_actions(painter: Painter, row: RowActions)
+    painter.controls.rows[#painter.controls.rows + 1] = row
+end
+
 -- An app-owned More and Help state; the app retains it between redraws.
 function M.menu(): Menu
-    local controls: Controls = {buttons = {}, overflow = {}, hints = {}, status = ""}
+    local controls: Controls = {buttons = {}, overflow = {}, hints = {}, status = "", rows = {}}
     return {mode = "", selected = 1, offset = 0, controls = controls, hits = {}, signature = "", count = 0}
 end
 
 local function choices(menu: Menu): {Button}
     if menu.mode == "more" then return menu.controls.overflow end
+    if menu.mode == "context" then
+        local context = menu.context
+        for _, row in ipairs(menu.controls.rows) do
+            if context and row.kind == context.kind and row.key == context.key and (row.key ~= "" or row.index == context.index) then
+                context.index = row.index
+                return row.actions
+            end
+        end
+        return {}
+    end
     return menu.controls.buttons
+end
+
+local function context_items(buttons: {Button}): {MenuItem}
+    local items: {MenuItem} = {}
+    for _, button in ipairs(buttons) do
+        items[#items + 1] = {label = button.label, action = button.kind, enabled = button.enabled, shortcut = button.key}
+    end
+    return items
+end
+
+local function context_state(context: Context): PopupState
+    return {selected = context.selected, offset = context.offset, x = context.x, y = context.y}
+end
+
+-- The row's actions drawn over the screen at the context's anchor, with one
+-- target per visible item; nil when the row no longer offers any.
+local function render_context(view: View, menu: Menu, preferences: appearance.Preferences): boolean
+    local context = menu.context
+    local buttons = choices(menu)
+    if not context or #buttons == 0 then return false end
+    local painter = M.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
+    painter.canvas:put_rows(1, 1, view.rows)
+    local items = context_items(buttons)
+    local panel = M.popup_panel(painter.width, painter.height, items, context_state(context))
+    local state = M.popup_fit(context_state(context), panel, items)
+    context.selected, context.offset, context.panel = state.selected, state.offset, panel
+    M.popup_draw(painter.canvas, panel, state, items, painter.theme)
+    for line = 1, panel.capacity do
+        local y = panel.y + panel.inset + line
+        local index = M.popup_hit(panel, state, panel.x + 1, y, items)
+        if index then M.add_hit(painter, "frame_choice", index, "", panel.x + 1, y, panel.width - 2, 1) end
+    end
+    view.rows, view.hits = M.rows(painter), painter.hits
+    menu.hits = view.hits
+    return true
 end
 
 -- Paints a shared overlay from this screen's declared buttons and hints.
 function M.render(view: View, menu: Menu, preferences: appearance.Preferences)
     local controls: Controls
     if view.controls then controls = view.controls
-    else controls = {buttons = {}, overflow = {}, hints = {}, status = ""} end
+    else controls = {buttons = {}, overflow = {}, hints = {}, status = "", rows = {}} end
     local parts: {string} = {}
     for _, button in ipairs(controls.buttons) do parts[#parts + 1] = button.kind end
     for _, hint in ipairs(controls.hints) do parts[#parts + 1] = hint.key .. hint.verb end
@@ -1032,6 +1275,8 @@ function M.render(view: View, menu: Menu, preferences: appearance.Preferences)
     if signature ~= menu.signature then menu.mode, menu.selected, menu.offset = "", 1, 0 end
     menu.signature, menu.controls = signature, controls
     if menu.mode == "more" and #controls.overflow == 0 then menu.mode = "" end
+    if menu.mode == "context" and not render_context(view, menu, preferences) then menu.mode, menu.context = "", nil end
+    if menu.mode == "context" then return end
     if menu.mode == "" then menu.hits = view.hits; return end
     local painter = M.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
     M.header(painter, menu.mode == "more" and "MORE ACTIONS" or "HELP", "Esc back")
@@ -1072,16 +1317,55 @@ function M.render(view: View, menu: Menu, preferences: appearance.Preferences)
     menu.hits = view.hits
 end
 
+-- dispatch closes the overlay and hands the chosen button to the app as a
+-- press on a target of the button's kind, placed first so the app's hit
+-- test finds it, carrying the row's index and key for a row action.
+local function dispatch(menu: Menu, button: Button, index: integer, key: string): tty.TTYEvent
+    table.insert(menu.hits, 1, {kind = button.kind, index = index, key = key, x = 1, y = 1, width = 1, height = 1})
+    menu.mode, menu.context = "", nil
+    return {type = "mouse", action = "press", button = "left", x = 1, y = 1, ctrl = false, alt = false, shift = false}
+end
+
 local function choose(menu: Menu, index: integer): tty.TTYEvent?
     local button = choices(menu)[index]
-    if menu.mode ~= "more" or not button or not button.enabled then return nil end
-    for _, hit in ipairs(menu.hits) do
-        if hit.kind == "frame_choice" and hit.index == index then
-            hit.kind, hit.index = button.kind, 0
-            menu.mode = ""
-            return {type = "mouse", action = "press", button = "left", x = hit.x, y = hit.y, ctrl = false, alt = false, shift = false}
+    if (menu.mode ~= "more" and menu.mode ~= "context") or not button or not button.enabled then return nil end
+    local context = menu.context
+    if menu.mode == "context" and context then return dispatch(menu, button, context.index, context.key) end
+    return dispatch(menu, button, 0, "")
+end
+
+-- open_context opens the actions of the row at target, anchored at (x, y).
+local function open_context(menu: Menu, row: RowActions, x: integer, y: integer)
+    menu.mode = "context"
+    menu.context = {kind = row.kind, key = row.key, index = row.index, x = x, y = y, selected = 1, offset = 0}
+    for index, button in ipairs(row.actions) do
+        if button.enabled then menu.context.selected = index; break end
+    end
+end
+
+local function row_at(menu: Menu, hit: Hit): RowActions?
+    for _, row in ipairs(menu.controls.rows) do
+        if row.kind == hit.kind and row.index == hit.index and row.key == hit.key then return row end
+    end
+    return nil
+end
+
+-- context_input answers one event while a row's actions are open.
+local function context_input(menu: Menu, event: tty.TTYEvent): tty.TTYEvent?
+    local context = menu.context
+    local buttons = choices(menu)
+    if not context then menu.mode = ""; return nil end
+    if event.type == "key" and not event.ctrl and not event.alt and event.key_type ~= "enter" then
+        for index, button in ipairs(buttons) do
+            if button.key and #button.key == 1 and button.key:lower() == (event.key or ""):lower() then return choose(menu, index) end
         end
     end
+    local panel = context.panel
+    if not panel then return nil end
+    local response = M.popup_respond(context_state(context), panel, context_items(buttons), event)
+    context.selected, context.offset = response.state.selected, response.state.offset
+    if response.close then menu.mode, menu.context = "", nil end
+    if response.action ~= "" then return choose(menu, context.selected) end
     return nil
 end
 
@@ -1119,6 +1403,27 @@ function M.route(menu: Menu, value: unknown, text_entry: boolean?): (tty.TTYEven
     local event = input_event(value)
     if not event then return nil, false end
     if event.type == "start" or event.type == "resize" or event.type == "close" then return event, false end
+    if menu.mode == "context" then
+        if event.type == "key" and event.action == "release" then return nil, true end
+        return context_input(menu, event), true
+    end
+    -- Shift+F10 or the menu key opens the selected row's actions under the
+    -- row; the terminal reports the menu key as an unnamed key.
+    if menu.mode == "" and event.type == "key" and event.action ~= "release" and not event.ctrl and not event.alt
+        and ((event.key_type == "f10" and event.shift) or (event.key_type == "unknown" and event.key == "menu")) then
+        for _, row in ipairs(menu.controls.rows) do
+            if row.selected then
+                for _, hit in ipairs(menu.hits) do
+                    if row_at(menu, hit) == row then open_context(menu, row, hit.x + 2, hit.y + 1); return nil, true end
+                end
+            end
+        end
+    end
+    if menu.mode == "" and event.type == "mouse" and event.action == "press" and event.button == "right" then
+        local hit = M.hit(menu.hits, event.x or 0, event.y or 0)
+        local row = hit and row_at(menu, hit)
+        if row then open_context(menu, row, event.x or 1, (event.y or 1) + 1); return nil, true end
+    end
     if event.type == "key" and event.action ~= "release" then
         local key, letter = event.key_type or "", event.key or ""
         local plain = not event.ctrl and not event.alt

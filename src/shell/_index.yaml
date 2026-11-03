@@ -36,10 +36,9 @@ entries:
 - name: menu
   kind: library.lua
   source: file://menu.lua
-  modules: [tty]
   imports:
     model: bee.shell:model
-    appearance: bee.ui:appearance
+    frame: bee.ui:frame
 - name: title_editor
   kind: library.lua
   source: file://title_editor.lua

@@ -32,6 +32,7 @@ entries:
     - session_cancel
     - session_close
     - session_remove
+    - session_rename
     - overlay
     - delivery
     - components
@@ -65,7 +66,7 @@ entries:
         - question
       - id: bee.mcp:sessions
         title: Manage agent sessions
-        prompt: Open agents, send work, read results, and close or remove sessions
+        prompt: Open agents, send work, read results, and close, remove or rename sessions
         tools:
         - session_catalog
         - session_open
@@ -78,6 +79,7 @@ entries:
         - session_cancel
         - session_close
         - session_remove
+        - session_rename
       - id: bee.mcp:authoring
         title: Build workspace applications
         prompt: Author overlays, preflight and request reviewed delivery

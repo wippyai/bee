@@ -78,7 +78,7 @@ local TOOL_NAMES = {
     thread_read = "Read conversation history", thread_message = "Add conversation notes",
     session_catalog = "Browse agents", session_open = "Open sessions", session_run = "Start work",
     session_send = "Send work to sessions", session_await = "Read work results", session_join = "Wait for multiple results",
-    session_get = "Inspect sessions", session_list = "Find peer sessions", session_cancel = "Stop work", session_close = "Close sessions", session_remove = "Remove sessions",
+    session_get = "Inspect sessions", session_list = "Find peer sessions", session_cancel = "Stop work", session_close = "Close sessions", session_remove = "Remove sessions", session_rename = "Rename sessions",
     capabilities = "Read available permissions", request_capability = "Request permissions", capability_status = "Read permission decisions",
     process_run = "Run approved commands", http_request = "Send approved web requests",
     app_tools = "Use workspace application tools",

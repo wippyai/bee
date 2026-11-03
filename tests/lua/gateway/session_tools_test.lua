@@ -1,4 +1,4 @@
--- MIT. The eleven default session tools: closed schemas, mandatory operation
+-- MIT. The twelve default session tools: closed schemas, mandatory operation
 -- keys, identity refused in payloads, exact projection onto a fake owner
 -- binding, and owner replies held to the published output schema.
 local test = require("test")
@@ -16,7 +16,7 @@ local WORK2 = "bw:node-a:ws-1:w2"
 local OP = "bo:node-a:ws-1:o1"
 local NOW = "2026-09-29T10:00:00Z"
 
-local MUTATIONS = {"session_open", "session_run", "session_send", "session_join", "session_cancel", "session_close", "session_remove"}
+local MUTATIONS = {"session_open", "session_run", "session_send", "session_join", "session_cancel", "session_close", "session_remove", "session_rename"}
 local READS = {"session_catalog", "session_await", "session_get", "session_list"}
 
 local function valid(name: string): Object
@@ -30,6 +30,7 @@ local function valid(name: string): Object
     if name == "session_get" then return {work = WORK} end
     if name == "session_list" then return {filter = {lifecycle = "active"}} end
     if name == "session_cancel" then return {work = WORK, reason = "stop", operation_key = "k1"} end
+    if name == "session_rename" then return {session = SESSION, name = "Release checks", operation_key = "k1"} end
     return {session = SESSION, operation_key = "k1"}
 end
 
@@ -51,6 +52,7 @@ local function success(name: string): Object
     if name == "session_cancel" then return {ok = true, value = {operation = OP, subject = WORK, state = "requested", effect = "cancel"}} end
     if name == "session_close" then return {ok = true, value = {operation = OP, subject = SESSION, state = "requested", effect = "close"}} end
     if name == "session_remove" then return {ok = true, value = {operation = OP, session = SESSION, state = "removing"}} end
+    if name == "session_rename" then return {ok = true, value = {operation = OP, session = SESSION, title = "Release checks", name = "Release checks"}} end
     if name == "session_await" then return {ok = true, value = {subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}} end
     if name == "session_get" then return {ok = true, value = {kind = "session", value = snapshot()}} end
     if name == "session_list" then return {ok = true, value = {items = {snapshot()}}} end
@@ -61,7 +63,7 @@ end
 
 local function fake_owner(log: {Object}): Object
     local owner: Object = {}
-    for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "cancel", "close", "remove"}) do
+    for _, method in ipairs({"open", "run", "send", "await", "join", "get", "list", "cancel", "close", "remove", "rename"}) do
         owner[method] = function(_self: Object, request: Object): (unknown, unknown)
             log[#log + 1] = {method = method, request = request}
             return {ok = true, value = {}}, nil
@@ -72,8 +74,8 @@ end
 
 local function define_tests()
     test.describe("Default session MCP tools", function()
-        test.it("publishes exactly the eleven tools as owner contract projections", function()
-            test.eq(#session_tools.NAMES, 11)
+        test.it("publishes exactly the twelve tools as owner contract projections", function()
+            test.eq(#session_tools.NAMES, 12)
             local seen: {[string]: mcp.Tool} = {}
             for _, tool in ipairs(mcp.TOOLS) do
                 test.is_nil(seen[tool.name])
@@ -128,7 +130,10 @@ local function define_tests()
             test.is_true((mcp.tool("session_join")).description:find("waiting up to timeout_ms", 1, true) ~= nil)
             local remove = (mcp.tool("session_remove")).description
             test.is_true(remove:find("stops its agent first", 1, true) ~= nil)
-            test.is_true(remove:find("thread history stays", 1, true) ~= nil)
+            test.is_true(remove:find("history", 1, true) ~= nil)
+            test.is_true(remove:find("shared", 1, true) ~= nil)
+            local rename = (mcp.tool("session_rename")).description
+            test.is_true(rename:find("empty name", 1, true) ~= nil)
         end)
         test.it("admits every tool through the strict catalog and keeps the no-shadow rule", function()
             local list: {Object} = {}
@@ -230,6 +235,12 @@ local function define_tests()
             refused("session_close", function(a) a.mode = "kill" end)
             refused("session_remove", function(a) a.expected_incarnation = 1 end)
             refused("session_remove", function(a) a.session = WORK end)
+            refused("session_remove", function(a) a.history = "yes" end)
+            test.not_nil(session_tools.decode("session_remove", {arguments = {session = SESSION, history = true, operation_key = "k1"}}))
+            refused("session_rename", function(a) a.name = nil end)
+            refused("session_rename", function(a) a.name = string.rep("n", 129) end)
+            refused("session_rename", function(a) a.session = WORK end)
+            test.not_nil(session_tools.decode("session_rename", {arguments = {session = SESSION, name = "", operation_key = "k1"}}))
             refused("session_open", function(a) a.spec = {} end)
             refused("session_open", function(a) a.spec = {definition = "d", limits = {active_ms = 0}} end)
             refused("session_await", function(a) a.deadline_at = "2026-09-29T10:00:00.5+02:00" end)
@@ -253,7 +264,7 @@ local function define_tests()
         test.it("projects each tool onto exactly one owner method with the validated request", function()
             local expected = {session_catalog = "list", session_open = "open", session_run = "run", session_send = "send",
                 session_await = "await", session_join = "join", session_get = "get", session_list = "list",
-                session_cancel = "cancel", session_close = "close", session_remove = "remove"}
+                session_cancel = "cancel", session_close = "close", session_remove = "remove", session_rename = "rename"}
             for _, name in ipairs(session_tools.NAMES) do
                 local log: {Object} = {}
                 local owner = fake_owner(log)

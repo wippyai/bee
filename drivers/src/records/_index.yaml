@@ -81,3 +81,9 @@ entries:
 - name: record_types
   kind: library.lua
   source: file://record_types.lua
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

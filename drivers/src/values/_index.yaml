@@ -38,3 +38,9 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

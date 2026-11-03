@@ -30,3 +30,9 @@ entries:
         mode: unproven
       cancellation: deny_before_close
       proof_fixture: permission_request_hook
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

@@ -13,3 +13,9 @@ entries:
   source: file://framing.lua
   imports:
     vocabulary: bee.drivers:framing_types
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

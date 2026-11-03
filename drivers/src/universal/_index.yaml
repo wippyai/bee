@@ -41,3 +41,9 @@ entries:
   method: locate
   imports:
     universal: bee.drivers.binding:universal
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

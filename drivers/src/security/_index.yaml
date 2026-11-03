@@ -42,3 +42,9 @@ entries:
     - bee.drivers.pi.profiles:profiles
     - bee.drivers.pi.credentials:credential_format
     effect: allow
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

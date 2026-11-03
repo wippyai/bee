@@ -93,3 +93,9 @@ entries:
 - name: hook_limits
   kind: library.lua
   source: file://hook_limits.lua
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

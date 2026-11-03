@@ -166,3 +166,9 @@ entries:
     placements: bee.drivers.descriptor:placement
     configuration_types: bee.drivers:configuration_types
     record_types: bee.drivers.records:record_types
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: namespace

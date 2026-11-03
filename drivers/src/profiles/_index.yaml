@@ -17,3 +17,9 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     types: bee.drivers:types
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

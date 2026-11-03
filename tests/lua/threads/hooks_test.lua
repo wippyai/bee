@@ -118,6 +118,13 @@ local function define_tests(group: string, selected_driver: string?)
         end)
         end
         if group == "core" then
+        test.it("admits hook dispatch by the execution owner's permission whatever its principal", function()
+            local session = host.open()
+            local raw, err = host.forwarded_host("hook-owner"):call("bee.threads.hooks:dispatch", {session_ref = session.session,
+                thread_id = session.thread, workspace_id = host.WORKSPACE, point = "tool.before", occurrence_id = harness.key(), input = {text = "seed"}})
+            test.is_nil(err)
+            test.eq(assert(bounds.object(host.value(raw).input)).text, "seed")
+        end)
         test.it("isolates active hooks and retained originals by session workspace and app", function()
             local session = host.open(nil, "bee.tests.memory:hooks_a")
             local other = host.open()

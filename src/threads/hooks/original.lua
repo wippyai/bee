@@ -11,7 +11,7 @@ function M.read(db: sql.DB, _actor: string, raw: unknown): transaction.Result
     local ref = request and bounds.id(request.record_ref)
     local actor = security.actor()
     local meta = actor and bounds.object(actor:meta())
-    if not ref or not request or bounds.fields(request, {"record_ref"}) or not actor or not meta or actor:id():match("^bee%.hive%.member%.") then
+    if not ref or not request or bounds.fields(request, {"record_ref"}) or not actor or not meta then
         return transaction.failure("DENIED", "original retrieval requires the approved app")
     end
     return transaction.read(db, function(tx: sql.Transaction): transaction.Result

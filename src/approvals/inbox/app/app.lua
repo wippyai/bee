@@ -130,7 +130,6 @@ local function main(value: unknown)
     local dialog: {request_id: string, kind: string, confirmation: model.Confirmation?, view: model.ApprovalView?, batch: leases.Intent?}? = nil
     local committed_stream = assert(cdc.stream("bee:changes", {tables = {
         "bee_approval_requests", "bee_approval_grants", "bee_approval_window_grants",
-        "bee_governance_leases",
     }}))
     local committed = assert(committed_stream:channel())
     local remote = false

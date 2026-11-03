@@ -7,3 +7,7 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     preflight: bee.gov.binding:preflight
+- name: changes
+  kind: library.lua
+  source: file://changes.lua
+  modules: [cdc]

@@ -11,14 +11,6 @@ entries:
     test: wippy.test:test
     appearance: bee.ui:appearance
     client: bee.node:client
-- name: launch_resources_test
-  kind: function.lua
-  source: file://launch_resources_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    client: bee.app:client
 - name: upgrade_test
   kind: function.lua
   source: file://upgrade_test.lua

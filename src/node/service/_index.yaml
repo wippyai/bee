@@ -158,4 +158,3 @@ entries:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     handover: bee.node.service:handover
-    capability_access: bee.gov.binding:capability_access

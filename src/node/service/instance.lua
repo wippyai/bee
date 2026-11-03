@@ -10,7 +10,6 @@ local funcs = require("funcs")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local handover = require("handover")
-local capability_access = require("capability_access")
 local M = {}
 type Instance = handover.Instance
 type AppAlias = handover.AppAlias
@@ -45,18 +44,6 @@ function M.start(id: string, app: string, desktop_id: string, app_args: {[string
         abandon()
         return nil, scope_problem
     end
-    local record, refusal = capability_access.record(workspace.id, definition.process)
-    local resources, resources_error = nil, nil
-    if refusal then
-        local fault = refusal.error
-        resources_error = fault and fault.message or "the application's grants cannot be read"
-    else
-        resources, resources_error = capability_access.resources(record)
-    end
-    if not resources then
-        abandon()
-        return nil, resources_error
-    end
     local alias, alias_error = attest(definition.process, workspace.id, actor:id())
     if not alias then
         abandon()
@@ -71,8 +58,7 @@ function M.start(id: string, app: string, desktop_id: string, app_args: {[string
         version = 1, broker_pid = owner_pid, workspace_pid = owner_pid, workspace_id = workspace.id, instance_id = id, view_id = id,
         definition_id = definition.process, execution_generation = 1, execution_id = execution_id, definition_revision = definition.revision,
         registry_revision = version:string(), launch_token = token, resume_schema = definition.resume_schema,
-        resume_state = type(app_args.resume_state) == "string" and app_args.resume_state or "", arguments = words(app_args),
-        resources = resources}
+        resume_state = type(app_args.resume_state) == "string" and app_args.resume_state or "", arguments = words(app_args)}
     -- The host context names the workspace; the functions an app calls
     -- authorize workspace-bound operations by it, never by the request.
     local launched, call_error = funcs.new():with_actor(actor):call("bee.node.service:launch", {terminal = grant, options = options})

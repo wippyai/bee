@@ -153,23 +153,34 @@ function M.edit(draft: Draft, event: {[string]: unknown}): (boolean, string?)
         return true, nil
     end
     if name == "backspace" or name == "backspace2" or name == "delete" then
-        local removed = name == "delete" and take_front(draft.after) or name ~= "delete" and take_back(draft.before) or nil
+        local removed: Part?
+        if name == "delete" then removed = take_front(draft.after) else removed = take_back(draft.before) end
         if not removed then return false, nil end
         draft.bytes = draft.bytes - #removed.text
         return true, nil
     end
-    if name == "left" or name == "right" then
-        local moved = name == "left" and take_back(draft.before) or name == "right" and take_front(draft.after) or nil
+    if name == "left" then
+        local moved = take_back(draft.before)
         if not moved then return false, nil end
-        if name == "left" then push_front(draft.after, moved) else push_back(draft.before, moved) end
+        push_front(draft.after, moved)
         return true, nil
     end
-    if name == "home" or name == "end" then
-        local from, to = name == "home" and draft.before or draft.after, name == "home" and draft.after or draft.before
-        if #from == 0 then return false, nil end
-        if name == "home" then for index = #from, 1, -1 do push_front(to, from[index]) end
-        else for _, part in ipairs(from) do push_back(to, part) end end
-        if name == "home" then draft.before = {} else draft.after = {} end
+    if name == "right" then
+        local moved = take_front(draft.after)
+        if not moved then return false, nil end
+        push_back(draft.before, moved)
+        return true, nil
+    end
+    if name == "home" then
+        if #draft.before == 0 then return false, nil end
+        for index = #draft.before, 1, -1 do push_front(draft.after, draft.before[index]) end
+        draft.before = {}
+        return true, nil
+    end
+    if name == "end" then
+        if #draft.after == 0 then return false, nil end
+        for _, part in ipairs(draft.after) do push_back(draft.before, part) end
+        draft.after = {}
         return true, nil
     end
     if event.alt == true then return false, nil end

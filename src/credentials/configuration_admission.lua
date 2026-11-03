@@ -12,7 +12,9 @@ type Status = {needs_setup: boolean, path: string}
 -- from before a request is filed. next blocks until the named request
 -- changes and returns why it cannot when the announcements end.
 type Changes = {next: (string) -> string?, close: () -> ()}
-type IO = {measure: () -> (Base?, string?), admitted: (Base) -> (boolean?, string?),
+-- IO.check returns why the launch refuses the measured file; setup reports
+-- it instead of asking the person to approve a file that cannot launch.
+type IO = {measure: () -> (Base?, string?), admitted: (Base) -> (boolean?, string?), check: (Base) -> string?,
     finish: (Base?, string, Object) -> string?, receipt: (string) -> (Object?, string?), call: (string, Object) -> (unknown, string?),
     changes: () -> (Changes?, string?)}
 local function call(io: IO, target: string, request: Object): (Object?, string?)
@@ -24,8 +26,15 @@ local function call(io: IO, target: string, request: Object): (Object?, string?)
     end
     return bounds.object(reply.value), nil
 end
-function M.status(io: IO): (Status?, string?)
+local function measure(io: IO): (Base?, string?)
     local base, err = io.measure()
+    if not base then return nil, err end
+    local refused = io.check(base)
+    if refused then return nil, "Bee cannot use " .. base.path .. ": " .. refused end
+    return base, nil
+end
+function M.status(io: IO): (Status?, string?)
+    local base, err = measure(io)
     if not base then return nil, err end
     local admitted, admission_error = io.admitted(base)
     if admitted == nil then return nil, admission_error end
@@ -33,7 +42,7 @@ function M.status(io: IO): (Status?, string?)
 end
 -- await_effect files the setup request and follows the owner's announced
 -- changes of it until its effect completes.
-local function await_effect(io: IO, changes: Changes, workspace: string, provider: string, attempt: string?, base_path: string?, base: Base): (Object?, string?)
+local function await_effect(io: IO, changes: Changes, workspace: string, provider: string, attempt: string?, base_path: string, base: Base): (Object?, string?)
     local proposal: Object = {kind = "operation", ref = "bee.credentials.binding:configuration_setup", revision = "1",
         input_digest = base.digest, payload = {workspace_id = workspace, provider = provider, path = base.path, digest = base.digest, base_path = base_path}}
     local identity = canonical.encode(proposal)
@@ -43,8 +52,9 @@ local function await_effect(io: IO, changes: Changes, workspace: string, provide
         idempotency_key = "configuration:" .. key, request_kind = "permission", policy = "configuration-setup",
         contract_version = 2, presentation = "inbox",
         origin = {attempt_id = attempt}, continuation = {destination = M.DESTINATION, effect_id = "configuration:" .. key, context = {}},
-        proposal = proposal, prompt = {text = "Allow Bee to use " .. base.path .. " as the configuration base for " .. provider
-            .. "? Bee preserves your provider settings and adds the selected agent's tools and settings to its launch configuration. Approving continues the launch."}})
+        proposal = proposal, prompt = {text = "Copy " .. base.path .. " into the " .. provider .. " agent's session as " .. base_path
+            .. "? The agent then starts with your own " .. provider .. " settings. Bee adds the selected profile's tools and hooks to the session copy;"
+            .. " your file stays unchanged. Bee asks again in this workspace only when the file changes. Approving continues the launch."}})
     if not requested then return nil, request_error end
     local approval_id = bounds.id(requested.approval_id)
     if not approval_id then return nil, "Needs you did not return a configuration setup request." end
@@ -59,8 +69,8 @@ local function await_effect(io: IO, changes: Changes, workspace: string, provide
     end
     return view, nil
 end
-function M.ensure(io: IO, workspace: string, provider: string, attempt: string?, base_path: string?): (Base?, string?)
-    local base, err = io.measure()
+function M.ensure(io: IO, workspace: string, provider: string, attempt: string?, base_path: string): (Base?, string?)
+    local base, err = measure(io)
     if not base then return nil, err end
     local admitted, admission_error = io.admitted(base)
     if admitted == nil then return nil, admission_error end

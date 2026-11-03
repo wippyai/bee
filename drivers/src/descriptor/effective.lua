@@ -497,10 +497,43 @@ function M.option_errors(descriptor: descriptors.Descriptor, policy: Object, val
     return errors, nil
 end
 
+-- AUTHORITY_NAMESPACES are word sequences; a key bears authority when its
+-- words contain one, each word in its plain, plural or listed form.
+local AUTHORITY_NAMESPACES: {{string}} = {{"network"}, {"mcp"}, {"provider"}, {"sandbox"}, {"approval"}, {"permission"}, {"env"},
+    {"hook"}, {"trust"}, {"plugin"}, {"tool"}, {"project"}, {"profile"}, {"base", "url"}, {"endpoint"}, {"api", "key"}, {"auth"},
+    {"token"}, {"command"}, {"socket"}, {"proxy"}}
+local AUTHORITY_FORMS: {[string]: string} = {environment = "env", environments = "env", oauth = "auth", authorization = "auth",
+    authorize = "auth", authentication = "auth", authenticate = "auth", trusted = "trust", untrusted = "trust", approve = "approval",
+    proxies = "proxy", sandboxed = "sandbox", baseurl = "base url", apikey = "api key", apikeys = "api key"}
+
+-- key_words splits a key into lowercase words at separators, digits,
+-- lower-to-upper case changes and the end of an uppercase run.
+local function key_words(key: string): {string}
+    local spaced = key:gsub("(%l)(%u)", "%1 %2"):gsub("(%u)(%u%l)", "%1 %2"):gsub("(%a)(%d)", "%1 %2"):gsub("(%d)(%a)", "%1 %2")
+    local words: {string} = {}
+    for word in spaced:lower():gmatch("[a-z]+") do
+        local form = AUTHORITY_FORMS[word] or (word:sub(-1) == "s" and AUTHORITY_FORMS[word:sub(1, -2)]) or nil
+        if form then
+            for part in form:gmatch("%S+") do words[#words + 1] = part end
+        elseif word:sub(-1) == "s" and #word > 1 then
+            words[#words + 1] = word:sub(1, -2)
+        else
+            words[#words + 1] = word
+        end
+    end
+    return words
+end
+
 local function authority_key(key: string): boolean
-    local normalized = key:lower():gsub("[^a-z]", "")
-    for _, namespace in ipairs({"network", "mcp", "provider", "sandbox", "approval", "permission", "env", "hook", "trust", "plugin", "tool", "project", "profile", "baseurl", "endpoint", "apikey", "auth", "token", "command", "socket", "proxy"}) do
-        if normalized:find(namespace, 1, true) then return true end
+    local words = key_words(key)
+    for _, namespace in ipairs(AUTHORITY_NAMESPACES) do
+        for start = 1, #words - #namespace + 1 do
+            local matched = true
+            for offset, part in ipairs(namespace) do
+                if words[start + offset - 1] ~= part then matched = false; break end
+            end
+            if matched then return true end
+        end
     end
     return false
 end
@@ -508,10 +541,11 @@ end
 function M.check_config(descriptor: descriptors.Descriptor, policy: Object, filename: string, content: string, placement: unknown?, consent_values: Object?): string?
     local format = filename:match("%.(json)$") or filename:match("%.(toml)$")
     if not format then return nil end
-    local document: unknown = nil
-    if format == "json" then document = json.decode(content) else document = toml.decode(content) end
+    local document: unknown = {}
+    if not content:match("^%s*$") then
+        if format == "json" then document = json.decode(content) else document = toml.decode(content) end
+    end
     local root = bounds.object(document)
-    if format == "toml" and content:match("^%s*$") then root = {} end
     if not root then return "Configuration is not an object: " .. filename end
     local compiled, invalid = M.compile(descriptor, policy, nil, consent_values, nil, nil, nil, placement)
     if not compiled then return invalid end

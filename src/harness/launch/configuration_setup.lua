@@ -10,9 +10,10 @@ local descriptors = require("descriptors")
 local profiles = require("profiles")
 local preferences = require("preferences")
 local placement_profiles = require("placement_profiles")
+local configuration_check = require("configuration_check")
 local M = {}
 type Plan = {placement_profile_ref: string?, binding_ref: string, policy_ref: string, profile_id: string, mode: string, effective_profile: unknown}
-type Requirement = {provider: string, base_path: string}
+type Requirement = {provider: string, base_path: string, launch: configuration_check.Context}
 function M.requirements(plan: Plan): ({Requirement}?, string?)
     local pinned, pin_error = registry.snapshot()
     if not pinned then return nil, tostring(pin_error) end
@@ -76,13 +77,14 @@ function M.requirements(plan: Plan): ({Requirement}?, string?)
     end
     local delivery, delivery_error = configuration.call(plan.binding_ref, target, request)
     if not delivery then return nil, tostring(delivery_error) end
+    local launch: configuration_check.Context = {binding_ref = plan.binding_ref, policy_ref = plan.policy_ref, placement_profile_ref = plan.placement_profile_ref, options = options}
     local result: {Requirement} = {}
     local seen: {[string]: boolean} = {}
     for _, file in ipairs(delivery.files) do
         if file.composition and not seen[file.composition.base_path] then
             local path = file.composition.base_path
             seen[path] = true
-            result[#result + 1] = {provider = provider, base_path = path}
+            result[#result + 1] = {provider = provider, base_path = path, launch = launch}
         end
     end
     return result, nil
@@ -93,7 +95,7 @@ function M.run(plan: Plan, workspace: string, operation: string): ({needs_setup:
     local result: {needs_setup: boolean, paths: {string}} = {needs_setup = false, paths = {}}
     for _, requirement in ipairs(requirements) do
         local raw, call_error = funcs.call("bee.credentials.binding:configuration_setup", {workspace_id = workspace,
-            provider = requirement.provider, base_path = requirement.base_path, operation = operation})
+            provider = requirement.provider, base_path = requirement.base_path, operation = operation, launch = requirement.launch})
         local reply = bounds.object(raw)
         local value = reply and bounds.object(reply.value)
         if call_error or not reply or reply.ok ~= true or not value then

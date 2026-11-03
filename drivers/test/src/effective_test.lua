@@ -94,6 +94,21 @@ local function define_tests()
                 option_constraints = {permission_mode = {capabilities = {"read"}}}}))
             test.eq(compiled.values.permission_mode, "plan")
         end)
+        test.it("recognizes authority by whole words of a key and admits words that only contain a namespace", function()
+            local cli = assert(descriptors.load("bee.drivers.claude.descriptor:cli"))
+            local file = ".claude/settings.json"
+            for _, key in ipairs({"auth", "authToken", "oauthAccount", "awsAuthRefresh", "apiKeyHelper", "api_key", "apikey", "baseURL",
+                "base_url", "ANTHROPIC_BASE_URL", "mcpServers", "enableAllProjectMcpServers", "env", "environment", "hooks", "permissions",
+                "skipDangerousModePermissionPrompt", "sandbox", "enabledPlugins", "allowedTools", "networkAccess", "model_providers",
+                "trustedFolders", "proxy", "httpProxies", "socketPath", "endpoint", "profiles", "approvalPolicy", "commandTimeout", "tokens"}) do
+                local err = effective.check_config(cli, {}, file, json.encode({[key] = "outside"}))
+                test.eq(err, file .. ": authority-bearing key " .. key .. " has no admitted mapping", key)
+            end
+            for _, key in ipairs({"includeCoAuthoredBy", "author", "authored_by", "envelope", "tokenizer", "toolbar", "hookah",
+                "theme", "feedbackSurveyState", "spinnerTipsEnabled", "contributor_mode_enabled", "projectile"}) do
+                test.is_nil(effective.check_config(cli, {}, file, json.encode({[key] = "local"})), key)
+            end
+        end)
         test.it("refuses unmapped authority in every imported config namespace", function()
             local cli = assert(descriptors.load("bee.drivers.codex.descriptor:cli"))
             for _, item in ipairs({
@@ -218,6 +233,59 @@ local function define_tests()
             test.is_nil(invalid)
             local env = effective.compile(claude, nil, nil, {env = {CLAUDE_CONFIG_DIR = "/outside"}})
             test.is_nil(env)
+        end)
+        test.it("admits each driver's realistic person configuration under a host that declares every option", function()
+            for _, case in ipairs({
+                {ref = "bee.drivers.muse.descriptor:cli", file = ".config/muse/.bee-global-settings.json", content = json.encode({
+                    schema_version = 1, provider = "meta", model = "muse-wonder-1.0",
+                    model_reasoning_efforts = {["muse-wonder-1.0"] = "high"}, tui = {foreign_context_notice_shown = true},
+                    contributor_mode_enabled = false, contributor_mode_disclosure_acknowledged = true})},
+                {ref = "bee.drivers.claude.descriptor:cli", file = ".claude/settings.json", content = json.encode({
+                    model = "opus", effortLevel = "high", theme = "dark", alwaysThinkingEnabled = true,
+                    includeCoAuthoredBy = false, attribution = {commit = "", pr = ""}, permissions = {defaultMode = "acceptEdits"}})},
+                {ref = "bee.drivers.codex.descriptor:cli", file = ".codex/.bee-user-config.toml", content = table.concat({
+                    'model = "gpt-5.5"', 'model_provider = "openai"', 'model_reasoning_effort = "high"', 'personality = "pragmatic"',
+                    "[notice]", "hide_rate_limit_model_nudge = true"}, "\n")},
+                {ref = "bee.drivers.grok.descriptor:cli", file = ".grok/.bee-global-config.toml", content = 'model = "grok-code-fast-1"'},
+                {ref = "bee.drivers.agy.descriptor:cli", file = ".gemini/antigravity-cli/cache/onboarding.json", content = json.encode({
+                    onboardingComplete = true, consumerOnboardingComplete = true})},
+                {ref = "bee.drivers.opencode.descriptor:cli", file = ".config/opencode/.bee-global-opencode.json", content = json.encode({
+                    ["$schema"] = "https://opencode.ai/config.json", model = "anthropic/claude-sonnet-4-5", theme = "opencode"})},
+            }) do
+                local cli = assert(descriptors.load(case.ref))
+                local restrictions: {[string]: unknown} = {}
+                for name, raw in pairs(assert(bounds.object(cli.options.fields))) do
+                    local field = assert(bounds.object(raw))
+                    if field.path then restrictions[effective.path(name)] = {kind = "declared"} end
+                end
+                local err = effective.check_config(cli, {profile_restrictions = restrictions}, case.file, case.content, placements.NATIVE)
+                test.is_nil(err, case.ref .. ": " .. tostring(err))
+            end
+        end)
+        test.it("bounds the Muse backend provider in the person's settings to the values Muse accepts", function()
+            local cli = assert(descriptors.load("bee.drivers.muse.descriptor:cli"))
+            local declared = {profile_restrictions = {["provider.options.model_provider"] = {kind = "declared"}, ["provider.model"] = {kind = "declared"}}}
+            local file = ".config/muse/.bee-global-settings.json"
+            for _, provider in ipairs({"meta", "echo", "local"}) do
+                test.is_nil(effective.check_config(cli, declared, file, json.encode({schema_version = 1, provider = provider}), placements.NATIVE))
+            end
+            local invented = effective.check_config(cli, declared, file, json.encode({schema_version = 1, provider = "outside"}), placements.NATIVE)
+            test.is_true(tostring(invented):find("provider", 1, true) ~= nil, tostring(invented))
+            local restricted = {profile_restrictions = {["provider.options.model_provider"] = {"meta"}}}
+            test.is_nil(effective.check_config(cli, restricted, file, json.encode({schema_version = 1, provider = "meta"}), placements.NATIVE))
+            test.not_nil(effective.check_config(cli, restricted, file, json.encode({schema_version = 1, provider = "local"}), placements.NATIVE))
+            test.is_nil(effective.check_config(cli, {}, file, json.encode({schema_version = 1, provider = "meta"}), placements.NATIVE))
+            test.not_nil(effective.check_config(cli, {}, file, json.encode({schema_version = 1, provider = "local"}), placements.NATIVE))
+        end)
+        test.it("admits the empty base a person without a configuration file starts from", function()
+            for _, case in ipairs({
+                {ref = "bee.drivers.muse.descriptor:cli", file = ".config/muse/.bee-global-settings.json"},
+                {ref = "bee.drivers.opencode.descriptor:cli", file = ".config/opencode/.bee-global-opencode.json"},
+                {ref = "bee.drivers.codex.descriptor:cli", file = ".codex/.bee-user-config.toml"},
+            }) do
+                local err = effective.check_config(assert(descriptors.load(case.ref)), {}, case.file, "", placements.NATIVE)
+                test.is_nil(err, case.ref .. ": " .. tostring(err))
+            end
         end)
         test.it("uses installed Claude modes and the full Muse effort set", function()
             local claude = assert(descriptors.load("bee.drivers.claude.descriptor:cli"))

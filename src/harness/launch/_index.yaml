@@ -250,6 +250,7 @@ entries:
     descriptors: bee.drivers.descriptor:descriptor
     configuration_types: bee.drivers:configuration_types
     placement_profiles: bee.placement.profiles:profiles
+    configuration_check: bee.placement.native.service:configuration_check
 - name: folder_consent
   kind: library.lua
   source: file://folder_consent.lua

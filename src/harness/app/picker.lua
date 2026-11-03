@@ -113,6 +113,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     -- removed is set once the open session is removed; the picker then
     -- returns to the session list.
     local removed = false
+    -- sidebar_mark is the sidebar session a right click selected while
+    -- another session stays open; opening a session clears it.
+    local sidebar_mark: string? = nil
     local reload_pending = false
     local editing: profile_view.State? = nil
     local edit_frame: profile_view.Frame = {rows = {}, hits = {}}
@@ -389,7 +392,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             elseif conversation then
                 client.review(launch, conversation.review)
                 local line = renaming and agents.rename_message(renaming.title, renaming.name) or confirmation.active(review) and prompt or status
-                session_frame = session_view.draw(width, height, preferences, conversation, draft, line, directory)
+                session_frame = session_view.draw(width, height, preferences, conversation, draft, line, directory, sidebar_mark)
                 frame.render(session_frame, menu, preferences)
                 rows = session_frame.rows
             elseif not catalog_open then
@@ -613,8 +616,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         local hit = frame.hit(session_frame.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         local kind = hit and hit.kind or ""
                         if hit and ROW_ACTIONS[kind] and directory[hit.index] then selected = hit.index end
-                        if (kind == "sidebar_session" or (kind == "open" and hit and hit.index > 0)) and hit and not session_busy then
-                            selected = hit.index; open_existing(selected)
+                        if kind == "sidebar_select" and hit and directory[hit.index] then
+                            selected, sidebar_mark = hit.index, directory[hit.index].session; dirty = true
+                        elseif (kind == "sidebar_session" or (kind == "open" and hit and hit.index > 0)) and hit and not session_busy then
+                            selected, sidebar_mark = hit.index, nil; open_existing(selected)
                         elseif act_listed(kind) then
                         elseif kind == "back" then leave_session()
                         elseif kind == "details" then conversation.details = not conversation.details; dirty = true

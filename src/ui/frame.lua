@@ -20,7 +20,9 @@ type Button = {kind: string, label: string, enabled: boolean, primary: boolean?,
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
 -- The actions one row offers; selected marks the row Shift+F10 opens.
-type RowActions = {kind: string, index: integer, key: string, actions: {Button}, selected: boolean?}
+-- select is the target kind a right click presses to select the row
+-- (default kind), for rows whose own press also activates them.
+type RowActions = {kind: string, index: integer, key: string, actions: {Button}, selected: boolean?, select: string?}
 type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?, rows: {RowActions}}
 type Bar = {x: integer, buttons: {Button}}
 type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}, controls: Controls, bars: {[integer]: Bar}}
@@ -955,8 +957,8 @@ end
 
 -- Declares the actions a row offers: a right click on the row's target
 -- (kind, index, key) or Shift+F10 on the selected row opens them as a popup
--- menu; a right click also reaches the app as a left press on the row, so
--- the app selects it. Each action is a Button; choosing one reaches the app as a press on
+-- menu; a right click also reaches the app as a press on the row's select
+-- target, so the app selects the row without activating it. Each action is a Button; choosing one reaches the app as a press on
 -- a target of the action's kind carrying the row's index and key.
 function M.row_actions(painter: Painter, row: RowActions)
     painter.controls.rows[#painter.controls.rows + 1] = row
@@ -1184,7 +1186,8 @@ function M.route(menu: Menu, value: unknown, text_entry: boolean?): (tty.TTYEven
         local row = hit and row_at(menu, hit)
         if row then
             open_context(menu, row, event.x or 1, (event.y or 1) + 1)
-            return {type = "mouse", action = "press", button = "left", x = event.x, y = event.y, ctrl = false, alt = false, shift = false}, true
+            table.insert(menu.hits, 1, {kind = row.select or row.kind, index = row.index, key = row.key, x = 1, y = 1, width = 1, height = 1})
+            return {type = "mouse", action = "press", button = "left", x = 1, y = 1, ctrl = false, alt = false, shift = false}, true
         end
     end
     if event.type == "key" and event.action ~= "release" then

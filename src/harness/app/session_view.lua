@@ -129,20 +129,21 @@ function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
 end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, conv: agents.Conversation,
-    draft: string, status: string, sidebar: {protocol.SessionSnapshot}?): Frame
+    draft: string, status: string, sidebar: {protocol.SessionSnapshot}?, marked: string?): Frame
     if sidebar and #sidebar > 0 and width >= 120 then
         local rail_width = 26
         local rail = frame.new(rail_width, height, preferences)
         frame.header(rail, "SESSIONS")
         local selected = 0
-        for index, item in ipairs(sidebar) do if item.session == conv.session:ref() then selected = index end end
+        local mark = marked or conv.session:ref()
+        for index, item in ipairs(sidebar) do if item.session == mark then selected = index end end
         local window = frame.window(#sidebar, height - 4, selected, 0)
         for slot = 1, window.capacity do
             local index = window.offset + slot
             local item = sidebar[index]
             if item then
                 frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(agents.label(item.provider, item.title), 128), index == selected, "sidebar_session", index, item.session)
-                frame.row_actions(rail, {kind = "sidebar_session", index = index, key = item.session, actions = directory_view.actions(item)})
+                frame.row_actions(rail, {kind = "sidebar_session", index = index, key = item.session, actions = directory_view.actions(item), select = "sidebar_select"})
             end
         end
         frame.fill(rail, height)

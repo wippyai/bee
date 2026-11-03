@@ -94,6 +94,21 @@ local function define_tests()
                 option_constraints = {permission_mode = {capabilities = {"read"}}}}))
             test.eq(compiled.values.permission_mode, "plan")
         end)
+        test.it("recognizes authority by whole words of a key and admits words that only contain a namespace", function()
+            local cli = assert(descriptors.load("bee.drivers.claude.descriptor:cli"))
+            local file = ".claude/settings.json"
+            for _, key in ipairs({"auth", "authToken", "oauthAccount", "awsAuthRefresh", "apiKeyHelper", "api_key", "apikey", "baseURL",
+                "base_url", "ANTHROPIC_BASE_URL", "mcpServers", "enableAllProjectMcpServers", "env", "environment", "hooks", "permissions",
+                "skipDangerousModePermissionPrompt", "sandbox", "enabledPlugins", "allowedTools", "networkAccess", "model_providers",
+                "trustedFolders", "proxy", "httpProxies", "socketPath", "endpoint", "profiles", "approvalPolicy", "commandTimeout", "tokens"}) do
+                local err = effective.check_config(cli, {}, file, json.encode({[key] = "outside"}))
+                test.eq(err, file .. ": authority-bearing key " .. key .. " has no admitted mapping", key)
+            end
+            for _, key in ipairs({"includeCoAuthoredBy", "author", "authored_by", "envelope", "tokenizer", "toolbar", "hookah",
+                "theme", "feedbackSurveyState", "spinnerTipsEnabled", "contributor_mode_enabled", "projectile"}) do
+                test.is_nil(effective.check_config(cli, {}, file, json.encode({[key] = "local"})), key)
+            end
+        end)
         test.it("refuses unmapped authority in every imported config namespace", function()
             local cli = assert(descriptors.load("bee.drivers.codex.descriptor:cli"))
             for _, item in ipairs({
@@ -227,7 +242,7 @@ local function define_tests()
                     contributor_mode_enabled = false, contributor_mode_disclosure_acknowledged = true})},
                 {ref = "bee.drivers.claude.descriptor:cli", file = ".claude/settings.json", content = json.encode({
                     model = "opus", effortLevel = "high", theme = "dark", alwaysThinkingEnabled = true,
-                    attribution = {commit = "", pr = ""}, permissions = {defaultMode = "acceptEdits"}})},
+                    includeCoAuthoredBy = false, attribution = {commit = "", pr = ""}, permissions = {defaultMode = "acceptEdits"}})},
                 {ref = "bee.drivers.codex.descriptor:cli", file = ".codex/.bee-user-config.toml", content = table.concat({
                     'model = "gpt-5.5"', 'model_provider = "openai"', 'model_reasoning_effort = "high"', 'personality = "pragmatic"',
                     "[notice]", "hide_rate_limit_model_nudge = true"}, "\n")},

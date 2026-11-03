@@ -141,8 +141,7 @@ JSONL, OpenCode JSON events, Agy stream-json, Grok streaming-json and Muse
 record JSONL. Each is a `function.lua` entry with `meta.type: bee.driver.codec`
 and `meta.codec: <id>`; `bee.drivers.codec:codec_registry` finds the one a
 descriptor's codec ID names by meta, and a driver package registers its own
-codec the same way. `bee.driver.wippy` is a separate non-CLI driver and does
-not use codecs.
+codec the same way.
 
 A window launch may declare `login`: a provider identifier, a display-only
 sign-in command and bounded alternative file paths relative to its selected

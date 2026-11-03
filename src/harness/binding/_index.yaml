@@ -203,28 +203,10 @@ entries:
   security:
     policies: [bee.harness.security:permission_hook_policy]
 
-- name: profile_get
+- name: profile_tool
   kind: function.lua
   source: file://profile_tools.lua
-  method: get
-  modules: [contract, ctx]
-  imports:
-    bounds: bee.drivers.values:bounds
-    protocol: bee.harness.profiles:protocol
-
-- name: profile_list
-  kind: function.lua
-  source: file://profile_tools.lua
-  method: list
-  modules: [contract, ctx]
-  imports:
-    bounds: bee.drivers.values:bounds
-    protocol: bee.harness.profiles:protocol
-
-- name: profile_put
-  kind: function.lua
-  source: file://profile_tools.lua
-  method: put
+  method: call
   modules: [contract, ctx]
   imports:
     bounds: bee.drivers.values:bounds

@@ -10,10 +10,7 @@ local traits = require("traits")
 local harness = require("harness")
 local app_identity = require("app_identity")
 local configuration = require("configuration")
-local system = require("system")
 local events = require("events")
-local channel = require("channel")
-local time = require("time")
 local process = require("process")
 local sql = require("sql")
 local M = {}
@@ -108,7 +105,7 @@ end
 function M.open(seed: boolean?, trait_id: string?, provider: string?, managed: boolean?, omit_hooks: boolean?): (Session, {[string]: unknown})
     M.call("bee.gateway.binding:open", {address = assert(configuration.current()).address})
     local owner = harness.session_owner(M.WORKSPACE)
-    local opened = harness.value(owner:call("session_create", {operation_key = harness.key(), route = {provider = provider or "wippy", delivery = provider and not managed and "hook" or nil}}))
+    local opened = harness.value(owner:call("session_create", {operation_key = harness.key(), route = {provider = provider or "fixture-host", delivery = provider and not managed and "hook" or nil}}))
     local session = assert(bounds.id(opened.session))
     local db = assert(sql.get("bee.tests.support.hygiene:db"))
     assert(db:execute("INSERT INTO bee_test_memory_sessions VALUES (?, ?, ?)", {session, owner.id, M.WORKSPACE}))
@@ -233,29 +230,6 @@ function M.turn(session: Session, text: string, observations: {{[string]: unknow
     end
     return harness.value(session.owner:call("work_settle", {turn = reserved.turn, claim = reserved.claim, result = {state = "succeeded", schema = "bee:Text@1", value = {text = text}}, operation_key = harness.key()}))
 end
-function M.endpoint(): string
-    local reference = "bee.tests.driver.wippy:mock_listener"
-    local subscription = assert(events.subscribe("supervisor", "service.update"))
-    local deadline = time.after("30s")
-    while true do
-        local state = assert(system.supervisor.state(reference))
-        if state.status == "running" then
-            local address = assert(state.details):match("^service listening on ([%d%.]+:%d+)$")
-            subscription:close()
-            return "http://" .. assert(address) .. "/v1"
-        end
-        local selected = channel.select({subscription:channel():case_receive(), deadline:case_receive()})
-        if selected.channel == deadline or not selected.ok then subscription:close(); error("fixture model listener unavailable") end
-    end
-end
-function M.native(session: Session, prompt: string): {[string]: unknown}
-    local raw, err = funcs.new():with_actor(security.new_actor(session.session, {workspace_id = M.WORKSPACE})):call("bee.driver.wippy.binding:run", {operation = "run", thread_id = session.thread,
-        action_id = session.session, attempt_id = session.binding.attempt_id, workspace_id = M.WORKSPACE,
-        agent_ref = "bee.tests.memory:test_agent", brief = prompt, host_config = {endpoint = M.endpoint()}})
-    assert(not err, tostring(err))
-    return assert(bounds.object(raw))
-end
-
 -- cli_hook posts one hook the way a CLI does and returns its decoded answer
 -- and the HTTP status it came with.
 function M.cli_hook(session: Session, event: string, fields: {[string]: unknown}, token: string, endpoint: string, mcp: boolean?): ({[string]: unknown}, integer)

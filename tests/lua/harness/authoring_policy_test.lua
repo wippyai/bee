@@ -22,7 +22,7 @@ local function define_tests()
                 -- Application tools, opening apps and sharing reach the agent only through the
                 -- person: the stock surface offers them as access to approve.
                 local surface = assert(decoded.gateway_surface, ref .. " offers no access")
-                for _, tool in ipairs({"app_tools", "application_open", "publish", "components", "install_request", "uninstall_request", "install_status"}) do
+                for _, tool in ipairs({"app_tools", "application_open", "publish", "components", "hub_install"}) do
                     test.is_true(bounds.member(tool, decoded.gateway_tools) ~= nil, ref .. " omits " .. tool)
                     test.is_nil(bounds.member(tool, surface.base_tools :: {string}), ref .. " grants " .. tool .. " without the person")
                 end

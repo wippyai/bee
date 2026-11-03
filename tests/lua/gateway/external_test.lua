@@ -217,7 +217,7 @@ local function define_tests()
             local issued = value(external.complete(assert(bounds.id(paired.client_id)), "fixture-cli"))
             local endpoint, action, token = assert(bounds.text(issued.endpoint, 256)), assert(bounds.id(issued.action_id)),
                 assert(bounds.text(issued.token, 128))
-            local hub_tools = {"components", "install_request", "uninstall_request", "install_status"}
+            local hub_tools = {"components", "hub_install"}
             local initial = names((rpc(endpoint, action, token, "tools/list", {})))
             for _, name in ipairs(hub_tools) do test.is_nil(initial[name]) end
             local asked = rpc(endpoint, action, token, "tools/call", {name = "session", arguments = {operation = "request_access",

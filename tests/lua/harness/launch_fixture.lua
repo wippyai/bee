@@ -41,7 +41,7 @@ end
 local function workspace_id(prefix: string): string
     return assert(hash.sha256(fresh(prefix))):sub(1, 32)
 end
-local scope_names = {"bee.tests.harness:saved_profile_test_policy", "bee.tests.harness:launch_client_policy", "bee.tests.harness:launch_recovery_client_policy", "bee.tests.harness:launch_recovery_runtime_policy", "bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe",
+local scope_names = {"bee.tests.harness:saved_profile_test_policy", "bee.tests.harness:launch_client_policy", "bee.tests.harness:launch_recovery_runtime_policy", "bee.tests.harness:carrier_client_policy", "bee.threads.security:create", "bee.threads.security:observe",
     "bee.threads.security:lifecycle", "bee.threads.security:carrier", "bee.harness.security:carrier_policy", "bee.tests.harness:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
     "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.security:interactive_session_policy", "bee.tests.harness:setup_client_policy"}
 local function scope(extra: {string}?): security.Scope

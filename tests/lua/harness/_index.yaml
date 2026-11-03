@@ -1317,16 +1317,6 @@ entries:
     - bee.threads.binding:read_after
     - bee.threads.binding:watch
     effect: allow
-- name: launch_recovery_client_policy
-  kind: security.policy
-  meta:
-    type: test_support
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.tests.harness:managed_run_probe
-    effect: allow
 - name: launch_recovery_runtime_policy
   kind: security.policy.expr
   meta:
@@ -1674,8 +1664,7 @@ entries:
     resources:
     - bee.gateway.binding:open
     - bee.gateway.binding:admit
-    - bee.gateway.binding:request_capability
-    - bee.gateway.binding:capability_status
+    - bee.gateway.binding:elevation
     - bee.threads.binding:create
     - bee.threads.binding:get
     - bee.threads.binding:admit_action
@@ -1699,7 +1688,7 @@ entries:
     resources:
     - bee.gateway.binding:open
     - bee.gateway.binding:admit
-    - bee.gateway.binding:install_request
+    - bee.gateway.binding:hub_install
     - bee.threads.binding:create
     - bee.threads.binding:get
     - bee.threads.binding:admit_action
@@ -1745,7 +1734,7 @@ entries:
     resources:
     - bee.gateway.binding:open
     - bee.gateway.binding:admit
-    - bee.gateway.binding:publish_request
+    - bee.gateway.binding:hub_publish
     - bee.threads.binding:create
     - bee.threads.binding:get
     - bee.threads.binding:admit_action
@@ -2345,15 +2334,6 @@ entries:
       measure_executable: bee.placement.native.binding:measure_executable
       close_stdin: bee.placement.native.binding:close_stdin
       activity: bee.placement.native.binding:activity
-- name: managed_run_probe
-  kind: function.lua
-  source: file://managed_run_probe.lua
-  method: handle
-  meta:
-    type: test_support
-  imports:
-    managed_run: bee.harness.launch:managed_run
-    bounds: bee.drivers.values:bounds
 - name: presentation_scope_probe
   kind: function.lua
   source: file://presentation_scope_probe.lua
@@ -2821,27 +2801,18 @@ entries:
     suite: bee
     timeout: 600s
   modules:
-  - cdc
-  - funcs
   - process
   - channel
   - registry
-  - env
   - time
   security:
     policies:
     - bee.tests.support:schema_policy
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
-    - bee.placement.native.security:placement_store_policy
   imports:
     test: wippy.test:test
-    completion: bee.tests.placement.native:completion
-    carrier_fixtures: bee.tests.harness:carrier_fixtures
-    orphan_gate: bee.tests.harness:orphan_gate
     principals: bee.tests.support.principals:bound
-    machine: bee.harness.carrier:machine
-    placement_store: bee.placement.native.persist:store
     bounds: bee.drivers.values:bounds
     fixture: bee.tests.harness:launch_fixture
 - name: launch_sessions_test

@@ -114,19 +114,6 @@ entries:
     bounds: bee.drivers.values:bounds
     driver_locate: bee.drivers.locate:locate
     driver_types: bee.drivers:types
-- name: managed_run
-  kind: library.lua
-  source: file://managed_run.lua
-  modules:
-  - funcs
-  - time
-  - process
-  - registry
-  imports:
-    bounds: bee.drivers.values:bounds
-    placement_resolver: bee.placement.binding:resolver
-    placement_decode: bee.placement:decode
-    prestart: bee.harness.carrier:prestart
 - name: setup_execution_policy
   kind: security.policy.expr
   groups:
@@ -176,7 +163,6 @@ entries:
     - bee.drivers.grok.binding:binding
     - bee.drivers.muse.binding:binding
     - bee.drivers.opencode.binding:binding
-    - bee.driver.wippy.binding:binding
 - name: harness_setup
   kind: registry.entry
   meta:

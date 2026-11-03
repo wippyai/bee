@@ -482,8 +482,8 @@ its `menus` field names.
 
 ## Limits
 
-Runtime agent elevation is implemented through the gateway `request_capability` and
-`capability_status` tools: an approval bound to the authenticated thread and
+Runtime agent elevation is implemented through the gateway `elevation` tool's
+`request` and `status` operations: an approval bound to the authenticated thread and
 attempt consumes once and writes one thread-actor resources grant the attempt's
 placement resolves. The host verifies the named resource association and
 requested access before approval and before consuming an approved decision.

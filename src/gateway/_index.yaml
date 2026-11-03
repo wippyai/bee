@@ -41,20 +41,14 @@ entries:
     - session_get
     - session_list
     - session_cancel
-    - session_close
-    - session_remove
-    - session_rename
+    - session_manage
     - overlay
     - delivery
     - components
     - tests
-    - install_request
-    - uninstall_request
-    - install_status
-    - publish_request
-    - publish_status
-    - request_capability
-    - capability_status
+    - hub_install
+    - hub_publish
+    - elevation
     - process_run
     - http_request
     pairing_traits:
@@ -88,9 +82,7 @@ entries:
         - session_get
         - session_list
         - session_cancel
-        - session_close
-        - session_remove
-        - session_rename
+        - session_manage
       - id: bee.mcp:authoring
         title: Build workspace applications
         prompt: Author overlays, preflight and request reviewed delivery
@@ -102,14 +94,12 @@ entries:
         title: Request package publication
         prompt: Ask the person to publish packages
         tools:
-        - publish_request
-        - publish_status
+        - hub_publish
       - id: bee.mcp:capabilities
         title: Request command and network access
         prompt: Ask for exact command or HTTP capabilities with approval expiry
         tools:
-        - request_capability
-        - capability_status
+        - elevation
         - process_run
         - http_request
       base_tools: []

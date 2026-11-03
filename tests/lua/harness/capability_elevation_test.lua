@@ -165,34 +165,34 @@ local function define_tests()
             ensure_approver_policy()
             admit_root()
             local workspace = fresh("elevation")
-            local bound = attempt_binding(workspace, {"request_capability", "capability_status"})
+            local bound = attempt_binding(workspace, {"elevation"})
             local binding_id, thread, attempt = bound.binding_id, bound.thread_id, bound.attempt_id
-            local unrealizable = raw_call(AGENT, workspace, "bee.gateway.binding:request_capability",
-                {binding_id = binding_id, capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
+            local unrealizable = raw_call(AGENT, workspace, "bee.gateway.binding:elevation",
+                {operation = "request", binding_id = binding_id, capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
             test.is_false(unrealizable.ok)
             test.eq((assert(bounds.object(unrealizable.error))).code, "INVALID")
             test.is_true(tostring((assert(bounds.object(unrealizable.error))).message):find("fixed by its host resolver", 1, true) ~= nil)
             local previous_source = set_database_source("$name")
             local outcome = (function(): Object
-                local missing = raw_call(AGENT, workspace, "bee.gateway.binding:request_capability",
-                    {binding_id = binding_id, capability = "app.database", parameters = {name = "missing"}, ttl_ms = 60000})
+                local missing = raw_call(AGENT, workspace, "bee.gateway.binding:elevation",
+                    {operation = "request", binding_id = binding_id, capability = "app.database", parameters = {name = "missing"}, ttl_ms = 60000})
                 test.is_false(missing.ok)
                 test.eq(((assert(bounds.object(missing.error))).code), "NOT_FOUND")
                 call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
                     name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "read"})
-                local insufficient = raw_call(AGENT, workspace, "bee.gateway.binding:request_capability",
-                    {binding_id = binding_id, capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
+                local insufficient = raw_call(AGENT, workspace, "bee.gateway.binding:elevation",
+                    {operation = "request", binding_id = binding_id, capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
                 test.is_false(insufficient.ok)
                 test.eq(((assert(bounds.object(insufficient.error))).code), "FORBIDDEN")
                 local association = call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
                     name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "write"})
                 local association_revision = association.revision
-                local requested = call(AGENT, workspace, "bee.gateway.binding:request_capability", {binding_id = binding_id,
+                local requested = call(AGENT, workspace, "bee.gateway.binding:elevation", {operation = "request", binding_id = binding_id,
                     capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
                 local approval_id = requested.approval_id
                 test.is_nil(requested.grant_id)
-                local pending = call(AGENT, workspace, "bee.gateway.binding:capability_status",
-                    {binding_id = binding_id, approval_id = approval_id})
+                local pending = call(AGENT, workspace, "bee.gateway.binding:elevation",
+                    {operation = "status", binding_id = binding_id, approval_id = approval_id})
                 test.eq(pending.status, "pending")
                 local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = approval_id})
                 test.eq(read.requester_id, AGENT)
@@ -207,20 +207,20 @@ local function define_tests()
                 call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
                     name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "read",
                     expected_revision = association_revision})
-                local blocked = raw_call(AGENT, workspace, "bee.gateway.binding:capability_status",
-                    {binding_id = binding_id, approval_id = approval_id})
+                local blocked = raw_call(AGENT, workspace, "bee.gateway.binding:elevation",
+                    {operation = "status", binding_id = binding_id, approval_id = approval_id})
                 test.is_false(blocked.ok)
                 test.eq(((assert(bounds.object(blocked.error))).code), "FORBIDDEN")
                 if type(association_revision) ~= "number" then error("invalid fixture association_revision") end
                 call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
                     name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "write",
                     expected_revision = association_revision + 1})
-                local granted = call(AGENT, workspace, "bee.gateway.binding:capability_status",
-                    {binding_id = binding_id, approval_id = approval_id})
+                local granted = call(AGENT, workspace, "bee.gateway.binding:elevation",
+                    {operation = "status", binding_id = binding_id, approval_id = approval_id})
                 test.eq(granted.status, "granted")
                 local grant_id = granted.grant_id
-                local replayed = call(AGENT, workspace, "bee.gateway.binding:capability_status",
-                    {binding_id = binding_id, approval_id = approval_id})
+                local replayed = call(AGENT, workspace, "bee.gateway.binding:elevation",
+                    {operation = "status", binding_id = binding_id, approval_id = approval_id})
                 test.eq(replayed.grant_id, grant_id)
                 local resolved = call(PLACEMENT, workspace, "bee.resources.binding:resolve",
                     {grant_id = grant_id, subject = AGENT, audience = AGENT, attempt_id = attempt})
@@ -239,9 +239,9 @@ local function define_tests()
         test.it("runs the approved command for the attempt holding a process elevation, and nothing else", function()
             ensure_approver_policy()
             local workspace = isolated()
-            local tools = {"request_capability", "capability_status", "process_run", "http_request"}
+            local tools = {"elevation", "process_run", "http_request"}
             local bound = attempt_binding(workspace.id, tools)
-            local requested = call(AGENT, workspace.id, "bee.gateway.binding:request_capability", {binding_id = bound.binding_id,
+            local requested = call(AGENT, workspace.id, "bee.gateway.binding:elevation", {operation = "request", binding_id = bound.binding_id,
                 capability = "process.exec", parameters = {command = "/bin/echo held", directory = "."}, ttl_ms = 60000})
             local approval_id = requested.approval_id
             local read = call(APPROVER, workspace.id, "bee.approvals.binding:read", {approval_id = approval_id})
@@ -251,8 +251,8 @@ local function define_tests()
             test.eq(code(AGENT, workspace.id, "bee.gateway.binding:process_run",
                 {binding_id = bound.binding_id, approval_id = approval_id}), "DENIED")
             approve(workspace.id, approval_id)
-            local granted = call(AGENT, workspace.id, "bee.gateway.binding:capability_status",
-                {binding_id = bound.binding_id, approval_id = approval_id})
+            local granted = call(AGENT, workspace.id, "bee.gateway.binding:elevation",
+                {operation = "status", binding_id = bound.binding_id, approval_id = approval_id})
             test.eq(granted.status, "granted")
             test.is_nil(granted.grant_id)
             test.eq(table.concat(principals.strings(granted.tools), ","), "process_run")
@@ -262,11 +262,11 @@ local function define_tests()
             test.eq(ran.output, "held one two words it's\n")
             test.eq(code(AGENT, workspace.id, "bee.gateway.binding:http_request", {binding_id = bound.binding_id,
                 approval_id = approval_id, method = "GET", url = "https://example.com/"}), "DENIED")
-            local where_requested = call(AGENT, workspace.id, "bee.gateway.binding:request_capability", {binding_id = bound.binding_id,
+            local where_requested = call(AGENT, workspace.id, "bee.gateway.binding:elevation", {operation = "request", binding_id = bound.binding_id,
                 capability = "process.exec", parameters = {command = "/bin/pwd", directory = "."}, ttl_ms = 60000})
             approve(workspace.id, where_requested.approval_id)
-            call(AGENT, workspace.id, "bee.gateway.binding:capability_status",
-                {binding_id = bound.binding_id, approval_id = where_requested.approval_id})
+            call(AGENT, workspace.id, "bee.gateway.binding:elevation",
+                {operation = "status", binding_id = bound.binding_id, approval_id = where_requested.approval_id})
             local where = call(AGENT, workspace.id, "bee.gateway.binding:process_run",
                 {binding_id = bound.binding_id, approval_id = where_requested.approval_id})
             test.eq(where.output, workspace.path .. "\n")
@@ -279,13 +279,13 @@ local function define_tests()
         test.it("holds an HTTP elevation for the approved origin, methods and path prefix only", function()
             ensure_approver_policy()
             local workspace = isolated()
-            local bound = attempt_binding(workspace.id, {"request_capability", "capability_status", "process_run", "http_request"})
-            local requested = call(AGENT, workspace.id, "bee.gateway.binding:request_capability", {binding_id = bound.binding_id,
+            local bound = attempt_binding(workspace.id, {"elevation", "process_run", "http_request"})
+            local requested = call(AGENT, workspace.id, "bee.gateway.binding:elevation", {operation = "request", binding_id = bound.binding_id,
                 capability = "http.api", parameters = {origin = "https://api.example.com", methods = {"GET"}, path_prefix = "/v1"},
                 ttl_ms = 60000})
             approve(workspace.id, requested.approval_id)
-            local granted = call(AGENT, workspace.id, "bee.gateway.binding:capability_status",
-                {binding_id = bound.binding_id, approval_id = requested.approval_id})
+            local granted = call(AGENT, workspace.id, "bee.gateway.binding:elevation",
+                {operation = "status", binding_id = bound.binding_id, approval_id = requested.approval_id})
             test.eq(granted.status, "granted")
             test.eq(table.concat(principals.strings(granted.tools), ","), "http_request")
             local function refusal(request: Object): string

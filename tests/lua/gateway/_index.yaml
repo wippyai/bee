@@ -400,3 +400,32 @@ entries:
     principals: bee.tests.support.principals:bound
     shared_authority: bee.tests.support:authority
     harness: bee.tests.threads:harness
+- name: tool_folds_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/gateway-tool-folds-test.db
+  lifecycle: {auto_start: true}
+- name: tool_folds_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.tests.gateway:tool_folds_db]
+    effect: allow
+- name: tool_folds_test
+  kind: function.lua
+  source: file://tool_folds_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [sql, json, funcs]
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    folds: bee.gateway.api:tool_folds
+    mcp: bee.gateway.api:mcp
+    surface: bee.gateway.catalog:surface
+    access: bee.drivers.profiles:profile_access
+    scope: bee.gateway.catalog:profile_scope
+  security:
+    policies: [bee.tests.gateway:tool_folds_policy, bee.tests.support:schema_policy]

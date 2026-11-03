@@ -376,9 +376,9 @@ function M.pack_contents(): string
         .. " Library's governed stage, preflight, person approval and activation path. Their app.database grants"
         .. " provision dedicated databases, their migrations run against those databases, and agent.tools grants"
         .. " expose their tools. ns.definition is package metadata admitted by the package ceiling."
-        .. " While you work, request_capability asks the person in Needs you for one catalog capability for this"
+        .. " While you work, elevation request asks the person in Needs you for one catalog capability for this"
         .. " attempt and a bounded time: process.exec to run one exact command in a folder of this workspace, or"
-        .. " http.api to reach one https origin under a path prefix with named methods. Poll capability_status"
+        .. " http.api to reach one https origin under a path prefix with named methods. Poll elevation status"
         .. " with the approval_id; once it reports granted, call process_run (your arguments follow the approved"
         .. " command) or http_request with that approval_id until it expires."
 end

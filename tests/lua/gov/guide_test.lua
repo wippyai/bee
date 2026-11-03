@@ -71,7 +71,7 @@ local function define_tests()
                 test.not_nil((string.find(text, needle, 1, true)), needle)
             end
             local contents = guide.pack_contents()
-            for _, needle in ipairs({"request_capability", "process_run", "http_request", "capability_status"}) do
+            for _, needle in ipairs({"elevation request", "process_run", "http_request", "elevation status"}) do
                 test.not_nil((string.find(contents, needle, 1, true)), needle)
             end
         end)

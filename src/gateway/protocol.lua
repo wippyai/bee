@@ -220,8 +220,7 @@ M.APPLICATION_RUNTIME_TRAIT_ID = "bee.app:runtime"
 -- person approves as requestable access.
 M.CONSENT_TOOLS = {app_tools = M.APPLICATION_TOOLS_TRAIT_ID, publish = M.APPLICATION_SHARE_TRAIT_ID,
     application_open = M.APPLICATION_RUNTIME_TRAIT_ID,
-    components = M.HUB_LIBRARY_TRAIT_ID, install_request = M.HUB_LIBRARY_TRAIT_ID,
-    uninstall_request = M.HUB_LIBRARY_TRAIT_ID, install_status = M.HUB_LIBRARY_TRAIT_ID}
+    components = M.HUB_LIBRARY_TRAIT_ID, hub_install = M.HUB_LIBRARY_TRAIT_ID}
 function M.access_traits(policy_data: unknown): {string}
     local data = bounds.object(policy_data)
     local declared_surface = data and bounds.object(data.gateway_surface) or nil

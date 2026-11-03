@@ -31,7 +31,7 @@ local function define_tests()
         for _, scenario in ipairs({"saved", "delegated", "legacy", "cleared", "narrowed", "context", "input_open", "input_run"}) do
             test.it("preserves the agent spec boundary through real MCP: " .. scenario, function()
                 local parent_id, child_id = fresh("regression-parent"), fresh("regression-child")
-                local tools = {"thread_read", "profile_get", "profile_put", "session_open", "session_run", "session_get", "thread_message", "app_tools"}
+                local tools = {"thread_read", "profile", "session_open", "session_run", "session_get", "thread_message", "app_tools"}
                 with_entry("bee.tests.threads.sessions:fake_owner", function(data)
                     local contracts = principals.objects((json.decode(assert(json.encode(data.contracts)))))
                     for _, contract in ipairs(contracts) do contract.default = false end

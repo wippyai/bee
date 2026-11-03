@@ -23,8 +23,9 @@ The MCP server is `bee` (protocol `2025-06-18`, `tools/list`, `tools/call`).
 
 | Tool | Purpose |
 |---|---|
-| `session_catalog`, `session_open`, `session_run`, `session_send`, `session_await`, `session_join`, `session_get`, `session_list`, `session_cancel`, `session_close` | One method each of `bee.threads.sessions:contract` and `:catalog` (see [sessions](sessions)). They are the way to start an agent, give it work and read its result. Arguments are the published closed schemas; every mutation requires `operation_key`; the gateway keeps no session state and each owner reply is held to the published output schema |
+| `session_catalog`, `session_open`, `session_run`, `session_send`, `session_await`, `session_join`, `session_get`, `session_list`, `session_cancel`, `session_manage` | One method per call of `bee.threads.sessions:contract` and `:catalog` (see [sessions](sessions)); `session_manage` selects `close`, `remove` or `rename` by its `operation`. They are the way to start an agent, give it work and read its result. Arguments are the published closed schemas; every mutation requires `operation_key`; the gateway keeps no session state and each owner reply is held to the published output schema |
 | `thread_read`, `thread_message` | Read the bound thread (or a member thread the caller belongs to); record a note on it that schedules nothing |
+| `profile` | `get`, `list` and `put` saved agent profiles in the bound workspace with compare-and-swap revisions |
 | `capabilities` | Read-only report of the admitted tools with their policies, the traits, the bound workspace and thread |
 | `overlay` | Caller-owned Governance overlay: a read-only `guide` (index, sections, worked example) and create, list, read, put, append, remove, freeze. A `put` carries at most 64 KiB of text or 87,384 bytes of base64 |
 | `docs` | Offline platform documentation: list by topic, search, and read bounded windows by stable id |
@@ -32,11 +33,11 @@ The MCP server is `bee` (protocol `2025-06-18`, `tools/list`, `tools/call`).
 | `delivery` | `preflight`, `request` and `status` for a frozen overlay pack; names the human steps it cannot take (review in the Library, approval in Approvals) |
 | `publish` | Publishes the exact application version a person has reviewed, approved and applied at this destination. Offered only when the person's profile lists `publish`, or the launch surface offers the built-in `bee.app:share` trait as access the person approves |
 | `application_open` | Opens an installed app on the person's desktop for the binding's workspace with literal arguments, under the approved `bee.app:runtime` trait; a running singleton receives the arguments as navigation (`docs/agents_and_apps`) |
-| `request_capability`, `capability_status` | Ask the person to elevate one attempt with one host catalog capability for a bounded time; approval consumption writes one Resources grant for that thread actor, which the attempt's placement resolves and no child inherits. A capability the catalog exercises through tools (`process.exec`, `http.api`) writes no row: the consumed approval is the grant until its TTL from consumption ends, and `capability_status` returns its `tools` |
+| `elevation` | `request` asks the person to elevate one attempt with one host catalog capability for a bounded time; approval consumption writes one Resources grant for that thread actor, which the attempt's placement resolves and no child inherits. A capability the catalog exercises through tools (`process.exec`, `http.api`) writes no row: the consumed approval is the grant until its TTL from consumption ends, and `status` returns its `tools` |
 | `app_tools` | Reports the active application's tool schemas and discovery diagnostics. Installed apps appear as individual traits; their aliases are exposed and callable only while their own trait has consent and is selected. See `docs/session_traits`. |
 | `process_run`, `http_request` | Exercise a held elevation by `approval_id`: run the approved command followed by the agent's arguments in the approved folder of the bound workspace through `bee.gateway.env:process_executor` with only the host PATH, returning the exit code and combined output; or send one request under the approved origin, methods and path prefix. Each call re-checks the approval for this subject and attempt |
-| `install_request`, `uninstall_request`, `install_status` | File and poll Hub installation requests |
-| `publish_request`, `publish_status` | File and poll Hub publication requests |
+| `hub_install` | `install` and `uninstall` file Hub installation requests; `status` polls one |
+| `hub_publish` | `publish` files a Hub publication request; `status` polls one |
 | `session`, `call_tool` | `session` reads or selects traits and requests host-declared access (`request_access`, `access_status`); `call_tool` calls a currently active tool by name |
 
 The host may admit any subset. Each built-in tool runs under a policy the host

@@ -35,7 +35,7 @@ entries:
 - name: host
   kind: library.lua
   source: file://host.lua
-  modules: [funcs, security, json, http_client, system, events, channel, time, process, sql]
+  modules: [funcs, security, json, http_client, events, process, sql]
   imports:
     owner_observer: bee.tests.support:owner_observer
     approval_effect: bee.tests.support:approval_effect
@@ -109,10 +109,6 @@ entries:
   kind: registry.entry
   meta: {type: agent.trait, title: Hook B, application_ref: 'bee.tests.memory:app'}
   data: {prompt: Apply hook B., tools: [], hooks: [session.start, prompt.submit, tool.before, tool.after]}
-- name: remember_hook
-  kind: registry.entry
-  meta: {type: agent.trait, title: Remember and recall, application_ref: 'bee.tests.memory:app'}
-  data: {prompt: Remember completed turns., tools: [], listens: [turn.completed], hooks: [prompt.submit]}
 - name: prompt_hook
   kind: registry.entry
   meta: {type: agent.trait, title: Prompt hook, application_ref: 'bee.tests.memory:app'}
@@ -134,7 +130,7 @@ entries:
   source: file://hook.lua
   method: hook
   meta: {type: bee.session.hook, application_ref: 'bee.tests.memory:app', application_revision: '1'}
-  modules: [security, funcs, hash, channel]
+  modules: [security, funcs, channel]
   imports: {bounds: bee.drivers.values:bounds}
 - name: admission
   kind: registry.entry
@@ -143,32 +139,6 @@ entries:
     bindings:
     - definition_id: bee.tests.memory:app
       policies: [bee.tests.memory:client_policy, bee.tests.memory:index_policy]
-- name: test_agent
-  kind: registry.entry
-  meta: {type: agent.gen1, title: Hook fixture agent}
-  data:
-    prompt: Follow the fixture prompt.
-    tools: [bee.tests.memory:test_tool]
-    traits: []
-    delegates: []
-    memory: []
-    context: {}
-    tuning: {}
-    declinable: []
-- name: test_tool
-  kind: function.lua
-  source: file://tool.lua
-  method: handle
-  modules: [sql]
-  imports: {bounds: bee.drivers.values:bounds}
-  meta:
-    type: tool
-    title: Hook fixture tool
-    llm_alias: FileReport
-    llm_description: Record execution of the hook fixture tool.
-    input_schema: '{"type":"object","properties":{"text":{"type":"string"},"mode":{"type":"string"}},"additionalProperties":false}'
-    output_schema: '{"type":"object"}'
-  security: {policies: [bee.threads.security:store]}
 - name: revoke_during_hook
   kind: function.lua
   source: file://revoke_hook.lua
@@ -176,12 +146,6 @@ entries:
   modules: [sql, security, funcs]
   imports: {bounds: bee.drivers.values:bounds}
   security: {policies: [bee.tests.memory:host_policy]}
-- name: schema
-  kind: function.lua
-  source: file://schema.lua
-  method: run
-  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-10T20:01:00Z', test_support: true}
-  imports: {migration: 'wippy.migration:migration'}
 - name: hold_hook
   kind: function.lua
   source: file://hold_hook.lua
@@ -201,3 +165,27 @@ entries:
   method: run
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-10T20:02:00Z', test_support: true}
   imports: {migration: 'wippy.migration:migration'}
+- name: host_hooks
+  kind: registry.entry
+  meta:
+    type: bee.driver_hooks
+    driver_id: fixture-host
+    comment: A host-owned driver fixture whose host answers every hook point in process
+  data:
+    response: bee.driver.descriptor:hook_specific_output
+    host: true
+    input_bytes: 8192
+    output_bytes: 3000
+    points:
+      session.start:
+        results: [pass, add_context, change, deny]
+        reason: The host owns model requests, tool execution and result insertion.
+      prompt.submit:
+        results: [pass, add_context, change, deny]
+        reason: The host owns model requests, tool execution and result insertion.
+      tool.before:
+        results: [pass, add_context, change, deny]
+        reason: The host owns model requests, tool execution and result insertion.
+      tool.after:
+        results: [pass, add_context, change, deny]
+        reason: The host owns model requests, tool execution and result insertion.

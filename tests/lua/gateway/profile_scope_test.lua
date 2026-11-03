@@ -13,9 +13,9 @@ local function define_tests()
             local profile = assert(access.decode({mcp = {{tool = "session_open", scope = {definitions = {"bee:agent"}, methods = {"bee.threads.sessions.binding:open"}}}}}))
             test.is_nil(scope.check(profile, "session_open", "bee.threads.sessions.binding:open", "home", {spec = {definition = "bee:agent"}}))
             test.not_nil(scope.check(profile, "session_open", "bee.threads.sessions.binding:open", "home", {spec = {definition = "bee:other"}}))
-            test.not_nil(scope.check(profile, "session_close", "bee.threads.sessions.binding:close", "home", {}))
-            test.not_nil(scope.check(profile, "session_remove", "bee.threads.sessions.binding:remove", "home", {}))
-            test.not_nil(scope.check(profile, "session_rename", "bee.threads.sessions.binding:rename", "home", {}))
+            for _, operation in ipairs({"close", "remove", "rename"}) do
+                test.not_nil(scope.check(profile, "session_manage", "bee.threads.sessions.binding:" .. operation, "home", {operation = operation}))
+            end
             test.not_nil(scope.check(profile, "session_open", "bee.threads.sessions.binding:run", "home", {spec = {definition = "bee:agent"}}))
         end)
         test.it("requires destination operations and narrowed resource paths", function()

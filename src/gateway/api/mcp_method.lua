@@ -210,7 +210,7 @@ local function session_projection(binding: gateway.Binding, tool: mcp.Tool, requ
     local remedy = request.operation_key ~= nil and "retry with the same operation_key" or nil
     local reply, call_error = session_tools.call(instance, tool.name, request)
     if call_error then return refused("UNAVAILABLE", tostring(call_error), nil, true, remedy) end
-    local checked, check_error = session_tools.result(tool.name, reply)
+    local checked, check_error = session_tools.result(tool.name, reply, bounds.id(request.operation))
     if not checked then return refused("UNAVAILABLE", check_error or "owner returned an invalid reply", nil, true, remedy) end
     local encoded, encode_error = json.encode(checked)
     if encode_error or not encoded then return refused("UNAVAILABLE", "owner reply could not be encoded", nil, true, remedy) end
@@ -263,10 +263,8 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         if not selected then return missing end
         request.thread_id = selected
     end
-    if tool.name == "request_capability" or tool.name == "capability_status" or tool.name == "process_run"
-        or tool.name == "http_request" or tool.name == "install_request"
-        or tool.name == "uninstall_request" or tool.name == "install_status"
-        or tool.name == "publish_request" or tool.name == "publish_status" then
+    if tool.name == "elevation" or tool.name == "process_run" or tool.name == "http_request"
+        or tool.name == "hub_install" or tool.name == "hub_publish" then
         request.binding_id = binding.binding_id
     end
     if tool.name == "thread_message" then
@@ -412,18 +410,15 @@ local function handle(): nil
     elseif tool.name == "thread_message" then arguments, argument_error = mcp.message_arguments(parameters)
     elseif session_tools.is_session_tool(tool.name) then arguments, argument_error = session_tools.decode(tool.name, parameters)
     elseif tool.name == "capabilities" then arguments, argument_error = mcp.capabilities_arguments(parameters)
-    elseif tool.name == "request_capability" then arguments, argument_error = mcp.capability_arguments(parameters)
-    elseif tool.name == "capability_status" then arguments, argument_error = mcp.capability_status_arguments(parameters)
+    elseif tool.name == "elevation" then arguments, argument_error = mcp.elevation_arguments(parameters)
     elseif tool.name == "process_run" then arguments, argument_error = mcp.process_run_arguments(parameters)
     elseif tool.name == "http_request" then arguments, argument_error = mcp.http_request_arguments(parameters)
     elseif tool.name == "overlay" then arguments, argument_error = mcp.overlay_arguments(parameters)
     elseif tool.name == "docs" then arguments, argument_error = mcp.docs_arguments(parameters)
     elseif tool.name == "components" then arguments, argument_error = mcp.components_arguments(parameters)
-    elseif tool.name == "install_request" then arguments, argument_error = mcp.install_arguments(parameters, false)
-    elseif tool.name == "uninstall_request" then arguments, argument_error = mcp.install_arguments(parameters, true)
-    elseif tool.name == "install_status" then arguments, argument_error = mcp.install_status_arguments(parameters)
-    elseif tool.name == "publish_request" then arguments, argument_error = mcp.hub_publish_arguments(parameters)
-    elseif tool.name == "publish_status" then arguments, argument_error = mcp.hub_publish_status_arguments(parameters)
+    elseif tool.name == "hub_install" then arguments, argument_error = mcp.hub_install_arguments(parameters)
+    elseif tool.name == "hub_publish" then arguments, argument_error = mcp.hub_publish_arguments(parameters)
+    elseif tool.name == "profile" then arguments, argument_error = mcp.profile_arguments(tool, parameters)
     elseif tool.name == "delivery" then arguments, argument_error = mcp.delivery_arguments(parameters, binding.workspace_id)
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters, binding.workspace_id)
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
@@ -445,7 +440,7 @@ local function handle(): nil
             end
         end
     end
-    local scope_error = profile_scope.check(bound.configuration.profile, tool.name, tool.operation, binding.workspace_id, arguments, application)
+    local scope_error = profile_scope.check(bound.configuration.profile, tool.name, session_tools.operation(tool.name, arguments) or tool.operation, binding.workspace_id, arguments, application)
     if scope_error then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, scope_error)); return nil end
     if tool.name == "app_tools" then
         if arguments.node ~= nil or arguments.operation ~= "list" then
@@ -473,7 +468,7 @@ local function handle(): nil
         runtime = granted
     end
     binding.agent_traits = trait_ceiling
-    binding.agent_profile_write = tool.name == "profile_put"
+    binding.agent_profile_write = tool.name == "profile" and arguments.operation == "put"
     answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime, bound.configuration.resource_grants)))
     return nil
 end

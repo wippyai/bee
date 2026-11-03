@@ -148,80 +148,6 @@ local function define_tests(group: string, selected_driver: string?)
             test.is_true(err ~= nil or (bounds.object(raw) and assert(bounds.object(raw)).ok == false))
         end)
         end
-        if group == "native" then
-        test.it("deny blocks native tool execution and delivers the reason to the model", function()
-            local db = harness.open()
-            local before = harness.query(db, "SELECT COUNT(*) AS total FROM bee_test_hook_calls")[1].total
-            db:release()
-            local session = host.open(nil, "bee.tests.memory:hooks_a")
-            host.approve(session.binding, nil, "bee.tests.memory:hooks_b")
-            local result = host.native(session, "native_deny")
-            test.is_true(result.ok, tostring(assert(bounds.object(result.error or {})).message))
-            local value = assert(bounds.object(result.value))
-            test.is_true(assert(bounds.text(value.answer)):find("fixture refuses this operation", 1, true) ~= nil)
-            db = harness.open()
-            test.eq(harness.query(db, "SELECT COUNT(*) AS total FROM bee_test_hook_calls")[1].total, before)
-            db:release()
-        end)
-        end
-        if group == "native" then
-        test.it("inserts chained input and output replacements into the native model request", function()
-            local db = harness.open()
-            db:release()
-            local session = host.open(nil, "bee.tests.memory:hooks_a")
-            host.approve(session.binding, nil, "bee.tests.memory:hooks_b")
-            local result = host.native(session, "native_mutate")
-            test.is_true(result.ok, tostring(assert(bounds.object(result.error or {})).message))
-            local captured = assert(bounds.text(assert(bounds.object(result.value)).answer))
-            test.is_true(captured:find("seed:a:b:a:b", 1, true) ~= nil, captured)
-            db = harness.open()
-            test.eq(harness.query(db, "SELECT text FROM bee_test_hook_calls ORDER BY id DESC LIMIT 1")[1].text, "seed:a:b")
-            local originals = harness.query(db, "SELECT original_json FROM bee_session_hook_originals WHERE session_ref=?", {session.session})
-            db:release()
-            test.eq(#originals, 2)
-            for _, original in ipairs(originals) do test.eq(original.original_json, '"seed:a:b"') end
-        end)
-        end
-        if group == "native" then
-        test.it("replaces oversized native output before insertion and retains the actual original", function()
-            local session = host.open(nil, "bee.tests.memory:hooks_a")
-            local result = host.native(session, "native_large_output")
-            test.is_true(result.ok, tostring(assert(bounds.object(result.error or {})).message))
-            local captured = assert(bounds.text(assert(bounds.object(result.value)).answer))
-            test.is_true(captured:find("digest:a", 1, true) ~= nil, captured)
-            test.is_true(captured:find(string.rep("original", 700), 1, true) == nil, captured)
-            local db = harness.open()
-            local originals = harness.query(db, "SELECT original_json FROM bee_session_hook_originals WHERE session_ref=?", {session.session})
-            db:release()
-            test.eq(#originals, 1)
-            test.eq(originals[1].original_json, '"' .. string.rep("original", 700) .. '"')
-        end)
-        end
-        if group == "native" then
-        test.it("learned facts from session A reach session B's captured model request and stop after revocation", function()
-            local first = host.open(nil, "bee.tests.memory:remember_hook")
-            local fact = "orchid-" .. harness.key()
-            host.turn(first, "\n\nfact: " .. fact .. "\n")
-            local client = host.client("memory-index-" .. harness.key())
-            local raw, err = client:call("bee.tests.memory:run", {session_ref = first.session, thread_id = first.thread, trait_id = "bee.tests.memory:remember_hook"})
-            test.is_nil(err); test.eq(host.value(raw).indexed, 1, "listener stores session A's fact")
-            local second = host.open(nil, "bee.tests.memory:remember_hook")
-            local result = host.native(second, "memory_capture")
-            test.is_true(result.ok, tostring(assert(bounds.object(result.error or {})).message))
-            local captured = assert(bounds.text(assert(bounds.object(result.value)).answer))
-            test.is_true(captured:find(fact, 1, true) ~= nil, "model request lacks stored fact: " .. captured)
-            host.revoke(second)
-            local next_attempt = "attempt-" .. harness.key()
-            local carrier = harness.principal("sessions-owner", harness.ALL, host.WORKSPACE)
-            harness.value(carrier:call("prepare_attempt", {thread_id = second.thread, action_id = second.session, attempt_id = next_attempt,
-                prepared = harness.prepared(), idempotency_key = harness.key()}))
-            second.binding.attempt_id = next_attempt
-            result = host.native(second, "memory_capture")
-            test.is_true(result.ok, "revoked native run failed: " .. tostring(assert(bounds.object(result.error or {})).message))
-            captured = assert(bounds.text(assert(bounds.object(result.value)).answer))
-            test.is_true(captured:find(fact, 1, true) == nil, "revoked model request contains stored fact: " .. captured)
-        end)
-        end
         if group == "driver" and (selected_driver == "claude" or selected_driver == "codex") then
         test.it("applies " .. tostring(selected_driver) .. " responses through authenticated HTTP and MCP transports", function()
             for _, driver in ipairs({assert(selected_driver)}) do
@@ -349,9 +275,9 @@ local function define_tests(group: string, selected_driver: string?)
         end
         if group == "capabilities" then
         test.it("reports each driver's operations instead of treating observations as mutations", function()
-            local native = capabilities.for_driver("wippy")
-            test.eq(#native, 4)
-            test.eq(native[4].allowed_results[3], "change")
+            local host_owned = capabilities.for_driver("fixture-host")
+            test.eq(#host_owned, 4)
+            test.eq(host_owned[4].allowed_results[3], "change")
             for _, point in ipairs(capabilities.for_driver("opencode")) do
                 test.is_false(point.supported)
                 test.is_true(#point.reason > 0)
@@ -367,7 +293,7 @@ local function define_tests(group: string, selected_driver: string?)
     end)
 end
 local methods = {}
-for _, group in ipairs({"core", "native", "boundaries", "capabilities"}) do
+for _, group in ipairs({"core", "boundaries", "capabilities"}) do
     methods[group] = test.run_cases(function() define_tests(group) end)
 end
 for _, driver in ipairs({"claude", "codex", "agy", "muse", "grok"}) do

@@ -15,6 +15,7 @@ local app_requests = require("app_requests")
 local json_schema = require("json_schema")
 local canonical = require("canonical")
 local requirements = require("requirements")
+local tool_folds = require("tool_folds")
 local M = {}
 local part_arguments = require("part_arguments")
 M.MAX_WORKSPACE_TEXT_BYTES = part_arguments.MAX_WORKSPACE_TEXT_BYTES
@@ -22,14 +23,11 @@ M.MAX_WORKSPACE_BASE64_BYTES = part_arguments.MAX_WORKSPACE_BASE64_BYTES
 type Object = part_arguments.Object
 M.read_arguments = part_arguments.read_arguments
 M.message_arguments = part_arguments.message_arguments
-M.capability_arguments = part_arguments.capability_arguments
-M.capability_status_arguments = part_arguments.capability_status_arguments
+M.elevation_arguments = part_arguments.elevation_arguments
 M.process_run_arguments = part_arguments.process_run_arguments
 M.http_request_arguments = part_arguments.http_request_arguments
-M.install_arguments = part_arguments.install_arguments
-M.install_status_arguments = part_arguments.install_status_arguments
+M.hub_install_arguments = part_arguments.hub_install_arguments
 M.hub_publish_arguments = part_arguments.hub_publish_arguments
-M.hub_publish_status_arguments = part_arguments.hub_publish_status_arguments
 M.capabilities_arguments = part_arguments.capabilities_arguments
 M.delivery_arguments = part_arguments.delivery_arguments
 M.publish_arguments = part_arguments.publish_arguments
@@ -41,7 +39,7 @@ M.docs_arguments = part_arguments.docs_arguments
 M.overlay_arguments = part_arguments.overlay_arguments
 M.components_arguments = part_arguments.components_arguments
 function M.is_retired_tool(name: string): boolean
-    return name == "thread_launch" or name == "run_status" or name == "run_wait" or name == "run_cancel"
+    return tool_folds.fold(name) ~= nil or name == "thread_launch" or name == "run_status" or name == "run_wait" or name == "run_cancel"
         or name == "session_directory" or name == "session_inbox" or name == "session_ack" or name == "session_reply"
         or name == "thread_sessions" or name == "launch_definitions" or name == "thread_wait" or name == "thread_notify"
 end
@@ -82,16 +80,47 @@ local BUILTIN_POLICY_REFS: {[string]: boolean} = {}
 for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = true end
 M.TOOL_POLICY_REFS = TOOL_POLICY_REFS
 function M.is_tool_policy_reference(value: string): boolean return BUILTIN_POLICY_REFS[value] == true end
+-- operation_schema: the input schema of a tool that takes one operation and
+-- the fields that operation names; every other field is refused.
+local function operation_schema(tool: string, properties: Object, required: {[string]: {string}}, examples: {Object}?): Object
+    local fields = part_arguments.OPERATION_FIELDS[tool] or {}
+    local operations = tool_folds.OPERATIONS[tool] or {}
+    local clauses: {Object} = {}
+    for _, operation in ipairs(operations) do
+        local needed = required[operation]
+        if needed and #needed > 0 then
+            clauses[#clauses + 1] = {["if"] = {properties = {operation = {const = operation}}}, ["then"] = {required = needed}}
+        end
+    end
+    local names: {string} = {}
+    for name in pairs(properties) do names[#names + 1] = name end
+    table.sort(names)
+    for _, name in ipairs(names) do
+        local owners: {string} = {}
+        for _, operation in ipairs(operations) do
+            if bounds.member(name, fields[operation] or {}) then owners[#owners + 1] = operation end
+        end
+        if #owners < #operations then
+            clauses[#clauses + 1] = {["if"] = {properties = {operation = {enum = owners}}}, ["else"] = {["not"] = {required = {name}}}}
+        end
+    end
+    local all: Object = {operation = {type = "string", enum = operations}}
+    for name, schema in pairs(properties) do all[name] = schema end
+    local schema: Object = {type = "object", additionalProperties = false, required = {"operation"}, properties = all, allOf = clauses}
+    if examples then schema.examples = examples end
+    return schema
+end
 local TOOLS: {Tool} = {
-    {name = "profile_get", description = "Get a saved agent profile in the bound workspace. Writes use compare-and-swap revisions and never approve gated traits.", operation = "bee.harness.binding:profile_get",
-        policies = {TOOL_POLICY_REFS.session}, annotations = READ_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"profile_id"}, properties = {profile_id = {type = "string", minLength = 1, maxLength = 160}}}},
-    {name = "profile_list", description = "List saved agent profiles in the bound workspace with the names the person gave them; query matches a name. Writes use compare-and-swap revisions and never approve gated traits.", operation = "bee.harness.binding:profile_list",
-        policies = {TOOL_POLICY_REFS.session}, annotations = READ_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {}, properties = {after_key = {type = "string"}, expected_cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64}, definition_ref = {type = "string"}, query = {type = "string", maxLength = 80}, sort = {enum = {"name", "driver"}}}}},
-    {name = "profile_put", description = "Put a saved agent profile in the bound workspace. Each driver's profiles carry distinct names; a name another profile of the driver holds is refused. Writes use compare-and-swap revisions and never approve gated traits.", operation = "bee.harness.binding:profile_put",
+    {name = "profile", description = "Read and write saved agent profiles in the bound workspace by operation. get {profile_id} returns one profile; list {after_key?, expected_cursor?, limit?, definition_ref?, query?, sort?} lists profiles with the names the person gave them, query matching a name; put {profile_id, expected_revision, idempotency_key, profile} saves one, and a name another profile of the same driver holds is refused. Writes use compare-and-swap revisions and never approve gated traits.",
+        operation = "bee.harness.binding:profile_tool",
         policies = {TOOL_POLICY_REFS.session}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"profile_id", "expected_revision", "idempotency_key", "profile"}, properties = {profile_id = {type = "string", minLength = 1, maxLength = 160}, expected_revision = {type = "integer", minimum = 0}, idempotency_key = {type = "string", minLength = 1, maxLength = 160}, profile = session_tools.profile_schema()}}},
+        schema = operation_schema("profile", {profile_id = {type = "string", minLength = 1, maxLength = 160},
+            after_key = {type = "string"}, expected_cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64},
+            definition_ref = {type = "string"}, query = {type = "string", maxLength = 80}, sort = {enum = {"name", "driver"}},
+            expected_revision = {type = "integer", minimum = 0}, idempotency_key = {type = "string", minLength = 1, maxLength = 160},
+            profile = session_tools.profile_schema()},
+            {get = {"profile_id"}, put = {"profile_id", "expected_revision", "idempotency_key", "profile"}},
+            {{operation = "list", query = "review"}, {operation = "get", profile_id = "0198f1c2-0000-7000-8000-000000000000"}})},
     {name = "question", description = "Ask the person a typed question in Needs you. Ask with an idempotency_key, prompt and response_schema (JSON Schema). Read the approval_id until terminal: decided responses contain the validated answer; expired, withdrawn or denied finishes without an answer. Withdraw an abandoned question with its observed revision and digests.", operation = "bee.approvals.binding:request",
         policies = {TOOL_POLICY_REFS.question}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
@@ -121,7 +150,7 @@ local TOOLS: {Tool} = {
     {name = "docs", description = "Read the platform documentation that ships inside Bee, offline: list the corpus by topic (at most 64 per page), search it for a phrase (at most 16 matches per page), or read one bounded window of one document by stable id (at most 16,384 bytes per window, honoring offset after section selection). For anything the bundled corpus does not cover, web_search, web_read, web_toc and web_index read the live documentation site the corpus is selected from (search results, one page by path, the table of contents, the curated llms.txt index), each as one window with next_offset. Use it to look up how the runtime modules an application author calls work (process, channel, tty, registry, sql, fs, http, events), Bee's own contracts (application, threads, hive and cross-node subscriptions, placement, gateway, storage, UI) and the terminal toolkit for drawing, layout, styles and input.", operation = "bee.docs.traits:call",
         policies = {TOOL_POLICY_REFS.docs}, annotations = READ_ANNOTATIONS,
         schema = docs_protocol.schema()},
-    {name = "components", description = "Read-only inspection of installed registry components, Hub packages and resolved installation plans. catalog {query?, page?, keyword?} discovers Hub packages; details {component} describes one; inspect {component, version} reads one exact Hub artifact (an exact version is required) as entry summaries first, at most 32 per page with next_offset, then page entries or read selected source windows; state {component, version} reads its metadata, resources and entry summaries the same way; files {component, version, resource, path?, offset?, limit?} pages a packaged directory; read_file {component, version, resource, path, offset?, limit?} reads one packaged file window of at most 16,384 bytes with next_offset; installed takes no request body and reads effective component inventory plus applications, the apps your workspace can open with application_open as {id, title, singleton}; installed_source {component, version, entry_id?, expected_revision?, offset?, limit?} lists and pages Lua source of an exact installed component, including local dev versions, under its registry revision; plan resolves dependencies and capabilities without applying. Hub artifact inspection and installed inspection are different sources and may differ. This tool cannot apply or write the registry; install_request asks the person to install a package.", operation = "bee.hub.traits:call",
+    {name = "components", description = "Read-only inspection of installed registry components, Hub packages and resolved installation plans. catalog {query?, page?, keyword?} discovers Hub packages; details {component} describes one; inspect {component, version} reads one exact Hub artifact (an exact version is required) as entry summaries first, at most 32 per page with next_offset, then page entries or read selected source windows; state {component, version} reads its metadata, resources and entry summaries the same way; files {component, version, resource, path?, offset?, limit?} pages a packaged directory; read_file {component, version, resource, path, offset?, limit?} reads one packaged file window of at most 16,384 bytes with next_offset; installed takes no request body and reads effective component inventory plus applications, the apps your workspace can open with application_open as {id, title, singleton}; installed_source {component, version, entry_id?, expected_revision?, offset?, limit?} lists and pages Lua source of an exact installed component, including local dev versions, under its registry revision; plan resolves dependencies and capabilities without applying. Hub artifact inspection and installed inspection are different sources and may differ. This tool cannot apply or write the registry; hub_install asks the person to install a package.", operation = "bee.hub.traits:call",
         policies = {TOOL_POLICY_REFS.components}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"operation"}, properties = {
             operation = {type = "string", enum = {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan"}},
@@ -162,43 +191,28 @@ local TOOLS: {Tool} = {
             {operation = "read_file", request = {component = "acme/tool", version = "1.2.3",
                 resource = "package", path = "init.lua", offset = 0, limit = 16384}},
         }}},
-    {name = "install_request", description = "Ask the person to install or update one Hub package in this agent's workspace. The host resolves the exact plan (the newest release when version is omitted, an update when the package is already installed through the Hub) and files one approval showing the package, version, source, dependency changes, the security policies it adds, replaces or removes, migrations and auto-start entries. Filing changes nothing; poll install_status with the returned request_id. A retry for the same plan replays the same request. Optional parameters fill declared requirements with typed values and the same validation as Library Configure. Application packages use the Library governed delivery and one installation approval.",
-        operation = "bee.gateway.binding:install_request",
+    {name = "hub_install", description = "Ask the person to install, update or remove one Hub package in this agent's workspace, or poll that request. install {component, version?, parameters?}: the host resolves the exact plan (the newest release when version is omitted, an update when the package is already installed through the Hub) and files one approval showing the package, version, source, dependency changes, the security policies it adds, replaces or removes, migrations and auto-start entries; optional parameters fill declared requirements with typed values and the same validation as Library Configure; application packages use the Library governed delivery and one installation approval. uninstall {component} removes one package this installer holds with the dependencies only it uses: the approval shows the removed packages and policies, governed applications retain saved data and applied library migrations block removal. Filing changes nothing and a retry for the same plan replays the same request. status {request_id} reports pending, refused (the person denied it or it expired), approved (applying), applied, or failed with the Hub code and message; the owner worker applies exactly the approved plan.",
+        operation = "bee.gateway.binding:hub_install",
         policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"component"}, properties = {
-            component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name"},
-            version = {type = "string", minLength = 1, maxLength = 128, description = "Exact version; omit for the newest release"},
-            parameters = {type = "array", maxItems = 128, description = "Declared configuration values; package schema validates each typed value",
+        schema = operation_schema("hub_install", {
+            component = {type = "string", minLength = 3, maxLength = 160, description = "install and uninstall: Hub package as owner/name"},
+            version = {type = "string", minLength = 1, maxLength = 128, description = "install: exact version; omit for the newest release"},
+            parameters = {type = "array", maxItems = 128, description = "install: declared configuration values; package schema validates each typed value",
                 items = {type = "object", additionalProperties = false, required = {"name", "value"}, properties = {
                     name = {type = "string", minLength = 1, maxLength = 256}, value = {}}}},
-        }}},
-    {name = "uninstall_request", description = "Ask the person to remove one Hub package this installer holds, with the dependencies only it uses. The approval shows the removed packages and policies. Governed applications retain saved data; applied library migrations block removal. Filing changes nothing; poll install_status with the returned request_id.",
-        operation = "bee.gateway.binding:uninstall_request",
-        policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"component"}, properties = {
-            component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name"},
-        }}},
-    {name = "install_status", description = "Poll one installation request by request_id: pending, refused (the person denied it or it expired), approved (applying), applied, or failed with the Hub code and message. Status reads the recorded decision and outcome; the owner worker applies exactly the approved plan.",
-        operation = "bee.gateway.binding:install_status",
-        policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
-            request_id = {type = "string", minLength = 1, maxLength = 160},
-        }}},
-    {name = "publish_request", description = "Ask the person to publish one package to the Wippy Hub from this agent's workspace. The worker seals the source tree into one .wapp file without uploading and files one approval showing the module, version, pack digest, visibility, organization and source tree. Filing changes nothing on the Hub; poll publish_status with the returned request_id. The publishing credential never reaches the agent; only the host uploader uses it after approval.",
-        operation = "bee.gateway.binding:publish_request",
+            request_id = {type = "string", minLength = 1, maxLength = 160, description = "status: the request_id install or uninstall returned"},
+        }, {install = {"component"}, uninstall = {"component"}, status = {"request_id"}},
+            {{operation = "install", component = "acme/tool"}, {operation = "status", request_id = "0198f1c2-0000-7000-8000-000000000000"}})},
+    {name = "hub_publish", description = "Ask the person to publish one package to the Wippy Hub from this agent's workspace, or poll that request. publish {component, version, visibility, source}: the worker seals the source tree into one .wapp file without uploading and files one approval showing the module, version, pack digest, visibility, organization and source tree; filing changes nothing on the Hub. status {request_id} reports pending, refused (the person denied it or it expired), approved (the owner worker is uploading), applied, or failed with the Hub code and message; after approval the owner worker uploads the sealed pack without any poll. The publishing credential never reaches the agent; only the host uploader uses it after approval.",
+        operation = "bee.gateway.binding:hub_publish",
         policies = {TOOL_POLICY_REFS.hub_publish}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"component", "version", "visibility", "source"}, properties = {
-            component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name under the host publishing organization"},
-            version = {type = "string", minLength = 1, maxLength = 128, description = "Exact version to publish"},
-            visibility = {type = "string", enum = {"public", "private"}, description = "Module visibility for a newly created module"},
-            source = {type = "string", minLength = 1, maxLength = 8192, description = "Absolute locked source tree the host admits"},
-        }}},
-    {name = "publish_status", description = "Read one publication request by request_id: pending, refused (the person denied it or it expired), approved (the owner worker is uploading), applied, or failed with the Hub code and message. Polling only reports state; after approval the owner worker uploads the sealed pack without any poll.",
-        operation = "bee.gateway.binding:publish_status",
-        policies = {TOOL_POLICY_REFS.hub_publish}, annotations = READ_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
-            request_id = {type = "string", minLength = 1, maxLength = 160},
-        }}},
+        schema = operation_schema("hub_publish", {
+            component = {type = "string", minLength = 3, maxLength = 160, description = "publish: Hub package as owner/name under the host publishing organization"},
+            version = {type = "string", minLength = 1, maxLength = 128, description = "publish: exact version to publish"},
+            visibility = {type = "string", enum = {"public", "private"}, description = "publish: module visibility for a newly created module"},
+            source = {type = "string", minLength = 1, maxLength = 8192, description = "publish: absolute locked source tree the host admits"},
+            request_id = {type = "string", minLength = 1, maxLength = 160, description = "status: the request_id publish returned"},
+        }, {publish = {"component", "version", "visibility", "source"}, status = {"request_id"}})},
     {name = "delivery", description = "Check a frozen component pack without staging it (preflight needs the frozen snapshot_digest, runs the destination checks for modules, capabilities, protected definitions and host policies, and stages nothing; call it before request), request delivery of your frozen pack to this destination (request publishes the frozen artifact, stages it and reads the destination's preflight verdict and needs snapshot_digest), or read a staged version's review, selection and activation status (status needs neither digest nor node; source_node and intent_id narrow it). It names the human steps it cannot take: the person approves the installation in Needs you, with the permissions it adds and every database migration it runs, and Bee installs it at once; the application then opens from Start, Apps, and Library shows installed versions and their history. Preflight checks without staging; request stages and prepares installation for person approval; status only reads.",
         operation = "bee.gov.traits:delivery_call",
         policies = {TOOL_POLICY_REFS.delivery}, annotations = WRITE_ANNOTATIONS,
@@ -210,20 +224,16 @@ local TOOLS: {Tool} = {
             source_overlay_id = {type = "string", minLength = 1, maxLength = 160},
             version = {type = "string", minLength = 1, maxLength = 160},
         }}},
-    {name = "request_capability", description = "Ask the person to elevate this attempt with one host catalog capability for a bounded time: the approval shows the catalog's own wording bound to this thread and attempt, and on approval this attempt's placement resolves one grant for the authenticated thread actor. Filing the request grants nothing; poll capability_status for the decision. A retry replays the same approval.",
-        operation = "bee.gateway.binding:request_capability",
+    {name = "elevation", description = "Ask the person to elevate this attempt with one host catalog capability for a bounded time, or poll that request. request {capability, parameters?, ttl_ms?} files one approval showing the catalog's own wording bound to this thread and attempt; filing grants nothing and a retry replays the same approval. status {approval_id} reports the pending decision until the person decides; on approval it consumes the decision exactly once and writes the thread-actor grant the attempt resolves, returning its grant, and a replayed poll replays the same grant. Pass a granted approval_id to process_run or http_request.",
+        operation = "bee.gateway.binding:elevation",
         policies = {TOOL_POLICY_REFS.capability}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"capability"}, properties = {
-            capability = {type = "string", minLength = 1, maxLength = 160},
-            parameters = {type = "object"},
-            ttl_ms = {type = "integer", minimum = 1, maximum = 86400000},
-        }}},
-    {name = "capability_status", description = "Poll one elevation request by approval_id. While the person has not decided it reports the pending decision; on approval it consumes the decision exactly once and writes the thread-actor grant the attempt resolves, returning its grant. A replayed poll replays the same grant.",
-        operation = "bee.gateway.binding:capability_status",
-        policies = {TOOL_POLICY_REFS.capability}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"approval_id"}, properties = {
-            approval_id = {type = "string", minLength = 1, maxLength = 160},
-        }}},
+        schema = operation_schema("elevation", {
+            capability = {type = "string", minLength = 1, maxLength = 160, description = "request: the host catalog capability"},
+            parameters = {type = "object", description = "request: the capability's parameters"},
+            ttl_ms = {type = "integer", minimum = 1, maximum = 86400000, description = "request: how long the grant lasts"},
+            approval_id = {type = "string", minLength = 1, maxLength = 160, description = "status: the approval_id request returned"},
+        }, {request = {"capability"}, status = {"approval_id"}},
+            {{operation = "request", capability = "process.exec", parameters = {command = "go"}}, {operation = "status", approval_id = "0198f1c2-0000-7000-8000-000000000000"}})},
     {name = "tests", description = "Run the Lua tests your application's pack carries, inside the node, as the application: each test runs with the actor and the exact scope the person approved for the application, nothing more. Omit node for the existing caller-owned local delivery. With node, list and run only peer tests exposed to this authenticated sending node; run requires a stable idempotency_key, and status uses run_id on the same node. Local delivery still requires the person's approval. list names an application's tests; run starts a run and returns its run_id at once (filter keeps the tests whose id contains it); status with that run_id returns progress and, when complete, one result per test entry with its cases (pass, fail or skip, error, duration_ms) and totals. A test is a function.lua entry of meta.type test; the overlay guide's tests section shows one. A run keeps at most 64 tests, 512 cases and 2048 bytes per error text and reports any truncation; 16 runs are kept, a local run is readable only by the actor that started it, while peer status belongs to the authenticated sending node and rechecks exposure; an unknown local run_id is NOT_FOUND.",
         operation = "bee.gov.traits:tests_call",
         policies = {TOOL_POLICY_REFS.tests}, annotations = WRITE_ANNOTATIONS,
@@ -235,7 +245,7 @@ local TOOLS: {Tool} = {
             node = {type = "string", minLength = 1, maxLength = 160},
             idempotency_key = {type = "string", minLength = 1, maxLength = 128},
         }, examples = {{operation = "run", application = "tally"}, {operation = "status", run_id = "0198f1c2-0000-7000-8000-000000000000"}}}},
-    {name = "process_run", description = "Run the command a person approved for this attempt through request_capability with process.exec: the approved command followed by these arguments, in the approved folder of this workspace, with only the host PATH in its environment. Pass the approval_id capability_status reported as granted. Returns the exit code and the combined stdout and stderr, at most 1 MiB per stream; a run past timeout_ms is stopped. Refused once the approval's time runs out or for any other command.",
+    {name = "process_run", description = "Run the command a person approved for this attempt through elevation request with process.exec: the approved command followed by these arguments, in the approved folder of this workspace, with only the host PATH in its environment. Pass the approval_id elevation status reported as granted. Returns the exit code and the combined stdout and stderr, at most 1 MiB per stream; a run past timeout_ms is stopped. Refused once the approval's time runs out or for any other command.",
         operation = "bee.gateway.binding:process_run",
         policies = {TOOL_POLICY_REFS.capability}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"approval_id"}, properties = {
@@ -243,7 +253,7 @@ local TOOLS: {Tool} = {
             arguments = {type = "array", maxItems = 64, items = {type = "string", maxLength = 4096}},
             timeout_ms = {type = "integer", minimum = 1, maximum = 600000},
         }}},
-    {name = "http_request", description = "Send one HTTP request a person approved for this attempt through request_capability with http.api: the url must be under the approved https origin and path prefix and the method one of the approved methods. Pass the approval_id capability_status reported as granted. Returns status_code, headers and body; a response that arrived from outside the approved origin and path is withheld. Refused once the approval's time runs out.",
+    {name = "http_request", description = "Send one HTTP request a person approved for this attempt through elevation request with http.api: the url must be under the approved https origin and path prefix and the method one of the approved methods. Pass the approval_id elevation status reported as granted. Returns status_code, headers and body; a response that arrived from outside the approved origin and path is withheld. Refused once the approval's time runs out.",
         operation = "bee.gateway.binding:http_request",
         policies = {TOOL_POLICY_REFS.capability}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"approval_id", "method", "url"}, properties = {
@@ -271,7 +281,7 @@ local TOOLS: {Tool} = {
             idempotency_key = {type = "string", minLength = 1, maxLength = 64},
         }}},
 }
--- The twelve default session tools project the bee.sessions owner contracts.
+-- The ten default session tools project the bee.sessions owner contracts.
 for _, tool in ipairs(session_tools.tools(TOOL_POLICY_REFS.session, READ_ANNOTATIONS, WRITE_ANNOTATIONS)) do
     TOOLS[#TOOLS + 1] = tool
 end
@@ -317,9 +327,7 @@ local DELIVERY_DIAGNOSTIC_SCHEMA: Object = {type = "object", additionalPropertie
     required = {"code", "target", "message", "remedy"},
     properties = {code = STRING_SCHEMA, target = STRING_SCHEMA, message = STRING_SCHEMA, remedy = STRING_SCHEMA}}
 local OUTPUT_SCHEMAS: {[string]: Object} = {
-    profile_get = output_schema({type = "object"}),
-    profile_list = output_schema({type = "object"}),
-    profile_put = output_schema({type = "object"}),
+    profile = output_schema({type = "object"}),
     session = output_schema({type = "object"}),
     call_tool = output_schema(JSON_VALUE_SCHEMA),
     question = output_schema({type = "object"}),
@@ -375,9 +383,7 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
             totals = {type = "object", additionalProperties = false,
                 properties = {passed = INTEGER_SCHEMA, failed = INTEGER_SCHEMA, skipped = INTEGER_SCHEMA, errors = INTEGER_SCHEMA}},
             truncated = {type = "object", additionalProperties = false, properties = {cases = INTEGER_SCHEMA}}}}),
-    request_capability = output_schema({type = "object", additionalProperties = false,
-        properties = {approval_id = {type = "string"}, status = {type = "string"}}}),
-    capability_status = output_schema({type = "object", additionalProperties = false,
+    elevation = output_schema({type = "object", additionalProperties = false,
         properties = {approval_id = {type = "string"}, status = {type = "string"},
             grant_id = {type = "string"}, expires_at = {type = "string"}, authorization_epoch = {type = "integer"},
             tools = STRING_ARRAY_SCHEMA}}),
@@ -385,11 +391,8 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
         properties = {exit_code = INTEGER_SCHEMA, output = STRING_SCHEMA}}),
     http_request = output_schema({type = "object", additionalProperties = false,
         properties = {status_code = INTEGER_SCHEMA, headers = {type = "object"}, body = STRING_SCHEMA}}),
-    install_request = output_schema({type = "object"}),
-    uninstall_request = output_schema({type = "object"}),
-    install_status = output_schema({type = "object"}),
-    publish_request = output_schema({type = "object"}),
-    publish_status = output_schema({type = "object"}),
+    hub_install = output_schema({type = "object"}),
+    hub_publish = output_schema({type = "object"}),
 }
 for name, schema in pairs(session_tools.OUTPUT_SCHEMAS) do OUTPUT_SCHEMAS[name] = schema end
 M.OUTPUT_SCHEMAS = OUTPUT_SCHEMAS
@@ -413,7 +416,7 @@ M.APPLICATION_SHARE_TRAIT = {id = gateway_protocol.APPLICATION_SHARE_TRAIT_ID, t
 -- person, each with the one tool it offers.
 M.HUB_LIBRARY_TRAIT = {id = gateway_protocol.HUB_LIBRARY_TRAIT_ID, title = "Hub and Library",
     prompt = "Browse Hub packages and request installation or removal in this workspace. Each change waits for your separate approval in Needs you; application packages use the Library governed review.",
-    tools = {"components", "install_request", "uninstall_request", "install_status"}}
+    tools = {"components", "hub_install"}}
 M.CONSENT_TRAITS = {M.APPLICATION_TOOLS_TRAIT, M.APPLICATION_SHARE_TRAIT, M.HUB_LIBRARY_TRAIT}
 -- Each advertised tool carries its own annotations.
 M.WRITE_ANNOTATIONS = WRITE_ANNOTATIONS
@@ -583,6 +586,13 @@ function M.configured_arguments(tool: Tool, params: Object): (Object?, string?)
     local failure = json_schema.validate(tool.schema, arguments)
     if failure then return nil, failure end
     return arguments, nil
+end
+-- profile_arguments: the profile tool's arguments, when its operation takes
+-- each field and they conform to the advertised schema.
+function M.profile_arguments(tool: Tool, params: Object): (Object?, string?)
+    local operation, _, invalid = part_arguments.operation_arguments("profile", params)
+    if not operation then return nil, invalid end
+    return M.configured_arguments(tool, params)
 end
 -- A tool result carries one text content block with the operation's JSON
 -- reply plus the same reply as structured content; a refused call is a tool

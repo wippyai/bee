@@ -222,12 +222,12 @@ what installing it would change. To use a package it does not have, the agent
 asks the person:
 
 ```json
-{"name": "install_request", "arguments": {"component": "acme/tool", "version": "1.2.0"}}
-{"name": "uninstall_request", "arguments": {"component": "acme/tool"}}
-{"name": "install_status", "arguments": {"request_id": "<request_id>"}}
+{"name": "hub_install", "arguments": {"operation": "install", "component": "acme/tool", "version": "1.2.0"}}
+{"name": "hub_install", "arguments": {"operation": "uninstall", "component": "acme/tool"}}
+{"name": "hub_install", "arguments": {"operation": "status", "request_id": "<request_id>"}}
 ```
 
-`install_request` resolves the exact plan in the agent's own workspace: the
+`install` resolves the exact plan in the agent's own workspace: the
 newest release that is not yanked when `version` is omitted, and an update when
 the component already has a Hub dependency root. Install and update run the
 package's migrations (`up`) under the host's migration grants; uninstall uses
@@ -241,7 +241,7 @@ and returns `request_id` and `status: pending`. A retry for the same plan by the
 same attempt replays the same request. A package whose plan needs requirement
 values is refused with `INCOMPLETE`; the person installs it in the Library.
 
-`install_status` reports `pending`, `refused` (with `DENIED`, `EXPIRED` or
+`status` reports `pending`, `refused` (with `DENIED`, `EXPIRED` or
 `WITHDRAWN`), `approved`, `applied` or `failed` with the Hub code and message.
 The agent never holds Hub management authority. On the first poll after the
 person approves, the gateway consumes the decision once and applies exactly the
@@ -249,10 +249,10 @@ approved digest through the Hub facade with management authority added to that
 one call; a changed registry base fails with `STALE` and needs a new request.
 `approved` means the apply outcome is unknown; the next poll repeats the same
 digest-bound apply, which replays its recorded receipt. The requesting attempt
-applies the request when it polls `install_status`, and a request whose attempt
+applies the request when it polls `status`, and a request whose attempt
 ended before polling stays unapplied.
 
-The host grants these tools per launch policy (`gateway_tools`) and links their
+The host grants this tool per launch policy (`gateway_tools`) and links their
 MCP policy through the gateway's `tool_install_policy_ref`; the shipped
 policy admits filing and polling requests and never applying them. The shipped
 agent launch policies include them. The configuration link
@@ -263,8 +263,8 @@ agent launch policies include them. The configuration link
 An agent publishes a package to the Hub only through a person-approved grant:
 
 ```json
-{"name": "publish_request", "arguments": {"component": "bee/probe", "version": "0.0.1-probe.1", "visibility": "private", "source": "/work/person/work/probe"}}
-{"name": "publish_status", "arguments": {"request_id": "<request_id>"}}
+{"name": "hub_publish", "arguments": {"operation": "publish", "component": "bee/probe", "version": "0.0.1-probe.1", "visibility": "private", "source": "/work/person/work/probe"}}
+{"name": "hub_publish", "arguments": {"operation": "status", "request_id": "<request_id>"}}
 ```
 
 The worker admits the locked source tree against the configured source roots,
@@ -276,7 +276,7 @@ module, version, pack digest, visibility, organization and source tree; the plan
 digest binds all of them. Filing changes nothing on the Hub and returns
 `request_id` and `status: pending`.
 
-`publish_status` only reports `pending`, `refused`, `approved` (the owner worker
+`status` only reports `pending`, `refused`, `approved` (the owner worker
 is uploading), `applied` or `failed`; polling never uploads. Once the person
 approves, the approval commit wakes the publication effect worker, which consumes
 the decision once and uploads exactly the sealed file through the Hub facade

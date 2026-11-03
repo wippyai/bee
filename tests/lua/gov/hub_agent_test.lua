@@ -28,20 +28,20 @@ local function define_tests()
             local before = harness.running()
             local session = stock_session(workspace, "progress")
             local hidden = listed(session)
-            for _, name in ipairs({"components", "install_request", "uninstall_request", "install_status"}) do test.is_nil(hidden[name]) end
+            for _, name in ipairs({"components", "hub_install"}) do test.is_nil(hidden[name]) end
             local requested = structured(tool_call(session, "session", {operation = "request_access",
                 traits = {"bee.hub:library"}, reason = "Install Progress for this workspace", idempotency_key = "hub-agent-access"}))
             harness.approve(workspace, requested.approval_id)
             test.eq(structured(tool_call(session, "session", {operation = "access_status", approval_id = requested.approval_id})).status, "granted")
             local offered = listed(session)
-            for _, name in ipairs({"components", "install_request", "uninstall_request", "install_status"}) do test.is_true(offered[name]) end
+            for _, name in ipairs({"components", "hub_install"}) do test.is_true(offered[name]) end
             local catalog = structured(tool_call(session, "components", {operation = "catalog", request = {query = "progress"}}))
             test.eq(assert(bounds.object(assert(bounds.array(catalog.items, 64))[1])).component, "bee/progress")
-            local request = {component = "bee/progress", version = "1.0.0", parameters = {{name = "app.progress:title", value = "Agent progress"}}}
-            local filed = structured(tool_call(session, "install_request", request))
+            local request = {operation = "install", component = "bee/progress", version = "1.0.0", parameters = {{name = "app.progress:title", value = "Agent progress"}}}
+            local filed = structured(tool_call(session, "hub_install", request))
             test.eq(filed.status, "pending")
-            test.eq(structured(tool_call(session, "install_request", request)).request_id, filed.request_id)
-            test.eq(structured(tool_call(session, "install_status", {request_id = filed.request_id})).status, "pending")
+            test.eq(structured(tool_call(session, "hub_install", request)).request_id, filed.request_id)
+            test.eq(structured(tool_call(session, "hub_install", {operation = "status", request_id = filed.request_id})).status, "pending")
             local approvals = 0
             for _, raw in ipairs(inbox(workspace)) do
                 local item = assert(bounds.object(assert(bounds.object(raw)).value))
@@ -56,7 +56,7 @@ local function define_tests()
             test.eq(approvals, 1)
             harness.approve(workspace, filed.approval_id)
             harness.drain()
-            local installed = structured(tool_call(session, "install_status", {request_id = filed.request_id}))
+            local installed = structured(tool_call(session, "hub_install", {operation = "status", request_id = filed.request_id}))
             test.eq(installed.status, "applied", tostring(json.encode(installed)))
             test.eq(assert(bounds.object(assert(bounds.object((assert(registry.get("app.progress:app"))).meta)).application)).title, "Agent progress")
             harness.value(harness.library(workspace, {operation = "uninstall", source_workspace = "hub:bee/progress", receipt_key = "hub-agent-cleanup"}))

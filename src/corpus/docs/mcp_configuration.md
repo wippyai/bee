@@ -84,12 +84,12 @@ development version, and `installed` (which takes no request body) for the
 effective inventory. `read_file` windows are capped at 16,384 bytes with
 `next_offset`. See [hub inspection](hub_inspection.md).
 
-`install_request`, `uninstall_request` and `install_status` are write tools
-beside `components`. A request names a Hub package (`component`, optional
-exact `version`); the host resolves the plan and files one approval bound to
-the caller's thread and attempt. The person decides it in Approvals; the
-caller's next `install_status` applies exactly the approved plan digest, and a
-replayed poll replays its receipt. They are admitted through the host's
+`hub_install` is the write tool beside `components`. Its `install` and
+`uninstall` operations name a Hub package (`component`, optional exact
+`version` to install); the host resolves the plan and files one approval bound
+to the caller's thread and attempt. The person decides it in Approvals; the
+caller's next `status` operation applies exactly the approved plan digest, and
+a replayed poll replays its receipt. They are admitted through the host's
 `tool_install_policy_ref` link and never grant Hub management to the
 caller. See [agent installation requests](hub_inspection.md#agent-installation-requests).
 
@@ -102,7 +102,7 @@ authoring path.
 Ten tools are the only way to start an agent, give it work and read what it
 produced: `session_catalog`, `session_open`, `session_run`, `session_send`,
 `session_await`, `session_join`, `session_get`, `session_list`,
-`session_cancel` and `session_close`. The flow is catalog, open, send, await,
+`session_cancel` and `session_manage`. The flow is catalog, open, send, await,
 close.
 
 1. `session_catalog` lists the definitions and profiles whose executor is
@@ -125,8 +125,10 @@ close.
    (with the result), `pending`, `blocked` (with what unblocks it) or
    `uncertain`. Queued or accepted is not done, and a timeout never cancels
    the work.
-5. `session_close` seals intake and drains accepted work. Await the returned
-   operation for the closure.
+5. `session_manage` with operation `close` seals intake and drains accepted
+   work. Await the returned operation for the closure. Its `remove` operation
+   deletes a session (with `history: true`, its thread and records too) and
+   `rename` gives it a name.
 
 `session_run` submits one job on a fresh session that closes after settlement;
 it returns a `WorkReceipt` to await. `session_join` observes an ordered set of

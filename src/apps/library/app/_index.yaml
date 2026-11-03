@@ -78,7 +78,6 @@ entries:
   source: file://app.lua
   method: main
   modules:
-  - cdc
   - channel
   - funcs
   - json
@@ -91,6 +90,7 @@ entries:
     appearance: bee.ui:appearance
     model: bee.apps.library.app:model
     governed: bee.gov.client:governed
+    governance_changes: bee.gov.client:changes
     hub: bee.apps.library.app:hub
     view: bee.apps.library.app:view
     contents: bee.apps.library.app:contents

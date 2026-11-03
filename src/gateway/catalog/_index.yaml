@@ -10,6 +10,7 @@ entries:
     bounds: bee.drivers.values:bounds
     agent_tool: bee.drivers.values:agent_tool
     agent_trait: bee.drivers.values:agent_trait
+    session_tools: bee.gateway.catalog:session_tools
 - name: context
   kind: library.lua
   source: file://context.lua

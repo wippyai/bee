@@ -2,18 +2,16 @@
 local login_evidence_types = require("login_evidence_types")
 local bounds = require("bounds")
 local login_evidence = require("login_evidence")
+local types = require("types")
 local M = {}
 
 type Spec = {provider: string, executable: string, login_evidence: login_evidence_types.Declaration?}
 type Request = {profile_id: string, configured: boolean, executable: {[string]: unknown}?, login_checks: {login_evidence_types.Check}?,
     platform: {[string]: unknown}?, checked_at: string?}
-type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
-type Login = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?}
+type LocateStatus = types.LocateStatus
+type Login = types.LocateLogin
 type Capability = {supported: boolean, reason: string?}
-type Result = {capabilities: {[string]: Capability}?, provider: string, status: LocateStatus,
-    executable: {name: string, present: boolean?, version: string?},
-    login: Login,
-    platform: {os: string?, arch: string?, compatible: boolean?}, checked_at: string?, reason: string?}
+type Result = types.LocateResult
 
 local function safe_relative(path: string?): boolean
     if path == nil then return true end
@@ -112,14 +110,15 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
         if spec.login_evidence then reason = "declared login evidence is present; credential contents and service validity were not checked" end
     end
 
+    local refused: boolean? = nil
     if present ~= true and (status == "unknown" or status == "unconfigured") then
         for _, check in ipairs(checks) do
-            if check.reason then reason = check.reason; break end
+            if check.reason then reason, refused = check.reason, true; break end
         end
     end
 
     local login: Login
-    if spec.login_evidence then login = {evidence = "any_of", exists = present}
+    if spec.login_evidence then login = {evidence = "any_of", exists = present, refused = refused}
     else login = {evidence = "not_required", exists = true} end
     local result_platform: Result["platform"] = {os = platform.os, arch = platform.arch, compatible = platform.compatible}
     local result: Result = {provider = spec.provider, status = status,
@@ -158,7 +157,8 @@ function M.decode(raw: unknown): (Result?, string?)
     end
     local raw_login = bounds.object(object.login)
     if not raw_login then return nil, "locate result login must be an object" end
-    if bounds.fields(raw_login, {"evidence", "path", "exists"}) then return nil, "locate result login has unknown fields" end
+    if bounds.fields(raw_login, {"evidence", "path", "exists", "refused"}) then return nil, "locate result login has unknown fields" end
+    if raw_login.refused ~= nil and raw_login.refused ~= true then return nil, "locate result login.refused must be true when present" end
     local login_evidence = bounds.member(raw_login.evidence, {"file_exists", "any_of", "not_required"})
     if not login_evidence then return nil, "locate result login.evidence is invalid" end
     local login_path: string? = nil
@@ -210,7 +210,7 @@ function M.decode(raw: unknown): (Result?, string?)
     end
     local decoded: Result = {capabilities = capabilities, provider = provider, status = status,
         executable = {name = executable_name, present = present, version = executable_version},
-        login = {evidence = evidence_kind, path = login_path, exists = exists},
+        login = {evidence = evidence_kind, path = login_path, exists = exists, refused = raw_login.refused == true or nil},
         platform = {os = platform_os, arch = platform_arch, compatible = compatible},
         checked_at = checked_at, reason = reason}
     return decoded, nil

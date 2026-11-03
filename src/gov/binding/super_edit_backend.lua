@@ -11,6 +11,7 @@ local super_edit = require("super_edit")
 local protected_kernel = require("protected_kernel")
 
 local M = {}
+M.EDIT_AREA = "bee.gov.edit_area"
 local PROFILE_ID = "bee.gov:activation_profiles"
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 type Object = {[string]: unknown}
@@ -88,12 +89,22 @@ function M.handle(raw: unknown): {[string]: unknown}
     local data = bounds.object(profile_entry.data)
     if not data then return failure("INVALID", "host activation profiles are malformed") end
     local manifest: protected_kernel.Manifest? = nil
+    local areas: {Object} = {}
     if operation == "status" or operation == "enable" then
         local state, state_error = snapshot:state()
         if not state then return failure("UNAVAILABLE", tostring(state_error or "read host registry state")) end
         local built, _, build_error = protected_kernel.build(state.entries)
         if not built then return failure("UNAVAILABLE", tostring(build_error or "protected kernel is unavailable")) end
         manifest = built
+        -- A component names the area its entries form for edit mode with a
+        -- bee.gov.edit_area entry in that namespace.
+        for _, raw_entry in ipairs(state.entries) do
+            local declared = bounds.object(raw_entry)
+            local meta = declared and bounds.object(declared.meta)
+            local namespace = declared and bounds.id(declared.id) and tostring(declared.id):match("^([^:]+):")
+            local title = meta and meta.type == M.EDIT_AREA and bounds.line(meta.title, 160) or nil
+            if namespace and title then areas[#areas + 1] = {namespace = namespace, title = title} end
+        end
     end
     if operation == "status" then
         local decoded, decode_error = activation_profiles.decode(data)
@@ -107,7 +118,7 @@ function M.handle(raw: unknown): {[string]: unknown}
             end
         end
         table.sort(grants)
-        return transaction.success({changed = false, enabled = enabled, protected = manifest,
+        return transaction.success({changed = false, enabled = enabled, protected = manifest, areas = areas,
             message = enabled and ("Edit mode enabled for " .. table.concat(grants, ", "))
                 or "Edit mode is disabled for this workspace"}, false)
     end

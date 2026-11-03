@@ -68,6 +68,22 @@ readiness, and delivers through the generation handshake. Installation and
 publication share the Gateway owner; activation uses its own owner. Consumers
 have no parallel direct-name wake path.
 
+A request speaks for an agent session when its requester is that session, or
+when its requester holds `bee.approvals.relay_session` for the session named
+as `origin.session_id`; the owner records it as `requesting_session`, and
+that session hears the outcome. Governance activation holds the relay policy
+`bee.security.approvals:session_relay_policy`.
+
+Operation owners word their requests in Needs you with a
+`meta.type: bee.approvals.display` entry naming `meta.operation_ref`. Its data
+may set `requester` (who asks, such as `Agent`), `duration`, `lasting` (show
+the duration as how long the approval lasts), `consequence`, `subject` (what a
+failed effect was, such as `Installation`), `approved` (the approval verb,
+such as `Confirmed`) and `form` (`allowance` decides a peer's session access
+in the allowance form). Without a display, a requester with an application
+principal is `App` and any other host component is `Bee`; a decision or grant
+event recorded from an application principal is the person's own.
+
 Gateway installation (`gateway.installation`), publication
 (`gateway.publication`) and governed activation (`gov.activation`) are domain
 adapters. They keep Hub/governance receipts and validate bindings, exact

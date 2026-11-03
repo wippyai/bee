@@ -34,6 +34,12 @@ entries:
     type: bee.resource_ref
     comment: Host-selected approval consume policy; absent link fails closed
   resource_ref: bee.security.approvals:approval_consume_policy
+- name: approval_relay_policy_ref
+  kind: registry.entry
+  meta:
+    type: bee.resource_ref
+    comment: Host-selected policy that lets activation ask on behalf of its origin agent session; absent link fails closed
+  resource_ref: bee.security.approvals:session_relay_policy
 - name: workspace_folder_read_ref
   kind: registry.entry
   meta:

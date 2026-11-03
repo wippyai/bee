@@ -4,9 +4,10 @@ local bounds = require("bounds")
 local json = require("json")
 local agent_tool = require("agent_tool")
 local agent_trait = require("agent_trait")
+local session_tools = require("session_tools")
 local M = {}
 type Object = {[string]: unknown}
-type Tool = {name: string, operation: string, description: string, policies: {string}, schema: Object, annotations: Object}
+type Tool = session_tools.Tool
 type Trait = agent_trait.Declaration
 type Catalog = {tools: {Tool}, traits: {Trait}}
 local function reference(value: unknown): string?
@@ -47,14 +48,15 @@ function M.decode(raw: unknown): (Catalog?, string?)
     for _, raw_tool in ipairs(tools) do
         local tool = bounds.object(raw_tool)
         if not tool then return nil, "tool must be an object" end
-        local invalid = bounds.fields(tool, {"name", "operation", "description", "policies", "schema", "annotations"})
+        local invalid = bounds.fields(tool, {"name", "operation", "description", "policies", "schema", "annotations", "application"})
         if invalid then return nil, invalid end
         local name, operation = bounds.line(tool.name, 64), reference(tool.operation)
         local description = bounds.text(tool.description, 4096)
         local policies = bounds.ids(tool.policies, true)
         local schema, annotations = bounds.object(tool.schema), bounds.object(tool.annotations)
         if not name or name == "session" or name == "call_tool" or not name:match("^[%w_.%-]+$") or names[name] or not operation or not description
-            or not policies or #policies == 0 or #policies > 8 or not schema or not annotations then
+            or not policies or #policies == 0 or #policies > 8 or not schema or not annotations
+            or (tool.application ~= nil and tool.application ~= true) then
             return nil, "invalid or duplicate tool declaration"
         end
         for _, policy in ipairs(policies) do if not reference(policy) then return nil, "invalid policy reference" end end
@@ -66,7 +68,7 @@ function M.decode(raw: unknown): (Catalog?, string?)
         end
         names[name] = true
         result.tools[#result.tools + 1] = {name = name, operation = operation, description = description,
-            policies = policies, schema = schema, annotations = annotations}
+            policies = policies, schema = schema, annotations = annotations, application = tool.application == true or nil}
     end
     local ids: {[string]: boolean} = {}
     for _, raw_trait in ipairs(traits) do

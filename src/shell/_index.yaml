@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.shell
 entries:
+- name: edit_area
+  kind: registry.entry
+  meta:
+    type: bee.gov.edit_area
+    title: Desktop
+    comment: Edit mode offers the desktop shell's entries as one area
 - name: model
   kind: library.lua
   source: file://model.lua

@@ -52,7 +52,7 @@ type RpcId = string | number
 type RequestCall = {id: RpcId, method: string, params: Object, notification: false}
 type NotificationCall = {method: string, params: Object, notification: true}
 type Call = RequestCall | NotificationCall
-type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object, annotations: Object}
+type Tool = session_tools.Tool
 type ListedTool = {name: string, description: string, inputSchema: Object, outputSchema: Object, annotations: Object}
 type ToolList = {tools: {ListedTool}}
 local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, idempotentHint = true, openWorldHint = false}

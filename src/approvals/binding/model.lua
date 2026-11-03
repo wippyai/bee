@@ -49,7 +49,7 @@ type Row = {contract_version: integer, contract: Object, reviewed_digest: string
     response_json: string?, response: unknown, validated_incarnation: integer?, validated_by: string?,
     validated_at: string?, consumer_id: string?, consumed_effect: string?, consumed_at: string?,
     expires_ms: integer, expires_at: string, created_at: string, updated_at: string?,
-    effect_completed_at: string?, effect_result_json: string?, effect_result: unknown,
+    effect_completed_at: string?, effect_result_json: string?, effect_result: unknown, requesting_session: string?,
 }
 type ApprovalView = {request_digest: string, contract_version: integer, contract: Object, reviewed_digest: string, effect_admission_ms: integer?, effect: Object, lifecycle_records: Object, window_grant: windows.Grant?, allowed_by_grant: string?, window_max_ttl_ms: integer, reallow: boolean, requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,

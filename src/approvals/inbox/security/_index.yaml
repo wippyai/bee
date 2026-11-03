@@ -25,6 +25,26 @@ entries:
     - bee.approvals.inbox.app:sources
     effect: allow
 
+- name: display_discovery_policy
+  kind: security.policy.expr
+  meta:
+    comment: The inbox finds the bee.approvals.display declarations operation owners publish to word their requests
+  policy:
+    actions: [registry.find]
+    resources: '*'
+    expression: action == "registry.find" && resource == "*"
+    effect: allow
+
+- name: remote_watch_policy
+  kind: security.policy.expr
+  meta:
+    comment: The inbox follows nodes joining the hive and monitors the remote approval owners it watches
+  policy:
+    actions: [events.subscribe, process.monitor, process.unmonitor]
+    resources: '*'
+    expression: (action == "events.subscribe" && resource == "cluster") || action == "process.monitor" || action == "process.unmonitor"
+    effect: allow
+
 - name: grants_policy
   kind: security.policy
   policy:

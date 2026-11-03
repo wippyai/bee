@@ -80,6 +80,12 @@ local function define_tests()
             test.is_true(inactive_reply.ok == true, tostring(inactive_reply.message))
             test.is_true(assert(bounds.object(inactive_reply.value)).enabled == false)
             test.eq(assert(bounds.object(inactive_reply.value)).message, "Edit mode is disabled for this workspace")
+            local desktop = false
+            for _, raw in ipairs(assert(bounds.array(assert(bounds.object(inactive_reply.value)).areas, 64))) do
+                local area = assert(bounds.object(raw))
+                if area.namespace == "bee.shell" and area.title == "Desktop" then desktop = true end
+            end
+            test.is_true(desktop, "status names the declared desktop edit area")
         end)
         test.it("reports malformed host profiles instead of calling edit mode disabled", function()
             local original = assert(registry.get("bee.gov:activation_profiles"))

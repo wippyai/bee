@@ -212,6 +212,11 @@ function M.client(instance: string, workspace: string?, revision: string?, defin
     local policy = assert(security.policy("bee.tests.memory:client_policy"))
     return funcs.new():with_actor(security.new_actor(id, {workspace_id = home, definition_id = app, definition_revision = revision or "1"})):with_scope(security.new_scope({policy, assert(security.policy("bee.tests.memory:index_policy"))}))
 end
+-- forwarded_host: a hive-forwarded principal acting in the fixture workspace
+-- under the calling suite's own permissions.
+function M.forwarded_host(instance: string): funcs.Executor
+    return funcs.new():with_actor(security.new_actor("bee.hive.member.peer." .. instance, {workspace_id = M.WORKSPACE}))
+end
 function M.receive(client: funcs.Executor, operation: string, request: unknown): {[string]: unknown}
     local raw, err = client:call("bee.threads.binding:" .. operation, request)
     assert(not err, tostring(err))

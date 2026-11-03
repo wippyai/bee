@@ -1147,5 +1147,19 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.driver.agy.hooks:input]
+    resources: [bee.driver.agy.hooks:input, bee.placement.native.binding:hook_file]
     effect: allow
+- name: third_party_cli
+  kind: registry.entry
+  meta:
+    type: bee.driver.cli_descriptor
+    comment: A driver outside the shipped bee.drivers set whose descriptor declares hook files
+  data:
+    schema_revision: bee.driver.cli-descriptor@4
+    provider: solo
+    executable: solo-agent
+    version_probe: {argv: [--version]}
+    configure: plain
+    options: {profiles: [window], fields: {}}
+    argv_templates: {window: {argv: [], readiness: none}}
+    hook_files: [.solo/logs]

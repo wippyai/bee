@@ -142,9 +142,9 @@ local function define_tests()
             test.eq(listing.items[1].title, "Claude")
         end)
         test.it("shows the runtime refusal in the login-needed state", function()
-            local refusal = "owner_safe: /store/bee.login: group/other-writable mode 0620"
+            local refusal = "/store/bee.login: group/other-writable mode 0620"
             local item = candidate("c:codex", "Codex", "unconfigured", {refusal})
-            item.features = {"presentation:start_menu", "driver:codex"}
+            item.features = {"presentation:start_menu", "driver:codex", "login:refused"}
             local client = fixtures.fixture_client({catalog = function(): (unknown, sessions.Fault?)
                 return {items = {item}, complete = true, unavailable_count = 1, diagnostics = {}}, nil
             end})
@@ -160,13 +160,28 @@ local function define_tests()
         end)
         test.it("preserves a saved profile's permission transport refusal", function()
             local item = candidate("c:profile", "Saved Claude", "incompatible", {
-                "bee.permission_answers=ask requires a host-accepted permission transport"})
+                "Permission answers: ask requires a host-accepted permission transport"})
             item.features = {"presentation:start_menu", "driver:claude"}
             local client = fixtures.fixture_client({catalog = function(): (unknown, sessions.Fault?)
                 return {items = {item}, complete = true, unavailable_count = 1, diagnostics = {}}, nil
             end})
             local listing = must_list(client, true)
             test.eq(listing.items[1].reason, "Permission answers: ask requires a host-accepted permission transport")
+        end)
+        test.it("explains a host diagnostic by its structured kind instead of showing it", function()
+            local routed = candidate("c:routed", "Routed Claude", "unknown", {"route admission failed at the host"})
+            routed.features = {"presentation:start_menu", "driver:claude", "reason:diagnostic"}
+            local bare = candidate("c:bare", "Bare", "incompatible", {"definition failed to decode"})
+            bare.features = {"presentation:start_menu", "reason:diagnostic"}
+            local plain = candidate("c:plain", "Plain", "incompatible", {"The profile's launch definition is not installed."})
+            local client = fixtures.fixture_client({catalog = function(): (unknown, sessions.Fault?)
+                return {items = {routed, bare, plain}, complete = true, unavailable_count = 3, diagnostics = {}}, nil
+            end})
+            local reasons: {[string]: string} = {}
+            for _, item in ipairs(must_list(client, true).items) do reasons[item.ref] = item.reason end
+            test.eq(reasons["c:routed"], "This agent cannot run with the current setup. Check its folder and permissions.")
+            test.eq(reasons["c:bare"], "This agent's setup is unavailable. Check installation, folder and permissions.")
+            test.eq(reasons["c:plain"], "The profile's launch definition is not installed.")
         end)
     end)
     test.describe("Peer agents", function()

@@ -97,9 +97,9 @@ function M.is_review(view: model.ApprovalView?): boolean
     return view ~= nil and view.state == "pending" and view.proposal.ref == M.PROPOSAL
 end
 
-function M.review_lines(view: model.ApprovalView, width: integer, names: {[string]: string}?): {string}
+function M.review_lines(view: model.ApprovalView, width: integer, names: {[string]: string}?, displays: {[string]: model.Display}?): {string}
     local facts = model.review(view)
-    local lines: {string} = {facts.title, "", "From: " .. model.requester_name(view, names)}
+    local lines: {string} = {facts.title, "", "From: " .. model.requester_name(view, names, displays)}
     if facts.access then lines[#lines + 1] = "Access: " .. facts.access end
     if facts.reason then lines[#lines + 1] = "Reason: " .. facts.reason end
     for _, line in ipairs(model.permission_lines(view)) do lines[#lines + 1] = line end

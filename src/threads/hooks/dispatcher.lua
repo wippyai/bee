@@ -272,7 +272,7 @@ end
 function M.dispatch(request: Request): (Result?, string?)
     local actor = security.actor()
     local meta = actor and bounds.object(actor:meta())
-    if not actor or not meta or meta.workspace_id ~= request.workspace_id or actor:id():match("^bee%.hive%.member%.")
+    if not actor or not meta or meta.workspace_id ~= request.workspace_id
         or not (security.can("bee.sessions.hook_boundary", request.session_ref) or security.can("bee.threads.carrier", request.thread_id)) then
         return nil, "hook dispatch requires the authenticated execution owner"
     end
@@ -298,8 +298,7 @@ function M.handle(raw: unknown): {ok: boolean, value?: unknown, error?: Object}
     if not session then
         local action = bounds.id(input.action_id)
         local actor = security.actor()
-        if not action or not actor or actor:meta().workspace_id ~= workspace or not security.can("bee.threads.carrier", thread)
-            or actor:id():match("^bee%.hive%.member%.") then return {ok = false, error = {code = "DENIED", message = "hook action requires the execution owner"}} end
+        if not action or not actor or actor:meta().workspace_id ~= workspace or not security.can("bee.threads.carrier", thread) then return {ok = false, error = {code = "DENIED", message = "hook action requires the execution owner"}} end
         local db, err = database.open()
         if not db then return {ok = false, error = {code = "UNAVAILABLE", message = err}} end
         local rows, failure = db:query([[SELECT DISTINCT s.session_ref FROM bee_sessions s LEFT JOIN bee_session_turns t ON t.session_ref=s.session_ref

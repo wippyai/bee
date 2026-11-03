@@ -218,7 +218,7 @@ local function session_projection(binding: gateway.Binding, tool: mcp.Tool, requ
 end
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?, grants: {context.ResourceGrant}?): Object
     if session_tools.is_session_tool(tool.name) then return session_projection(binding, tool, request, values, grants) end
-    if tool.operation == "bee.node.binding:app_tool_call" then
+    if tool.application then
         local executor, failure = subject_executor(binding, tool, values, runtime, grants)
         if not executor then return assert(failure) end
         local descriptor, err = app_tools.find(binding.workspace_id or "", tool.name)
@@ -320,7 +320,7 @@ local function handle(): nil
     for _, item in ipairs(available) do
         local description: Object = {name = item.name, description = item.description,
             inputSchema = item.schema, outputSchema = mcp.OUTPUT_SCHEMAS[item.name], annotations = item.annotations}
-        if item.operation == "bee.node.binding:app_tool_call" then
+        if item.application then
             for _, tool in ipairs(application_tools and application_tools.tools or {}) do
                 if tool.alias == item.name then
                     local projection = mcp.app_projection({tools = {tool}, diagnostics = {}}, {})
@@ -438,7 +438,7 @@ local function handle(): nil
     local grant_error = profile_scope.revalidate(bound.configuration.resource_grants, binding.attempt_id, function(target: string, value: unknown): (unknown, unknown) local raw, err = funcs.call(target, value); return raw, err end)
     if grant_error then answer(response, http.STATUS.OK, mcp.result(call.id, refused("DENIED", grant_error))); return nil end
     local application: {definition: string, trait: string}? = nil
-    if tool.operation == "bee.node.binding:app_tool_call" then
+    if tool.application then
         for _, declared in ipairs(config.catalog.traits) do
             if declared.application_ref and bounds.member(tool.name, declared.tools) then
                 application = {definition = declared.application_ref, trait = declared.id}
@@ -457,7 +457,7 @@ local function handle(): nil
         if not found then answer(response, http.STATUS.OK, mcp.result(call.id, refused("UNAVAILABLE", err or "application discovery unavailable"))); return nil end
         for _, item in ipairs(found.tools) do
             for _, selected in ipairs(available) do
-                if selected.operation == "bee.node.binding:app_tool_call" and selected.name == item.alias then tools[#tools + 1] = item end
+                if selected.application and selected.name == item.alias then tools[#tools + 1] = item end
             end
         end
         answer(response, http.STATUS.OK, mcp.result(call.id, app_listing(mcp.app_projection({tools = tools, diagnostics = found.diagnostics}, {}), nil)))

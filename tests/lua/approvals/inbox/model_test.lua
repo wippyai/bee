@@ -4,6 +4,7 @@
 -- committed, an unknown answer is recovered by reading, and the
 -- checkpoint carries selection only.
 local test = require("test")
+local registry = require("registry")
 local bounds = require("bounds")
 local json = require("json")
 local model = require("model")
@@ -29,6 +30,30 @@ local function page(changes: {Object}, next_seq: integer, more: boolean): model.
 end
 local function define_tests()
     test.describe("Inbox model", function()
+        test.it("words a request by its operation's declared display and its recorded principals", function()
+            local displays = model.displays({{id = "bee.x:access_display", meta = {type = "bee.approvals.display", operation_ref = "bee.x:access"},
+                data = {requester = "Agent", duration = "For this agent session", consequence = "Other requests still need you.", lasting = true,
+                    subject = "Access", approved = "Granted", form = "allowance"}}})
+            local function decoded(extra: Object): model.ApprovalView
+                local value, err = model.decode_view(view("label-1", 1, "pending", extra))
+                if not value then error(tostring(err)) end
+                return value
+            end
+            local declared = decoded({proposal = {kind = "operation", ref = "bee.x:access", revision = "1", payload = {}}})
+            local display = assert(model.display(declared, displays))
+            test.eq(model.requester_name(declared, nil, displays), "Agent")
+            test.eq(model.duration(declared, displays), "For this agent session")
+            test.eq(display.consequence, "Other requests still need you.")
+            test.is_true(display.lasting == true)
+            test.eq(display.form, "allowance")
+            test.eq(model.requester_name(decoded({contract = {requester = {actor_id = "bee.application:w:i", definition_id = "bee.demo:app"}}}), nil, displays), "App")
+            test.eq(model.requester_name(decoded({contract = {requester = {actor_id = "bee.host.component"}}}), nil, displays), "Bee")
+            test.eq(model.requester_name(decoded({requesting_session = "bs:n:w:s"}), nil, displays), "Agent session")
+            local by_person = decoded({lifecycle_records = {decisions = {{decider_json = '{"actor_id":"bee.someone","definition_id":"bee.approvals.inbox.app:app"}'}}, grants = {}}})
+            test.eq(model.decider(by_person, "bee.someone"), "you")
+            local by_host = decoded({lifecycle_records = {decisions = {{decider_json = '{"actor_id":"bee.gov.recovery"}'}}, grants = {}}})
+            test.eq(model.decider(by_host, "bee.gov.recovery"), "bee.gov.recovery")
+        end)
         test.it("shows a malformed install review list as unavailable instead of an empty section", function()
             local function install(payload: Object): Object
                 return view("install-1", 1, "pending", {proposal = {kind = "operation", ref = "bee.gov:establish-overlay",
@@ -313,7 +338,7 @@ local function define_tests()
             test.eq(row.effect, "app.stop")
             test.eq(row.target, "exact-instance")
             test.eq(model.history(decoded), "confirmed")
-            test.eq(model.decision_line(decoded), "Confirmed by bee.node")
+            test.eq(model.decision_line(decoded, model.displays(registry.find({["meta.type"] = model.DISPLAY}))), "Confirmed by bee.node")
             test.eq(model.assurance(decoded), "enter · inline")
             local state = model.new({"ws-1"})
             record.state, record.decision, record.decider_id = "pending", nil, nil

@@ -123,7 +123,14 @@ local function define_tests()
             if not result then error(tostring(err)) end
             test.eq(result.status, "unconfigured")
             test.eq(result.reason, refusal)
-            test.eq(assert(locate.decode(result)).reason, refusal)
+            test.is_true(result.login.refused == true, "a login check refusal is a structured login state")
+            local decoded = assert(locate.decode(result))
+            test.eq(decoded.reason, refusal)
+            test.is_true(decoded.login.refused == true)
+            input.login_checks = {{present = false}}
+            local absent = assert(locate.evaluate({provider = "fixture", executable = "fixture-cli", login_evidence = declaration}, input))
+            test.eq(absent.status, "unconfigured")
+            test.is_nil(absent.login.refused)
             input.login_checks = {{present = true, reason = refusal}}
             test.is_nil(locate.evaluate({provider = "fixture", executable = "fixture-cli", login_evidence = declaration}, input))
             for _, invalid in ipairs({"bad\nreason", string.rep("x", 513)}) do

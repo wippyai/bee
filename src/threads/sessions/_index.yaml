@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.threads.sessions
 entries:
+- name: allowance_display
+  kind: registry.entry
+  meta:
+    type: bee.approvals.display
+    operation_ref: bee.threads.sessions:allowance
+    comment: A peer bee's request for session access is decided in the allowance form
+  data:
+    form: allowance
 - name: contract
   kind: contract.definition
   methods:

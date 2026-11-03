@@ -34,17 +34,25 @@ local function fault(code: string, message: string, retry: "never" | "same_key" 
     return {code = code, message = message, retry = retry}
 end
 
-local function failure_status(raw: unknown): (Status, string)
+-- REASON_DIAGNOSTIC marks a candidate whose reason is a host diagnostic
+-- rather than guidance for the person; LOGIN_REFUSED one whose login
+-- evidence the host refused to read.
+M.REASON_DIAGNOSTIC = "reason:diagnostic"
+M.LOGIN_REFUSED = "login:refused"
+
+-- failure_status: an admission refusal's readiness and reason. Only an
+-- unsupported capability, which the person's own profile choices cause,
+-- is guidance; every other refusal is a host diagnostic.
+local function failure_status(raw: unknown): (Status, string, boolean)
     local reply = object(raw)
     local details = reply and object(reply.error) or nil
     local code = details and bounds.id(details.code) or nil
     local message = details and bounds.text(details.message, 16384) or nil
-    if code == "NOT_FOUND" then return "missing", message or "The admitted definition is missing." end
-    if code == "UNAVAILABLE" then return "unconfigured", message or "The route is not configured on this host." end
-    if code == "UNSUPPORTED_CAPABILITY" or code == "INVALID" then
-        return "incompatible", message or "The route is not compatible with this host."
-    end
-    return "unknown", message or "The route could not be admitted on this host."
+    if code == "NOT_FOUND" then return "missing", message or "The admitted definition is missing.", true end
+    if code == "UNAVAILABLE" then return "unconfigured", message or "The route is not configured on this host.", true end
+    if code == "UNSUPPORTED_CAPABILITY" then return "incompatible", message or "The route is not compatible with this host.", false end
+    if code == "INVALID" then return "incompatible", message or "The route is not compatible with this host.", true end
+    return "unknown", message or "The route could not be admitted on this host.", true
 end
 
 local function dense_rows(value: unknown): {unknown}?
@@ -165,7 +173,8 @@ local function measured_candidate(cache: locate.Cache, readiness_cache: readines
     local plan_object = object(plan)
     local base_status: Status = "ready"
     local base_reason = ""
-    if not plan then base_status, base_reason = failure_status(refused) end
+    local base_diagnostic = false
+    if not plan then base_status, base_reason, base_diagnostic = failure_status(refused) end
     local plan_digest = plan_object and bounds.id(plan_object.plan_digest) or nil
     local binding_digest = plan_object and bounds.id(plan_object.binding_digest) or nil
     local profile_digest = plan_object and bounds.id(plan_object.profile_digest) or nil
@@ -182,6 +191,7 @@ local function measured_candidate(cache: locate.Cache, readiness_cache: readines
         local reasons: {string} = {}
         if probe.result.reason then reasons[1] = probe.result.reason end
         local features: {string} = {"driver:" .. probe.result.provider}
+        if probe.result.login.refused then features[#features + 1] = M.LOGIN_REFUSED end
         for path, capability in pairs(probe.result.capabilities or {}) do
             features[#features + 1] = (capability.supported and "supported:" or "unsupported:") .. path
         end
@@ -192,10 +202,12 @@ local function measured_candidate(cache: locate.Cache, readiness_cache: readines
     if not value then return nil, locate_error end
     local status: Status = base_status
     local reason = base_reason
+    local diagnostic = false
     if value.status == "ready" then
-        if plan then reason = value.reasons[1] or "" end
+        if plan then reason = value.reasons[1] or "" else diagnostic = base_diagnostic end
     elseif value.status == "unknown" and not plan then
         -- Keep the admission reason when both layers are inconclusive.
+        diagnostic = base_diagnostic
     else
         status, reason = value.status, value.reasons[1] or "Driver readiness is unknown."
     end
@@ -204,17 +216,20 @@ local function measured_candidate(cache: locate.Cache, readiness_cache: readines
     if status == "ready" then actions[1] = {operation = "session_open", label = "Open session"} end
     local reasons: {string} = {}
     if status == "ready" then reasons = value.reasons else reasons[1] = reason end
+    local features: {string} = {}
+    for _, feature in ipairs(value.features) do features[#features + 1] = feature end
+    if diagnostic and status ~= "ready" then features[#features + 1] = M.REASON_DIAGNOSTIC end
     local candidate: locate.Candidate = {ref = value.ref, kind = value.kind, revision = value.revision, title = value.title,
-        status = status, checked_at = value.checked_at, reasons = reasons, features = value.features, actions = actions, hook_capabilities = hook_capabilities.for_driver(plan_object and bounds.id(plan_object.driver_id) or "unknown")}
+        status = status, checked_at = value.checked_at, reasons = reasons, features = features, actions = actions, hook_capabilities = hook_capabilities.for_driver(plan_object and bounds.id(plan_object.driver_id) or "unknown")}
     return candidate, nil
 end
 
 local function unavailable_candidate(cache: locate.Cache, kind: Kind, ref: string, title: string,
-    revision: integer?, status: Status, reason: string, generation: integer): (locate.Candidate?, string?)
+    revision: integer?, status: Status, reason: string, generation: integer, diagnostic: boolean?): (locate.Candidate?, string?)
     return locate.locate(cache, {ref = ref, kind = kind, title = title, revision = revision,
         target = "bee.harness.permission.external", binding_ref = "bee.driver.unavailable:binding", binding_digest = "unresolved",
         runtime_identity = "local", availability_revision = tostring(generation)}, function(_: locate.CandidateInput): (locate.LocateObservation?, string?)
-        return {status = status, reasons = {reason}, features = {}, actions = {}}, nil
+        return {status = status, reasons = {reason}, features = diagnostic and {M.REASON_DIAGNOSTIC} or {}, actions = {}}, nil
     end)
 end
 
@@ -229,7 +244,7 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
     local decoded, decode_error = definition.decode(ref, entry)
     if not decoded then
         return unavailable_candidate(cache, kind, candidate_ref, title, revision, "incompatible",
-            decode_error or "The launch definition is invalid.", generation)
+            decode_error or "The launch definition is invalid.", generation, true)
     end
     local plan: unknown = nil
     local refused: unknown = nil
@@ -257,6 +272,7 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
             result.status = "unknown"
             local reasons: {string} = {setup_error}
             result.reasons = reasons
+            result.features[#result.features + 1] = M.REASON_DIAGNOSTIC
         end
     end
     if decoded.presentation.start_menu then result.features[#result.features + 1] = "presentation:start_menu" end

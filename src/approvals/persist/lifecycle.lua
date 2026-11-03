@@ -13,8 +13,11 @@ local M = {}
 M.VERSION = 2
 M.EFFECT_STATES = {"waiting", "authorized", "reserved", "admitted", "started", "succeeded", "failed", "canceled", "uncertain"}
 M.GRANT_STATES = {"active", "revoked", "expired", "exhausted"}
+-- RELAY is the permission to ask on behalf of the session a request names
+-- as its origin; that session then hears the request's outcome.
+M.RELAY = "bee.approvals.relay_session"
 type Object = {[string]: unknown}
-type Contract = {value: Object, encoded: string, reviewed_digest: string, effect_admission_ms: integer}
+type Contract = {value: Object, encoded: string, reviewed_digest: string, effect_admission_ms: integer, requesting_session: string?}
 local function execute(tx: sql.Transaction, statement: string, args: {unknown}): string?
     local _, err = tx:execute(statement, args)
     if err then return tostring(err) end
@@ -22,13 +25,17 @@ local function execute(tx: sql.Transaction, statement: string, args: {unknown}):
 end
 local function requester_destinations(row: Object): {string}
     local destinations: {string} = {"requester:" .. tostring(row.requester_id)}
-    local contract = bounds.object(row.contract)
-    local origin = contract and bounds.object(contract.origin)
-    local session = origin and bounds.id(origin.session_id)
-    if row.requester_id == "bee.gov.activation" and session and session:match("^bs:") then
-        destinations[#destinations + 1] = "requester:" .. session
-    end
+    local session = bounds.id(row.requesting_session)
+    if session and session ~= row.requester_id then destinations[#destinations + 1] = "requester:" .. session end
     return destinations
+end
+-- requesting_session: the agent session a request speaks for, the requester
+-- itself when it is a session, or the origin session a permitted relay names.
+local function requesting_session(actor: string, origin: Object): string?
+    if actor:match("^bs:") then return actor end
+    local session = bounds.id(origin.session_id)
+    if session and session:match("^bs:") and security.can(M.RELAY, session) then return session end
+    return nil
 end
 function M.principal(actor: string): Object
     local current = security.actor()
@@ -90,11 +97,12 @@ function M.prepare(actor: string, request: Object, proposal: Object, proposal_di
     if not encoded then return nil, tostring(encode_error) end
     local reviewed, hash_error = hash.sha256(encoded)
     if not reviewed or hash_error then return nil, "reviewed digest failed" end
-    return {value = value, encoded = encoded, reviewed_digest = reviewed, effect_admission_ms = admission}, nil
+    return {value = value, encoded = encoded, reviewed_digest = reviewed, effect_admission_ms = admission,
+        requesting_session = requesting_session(actor, origin)}, nil
 end
 function M.attach(tx: sql.Transaction, approval_id: string, contract: Contract, at: string): string?
-    local err = execute(tx, "UPDATE bee_approval_requests SET contract_version = ?, contract_json = ?, reviewed_digest = ?, effect_admission_ms = ? WHERE approval_id = ?",
-        {M.VERSION, contract.encoded, contract.reviewed_digest, contract.effect_admission_ms, approval_id})
+    local err = execute(tx, "UPDATE bee_approval_requests SET contract_version = ?, contract_json = ?, reviewed_digest = ?, effect_admission_ms = ?, requesting_session = ? WHERE approval_id = ?",
+        {M.VERSION, contract.encoded, contract.reviewed_digest, contract.effect_admission_ms, contract.requesting_session, approval_id})
     if err then return err end
     local continuation = bounds.object(contract.value.continuation)
     local effect_id = continuation and bounds.id(continuation.effect_id) or approval_id
@@ -190,10 +198,12 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
     end
     local subject_json = canonical.encode(contract.subject)
     local scope_json = canonical.encode(contract.scope)
-    local err = execute(tx, "INSERT INTO bee_approval_grants (grant_id, approval_id, decision_id, subject_json, scope_json, terms_json, state, revision, until_ms, max_uses, created_at, owner_node, workspace_id, requester_id, granted_by, provenance_json) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?, 1, ?, ?, ?, ?, ?, ?)",
-        {approval_id .. ":grant", approval_id, decision_id, subject_json, scope_json, '{"kind":"once","time_basis":"absolute"}', row.effect_admission_ms, at, row.owner_node,row.workspace_id,row.requester_id,actor,canonical.encode({kind = "decision",approval_id = approval_id,reviewed_digest = row.reviewed_digest})})
+    local err = execute(tx, "INSERT INTO bee_approval_grants (grant_id, approval_id, decision_id, subject_json, scope_json, terms_json, state, revision, until_ms, max_uses, created_at, owner_node, workspace_id, requester_id, granted_by, granted_definition, provenance_json) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?, 1, ?, ?, ?, ?, ?, ?, ?)",
+        {approval_id .. ":grant", approval_id, decision_id, subject_json, scope_json, '{"kind":"once","time_basis":"absolute"}', row.effect_admission_ms, at, row.owner_node,row.workspace_id,row.requester_id,actor,M.principal(actor).definition_id,canonical.encode({kind = "decision",approval_id = approval_id,reviewed_digest = row.reviewed_digest})})
     if err then return err end
-    return execute(tx, "INSERT INTO bee_approval_grant_history SELECT grant_id,revision,'grant.created',granted_by,provenance_json,created_at FROM bee_approval_grants WHERE grant_id = ?", {approval_id .. ":grant"})
+    local created, read_error = grants.read(tx, approval_id .. ":grant")
+    if not created then return read_error or "read decision grant" end
+    return grants.history(tx, created, "grant.created", actor, created.provenance, at)
 end
 function M.grant_revoked(tx: sql.Transaction, approval_id: string, requester: string, revision: integer, at: string): string?
     local effect, read_error = M.read(tx, approval_id)

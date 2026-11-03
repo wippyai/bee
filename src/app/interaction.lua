@@ -52,12 +52,6 @@ function M.result(value: unknown): Result?
     if not request_id or not id or not instance_id or not code or type(value.error) ~= "string" or #value.error > 4096 then return nil end
     return {version = 1, request_id = request_id, id = id, instance_id = instance_id, error_code = code, error = value.error}
 end
-function M.shutdown(value: unknown): Spec?
-    if type(value) ~= "table" or value.version ~= 1 then return nil end
-    local spec = M.spec(value.shutdown)
-    if not spec or spec.id ~= "bee.workspace:shutdown" or spec.instance_id ~= "workspace" or spec.kind ~= "confirm" then return nil end
-    return spec
-end
 function M.snapshot(value: unknown): {Spec}?
     if type(value) ~= "table" or value.version ~= 1 or type(value.items) ~= "table" then return nil end
     local count = 0

@@ -1,6 +1,17 @@
 version: '1.0'
 namespace: bee.gateway
 entries:
+- name: access_display
+  kind: registry.entry
+  meta:
+    type: bee.approvals.display
+    operation_ref: bee.gateway:access
+    comment: How Needs you words an agent's request for MCP access
+  data:
+    requester: Agent
+    duration: For this agent session
+    lasting: true
+    consequence: Other requests still need your approval. You can remove access at any time.
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

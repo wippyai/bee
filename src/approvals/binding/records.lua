@@ -22,8 +22,7 @@ local approval_state = part_values.approval_state
 local digest_of = part_values.digest_of
 function M.view(row: Row): ApprovalView
     return {request_digest = row.request_digest, lifecycle_records = row.lifecycle_records, contract_version = row.contract_version, contract = row.contract, reviewed_digest = row.reviewed_digest, effect_admission_ms = row.effect_admission_ms, effect = row.effect, window_grant = row.window_grant, allowed_by_grant = row.allowed_by_grant, window_max_ttl_ms = row.window_max_ttl_ms, reallow = row.reallow, approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,
-        requesting_session = row.requester_id:match("^bs:") and row.requester_id
-            or (row.requester_id == "bee.gov.activation" and bounds.id((bounds.object(row.contract.origin) or {}).session_id) or nil),
+        requesting_session = row.requesting_session,
         requester_id = row.requester_id, request_kind = row.request_kind, policy = row.policy, proposal = row.proposal, proposal_digest = row.proposal_digest,
         prompt = row.prompt, response_schema = row.response_schema, thread_id = row.thread_id, binding = row.binding, revision = row.revision, state = row.state,
         decision = row.decision, decider_id = row.decider_id, decided_at = row.decided_at, response = row.response, validated_incarnation = row.validated_incarnation,
@@ -252,7 +251,7 @@ local function decode_row(raw: unknown, tx: sql.Transaction): (Row?, string?)
         validated_by = validated_by, validated_at = validated_at, consumer_id = consumer_id, consumed_effect = consumed_effect,
         consumed_at = consumed_at, expires_ms = expires_ms, expires_at = expires_at, created_at = created_at,
         updated_at = updated_at, effect_completed_at = effect_completed_at, effect_result_json = effect_result_json,
-        effect_result = effect_result}
+        effect_result = effect_result, requesting_session = bounds.id(value.requesting_session)}
     return row, nil
 end
 local function load(tx: sql.Transaction, approval_id: string): (Row?, string?)

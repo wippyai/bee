@@ -79,8 +79,14 @@ bee.approvals.inbox.workspaces`). Remote sources are listed by
     - {node_id: node-b, workspace_id: workspace-id}
 ```
 
-At most 16 sources are accepted. Each source uses a staged snapshot, incremental
-catch-up and periodic reconciliation; a snapshot is bounded to eight pages and
+At most 16 sources are accepted. Each source uses a staged snapshot and
+incremental catch-up. The inbox watches each remote source with
+`approvals.watch`: the owner node's approvals service, which admits the watch
+under the same peer decision gate as the feed, sends `bee.approvals.changed`
+naming the workspace whenever one of its approvals changes, and the inbox
+catches up from the feed. A watch lasts while the owner's service lives; the
+inbox renews it when that service ends or the owner's node joins the hive
+again. A snapshot is bounded to eight pages and
 256 visible requests, beyond which the source fails with `CAPACITY_EXHAUSTED`.
 A denied or reset source loses its cached rows. An unavailable source is shown
 as unavailable, not empty.

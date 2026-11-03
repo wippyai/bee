@@ -7,6 +7,7 @@ M.MAX_BYTES = 16384
 M.MAX_DEPTH = 4
 M.MAX_KEYS = 32
 M.BINDING_KEY = "bee.gateway.binding"
+M.WORKSPACE_KEY = "bee.workspace_id"
 type Object = {[string]: unknown}
 type Values = {[string]: unknown}
 type Context = {[string]: unknown}
@@ -173,6 +174,8 @@ end
 -- The endpoint supplies these identities from its authenticated binding, never
 -- from tool arguments. This fixed-size record is outside the configurable
 -- context quota. It identifies the call; actor and scope still authorize it.
+-- The binding's workspace is the host-inherited workspace of every call the
+-- bound subject makes, tool or hook alike.
 function M.bind(values: unknown, identity: Attribution): (Context?, string?)
     local copied, copy_error = checked_values(values)
     if not copied then return nil, copy_error end
@@ -194,6 +197,10 @@ function M.bind(values: unknown, identity: Attribution): (Context?, string?)
         workspace_id = bounds.id(identity.workspace_id)
         if not workspace_id then return nil, "invalid gateway binding attribution" end
     end
+    if copied[M.WORKSPACE_KEY] ~= nil and copied[M.WORKSPACE_KEY] ~= workspace_id then
+        return nil, "context key " .. M.WORKSPACE_KEY .. " belongs to the binding's workspace"
+    end
+    copied[M.WORKSPACE_KEY] = workspace_id
     local origin_view: OriginView? = nil
     if identity.origin_view ~= nil then
         local source = bounds.object(identity.origin_view)

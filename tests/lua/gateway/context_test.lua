@@ -7,13 +7,19 @@ type Object = {[string]: unknown}
 
 local function run()
     test.describe("Gateway MCP context values", function()
-        test.it("supplies the authenticated host workspace to nested owner calls", function()
-            local fixed = { ["bee.workspace_id"] = "workspace-a" }
-            local values = assert(context.compose(fixed, {}, {}))
-            local bound = assert(context.bind(values, {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a",
-                action_id = "action-a", attempt_id = "attempt-a", workspace_id = "workspace-a"}))
-            test.eq(bound["bee.workspace_id"], "workspace-a")
-            test.is_nil(context.compose(fixed, {["bee.workspace_id"] = "foreign"}, {"bee.workspace_id"}))
+        test.it("supplies the binding's workspace to every nested owner call", function()
+            local identity = {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a",
+                action_id = "action-a", attempt_id = "attempt-a", workspace_id = "workspace-a"}
+            local bound = assert(context.bind({}, identity))
+            test.eq(bound[context.WORKSPACE_KEY], "workspace-a")
+            local composed = assert(context.compose({}, {project = "one"}, {"project"}))
+            local tool = assert(context.bind(composed, identity))
+            test.eq(tool[context.WORKSPACE_KEY], "workspace-a")
+            test.eq(tool.project, "one")
+            test.is_nil(context.bind({[context.WORKSPACE_KEY] = "foreign"}, identity))
+            local unscoped = {binding_id = "binding-b", thread_id = "thread-b", subject = "subject-b", action_id = "action-b", attempt_id = "attempt-b"}
+            test.is_nil(assert(context.bind({}, unscoped))[context.WORKSPACE_KEY])
+            test.is_nil(context.bind({[context.WORKSPACE_KEY] = "forged"}, unscoped))
         end)
         test.it("reserves binding attribution and isolates it from caller context", function()
             local identity = {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a",

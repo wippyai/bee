@@ -15,7 +15,9 @@ entries:
   meta:
     type: test_support
   imports:
-    universal: bee.drivers.binding:universal
+    codec: bee.drivers.codec:claude_stream_json
+    descriptor: bee.drivers.descriptor:descriptor
+    bounds: bee.drivers.values:bounds
 - name: codex_launch
   kind: library.lua
   source: file://codex_launch.lua

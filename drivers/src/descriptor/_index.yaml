@@ -13,6 +13,7 @@ entries:
   modules:
   - registry
   imports:
+    codec_registry: bee.drivers.codec:codec_registry
     bounds: bee.drivers.values:bounds
     login_evidence: bee.drivers.locate:login_evidence
     schema_values: bee.drivers.descriptor:schema_values

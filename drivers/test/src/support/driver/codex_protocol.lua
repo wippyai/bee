@@ -1,3 +1,4 @@
--- MIT. The universal protocol of the codex driver's descriptor, for its suites.
-local universal = require("universal")
-return universal.protocol("bee.drivers.codex.descriptor:cli")
+-- MIT. The codex driver's codec with its descriptor's JSON paths, for its suites.
+local codec_protocol = require("codec_protocol")
+local codec = require("codec")
+return codec_protocol.of(codec, "bee.drivers.codex.descriptor:cli")

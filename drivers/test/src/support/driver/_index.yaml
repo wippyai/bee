@@ -15,7 +15,8 @@ entries:
   meta:
     type: test_support
   imports:
-    universal: bee.drivers.binding:universal
+    codec_protocol: bee.drivers.tests.support.driver:codec_protocol
+    codec: bee.drivers.codec:claude_stream_json
 - name: codex_launch
   kind: library.lua
   source: file://codex_launch.lua
@@ -30,7 +31,8 @@ entries:
   meta:
     type: test_support
   imports:
-    universal: bee.drivers.binding:universal
+    codec_protocol: bee.drivers.tests.support.driver:codec_protocol
+    codec: bee.drivers.codec:codex_jsonl
 - name: agy_launch
   kind: library.lua
   source: file://agy_launch.lua
@@ -45,7 +47,8 @@ entries:
   meta:
     type: test_support
   imports:
-    universal: bee.drivers.binding:universal
+    codec_protocol: bee.drivers.tests.support.driver:codec_protocol
+    codec: bee.drivers.codec:agy_stream_json
 - name: grok_launch
   kind: library.lua
   source: file://grok_launch.lua
@@ -60,7 +63,8 @@ entries:
   meta:
     type: test_support
   imports:
-    universal: bee.drivers.binding:universal
+    codec_protocol: bee.drivers.tests.support.driver:codec_protocol
+    codec: bee.drivers.codec:grok_streaming_json
 - name: muse_launch
   kind: library.lua
   source: file://muse_launch.lua
@@ -75,7 +79,8 @@ entries:
   meta:
     type: test_support
   imports:
-    universal: bee.drivers.binding:universal
+    codec_protocol: bee.drivers.tests.support.driver:codec_protocol
+    codec: bee.drivers.codec:muse_record_jsonl
 - name: opencode_launch
   kind: library.lua
   source: file://opencode_launch.lua
@@ -90,7 +95,8 @@ entries:
   meta:
     type: test_support
   imports:
-    universal: bee.drivers.binding:universal
+    codec_protocol: bee.drivers.tests.support.driver:codec_protocol
+    codec: bee.drivers.codec:opencode_json_events
 - name: opencode_hooks
   kind: library.lua
   source: file://opencode_hooks.lua
@@ -98,3 +104,11 @@ entries:
   imports:
     mapper: bee.drivers.opencode.observer:events
     delivery: bee.drivers.opencode.observer:delivery
+- name: codec_protocol
+  kind: library.lua
+  source: file://codec_protocol.lua
+  meta:
+    type: test_support
+  imports:
+    descriptor: bee.drivers.descriptor:descriptor
+    bounds: bee.drivers.values:bounds

@@ -41,6 +41,13 @@ entries:
     - bee.drivers.pi.descriptor:cli
     - bee.drivers.pi.profiles:profiles
     - bee.drivers.pi.credentials:credential_format
+    - bee.drivers.codec:claude_stream_json_codec
+    - bee.drivers.codec:codex_jsonl_codec
+    - bee.drivers.codec:opencode_json_events_codec
+    - bee.drivers.codec:agy_stream_json_codec
+    - bee.drivers.codec:grok_streaming_json_codec
+    - bee.drivers.codec:muse_record_jsonl_codec
+    - bee.drivers.codec:pi_json_codec
     effect: allow
 - name: kernel
   kind: registry.entry

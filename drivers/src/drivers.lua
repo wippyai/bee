@@ -411,12 +411,24 @@ function M.reader(driver_id: string, resumed: boolean?): (Reader?, error?)
     -- applies to the next stream, never to state this one built.
     local codec = selected.descriptor.codec
     if not codec then return nil, fail(errors.INVALID, selected.descriptor_ref .. " declares no codec; it runs only in a window") end
-    local protocol = codec_registry.resolve(codec, bounds.object(selected.descriptor.json_paths) or {})
-    if not protocol then return nil, fail(errors.INTERNAL, selected.descriptor_ref .. " selects an unsupported codec " .. codec) end
+    local target, codec_error = codec_registry.find(pinned, codec)
+    if not target then return nil, fail(errors.INTERNAL, selected.descriptor_ref .. ": " .. tostring(codec_error)) end
+    local normalize = codec_registry.bind(target, bounds.object(selected.descriptor.json_paths) or {})
     local decoder = stream_json.new(nil)
-    local state = protocol.new(resumed == true)
+    local state: unknown = nil
+    -- call folds one request through the codec and keeps the state it returns.
+    local function call(request: Object): (Object?, string?)
+        request.state, request.resumed = state, resumed == true
+        local reply = bounds.object(normalize(request))
+        if not reply then return nil, codec .. " returned no reply" end
+        if reply.ok ~= true then return nil, tostring(reply.error) end
+        state = reply.state
+        return reply, nil
+    end
     -- take decodes what the codec reported into typed records.
-    local function take(step: Step, observations: {unknown}, terminal: unknown): error?
+    local function take(step: Step, reported: unknown, terminal: unknown): error?
+        local observations = bounds.array(reported)
+        if not observations then return fail(errors.INTERNAL, codec .. " produced no observation list") end
         for _, raw in ipairs(observations) do
             local decoded, decode_error = observation.decode(raw)
             if not decoded then return fail(errors.INTERNAL, codec .. " produced an invalid observation: " .. tostring(decode_error)) end
@@ -430,7 +442,7 @@ function M.reader(driver_id: string, resumed: boolean?): (Reader?, error?)
         return nil
     end
     local function fold(step: Step, frame: integer, value: Object): error?
-        local folded, normalize_error = protocol.normalize(state, frame, value)
+        local folded, normalize_error = call({index = frame, envelope = value})
         if not folded then return fail(errors.INVALID, "frame " .. tostring(frame) .. ": " .. tostring(normalize_error)) end
         return take(step, folded.observations, folded.terminal)
     end
@@ -455,7 +467,7 @@ function M.reader(driver_id: string, resumed: boolean?): (Reader?, error?)
             local step: Step = {observations = {}, problems = {}}
             local tail = stream_json.finish(decoder)
             if tail then step.problems[#step.problems + 1] = {index = tail.index, message = tail.message, sample = tail.sample} end
-            local folded, finish_error = protocol.finish(state, decoder.index + 1)
+            local folded, finish_error = call({index = decoder.index + 1, eof = true})
             if not folded then return nil, fail(errors.INVALID, tostring(finish_error)) end
             local take_error = take(step, folded.observations, folded.terminal)
             if take_error then return nil, take_error end

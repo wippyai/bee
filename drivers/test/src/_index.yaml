@@ -53,13 +53,16 @@ entries:
   - funcs
   imports:
     driver_types: bee.drivers:types
-    universal: bee.drivers.binding:universal
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     stream_json: bee.drivers.transport:stream_json
     claude: bee.drivers.tests.support.driver:claude_protocol
     codex: bee.drivers.tests.support.driver:codex_protocol
     muse: bee.drivers.tests.support.driver:muse_protocol
+    grok: bee.drivers.tests.support.driver:grok_protocol
+    agy: bee.drivers.tests.support.driver:agy_protocol
+    opencode: bee.drivers.tests.support.driver:opencode_protocol
+    codec_protocol: bee.drivers.tests.support.driver:codec_protocol
     claude_launch: bee.drivers.tests.support.driver:claude_launch
     codex_launch: bee.drivers.tests.support.driver:codex_launch
     muse_launch: bee.drivers.tests.support.driver:muse_launch

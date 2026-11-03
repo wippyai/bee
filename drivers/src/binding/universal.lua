@@ -15,7 +15,6 @@ local json = require("json")
 local M = {}
 
 type Object = {[string]: unknown}
-type ProtocolStep = {observations: {Object}, terminal: unknown?}
 type Descriptor = descriptor_reader.Descriptor
 type Request = {[string]: descriptor_reader.OptionValue?} & {profile_id: string, brief: string}
 type ConfigureRequest = configuration_types.Request
@@ -632,16 +631,12 @@ function M.locate(raw: unknown): (types.LocateResult?, string?)
         login_evidence = selected.login_evidence}, request)
 end
 
-type DeferredProtocol = {
-    revision: () -> string, max_answer_bytes: () -> integer,
-    new: (boolean) -> unknown, decode_state: (unknown) -> (unknown?, string?),
-    normalize: (unknown, integer, Object, integer?) -> (ProtocolStep?, string?),
-    finish: (unknown, integer) -> (ProtocolStep?, string?),
-}
-local function codec_selector<T>(ref: string, bind: (string, Object) -> T?): () -> T
+-- normalizer returns the codec function the descriptor at ref selects, bound
+-- to its json_paths. The binding is reused until the declaration changes.
+local function normalizer(ref: string): () -> (unknown) -> unknown
     local declaration: string? = nil
-    local cached: T? = nil
-    return function(): T
+    local cached: ((unknown) -> unknown)? = nil
+    return function(): (unknown) -> unknown
         local pinned, pin_error = registry.snapshot()
         if not pinned then error(tostring(pin_error or "CLI descriptor registry is unavailable")) end
         local entry, entry_error = pinned:get(ref)
@@ -650,30 +645,14 @@ local function codec_selector<T>(ref: string, bind: (string, Object) -> T?): () 
         if cached and declaration == current then return cached end
         local descriptor, load_error = descriptor_reader.load_from(pinned, ref)
         if not descriptor then error(tostring(load_error or "CLI descriptor is unavailable")) end
-        local json_paths = bounds.object(descriptor.json_paths) or {}
         local codec = descriptor.codec
         if not codec then error("CLI descriptor " .. ref .. " declares no codec; its window output is not decoded") end
-        local selected = bind(codec, json_paths)
-        if not selected then error("CLI descriptor selects an unsupported codec") end
+        local target, find_error = codec_registry.find(pinned, codec)
+        if not target then error("CLI descriptor " .. ref .. ": " .. tostring(find_error)) end
+        local selected = codec_registry.bind(target, bounds.object(descriptor.json_paths) or {})
         declaration, cached = current, selected
         return selected
     end
-end
-function M.protocol(ref: string): DeferredProtocol
-    local selected = codec_selector(ref, codec_registry.resolve)
-    -- Bindings load before registry startup. Defer descriptor lookup until a
-    -- protocol method or property is used by a running request.
-    local protocol: DeferredProtocol = {
-        revision = function(): string return selected().PROTOCOL_REVISION end,
-        max_answer_bytes = function(): integer return selected().MAX_ANSWER_BYTES end,
-        new = function(resumed: boolean): unknown return selected().new(resumed) end,
-        decode_state = function(raw: unknown): (unknown?, string?) return selected().decode_state(raw) end,
-        normalize = function(state: unknown, index: integer, envelope: Object, budget: integer?): (ProtocolStep?, string?)
-            return selected().normalize(state, index, envelope)
-        end,
-        finish = function(state: unknown, index: integer): (ProtocolStep?, string?) return selected().finish(state, index) end,
-    }
-    return setmetatable(protocol, {__index = function(_self: unknown, name: string): unknown return selected()[name] end})
 end
 
 local normalizers: {[string]: () -> (unknown) -> unknown} = {}
@@ -682,7 +661,7 @@ function M.normalize(raw: unknown): unknown
     if not ref then return {ok = false, error = request_error} end
     local selected = normalizers[ref]
     if not selected then
-        selected = codec_selector(ref, codec_registry.bind)
+        selected = normalizer(ref)
         normalizers[ref] = selected
     end
     return selected()(request)

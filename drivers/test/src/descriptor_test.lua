@@ -378,13 +378,30 @@ local function define_tests()
                 test.is_nil(decoded)
                 test.not_nil(decode_error)
 
-                local unknown_codec = {}
-                for key, value in pairs(loaded) do unknown_codec[key] = value end
-                unknown_codec.codec = "unknown-codec"
-                decoded, decode_error = descriptor.decode(unknown_codec)
+                local malformed_codec = {}
+                for key, value in pairs(loaded) do malformed_codec[key] = value end
+                malformed_codec.codec = 42
+                decoded, decode_error = descriptor.decode(malformed_codec)
                 test.is_nil(decoded)
                 test.not_nil(decode_error)
             end
+        end)
+
+        test.it("loads a descriptor only while a driver package registers its codec", function()
+            local ref = "bee.drivers.codex.descriptor:cli"
+            local original = assert(registry.get(ref))
+            local changed = assert(registry.get(ref))
+            assert(bounds.object(changed.data)).codec = "unregistered-codec"
+            local changes = registry.snapshot():changes()
+            changes:update(changed)
+            assert(changes:apply())
+            local loaded, load_error = descriptor.load(ref)
+            local restored = registry.snapshot():changes()
+            restored:update(original)
+            assert(restored:apply())
+            test.is_nil(loaded)
+            test.eq(load_error, ref .. ": no driver package registers codec unregistered-codec")
+            test.not_nil(descriptor.load(ref))
         end)
 
         test.it("rejects invalid defaults, undeclared template fields and cyclic flag dependencies", function()

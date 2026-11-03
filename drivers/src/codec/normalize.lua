@@ -58,4 +58,35 @@ function M.bind<State>(new: (boolean) -> State,
     return function(request: unknown) return M.handle(request, protocol) end
 end
 
+type Codec<State> = {
+    new: (boolean) -> State,
+    decode_state: (unknown) -> (State?, string?),
+    normalize: (State, integer, {[string]: unknown}, {[string]: unknown}?) -> Step,
+    finish: (State, integer) -> Step,
+}
+
+-- serve answers a codec function request: the normalizer request plus the
+-- descriptor's json_paths, which select the codec's protocol fields.
+function M.serve<State>(codec: Codec<State>): (unknown) -> Reply<State>
+    return function(raw: unknown): Reply<State>
+        local request = bounds.object(raw)
+        if not request then return {ok = false, error = "request must be an object"} end
+        local paths = bounds.object(request.json_paths == nil and {} or request.json_paths)
+        if not paths then return {ok = false, error = "json_paths must be an object"} end
+        local selected = assert(paths)
+        local forwarded: {[string]: unknown} = {}
+        for key, value in pairs(request) do
+            if key ~= "json_paths" then forwarded[key] = value end
+        end
+        return M.handle(forwarded, {
+            new = codec.new,
+            decode_state = codec.decode_state,
+            normalize = function(state: State, index: integer, envelope: {[string]: unknown}): (Step?, string?)
+                return codec.normalize(state, index, envelope, selected), nil
+            end,
+            finish = function(state: State, index: integer): (Step?, string?) return codec.finish(state, index), nil end,
+        })
+    end
+end
+
 return M

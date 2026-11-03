@@ -4,6 +4,7 @@ local bounds = require("bounds")
 local registry = require("registry")
 local login_evidence = require("login_evidence")
 local schema_values = require("schema_values")
+local codec_registry = require("codec_registry")
 local M = {}
 type PermissionAnswer = {transport: string, adapter_ref: string?, reason: string?}
 type Capabilities = {permission_answers: {[string]: PermissionAnswer}}
@@ -89,7 +90,6 @@ M.TYPE = "bee.driver.cli_descriptor"
 M.SCHEMA = "bee.driver.cli-descriptor@4"
 M.MAX_TEMPLATE_ITEMS = 128
 M.MAX_TEMPLATE_DEPTH = 8
-M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl", "pi-json"}
 
 type Object = {[string]: unknown}
 type OptionValue = string | number | boolean | {[string]: unknown} | {unknown}
@@ -483,8 +483,8 @@ function M.decode(value: unknown): (Descriptor?, string?)
     if not provider or not executable or not configure then return nil, "CLI descriptor identity is invalid" end
     local codec: string? = nil
     if item.codec ~= nil then
-        codec = bounds.member(item.codec, M.CODECS)
-        if not codec then return nil, "CLI descriptor codec is unsupported" end
+        codec = bounds.id(item.codec)
+        if not codec then return nil, "CLI descriptor codec must name a registered codec" end
     end
 
     local probe, probe_error = object(item.version_probe, "CLI descriptor.version_probe")
@@ -961,6 +961,10 @@ function M.load_from(pinned: registry.Snapshot, ref: string): (Descriptor?, stri
     if not meta or meta.type ~= M.TYPE then return nil, "registry entry is not a CLI descriptor" end
     local decoded, decode_error = M.decode(entry.data)
     if not decoded then return nil, id .. ": " .. tostring(decode_error) end
+    if decoded.codec then
+        local _, codec_error = codec_registry.find(pinned, decoded.codec)
+        if codec_error then return nil, id .. ": " .. codec_error end
+    end
     return decoded, nil
 end
 

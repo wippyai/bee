@@ -80,16 +80,9 @@ entries:
 - name: codec_registry
   kind: library.lua
   source: file://codec_registry.lua
+  modules: [registry, funcs]
   imports:
     bounds: bee.drivers.values:bounds
-    normalizer: bee.drivers.codec:normalize
-    claude_stream_json: bee.drivers.codec:claude_stream_json
-    codex_jsonl: bee.drivers.codec:codex_jsonl
-    opencode_json_events: bee.drivers.codec:opencode_json_events
-    agy_stream_json: bee.drivers.codec:agy_stream_json
-    grok_streaming_json: bee.drivers.codec:grok_streaming_json
-    muse_record_jsonl: bee.drivers.codec:muse_record_jsonl
-    pi_json: bee.drivers.codec:pi_json
 - name: events
   kind: library.lua
   source: file://events.lua
@@ -108,3 +101,80 @@ entries:
     type: bee.kernel
   data:
     scope: tree
+- name: claude_stream_json_codec
+  kind: function.lua
+  meta:
+    type: bee.driver.codec
+    codec: claude-stream-json
+    comment: Folds one output envelope of the claude-stream-json protocol into observations and a terminal report
+  source: file://serve.lua
+  method: handle
+  imports:
+    codec: bee.drivers.codec:claude_stream_json
+    normalizer: bee.drivers.codec:normalize
+- name: codex_jsonl_codec
+  kind: function.lua
+  meta:
+    type: bee.driver.codec
+    codec: codex-jsonl
+    comment: Folds one output envelope of the codex-jsonl protocol into observations and a terminal report
+  source: file://serve.lua
+  method: handle
+  imports:
+    codec: bee.drivers.codec:codex_jsonl
+    normalizer: bee.drivers.codec:normalize
+- name: opencode_json_events_codec
+  kind: function.lua
+  meta:
+    type: bee.driver.codec
+    codec: opencode-json-events
+    comment: Folds one output envelope of the opencode-json-events protocol into observations and a terminal report
+  source: file://serve.lua
+  method: handle
+  imports:
+    codec: bee.drivers.codec:opencode_json_events
+    normalizer: bee.drivers.codec:normalize
+- name: agy_stream_json_codec
+  kind: function.lua
+  meta:
+    type: bee.driver.codec
+    codec: agy-stream-json
+    comment: Folds one output envelope of the agy-stream-json protocol into observations and a terminal report
+  source: file://serve.lua
+  method: handle
+  imports:
+    codec: bee.drivers.codec:agy_stream_json
+    normalizer: bee.drivers.codec:normalize
+- name: grok_streaming_json_codec
+  kind: function.lua
+  meta:
+    type: bee.driver.codec
+    codec: grok-streaming-json
+    comment: Folds one output envelope of the grok-streaming-json protocol into observations and a terminal report
+  source: file://serve.lua
+  method: handle
+  imports:
+    codec: bee.drivers.codec:grok_streaming_json
+    normalizer: bee.drivers.codec:normalize
+- name: muse_record_jsonl_codec
+  kind: function.lua
+  meta:
+    type: bee.driver.codec
+    codec: muse-record-jsonl
+    comment: Folds one output envelope of the muse-record-jsonl protocol into observations and a terminal report
+  source: file://serve.lua
+  method: handle
+  imports:
+    codec: bee.drivers.codec:muse_record_jsonl
+    normalizer: bee.drivers.codec:normalize
+- name: pi_json_codec
+  kind: function.lua
+  meta:
+    type: bee.driver.codec
+    codec: pi-json
+    comment: Folds one output envelope of the pi-json protocol into observations and a terminal report
+  source: file://serve.lua
+  method: handle
+  imports:
+    codec: bee.drivers.codec:pi_json
+    normalizer: bee.drivers.codec:normalize

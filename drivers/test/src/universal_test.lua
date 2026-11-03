@@ -34,32 +34,26 @@ local function define_tests()
             end
             local ok, problem = pcall(function()
                 local normalize = normalizer(ref)
-                local protocol = universal.protocol(ref)
                 local state: unknown = nil
-                local direct = protocol.new(false)
                 for index = 1, 8 do
                     local envelope = {type = "stream_event", event = {type = "content_block_delta", index = 0,
                         delta = {type = "text_delta", text = "x"}}}
                     local reply = assert(bounds.object(normalize({index = index, state = state, envelope = envelope})))
                     test.eq(reply.ok, true)
                     state = reply.state
-                    test.not_nil(protocol.normalize(direct, index, envelope))
-                    test.eq(protocol.revision(), "stream-json-2")
                 end
-                test.eq(decodes, 2, "option validation is independent of stream length")
+                test.eq(decodes, 1, "option validation is independent of stream length")
                 local changed = assert(registry.get(ref))
                 assert(bounds.object(changed.data)).codec = "unknown-codec"
                 local changes = registry.snapshot():changes()
                 changes:update(changed)
                 assert(changes:apply())
                 test.is_false((pcall(normalize, {index = 9, eof = true, state = state})))
-                test.is_false((pcall(protocol.finish, direct, 9)))
                 local restored = registry.snapshot():changes()
                 restored:update(original)
                 assert(restored:apply())
                 test.eq(assert(bounds.object(normalize({index = 9, eof = true, state = state}))).ok, true)
-                test.not_nil(protocol.finish(direct, 9))
-                test.eq(decodes, 4)
+                test.eq(decodes, 2)
             end)
             descriptor.decode = decode
             local restored = registry.snapshot():changes()
@@ -89,16 +83,13 @@ local function define_tests()
             local ok, problem = pcall(function()
                 local version = assert(registry.snapshot()):version():id()
                 local normalize = normalizer(ref)
-                local protocol = universal.protocol(ref)
                 test.eq(assert(bounds.object(normalize({index = 0, eof = true}))).ok, true)
-                test.eq(protocol.revision(), "stream-json-2")
                 assert(bounds.object(declaration.data)).codec = "unknown-codec"
                 local changes = assert(registry.overlay(owner)):changes()
                 changes:update(declaration)
                 assert(changes:apply())
                 test.eq(assert(registry.snapshot()):version():id(), version)
                 test.is_false((pcall(normalize, {index = 0, eof = true})))
-                test.is_false((pcall(protocol.revision)))
             end)
             local cleanup = assert(registry.overlay(owner)):changes()
             cleanup:delete(ref)
@@ -148,14 +139,6 @@ local function define_tests()
             test.is_false(called)
         end)
         test.it("selects the shared normalizer from the registry descriptor codec", function()
-            local protocol = universal.protocol("bee.drivers.opencode.descriptor:cli")
-            test.eq(protocol.revision(), "opencode-run-json-1")
-            local function legacy_property(raw: unknown, name: string): unknown
-                assert(type(raw) == "table")
-                return raw[name]
-            end
-            test.eq(legacy_property(protocol, "PROTOCOL_REVISION"), protocol.revision())
-            test.eq(legacy_property(protocol, "MAX_ANSWER_BYTES"), protocol.max_answer_bytes())
             local handle = normalizer("bee.drivers.opencode.descriptor:cli")
             local started = handle({index = 0, envelope = {type = "step_start", sessionID = "ses_universal"}})
             local reply = assert(bounds.object(started))
@@ -203,22 +186,22 @@ local function define_tests()
         end)
 
         test.it("uses descriptor JSON paths to extract protocol fields", function()
-            local protocol = codec_registry.resolve("codex-jsonl", {
+            local target = assert(codec_registry.find(assert(registry.snapshot()), "codex-jsonl"))
+            local normalize = codec_registry.bind(target, {
                 resume_id = {"conversation_key"},
                 result_text = {"item", "message"},
                 errors = {"fault", "detail"},
                 usage = {"stats"},
             })
-            test.not_nil(protocol)
-            local selected = protocol
-            local state = selected.new(false)
-            selected.normalize(state, 0, {type = "thread.started", conversation_key = "thread_selected"})
-            selected.normalize(state, 1, {type = "item.completed", item = {type = "agent_message", message = "selected answer"}})
-            local completed = selected.normalize(state, 2, {type = "turn.completed", stats = {input_tokens = 7, output_tokens = 3}})
-            test.not_nil(completed.terminal)
-            test.eq(completed.terminal and completed.terminal.resume_ref, "thread_selected")
-            test.eq(completed.terminal and completed.terminal.answer, "selected answer")
-            test.eq(completed.terminal and completed.terminal.usage and completed.terminal.usage.input_tokens, 7)
+            local started = assert(bounds.object(normalize({index = 0, envelope = {type = "thread.started", conversation_key = "thread_selected"}})))
+            local answered = assert(bounds.object(normalize({state = started.state, index = 1,
+                envelope = {type = "item.completed", item = {type = "agent_message", message = "selected answer"}}})))
+            local completed = assert(bounds.object(normalize({state = answered.state, index = 2,
+                envelope = {type = "turn.completed", stats = {input_tokens = 7, output_tokens = 3}}})))
+            local terminal = assert(bounds.object(completed.terminal))
+            test.eq(terminal.resume_ref, "thread_selected")
+            test.eq(terminal.answer, "selected answer")
+            test.eq(assert(bounds.object(terminal.usage)).input_tokens, 7)
         end)
 
         test.it("refuses recursive flag rendering and oversized argv expansion", function()

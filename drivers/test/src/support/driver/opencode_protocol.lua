@@ -1,3 +1,4 @@
--- MIT. The universal protocol of the opencode driver's descriptor, for its suites.
-local universal = require("universal")
-return universal.protocol("bee.drivers.opencode.descriptor:cli")
+-- MIT. The opencode driver's codec with its descriptor's JSON paths, for its suites.
+local codec_protocol = require("codec_protocol")
+local codec = require("codec")
+return codec_protocol.of(codec, "bee.drivers.opencode.descriptor:cli")

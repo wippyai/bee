@@ -25,6 +25,8 @@ entries:
   method: normalize
   imports:
     universal: bee.drivers.binding:universal
+  security:
+    policies: [bee.drivers.universal:codec_calls]
 - name: configure
   kind: function.lua
   meta:
@@ -47,3 +49,11 @@ entries:
     type: bee.kernel
   data:
     scope: tree
+- name: codec_calls
+  kind: security.policy
+  meta:
+    comment: The shared normalize method reads the descriptor and calls the codec function a driver package registers for it
+  policy:
+    actions: [registry.snapshot, registry.get, funcs.call]
+    resources: '*'
+    effect: allow

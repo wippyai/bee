@@ -9,12 +9,15 @@ local stream_json = require("stream_json")
 local claude = require("claude")
 local codex = require("codex")
 local muse = require("muse")
+local grok = require("grok")
+local agy = require("agy")
+local opencode = require("opencode")
+local codec_protocol = require("codec_protocol")
 local claude_launch = require("claude_launch")
 local codex_launch = require("codex_launch")
 local muse_launch = require("muse_launch")
 local observation = require("observation")
 local quote = require("quote")
-local universal = require("universal")
 local driver_types = require("driver_types")
 type Terminal = {outcome: string, answer: string?, resume_ref: string?, usage: {[string]: unknown}?, error: {code: string, message: string, retryable: boolean}?}
 type Run = {types: {string}, observations: {{[string]: unknown}}, terminal: Terminal?, problems: integer}
@@ -27,7 +30,7 @@ local function fixture(path: string): string
 end
 -- Feeds a fixture in odd-sized chunks through the transport and the
 -- normalizer; optionally stops before the last frame.
-local function run(normalizer: universal.DeferredProtocol, path: string, chunk_size: integer, drop_last: boolean): Run
+local function run<State>(normalizer: codec_protocol.Protocol<State>, path: string, chunk_size: integer, drop_last: boolean): Run
     local content = fixture(path)
     if drop_last then
         local cut = content:sub(1, -2)
@@ -71,38 +74,37 @@ end
 local function define_tests()
     test.describe("Terminal answer retention", function()
         test.it("keeps every codec terminal decodable at and beyond its answer bound", function()
-            type AnswerCase = {provider: string, envelopes: (string) -> {{[string]: unknown}}}
+            type AnswerCase = {provider: string, limit: integer, envelopes: (string) -> {{[string]: unknown}}}
             local cases: {AnswerCase} = {
-                {provider = "claude", envelopes = function(answer: string): {{[string]: unknown}}
+                {provider = "claude", limit = claude.max_answer_bytes(), envelopes = function(answer: string): {{[string]: unknown}}
                     return {{type = "stream_event", event = {type = "content_block_delta", index = 0,
                         delta = {type = "text_delta", text = answer}}},
                         {type = "result", subtype = "success", is_error = false, result = answer}}
                 end},
-                {provider = "codex", envelopes = function(answer: string): {{[string]: unknown}}
+                {provider = "codex", limit = codex.max_answer_bytes(), envelopes = function(answer: string): {{[string]: unknown}}
                     return {{type = "item.completed", item = {id = "answer", type = "agent_message", text = answer}},
                         {type = "turn.completed"}}
                 end},
-                {provider = "grok", envelopes = function(answer: string): {{[string]: unknown}}
+                {provider = "grok", limit = grok.max_answer_bytes(), envelopes = function(answer: string): {{[string]: unknown}}
                     return {{type = "text", data = answer}, {type = "end", stopReason = "end_turn"}}
                 end},
-                {provider = "muse", envelopes = function(answer: string): {{[string]: unknown}}
+                {provider = "muse", limit = muse.max_answer_bytes(), envelopes = function(answer: string): {{[string]: unknown}}
                     return {{payload_type = "runtime.command.accepted", payload = {}},
                         {payload_type = "run.lifecycle.started", payload = {}},
                         {payload_type = "run.output.delta", payload = {text = answer}},
                         {payload_type = "run.terminal.completed", payload = {terminal = "completed"}}}
                 end},
-                {provider = "agy", envelopes = function(answer: string): {{[string]: unknown}}
+                {provider = "agy", limit = agy.max_answer_bytes(), envelopes = function(answer: string): {{[string]: unknown}}
                     return {{event = "init", conversation_id = "answer-session", init = {}},
                         {event = "step_update", step_update = {step_type = "agent_response", text_delta = answer}},
                         {event = "result", result = {status = "SUCCESS", response = answer}}}
                 end},
-                {provider = "opencode", envelopes = function(answer: string): {{[string]: unknown}}
+                {provider = "opencode", limit = opencode.max_answer_bytes(), envelopes = function(answer: string): {{[string]: unknown}}
                     return {{type = "text", part = {text = answer}}, {type = "step_finish", part = {reason = "stop"}}}
                 end},
             }
             for _, case in ipairs(cases) do
-                local protocol = universal.protocol("bee.drivers." .. case.provider .. ".descriptor:cli")
-                local limit = protocol.max_answer_bytes()
+                local limit = case.limit
                 for _, size in ipairs({limit, limit + 1, 60000}) do
                     local answer = string.rep("x", size)
                     local state: unknown = nil

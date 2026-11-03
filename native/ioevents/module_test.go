@@ -6,6 +6,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/wippyai/runtime/api/attrs"
 	ctxapi "github.com/wippyai/runtime/api/context"
 	fsapi "github.com/wippyai/runtime/api/fs"
+	"github.com/wippyai/runtime/api/payload"
 	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/api/process"
 	"github.com/wippyai/runtime/api/relay"
@@ -210,5 +213,130 @@ func TestLuaWatchFailedDispatchReleasesSubscription(t *testing.T) {
 	}
 	if !out.IsDone() || p.LiveSubscriptionCount() != 0 {
 		t.Fatal("failed dispatch leaked subscription")
+	}
+}
+
+// driveWatch runs script, serving its watch yields from a manager over a
+// host directory; started runs once the first watch is installed.
+func driveWatch(t *testing.T, script string, prepare, started func(root string)) {
+	t.Helper()
+	p := watchTestProcess(t, script, "")
+	manager := NewManager()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := manager.Stop(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	root := t.TempDir()
+	prepare(root)
+	events := make(chan process.Event, 1024)
+	ctx := ctxapi.NewRootContext()
+	ctx = fsapi.WithRegistry(ctx, watchTestRegistry{fs: watchTestFS{root: root}})
+	ctx = relay.WithNode(ctx, watchTestNode{events: events})
+	var out process.StepOutput
+	if err := p.Step(nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	begun := false
+	for !out.IsDone() {
+		for _, y := range out.Yields() {
+			if err := manager.Handle(ctx, y.Cmd, y.Tag, watchTestReceiver{events: events}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		select {
+		case e := <-events:
+			if e.Type == process.EventYieldComplete && e.Error == nil && !begun {
+				begun = true
+				started(root)
+			}
+			out.Reset()
+			if err := p.Step([]process.Event{e}, &out); err != nil {
+				t.Fatal(err)
+			}
+		case <-timer.C:
+			t.Fatal("watch script did not complete")
+		}
+	}
+}
+
+func TestLuaRecursiveWatchReportsNestedChanges(t *testing.T) {
+	driveWatch(t, `local w, err = ioevents.watch("workspace", ".", {recursive = true}); assert(w, tostring(err)); local ch = w:channel(); while true do local e = ch:receive(); if e.kind == "change" and e.path == "sub/deep/file.txt" then break end end; return true`,
+		func(root string) {
+			if err := os.MkdirAll(filepath.Join(root, "sub", "deep"), 0700); err != nil {
+				t.Fatal(err)
+			}
+		},
+		func(root string) {
+			if err := os.WriteFile(filepath.Join(root, "sub", "deep", "file.txt"), []byte("nested"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		})
+}
+
+func TestLuaWatchChannelClosesWhenItsDirectoryIsRemoved(t *testing.T) {
+	driveWatch(t, `local w, err = ioevents.watch("workspace", "watched"); assert(w, tostring(err)); local ch = w:channel(); while true do local _, ok = ch:receive(); if not ok then break end end; return true`,
+		func(root string) {
+			if err := os.Mkdir(filepath.Join(root, "watched"), 0700); err != nil {
+				t.Fatal(err)
+			}
+		},
+		func(root string) {
+			if err := os.RemoveAll(filepath.Join(root, "watched")); err != nil {
+				t.Fatal(err)
+			}
+		})
+}
+
+func TestLuaWatchRefusesInvalidOptionsWithoutYield(t *testing.T) {
+	p := watchTestProcess(t, `
+		local w, err = ioevents.watch("workspace", ".", {depth = 1})
+		assert(w == nil and err:kind() == "Invalid", tostring(err))
+		w, err = ioevents.watch("workspace", ".", {recursive = "yes"})
+		assert(w == nil and err:kind() == "Invalid", tostring(err))
+		w, err = ioevents.watch("workspace", ".", true)
+		assert(w == nil and err:kind() == "Invalid", tostring(err))
+		return true`, "")
+	var out process.StepOutput
+	if err := p.Step(nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.IsDone() || out.Count() != 0 || p.LiveSubscriptionCount() != 0 {
+		t.Fatalf("invalid options yielded or leaked: %+v", out)
+	}
+}
+
+func TestDeliveryTurnsTheLastFreeSlotIntoARescan(t *testing.T) {
+	l := lua.NewState()
+	defer l.Close()
+	channel := engine.NewChannel(4)
+	handle := delivery(channel, Event{Kind: EventRescan, Resource: "workspace", Path: "."})
+	offer := func(name string) lua.LValue {
+		value := handle(context.Background(), l, pid.PID{}, "ioevents@1", []payload.Payload{payload.NewPayload(Event{Kind: EventChange, Resource: "workspace", Path: name, Operation: "write"}, payload.Golang)})
+		if value != nil {
+			if _, sent := channel.TrySend(value); !sent {
+				t.Fatalf("delivered %s into a full channel", name)
+			}
+		}
+		return value
+	}
+	kinds := []string{}
+	for index := range 10 {
+		if value := offer("f" + strconv.Itoa(index)); value != nil {
+			kinds = append(kinds, value.(*lua.LTable).RawGetString("kind").String()+":"+value.(*lua.LTable).RawGetString("path").String())
+		}
+	}
+	want := []string{"change:f0", "change:f1", "change:f2", "rescan:."}
+	if strings.Join(kinds, ",") != strings.Join(want, ",") {
+		t.Fatalf("delivered %v, want %v", kinds, want)
+	}
+	channel.Drain()
+	value := offer("after")
+	if value == nil || value.(*lua.LTable).RawGetString("path").String() != "after" {
+		t.Fatal("delivery did not resume once the consumer received the rescan")
 	}
 }

@@ -5,6 +5,7 @@ package ioevents
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync/atomic"
 
 	lua "github.com/wippyai/go-lua"
@@ -80,6 +81,12 @@ func watchDirectory(l *lua.LState) int {
 		l.Push(lua.NewLuaError(l, "invalid filesystem resource or watch path").WithKind(lua.Invalid))
 		return 2
 	}
+	recursive, invalid := watchOptions(l.Get(3))
+	if invalid != "" {
+		l.Push(lua.LNil)
+		l.Push(lua.NewLuaError(l, invalid).WithKind(lua.Invalid).WithRetryable(false))
+		return 2
+	}
 	// The caller's frame context carries its actor and policy scope; the
 	// dispatcher context the command handler runs under carries neither.
 	// Watching is its own authority: it reports names and operations and never
@@ -104,11 +111,12 @@ func watchDirectory(l *lua.LState) int {
 		l.Push(lua.WrapErrorWithLua(l, err, "subscribe"))
 		return 2
 	}
-	process.SetTopicHandler(topic, decodeEvent)
+	process.SetTopicHandler(topic, delivery(channel, Event{Kind: EventRescan, Resource: resourceName,
+		Path: filepath.ToSlash(filepath.Clean(relative))}))
 	watchContext, cancel := context.WithCancel(l.Context())
 	process.SetSubscriptionCleanup(channel, cancel)
 	operation := &watchYield{channel: channel, cancel: cancel, command: startCommand{
-		context: watchContext, resource: resourceName, relative: relative, owner: owner,
+		context: watchContext, resource: resourceName, relative: relative, recursive: recursive, owner: owner,
 		topic: topic, epoch: process.Epoch(), id: id, generation: generation,
 	}}
 	l.Push(operation)
@@ -118,6 +126,7 @@ func watchDirectory(l *lua.LState) int {
 type startCommand struct {
 	context                   context.Context
 	resource, relative, topic string
+	recursive                 bool
 	owner                     pid.PID
 	epoch, id                 uint64
 	generation                *atomic.Uint64
@@ -163,14 +172,59 @@ func (yield *watchYield) HandleResult(l *lua.LState, data any, err error) []lua.
 	return []lua.LValue{handle, lua.LNil}
 }
 
-func decodeEvent(_ context.Context, l *lua.LState, _ pid.PID, _ string, items []payload.Payload) lua.LValue {
-	if len(items) != 1 {
-		return lua.LNil
+// watchOptions reads the optional {recursive = boolean} table.
+func watchOptions(raw lua.LValue) (bool, string) {
+	if raw == lua.LNil {
+		return false, ""
 	}
-	event, ok := items[0].Data().(Event)
+	options, ok := raw.(*lua.LTable)
 	if !ok {
-		return lua.LNil
+		return false, "watch options must be a table"
 	}
+	recursive, invalid := false, ""
+	options.ForEach(func(key, value lua.LValue) {
+		switch {
+		case key.String() == "recursive" && value.Type() == lua.LTBool:
+			recursive = value == lua.LTrue
+		case key.String() == "recursive":
+			invalid = "watch option recursive must be a boolean"
+		case invalid == "":
+			invalid = "unknown watch option: " + key.String()
+		}
+	})
+	return recursive, invalid
+}
+
+// delivery builds the topic handler that turns native events into Lua
+// records. The runtime drops a routed frame that finds the channel full, so
+// the last free slot carries a rescan of the watched directory instead, and
+// notices are dropped until the consumer has received it: the listing the
+// consumer makes on that rescan covers them.
+func delivery(channel *engine.Channel, rescan Event) engine.TopicHandler {
+	behind := false
+	return func(_ context.Context, l *lua.LState, _ pid.PID, _ string, items []payload.Payload) lua.LValue {
+		if len(items) != 1 {
+			return nil
+		}
+		event, ok := items[0].Data().(Event)
+		if !ok {
+			return nil
+		}
+		if behind {
+			if channel.Size() > 0 {
+				return nil
+			}
+			behind = false
+		}
+		if channel.Slots() <= 1 {
+			behind = true
+			event = rescan
+		}
+		return eventRecord(l, event)
+	}
+}
+
+func eventRecord(l *lua.LState, event Event) lua.LValue {
 	record := l.CreateTable(0, 4)
 	record.RawSetString("kind", lua.LString(event.Kind))
 	record.RawSetString("resource", lua.LString(event.Resource))
@@ -205,18 +259,28 @@ func (manager *Manager) Handle(ctx context.Context, command dispatcher.Command, 
 		return nil
 	}
 	root := host.RootPath()
+	send := func(item payload.Payload, size int) error {
+		frame := &engine.SubscriptionFrame{Epoch: request.epoch, SubID: request.id, Gen: request.generation.Load(), Payloads: payload.Payloads{item}}
+		message := relay.NewPackage(pid.PID{}, request.owner, request.topic, engine.NewSubscriptionFramePayload(frame))
+		for _, queued := range message.Messages {
+			queued.MaxItems = eventBuffer
+			queued.MaxBytes = 1024 * 1024
+			queued.PayloadBytes = int64(size)
+		}
+		return node.Send(message)
+	}
 	go func() {
-		watch, err := manager.Start(request.context, fmt.Sprintf("%s/%d", request.owner.String(), request.epoch), request.resource, root, request.relative, func(event Event) error {
-			frame := &engine.SubscriptionFrame{Epoch: request.epoch, SubID: request.id, Gen: request.generation.Load(), Payloads: payload.Payloads{payload.NewPayload(event, payload.Golang)}}
-			message := relay.NewPackage(pid.PID{}, request.owner, request.topic, engine.NewSubscriptionFramePayload(frame))
-			for _, item := range message.Messages {
-				item.MaxItems = eventBuffer
-				item.MaxBytes = 1024 * 1024
-				item.PayloadBytes = int64(len(event.Path) + len(event.Resource) + len(event.Operation) + 64)
-			}
-			return node.Send(message)
+		watch, err := manager.Start(request.context, fmt.Sprintf("%s/%d", request.owner.String(), request.epoch), request.resource, root, request.relative, request.recursive, func(event Event) error {
+			return send(payload.NewPayload(event, payload.Golang), len(event.Path)+len(event.Resource)+len(event.Operation)+64)
 		})
 		receiver.CompleteYield(tag, watch, err)
+		if watch == nil {
+			return
+		}
+		// The channel closes when the native watch ends, whichever side ends it.
+		<-watch.Done()
+		// An exited owner has no channel left to close.
+		_ = send(payload.NewTerminal(), 0)
 	}()
 	return nil
 }

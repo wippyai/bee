@@ -167,7 +167,9 @@ function M.decode_option(field: string, declaration: Object, value: unknown): (O
     if spec.type == "json" then
         return schema_values.decode(spec.schema, value, field)
     elseif spec.type == "text" then
-        return schema_values.decode({type = "string", maxLength = spec.max, pattern = spec.pattern}, value, field)
+        local selected, text_error = schema_values.decode({type = "string", maxLength = spec.max, pattern = spec.pattern}, value, field)
+        if selected == nil then return nil, bounds.text(spec.invalid, 256) or text_error end
+        return selected, nil
     elseif spec.type == "enum" then
         local values = type(spec.values) == "table" and spec.values or {}
         local selected = bounds.member(value, values)
@@ -192,10 +194,6 @@ function M.decode_option(field: string, declaration: Object, value: unknown): (O
     elseif spec.type == "duration" then
         local selected = bounds.text(value, 32)
         if not selected or not selected:match("^[1-9][0-9]*[smh]$") then return nil, field_error(spec, field, "must be a positive duration string") end
-        return selected, nil
-    elseif spec.type == "codex_profile" then
-        local selected = bounds.text(value, 64)
-        if not selected or not selected:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$") then return nil, field_error(spec, field, "must be a plain Codex profile name") end
         return selected, nil
     elseif spec.type == "ids" then
         local selected, ids_error = bounds.ids(value, true)
@@ -682,7 +680,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
             end
         elseif bounds.fields(declaration, {"type", "values", "default", "max", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) then return nil, "Runtime option has unknown fields" end
         local spec = M.runtime_spec(declaration)
-        if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "duration", "ids", "codex_profile", "text", "json"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
+        if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "duration", "ids", "text", "json"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
         if spec.type == "enum" and spec.values == nil then return nil, "CLI descriptor.options." .. tostring(name) .. ".values is required for an enum" end
         if spec.values ~= nil then
             local values, values_error = sequence(spec.values, "CLI descriptor.options." .. tostring(name) .. ".values", 32)

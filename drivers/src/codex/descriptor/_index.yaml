@@ -271,7 +271,8 @@ entries:
           path: provider.options.config_profile
           value_schema:
             type: string
-            format: codex_profile
+            maxLength: 64
+          pattern: ^[A-Za-z0-9_][A-Za-z0-9_-]*$
           label: Config profile
           description: CLI config profile
           section: advanced

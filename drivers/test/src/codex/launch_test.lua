@@ -55,6 +55,7 @@ local function define_tests()
                 local decoded, decode_error = launch.decode({profile_id = "window", brief = "", sandbox = "read-only", config_profile = name})
                 test.is_nil(decoded)
                 test.not_nil(decode_error)
+                test.is_true(tostring(decode_error):find("config_profile must be a plain Codex profile name", 1, true) ~= nil, tostring(decode_error))
             end
         end)
     end)

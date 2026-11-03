@@ -18,6 +18,7 @@ entries:
     - bee.security.approvals:approval_request_policy
     - bee.security.approvals:approval_consume_policy
     - bee.threads.security:sessions_owner
+    - bee.threads.security:waits
     - bee.harness.security:carrier_policy
     - bee.harness.security:carrier_environment_policy
     - bee.harness.security:profile_workspace_policy

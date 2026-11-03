@@ -991,7 +991,7 @@ local function context_items(buttons: {Button}): {MenuItem}
 end
 
 -- The row's actions drawn over the screen at the context's anchor with the
--- row marked "›"; false when the row no longer offers any.
+-- row marked "›"; false when the row offers none.
 local function render_context(view: View, menu: Menu, preferences: appearance.Preferences): boolean
     local context = menu.context
     local buttons = choices(menu)

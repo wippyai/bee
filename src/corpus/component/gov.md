@@ -337,7 +337,10 @@ declares its namespace with a `bee.kernel` registry entry (`scope: tree` or
 governance builds the protected set from the registry at decision time. The
 host trust map `bee.gov:protected_kernel` keeps the `super_edit` list of exact
 entries the host opens to a super-edit profile; Bee selects the
-`bee.apps.settings` and `bee.shell` entries. Each driver's own
+`bee.apps.settings` and `bee.shell` entries. Settings offers an installed
+application's namespace as an edit area, and any namespace that declares a
+`bee.gov.edit_area` entry (`meta.title`, as `bee.shell:edit_area` names the
+Desktop) once one of its entries is opened. Each driver's own
 `bee.driver.<name>` and `bee.drivers.<name>` namespaces stay under governance.
 A super-edit profile row carries `expires_at`; it is admitted only
 while unexpired, must set `allow.auto_start: false`, must name a dedicated

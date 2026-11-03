@@ -154,7 +154,7 @@ local function main(options: unknown)
             editing.problem = tostring(list_error or configuration_error or answer_error
                 or (reply and (reply.message or reply.code)) or "Editing areas are unavailable")
         else
-            edit_mode.load(editing, launch.workspace_id, listed.apps, configuration.data, value.protected)
+            edit_mode.load(editing, launch.workspace_id, listed.apps, configuration.data, value.protected, value.areas)
         end
         dirty = true
     end

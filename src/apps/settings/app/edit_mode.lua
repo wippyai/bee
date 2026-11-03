@@ -10,21 +10,32 @@ type Area = {id: string, title: string}
 type Grant = {area: string, expires_at: string}
 type State = {areas: {Area}, grants: {Grant}, form: forms.Form?, problem: string}
 function M.new(): State return {areas = {}, grants = {}, form = nil, problem = ""} end
-function M.load(state: State, workspace: string, apps: unknown, configuration: unknown, protection: unknown): string?
+-- load: the editable areas are the installed applications' namespaces and
+-- the declared edit areas whose namespace holds an entry the host opens to
+-- editing, each outside the protected kernel.
+function M.load(state: State, workspace: string, apps: unknown, configuration: unknown, protection: unknown, declared: unknown): string?
     local manifest, manifest_error = kernel.decode(protection)
     local decoded, decode_error = profiles.decode(configuration)
     local installed, apps_error = bounds.dense_list(apps, 128, "installed apps")
+    local listed, areas_error = bounds.dense_list(declared == nil and {} or declared, 64, "edit areas")
     state.areas, state.grants = {}, {}
-    if not manifest or not decoded or not installed then
-        state.problem = manifest_error or decode_error or apps_error or "Editing areas are unavailable"
+    if not manifest or not decoded or not installed or not listed then
+        state.problem = manifest_error or decode_error or apps_error or areas_error or "Editing areas are unavailable"
         return state.problem
     end
     local names: {[string]: string} = {}
     local function offer(id: string, title: string)
         if not super_edit.is_kernel(id, manifest) then names[id] = title end
     end
-    for _, opened in ipairs(manifest.super_edit) do
-        if opened == "bee.shell:main" then offer("bee.shell", "Desktop") end
+    for _, raw in ipairs(listed) do
+        local area = bounds.object(raw)
+        local namespace = area and bounds.id(area.namespace)
+        local title = area and bounds.line(area.title, 160)
+        if namespace and title then
+            for _, opened in ipairs(manifest.super_edit) do
+                if opened:match("^([^:]+):") == namespace then offer(namespace, title) end
+            end
+        end
     end
     for _, raw in ipairs(installed) do
         local app = bounds.object(raw)

@@ -27,8 +27,9 @@ local function define_tests()
             local configuration = assert(super_edit.enable({profiles = {}}, workspace, "node", {"bee.apps.settings.app"},
                 "2099-01-01T00:00:00.000Z", protection))
             test.is_nil(model.load(state, workspace, {{id = "bee.apps.settings.app:app", title = "Settings"},
-                {id = "bee.approvals.inbox.app:app", title = "Needs you"}}, configuration, protection))
+                {id = "bee.approvals.inbox.app:app", title = "Needs you"}}, configuration, protection, {{namespace = "bee.shell", title = "Desktop"}}))
             test.eq(#state.areas, 2)
+            test.eq(state.areas[1].title, "Desktop")
             test.eq(#state.grants, 1)
             test.eq(state.grants[1].area, "Settings")
             model.enable(state)
@@ -48,6 +49,16 @@ local function define_tests()
             test.contains(grants, "Disable all")
             test.is_nil(model.load(state, "another-workspace", {}, configuration, protection))
             test.eq(#state.grants, 0)
+        end)
+        test.it("offers each declared edit area whose entries the host opens to editing", function()
+            local state = model.new()
+            local protection = {revision = 1, super_edit = {"bee.demo:main"}, entries = {"bee.gov:protected_kernel"}}
+            local configuration = {profiles = {}}
+            test.is_nil(model.load(state, string.rep("a", 32), {}, configuration, protection,
+                {{namespace = "bee.demo", title = "Demo"}, {namespace = "bee.closed", title = "Closed"}}))
+            test.eq(#state.areas, 1)
+            test.eq(state.areas[1].id, "bee.demo")
+            test.eq(state.areas[1].title, "Demo")
         end)
         test.it("feeds form area and duration through the exact-area confirmation validator", function()
             for _, values in ipairs({{"bee.*", "1h"}, {"bee.demo?", "8h"}, {"bee.demo", "25h"}, {"bee.demo", "0h"}}) do

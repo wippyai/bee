@@ -6,13 +6,16 @@ local M = {}
 local function fail(code: string, message: string): {[string]: unknown}
     return {ok = false, error = {code = code, message = message}}
 end
-local function call(operation: string, raw: unknown): {[string]: unknown}
+-- call: the profile MCP tool's get, list or put in the bound workspace; the
+-- workspace is host owned and never an argument.
+function M.call(raw: unknown): {[string]: unknown}
     local arguments = bounds.object(raw)
     if not arguments then return fail("INVALID", "profile arguments must be an object") end
+    if not bounds.member(arguments.operation, {"get", "list", "put"}) then return fail("INVALID", "operation must be get, list or put") end
+    if arguments.workspace_id ~= nil then return fail("INVALID", "profile workspace is host owned") end
     local request: {[string]: unknown} = {}
     for key, value in pairs(arguments) do request[key] = value end
-    if request.operation ~= nil or request.workspace_id ~= nil then return fail("INVALID", "profile identity is host owned") end
-    request.operation, request.workspace_id = operation, ctx.get("bee.workspace_id")
+    request.workspace_id = ctx.get("bee.workspace_id")
     local decoded, err = protocol.decode(request)
     if not decoded then return fail("INVALID", err or "invalid profile request") end
     local owner, open_error = contract.get("bee.harness:profiles")
@@ -22,7 +25,4 @@ local function call(operation: string, raw: unknown): {[string]: unknown}
     local reply, call_error = instance:call(request)
     return bounds.object(reply) or fail("UNAVAILABLE", tostring(call_error))
 end
-function M.get(raw: unknown): {[string]: unknown} return call("get", raw) end
-function M.list(raw: unknown): {[string]: unknown} return call("list", raw) end
-function M.put(raw: unknown): {[string]: unknown} return call("put", raw) end
 return M

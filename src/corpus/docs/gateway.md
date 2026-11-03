@@ -70,10 +70,14 @@ authority.
 
 The host may admit the ten session tools (session_catalog, session_open,
 session_run, session_send, session_await, session_join, session_get,
-session_list, session_cancel, session_close), thread_read, thread_message,
-capabilities, overlay, components, install_request, uninstall_request,
-install_status, publish_request, publish_status, delivery, publish, request_capability,
-capability_status, docs and application_open. The server also lists `session`
+session_list, session_cancel, session_manage), profile, thread_read,
+thread_message, question, capabilities, overlay, components, hub_install,
+hub_publish, delivery, publish, tests, elevation, process_run, http_request,
+app_tools, docs and application_open. A tool that covers related steps takes
+an `operation` argument naming one, and refuses a field that operation does
+not take: session_manage `close`, `remove` or `rename`; profile `get`, `list`
+or `put`; hub_install `install`, `uninstall` or `status`; hub_publish
+`publish` or `status`; elevation `request` or `status`. The server also lists `session`
 (read or select traits and context, request host-declared access) and `call_tool`.
 Each tool receives only bounded
 arguments. The binding supplies thread, subject, action, attempt and context.
@@ -92,7 +96,8 @@ thread, and the authoring path (overlay guide, delivery preflight).
 
 The ten session tools are the only way to start an agent, give it work and read
 its result. They project the `bee.threads.sessions:contract` and `bee.threads.sessions:catalog`
-owner contracts one method each; the gateway holds no session state. Arguments
+owner contracts one method per call, session_manage selecting the method by
+its operation; the gateway holds no session state. Arguments
 are the published closed schemas, every mutation requires `operation_key`, and
 caller identity travels only in the authenticated call context, never in a
 payload. The owner binding opens under the host-linked
@@ -114,8 +119,9 @@ The flow is catalog, open, send, await, close:
    tagged observation: `ready` with the result, `pending`, `blocked` or
    `uncertain`. A timeout never cancels the work. The same reference always
    names the same work.
-5. session_close seals intake and drains accepted work. Await the returned
-   operation for closure; use session_cancel to stop one Work.
+5. session_manage `close` seals intake and drains accepted work. Await the
+   returned operation for closure; use session_cancel to stop one Work.
+   `remove` deletes the session, and `rename` names it.
 
 session_run opens a fresh session, submits one Work and returns its
 `WorkReceipt`. Await the receipt. session_join observes an ordered set of

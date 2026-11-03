@@ -1674,8 +1674,7 @@ entries:
     resources:
     - bee.gateway.binding:open
     - bee.gateway.binding:admit
-    - bee.gateway.binding:request_capability
-    - bee.gateway.binding:capability_status
+    - bee.gateway.binding:elevation
     - bee.threads.binding:create
     - bee.threads.binding:get
     - bee.threads.binding:admit_action
@@ -1699,7 +1698,7 @@ entries:
     resources:
     - bee.gateway.binding:open
     - bee.gateway.binding:admit
-    - bee.gateway.binding:install_request
+    - bee.gateway.binding:hub_install
     - bee.threads.binding:create
     - bee.threads.binding:get
     - bee.threads.binding:admit_action
@@ -1745,7 +1744,7 @@ entries:
     resources:
     - bee.gateway.binding:open
     - bee.gateway.binding:admit
-    - bee.gateway.binding:publish_request
+    - bee.gateway.binding:hub_publish
     - bee.threads.binding:create
     - bee.threads.binding:get
     - bee.threads.binding:admit_action

@@ -753,9 +753,7 @@ entries:
     allow_host_home: false
     gateway_tools:
     - session_catalog
-    - profile_get
-    - profile_list
-    - profile_put
+    - profile
     - session_open
     - session_run
     - session_send
@@ -764,9 +762,7 @@ entries:
     - session_get
     - session_list
     - session_cancel
-    - session_close
-    - session_remove
-    - session_rename
+    - session_manage
     - thread_read
     - thread_message
     - question
@@ -808,9 +804,7 @@ entries:
     allow_host_home: true
     gateway_tools:
     - session_catalog
-    - profile_get
-    - profile_list
-    - profile_put
+    - profile
     - session_open
     - session_run
     - session_send
@@ -819,9 +813,7 @@ entries:
     - session_get
     - session_list
     - session_cancel
-    - session_close
-    - session_remove
-    - session_rename
+    - session_manage
     - thread_read
     - thread_message
     - question
@@ -829,9 +821,7 @@ entries:
     - overlay
     - docs
     - components
-    - install_request
-    - uninstall_request
-    - install_status
+    - hub_install
     - delivery
     - tests
     - app_tools

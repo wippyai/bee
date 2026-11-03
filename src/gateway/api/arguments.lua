@@ -9,6 +9,7 @@ local arguments = require("arguments")
 local node_tests = require("node_tests")
 local app_requests = require("app_requests")
 local requirements = require("requirements")
+local tool_folds = require("tool_folds")
 local M = {}
 M.MAX_WORKSPACE_TEXT_BYTES = 65536
 M.MAX_WORKSPACE_BASE64_BYTES = 87384
@@ -63,10 +64,38 @@ function M.message_arguments(params: Object): (Object?, string?)
     local body: Object = {message_id = decoded.message_id, message_kind = decoded.message_kind, recipient_ids = decoded.recipient_ids, content = decoded.content}
     return {idempotency_key = key, body = body}, nil
 end
+-- The fields each operation of a tool that takes an operation names.
+local OPERATION_FIELDS: {[string]: {[string]: {string}}} = {
+    profile = {get = {"profile_id"}, list = {"after_key", "expected_cursor", "limit", "definition_ref", "query", "sort"},
+        put = {"profile_id", "expected_revision", "idempotency_key", "profile"}},
+    elevation = {request = {"capability", "parameters", "ttl_ms"}, status = {"approval_id"}},
+    hub_install = {install = {"component", "version", "parameters"}, uninstall = {"component"}, status = {"request_id"}},
+    hub_publish = {publish = {"component", "version", "visibility", "source"}, status = {"request_id"}},
+}
+M.OPERATION_FIELDS = OPERATION_FIELDS
+-- operation_arguments: the operation a call names and the arguments without
+-- it, refusing a field the operation does not take.
+function M.operation_arguments(tool: string, params: Object): (string?, Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, nil, "arguments must be an object" end
+    local operations = tool_folds.OPERATIONS[tool] or {}
+    local operation = bounds.member(arguments.operation, operations)
+    local by_operation = OPERATION_FIELDS[tool]
+    local fields = operation and by_operation and by_operation[operation]
+    if not operation or not fields then return nil, nil, "operation must be one of " .. table.concat(operations, ", ") end
+    local rest: Object = {}
+    for key, value in pairs(arguments) do
+        if key ~= "operation" then
+            if not bounds.member(key, fields) then return nil, nil, tostring(key) .. " does not belong to operation " .. operation end
+            rest[key] = value
+        end
+    end
+    return operation, rest, nil
+end
 -- An elevation request names one catalog capability with its parameters
 -- and an optional TTL; the endpoint supplies the binding. Status polls
 -- the request by approval id.
-function M.capability_arguments(params: Object): (Object?, string?)
+local function capability_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     local unknown_field = bounds.fields(arguments, {"capability", "parameters", "ttl_ms"})
@@ -83,7 +112,7 @@ function M.capability_arguments(params: Object): (Object?, string?)
     end
     return request, nil
 end
-function M.capability_status_arguments(params: Object): (Object?, string?)
+local function capability_status_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     local unknown_field = bounds.fields(arguments, {"approval_id"})
@@ -91,6 +120,17 @@ function M.capability_status_arguments(params: Object): (Object?, string?)
     local approval_id = bounds.id(arguments.approval_id)
     if not approval_id then return nil, "approval_id is required and must be an identifier" end
     return {approval_id = approval_id}, nil
+end
+function M.elevation_arguments(params: Object): (Object?, string?)
+    local operation, rest, invalid = M.operation_arguments("elevation", params)
+    if not operation or not rest then return nil, invalid end
+    local request: Object? = nil
+    local failure: string? = nil
+    if operation == "request" then request, failure = capability_arguments({arguments = rest})
+    else request, failure = capability_status_arguments({arguments = rest}) end
+    if not request then return nil, failure end
+    request.operation = operation
+    return request, nil
 end
 -- A held elevation's tools name the approval they exercise; the gateway
 -- reads everything else from that approval.
@@ -137,7 +177,7 @@ function M.http_request_arguments(params: Object): (Object?, string?)
     return request, nil
 end
 -- Installation requests name a package; the host resolves everything else.
-function M.install_arguments(params: Object, uninstall: boolean): (Object?, string?)
+local function install_arguments(params: Object, uninstall: boolean): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     local allowed: {string} = {"component", "version", "parameters"}
@@ -159,7 +199,7 @@ function M.install_arguments(params: Object, uninstall: boolean): (Object?, stri
     end
     return request, nil
 end
-function M.install_status_arguments(params: Object): (Object?, string?)
+local function install_status_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     local unknown_field = bounds.fields(arguments, {"request_id"})
@@ -170,7 +210,7 @@ function M.install_status_arguments(params: Object): (Object?, string?)
 end
 -- Publication requests name the exact package version, its visibility and
 -- the admitted locked source tree; the worker seals the tree into one pack.
-function M.hub_publish_arguments(params: Object): (Object?, string?)
+local function publish_request_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     local unknown_field = bounds.fields(arguments, {"component", "version", "visibility", "source"})
@@ -185,7 +225,7 @@ function M.hub_publish_arguments(params: Object): (Object?, string?)
     if not source then return nil, "source is required as an absolute locked source tree" end
     return {component = component, version = version, visibility = visibility, source = source}, nil
 end
-function M.hub_publish_status_arguments(params: Object): (Object?, string?)
+local function publish_status_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     local unknown_field = bounds.fields(arguments, {"request_id"})
@@ -193,6 +233,28 @@ function M.hub_publish_status_arguments(params: Object): (Object?, string?)
     local request_id = bounds.id(arguments.request_id)
     if not request_id then return nil, "request_id is required and must be an identifier" end
     return {request_id = request_id}, nil
+end
+function M.hub_install_arguments(params: Object): (Object?, string?)
+    local operation, rest, invalid = M.operation_arguments("hub_install", params)
+    if not operation or not rest then return nil, invalid end
+    local request: Object? = nil
+    local failure: string? = nil
+    if operation == "status" then request, failure = install_status_arguments({arguments = rest})
+    else request, failure = install_arguments({arguments = rest}, operation == "uninstall") end
+    if not request then return nil, failure end
+    request.operation = operation
+    return request, nil
+end
+function M.hub_publish_arguments(params: Object): (Object?, string?)
+    local operation, rest, invalid = M.operation_arguments("hub_publish", params)
+    if not operation or not rest then return nil, invalid end
+    local request: Object? = nil
+    local failure: string? = nil
+    if operation == "publish" then request, failure = publish_request_arguments({arguments = rest})
+    else request, failure = publish_status_arguments({arguments = rest}) end
+    if not request then return nil, failure end
+    request.operation = operation
+    return request, nil
 end
 -- The capability report takes no arguments: the binding selects the surface.
 function M.capabilities_arguments(params: Object): (Object?, string?)

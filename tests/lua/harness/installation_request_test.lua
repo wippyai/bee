@@ -95,7 +95,7 @@ local function attempt(workspace: string): Binding
         attempt_id = attempt_id, idempotency_key = fresh("prepare"), prepared = {binding_ref = "test-binding", binding_digest = "test-digest",
             profile_id = "test-profile", profile_digest = "test-profile-digest", placement_binding = "test-placement",
             placement_attempt_id = attempt_id, plan_digest = "test-plan"}})
-    local tools = {"install_request", "uninstall_request", "install_status"}
+    local tools = {"hub_install"}
     local admitted = call(AGENT, workspace, "bee.gateway.binding:admit", {subject = AGENT, action_id = action,
         attempt_id = attempt_id, thread_id = thread, owner_incarnation = 1, carrier_epoch = 1, tools = tools,
         ttl_ms = 600000, idempotency_key = fresh("admit"), workspace_id = workspace,
@@ -397,8 +397,7 @@ local function define_tests()
             local workspace = fresh("install-denied")
             call(AGENT, workspace, "bee.gateway.binding:open", {address = endpoint()})
             local binding = attempt(workspace)
-            local foreign = raw_call(OTHER, workspace, "bee.gateway.binding:install_request",
-                {binding_id = binding.binding_id, component = "acme/tool", version = "1.0.0"})
+            local foreign = raw_call(OTHER, workspace, "bee.gateway.binding:hub_install", {operation = "install", binding_id = binding.binding_id, component = "acme/tool", version = "1.0.0"})
             test.is_false(foreign.ok)
             test.eq((assert(bounds.object(foreign.error))).code, "DENIED")
             local reference = registry.get(installation.CONFIGURATION_REF)
@@ -407,8 +406,7 @@ local function define_tests()
             local linked = data.resource_ref
             data.resource_ref = nil
             apply(reference)
-            local unlinked = raw_call(AGENT, workspace, "bee.gateway.binding:install_request",
-                {binding_id = binding.binding_id, component = "acme/tool", version = "1.0.0"})
+            local unlinked = raw_call(AGENT, workspace, "bee.gateway.binding:hub_install", {operation = "install", binding_id = binding.binding_id, component = "acme/tool", version = "1.0.0"})
             data.resource_ref = linked
             apply(reference)
             test.is_false(unlinked.ok)

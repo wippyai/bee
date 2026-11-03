@@ -78,12 +78,12 @@ local TOOL_NAMES = {
     thread_read = "Read conversation history", thread_message = "Add conversation notes",
     session_catalog = "Browse agents", session_open = "Open sessions", session_run = "Start work",
     session_send = "Send work to sessions", session_await = "Read work results", session_join = "Wait for multiple results",
-    session_get = "Inspect sessions", session_list = "Find peer sessions", session_cancel = "Stop work", session_close = "Close sessions", session_remove = "Remove sessions", session_rename = "Rename sessions",
-    capabilities = "Read available permissions", request_capability = "Request permissions", capability_status = "Read permission decisions",
+    session_get = "Inspect sessions", session_list = "Find peer sessions", session_cancel = "Stop work", session_manage = "Close, remove and rename sessions",
+    capabilities = "Read available permissions", elevation = "Request permissions and read their decisions",
     process_run = "Run approved commands", http_request = "Send approved web requests",
     app_tools = "Use workspace application tools",
     guide = "Read Bee help", preflight = "Check application changes", delivery = "Deliver application changes",
-    install_request = "Request app installation", uninstall_request = "Request app removal", install_status = "Read installation status",
+    hub_install = "Request app installation and removal", hub_publish = "Request package publication", profile = "Read and save agent profiles",
 }
 local function human(name: string): string
     local words = name:gsub("_", " ")

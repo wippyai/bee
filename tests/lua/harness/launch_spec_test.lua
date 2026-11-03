@@ -70,7 +70,7 @@ local function define_tests()
         end)
         test.it("spawns a saved spec through the real carrier and MCP, including a narrowed child", function()
             local parent_id, child_id = fresh("spec-parent"), fresh("spec-child")
-            local tools = {"thread_read", "capabilities", "profile_get", "profile_put", "profile_list", "session_open", "session_run", "session_get", "session_close", "thread_message"}
+            local tools = {"thread_read", "capabilities", "profile", "session_open", "session_run", "session_get", "session_manage", "thread_message"}
             with_entry("bee.tests.threads.sessions:fake_owner", function(data)
                 local contracts: {{[string]: unknown}} = {}
                 for _, item in ipairs(principals.objects(data.contracts)) do

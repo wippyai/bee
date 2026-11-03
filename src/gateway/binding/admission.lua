@@ -49,7 +49,7 @@ function M.effect_binding(value: unknown): Reply
     end
     local binding_id = bounds.id(object.binding_id)
     if not binding_id then return fail("INVALID", "binding_id is not an identifier") end
-    local required: {string} = {"install_request", "uninstall_request"}
+    local required: {string} = {"hub_install"}
     if object.tools ~= nil then
         local named = bounds.ids(object.tools)
         if named and #named >= 1 and #named <= part_model.MAX_TOOLS then

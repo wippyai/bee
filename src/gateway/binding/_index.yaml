@@ -152,28 +152,13 @@ entries:
     - bee.gateway.security:trait_registry_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
-- name: request_capability
+- name: elevation
   kind: function.lua
-  source: file://request_capability_method.lua
+  source: file://elevation_method.lua
   method: handle
   imports:
     gateway: bee.gateway.binding:gateway
-  security:
-    policies:
-    - bee.gateway.security:store_policy
-    - bee.gateway.security:grant_context_policy
-    - bee.gateway.security:trait_registry_policy
-    - bee.gateway.security:execute_policy
-    - bee.gateway.security:elevation_policy
-    - bee.gateway.security:access_reference_policy
-    - bee.gateway.security:access_policy_read_policy
-    - bee.resources.security:resource_grant_thread_policy
-- name: capability_status
-  kind: function.lua
-  source: file://capability_status_method.lua
-  method: handle
-  imports:
-    gateway: bee.gateway.binding:gateway
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gateway.security:store_policy
@@ -217,44 +202,13 @@ entries:
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
     - bee.gateway.security:http_use_policy
-- name: install_request
+- name: hub_install
   kind: function.lua
-  source: file://install_request_method.lua
+  source: file://hub_install_method.lua
   method: handle
   imports:
     gateway: bee.gateway.binding:gateway
-  security:
-    policies:
-    - bee.gateway.security:store_policy
-    - bee.gateway.security:grant_context_policy
-    - bee.gateway.security:trait_registry_policy
-    - bee.gateway.security:execute_policy
-    - bee.gateway.security:installation_policy
-    - bee.gateway.security:installation_library_policy
-    - bee.gateway.security:access_reference_policy
-    - bee.gateway.security:access_policy_read_policy
-- name: uninstall_request
-  kind: function.lua
-  source: file://uninstall_request_method.lua
-  method: handle
-  imports:
-    gateway: bee.gateway.binding:gateway
-  security:
-    policies:
-    - bee.gateway.security:store_policy
-    - bee.gateway.security:grant_context_policy
-    - bee.gateway.security:trait_registry_policy
-    - bee.gateway.security:execute_policy
-    - bee.gateway.security:installation_policy
-    - bee.gateway.security:installation_library_policy
-    - bee.gateway.security:access_reference_policy
-    - bee.gateway.security:access_policy_read_policy
-- name: install_status
-  kind: function.lua
-  source: file://install_status_method.lua
-  method: handle
-  imports:
-    gateway: bee.gateway.binding:gateway
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gateway.security:store_policy
@@ -272,27 +226,13 @@ entries:
     bounds: bee.drivers.values:bounds
     gateway: bee.gateway.binding:gateway
     hubpublish: bee.gateway.security:publish
-- name: publish_request
+- name: hub_publish
   kind: function.lua
-  source: file://publish_request_method.lua
+  source: file://hub_publish_method.lua
   method: handle
   imports:
     publication: bee.gateway.binding:publication
-  security:
-    policies:
-    - bee.gateway.security:store_policy
-    - bee.gateway.security:grant_context_policy
-    - bee.gateway.security:trait_registry_policy
-    - bee.gateway.security:execute_policy
-    - bee.gateway.security:publication_policy
-    - bee.gateway.security:access_reference_policy
-    - bee.gateway.security:access_policy_read_policy
-- name: publish_status
-  kind: function.lua
-  source: file://publish_status_method.lua
-  method: handle
-  imports:
-    publication: bee.gateway.binding:publication
+    bounds: bee.drivers.values:bounds
   security:
     policies:
     - bee.gateway.security:store_policy

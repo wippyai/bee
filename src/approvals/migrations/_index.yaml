@@ -110,3 +110,13 @@ entries:
   method: run
   imports:
     migration: wippy.migration:migration
+- name: tool_folds
+  kind: function.lua
+  source: file://tool_folds.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-11-03T00:10:00Z'}
+  modules: [json]
+  imports:
+    migration: wippy.migration:migration
+    canonical: bee.drivers.values:canonical
+    folds: bee.gateway.api:tool_folds

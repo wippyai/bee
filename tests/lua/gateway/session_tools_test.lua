@@ -1,6 +1,7 @@
--- MIT. The twelve default session tools: closed schemas, mandatory operation
+-- MIT. The ten default session tools: closed schemas, mandatory operation
 -- keys, identity refused in payloads, exact projection onto a fake owner
--- binding, and owner replies held to the published output schema.
+-- binding, and owner replies held to the published output schema. A case
+-- names a tool, or session_manage with the operation it calls.
 local test = require("test")
 local principals = require("principals")
 local bounds = require("bounds")
@@ -16,8 +17,13 @@ local WORK2 = "bw:node-a:ws-1:w2"
 local OP = "bo:node-a:ws-1:o1"
 local NOW = "2026-09-29T10:00:00Z"
 
-local MUTATIONS = {"session_open", "session_run", "session_send", "session_join", "session_cancel", "session_close", "session_remove", "session_rename"}
+local MUTATIONS = {"session_open", "session_run", "session_send", "session_join", "session_cancel", "session_manage.close", "session_manage.remove", "session_manage.rename"}
 local READS = {"session_catalog", "session_await", "session_get", "session_list"}
+local CASES = {"session_catalog", "session_open", "session_run", "session_send", "session_await", "session_join",
+    "session_get", "session_list", "session_cancel", "session_manage.close", "session_manage.remove", "session_manage.rename"}
+
+local function tool_of(case: string): string return (case:match("^([%w_]+)")) or case end
+local function operation_of(case: string): string? return case:match("%.(%w+)$") end
 
 local function valid(name: string): Object
     local spec = {definition = "def:research"}
@@ -30,8 +36,9 @@ local function valid(name: string): Object
     if name == "session_get" then return {work = WORK} end
     if name == "session_list" then return {filter = {lifecycle = "active"}} end
     if name == "session_cancel" then return {work = WORK, reason = "stop", operation_key = "k1"} end
-    if name == "session_rename" then return {session = SESSION, name = "Release checks", operation_key = "k1"} end
-    return {session = SESSION, operation_key = "k1"}
+    if name == "session_manage.rename" then return {operation = "rename", session = SESSION, name = "Release checks", operation_key = "k1"} end
+    if name == "session_manage.remove" then return {operation = "remove", session = SESSION, history = true, operation_key = "k1"} end
+    return {operation = "close", session = SESSION, expected_incarnation = 1, operation_key = "k1"}
 end
 
 local function snapshot(): Object
@@ -50,9 +57,9 @@ local function success(name: string): Object
     if name == "session_open" then return {ok = true, value = {session = SESSION, operation = OP, snapshot = snapshot()}} end
     if name == "session_run" or name == "session_send" then return {ok = true, value = receipt()} end
     if name == "session_cancel" then return {ok = true, value = {operation = OP, subject = WORK, state = "requested", effect = "cancel"}} end
-    if name == "session_close" then return {ok = true, value = {operation = OP, subject = SESSION, state = "requested", effect = "close"}} end
-    if name == "session_remove" then return {ok = true, value = {operation = OP, session = SESSION, state = "removing"}} end
-    if name == "session_rename" then return {ok = true, value = {operation = OP, session = SESSION, title = "Release checks", name = "Release checks"}} end
+    if name == "session_manage.close" then return {ok = true, value = {operation = OP, subject = SESSION, state = "requested", effect = "close"}} end
+    if name == "session_manage.remove" then return {ok = true, value = {operation = OP, session = SESSION, state = "removing"}} end
+    if name == "session_manage.rename" then return {ok = true, value = {operation = OP, session = SESSION, title = "Release checks", name = "Release checks"}} end
     if name == "session_await" then return {ok = true, value = {subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}} end
     if name == "session_get" then return {ok = true, value = {kind = "session", value = snapshot()}} end
     if name == "session_list" then return {ok = true, value = {items = {snapshot()}}} end
@@ -74,8 +81,8 @@ end
 
 local function define_tests()
     test.describe("Default session MCP tools", function()
-        test.it("publishes exactly the twelve tools as owner contract projections", function()
-            test.eq(#session_tools.NAMES, 12)
+        test.it("publishes exactly the ten tools as owner contract projections", function()
+            test.eq(#session_tools.NAMES, 10)
             local seen: {[string]: mcp.Tool} = {}
             for _, tool in ipairs(mcp.TOOLS) do
                 test.is_nil(seen[tool.name])
@@ -85,7 +92,12 @@ local function define_tests()
                 local tool = seen[name]
                 if not tool then error("missing " .. name) end
                 local contract, method = session_tools.target(name)
-                test.eq(tool.operation, tostring(contract) .. "." .. tostring(method))
+                if name == "session_manage" then
+                    test.eq(tool.operation, contract)
+                    test.is_nil(method)
+                else
+                    test.eq(tool.operation, tostring(contract) .. "." .. tostring(method))
+                end
                 test.eq(tool.policies[1], mcp.TOOL_POLICY_REFS.session)
                 local outputs = mcp.OUTPUT_SCHEMAS
                 test.not_nil(outputs[name])
@@ -97,14 +109,14 @@ local function define_tests()
             test.eq((seen.session_send).operation, "bee.threads.sessions:contract.send")
             for _, name in ipairs({"thread_launch", "run_status", "run_wait", "run_cancel", "thread_sessions",
                 "session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply",
-                "launch_definitions"}) do
+                "launch_definitions", "session_close", "session_remove", "session_rename"}) do
                 test.is_nil(seen[name], name .. " must not be part of the session tool catalog")
                 test.is_nil(mcp.tool(name), name .. " must not have an MCP route")
             end
         end)
         test.it("advertises operation_key as required on every mutation and annotations that match", function()
             for _, name in ipairs(MUTATIONS) do
-                local tool = mcp.tool(name)
+                local tool = mcp.tool(tool_of(name))
                 local required = principals.strings(tool.schema.required)
                 local found = false
                 for _, item in ipairs(required) do if item == "operation_key" then found = true end end
@@ -113,7 +125,7 @@ local function define_tests()
                 test.eq(tool.annotations.idempotentHint, true)
             end
             for _, name in ipairs(READS) do test.eq((mcp.tool(name)).annotations.readOnlyHint, true) end
-            for _, name in ipairs({"session_join", "session_cancel", "session_close", "session_remove"}) do
+            for _, name in ipairs({"session_join", "session_cancel", "session_manage"}) do
                 test.eq((mcp.tool(name)).annotations.destructiveHint, true)
             end
             test.eq((mcp.tool("session_send")).annotations.destructiveHint, false)
@@ -128,12 +140,12 @@ local function define_tests()
             test.is_true(await:find("timeout never cancels", 1, true) ~= nil)
             test.is_true(await:find("Wait up to timeout_ms", 1, true) ~= nil)
             test.is_true((mcp.tool("session_join")).description:find("waiting up to timeout_ms", 1, true) ~= nil)
-            local remove = (mcp.tool("session_remove")).description
-            test.is_true(remove:find("stops its agent first", 1, true) ~= nil)
-            test.is_true(remove:find("history", 1, true) ~= nil)
-            test.is_true(remove:find("shared", 1, true) ~= nil)
-            local rename = (mcp.tool("session_rename")).description
-            test.is_true(rename:find("empty name", 1, true) ~= nil)
+            local manage = (mcp.tool("session_manage")).description
+            test.is_true(manage:find("close seals session intake", 1, true) ~= nil)
+            test.is_true(manage:find("stops its agent first", 1, true) ~= nil)
+            test.is_true(manage:find("history true", 1, true) ~= nil)
+            test.is_true(manage:find("shared", 1, true) ~= nil)
+            test.is_true(manage:find("empty name", 1, true) ~= nil)
         end)
         test.it("admits every tool through the strict catalog and keeps the no-shadow rule", function()
             local list: {Object} = {}
@@ -154,8 +166,8 @@ local function define_tests()
             test.is_nil((surface.prepare(raw, mcp.TOOLS, {"session_send"})))
         end)
         test.it("decodes a valid call for every tool", function()
-            for _, name in ipairs(session_tools.NAMES) do
-                local request, failure = session_tools.decode(name, {arguments = valid(name)})
+            for _, name in ipairs(CASES) do
+                local request, failure = session_tools.decode(tool_of(name), {arguments = valid(name)})
                 test.is_nil(failure)
                 test.not_nil(request)
             end
@@ -179,29 +191,29 @@ local function define_tests()
             for _, name in ipairs(MUTATIONS) do
                 local arguments = valid(name)
                 arguments.operation_key = nil
-                local request, failure = session_tools.decode(name, {arguments = arguments})
+                local request, failure = session_tools.decode(tool_of(name), {arguments = arguments})
                 test.is_nil(request)
                 test.eq(failure, "arguments.operation_key is required")
             end
         end)
         test.it("accepts an optional bounded node on every session tool", function()
-            for _, name in ipairs(session_tools.NAMES) do
+            for _, name in ipairs(CASES) do
                 local arguments = valid(name)
                 arguments.node = "bee-peer"
-                local request, err = session_tools.decode(name, {arguments = arguments})
+                local request, err = session_tools.decode(tool_of(name), {arguments = arguments})
                 test.not_nil(request, tostring(err))
                 test.eq(request and request.node, "bee-peer")
                 arguments.node = ""
-                test.is_nil(session_tools.decode(name, {arguments = arguments}))
+                test.is_nil(session_tools.decode(tool_of(name), {arguments = arguments}))
             end
         end)
         test.it("refuses caller identity and unknown fields in every payload", function()
-            for _, name in ipairs(session_tools.NAMES) do
+            for _, name in ipairs(CASES) do
                 for _, field in ipairs({"subject_id", "workspace_id", "thread_id", "caller", "sender_action_id", "incarnation_epoch"}) do
                     if not (name == "session_await" and field == "subject_id") then
                         local arguments = valid(name)
                         arguments[field] = "forged"
-                        local request, failure = session_tools.decode(name, {arguments = arguments})
+                        local request, failure = session_tools.decode(tool_of(name), {arguments = arguments})
                         test.is_nil(request)
                         test.eq(failure, "unknown field " .. field)
                     end
@@ -212,7 +224,7 @@ local function define_tests()
             local function refused(name: string, mutate: (Object) -> ()): string?
                 local arguments = valid(name)
                 mutate(arguments)
-                local request, failure = session_tools.decode(name, {arguments = arguments})
+                local request, failure = session_tools.decode(tool_of(name), {arguments = arguments})
                 test.is_nil(request)
                 return failure
             end
@@ -232,15 +244,22 @@ local function define_tests()
             refused("session_join", function(a) a.quorum = 3 end)
             refused("session_join", function(a) a.policy = "all_success" end)
             refused("session_join", function(a) a.works = {} end)
-            refused("session_close", function(a) a.mode = "kill" end)
-            refused("session_remove", function(a) a.expected_incarnation = 1 end)
-            refused("session_remove", function(a) a.session = WORK end)
-            refused("session_remove", function(a) a.history = "yes" end)
-            test.not_nil(session_tools.decode("session_remove", {arguments = {session = SESSION, history = true, operation_key = "k1"}}))
-            refused("session_rename", function(a) a.name = nil end)
-            refused("session_rename", function(a) a.name = string.rep("n", 129) end)
-            refused("session_rename", function(a) a.session = WORK end)
-            test.not_nil(session_tools.decode("session_rename", {arguments = {session = SESSION, name = "", operation_key = "k1"}}))
+            refused("session_manage.close", function(a) a.mode = "kill" end)
+            refused("session_manage.close", function(a) a.operation = nil end)
+            refused("session_manage.close", function(a) a.operation = "kill" end)
+            refused("session_manage.close", function(a) a.history = true end)
+            refused("session_manage.close", function(a) a.name = "named" end)
+            refused("session_manage.remove", function(a) a.expected_incarnation = 1 end)
+            refused("session_manage.remove", function(a) a.name = "named" end)
+            refused("session_manage.remove", function(a) a.session = WORK end)
+            refused("session_manage.remove", function(a) a.history = "yes" end)
+            test.not_nil(session_tools.decode("session_manage", {arguments = {operation = "remove", session = SESSION, operation_key = "k1"}}))
+            test.not_nil(session_tools.decode("session_manage", {arguments = {operation = "close", session = SESSION, operation_key = "k1"}}))
+            refused("session_manage.rename", function(a) a.name = nil end)
+            refused("session_manage.rename", function(a) a.history = false end)
+            refused("session_manage.rename", function(a) a.name = string.rep("n", 129) end)
+            refused("session_manage.rename", function(a) a.session = WORK end)
+            test.not_nil(session_tools.decode("session_manage", {arguments = {operation = "rename", session = SESSION, name = "", operation_key = "k1"}}))
             refused("session_open", function(a) a.spec = {} end)
             refused("session_open", function(a) a.spec = {definition = "d", limits = {active_ms = 0}} end)
             refused("session_await", function(a) a.deadline_at = "2026-09-29T10:00:00.5+02:00" end)
@@ -261,33 +280,43 @@ local function define_tests()
                 input = {schema = "s", value = deep}, operation_key = "k"}})
             test.is_nil(request)
         end)
-        test.it("projects each tool onto exactly one owner method with the validated request", function()
+        test.it("projects each call onto exactly one owner method with the validated request", function()
             local expected = {session_catalog = "list", session_open = "open", session_run = "run", session_send = "send",
                 session_await = "await", session_join = "join", session_get = "get", session_list = "list",
-                session_cancel = "cancel", session_close = "close", session_remove = "remove", session_rename = "rename"}
-            for _, name in ipairs(session_tools.NAMES) do
+                session_cancel = "cancel", ["session_manage.close"] = "close", ["session_manage.remove"] = "remove",
+                ["session_manage.rename"] = "rename"}
+            for _, name in ipairs(CASES) do
                 local log: {Object} = {}
                 local owner = fake_owner(log)
-                local request = assert(bounds.object(session_tools.decode(name, {arguments = valid(name)})))
-                local reply, failure = session_tools.call(owner, name, request)
+                local request = assert(bounds.object(session_tools.decode(tool_of(name), {arguments = valid(name)})))
+                local reply, failure = session_tools.call(owner, tool_of(name), request)
                 test.is_nil(failure)
                 test.not_nil(reply)
                 test.eq(#log, 1)
                 local call = assert(bounds.object(log[1]))
                 test.eq(call.method, expected[name])
-                test.eq(call.request, request)
+                local owner_request = assert(bounds.object(call.request))
+                if operation_of(name) then
+                    test.is_nil(owner_request.operation)
+                    test.eq(request.operation, operation_of(name))
+                    test.eq(session_tools.operation("session_manage", request), "bee.threads.sessions:contract." .. tostring(expected[name]))
+                    for key, value in pairs(request) do if key ~= "operation" then test.eq(owner_request[key], value) end end
+                else
+                    test.eq(call.request, request)
+                end
             end
+            test.is_nil(select(1, session_tools.call(fake_owner({}), "session_manage", {session = SESSION, operation_key = "k1"})))
             test.is_nil(select(1, session_tools.call({}, "session_open", {})))
             local _, missing = session_tools.call({}, "session_open", {})
             test.eq(missing, "owner binding has no method open")
         end)
         test.it("accepts owner replies that satisfy the published output schema", function()
-            for _, name in ipairs(session_tools.NAMES) do
-                local checked, failure = session_tools.result(name, success(name))
+            for _, name in ipairs(CASES) do
+                local checked, failure = session_tools.result(tool_of(name), success(name), operation_of(name))
                 if not checked then error(name .. ": " .. tostring(failure)) end
             end
             local fault = {ok = false, error = {code = "CONFLICT", message = "key reused", retry = "never", operation_key = "k1"}}
-            for _, name in ipairs(MUTATIONS) do test.not_nil(session_tools.result(name, fault)) end
+            for _, name in ipairs(MUTATIONS) do test.not_nil(session_tools.result(tool_of(name), fault, operation_of(name))) end
             local read_fault = {ok = false, error = {code = "NOT_FOUND", message = "gone", retry = "never"}}
             for _, name in ipairs(READS) do test.not_nil(session_tools.result(name, read_fault)) end
         end)
@@ -332,7 +361,7 @@ local function define_tests()
         test.it("refuses owner replies that break the published schema", function()
             local no_key = {ok = false, error = {code = "CONFLICT", message = "key reused", retry = "never"}}
             for _, name in ipairs(MUTATIONS) do
-                local checked = session_tools.result(name, no_key)
+                local checked = session_tools.result(tool_of(name), no_key, operation_of(name))
                 test.is_nil(checked)
             end
             local extra = success("session_send")
@@ -348,9 +377,12 @@ local function define_tests()
             local bad_cancel = success("session_cancel")
             ;(assert(bounds.object(bad_cancel.value))).effect = "close"
             test.is_nil(session_tools.result("session_cancel", bad_cancel))
-            local bad_remove = success("session_remove")
+            local bad_remove = success("session_manage.remove")
             ;(assert(bounds.object(bad_remove.value))).state = "closed"
-            test.is_nil(session_tools.result("session_remove", bad_remove))
+            test.is_nil(session_tools.result("session_manage", bad_remove, "remove"))
+            test.is_nil(session_tools.result("session_manage", success("session_manage.remove"), "rename"))
+            test.is_nil(session_tools.result("session_manage", success("session_manage.rename"), "close"))
+            test.is_nil(session_tools.result("session_manage", success("session_manage.close"), nil))
         end)
     end)
 end

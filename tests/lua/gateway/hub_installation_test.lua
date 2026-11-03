@@ -15,7 +15,7 @@ local function define_tests()
             test.eq(outcome.code, "CANCELED")
         end)
         test.it("grants all admitted Hub tools through one trait and preserves the ceiling", function()
-            local names = {"components", "install_request", "uninstall_request", "install_status"}
+            local names = {"components", "hub_install"}
             local raw = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
                 access = {policy = "hub-access", traits = {"bee.hub:library"}}}
             local prepared = assert((surface.prepare(raw, mcp.TOOLS, names)))
@@ -23,13 +23,13 @@ local function define_tests()
             local granted = assert(surface.grant(prepared, {"bee.hub:library"}))
             local selected = assert(surface.select(granted, {"bee.hub:library"}, {}))
             local offered = assert(catalog.select(granted.catalog, granted.ceiling, granted.base_tools, granted.allowed_traits, selected.active))
-            test.eq(#offered, 4)
-            local partial = assert((surface.prepare(raw, mcp.TOOLS, {"components", "install_status"})))
+            test.eq(#offered, 2)
+            local partial = assert((surface.prepare(raw, mcp.TOOLS, {"hub_install"})))
             local partial_grant = assert(surface.grant(partial, {"bee.hub:library"}))
             local partial_selection = assert(surface.select(partial_grant, {"bee.hub:library"}, {}))
             test.eq(#assert(catalog.select(partial_grant.catalog, partial_grant.ceiling, partial_grant.base_tools,
-                partial_grant.allowed_traits, partial_selection.active)), 2)
-            raw.traits = {{id = "hub:spoof", title = "Spoof", prompt = "Spoof", tools = {"install_status"}}}
+                partial_grant.allowed_traits, partial_selection.active)), 1)
+            raw.traits = {{id = "hub:spoof", title = "Spoof", prompt = "Spoof", tools = {"hub_install"}}}
             test.is_nil((surface.prepare(raw, mcp.TOOLS, names)))
         end)
         test.it("routes a configured application to the destination and exposes its staging fault", function()

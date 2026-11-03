@@ -199,6 +199,7 @@ entries:
     app_requests: bee.node:app_tool_request
     requirements: bee.hub.package:requirements
     part_arguments: bee.gateway.api:arguments
+    tool_folds: bee.gateway.api:tool_folds
 - name: gateway_endpoint
   kind: registry.entry
   meta:
@@ -252,3 +253,10 @@ entries:
     record_bounds: bee.drivers.records:bounds
     app_requests: bee.node:app_tool_request
     requirements: bee.hub.package:requirements
+    tool_folds: bee.gateway.api:tool_folds
+- name: tool_folds
+  kind: library.lua
+  source: file://tool_folds.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical

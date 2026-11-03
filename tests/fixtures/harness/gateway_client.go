@@ -447,8 +447,8 @@ func runGatewayAt(url, authorization string) int {
 			request := object{"operation": "request_access", "idempotency_key": "profile-traits", "traits": []string{"bee.tests.memory:trait"}, "reason": "This session's profile selects these application traits."}
 			report["consent_first"] = call("session", request, 91)
 			report["consent_again"] = call("session", request, 92)
-			report["profile_list"] = call("profile_list", object{}, 81)
-			got := call("profile_get", object{"profile_id": profile}, 82)
+			report["profile_list"] = call("profile", object{"operation": "list"}, 81)
+			got := call("profile", object{"operation": "get", "profile_id": profile}, 82)
 			report["profile_get"] = got
 			stored := mustObject(mustObject(got["value"])["profile"])
 			if stored != nil {
@@ -458,11 +458,11 @@ func runGatewayAt(url, authorization string) int {
 				}
 				copied["name"] = "Agent-created profile"
 				copied["active_traits"] = []string{"bee.tests.memory:trait"}
-				report["profile_put"] = call("profile_put", object{"profile_id": profile + "-copy", "expected_revision": 0, "idempotency_key": "spec-copy", "profile": copied}, 83)
+				report["profile_put"] = call("profile", object{"operation": "put", "profile_id": profile + "-copy", "expected_revision": 0, "idempotency_key": "spec-copy", "profile": copied}, 83)
 				copied["active_traits"] = []string{"bee.tests.memory:outside"}
-				report["profile_denied"] = call("profile_put", object{"profile_id": profile + "-denied", "expected_revision": 0, "idempotency_key": "spec-copy-denied", "profile": copied}, 89)
+				report["profile_denied"] = call("profile", object{"operation": "put", "profile_id": profile + "-denied", "expected_revision": 0, "idempotency_key": "spec-copy-denied", "profile": copied}, 89)
 				copied["active_traits"] = []string{"bee.app:tools"}
-				report["driver_denied"] = call("profile_put", object{"profile_id": profile + "-driver-denied", "expected_revision": 0, "idempotency_key": "spec-driver-denied", "profile": copied}, 93)
+				report["driver_denied"] = call("profile", object{"operation": "put", "profile_id": profile + "-driver-denied", "expected_revision": 0, "idempotency_key": "spec-driver-denied", "profile": copied}, 93)
 			}
 			report["spec_after_put"] = call("session", object{"operation": "read"}, 84)
 			if child, ok := context["child_profile"].(string); ok {
@@ -568,14 +568,14 @@ func reportSpecRegression(client *httpClient, url, authorization string, report 
 	profile := context["child_profile"].(string)
 	overrides := object{"name": "Child", "role": "Review changes", "context": object{"from_parent": true, "project": "caller-project"}, "input": "Read your session context"}
 	if mode == "cleared" || mode == "delegated" {
-		got := call("profile_get", object{"profile_id": context["parent_profile"]}, 105)
+		got := call("profile", object{"operation": "get", "profile_id": context["parent_profile"]}, 105)
 		copied := mustObject(mustObject(got["value"])["profile"])
 		if mode == "cleared" {
 			copied["active_traits"], copied["requestable"] = []string{}, []string{}
 		}
 		profile += "-cleared"
 		copied["name"] = fmt.Sprint(copied["name"]) + " (" + mode + ")"
-		put := call("profile_put", object{"profile_id": profile, "expected_revision": 0, "idempotency_key": "traits:" + profile, "profile": copied}, 106)
+		put := call("profile", object{"operation": "put", "profile_id": profile, "expected_revision": 0, "idempotency_key": "traits:" + profile, "profile": copied}, 106)
 		report["put_ok"] = put["ok"]
 		report["put_error"] = put["error"]
 		return

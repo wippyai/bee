@@ -32,8 +32,8 @@ overrides replace matching profile keys and host values win. MCP
 `session {operation = "read"}` returns the composed context. Name and role
 appear in the Sessions view in Agents, Sessions catalog and thread title.
 
-Agents use `profile_list {after_key?, expected_cursor?, limit?, definition_ref?, query?, sort?}`, `profile_get {profile_id}`, and
-`profile_put {profile_id, expected_revision, idempotency_key, profile}` in their
+Agents use the `profile` tool's operations `list {after_key?, expected_cursor?, limit?, definition_ref?, query?, sort?}`, `get {profile_id}`, and
+`put {profile_id, expected_revision, idempotency_key, profile}` in their
 bound workspace. Put uses the existing profiles contract's compare-and-swap
 owner and delegated profile grant. Driver and parent ceilings still apply;
 saving a gated trait cannot activate it. The editor offers Role, trait choices

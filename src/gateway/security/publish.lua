@@ -218,7 +218,7 @@ function M.drain_approved(): (integer, string?)
             end
         elseif approval_id and view.policy == policy and proposal and proposal.ref == publishing.REF and payload and binding_id then
             local raw_resolved, resolve_error = funcs.new():call("bee.gateway.binding:effect_binding",
-                {binding_id = binding_id, tools = {"publish_request"}})
+                {binding_id = binding_id, tools = {"hub_publish"}})
             if resolve_error then return count, tostring(resolve_error) end
             local resolved_reply = not resolve_error and bounds.object(raw_resolved) or nil
             local resolved = resolved_reply and resolved_reply.ok == true and bounds.object(resolved_reply.value) or nil

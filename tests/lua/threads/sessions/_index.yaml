@@ -22,7 +22,7 @@ entries:
   source: file://interactive_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [funcs, security, sql, uuid, registry, process, channel, time, json]
+  modules: [funcs, security, sql, uuid, registry, process, channel, time, json, hash]
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness
@@ -451,7 +451,7 @@ entries:
   source: file://driver_window_contract_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [funcs, security, registry]
+  modules: [funcs, security, registry, hash]
   security:
     policies: [bee.tests.harness:apply_test_policy, bee.placement.native.security:placement_exec_policy, bee.tests.threads.sessions:window_profile_test_policy]
   imports:

@@ -300,20 +300,26 @@ local function reply_of(answer: unknown): string
     return "The agent ended its turn; its reply is shown in its terminal"
 end
 
-local HEADER = "[Bee message from "
 -- prompt_text is a message's input as the text typed for it.
 local function prompt_text(value: unknown): string?
     if type(value) == "string" then return value end
     return (canonical.encode(value, 16384, 16))
 end
 
--- message_text is what a queued message types into the agent's prompt; a
--- message from another session or a person names its sender the way
--- Sessions lists it.
-local function message_text(input: unknown, sender: Object?, session: string): string?
+-- marker opens the sender line Bee types above a turn's message. It names the
+-- turn by a digest of its ref, which the agent's submitted prompt carries in
+-- whatever form its terminal renders pasted text.
+local function marker(turn: string): string
+    return "[Bee message #" .. assert(hash.sha256(turn)):sub(1, 12)
+end
+
+-- message_text is what a queued message types into the agent's prompt: the
+-- turn's sender line, naming a sender other than the session the way
+-- Sessions lists it, above the message.
+local function message_text(turn: string, input: unknown, sender: Object?, session: string): string?
     local prompt = prompt_text(input)
     if not prompt then return nil end
-    if not sender or sender.id == session then return prompt end
+    if not sender or sender.id == session then return marker(turn) .. "]\n" .. prompt end
     local name = tostring(sender.id)
     if sender.kind == "session" then
         local current = describe(name)
@@ -321,25 +327,16 @@ local function message_text(input: unknown, sender: Object?, session: string): s
         if title and title ~= "" then name = title end
     end
     if #name > 60 then name = name:sub(1, 57) .. "..." end
-    return HEADER .. name .. "]\n" .. prompt
+    return marker(turn) .. " from " .. name .. "]\n" .. prompt
 end
 
--- same_prompt is whether the prompt the agent submitted is the message typed
--- for the turn: its body, under the sender line Bee typed above it.
-local function same_prompt(typed: string, input: unknown): boolean
-    local body = prompt_text(input)
-    if not body then return false end
-    local function normal(value: string): string
-        local unified = value:gsub("\r\n?", "\n")
-        return (unified:gsub("%s+$", ""))
-    end
-    local submitted = normal(typed)
-    if submitted:sub(1, #HEADER) == HEADER then
-        local newline = submitted:find("\n", 1, true)
-        if not newline then return false end
-        submitted = submitted:sub(newline + 1)
-    end
-    return submitted == normal(body)
+-- typed_for is whether the prompt the agent submitted is the message Bee typed
+-- for the turn: it carries that turn's sender line.
+local function typed_for(submitted: string, turn: string): boolean
+    local start = marker(turn)
+    local at = submitted:find(start, 1, true)
+    local after = at and submitted:sub(at + #start, at + #start)
+    return after == "]" or after == " "
 end
 
 -- claimed is the active turn's current claim, recovered after an owner restart.
@@ -386,7 +383,7 @@ function M.launch_prompt(raw_request: unknown): Reply
     end
     local pulled, pull_error = journal.invoke("turn_pull", {turn = turn, claim = claim})
     local input = object(pulled)
-    local text = input and message_text(input.input, object(input.sender), session)
+    local text = input and message_text(assert(turn), input.input, object(input.sender), session)
     if pull_error or not input or not text then return unavailable(pull_error or "the waiting message is unreadable", nil) end
     return succeed({prompt = text})
 end
@@ -457,7 +454,7 @@ deliver = function(session: string, key_seed: string): string?
     local turn, claim = tostring(next_turn.turn), tostring(next_turn.claim)
     local pulled, pull_error = journal.invoke("turn_pull", {turn = turn, claim = claim})
     local input = object(pulled)
-    local text = input and message_text(input.input, object(input.sender), session)
+    local text = input and message_text(turn, input.input, object(input.sender), session)
     if pull_error or not input or not text then return pull_error or "the queued message is unreadable" end
     local typed, type_error = funcs.call(TYPE, {session = session, text = text})
     local reply = object(typed)
@@ -589,7 +586,7 @@ function M.hook_boundary(raw_request: unknown): Reply
         local pulled, pull_error = journal.invoke("turn_pull", {turn = active.turn, claim = current})
         local typed = object(pulled)
         if pull_error or not typed then return unavailable(pull_error or "interactive turn input unavailable", event_key) end
-        if type(request.input) ~= "string" or not same_prompt(request.input, typed.input) then return succeed({extension_response = extension_response, hook_driver = extension_response and route.provider or nil}) end
+        if type(request.input) ~= "string" or not typed_for(request.input, tostring(active.turn)) then return succeed({extension_response = extension_response, hook_driver = extension_response and route.provider or nil}) end
         turn_ref, claim = tostring(active.turn), current
     elseif not active and request.input ~= nil then
         local sent, send_error = journal.invoke("work_send", {session = session, operation_key = "hook-native:" .. boundary_key,

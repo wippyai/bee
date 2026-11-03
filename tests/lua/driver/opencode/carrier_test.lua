@@ -4,10 +4,11 @@ local harness = require("harness")
 local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
+local hash = require("hash")
 local opencode_hooks = require("opencode_hooks")
 local WORKSPACE = string.rep("a", 32)
-local function owner_text(input: string, sender: string): string
-    return "[Bee message from " .. sender .. "]\n" .. input
+local function owner_text(turn: unknown, input: string, sender: string): string
+    return "[Bee message #" .. assert(hash.sha256(tostring(turn))):sub(1, 12) .. " from " .. sender .. "]\n" .. input
 end
 local function define_tests()
     test.describe("OpenCode hook carrier settlement", function()
@@ -17,9 +18,9 @@ local function define_tests()
             local attempt = "attempt:" .. string.rep("b", 64)
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = attempt, operation_key = harness.key()}))
             local work = harness.value(journal:call("work_send", {session = opened.session, input = "e2e thread handshake", operation_key = harness.key()}))
-            harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+            local reserved = harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
             test.eq(harness.value(journal:call("work_describe", {work = work.work})).phase, "reserved")
-            local capture = opencode_hooks.capture({prompt = owner_text("e2e thread handshake", "sessions-owner"), answer = "Acknowledged e2e thread handshake"})
+            local capture = opencode_hooks.capture({prompt = owner_text(reserved.turn, "e2e thread handshake", "sessions-owner"), answer = "Acknowledged e2e thread handshake"})
             test.is_nil(capture.error)
             for _, payload in ipairs(harness.objects(capture.rows, 16)) do
                 local raw, err = funcs.new():with_scope(security.new_scope({})):with_actor(assert(security.new_actor("gateway"))):call(

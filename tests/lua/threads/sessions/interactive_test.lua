@@ -11,10 +11,17 @@ local channel = require("channel")
 local json = require("json")
 local session_tools = require("session_tools")
 local protocol = require("protocol")
+local hash = require("hash")
 local WORKSPACE = string.rep("a", 32)
--- owner_text is the text Sessions types into the agent for a queued message.
-local function owner_text(input: string, sender: string): string
-    return "[Bee message from " .. sender .. "]\n" .. input
+-- owner_text is the text Sessions types into the agent for a queued message:
+-- the sender line naming its turn, then the message.
+local function owner_text(turn: unknown, input: string, sender: string): string
+    return "[Bee message #" .. assert(hash.sha256(tostring(turn))):sub(1, 12) .. " from " .. sender .. "]\n" .. input
+end
+-- reserved_turn is the turn the session's terminal is typed or started with.
+local function reserved_turn(journal: harness.Client, session: unknown): unknown
+    local described = harness.value(journal:call("session_describe", {session = session}))
+    return (assert(bounds.object(described.active_turn))).turn
 end
 
 -- with_window_probes runs body with the window resume and type facades
@@ -121,7 +128,7 @@ local function define_tests()
             local attempt = "attempt:" .. string.rep("a", 64)
             harness.value(journal:call("session_attach", {session = opened.session, attempt_id = attempt, operation_key = harness.key()}))
             local work = harness.value(journal:call("work_send", {session = opened.session, input = "peer boundary message", operation_key = harness.key()}))
-            harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+            local reserved = harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
             local function hook(event: string, payload: {[string]: unknown}): {[string]: unknown}
                 local raw, err = funcs.new():with_scope(security.new_scope({})):with_actor(assert(security.new_actor("gateway"))):call(
                     "bee.tests.threads.sessions:hook_boundary_probe", {binding = {binding_id = "binding-1", subject = opened.session,
@@ -133,7 +140,7 @@ local function define_tests()
                 if not reply.ok then error(tostring(reply.error)) end
                 return reply
             end
-            local accepted = hook("UserPromptSubmit", {prompt = owner_text("peer boundary message", "sessions-owner")})
+            local accepted = hook("UserPromptSubmit", {prompt = owner_text(reserved.turn, "peer boundary message", "sessions-owner")})
             test.is_nil((assert(bounds.object(accepted.value))).hookSpecificOutput)
             test.eq(harness.value(journal:call("work_describe", {work = work.work})).phase, "accepted")
             hook("Stop", {last_assistant_message = "The boundary reply."})
@@ -273,7 +280,7 @@ local function define_tests()
                 hook("UserPromptSubmit", "what the person typed first")
                 hook("Stop", nil, "The first answer.")
                 local delivered = assert(received(typed), "the queued message was not typed after the first turn")
-                test.eq(delivered.text, owner_text("wait for the agent", "sessions-owner"))
+                test.eq(delivered.text, owner_text(reserved_turn(journal, opened.session), "wait for the agent", "sessions-owner"))
                 test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "reserved")
                 hook("UserPromptSubmit", delivered.text)
                 hook("Stop", nil, "The waited answer.")
@@ -313,8 +320,9 @@ local function define_tests()
                 hook("UserPromptSubmit", "first")
                 hook("Stop", nil, "The first answer.")
                 local delivered = assert(received(typed), "the large message was not typed")
-                test.eq(delivered.text, owner_text(large, "sessions-owner"))
-                hook("UserPromptSubmit", delivered.text)
+                test.eq(delivered.text, owner_text(reserved_turn(journal, opened.session), large, "sessions-owner"))
+                -- Claude submits a long paste wrapped as pasted content.
+                hook("UserPromptSubmit", '\n\n<pasted_content id="a602">\n' .. delivered.text .. '\n</pasted_content id="a602">\n')
                 hook("Stop", nil, "Read it all.")
                 test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "settled")
             end)
@@ -335,7 +343,7 @@ local function define_tests()
             test.is_nil(launch_prompt().prompt)
             local work = harness.value(journal:call("work_send", {session = opened.session, input = "start with this", operation_key = harness.key()}))
             local first = launch_prompt()
-            test.eq(first.prompt, owner_text("start with this", "sessions-owner"))
+            test.eq(first.prompt, owner_text(reserved_turn(journal, opened.session), "start with this", "sessions-owner"))
             test.eq(harness.value(journal:call("work_describe", {work = work.work})).phase, "reserved")
             test.eq(launch_prompt().prompt, first.prompt)
         end)
@@ -559,7 +567,7 @@ local function define_tests()
             local session_ref = assert(bounds.id(opened.session))
             local peer = harness.principal("bs:node:" .. WORKSPACE .. ":peer", {"bee.threads.security:sessions_owner"}, WORKSPACE)
             local first = harness.value(peer:call("work_send", {session = opened.session, input = "reply to this peer", operation_key = harness.key()}))
-            harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+            local reserved = harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
             local policies = {assert(security.policy("bee.gateway.security:session_boundary_policy"))}
             local function boundary(actor_id: string, event: string, operation_key: string, attempt: string?, input: string?, answer: string?): {[string]: unknown}
                 local actor = assert(security.new_actor(actor_id, {workspace_id = WORKSPACE}))
@@ -568,7 +576,7 @@ local function define_tests()
                 if err then error(tostring(err)) end
                 return assert(bounds.object(raw))
             end
-            local typed = owner_text("reply to this peer", peer.id)
+            local typed = owner_text(reserved.turn, "reply to this peer", peer.id)
             test.is_false(boundary("forged", "UserPromptSubmit", harness.key(), nil, typed).ok)
             test.is_false(boundary(session_ref, "UserPromptSubmit", harness.key(), "stale-window", typed).ok)
             test.is_false(boundary(session_ref, "UserPromptSubmit", harness.key(), nil, nil, "an answer belongs to Stop").ok)

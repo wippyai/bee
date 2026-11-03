@@ -51,7 +51,7 @@ local function define_tests()
                         local report = assert(bounds.object(assert((typed:receive())):payload():data()))
                         test.eq(report.session, session)
                         text = assert(bounds.text(report.text))
-                        test.contains(text, "[Bee message from bee.approvals.outbox]")
+                        test.contains(text, " from bee.approvals.outbox]\n")
                     end
                     local alias = "bee.session.window/" .. session
                     assert(process.registry.register(alias))

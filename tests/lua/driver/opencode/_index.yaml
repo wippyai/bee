@@ -37,7 +37,7 @@ entries:
   source: file://carrier_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [funcs, security]
+  modules: [funcs, security, hash]
   security:
     policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy]
   imports:

@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
+local hash = require("hash")
 local harness = require("harness")
 local funcs = require("funcs")
 local security = require("security")
@@ -30,7 +31,7 @@ local function define_tests()
                 local attempt = "attempt:" .. string.rep(provider == "agy" and "a" or "b", 64)
                 harness.value(journal:call("session_attach", {session = opened.session, attempt_id = attempt, operation_key = harness.key()}))
                 local work = harness.value(journal:call("work_send", {session = opened.session, input = "Fixture prompt.", operation_key = harness.key()}))
-                harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+                local reserved = harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
                 local action = "action:" .. string.rep(provider == "agy" and "a" or "b", 64)
                 local binding_id = plan and muse.binding(provider, tostring(opened.session), tostring(stored.thread_ref), attempt, action) or "binding-1"
                 local function hook(event: string, payload: Object)
@@ -43,7 +44,7 @@ local function define_tests()
                     local reply = assert(bounds.object(raw))
                     if reply.ok ~= true then error(tostring(reply.error)) end
                 end
-                hook("UserPromptSubmit", {session_id = "provider-session", prompt = "[Bee message from sessions-owner]\nFixture prompt."})
+                hook("UserPromptSubmit", {session_id = "provider-session", prompt = "[Bee message #" .. assert(hash.sha256(tostring(reserved.turn))):sub(1, 12) .. " from sessions-owner]\nFixture prompt."})
                 test.eq(harness.value(journal:call("work_describe", {work = work.work})).phase, "accepted")
                 if plan then
                     local payload = muse.capture(provider, "PermissionRequest")

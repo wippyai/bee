@@ -14,6 +14,7 @@ local machine = require("machine")
 local descriptor = require("descriptor")
 local classify = require("classify")
 local profiles = require("profiles")
+local commits = require("commits")
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value?: unknown, error?: {code: string, message: string}}
 local function fail(message: string): Reply return {ok = false, error = {code = "PERMISSION_REFUSED", message = message}} end
@@ -184,16 +185,31 @@ local function handle(raw: unknown): Reply
     elseif detected ~= 1 then return fail("hook did not carry one permission request") end
     local committed, commit_error = commit(records)
     if not committed then return fail(tostring(commit_error)) end
-    while not response do
+    -- The decision arrives as an approval transition committed on the
+    -- thread, and the request's deadline withdraws it; each commit and the
+    -- deadline advance the exchange until it writes the response.
+    local deadline_ms: integer? = nil
+    for _, item in ipairs(point.permissions) do
+        if item.correlation_id == event_id and item.phase ~= "closed" then deadline_ms = item.deadline_ms end
+    end
+    if not deadline_ms then return fail("hook permission request has no deadline") end
+    local function step(_final: boolean): string?
         local advanced, advance_error = exchange.advance(ctx, true)
-        if not advanced then return fail(tostring(advance_error)) end
+        if not advanced then return tostring(advance_error) end
+        if response then return nil end
         if not ctx.waiting() then
             local closed, close_error = exchange.close(ctx)
-            if not closed then return fail(tostring(close_error)) end
-            return fail("hook binding no longer waits")
+            if not closed then return tostring(close_error) end
+            return "hook binding no longer waits"
         end
-        if not response then time.sleep(tostring(declaration.poll_ms) .. "ms") end
+        return nil
     end
+    local wait_ms = math.max(0, deadline_ms - ctx.now_ms())
+    local problem = commits.await({thread_id}, wait_ms, function(failure: string?): boolean
+        return failure == nil and response == nil
+    end, step, function(message: string): string? return message end)
+    if problem then return fail(problem) end
+    if not response then return fail("permission was not answered by its deadline") end
     return {ok = true, value = {permission_response = response}}
 end
 return {handle = handle}

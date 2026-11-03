@@ -46,3 +46,4 @@ entries:
     policy: bee.harness.carrier:policy
     machine: bee.harness.carrier:machine
     descriptor: bee.drivers.descriptor:descriptor
+    commits: bee.threads.delivery:commits

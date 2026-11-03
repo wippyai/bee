@@ -98,8 +98,8 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         if hooks_error then error("hooks: " .. tostring(hooks_error)) end
     end
     drain_hooks()
-    -- Held permission hooks: each pending hook is answered once, when the
-    -- exchange writes its response or ends, never re-asked by the hook.
+    -- Held permission hooks: the carrier answers each pending hook once, when
+    -- its exchange writes the response or the attempt ends.
     local held: {{to: string, topic: string, event_id: string}} = {}
     local function answer_held()
         local waiting: {{to: string, topic: string, event_id: string}} = {}

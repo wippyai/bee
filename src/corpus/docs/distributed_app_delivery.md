@@ -404,9 +404,10 @@ volume, a read grant is read-only at the filesystem boundary, and private
 paths and Bee state (`.wippy`) are refused, including ancestor subroots that
 would expose them. A database grant installs a host-provisioned dedicated
 SQLite store under `bee.capability:app_databases` (rooted at `BEE_APP_DATABASE_ROOT`, default `.wippy/app-db`), outside the readable tree, with a `db.get`-only policy on that store.
-An application reads the identities of its own granted volumes (by subpath)
-and database (by name) from `bee.gov.binding:granted_resources`, which answers
-only for the calling application's live grant; it never embeds a
+An application process receives the identities of its own granted volumes
+(by subpath) and database (by name) in `launch.resources` from `client.launch`, and its
+functions read the same map from `bee.gov.binding:granted_resources`, which
+answers only for the calling application's live grant; it never embeds a
 host-generated identity, so the same artifact works on every workspace and
 node. The shipped module ceiling includes `funcs` so the installed policy can
 authorize calls to the Threads owner, which checks the application's actor

@@ -91,20 +91,40 @@ REQUEST_EXAMPLE = """```yaml
 ```"""
 
 CAPABILITY_USAGE = {
-    "workspace.files.watch": """The app reads the folder through its read-only volume, `volumes[subpath]` of `bee.gov.binding:granted_resources`, and watches it through `watches[subpath]`, a watch target that admits no filesystem operation, so the app cannot write, delete or rename there. Watches are not recursive: watch each folder of interest, and a file's containing folder to see atomic saves. Each event has `kind` (`change` or `rescan`), `resource` (the watch target), `path` (relative to the subpath) and `operation` (`create`, `write`, `rename`, `remove` or `other`). A `rescan` arrives first and then every five seconds; on it, list the folder again, because the operating system can merge or drop notices. A process may hold 32 watches. For example, with the `ioevents`, `funcs` and `channel` modules:
+    "workspace.files.watch": """The app receives the folder as one resource: its process gets the folder's registry ID in `launch.resources.volumes[subpath]` of `bee.app:client` `client.launch` (functions read the same map from `bee.gov.binding:granted_resources`). The app reads it with `fs.get(folder)`, which is read-only, and watches it with `ioevents.watch(folder, path, {recursive = true})`; it cannot write, delete or rename there. `path` is a directory relative to the folder (default `.`); `recursive` follows every directory below it, including new ones, never through symbolic links. Each event has `kind` (`change` or `rescan`), `resource` (the folder), `path` (relative to the folder) and `operation` for a change (`create`, `write`, `rename`, `remove` or `other`). A `rescan` names a directory to list again because notices there may be missing: the first event of every watch, after the operating system's queue overflows, for a directory a recursive watch starts following, and when the app falls 128 events behind (later notices are dropped until it receives that rescan). The channel closes when the watch ends: `watch:close()`, the watched directory removed or renamed, or a native failure; open it again to continue, which starts with a rescan. Failures return `nil, err`, and `err:kind()` is `errors.INVALID` (bad path or option, or a file), `errors.NOT_FOUND`, `errors.PERMISSION_DENIED` (outside the folder or unreadable), `errors.RATE_LIMITED` (32 watches per process, 1024 directories per recursive watch) or `errors.UNAVAILABLE`. For example, with the `fs`, `ioevents`, `channel` and `process` modules and the `client` import:
 
 ```lua
-local reply = funcs.new():call("bee.gov.binding:granted_resources", {})
-local granted = reply and reply.ok and reply.value
-local watch, err = ioevents.watch(granted.watches["docs"], ".")
-if not watch then return nil, err end
-local events = watch:channel()
-while true do
-    local event, ok = events:receive()
-    if not ok then break end
-    -- event.kind, event.path, event.operation; read files through granted.volumes["docs"]
+local function main(value)
+    local launch = assert(client.launch(value))
+    local folder = launch.resources.volumes["docs"]
+    local files, err = fs.get(folder)
+    if not files then return nil, err end
+    local watch
+    watch, err = ioevents.watch(folder, ".", {recursive = true})
+    if not watch then return nil, err end
+    local inbox = process.inbox()
+    while true do
+        local selected = channel.select({watch:channel():case_receive(), inbox:case_receive()})
+        if selected.channel == inbox then
+            if selected.value:topic() == "stop" then break end
+        elseif not selected.ok then
+            watch, err = ioevents.watch(folder, ".", {recursive = true})
+            if not watch then return nil, err end
+        elseif selected.value.kind == "rescan" then
+            local entries, list_err = files:readdir("/" .. selected.value.path)
+            if entries then
+                for entry in entries do
+                    -- reconcile entry.name under selected.value.path
+                end
+            elseif list_err:kind() ~= errors.NOT_FOUND then
+                return nil, list_err
+            end
+        else
+            -- selected.value.operation happened to selected.value.path
+        end
+    end
+    watch:close()
 end
-watch:close()
 ```""",
 }
 

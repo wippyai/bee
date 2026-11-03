@@ -11,7 +11,9 @@ local M = {}
 M.CONTRACT = "bee.threads.sessions:contract"
 M.CATALOG_CONTRACT = "bee.threads.sessions:catalog"
 type Object = {[string]: unknown}
-type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object, annotations: Object}
+-- Tool is the one MCP tool declaration shape. application marks a tool an
+-- admitted application offers; its calls run as that application.
+type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object, annotations: Object, application: boolean?}
 type Target = {contract: string, method: string, mutation: boolean, read: boolean, destructive: boolean}
 
 -- method: the owner contract method each tool projects.

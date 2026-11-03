@@ -123,6 +123,15 @@ local function define_tests()
                 if trait.id == trait_id then progress = trait; test.eq(trait.title, "Progress"); test.eq(table.concat(trait.tools, ","), "notes_add,notes_list") end
             end
             test.not_nil(progress)
+            local builtin: {[string]: boolean} = {}
+            for _, tool in ipairs(mcp.TOOLS) do builtin[tool.name] = true end
+            local marked: {string} = {}
+            for _, tool in ipairs(configured.catalog.tools) do
+                test.eq(tool.application == true, not builtin[tool.name], tool.name)
+                if tool.application then marked[#marked + 1] = tool.name end
+            end
+            table.sort(marked)
+            test.eq(table.concat(marked, ","), "notes_add,notes_list,unrelated_add")
             local planned, err = launch_policy.decode("bee.driver.claude.security:launch_policy_claude_window",
                 assert(registry.get("bee.driver.claude.security:launch_policy_claude_window")),
                 function(_ref: string): (string?, string?) return "/usr/bin/fixture", nil end,

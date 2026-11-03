@@ -51,6 +51,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}, wo
     if not configured then return nil, nil, config_error end
     for _, tool in ipairs(configured.tools) do
         if mcp.is_retired_tool(tool.name) then return nil, nil, tool.name .. " is retired and cannot be redeclared" end
+        if tool.application then return nil, nil, tool.name .. ": application tools come from admitted applications" end
     end
     local combined: {catalog.Tool} = {}
     for _, tool in ipairs(builtins) do combined[#combined + 1] = tool end
@@ -82,7 +83,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}, wo
             if not taken[tool.alias] then
                 combined[#combined + 1] = {name = tool.alias, operation = "bee.node.binding:app_tool_call",
                     description = tool.description, policies = {"bee.security.gateway:gateway_tool_app_tools_policy"},
-                    schema = tool.input_schema, annotations = tool.annotations}
+                    schema = tool.input_schema, annotations = tool.annotations, application = true}
                 expanded[#expanded + 1] = tool.alias
             end
         end

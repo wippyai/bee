@@ -9,6 +9,7 @@ M.PUBLICATION_PROFILES_REF = "bee.gov.env:publication_profiles_ref"
 M.ACTIVATION_PROFILES_REF = "bee.gov.env:activation_profiles_ref"
 M.APPROVAL_REQUEST_POLICY_REF = "bee.gov.env:approval_request_policy_ref"
 M.APPROVAL_CONSUME_POLICY_REF = "bee.gov.env:approval_consume_policy_ref"
+M.APPROVAL_RELAY_POLICY_REF = "bee.gov.env:approval_relay_policy_ref"
 M.WORKSPACE_FOLDER_READ_REF = "bee.gov.env:workspace_folder_read_ref"
 M.WORKSPACE_FOLDER_POLICY_REF = "bee.gov.env:workspace_folder_policy_ref"
 
@@ -64,6 +65,10 @@ end
 
 function M.approval_consume_policy(): (string?, string?)
     return linked(M.APPROVAL_CONSUME_POLICY_REF, POLICY_KINDS, "approval consume policy")
+end
+
+function M.approval_relay_policy(): (string?, string?)
+    return linked(M.APPROVAL_RELAY_POLICY_REF, POLICY_KINDS, "approval session relay policy")
 end
 
 function M.workspace_folder_read(): (string?, string?)

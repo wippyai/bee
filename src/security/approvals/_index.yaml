@@ -31,6 +31,15 @@ entries:
     - bee.approvals.request
     resources: '*'
     effect: allow
+- name: session_relay_policy
+  kind: security.policy
+  meta:
+    comment: Operation owners that ask for approval on behalf of the agent session named as the request's origin; that session hears the outcome
+  policy:
+    actions:
+    - bee.approvals.relay_session
+    resources: '*'
+    effect: allow
 - name: approval_announce_policy
   kind: security.policy
   meta:

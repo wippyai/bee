@@ -237,11 +237,15 @@ end
 local function approval_executor(): (owner.Executor?, string?)
     local request_id, request_ref_error = resources.approval_request_policy()
     local consume_id, consume_ref_error = resources.approval_consume_policy()
-    if not request_id or not consume_id then return nil, tostring(request_ref_error or consume_ref_error or "approval policies are unavailable") end
+    local relay_id, relay_ref_error = resources.approval_relay_policy()
+    if not request_id or not consume_id or not relay_id then
+        return nil, tostring(request_ref_error or consume_ref_error or relay_ref_error or "approval policies are unavailable")
+    end
     local request, request_error = security.policy(request_id)
     local consume, consume_error = security.policy(consume_id)
-    if not request or not consume then return nil, tostring(request_error or consume_error or "load approval policies") end
-    local caller = funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope({request, consume}))
+    local relay, relay_error = security.policy(relay_id)
+    if not request or not consume or not relay then return nil, tostring(request_error or consume_error or relay_error or "load approval policies") end
+    local caller = funcs.new():with_actor(security.new_actor(ACTOR)):with_scope(security.new_scope({request, consume, relay}))
     local executor: owner.Executor = {call = function(_self: owner.Executor, target: string, input: unknown): (unknown?, unknown?)
         local result, problem = caller:call(target, input)
         local value = bounds.object(result)

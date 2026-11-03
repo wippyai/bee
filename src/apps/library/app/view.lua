@@ -134,7 +134,7 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
             if row and candidate.digest == row.operation then operation = candidate end
         end
         buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.governed.technical and "Hide technical" or "Technical", enabled = true}
-        buttons[#buttons + 1] = {kind = "operations_previous", label = "Prev", enabled = state.hub.operation_page > 1}
+        buttons[#buttons + 1] = {kind = "operations_previous", label = "Previous", enabled = state.hub.operation_page > 1}
         buttons[#buttons + 1] = {kind = "operations_next", label = "Next",
             enabled = state.hub.operation_page < math.max(1, math.ceil(state.hub.operation_total / math.max(1, state.hub.operation_page_size)))}
         if operation and operation.request and (operation.state == "prepared" or operation.state == "published" or operation.state == "recovery_required") then
@@ -183,8 +183,8 @@ local function cells(row: model.Row): {string}
     return {model.kind_glyph(row.kind) .. " " .. row.name, row.version, status, source}
 end
 
-local COLUMNS: {frame.Column} = {{title = "Name", width = 0}, {title = "Version", width = 14},
-    {title = "Status", width = 28}, {title = "Source", width = 34}}
+local COLUMNS: {frame.Column} = {{title = "Name", width = 0, min = 16}, {title = "Version", width = 14},
+    {title = "Status", width = 28}, {title = "Source", width = 0, min = 30}}
 
 local function empty_title(state: model.State): (string, string)
     local tab = state.tab
@@ -266,8 +266,8 @@ local function draw_platform(width: integer, height: integer, preferences: appea
     end
     local window = {offset = 0, capacity = 0}
     if #rows > 0 and height >= 6 then
-        window = frame.table(painter, 4, height - 2, {columns = {{title = "Package", width = 0}, {title = "Version", width = 14},
-            {title = "Part of", width = 12}}, cells = table_cells, keys = keys, kind = "row", selected = selected_index, offset = ui.offset})
+        window = frame.table(painter, 4, height - 2, {columns = {{title = "Package", width = 0, min = 16}, {title = "Version", width = 14},
+            {title = "Part of", width = 0, min = 16}}, cells = table_cells, keys = keys, kind = "row", selected = selected_index, offset = ui.offset})
     end
     if height >= 4 then
         footer_buttons = {{kind = "open", key = "Enter", label = "Details", enabled = chosen ~= nil, primary = true},

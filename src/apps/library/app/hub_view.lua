@@ -155,7 +155,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 end
                 button("content_back", " Back ", not content.pending)
                 button("content_previous", " Previous ", not content.pending and content.offset > 0)
-                button("content_next", " Next page ", not content.pending and content.next_offset ~= nil)
+                button("content_next", " Next ", not content.pending and content.next_offset ~= nil)
                 frame.line(painter, height - 1, content.notice, theme.muted)
                 frame.footer(painter, status, "↑↓ browse · Enter open · ⌫ back · N next · T technical", nil, footer_buttons)
                 return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
@@ -287,8 +287,8 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 button("policy_leave", " Leave ", true)
                 button("policy_down", " Roll back ", true)
             else
-                button("policy_none", " No migrations ", true)
-                button("policy_up", " Run migrations ", true)
+                button(state.policy == "up" and "policy_none" or "policy_up", " Run migrations ", true)
+                footer_buttons[#footer_buttons].active = state.policy == "up"
             end
             local parameters = #state.parameters == 0 and "no parameters" or (tostring(#state.parameters) .. " typed parameters")
             if width >= 74 then frame.line(painter, height - 3, protected and "updates with Bee · T technical for the full reason" or ("Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters), theme.muted) end

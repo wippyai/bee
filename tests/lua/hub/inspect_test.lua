@@ -93,9 +93,21 @@ local function define_tests()
                     entry_offset = manifest.next_offset, expected_revision = revision}))
             end
             test.is_true(found)
-            local page = assert(installed.sources({component = "bee/bee", version = version,
-                entry_id = "bee.ui:frame", expected_revision = revision, offset = 0, limit = 4096}))
-            test.is_true((page.content):find("function M.", 1, true) ~= nil)
+            -- The implementation is read page by page to its end, as an
+            -- agent reads it; where the API starts in the file is the
+            -- library's own layout.
+            local parts: {string} = {}
+            local offset, bytes = 0, -1
+            while true do
+                local page = assert(installed.sources({component = "bee/bee", version = version,
+                    entry_id = "bee.ui:frame", expected_revision = revision, offset = offset, limit = 4096}))
+                parts[#parts + 1] = page.content
+                offset, bytes = offset + #page.content, page.bytes
+                if page.eof then break end
+            end
+            local source = table.concat(parts)
+            test.eq(#source, bytes)
+            test.is_true(source:find("function M.new(", 1, true) ~= nil)
         end)
         test.it("returns entry summaries first with stable paging", function()
             local summarized = inspection.decode({component = "acme/tool", version = "1.2.3"})

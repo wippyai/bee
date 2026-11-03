@@ -15,7 +15,8 @@ local MARKER = "›"
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
 -- A button with a key is drawn as "Key Label"; primary marks the one filled
 -- action, active a selected toggle. Disabled buttons stay visible and have no hit.
-type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?, more: boolean?}
+-- tab marks a tab of the screen's tab row.
+type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?, more: boolean?, tab: boolean?}
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
 -- The actions one row offers; selected marks the row Shift+F10 opens.
@@ -27,15 +28,17 @@ type View = {rows: {string}, hits: {Hit}, controls: Controls?}
 type MenuItem = popup.Item
 type PopupState = popup.State
 type Panel = popup.Panel
--- context is the row whose actions are open, anchored at the cell (x, y).
+-- context is the row whose actions are open; state anchors the popup and
 -- panel is where it was last drawn.
-type Context = {kind: string, key: string, index: integer, x: integer, y: integer, selected: integer, offset: integer, panel: Panel?}
+type Context = {kind: string, key: string, index: integer, state: PopupState, panel: Panel?}
 type Menu = {mode: string, selected: integer, offset: integer, controls: Controls, hits: {Hit}, signature: string, count: integer, context: Context?}
 
 type Window = {offset: integer, capacity: integer}
 type ListCard = {glyph: string, title: string, requester: string, summary: string, meta: string}
--- A table column: width 0 is the single flexible column; align "right" for numbers.
-type Column = {title: string, width: integer, align: string?}
+-- A table column: width 0 is flexible; flexible columns keep at least min
+-- cells (default 8 or the title) and share the remaining width, and the
+-- compact form applies when they cannot; align "right" for numbers.
+type Column = {title: string, width: integer, align: string?, min: integer?}
 -- A cell rectangle: x and y are one-based, width and height may be zero.
 type Rect = {x: integer, y: integer, width: integer, height: integer}
 -- area confines the table to a region's columns, as the list pane beside a
@@ -189,7 +192,7 @@ end
 -- does not fit. Returns the column after the last drawn tab.
 function M.tabs(painter: Painter, y: integer, tabs: {Tab}, selected: string): integer
     for _, tab in ipairs(tabs) do
-        painter.controls.buttons[#painter.controls.buttons + 1] = {kind = tab.kind, label = tab.label, enabled = true}
+        painter.controls.buttons[#painter.controls.buttons + 1] = {kind = tab.kind, label = tab.label, enabled = true, tab = true}
     end
     -- The active tab keeps its full label and inactive tabs that do not
     -- fit are left out, so the pane shown stays named at any width.
@@ -432,23 +435,21 @@ end
 -- Column geometry for a table at the canvas width, or nil when the flexible
 -- column cannot keep at least its title width (the compact form applies).
 local function layout(width: integer, columns: {Column}): {integer}?
-    local room = width - 2
-    local fixed, flexible = 0, 0
-    for _, column in ipairs(columns) do
-        if column.width > 0 then fixed = fixed + column.width else flexible = flexible + 1 end
-    end
-    local gaps = 2 * (#columns - 1)
-    local rest = room - fixed - gaps
+    local rest, flexible = width - 2 - 2 * (#columns - 1), 0
     local widths: {integer} = {}
     for index, column in ipairs(columns) do
-        if column.width > 0 then widths[index] = column.width
-        else
-            local minimum_width = maximum(8, tty.text.width(column.title))
-            if flexible ~= 1 or rest < minimum_width then return nil end
-            widths[index] = rest
+        widths[index] = column.width > 0 and column.width or maximum(column.min or 8, tty.text.width(column.title))
+        rest = rest - widths[index]
+        if column.width <= 0 then flexible = flexible + 1 end
+    end
+    if rest < 0 then return nil end
+    local given = 0
+    for index, column in ipairs(columns) do
+        if column.width <= 0 then
+            widths[index] = widths[index] + rest // flexible + (given < rest % flexible and 1 or 0)
+            given = given + 1
         end
     end
-    if flexible == 0 and rest < 0 then return nil end
     return widths
 end
 
@@ -989,13 +990,8 @@ local function context_items(buttons: {Button}): {MenuItem}
     return items
 end
 
-local function context_state(context: Context): PopupState
-    return {selected = context.selected, offset = context.offset, x = context.x, y = context.y}
-end
-
--- The row's actions drawn over the screen at the context's anchor, the row
--- marked with "›" and one target per visible item; false when the row no
--- longer offers any.
+-- The row's actions drawn over the screen at the context's anchor with the
+-- row marked "›"; false when the row no longer offers any.
 local function render_context(view: View, menu: Menu, preferences: appearance.Preferences): boolean
     local context = menu.context
     local buttons = choices(menu)
@@ -1009,15 +1005,9 @@ local function render_context(view: View, menu: Menu, preferences: appearance.Pr
         end
     end
     local items = context_items(buttons)
-    local panel = popup.panel(painter.width, painter.height, items, context_state(context))
-    local state = popup.fit(context_state(context), panel, items)
-    context.selected, context.offset, context.panel = state.selected, state.offset, panel
-    popup.draw(painter.canvas, panel, state, items, painter.theme)
-    for line = 1, panel.capacity do
-        local y = panel.y + panel.inset + line
-        local index = popup.hit(panel, state, panel.x + 1, y, items)
-        if index then M.add_hit(painter, "frame_choice", index, "", panel.x + 1, y, panel.width - 2, 1) end
-    end
+    local panel = popup.panel(painter.width, painter.height, items, context.state)
+    context.state, context.panel = popup.fit(context.state, panel, items), panel
+    popup.draw(painter.canvas, panel, context.state, items, painter.theme)
     view.rows, view.hits = M.rows(painter), painter.hits
     menu.hits = view.hits
     return true
@@ -1043,13 +1033,30 @@ function M.render(view: View, menu: Menu, preferences: appearance.Preferences)
     M.add_hit(painter, "frame_back", 0, "", maximum(1, painter.width - 8), 1, 8, 1)
     local items = choices(menu)
     local lines: {string} = {}
-    for _, button in ipairs(items) do
-        lines[#lines + 1] = (button.key and (button.key .. "  ") or "") .. button.label .. (button.enabled and "" or " · unavailable")
+    local muted: {[integer]: boolean} = {}
+    local function add(line: string, unavailable: boolean?)
+        lines[#lines + 1] = line .. (unavailable and " · unavailable" or "")
+        muted[#lines] = unavailable == true
     end
-    if menu.mode == "help" then
-        for _, hint in ipairs(controls.hints) do lines[#lines + 1] = hint.key .. "  " .. hint.verb end
-        lines[#lines + 1] = "F10  More actions"
-        lines[#lines + 1] = "?  Help"
+    if menu.mode ~= "help" then
+        for _, button in ipairs(items) do add((button.key and (button.key .. "  ") or "") .. button.label, not button.enabled) end
+    else
+        -- Help names each key once: a button's label wins over a hint for
+        -- the same key, tabs share one line and keyless buttons are clicked.
+        local tabs: {string} = {}
+        for _, button in ipairs(items) do if button.tab then tabs[#tabs + 1] = button.label end end
+        if #tabs > 0 then add("Tabs  " .. table.concat(tabs, " · ")) end
+        local named: {[string]: boolean} = {}
+        for _, button in ipairs(items) do
+            if not button.tab then
+                if button.key then named[button.key:lower()] = true end
+                add((button.key or "Click") .. "  " .. button.label, not button.enabled)
+            end
+        end
+        for _, hint in ipairs(controls.hints) do
+            if not named[hint.key:lower()] then add(hint.key .. "  " .. hint.verb); named[hint.key:lower()] = true end
+        end
+        if #controls.overflow > 0 and not named["f10"] then add("F10  More actions") end
         local status = controls.status or ""
         if status ~= "" then
             local remaining = "Status: " .. status
@@ -1068,11 +1075,9 @@ function M.render(view: View, menu: Menu, preferences: appearance.Preferences)
     for slot = 1, window.capacity do
         local index = window.offset + slot
         if not lines[index] then break end
-        local button = items[index]
-        M.row(painter, slot + 2, lines[index], index == menu.selected, "frame_choice", index, "",
-            button and not button.enabled and painter.theme.muted or nil)
+        M.row(painter, slot + 2, lines[index], index == menu.selected, "frame_choice", index, "", muted[index] and painter.theme.muted or nil)
     end
-    M.footer(painter, "", menu.mode == "more" and "↑↓ select · Enter choose · Esc back" or "↑↓ scroll · Esc back")
+    M.footer(painter, "", menu.mode == "more" and "↑↓ select · Enter choose" or "↑↓ scroll")
     view.rows, view.hits = M.rows(painter), painter.hits
     menu.hits = view.hits
 end
@@ -1097,10 +1102,11 @@ end
 -- open_context opens the actions of the row at target, anchored at (x, y).
 local function open_context(menu: Menu, row: RowActions, x: integer, y: integer)
     menu.mode = "context"
-    menu.context = {kind = row.kind, key = row.key, index = row.index, x = x, y = y, selected = 1, offset = 0}
+    local first = 1
     for index, button in ipairs(row.actions) do
-        if button.enabled then menu.context.selected = index; break end
+        if button.enabled then first = index; break end
     end
+    menu.context = {kind = row.kind, key = row.key, index = row.index, state = {selected = first, offset = 0, x = x, y = y}}
 end
 
 local function row_at(menu: Menu, hit: Hit): RowActions?
@@ -1122,10 +1128,10 @@ local function context_input(menu: Menu, event: tty.TTYEvent): tty.TTYEvent?
     end
     local panel = context.panel
     if not panel then return nil end
-    local response = popup.respond(context_state(context), panel, context_items(buttons), event)
-    context.selected, context.offset = response.state.selected, response.state.offset
+    local response = popup.respond(context.state, panel, context_items(buttons), event)
+    context.state = response.state
     if response.close then menu.mode, menu.context = "", nil end
-    if response.action ~= "" then return choose(menu, context.selected) end
+    if response.action ~= "" then return choose(menu, context.state.selected) end
     return nil
 end
 

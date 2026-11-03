@@ -213,6 +213,36 @@ local function define_tests()
             test.eq(menu.mode, "")
         end)
     end)
+    test.describe("Help", function()
+        test.it("names each key once, puts the tabs on one line and lists keyless buttons as clicks", function()
+            local prefs = appearance.defaults()
+            local function screen(): frame.View
+                local painter = frame.new(80, 20, prefs)
+                frame.tabs(painter, 2, {{kind = "installed", label = "Installed"}, {kind = "shared", label = "Shared"}}, "installed")
+                frame.footer(painter, "", "Tab view · / search", frame.hints({{key = "Enter", verb = "start agent"}, {key = "Esc", verb = "back"}}), {
+                    {kind = "open", key = "Enter", label = "Start agent", enabled = true, primary = true},
+                    {kind = "apply", label = "Apply", enabled = false},
+                    {kind = "close", key = "Esc", label = "Sessions", enabled = true},
+                })
+                return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
+            end
+            local menu = frame.menu()
+            frame.render(screen(), menu, prefs)
+            frame.route(menu, {type = "key", action = "press", key_type = "runes", key = "?"})
+            local view = screen()
+            frame.render(view, menu, prefs)
+            local shown = tty.text.plain(table.concat(view.rows, "\n"))
+            test.contains(shown, "Tabs  Installed · Shared")
+            test.contains(shown, "Enter  Start agent")
+            test.contains(shown, "Esc  Sessions")
+            test.contains(shown, "Click  Apply · unavailable")
+            test.contains(shown, "/  search")
+            test.is_nil((shown:find("start agent", 1, true)))
+            test.is_nil((shown:find("Esc  back", 1, true)))
+            test.is_nil((shown:find("?  Help", 1, true)))
+            test.is_nil((shown:find("F10  More actions", 1, true)))
+        end)
+    end)
     test.describe("Frame gestures", function()
         test.it("treats a second press on the same row within the double-click window as a double click", function()
             local memory = frame.clicks()

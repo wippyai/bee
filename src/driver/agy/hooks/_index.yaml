@@ -18,3 +18,12 @@ entries:
     actions: [funcs.call]
     resources: [bee.placement.native.binding:hook_file]
     effect: allow
+- name: reader_call
+  kind: security.policy
+  meta:
+    comment: The hook endpoint calls the Agy hook input reader the Agy hook declaration names
+  groups: [bee.gateway.api:hook_readers]
+  policy:
+    actions: [funcs.call]
+    resources: [bee.driver.agy.hooks:input]
+    effect: allow

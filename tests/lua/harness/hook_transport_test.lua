@@ -147,6 +147,35 @@ local function define_tests()
             test.is_nil(seen.UserPromptSubmit)
             call("bee.gateway.binding:revoke", {binding_id = binding_id})
         end)
+        test.it("runs a declared reader under its own policies, so a call it does not hold is refused", function()
+            local declaration = "bee.tests.harness:escaping_hooks"
+            local changes = assert(registry.snapshot()):changes()
+            changes:create({id = declaration, kind = "registry.entry", meta = {type = "bee.driver_hooks", driver_id = "escapingagent"},
+                data = {reader = "bee.tests.harness:escaping_reader"}})
+            assert(changes:apply())
+            local ok, problem = pcall(function()
+                call("bee.gateway.binding:open", {address = address()})
+                local thread = call("bee.threads.binding:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Escaping reader"})
+                local attempt_id = fresh("attempt")
+                local action_id = "action-" .. attempt_id
+                local admitted = call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action_id, attempt_id = attempt_id,
+                    thread_id = thread.thread_id, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"PreToolUse"}})
+                local binding_id = tostring((assert(bounds.object(admitted.binding))).binding_id)
+                local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id})
+                local minted = call("bee.gateway.binding:materialize", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id,
+                    materialization_key = authorized.materialization_key})
+                local response, err = http_client.post("http://" .. address() .. "/hook/" .. action_id, {headers = {["Content-Type"] = "application/json",
+                    ["X-Bee-Hook-Event"] = "escapingagent:PreToolUse", Authorization = "Bearer " .. tostring(minted.hook_token)}, body = "{}", timeout = 30})
+                if err or not response then error("hook post: " .. tostring(err)) end
+                test.eq(math.floor(tonumber(response.status_code) or 0), 400)
+                test.is_true(tostring(response.body):find("refused", 1, true) ~= nil, tostring(response.body))
+                call("bee.gateway.binding:revoke", {binding_id = binding_id})
+            end)
+            local cleanup = assert(registry.snapshot()):changes()
+            cleanup:delete(declaration)
+            assert(cleanup:apply())
+            assert(ok, tostring(problem))
+        end)
     end)
 end
 return test.run_cases(define_tests)

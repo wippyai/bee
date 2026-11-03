@@ -8,6 +8,7 @@ local bounds = require("bounds")
 local capabilities = require("capabilities")
 local hook_response = require("hook_response")
 local funcs = require("funcs")
+local security = require("security")
 type Object = {[string]: unknown}
 -- A hook command names its event in X-Bee-Hook-Event, optionally qualified by
 -- the id of the driver whose declared reader turns the CLI's stdin into the
@@ -24,13 +25,16 @@ local function command_of(request: http.Request): (Command?, string?)
     return {event = tostring(event), driver = driver}, nil
 end
 -- command_payload reads a hook command's stdin: the driver's declared reader
--- maps it, or it is the payload itself, whose own event agrees with the
--- command's. The reader reads files of the binding's attempt only. A nil
--- payload with no error is an invocation that holds no work.
+-- maps it, running under its own policies only, or it is the payload itself,
+-- whose own event agrees with the command's. The reader reads files of the
+-- binding's attempt only. A nil payload with no error is an invocation that
+-- holds no work.
 local function command_payload(command: Command, raw: string, attempt_id: string): (Object?, string?)
     local reader = command.driver and capabilities.declaration(command.driver).reader or nil
     if reader then
-        local reply, call_error = funcs.call(reader, {event = command.event, body = raw, attempt_id = attempt_id})
+        local isolated, scope_error = funcs.new():with_scope(security.new_scope({}))
+        if not isolated then return nil, "hook input reader scope: " .. tostring(scope_error) end
+        local reply, call_error = isolated:call(reader, {event = command.event, body = raw, attempt_id = attempt_id})
         local read = bounds.object(reply)
         if call_error or not read then return nil, "hook input reader " .. reader .. " failed: " .. tostring(call_error) end
         if read.skip == true then return nil, nil end

@@ -1,6 +1,23 @@
 version: '1.0'
 namespace: bee.gov
 entries:
+- name: overlay_display
+  kind: registry.entry
+  meta:
+    type: bee.approvals.display
+    operation_ref: bee.gov:establish-overlay
+    comment: How Needs you words an application installation
+  data:
+    duration: Until the app is replaced or removed
+    subject: Installation
+- name: lease_display
+  kind: registry.entry
+  meta:
+    type: bee.approvals.display
+    operation_ref: bee.gov:grant-lease
+    comment: How Needs you words a request for an update lease
+  data:
+    duration: For the time shown below
 - name: delivery_contract
   kind: contract.definition
   methods:

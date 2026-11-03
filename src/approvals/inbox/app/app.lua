@@ -12,6 +12,7 @@ local process = require("process")
 local time = require("time")
 local cdc = require("cdc")
 local uuid = require("uuid")
+local json = require("json")
 local funcs = require("funcs")
 local registry = require("registry")
 local appearance = require("appearance")
@@ -83,6 +84,9 @@ local function main(value: unknown)
         end)
     local owner = routed
     local state: model.State = model.new(configured.workspaces)
+    local declared_displays, display_error = registry.find({["meta.type"] = model.DISPLAY})
+    if display_error then error("approval displays are unavailable: " .. tostring(display_error)) end
+    state.displays = model.displays(declared_displays or {})
     local slice: leases.Slice = leases.new()
     local answer_form: question_form.State? = nil
     local request_form: lease_form.State? = nil
@@ -159,12 +163,13 @@ local function main(value: unknown)
         local app_names: {[string]: string} = {}
         for _, raw in ipairs(instances or {}) do
             local item = bounds.object(raw)
-            local id, title = item and bounds.id(item.id), item and bounds.line(item.title, 160)
-            if id and title then app_names[id] = title end
+            local definition, title = item and bounds.id(item.app), item and bounds.line(item.title, 160)
+            if definition and title then app_names[definition] = title end
         end
         for _, row in ipairs(rows) do
-            local instance = row.requester_id:match("^bee%.application:[^:]+:(.+)$")
-            if instance and app_names[instance] then state.requester_names[row.requester_id] = app_names[instance] end
+            local principal = row.view.contract and bounds.object(row.view.contract.requester)
+            local definition = principal and bounds.id(principal.definition_id)
+            if definition and app_names[definition] then state.requester_names[row.requester_id] = app_names[definition] end
             if row.view.requesting_session and not state.requester_names[row.requester_id] then
                 local raw = funcs.call("bee.threads.sessions.binding:get", {session = row.view.requesting_session})
                 local envelope = bounds.object(raw)
@@ -280,7 +285,7 @@ local function main(value: unknown)
         dirty = true
     end
     local function reviewed(): boolean
-        if state.detail and state.detail.state ~= "pending" then status = model.decision_line(state.detail); dirty = true; return false end
+        if state.detail and state.detail.state ~= "pending" then status = model.decision_line(state.detail, state.displays); dirty = true; return false end
         if not shown_review or not model.confirmation_matches(state, shown_review) or state.technical or state.grants_view then
             status = state.detail and "Read every line before deciding · ↓ scroll" or "Open a pending request before deciding"
             dirty = true; return false
@@ -318,7 +323,7 @@ local function main(value: unknown)
                 local request = source and source.kind == "success" and model.decode_view(source.value) or nil
                 if request then
                     lines[#lines + 1] = model.prompt(request)
-                    lines[#lines + 1] = "Lasts: " .. model.duration(request)
+                    lines[#lines + 1] = "Lasts: " .. model.duration(request, state.displays)
                     for _, line in ipairs(model.permission_lines(request)) do lines[#lines + 1] = line end
                 end
             end
@@ -333,7 +338,8 @@ local function main(value: unknown)
                 for _, raw in ipairs(history) do
                     local row = assert(bounds.object(raw))
                     local events: {[string]: string} = {["grant.created"] = "Granted", ["grant.revoked"] = "Access removed", ["grant.migrated"] = "Saved", ["grant.superseded"] = "Replaced"}
-                    local actor = tostring(row.actor_id):match("^bee%.application:") and "you" or "Bee"
+                    local recorded = type(row.body_json) == "string" and bounds.object(json.decode(row.body_json)) or nil
+                    local actor = recorded and bounds.id(recorded.actor_definition) and "you" or "Bee"
                     lines[#lines + 1] = model.text(row.at,64) .. " · " .. (events[tostring(row.kind)] or "Updated") .. " by " .. actor
                 end
                 if body.more ~= true then break end
@@ -378,7 +384,8 @@ local function main(value: unknown)
             dirty = true
             return
         end
-        if kind == "approve" and state.detail and state.detail.proposal.ref == "bee.threads.sessions:allowance" then
+        local detail_display = state.detail and model.display(state.detail, state.displays)
+        if kind == "approve" and state.detail and detail_display and detail_display.form == "allowance" then
             allowance_request = allowance_form.new(state.detail.source_workspace_id or state.detail.workspace_id, state.detail)
             dirty = true
             return

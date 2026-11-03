@@ -14,6 +14,7 @@ local grants = require("grants")
 local glyphs = require("glyphs")
 local typed_form = require("typed_form")
 local M = {}
+M.DISPLAY = "bee.approvals.display"
 M.TEXT_LIMIT = 512
 M.LINE_LIMIT = 160
 M.MAX_ROWS = 256
@@ -72,8 +73,10 @@ type Pending =
     {kind: "withdraw", request_id: string, approval_id: string, revision: integer, decision: nil}
 type Intent = {target: string, request: Object}
 type Confirmation = {approval_id: string, revision: integer, proposal_digest: string, reviewed_digest: string?, owner_node: string, owner_incarnation: integer}
+type Display = {requester: string?, duration: string?, consequence: string?, lasting: boolean, subject: string?, approved: string?, form: string?}
 type State = {
     requester_names: {[string]: string}?,
+    displays: {[string]: Display}?,
     resyncing: {[string]: boolean},
     grant_line_count: integer?, grant_detail: {string}?, grants_view: boolean, grants: {grants.Grant}, grant_selected: integer, longer: boolean, longer_choices: {windows.Choice},
     workspaces: {string},
@@ -274,11 +277,17 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     if cap == nil or (view.reallow ~= nil and type(view.reallow) ~= "boolean")
         or (view.allowed_by_grant ~= nil and (not automatic or not grant or automatic ~= grant.grant_id)) then return nil, "approval window metadata is invalid" end
     local contract = bounds.object(view.contract)
+    local function requester_principal(value: Object): Object?
+        local principal = bounds.object(value.requester)
+        local actor = principal and bounds.id(principal.actor_id)
+        if not principal or not actor then return nil end
+        return {actor_id = actor, definition_id = bounds.id(principal.definition_id)}
+    end
     local effect = bounds.object(view.effect)
     if view.effect ~= nil and (not effect or not bounds.member(effect.state, {"waiting", "authorized", "reserved", "admitted", "started", "succeeded", "failed", "canceled", "uncertain"})) then
         return nil, "approval effect state is invalid"
     end
-    local decoded_view: ApprovalView = {effect = effect and {state = effect.state, receipt = bounds.object(effect.receipt)}, contract = contract and {presentation = bounds.member(contract.presentation, {"inbox", "inline", "dialog"})}, window_grant = grant, allowed_by_grant = automatic, window_max_ttl_ms = cap, reallow = view.reallow == true, requesting_session = requesting_session, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
+    local decoded_view: ApprovalView = {effect = effect and {state = effect.state, receipt = bounds.object(effect.receipt)}, contract = contract and {presentation = bounds.member(contract.presentation, {"inbox", "inline", "dialog"}), requester = requester_principal(contract)}, window_grant = grant, allowed_by_grant = automatic, window_max_ttl_ms = cap, reallow = view.reallow == true, requesting_session = requesting_session, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
         requester_id = requester_id, request_kind = request_kind_value, policy = policy, proposal = proposal, proposal_digest = proposal_digest, reviewed_digest = bounds.id(view.reviewed_digest),
         prompt = prompt, revision = revision, state = state, decision = approval_decision, decider_id = decider_id,
         expires_at = expires_at, created_at = created_at, response_schema = response_schema, thread_id = thread_id, binding = binding,
@@ -401,21 +410,47 @@ function M.review(view: ApprovalView): Review
     return {title = title and M.text(title, 8192) or M.prompt(view), access = access and M.text(access, 8192),
         reason = reason and M.text(reason, 8192), exposure = exposure and M.text(exposure, 8192)}
 end
-function M.requester_name(view: ApprovalView, names: {[string]: string}?): string
+-- displays: the operation owners' bee.approvals.display declarations, keyed
+-- by the operation they word: who asks, how long an approval lasts, what it
+-- leads to, what the request is about and which decision form it takes.
+function M.displays(entries: unknown): {[string]: Display}
+    local result: {[string]: Display} = {}
+    for _, raw in ipairs(bounds.dense_list(entries, 256, "approval displays") or {}) do
+        local entry = bounds.object(raw)
+        local meta = entry and bounds.object(entry.meta)
+        local data = entry and bounds.object(entry.data)
+        local ref = meta and meta.type == M.DISPLAY and bounds.id(meta.operation_ref) or nil
+        if ref and data then
+            local function line(value: unknown): string?
+                local text = bounds.line(value, 160)
+                return text and text ~= "" and M.text(text, 160) or nil
+            end
+            local consequence = bounds.text(data.consequence, 2048)
+            result[ref] = {requester = line(data.requester), duration = line(data.duration), subject = line(data.subject),
+                approved = line(data.approved), form = bounds.id(data.form), lasting = data.lasting == true,
+                consequence = consequence and M.text(consequence, 2048) or nil}
+        end
+    end
+    return result
+end
+function M.display(view: ApprovalView, displays: {[string]: Display}?): Display?
+    return displays and displays[view.proposal.ref] or nil
+end
+function M.requester_name(view: ApprovalView, names: {[string]: string}?, displays: {[string]: Display}?): string
     local supplied = names and names[view.requester_id] or bounds.line(view.proposal.payload.requester_name, 160)
     if supplied and supplied ~= "" then return M.text(supplied, 160) end
-    if view.requester_id == "bee.node" then return "Bee" end
-    if view.requesting_session or view.requester_id:match("^bs:") then return "Agent session" end
-    if view.proposal.ref == "bee.gateway:access" then return "Agent" end
-    return "App"
+    if view.requesting_session then return "Agent session" end
+    local display = M.display(view, displays)
+    if display and display.requester then return display.requester end
+    local requester = view.contract and bounds.object(view.contract.requester)
+    if requester and bounds.id(requester.definition_id) then return "App" end
+    return "Bee"
 end
-function M.duration(view: ApprovalView): string
-    local payload = view.proposal.payload
-    if view.proposal.ref == "bee.gateway:access" then return "For this agent session" end
-    local stated = bounds.line(payload.duration, 160)
+function M.duration(view: ApprovalView, displays: {[string]: Display}?): string
+    local stated = bounds.line(view.proposal.payload.duration, 160)
     if stated and stated ~= "" then return M.text(stated, 160) end
-    if view.proposal.ref == "bee.gov:establish-overlay" then return "Until the app is replaced or removed" end
-    if view.proposal.ref == "bee.gov:grant-lease" then return "For the time shown below" end
+    local display = M.display(view, displays)
+    if display and display.duration then return display.duration end
     return "One action" .. ((view.window_max_ttl_ms or 0) >= 1800000 and " (or choose 30 minutes)" or "")
 end
 function M.summary(view: ApprovalView, seq: integer): Row
@@ -675,11 +710,16 @@ function M.withdraw_intent(state: State, request_id: string): (Intent?, string?)
     state.pending = {kind = "withdraw", request_id = request_id, approval_id = selected, revision = detail.revision, decision = nil}
     return {target = "bee.approvals.binding:withdraw", request = {approval_id = selected, expected_revision = detail.revision, proposal_digest = detail.proposal_digest, reviewed_digest = detail.reviewed_digest}}, nil
 end
--- Who decided, as the person reads it: the person's own Bee application is
--- "you"; any other approver is named by the last part of its identity.
-function M.decider(decider_id: string?): string
+-- Who decided, as the person reads it: a decision the owner recorded from
+-- an application principal is the person's own, "you"; any other approver
+-- is named by the last part of its identity.
+function M.decider(view: ApprovalView, decider_id: string?): string
     if not decider_id then return "unknown" end
-    if decider_id:sub(1, #"bee.application:") == "bee.application:" then return "you" end
+    local decisions = view.lifecycle_records and bounds.array(view.lifecycle_records.decisions, 64)
+    local record = decisions and decisions[#decisions] and bounds.object(decisions[#decisions])
+    local raw = record and bounds.text(record.decider_json, 4096)
+    local principal = raw and bounds.object(json.decode(raw))
+    if principal and principal.actor_id == decider_id and bounds.id(principal.definition_id) then return "you" end
     return M.text(decider_id:match("([^:]+)$") or decider_id, 40)
 end
 -- The decision line of a request: what was decided and by whom, or why it is
@@ -692,21 +732,21 @@ function M.assurance(view: ApprovalView): string?
     if not assurance or assurance.kind ~= "explicit_gesture" then return nil end
     return M.text(assurance.gesture, 32) .. " · " .. M.text(assurance.presentation, 32)
 end
-function M.decision_line(view: ApprovalView): string
+function M.decision_line(view: ApprovalView, displays: {[string]: Display}?): string
     local effect = bounds.object(view.effect)
-    local label = view.proposal.ref == "bee.gov:establish-overlay" and "Installation" or "Action"
+    local display = M.display(view, displays)
+    local label = display and display.subject or "Action"
     if effect and effect.state == "failed" then return label .. " failed" end
     if effect and effect.state == "uncertain" then return label .. " outcome uncertain" end
     if view.state == "decided" and view.decision then
-        local confirmed = view.proposal.ref == "bee.approvals:confirmation"
-        return (view.decision == "approved" and (confirmed and "Confirmed" or "Approved") or "Denied") .. " by " .. M.decider(view.decider_id)
+        return (view.decision == "approved" and (display and display.approved or "Approved") or "Denied") .. " by " .. M.decider(view, view.decider_id)
     end
     if view.state == "pending" then return "Waiting for your decision" end
     if view.state == "withdrawn" then return "Withdrawn" end
     return "Expired"
 end
 local function outcome_text(view: ApprovalView): string
-    if view.state == "decided" and view.decision then return M.text(view.decision, 40) .. " by " .. M.decider(view.decider_id) end
+    if view.state == "decided" and view.decision then return M.text(view.decision, 40) .. " by " .. M.decider(view, view.decider_id) end
     return view.state
 end
 -- apply_answer: the owner's answer to the in-flight request. A conflict or

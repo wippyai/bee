@@ -107,9 +107,18 @@ function M.observe(tx: sql.Transaction | sql.DB, grant: Grant): string?
     if not grant.until_ms or deadline < grant.until_ms then grant.until_ms = deadline end
     return nil
 end
+-- history records each grant event with its actor and, in the body, the
+-- application definition that actor acts through: the granter's for its
+-- creation, the authenticated caller's for a later change.
 function M.history(tx: sql.Transaction | sql.DB, grant: Grant, kind: string, actor: string, body: Object, at: string): string?
+    local current, definition = M.principal(actor)
+    if kind == "grant.created" or kind == "grant.migrated" then definition = grant.granted_definition
+    elseif current ~= actor then definition = nil end
+    local recorded: Object = {}
+    for key, value in pairs(body) do recorded[key] = value end
+    recorded.actor_definition = definition
     return execute(tx,"INSERT INTO bee_approval_grant_history(grant_id,revision,kind,actor_id,body_json,at) VALUES (?,?,?,?,?,?)",
-        {grant.grant_id,grant.revision,kind,actor,canonical.encode(body),at})
+        {grant.grant_id,grant.revision,kind,actor,canonical.encode(recorded),at})
 end
 function M.create(tx: sql.Transaction | sql.DB, grant: Grant): string?
     if grant.terms.kind == "until_revoked" and grant.provenance.kind ~= "legacy" and not M.permanent_allowed(grant.domain) then return "FORBIDDEN: policy does not permit persistent grants" end

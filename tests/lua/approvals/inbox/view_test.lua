@@ -2,6 +2,7 @@
 -- leads with the proposed effect, and lets no control sequence from a
 -- request through.
 local test = require("test")
+local registry = require("registry")
 local bounds = require("bounds")
 local tty = require("tty")
 local model = require("model")
@@ -20,12 +21,24 @@ local function request(id: string, state: string, prompt: string): Object
     return {approval_id = id, workspace_id = "ws-1", requester_id = "bee.test.requester", request_kind = "permission", policy = "inbox-test",
         proposal = {kind = "attempt", ref = "attempt-" .. id, revision = "r1", action_id = "action-" .. id, payload = {tool_name = "Bash", correlation_id = "c-1"}},
         proposal_digest = string.rep("b", 64), prompt = {text = prompt}, revision = 1, state = state, owner_node = "node-1", owner_incarnation = 2,
-        expires_at = "2026-09-09T10:00:00.000Z", created_at = "2026-09-09T09:00:00.000Z"}
+        expires_at = "2026-09-09T10:00:00.000Z", created_at = "2026-09-09T09:00:00.000Z",
+        contract = {requester = {actor_id = "bee.test.requester", definition_id = "bee.tests.approvals:requester_app"}}}
+end
+-- new_state: an inbox state wording requests by the shipped operation displays.
+local function new_state(workspaces: {string}): model.State
+    local state = model.new(workspaces)
+    state.displays = model.displays(registry.find({["meta.type"] = model.DISPLAY}))
+    return state
+end
+-- by_person records the decision as the owner does for a person deciding
+-- through an application.
+local function by_person(item: Object)
+    item.lifecycle_records = {decisions = {{decider_json = '{"actor_id":"' .. tostring(item.decider_id) .. '","definition_id":"bee.approvals.inbox.app:app"}'}}, grants = {}}
 end
 local function define_tests()
     test.describe("Inbox frame", function()
         test.it("separates an access question into labelled facts and a local deadline", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("access-card", "pending", "Misleading legacy prompt must not supply card facts")
             item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {requester_name = "Claude Code", review = {title = "Let this agent session use Hub and Library?", access = "Hub and Library", reason = "Read the installed applications to find the progress app."}}}
             state.requester_names = {["bee.test.requester"] = "Claude Code · hi"}
@@ -48,7 +61,7 @@ local function define_tests()
             for _, hit in ipairs(compact.hits) do test.is_false(hit.kind == "approve" or hit.kind == "deny") end
         end)
         test.it("uses proposal fields in list rows and offers Details on the opened card", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("structured", "pending", "Let this agent session use Wrong? It asks: Wrong reason")
             item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {review = {title = "Use Progress?", access = "Progress", reason = "Track the build"}}}
             model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
@@ -64,12 +77,13 @@ local function define_tests()
             test.is_true(found)
         end)
         test.it("shows who decided a request and when instead of its deadline", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("decided-access", "decided", "Let this agent session use Hub and Library?")
             item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {review = {title = "Let this agent session use Hub and Library?", access = "Hub and Library"}}}
             item.decision = "approved"
             item.decider_id = "bee.application:01a06e56ba587c5aa2ab9b0b63c0f001:inbox-instance"
             item.decided_at = "2026-09-09T09:30:00.000Z"
+            by_person(item)
             model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
             local listed = tty.text.plain(table.concat(view.draw(120, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows, "\n"))
             test.contains(listed, "Let this agent session use Hub and Library?")
@@ -82,7 +96,7 @@ local function define_tests()
             test.is_nil((opened:find("Decide by", 1, true)))
         end)
         test.it("shows the whole question before enabling a decision", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("long-review", "pending", string.rep("Read these terms carefully. ", 14) .. "Last consequence: files change.")
             model.select(state, "long-review")
             model.apply_read(state, "long-review", reply({ok = true, value = item}))
@@ -90,7 +104,7 @@ local function define_tests()
             for _, hit in ipairs(shown.hits) do test.is_false(hit.kind == "approve" or hit.kind == "deny") end
         end)
         test.it("cannot decide when a wide character does not fit the review", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("wide-text", "pending", "Review 🧭 navigation?")
             model.select(state, "wide-text")
             model.apply_read(state, "wide-text", reply({ok = true, value = item}))
@@ -102,7 +116,7 @@ local function define_tests()
             end
         end)
         test.it("uses a person's app name instead of raw request and session identities", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("identity-card", "pending", "Let this agent session use Hub and Library? It asks: Install a clock.")
             item.requester_id = "bs:node:workspace:session"
             item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {requester_name = "Clock helper", duration = "For this agent session", access_summary = "Find and install apps"}}
@@ -117,7 +131,7 @@ local function define_tests()
             item.request_kind = "question"
             item.response_schema = {type = "object", required = {"count", "mode"}, properties = {
                 count = {type = "integer"}, mode = {type = "string", enum = {"one", "two"}}}}
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             model.select(state, "question-form")
             model.apply_read(state, "question-form", reply({ok = true, value = item}))
             local opened = question_form.new(assert(state.detail))
@@ -134,7 +148,7 @@ local function define_tests()
             end
         end)
         test.it("never presents a snapshot reset as an unavailable workspace", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             test.is_true(model.apply_inbox(state, "ws-1", {kind = "failure", code = "RESET_REQUIRED", message = "approval snapshot identity mismatch"}))
             local shown = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
             test.contains(table.concat(shown.rows, "\n"), "Refreshing approvals")
@@ -144,7 +158,7 @@ local function define_tests()
             end
         end)
         test.it("shows a permanent snapshot failure instead of an unfinished refresh", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             test.is_false(model.apply_inbox(state, "ws-1", {kind = "failure", code = "UNAVAILABLE", message = "approval snapshot identity mismatch"}))
             local shown = view.draw(120, 24, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
             local text = tty.text.plain(table.concat(shown.rows, "\n"))
@@ -152,7 +166,7 @@ local function define_tests()
             test.is_nil((text:find("Refreshing approvals", 1, true)))
         end)
         test.it("leads MCP pairing cards with the client name and the requested trait summary", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("mcp-card", "pending", "A legacy paragraph with different content")
             item.proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {review = {title = "Pair external MCP client Terminal Claude", access = "Read Bee documentation and this client's thread", reason = "Pair this terminal"}}}
             model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
@@ -162,7 +176,7 @@ local function define_tests()
             test.is_nil((tty.text.plain(shown.rows[4]):find("attempt", 1, true)))
         end)
         test.it("lays out complete request cards and drops the summary first on narrow screens", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("small-card", "pending", "Run the API checks?")
             item.window_max_ttl_ms = 1800000
             model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
@@ -192,7 +206,7 @@ local function define_tests()
             end
         end)
         test.it("moves selection and scroll offsets by whole cards", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local changes: {Object} = {}
             for index = 1, 12 do changes[index] = {seq = index, request = request("card-" .. tostring(index), "pending", "Request " .. tostring(index))} end
             model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = changes, next_seq = 12, more = false}}))
@@ -225,7 +239,7 @@ local function define_tests()
             end
         end)
         test.it("offers only capped windows and one-key re-allow choices on a short prompt", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("window", "pending", "Write exactly one file")
             item.window_max_ttl_ms = 1800000
             item.reallow = true
@@ -258,7 +272,7 @@ local function define_tests()
 
         test.it("keeps Grants discoverable and selectable through shared More at both sizes", function()
             for _, size in ipairs({{80, 24}, {120, 36}}) do
-                local state, slice = model.new({"ws-1"}), leases.new()
+                local state, slice = new_state({"ws-1"}), leases.new()
                 local menu = frames.menu()
                 local drawn = view.draw(size[1], size[2], appearance.defaults(), state, {}, 0, "Open a pending request before deciding", slice)
                 frames.render(drawn, menu, appearance.defaults())
@@ -282,7 +296,7 @@ local function define_tests()
             end
         end)
         test.it("asks to install an exact app version with approve or deny only, the question first", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("install", "pending", "Install Bee application tally 1.0.0. It adds no permissions.")
             item.proposal = {kind = "operation", ref = leases.ACTIVATION, revision = "r1", payload = {version = "1.0.0"}}
             item.window_max_ttl_ms = 14400000
@@ -302,7 +316,7 @@ local function define_tests()
         end)
         test.it("keeps lease and grant decisions out of the primary row", function()
             for _, size in ipairs({{120, 36}, {80, 24}}) do
-                local shown = view.draw(size[1], size[2], appearance.defaults(), model.new({"ws-1"}), {}, 0, "", leases.new())
+                local shown = view.draw(size[1], size[2], appearance.defaults(), new_state({"ws-1"}), {}, 0, "", leases.new())
                 local row = shown.rows[math.floor(size[2])]
                 test.is_nil((row:find("Approve", 1, true)))
                 test.is_nil((row:find("Deny", 1, true)))
@@ -315,7 +329,7 @@ local function define_tests()
             local session = "bs:" .. string.rep("n", 36) .. ":" .. string.rep("w", 32) .. ":" .. string.rep("s", 36)
             local prompt = "Session " .. session .. " in workspace " .. string.rep("w", 32)
                 .. " asks Bash {\"command\":\"touch inbox-proof.txt\"} (leave the requested marker)"
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("permission-command", "pending", prompt)
             model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
             model.select(state, "permission-command")
@@ -328,7 +342,7 @@ local function define_tests()
             end
         end)
         test.it("keeps rows, detail and hits inside every terminal size and strips hostile text", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local changes: {Object} = {}
             for index = 1, 12 do
                 changes[#changes + 1] = {seq = index, approval_id = "r" .. tostring(index), revision = 1, request = request("r" .. tostring(index), index % 3 == 0 and "expired" or "pending", "touch proof.txt \27[31mred\27[0m\r\7 line")}
@@ -369,7 +383,7 @@ local function define_tests()
         end)
         test.it("shows saved workspace names and effect cards at both frame sizes", function()
             for _, size in ipairs({{120, 36}, {80, 24}}) do
-                local state = model.new({"ws-1"})
+                local state = new_state({"ws-1"})
                 local item = request("card-1", "pending", "Run the API checks?")
                 model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
                 local shown = view.draw(size[1], size[2], appearance.defaults(), state, model.rows(state), 0, "Decision needed", leases.new(),
@@ -384,7 +398,7 @@ local function define_tests()
             end
         end)
         test.it("shows catalog capability and delta on the ordinary approval screen", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("grant-1", "pending", "Install Tally?")
             local proposal = assert(bounds.object(item.proposal))
             proposal.payload = {permission_changes = {"added: Read owned threads"},
@@ -400,7 +414,7 @@ local function define_tests()
             test.is_true(visible:find("Allows: Read owned threads", 1, true) ~= nil)
         end)
         test.it("asks an install question once, with each fact on its own line and the tools agents see", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("install-1", "pending", "Install Notes 1.0.0 (made by Claude Code · this bee)? It adds: ...")
             item.proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = string.rep("a", 64),
                 input_digest = string.rep("a", 64), payload = {title = "Notes", version = "1.0.0",
@@ -442,10 +456,11 @@ local function define_tests()
             for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), 120) end
         end)
         test.it("shows a decided install with the same card, one decision line and raw ids only under T", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("decided-1", "decided", "Install Tasks 1.0.0 (made by Claude Code · this bee)? It adds: ...")
             item.decision = "approved"
             item.decider_id = "bee.application:01a06e56ba587c5aa2ab9b0b63c0f001:inbox-instance"
+            by_person(item)
             item.proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = string.rep("a", 64),
                 input_digest = string.rep("a", 64), payload = {title = "Tasks", version = "1.0.0",
                     maker = "made by Claude Code · this bee", source_workspace = "tasks",
@@ -482,7 +497,7 @@ local function define_tests()
             test.is_true(drawn_text():find("bee.application:01a06e56ba587c5aa2ab9b0b63c0f001:inbox-instance", 1, true) ~= nil)
         end)
         test.it("names what an upgrade adds under Now also and keeps the technical lines behind T", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("upgrade-1", "pending", "Install Notes 1.1.0?")
             item.proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = string.rep("a", 64),
                 input_digest = string.rep("a", 64), payload = {title = "Notes", version = "1.1.0", source_workspace = "notes",
@@ -502,7 +517,7 @@ local function define_tests()
             test.is_true(technical:find("Allows: Read owned threads", 1, true) ~= nil)
         end)
         test.it("shows a driver install with the driver glyph and a list row without the paragraph", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("driver-1", "pending", "Install agent driver stub 1.0.0? It adds no permissions. Applies to this exact version.")
             item.proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = string.rep("a", 64),
                 input_digest = string.rep("a", 64), payload = {title = "Stub", version = "1.0.0", subject = "driver",
@@ -521,7 +536,7 @@ local function define_tests()
             test.is_true(text:find("⌁ Install driver Stub 1.0.0", 1, true) ~= nil)
         end)
         test.it("keeps the full bounded capability review visible at desktop height", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local item = request("grant-many", "pending", "Install the requested capabilities?")
             local changes: {string} = {}
             local resolved: {string} = {}
@@ -542,7 +557,7 @@ local function define_tests()
             test.is_true(visible:find("Allows: Capability 8", 1, true) ~= nil)
         end)
         test.it("offers no decision without an opened pending request or while one awaits the owner", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "r1", revision = 1, request = request("r1", "pending", "x")}}, next_seq = 1, more = false}, replayed = false}))
             model.select(state, "r1")
             local function offers(kind: string): boolean
@@ -558,7 +573,7 @@ local function define_tests()
             test.is_false(offers("refresh"))
         end)
         test.it("names the empty inbox's next action and keeps hints beside a status", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local empty = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "Refreshed", leases.new())
             local rows: {string} = {}
             for index, row in ipairs(empty.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
@@ -572,7 +587,7 @@ local function define_tests()
             test.is_nil((idle:find("…", 1, true)))
         end)
         test.it("marks the selected request without color and counts pending requests in the header", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {changes = {
                 {seq = 1, approval_id = "r1", revision = 1, request = request("r1", "pending", "x")},
                 {seq = 2, approval_id = "r2", revision = 1, request = request("r2", "pending", "y")}}, next_seq = 2, more = false}, replayed = false}))
@@ -594,7 +609,7 @@ local function define_tests()
             test.is_true(details_button)
         end)
         test.it("shows keyboard guidance when no operation needs attention", function()
-            local state = model.new({"ws-1"})
+            local state = new_state({"ws-1"})
             local frame = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
             test.is_true(table.concat(frame.rows, "\n"):find("R refreshes", 1, true) ~= nil)
         end)

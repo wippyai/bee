@@ -180,7 +180,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   security:
     policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy, bee.security.approvals:session_relay_policy]
-  modules: [time, channel, events, funcs]
+  modules: [time, channel, events, funcs, json]
   imports:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test

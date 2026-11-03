@@ -25,6 +25,16 @@ entries:
     - bee.approvals.inbox.app:sources
     effect: allow
 
+- name: display_discovery_policy
+  kind: security.policy.expr
+  meta:
+    comment: The inbox finds the bee.approvals.display declarations operation owners publish to word their requests
+  policy:
+    actions: [registry.find]
+    resources: '*'
+    expression: action == "registry.find" && resource == "*"
+    effect: allow
+
 - name: grants_policy
   kind: security.policy
   policy:

@@ -198,10 +198,12 @@ function M.change(tx: sql.Transaction, row: Object, revision: integer, state: st
     end
     local subject_json = canonical.encode(contract.subject)
     local scope_json = canonical.encode(contract.scope)
-    local err = execute(tx, "INSERT INTO bee_approval_grants (grant_id, approval_id, decision_id, subject_json, scope_json, terms_json, state, revision, until_ms, max_uses, created_at, owner_node, workspace_id, requester_id, granted_by, provenance_json) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?, 1, ?, ?, ?, ?, ?, ?)",
-        {approval_id .. ":grant", approval_id, decision_id, subject_json, scope_json, '{"kind":"once","time_basis":"absolute"}', row.effect_admission_ms, at, row.owner_node,row.workspace_id,row.requester_id,actor,canonical.encode({kind = "decision",approval_id = approval_id,reviewed_digest = row.reviewed_digest})})
+    local err = execute(tx, "INSERT INTO bee_approval_grants (grant_id, approval_id, decision_id, subject_json, scope_json, terms_json, state, revision, until_ms, max_uses, created_at, owner_node, workspace_id, requester_id, granted_by, granted_definition, provenance_json) VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?, 1, ?, ?, ?, ?, ?, ?, ?)",
+        {approval_id .. ":grant", approval_id, decision_id, subject_json, scope_json, '{"kind":"once","time_basis":"absolute"}', row.effect_admission_ms, at, row.owner_node,row.workspace_id,row.requester_id,actor,M.principal(actor).definition_id,canonical.encode({kind = "decision",approval_id = approval_id,reviewed_digest = row.reviewed_digest})})
     if err then return err end
-    return execute(tx, "INSERT INTO bee_approval_grant_history SELECT grant_id,revision,'grant.created',granted_by,provenance_json,created_at FROM bee_approval_grants WHERE grant_id = ?", {approval_id .. ":grant"})
+    local created, read_error = grants.read(tx, approval_id .. ":grant")
+    if not created then return read_error or "read decision grant" end
+    return grants.history(tx, created, "grant.created", actor, created.provenance, at)
 end
 function M.grant_revoked(tx: sql.Transaction, approval_id: string, requester: string, revision: integer, at: string): string?
     local effect, read_error = M.read(tx, approval_id)

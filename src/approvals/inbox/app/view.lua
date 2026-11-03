@@ -15,10 +15,10 @@ local clock = require("clock")
 local M = {}
 -- The time fact of a request: its deadline while it waits for the person,
 -- afterwards who settled it and when.
-local function timing(view: model.ApprovalView): string
+local function timing(view: model.ApprovalView, displays: {[string]: model.Display}?): string
     if view.state == "pending" then return "Decide by: " .. clock.local_deadline(view.expires_at) end
     local settled = view.decided_at
-    return model.decision_line(view) .. (settled and (" · " .. clock.local_time(settled)) or "")
+    return model.decision_line(view, displays) .. (settled and (" · " .. clock.local_time(settled)) or "")
 end
 local function prompt_lines(prompt: string, width: integer, prefix: string?): {string}
     local rest = (prefix == nil and "Asked: " or prefix) .. prompt
@@ -52,7 +52,7 @@ local function draw_review(width: integer, height: integer, preferences: appeara
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
-    local lines = leases.review_lines(detail, width, state.requester_names)
+    local lines = leases.review_lines(detail, width, state.requester_names, state.displays)
     local visible = math.floor(math.max(1, height - 5))
     local top, complete = leases.review_frame(slice, detail, #lines, visible)
     frame.header(painter, "APP UPDATES", "lines " .. tostring(math.min(#lines, top + visible)) .. " of " .. tostring(#lines))
@@ -142,7 +142,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
     local group: {model.ApprovalView} = {detail}
     local one_time = detail.proposal.ref == leases.ACTIVATION
     local cap = one_time and 0 or model.window_cap(state)
-    frame.header(painter, "NEEDS YOU", detail.state == "pending" and "Reviewing request" or model.decision_line(detail))
+    frame.header(painter, "NEEDS YOU", detail.state == "pending" and "Reviewing request" or model.decision_line(detail, state.displays))
     local lines: {string} = {}
     local readable = width > 2 and detail.prompt.text ~= nil
     for _, item in ipairs(group) do
@@ -150,12 +150,12 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
         local source: {string} = {}
         if card then
             for _, line in ipairs(card_lines(card)) do source[#source + 1] = line end
-            source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names)
+            source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names, state.displays)
         else
             local facts = model.review(item)
             source[#source + 1] = facts.title
             source[#source + 1] = ""
-            source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names)
+            source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names, state.displays)
             local summary = model.summary(item, 0)
             source[#source + 1] = "Access: " .. (facts.access
                 or (summary.effect ~= "operation" and summary.effect ~= "attempt" and summary.effect or "This action"))
@@ -164,18 +164,19 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
             local command = item.proposal.payload.command
             if type(command) == "string" then source[#source + 1] = "Command: " .. model.text(command, 8192) end
             for _, line in ipairs(model.permission_lines(item)) do source[#source + 1] = line end
-            source[#source + 1] = "Lasts: " .. model.duration(item)
+            source[#source + 1] = "Lasts: " .. model.duration(item, state.displays)
         end
-        source[#source + 1] = timing(item)
+        source[#source + 1] = timing(item, state.displays)
         if not card then
             source[#source + 1] = ""
             local consequence = item.proposal.payload.consequence
+            local display = model.display(item, state.displays)
             source[#source + 1] = type(consequence) == "string" and model.text(consequence, 2048)
-                or (item.proposal.ref == "bee.gateway:access" and "Other requests still need your approval. You can remove access at any time."
-                or "Approval lets this action proceed. Its changes may remain after access ends.")
+                or (display and display.consequence)
+                or "Approval lets this action proceed. Its changes may remain after access ends."
         end
         local result = type(item.effect_result) == "table" and item.effect_result or (item.effect and item.effect.receipt)
-        if type(result) == "table" and type(result.error) == "string" then source[#source + 1] = model.decision_line(item) .. ": " .. model.text(result.error, 2048) end
+        if type(result) == "table" and type(result.error) == "string" then source[#source + 1] = model.decision_line(item, state.displays) .. ": " .. model.text(result.error, 2048) end
         for _, line in ipairs(source) do
             for _, wrapped in ipairs(prompt_lines(line, width, "")) do
                 if tty.text.width(wrapped) > width - 2 then readable = false end
@@ -208,7 +209,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
         end
     end
     local message = status ~= "" and status or state.notice
-    if message == "" then message = detail.state ~= "pending" and model.decision_line(detail) or (complete and "Read the request, then press A or D to decide" or "Read every line before deciding · ↓ scroll") end
+    if message == "" then message = detail.state ~= "pending" and model.decision_line(detail, state.displays) or (complete and "Read the request, then press A or D to decide" or "Read every line before deciding · ↓ scroll") end
     frame.footer(painter, message, frame.hints({{key = "↑↓", verb = "scroll"}}), nil, height >= 4 and buttons or {})
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = visible, offset = top,
         review_first = top + 1, review_last = math.min(#lines, top + visible), review_total = readable and #lines or nil}
@@ -297,14 +298,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             scope = windows.duration(grant.until_ms - grant.granted_ms) .. " until " .. clock.local_deadline(grant.until_at)
         end
         local separator = width < 60 and " " or " · "
-        local lasting = row.view.proposal.ref == "bee.gateway:access" and model.duration(row.view) or scope
+        local shown = model.display(row.view, state.displays)
+        local lasting = shown and shown.lasting and model.duration(row.view, state.displays) or scope
         local label = row.state == "pending" and state_label(row) or (row.view.allowed_by_grant and model.history(row.view))
-        local meta = (label and (label .. separator) or "") .. lasting .. separator .. timing(row.view)
+        local meta = (label and (label .. separator) or "") .. lasting .. separator .. timing(row.view, state.displays)
         if card and width >= 100 then meta = meta .. " · " .. card.scope end
         frame.list_card(painter, list_first + (slot - 1) * (card_height + 1), card_height,
             {glyph = model.state_mark(row.state == "decided" and (row.decision or "decided") or row.state),
                 title = title,
-                requester = model.requester_name(row.view, state.requester_names), summary = summary, meta = meta},
+                requester = model.requester_name(row.view, state.requester_names, state.displays), summary = summary, meta = meta},
             window.offset + slot == selected_index, "row", window.offset + slot, row.approval_id)
     end
     local idle = state.pending == nil

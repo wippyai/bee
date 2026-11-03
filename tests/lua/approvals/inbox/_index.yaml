@@ -20,7 +20,7 @@ entries:
   source: file://model_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [json]
+  modules: [json, registry]
   imports:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
@@ -45,7 +45,7 @@ entries:
   source: file://view_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [tty]
+  modules: [tty, registry]
   imports:
     question_form: bee.approvals.inbox.app:question_form
     bounds: bee.drivers.values:bounds

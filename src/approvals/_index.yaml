@@ -1,6 +1,14 @@
 version: '1.0'
 namespace: bee.approvals
 entries:
+- name: confirmation_display
+  kind: registry.entry
+  meta:
+    type: bee.approvals.display
+    operation_ref: bee.approvals:confirmation
+    comment: How Needs you words an application's confirmation
+  data:
+    approved: Confirmed
 - name: contract
   kind: contract.definition
   meta:

@@ -15,6 +15,7 @@ entries:
   - funcs
   - registry
   - system
+  - json
   imports:
     frame: bee.ui:frame
     client: bee.app:client
@@ -58,6 +59,7 @@ entries:
     - bee.gov.security:governance_delivery_lease_policy
     - bee.approvals.inbox.security:changes_policy
     - bee.approvals.inbox.security:client_policy
+    - bee.approvals.inbox.security:display_discovery_policy
     - bee.approvals.inbox.security:session_names_policy
     - bee.approvals.inbox.security:grants_policy
     - bee.node.security:workspace_catalog_read_policy

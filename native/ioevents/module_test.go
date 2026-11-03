@@ -4,6 +4,8 @@ package ioevents
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,7 +19,9 @@ import (
 	fsapi "github.com/wippyai/runtime/api/fs"
 	"github.com/wippyai/runtime/api/payload"
 	"github.com/wippyai/runtime/api/pid"
+	apierror "github.com/wippyai/runtime/api/error"
 	"github.com/wippyai/runtime/api/process"
+	registryapi "github.com/wippyai/runtime/api/registry"
 	"github.com/wippyai/runtime/api/relay"
 	runtimeapi "github.com/wippyai/runtime/api/runtime"
 	secapi "github.com/wippyai/runtime/api/security"
@@ -338,5 +342,43 @@ func TestDeliveryTurnsTheLastFreeSlotIntoARescan(t *testing.T) {
 	value := offer("after")
 	if value == nil || value.(*lua.LTable).RawGetString("path").String() != "after" {
 		t.Fatal("delivery did not resume once the consumer received the rescan")
+	}
+}
+
+type namedFilesystems map[string]fsapi.FS
+
+func (r namedFilesystems) GetFS(name string) (fsapi.FS, bool) {
+	filesystem, ok := r[name]
+	return filesystem, ok
+}
+
+type watchForFinder struct{ source, folder string }
+
+func (f watchForFinder) Find(meta attrs.Bag) ([]registryapi.Entry, error) {
+	if meta.GetString(".kind", "") != "fs.directory" || meta.GetString("meta.watch_for", "") != f.folder {
+		return nil, nil
+	}
+	return []registryapi.Entry{{ID: registryapi.ParseID(f.source), Kind: "fs.directory"}}, nil
+}
+
+func TestWatchRootOfAReadOnlyVolumeIsItsWatchSource(t *testing.T) {
+	root := t.TempDir()
+	ctx := ctxapi.NewRootContext()
+	ctx = fsapi.WithRegistry(ctx, namedFilesystems{
+		"grants:folder": fsapi.NewReadOnlyFS(os.DirFS(root).(fs.ReadDirFS)),
+		"grants:source": watchTestFS{root: root},
+		"grants:other":  fsapi.NewReadOnlyFS(os.DirFS(root).(fs.ReadDirFS)),
+	})
+	ctx = registryapi.WithFinder(ctx, watchForFinder{source: "grants:source", folder: "grants:folder"})
+	resolved, err := watchRoot(ctx, "grants:folder")
+	if err != nil || resolved != root {
+		t.Fatalf("read-only folder resolved to %q, %v", resolved, err)
+	}
+	var typed apierror.Error
+	if _, err := watchRoot(ctx, "grants:other"); !errors.As(err, &typed) || typed.Kind() != apierror.Invalid {
+		t.Fatalf("read-only volume without a watch source: want Invalid, got %v", err)
+	}
+	if _, err := watchRoot(ctx, "grants:missing"); !errors.As(err, &typed) || typed.Kind() != apierror.NotFound {
+		t.Fatalf("missing resource: want NotFound, got %v", err)
 	}
 }

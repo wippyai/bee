@@ -154,10 +154,11 @@ function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
         data = config}, nil
 end
 
--- The host-backed directory a watch grant observes. Native watches need the
--- host directory, which the read-only volume withholds; the watch policy never
--- lets the application acquire this volume, so it stays unreadable and
--- unwritable through fs while ioevents reports its changes.
+-- The host-backed directory behind a watched folder. Native watches need the
+-- host directory, which the read-only volume withholds; this entry names the
+-- folder it serves in meta.watch_for, and ioevents resolves a watch on the
+-- folder through it. No grant lets the application acquire it, so it stays
+-- unreadable and unwritable through fs.
 function M.watch_volume_id(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (string?, string?)
     local read_id, id_error = M.volume_id(owner_raw, folder_raw, subpath_raw)
     if not read_id then return nil, id_error end
@@ -166,12 +167,14 @@ function M.watch_volume_id(owner_raw: unknown, folder_raw: unknown, subpath_raw:
     return M.VOLUME_PREFIX .. suffix, nil
 end
 
-function M.watch_volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (Volume?, string?)
+type WatchVolume = {id: string, kind: "fs.directory", meta: {comment: string, watch_for: string}, data: VolumeConfig}
+function M.watch_volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (WatchVolume?, string?)
     local id, id_error = M.watch_volume_id(owner_raw, folder_raw, subpath_raw)
     if not id then return nil, id_error end
+    local folder_id = assert(M.volume_id(owner_raw, folder_raw, subpath_raw))
     local root = assert(folder(folder_raw))
     local subpath = assert(M.verify_subpath(subpath_raw))
-    return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace watch volume"},
+    return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace watch source", watch_for = folder_id},
         data = {directory = located(root, subpath), base = root.base, auto_init = false, readonly = false,
             mode = "0500"}}, nil
 end
@@ -250,20 +253,19 @@ function M.process_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: 
             effect = "allow"}}}, nil
 end
 
--- The application reads the folder through its read-only volume, watches the
--- host-backed watch volume and reads its granted identities; it can acquire
--- the watch volume for no filesystem operation.
+-- The application reads and watches the folder through its read-only volume
+-- and reads its granted identities; no filesystem operation reaches the watch
+-- source behind it.
 function M.watch_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
     policy_id_raw: unknown): (ExprPolicy?, string?)
     local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, false)
-    local watched, watched_error = M.watch_volume(owner_raw, folder_raw, subpath_raw)
     local id = bounds.id(policy_id_raw)
-    if not volume or not watched or not id then
-        return nil, volume_error or watched_error or "watch grant policy identity is invalid"
+    if not volume or not id then
+        return nil, volume_error or "watch grant policy identity is invalid"
     end
     local expression = '(action == "funcs.call" && resource == "' .. gateway.GRANTED_RESOURCES .. '")'
         .. ' || (action == "fs.get" && resource == "' .. volume.id .. '")'
-        .. ' || (action == "ioevents.watch" && resource == "' .. watched.id .. '")'
+        .. ' || (action == "ioevents.watch" && resource == "' .. volume.id .. '")'
     return {id = id, kind = "security.policy.expr", meta = {comment = "Host-generated workspace watch grant"},
         data = {policy = {actions = {"funcs.call", "fs.get", "ioevents.watch"}, resources = "*",
             expression = expression, effect = "allow"}}}, nil

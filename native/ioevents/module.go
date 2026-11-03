@@ -9,11 +9,13 @@ import (
 	"sync/atomic"
 
 	lua "github.com/wippyai/go-lua"
+	"github.com/wippyai/runtime/api/attrs"
 	"github.com/wippyai/runtime/api/dispatcher"
 	apierror "github.com/wippyai/runtime/api/error"
 	fsapi "github.com/wippyai/runtime/api/fs"
 	"github.com/wippyai/runtime/api/payload"
 	"github.com/wippyai/runtime/api/pid"
+	registryapi "github.com/wippyai/runtime/api/registry"
 	"github.com/wippyai/runtime/api/relay"
 	runtimeapi "github.com/wippyai/runtime/api/runtime"
 	luaapi "github.com/wippyai/runtime/api/runtime/lua"
@@ -233,24 +235,53 @@ func eventRecord(l *lua.LState, event Event) lua.LValue {
 	return record
 }
 
+// watchRoot is the host directory behind a filesystem resource. A read-only
+// volume withholds its host directory; the host-backed fs.directory entry
+// whose meta.watch_for names that volume serves its watches, and the caller
+// never acquires it.
+func watchRoot(ctx context.Context, resource string) (string, error) {
+	filesystems := fsapi.GetRegistry(ctx)
+	if filesystems == nil {
+		return "", apierror.New(apierror.Internal, "filesystem registry unavailable")
+	}
+	filesystem, ok := filesystems.GetFS(resource)
+	if !ok {
+		return "", apierror.New(apierror.NotFound, "filesystem resource not found").WithRetryable(apierror.False)
+	}
+	if host, ok := filesystem.(fsapi.HostPathFS); ok {
+		return host.RootPath(), nil
+	}
+	unsupported := apierror.New(apierror.Invalid, "filesystem provider does not support native watches").WithRetryable(apierror.False)
+	finder := registryapi.GetFinder(ctx)
+	if finder == nil {
+		return "", unsupported
+	}
+	entries, err := finder.Find(attrs.Bag{".kind": "fs.directory", "meta.watch_for": resource})
+	if err != nil {
+		return "", apierror.New(apierror.Unavailable, "registry cannot be read").WithRetryable(apierror.True)
+	}
+	if len(entries) != 1 {
+		return "", unsupported
+	}
+	source, ok := filesystems.GetFS(entries[0].ID.String())
+	if !ok {
+		return "", apierror.New(apierror.NotFound, "watch source of filesystem resource not found").WithRetryable(apierror.False)
+	}
+	host, ok := source.(fsapi.HostPathFS)
+	if !ok {
+		return "", unsupported
+	}
+	return host.RootPath(), nil
+}
+
 func (manager *Manager) Handle(ctx context.Context, command dispatcher.Command, tag uint64, receiver dispatcher.ResultReceiver) error {
 	request, ok := command.(*startCommand)
 	if !ok {
 		return fmt.Errorf("unexpected I/O events command")
 	}
-	registry := fsapi.GetRegistry(ctx)
-	if registry == nil {
-		receiver.CompleteYield(tag, nil, apierror.New(apierror.Internal, "filesystem registry unavailable"))
-		return nil
-	}
-	filesystem, ok := registry.GetFS(request.resource)
-	if !ok {
-		receiver.CompleteYield(tag, nil, apierror.New(apierror.NotFound, "filesystem resource not found"))
-		return nil
-	}
-	host, ok := filesystem.(fsapi.HostPathFS)
-	if !ok {
-		receiver.CompleteYield(tag, nil, apierror.New(apierror.Invalid, "filesystem provider does not support native watches"))
+	root, err := watchRoot(ctx, request.resource)
+	if err != nil {
+		receiver.CompleteYield(tag, nil, err)
 		return nil
 	}
 	node := relay.GetNode(ctx)
@@ -258,7 +289,6 @@ func (manager *Manager) Handle(ctx context.Context, command dispatcher.Command, 
 		receiver.CompleteYield(tag, nil, apierror.New(apierror.Internal, "process relay unavailable"))
 		return nil
 	}
-	root := host.RootPath()
 	send := func(item payload.Payload, size int) error {
 		frame := &engine.SubscriptionFrame{Epoch: request.epoch, SubID: request.id, Gen: request.generation.Load(), Payloads: payload.Payloads{item}}
 		message := relay.NewPackage(pid.PID{}, request.owner, request.topic, engine.NewSubscriptionFramePayload(frame))

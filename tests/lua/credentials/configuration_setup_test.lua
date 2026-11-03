@@ -44,7 +44,14 @@ local function fixture(decision: string)
             reads = reads + 1
             return {ok = true, value = {approval_id = "approval", state = reads % 2 == 1 and "pending" or "decided", decision = reads % 2 == 0 and decision or nil, effect_completed_at = completed and "now" or nil, effect_result = receipt}}, nil
         end,
-        wait = function() waits = waits + 1; if waits % 2 == 0 then test.is_nil(admission.consume(io, reviewed)) end end,
+        changes = function(): (admission.Changes?, string?)
+            return {next = function(approval_id: string): string?
+                test.eq(approval_id, "approval")
+                waits = waits + 1
+                if waits % 2 == 0 then test.is_nil(admission.consume(io, reviewed)) end
+                return nil
+            end, close = function() end}, nil
+        end,
     }
     return io, function(): (integer, integer, integer, integer) return requests, reads, admissions, waits end,
         function(value: string) current = value end, keys
@@ -94,14 +101,17 @@ function run()
                     end
                     return raw, err and tostring(err) or nil
                 end,
-                wait = function()
-                    local view = assert(requested)
-                    local raw, err = approver:call("bee.approvals.binding:decide", {approval_id = view.approval_id,
-                        expected_revision = view.revision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest, decision = "approved"})
-                    test.is_nil(err)
-                    local reply = assert(bounds.object(raw))
-                    test.eq(reply.ok, true)
-                    test.is_nil(admission.consume(io, assert(bounds.object(reply.value))))
+                changes = function(): (admission.Changes?, string?)
+                    return {next = function(_approval_id: string): string?
+                        local view = assert(requested)
+                        local raw, err = approver:call("bee.approvals.binding:decide", {approval_id = view.approval_id,
+                            expected_revision = view.revision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest, decision = "approved"})
+                        test.is_nil(err)
+                        local reply = assert(bounds.object(raw))
+                        test.eq(reply.ok, true)
+                        test.is_nil(admission.consume(io, assert(bounds.object(reply.value))))
+                        return nil
+                    end, close = function() end}, nil
                 end,
             }
             local base, err = admission.ensure(io, workspace, "synthetic")
@@ -118,6 +128,16 @@ function run()
             test.eq(requests, 1); test.eq(reads, 2); test.eq(admitted, 1)
             test.is_true(admission.ensure(io, "workspace", "opencode") ~= nil)
             test.eq(counts(), 1)
+        end)
+        test.it("ends setup with the reason when Needs you stops announcing changes", function()
+            local io = fixture("approved")
+            local closed = false
+            io.changes = function(): (admission.Changes?, string?)
+                return {next = function(_approval_id: string): string? return "announcements ended" end,
+                    close = function() closed = true end}, nil
+            end
+            local base, err = admission.ensure(io, "workspace", "opencode")
+            test.is_nil(base); test.eq(err, "announcements ended"); test.is_true(closed)
         end)
         test.it("denial ends launch with a clear reason and never admits", function()
             local io, counts = fixture("denied")

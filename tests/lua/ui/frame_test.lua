@@ -124,6 +124,7 @@ local function define_tests()
             test.eq(panel_top, 5)
             test.eq(tty.text.width(assert(tty.text.plain(view.rows[panel_top]):match("^(.-)╭"))), 9)
             test.contains(view.rows[3], "Session 1")
+            test.eq(tty.text.plain(view.rows[4]):sub(1, #"›"), "›")
         end)
 
         test.it("chooses an action through the app's mouse path with the row it belongs to", function()

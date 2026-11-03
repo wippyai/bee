@@ -1240,14 +1240,21 @@ local function context_state(context: Context): PopupState
     return {selected = context.selected, offset = context.offset, x = context.x, y = context.y}
 end
 
--- The row's actions drawn over the screen at the context's anchor, with one
--- target per visible item; nil when the row no longer offers any.
+-- The row's actions drawn over the screen at the context's anchor, the row
+-- marked with "›" and one target per visible item; false when the row no
+-- longer offers any.
 local function render_context(view: View, menu: Menu, preferences: appearance.Preferences): boolean
     local context = menu.context
     local buttons = choices(menu)
     if not context or #buttons == 0 then return false end
     local painter = M.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
     painter.canvas:put_rows(1, 1, view.rows)
+    for _, hit in ipairs(view.hits) do
+        if hit.kind == context.kind and hit.index == context.index and hit.key == context.key then
+            M.put(painter, hit.x, hit.y, MARKER, 1, painter.theme.accent)
+            break
+        end
+    end
     local items = context_items(buttons)
     local panel = M.popup_panel(painter.width, painter.height, items, context_state(context))
     local state = M.popup_fit(context_state(context), panel, items)

@@ -387,3 +387,4 @@ entries:
     store: bee.placement.native.persist:store
     homes: bee.placement.native.service:homes
     resolver: bee.drivers.binding:resolver
+    descriptors: bee.drivers.descriptor:descriptor

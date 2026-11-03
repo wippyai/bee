@@ -5,6 +5,7 @@
 local test = require("test")
 local fs = require("fs")
 local funcs = require("funcs")
+local security = require("security")
 local json = require("json")
 local bounds = require("bounds")
 local store = require("store")
@@ -66,7 +67,8 @@ local function conversation(owner: Session, id: string, content: string): Object
 end
 
 local function read(owner: Session, event: string, hook: Object): Object
-    local reply, err = funcs.call(READER, {event = event, body = assert(json.encode(hook)), attempt_id = owner.attempt_id})
+    local isolated = assert(funcs.new():with_scope(security.new_scope({})))
+    local reply, err = isolated:call(READER, {event = event, body = assert(json.encode(hook)), attempt_id = owner.attempt_id})
     if err then error(tostring(err)) end
     return assert(bounds.object(reply))
 end

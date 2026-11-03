@@ -171,3 +171,4 @@ entries:
     - bee.placement.native.security:placement_service_policy
     - bee.resources.security:resource_resolve_policy
     - bee.placement.native.security:hook_file_policy
+    - bee.drivers.security:host_access

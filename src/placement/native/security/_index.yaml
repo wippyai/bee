@@ -111,8 +111,8 @@ entries:
 - name: hook_file_policy
   kind: security.policy
   meta:
-    comment: A hook file read reaches a machine HOME through its read-only volume
+    comment: A hook file read reaches the placement root and a machine HOME through its read-only volume
   policy:
     actions: [fs.get, env.get]
-    resources: [bee.placement.native.env:machine_home_files, bee.env:machine_home]
+    resources: [bee.placement.native.env:machine_home_files, bee.env:machine_home, bee.placement.native.env:root_path]
     effect: allow

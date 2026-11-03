@@ -1122,7 +1122,7 @@ entries:
     type: test
     suite: bee
     timeout: 180s
-  modules: [fs, funcs, json, registry, hash]
+  modules: [fs, funcs, json, registry, hash, security]
   security:
     policies:
     - bee.tests.placement.native:agy_hook_reader_policy

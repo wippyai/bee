@@ -10,6 +10,7 @@ local bounds = require("bounds")
 local store = require("store")
 local homes = require("homes")
 local resolver = require("resolver")
+local descriptors = require("descriptors")
 local M = {}
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value: Object?, error: {code: string, message: string}?}
@@ -87,9 +88,12 @@ function M.read(raw: unknown): Reply
     if not request then return fail("STORAGE", tostring(request_error)) end
     local pinned, pin_error = resolver.pin()
     if not pinned then return fail("UNAVAILABLE", tostring(pin_error)) end
-    local _, renderer_error, descriptor = resolver.configure_renderer(pinned, request.binding_ref, nil)
-    if renderer_error then return fail("UNAVAILABLE", renderer_error) end
-    local directories = descriptor and descriptor.hook_files or {}
+    local binding, binding_error = resolver.binding(pinned, request.binding_ref)
+    local descriptor_ref = binding and bounds.id((bounds.object(binding.meta) or {}).descriptor_ref)
+    if not descriptor_ref then return fail("UNAVAILABLE", binding_error or "attempt driver names no CLI descriptor") end
+    local descriptor, descriptor_error = descriptors.load_from(pinned, descriptor_ref)
+    if not descriptor then return fail("UNAVAILABLE", tostring(descriptor_error)) end
+    local directories = descriptor.hook_files
     local home, home_error = home_of(request)
     if not home then return fail("DENIED", tostring(home_error)) end
     local relative, outside = admitted(path, home, directories)

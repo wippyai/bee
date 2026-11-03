@@ -255,11 +255,28 @@ entries:
   meta:
     type: test
     suite: bee
+  modules: [sql]
   imports:
     test: wippy.test:test
     image: bee.placement.docker.service:image
     daemon: bee.placement.docker.service:daemon
-  security: {policies: [bee.placement.native.security:placement_exec_policy]}
+  security: {policies: [bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_store_policy]}
+- name: measured_executable
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee:os
+  variable: BEE_TEST_MEASURED_EXECUTABLE
+  default: /bin/true
+  readonly: true
+- name: measured_recipe
+  kind: registry.entry
+  meta: {type: bee.runtime_recipe, test_support: true}
+  data:
+    schema_revision: bee.runtime-recipe@1
+    base: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
+    artifacts:
+    - name: probe
+      executable_ref: bee.tests.placement.docker:measured_executable
 - name: environment_test
   kind: function.lua
   source: file://environment_test.lua
@@ -455,3 +472,78 @@ entries:
     - bee.placement.native.security:placement_store_policy
     - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.docker.security:host_user_policy
+- name: authority_probe
+  kind: function.lua
+  source: file://authority_probe.lua
+  method: run
+  meta: {type: test_support}
+  imports:
+    environment: bee.placement.docker.service:environment
+    bounds: bee.drivers.values:bounds
+- name: consume_probe
+  kind: function.lua
+  source: file://authority_probe.lua
+  method: consume
+  meta: {type: test_support}
+  imports:
+    environment: bee.placement.docker.service:environment
+    bounds: bee.drivers.values:bounds
+- name: authority_test
+  kind: function.lua
+  source: file://authority_test.lua
+  method: run
+  modules: [registry, security, funcs, uuid]
+  security:
+    policies: [bee.tests.approvals:apply_test_policy, bee.tests.placement.docker:authority_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    service: bee.approvals.binding:service
+- name: authority_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.get, funcs.call, funcs.security, security.policy.get, security.actor.create, security.scope.create]
+    resources: '*'
+    effect: allow
+- name: window_scope_probe
+  kind: function.lua
+  source: file://window_scope_probe.lua
+  method: run
+  modules: [exec]
+  meta: {type: test_support}
+  imports:
+    profile_home: bee.placement.docker.service:profile_home
+- name: window_scope_test
+  kind: function.lua
+  source: file://window_scope_test.lua
+  method: run
+  modules: [registry, security, funcs]
+  security:
+    policies: [bee.tests.placement.docker:authority_test_policy, bee.placement.docker.security:home_policy]
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+- name: probe_cache_test
+  kind: function.lua
+  source: file://probe_cache_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee_docker
+    resources: [docker_daemon]
+    timeout: 120s
+  modules: [sql]
+  imports:
+    test: wippy.test:test
+    runtime_probe: bee.placement.docker.service:runtime_probe
+    daemon: bee.placement.docker.service:daemon
+    bounds: bee.drivers.values:bounds
+  security:
+    policies: [bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_store_policy, bee.placement.docker.security:docker_policy, bee.placement.docker.security:docker_socket_policy]

@@ -78,13 +78,14 @@ entries:
     - registry.overlay.update.security.policy.expr
     - registry.overlay.delete.security.policy.expr
     - registry.overlay.shadow
+    - system.read
     resources:
     - bee.placement.docker.env:environment
     - bee.gateway.api:gateway_endpoint
     - bee:gateway_listener
     - '*'
     effect: allow
-    expression: (action in ["registry.get", "funcs.call", "bee.approvals.request", "bee.approvals.read", "bee.approvals.consume"]) || (action in ["registry.overlay.get", "registry.overlay.apply"] && resource
+    expression: (action in ["registry.get", "funcs.call", "bee.approvals.request", "bee.approvals.read", "bee.approvals.consume"]) || (action == "system.read" && resource == "node") || (action in ["registry.overlay.get", "registry.overlay.apply"] && resource
       == "bee.placement.docker.env:environment") || (action in ["registry.overlay.shadow", "registry.overlay.update.registry.entry", "registry.overlay.update.http.service", "registry.overlay.delete.registry.entry",
       "registry.overlay.delete.http.service", "registry.overlay.update.security.policy.expr", "registry.overlay.delete.security.policy.expr"] && resource in ["bee.gateway.api:gateway_endpoint", "bee:gateway_listener",
       "bee.gateway.security:readiness_policy"])

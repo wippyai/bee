@@ -878,7 +878,7 @@ function M.payload_lines(value: unknown): {string}
     return lines
 end
 local MAX_REVIEW_ITEMS = 128
-type Review = {capabilities: {string}, changes: {string}, migrations: {Object}}
+type Review = {capabilities: {string}, changes: {string}, migrations: {Object}, replaces: {string}}
 
 local function review_strings(raw: unknown, label: string): ({string}?, string?)
     local result: {string} = {}
@@ -914,7 +914,9 @@ local function review(payload: Object): (Review?, string?)
     if not changes then return nil, changes_error end
     local migrations, migrations_error = review_migrations(payload.migrations)
     if not migrations then return nil, migrations_error end
-    return {capabilities = capabilities, changes = changes, migrations = migrations}, nil
+    local replaces, replaces_error = review_strings(payload.replaces, "replaces")
+    if not replaces then return nil, replaces_error end
+    return {capabilities = capabilities, changes = changes, migrations = migrations, replaces = replaces}, nil
 end
 
 function M.permission_lines(value: unknown): {string}
@@ -985,7 +987,8 @@ function M.card(value: unknown): Card?
     if payload.title == nil and payload.source_workspace == nil then return nil end
     local name = M.text(payload.title or payload.source_workspace, 80)
     local kind = payload.subject == "driver"
-    local title = "Install " .. (kind and "driver " or "") .. name .. " " .. M.text(payload.version, 40)
+    local self_edit = payload.subject == "self_edit"
+    local title = (self_edit and "Change Bee's " or ("Install " .. (kind and "driver " or ""))) .. name .. " " .. M.text(payload.version, 40)
     local maker = type(payload.maker) == "string" and M.text(payload.maker, 160) or nil
     local sections: {CardSection} = {}
     local can: {string} = {}
@@ -996,8 +999,17 @@ function M.card(value: unknown): Card?
             scope = "For this version in this workspace."}
     end
     for _, raw in ipairs(shown.capabilities) do can[#can + 1] = glyphs.capability .. " " .. M.text(raw, M.LINE_LIMIT) end
-    if #can == 0 then can[1] = glyphs.capability .. " nothing beyond its own screen" end
-    sections[#sections + 1] = {heading = "It can", lines = can}
+    if self_edit then
+        local replaced: {string} = {}
+        for _, id in ipairs(shown.replaces) do replaced[#replaced + 1] = glyphs.capability .. " " .. M.text(id, M.LINE_LIMIT) end
+        local more = bounds.count(payload.replaces_more)
+        if more and more > 0 then replaced[#replaced + 1] = glyphs.capability .. " and " .. tostring(more) .. " more" end
+        sections[#sections + 1] = {heading = "It replaces part of Bee", lines = replaced}
+        if #can > 0 then sections[#sections + 1] = {heading = "It can", lines = can} end
+    else
+        if #can == 0 then can[1] = glyphs.capability .. " nothing beyond its own screen" end
+        sections[#sections + 1] = {heading = "It can", lines = can}
+    end
     local data: {string} = {}
     local databases: {string} = {}
     local named: {[string]: {string}} = {}

@@ -229,6 +229,47 @@ function M.grants(tx: sql.Transaction, binding_id: string, now: integer?): ({str
     table.sort(result)
     return result, nil
 end
+-- carry records, for a binding admitted for a restarted agent session, a
+-- receipt of each access grant the session still holds whose traits the
+-- binding's own surface offers, and returns the traits it activates.
+function M.carry(tx: sql.Transaction, binding_id: string, subject: string, workspace: string,
+    offered: (traits: {string}) -> boolean, now: integer): ({string}?, Fault?)
+    local rows, err = tx:query("SELECT DISTINCT a.approval_id,a.proposal_digest,a.traits_json,a.grant_id FROM bee_gateway_access_receipts a JOIN bee_gateway_bindings b ON b.binding_id = a.binding_id WHERE b.subject = ? AND b.workspace_id = ? AND a.binding_id <> ? ORDER BY a.approval_id ASC", {subject, workspace, binding_id})
+    if not rows or err then return nil, fault("STORAGE", "read session access receipts") end
+    local carried: {string} = {}
+    local seen: {[string]: boolean} = {}
+    local recorded = 0
+    for _, raw in ipairs(rows) do
+        local row = bounds.object(raw)
+        local grant_id = row and bounds.id(row.grant_id)
+        local approval_id = row and bounds.id(row.approval_id)
+        local digest = row and bounds.text(row.proposal_digest, 64)
+        local encoded = row and bounds.text(row.traits_json, 8192)
+        if not grant_id or not approval_id or not digest or not encoded then return nil, fault("STORAGE", "invalid session access receipt") end
+        if not seen[grant_id] then
+            seen[grant_id] = true
+            local grant, grant_error = authority.read(tx, grant_id)
+            if grant_error then return nil, fault("STORAGE", grant_error) end
+            if grant and grant.domain == "gateway_access" and grant.terms.kind == "session" and grant.terms.session_ref == subject
+                and grant.workspace_id == workspace and authority.state(grant, now) == "active" then
+                local traits, invalid = decode_traits(binding_id, encoded, "STORAGE", "invalid session access traits")
+                if not traits then return nil, invalid end
+                local current = true
+                for _, id in ipairs(traits) do if not reviewed(grant, id) then current = false end end
+                if current and offered(traits) then
+                    recorded = recorded + 1
+                    if recorded > 64 then return nil, fault("LIMIT_EXCEEDED", "MCP grant receipt capacity reached") end
+                    local inserted, insert_error = tx:execute("INSERT INTO bee_gateway_access_receipts (binding_id, approval_id, proposal_digest, traits_json, grant_id) VALUES (?, ?, ?, ?, ?)", {binding_id, approval_id, digest, encoded, grant_id})
+                    if not inserted or insert_error then return nil, fault("STORAGE", "record carried MCP grant receipt") end
+                    for _, id in ipairs(traits) do
+                        if not bounds.member(id, carried) then carried[#carried + 1] = id end
+                    end
+                end
+            end
+        end
+    end
+    return carried, nil
+end
 function M.receipt(db: sql.DB, binding_id: string, approval_id: string)
     return db:query("SELECT traits_json FROM bee_gateway_access_receipts WHERE binding_id = ? AND approval_id = ?", {binding_id, approval_id})
 end

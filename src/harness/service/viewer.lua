@@ -79,21 +79,32 @@ function M.attach(value: unknown): Object
     return reply
 end
 type Review = {approval_id: string, title: string}
--- review is the request a session's viewer shows after an attention event:
--- one bound to the session's thread or asked by its window, while pending;
--- none once that request settles. The second result says whether it changed.
-function M.review(current: Review?, event: {[string]: unknown}, thread_id: string?, self_id: string): (Review?, boolean)
+-- review folds one attention event into the requests a session's viewer
+-- waits on, in the order they were asked: one bound to the session's thread,
+-- asked by its window, or made for its session, such as the installation of
+-- an app it delivered. A request leaves the list once it settles. The second
+-- result says whether the list changed.
+function M.review(pending: {Review}, event: {[string]: unknown}, thread_id: string?, self_id: string, session_ref: string?): ({Review}, boolean)
     local data = bounds.object(event.data)
     local request = data and bounds.object(data.request)
     local approval_id = request and bounds.id(request.approval_id)
-    if not data or not request or not approval_id then return current, false end
+    if not data or not request or not approval_id then return pending, false end
     local ours = (thread_id ~= nil and request.thread_id == thread_id) or (self_id ~= "" and request.requester_id == self_id)
+        or (session_ref ~= nil and request.requesting_session == session_ref)
+    local kept: {Review} = {}
+    local found = false
+    for _, item in ipairs(pending) do
+        if item.approval_id == approval_id then found = true else kept[#kept + 1] = item end
+    end
     if event.kind == "approval.requested" and ours and request.state == "pending" then
-        return {approval_id = approval_id, title = bounds.line(data.title, 160) or "Review request"}, true
+        kept[#kept + 1] = {approval_id = approval_id, title = bounds.line(data.title, 160) or "Review request"}
+        return kept, true
     end
-    if event.kind == "approval.changed" and current and current.approval_id == approval_id and request.state ~= "pending" then
-        return nil, true
-    end
-    return current, false
+    if event.kind == "approval.changed" and found and request.state ~= "pending" then return kept, true end
+    return pending, false
+end
+-- shown is the request the viewer shows: the latest one still waiting.
+function M.shown(pending: {Review}): Review?
+    return pending[#pending]
 end
 return M

@@ -172,7 +172,7 @@ session home use separate attempt homes.
 
 `homes.project_attempt_login` writes only the broker's primary login file and
 its admitted setup initializers into a newly created attempt home. Claude's
-format also initializes `.claude.json` with only `hasCompletedOnboarding: true`
+format also initializes `.claude/.claude.json` with only `hasCompletedOnboarding: true`
 when login bytes are present; this lets Claude Code recognize the imported
 subscription without importing unrelated home state. Setup configuration is
 copied as admitted, or created empty only when its host declaration marks it as

@@ -20,11 +20,11 @@ local uuid = require("uuid")
 local M = {}
 type Channel = channel.Channel
 type Object = {[string]: unknown}
-local function approval_call(method: string, request: Object): (Object?, string?, string?)
+local function approval_call(method: string, request: Object): (Object?, string?, string?, Object?)
     local reply, call_error = funcs.call("bee.approvals.binding:" .. method, request)
     local value = bounds.object(reply)
     local fault = value and bounds.object(value.error)
-    if call_error or not value or value.ok ~= true then return nil, tostring(call_error or fault and fault.message or "approval owner did not answer"),fault and bounds.id(fault.code) end
+    if call_error or not value or value.ok ~= true then return nil, tostring(call_error or fault and fault.message or "approval owner did not answer"),fault and bounds.id(fault.code),value and bounds.object(value.value) end
     return bounds.object(value.value), nil
 end
 local function configuration(): (Object?, string?)
@@ -54,6 +54,37 @@ local function receipt(value: unknown): environment.Receipt?
     local result: environment.Receipt = {state = state, selection_digest = digest, approval_id = id, proposal_digest = proposal, owner_incarnation = incarnation, address = address,grant_id = bounds.id(data.grant_id)}
     return result
 end
+-- The person's standing consent for this exact environment selection on this node.
+function M.authority(recorded: environment.Receipt, selected: environment.Selection): (grants.Grant?,string?)
+    local raw, err = approval_call("grant",{operation = "read",grant_id = recorded.approval_id .. ":grant"})
+    local body = raw and bounds.object(raw.grant)
+    if not body then return nil,err or "Docker consent grant is unavailable" end
+    local grant, decode_error = grants.decode(body)
+    if not grant then return nil,decode_error end
+    local node, node_error = system.node.id()
+    if not node then return nil,"node identity is unavailable: " .. tostring(node_error) end
+    if grant.domain ~= "docker_environment" or grant.owner_node ~= node or grant.metadata.selection_digest ~= selected.digest or grant.metadata.network ~= selected.network then return nil,"Docker consent grant scope differs" end
+    return grant,nil
+end
+-- Binds the person's approval of this exact environment selection to its one effect.
+-- A decision made under an earlier approvals incarnation is revalidated under the
+-- current one first; the caller has already matched it to this exact selection.
+function M.consume(approval: environment.Approval, digest: string): string?
+    local request: Object = {approval_id = approval.approval_id, proposal_digest = approval.proposal_digest,
+        owner_incarnation = approval.owner_incarnation, effect_key = "docker-environment:" .. digest}
+    local consumed, error, code, state = approval_call("consume", request)
+    if not consumed and code == "REVALIDATE" then
+        local current = state and bounds.integer(state.current_incarnation)
+        if not current then return "Docker environment approval names no current authority" end
+        local validated, validation_error = approval_call("revalidate", {approval_id = approval.approval_id,
+            proposal_digest = approval.proposal_digest, owner_incarnation = current})
+        if not validated then return validation_error or "Docker environment approval could not be revalidated" end
+        request.owner_incarnation = current
+        consumed, error = approval_call("consume", request)
+    end
+    if not consumed then return error or "Docker environment approval is not consumable" end
+    return nil
+end
 function M.run(profile_ref: string, digest: string, network: string, workspace: string, recipient: string?, cancel: Channel<boolean>?, revoke: boolean?): (string?, string?)
     local config, config_error = configuration()
     if not config then return nil, config_error end
@@ -82,16 +113,6 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
         if not written then return tostring(write_error or "record Docker environment") end
         return nil
     end
-    local function authority(recorded: environment.Receipt, selected: environment.Selection): (grants.Grant?,string?)
-        local id = recorded.approval_id .. ":grant"
-        local raw, err, code = approval_call("grant",{operation = "read",grant_id = id})
-        local body = raw and bounds.object(raw.grant)
-        if not body then return nil,err or "Docker consent grant is unavailable" end
-        local grant, decode_error = grants.decode(body)
-        if not grant then return nil,decode_error end
-        if grant.domain ~= "docker_environment" or grant.owner_node ~= system.node.id() or grant.metadata.selection_digest ~= selected.digest or grant.metadata.network ~= selected.network then return nil,"Docker consent grant scope differs" end
-        return grant,nil
-    end
     local function listener_action(kind: string, expected: string): string?
         local sent, send_error = events.send("supervisor", "service." .. kind, tostring(config.listener))
         if not sent then return tostring(send_error or "gateway listener lifecycle request refused") end
@@ -107,7 +128,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
         local recorded, read_error = load()
         if not recorded then return nil, read_error or "Docker environment has no admission to revoke" end
         local selected: environment.Selection = {workspace = workspace,profile = profile_ref,digest = digest,network = network,policy = tostring(config.approval_policy)}
-        local grant, authority_error = authority(recorded,selected)
+        local grant, authority_error = M.authority(recorded,selected)
         if not grant then return nil,authority_error end
         local revoked, revoke_error = approval_call("grant",{operation = "revoke",grant_id = grant.grant_id,expected_revision = grant.revision})
         if not revoked then return nil,revoke_error end
@@ -143,7 +164,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
             end
         end,
         check = function(recorded: environment.Receipt,selected: environment.Selection): string?
-            local grant, err = authority(recorded,selected)
+            local grant, err = M.authority(recorded,selected)
             if not grant then return err or "Docker consent grant is unavailable" end
             local effect = assert(uuid.v7())
             local reserved, reserve_error = approval_call("grant",{operation = "reserve",grant_id = grant.grant_id,subject = grant.subject,scope = grant.scope,effect_key = effect,expected_revision = grant.revision})
@@ -152,12 +173,7 @@ function M.run(profile_ref: string, digest: string, network: string, workspace: 
             if not admitted then return admission_error or "Docker consent no longer admits provisioning" end
             return nil
         end,
-        consume = function(approval: environment.Approval): string?
-            local consumed, error = approval_call("consume", {approval_id = approval.approval_id, proposal_digest = approval.proposal_digest,
-                owner_incarnation = approval.owner_incarnation, effect_key = "docker-environment:" .. digest})
-            if not consumed then return error or "Docker environment approval is not consumable" end
-            return nil
-        end,
+        consume = function(approval: environment.Approval): string? return M.consume(approval, digest) end,
         provision = function(selected: environment.Selection): (string?, string?)
             local net, network_error = daemon.inspect("network", selected.network, cancel)
             if network_error then return nil, network_error end

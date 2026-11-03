@@ -36,16 +36,31 @@ local listener_open = false
 
 -- open starts the session label names in workspace; label keeps subjects,
 -- threads and actions of different suites apart.
-function M.open(workspace: string, label: string): Session
+-- A restored session keeps its subject and thread; Restore names them.
+type Restore = {subject: string, thread_id: string?}
+
+local function endpoint(): string
+    return tostring((assert(bounds.object((assert(registry.get("bee.gateway.api:gateway_endpoint"))).data))).address)
+end
+
+-- restart opens the listener again as a restarted node does: a new epoch
+-- that retires every earlier binding.
+function M.restart(workspace: string, subject: string)
+    gateway_call(subject, workspace, "bee.gateway.binding:open", {address = endpoint()})
+    listener_open = true
+end
+
+function M.open(workspace: string, label: string, restore: Restore?): Session
     local decoded = assert(launch_policy.decode(STOCK_POLICY, assert(registry.get(STOCK_POLICY)),
         function(_ref: string): (string?, string?) return "/usr/bin/claude-fixture", nil end))
-    local subject = "bee.tests.session_" .. (label:gsub("-", "_"))
-    local address = tostring((assert(bounds.object((assert(registry.get("bee.gateway.api:gateway_endpoint"))).data))).address)
+    local subject = restore and restore.subject or ("bee.tests.session_" .. (label:gsub("-", "_")))
+    local address = endpoint()
     if not listener_open then
         gateway_call(subject, workspace, "bee.gateway.binding:open", {address = address})
         listener_open = true
     end
-    local thread = gateway_call(subject, workspace, "bee.threads.binding:create", {thread_id = label,
+    local kept = restore and restore.thread_id
+    local thread = kept and {thread_id = kept} or gateway_call(subject, workspace, "bee.threads.binding:create", {thread_id = label,
         idempotency_key = label .. "-thread", title = "Stock session " .. label})
     local attempt_id = label .. "-attempt"
     local action_id = label .. "-action"

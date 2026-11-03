@@ -19,7 +19,9 @@ type Fault = {code: string, message: string, value: Object?}
 type Migration = {id: string, target_db: string}
 -- How the person knows what they install: the application's own title, who
 -- made it and where it came from, and the names its tools go by for agents.
-type Presentation = {title: string?, maker: string?, tools: {[string]: string}?, requesting_session: string?}
+type Presentation = {title: string?, maker: string?, tools: {[string]: string}?, requesting_session: string?, replaces: {string}?}
+-- A self-edit names at most this many of the entries it replaces.
+local MAX_REPLACED = 32
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -150,6 +152,16 @@ local function build_proposal(item: Object, review_raw: unknown?, migrations_raw
     payload.title = shown and bounds.line(shown.title, 80) or nil
     payload.maker = shown and bounds.line(shown.maker, 160) or nil
     if driver_owned(item.overlay_owner) then payload.subject = "driver" end
+    if shown and shown.replaces then
+        payload.subject = "self_edit"
+        local named: {string} = {}
+        for index, id in ipairs(shown.replaces) do
+            if index > MAX_REPLACED then break end
+            named[index] = id
+        end
+        payload.replaces = named
+        if #shown.replaces > MAX_REPLACED then payload.replaces_more = #shown.replaces - MAX_REPLACED end
+    end
     if review_raw ~= nil then
         local review = object(review_raw)
         local resolved, resolved_error = review and review_lines(review.resolved, shown and shown.tools) or nil
@@ -190,6 +202,18 @@ local function activation_prompt(item: Object, changes: {string}?, migrations: {
         login = " Its sessions may use your machine login for its own provider."
     end
     local maker = shown and shown.maker and shown.maker ~= "this bee" and (" (" .. shown.maker .. ")") or ""
+    local replaces = shown and shown.replaces
+    if replaces then
+        local named: {string} = {}
+        for index, id in ipairs(replaces) do
+            if index > 8 then named[#named + 1] = "and " .. tostring(#replaces - 8) .. " more"; break end
+            named[#named + 1] = id
+        end
+        return "Change Bee's " .. tostring(item.source_workspace) .. " " .. tostring(item.version) .. maker
+            .. "? It replaces " .. table.concat(named, ", ") .. "."
+            .. (changes and #changes > 0 and (" It adds: " .. table.concat(changes, "; ") .. ".") or "")
+            .. " Applies to this exact version in this workspace until replaced or removed."
+    end
     local permissions = " It adds no permissions."
     if changes and #changes > 0 then permissions = " It adds: " .. table.concat(changes, "; ") .. "." end
     local schema = ""

@@ -236,17 +236,17 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
     end
     local mount: string? = nil
     local recipient: string? = nil
-    -- The request waiting for the person on this session's behalf: one its
-    -- thread is bound to, or one this window asked for while it starts. The
-    -- attached viewer shows it until the request settles.
-    local review: {approval_id: string, title: string}? = nil
+    -- The requests waiting for the person on this session's behalf: ones its
+    -- thread is bound to, its window asked for while it starts, or made for
+    -- the session. The attached viewer shows the latest until it settles.
+    local reviews: {viewer.Review} = {}
     local function show_review()
-        if recipient then process.send(recipient, REVIEW, {review = review or false}) end
+        if recipient then process.send(recipient, REVIEW, {review = viewer.shown(reviews) or false}) end
     end
     local function attend(event: {[string]: unknown})
-        local next_review, changed = viewer.review(review, event, thread_id, self_id)
+        local next_reviews, changed = viewer.review(reviews, event, thread_id, self_id, session_ref)
         if changed then
-            review = next_review
+            reviews = next_reviews
             show_review()
         end
     end
@@ -351,7 +351,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
             else reply = fail("invalid window operation") end
             reply.caller_token = token
             process.send(sender, REPLY, reply)
-            if body.op == "attach" and review then show_review() end
+            if body.op == "attach" and viewer.shown(reviews) then show_review() end
         end
         ::next_request::
     end

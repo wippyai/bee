@@ -233,8 +233,10 @@ effect and records the new selection atomically with its surface revision.
 The approval owner remains the decision authority. Replays do not duplicate a
 grant or reactivate a later-deselected trait. Restart recovery verifies the
 same proposal and configuration before applying an already consumed effect.
-A grant lasts only for its binding and is still subject to expiry, credential
-rotation and revocation. An agent cannot approve itself, publish arbitrary
+A grant to an agent session lasts for the session: a binding admitted for the
+session after a restart carries each grant the session still holds whose traits
+its own surface offers. Any other grant lasts only for its binding. Every grant
+is still subject to expiry, credential rotation and revocation. An agent cannot approve itself, publish arbitrary
 registry state or rely on an application ID in context as target authorization.
 
 For listener, credential and hook behavior, see [gateway](gateway.md) and

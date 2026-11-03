@@ -112,7 +112,7 @@ local function define_tests()
             {provider = "claude", launch = claude.specification(assert(claude.decode({profile_id = "batch", brief = "fixture"}))),
                 paths = {{".claude/.credentials.json", ".claude/.credentials.json", "login", true},
                     {".claude/settings.json", ".claude/settings.json", "config", false},
-                    {"", ".claude.json", "state", false}}},
+                    {"", ".claude/.claude.json", "state", false}}},
             {provider = "codex", launch = codex.specification(assert(codex.decode({profile_id = "batch", brief = "fixture"}))),
                 paths = {{".codex/auth.json", ".codex/auth.json", "login", true}, {".codex/config.toml", ".codex/.bee-user-config.toml", "config", false}}},
             {provider = "agy", launch = agy.specification(assert(agy.decode({profile_id = "batch", brief = "fixture"}))),

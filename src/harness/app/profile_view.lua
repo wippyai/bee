@@ -678,7 +678,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         confirmation.matches(state.confirmation, "profile.remove") and painter.theme.text or painter.theme.muted)
     if height >= 3 then
         local buttons: {frame.Button} = {{kind = "save", key = "Ctrl+S", label = "Save", enabled = not confirmation.matches(state.confirmation, "profile.remove") and state.form.pending ~= "remove", primary = true}}
-        if state.advanced and editor.placement_ref(state.form.draft) == "bee.placement.docker.profiles:coding" then
+        if state.advanced and (state.form.draft.placement and state.form.draft.placement.kind == "docker") then
             buttons[#buttons + 1] = {kind = "revoke_docker", key = "Ctrl+R", label = "Revoke Docker access", enabled = not state.form.pending}
         end
         if state.form.revision > 0 and state.form.draft.placement and state.form.draft.placement.kind == "docker" then
@@ -689,9 +689,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 enabled = state.form.pending ~= "save", primary = confirmation.matches(state.confirmation, "profile.remove")}
         end
         buttons[#buttons + 1] = {kind = "cancel", key = "Esc", label = "Cancel", enabled = true}
-        if state.advanced and (state.form.draft.placement and state.form.draft.placement.kind == "docker") then
-            buttons[#buttons + 1] = {kind = "revoke_docker", key = "Ctrl+R", label = "Revoke Docker access", enabled = not state.form.pending}
-        end
         buttons[#buttons + 1] = {kind = "advanced", key = "Ctrl+P", label = state.advanced and "Basic fields" or "Advanced", enabled = not state.form.pending}
         if state.form.conflict then
             buttons[#buttons + 1] = {kind = "copy", key = "", label = "Save copy", enabled = true}

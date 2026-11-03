@@ -183,6 +183,28 @@ local function define_tests()
                 end
             end
         end)
+        test.it("names the protected kernel when an overlay changes Bee itself", function()
+            local workspace = harness.isolated("kernel-edit")
+            local author = harness.author(workspace, "kerneledit")
+            local function preflight(overlay: string, entry: string): Object
+                local pack: {Object} = {{id = entry, kind = "library.lua", data = {source = "return {}"}}}
+                local digest = harness.freeze(author, overlay, pack, "1")
+                local refused = harness.reply(author:call("bee.gov.binding:delivery_call", {operation = "preflight",
+                    workspace_id = workspace, source_overlay_id = overlay, version = "1", snapshot_digest = digest}))
+                test.eq(refused.ok, false)
+                return refused
+            end
+            local kernel = preflight("bee.approvals.inbox.app", "bee.approvals.inbox.app:app")
+            test.eq(kernel.code, "PROTECTED_KERNEL", tostring(kernel.message))
+            test.eq(kernel.message, "bee.approvals.inbox.app is part of Bee's protected kernel; no overlay or edit grant can change it")
+            local remedy = tostring((assert(bounds.object(kernel.value))).remedy)
+            test.contains(remedy, "only a Bee update changes it")
+            test.contains(remedy, "bee.shell")
+            local closed = preflight("bee.shell", "bee.shell:chrome")
+            test.eq(closed.code, "BLOCKED")
+            test.eq(closed.message, "bee.shell has no active edit grant in this workspace")
+            test.contains(tostring((assert(bounds.object(closed.value))).remedy), "Edit mode")
+        end)
     end)
 end
 return test.run_cases(define_tests)

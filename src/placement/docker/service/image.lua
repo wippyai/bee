@@ -16,6 +16,7 @@ local channel = require("channel")
 local uuid = require("uuid")
 local security = require("security")
 local demand = require("demand")
+local executable = require("executable")
 local M = {}
 M.TOPIC = "bee.placement.image_progress"
 type Channel = channel.Channel
@@ -87,9 +88,9 @@ function M.discover(ref: string, cancel: Channel<boolean>?): (Discovery?, string
     local inputs: {Input} = {}
     local architecture: string? = nil
     for _, artifact in ipairs(recipe.artifacts) do
-        local executable = env.get(artifact.executable_ref)
-        if type(executable) == "string" and executable ~= "" then
-            local resolved, resolve_error = real_file(executable, cancel)
+        local installed = env.get(artifact.executable_ref)
+        if type(installed) == "string" and installed ~= "" then
+            local resolved, resolve_error = real_file(installed, cancel)
             if not resolved then return nil, resolve_error or "installed runtime path cannot be resolved: " .. artifact.name end
             local parent = resolved:match("^(.*)/[^/]+$")
             if not parent then return nil, "installed runtime has no parent directory" end
@@ -115,8 +116,8 @@ function M.discover(ref: string, cancel: Channel<boolean>?): (Discovery?, string
             local arch = elf(volume, source)
             if not arch or (architecture and architecture ~= arch) then return nil, "installed CLI artifacts have incompatible architectures" end
             architecture = arch
-            local measured, measure_error = daemon.command({"/usr/bin/sha256sum", source}, nil, cancel)
-            local digest = measured and measured:match("^([0-9a-f]+)") or nil
+            local measured, measure_error = executable.measure(source)
+            local digest = measured and measured.digest or nil
             if not digest or #digest ~= 64 then return nil, measure_error or "runtime artifact digest failed" end
             inputs[#inputs + 1] = {name = artifact.name, source = source, digest = digest}
         end

@@ -151,7 +151,10 @@ protected by name only, so an application they describe stays upgradable) and
 reports `PROTECTED_KERNEL` for a plan that defines or replaces a kernel entry
 or dependency, updates a package that owns kernel definitions, or aims a
 requirement target into the kernel. The kernel changes only through the host
-composition and a person-confirmed native upgrade.
+composition and a person-confirmed native upgrade. Delivering an overlay named
+after a protected namespace is refused before preflight with `PROTECTED_KERNEL`;
+one named after a namespace the trust map opens, with no active edit grant, is
+`BLOCKED` and names Edit mode in Bee Settings.
 
 A host may open a namespace outside the kernel to one narrow, time-bounded profile: a row in `bee.gov:activation_profiles` that carries `expires_at`. Such a
 super-edit row is refused unless it withholds auto start

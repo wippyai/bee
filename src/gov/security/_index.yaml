@@ -302,6 +302,16 @@ entries:
     - bee.gov:publication_profiles
     - bee.gov:activation_profiles
     effect: allow
+- name: kernel_area_read_policy
+  kind: security.policy
+  meta:
+    comment: The kernel area answer reads the registry state the protected kernel is built from; it changes nothing
+  policy:
+    actions:
+    - registry.get
+    - registry.snapshot
+    resources: '*'
+    effect: allow
 - name: delivery_node_read_policy
   kind: security.policy
   meta:
@@ -325,6 +335,7 @@ entries:
     resources:
     - bee.gov.binding:publication_call
     - bee.gov.binding:destination_call
+    - bee.gov.binding:kernel_area
     - bee.gov.env:publication_profiles_ref
     - bee.gov.env:activation_profiles_ref
     effect: allow

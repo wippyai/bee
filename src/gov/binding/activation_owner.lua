@@ -38,7 +38,7 @@ type MigrationEffects = {
 type Config = {plans: plans.Store, activations: activations.Store, resolver: Resolver,
     approvals: Executor, actor_id: string, consumer_id: string, overlay_owner: string,
     approval_policy: string, apply: Apply, matches: Observe, migrations: MigrationEffects,
-    leases: lease_store.Store?, measurement: measure.Preparation?, requesting_session: string?}
+    leases: lease_store.Store?, measurement: measure.Preparation?, requesting_session: string?, super_edit: boolean?}
 
 local function failure(code: string, message: string, value: unknown?): Result
     return transaction.failure(code, message, value)
@@ -228,10 +228,13 @@ end
 local function presentation(config: Config, intent: Object, plan: Object): approval.Presentation
     local shown: approval.Presentation = {title = nil, maker = nil, tools = {}}
     local entries = artifact.decode(intent.artifact_bytes, intent.artifact_digest)
+    -- A self-edit replaces part of Bee itself; the person reads which entries.
+    local replaces: {string} = {}
     for _, raw in ipairs(entries or {}) do
         local entry = object(raw)
         local meta = entry and object(entry.meta) or nil
         local id = entry and bounds.id(entry.id) or nil
+        if config.super_edit and id then replaces[#replaces + 1] = id end
         local alias = meta and meta.type == "tool" and bounds.line(meta.llm_alias, 80) or nil
         if id and alias and shown.tools then shown.tools[id] = alias end
         local declared = meta and meta.type == "bee.application" and object(meta.application) or nil
@@ -246,6 +249,10 @@ local function presentation(config: Config, intent: Object, plan: Object): appro
     local place = source and source ~= config.activations.node and ("from bee " .. source) or "this bee"
     shown.maker = made and (made .. " · " .. place) or place
     shown.requesting_session = config.requesting_session
+    if config.super_edit then
+        table.sort(replaces)
+        shown.replaces = replaces
+    end
     return shown
 end
 

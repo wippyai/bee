@@ -150,6 +150,31 @@ local function define_tests()
             test.eq(settled.approval_id, created.approval_id)
             test.eq(settled.state, "withdrawn")
         end)
+        test.it("names the session an installation is requested for when it announces the request", function()
+            local workspace = string.rep("e", 32)
+            local journal = thread_harness.session_owner(workspace)
+            local session = thread_harness.value(journal:call("session_create", {operation_key = key(), route = {delivery = "hook", provider = "claude", definition = "bee.harness.app:app"}})).session
+            local db = open_test_store()
+            local subscription = assert(events.subscribe(service.ATTENTION, "approval.requested"))
+            local created = executed(service.execute(db, "bee.gov.activation", "request", request_of(workspace,
+                {proposal = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "1", payload = {}},
+                    origin = {session_id = session}, continuation = {destination = "gov.activation", effect_id = "origin-" .. key(), context = {}},
+                    prompt = {text = "Install Fixture Origin 1.0.0?"}}), 1000, nil))
+            test.is_nil(service.announce_changes(db))
+            local announced: {[string]: unknown}? = nil
+            while not announced do
+                local selected = channel.select({subscription:channel():case_receive(), time.after("1s"):case_receive()})
+                if selected.channel ~= subscription:channel() then break end
+                local data = bounds.object(selected.value.data)
+                local request = data and bounds.object(data.request)
+                if selected.value.path == workspace and request and request.approval_id == created.approval_id then announced = request end
+            end
+            subscription:close()
+            db:release()
+            local request = assert(announced)
+            test.eq(request.requester_id, "bee.gov.activation")
+            test.eq(request.requesting_session, session)
+        end)
         test.it("delivers and acknowledges a compound completion event beyond the principal ID bound", function()
             local workspace = string.rep("d", 32)
             local journal = thread_harness.session_owner(workspace)

@@ -114,7 +114,7 @@ function M.define(workspace: string)
         local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
             attempt_id = attempt, generation_key = "claude-settings-generation"}))
         test.eq(#materialized.format.file.initialize, 1)
-        test.eq(materialized.format.file.initialize[1].path, ".claude.json")
+        test.eq(materialized.format.file.initialize[1].path, ".claude/.claude.json")
     end)
     test.it("imports Grok configuration as an opaque private composition base with or without login", function()
         local ws = fresh("grok-setup")

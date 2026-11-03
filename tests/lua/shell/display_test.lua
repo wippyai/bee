@@ -330,7 +330,7 @@ local function define_tests()
             expect(second, "the menu marks the first display's desktop", "other display", true)
             key(second, "up")
             key(second, "enter")
-            expect(second, "the second display keeps off the first display's desktop", "is on another display", true)
+            expect(second, "the second display keeps off the first display's desktop", "is shown on another display", true)
             expect(second, "the second display shows none of the first desktop's apps", "label ", false)
             key(second, "esc")
 

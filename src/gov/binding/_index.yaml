@@ -43,6 +43,18 @@ entries:
     - bee.gov.security:delivery_facade_policy
     - bee.gov.security:delivery_node_read_policy
     - bee.gov.security:publication_profiles_read_policy
+- name: kernel_area
+  kind: function.lua
+  source: file://kernel_area.lua
+  method: handle
+  modules:
+  - registry
+  imports:
+    bounds: bee.drivers.values:bounds
+    protected_kernel: bee.gov.types:protected_kernel
+  security:
+    policies:
+    - bee.gov.security:kernel_area_read_policy
 - name: publication_call
   kind: function.lua
   source: file://publication_method.lua

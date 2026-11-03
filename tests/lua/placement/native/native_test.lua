@@ -128,7 +128,7 @@ local function home_tests()
                     test.eq(file.path, ".claude/settings.json")
                     test.eq(file.source_path, ".claude/settings.json")
                 elseif file.kind == "state" then
-                    test.eq(file.path, ".claude.json")
+                    test.eq(file.path, ".claude/.claude.json")
                 end
             end
             test.eq(login_path, ".claude/.credentials.json")
@@ -138,10 +138,10 @@ local function home_tests()
                 .. ' && test -n "$PATH"'
                 .. ' && test -s "$CLAUDE_CONFIG_DIR/.credentials.json"'
                 .. ' && test -s "$CLAUDE_CONFIG_DIR/settings.json"'
-                .. ' && test -s "$HOME/.claude.json"'
-                .. ' && test ! -e "$CLAUDE_CONFIG_DIR/.claude.json"'
+                .. ' && test -s "$CLAUDE_CONFIG_DIR/.claude.json"'
+                .. ' && test ! -e "$HOME/.claude.json"'
                 .. ' && actual="$(find "$HOME" -type f | sed "s|^$HOME/||" | sort)"'
-                .. ' && expected="$(printf "%s\\n" .claude.json .claude/.credentials.json .claude/settings.json | sort)"'
+                .. ' && expected="$(printf "%s\\n" .claude/.claude.json .claude/.credentials.json .claude/settings.json | sort)"'
                 .. ' && test "$actual" = "$expected"'
                 .. ' && ! env | cut -d= -f1 | grep -q "^XDG_"'
                 .. ' && ! env | cut -d= -f1 | grep -q "^ANTHROPIC_"'

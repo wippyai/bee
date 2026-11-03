@@ -69,6 +69,7 @@ entries:
     daemon: bee.placement.docker.service:daemon
     spec: bee.placement.docker.binding:spec
     demand: bee.process:demand
+    executable: bee.placement.native.service:executable
 - name: image_owner
   kind: process.lua
   source: file://image_owner.lua
@@ -149,9 +150,12 @@ entries:
   source: file://runtime_probe.lua
   modules:
   - uuid
+  - hash
   imports:
     bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
     daemon: bee.placement.docker.service:daemon
+    measurements: bee.placement.native.persist:measurements
 - name: daemon
   kind: library.lua
   source: file://daemon.lua

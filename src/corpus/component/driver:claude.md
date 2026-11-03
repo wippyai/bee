@@ -12,8 +12,9 @@ The private batch route receives `.claude/.credentials.json` and the optional
 `.claude/settings.json` from the machine home and points `CLAUDE_CONFIG_DIR`
 into the attempt home. Claude may refresh its own `.credentials.json`;
 placement returns only that login file through the credential broker after exit.
-Configuration is not written back. The credential format creates `.claude.json`
-with the onboarding-complete marker alongside the login. Window launches keep
+Configuration is not written back. The credential format creates `.claude/.claude.json`, the global configuration
+Claude reads from `CLAUDE_CONFIG_DIR`, with the onboarding-complete marker
+alongside the login. Window launches keep
 the machine home and the login hint.
 
 When Bee gateway tools are selected, the launch passes them to

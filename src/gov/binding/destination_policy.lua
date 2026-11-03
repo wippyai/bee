@@ -618,6 +618,7 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
     local owner_configuration: owner.Config = {plans = plan_store, activations = activation_store, resolver = resolved,
         approvals = executor, actor_id = ACTOR, consumer_id = ACTOR, leases = lease_handle,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
+        super_edit = profile_value.super_edit == true,
         apply = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): ({[string]: unknown}?, string?, boolean?)
             local generated, generated_error = generated_install(profile_value, intent)
             if generated_error then return nil, generated_error, true end

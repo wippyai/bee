@@ -10,12 +10,10 @@ local descriptors = require("descriptors")
 local profiles = require("profiles")
 local preferences = require("preferences")
 local placement_profiles = require("placement_profiles")
+local configuration_check = require("configuration_check")
 local M = {}
 type Plan = {placement_profile_ref: string?, binding_ref: string, policy_ref: string, profile_id: string, mode: string, effective_profile: unknown}
--- Launch: what the configuration setup checks the person's file against,
--- the launch's own binding, policy, placement and selected options.
-type Launch = {binding_ref: string, policy_ref: string, placement_profile_ref: string?, options: {[string]: unknown}}
-type Requirement = {provider: string, base_path: string, launch: Launch}
+type Requirement = {provider: string, base_path: string, launch: configuration_check.Context}
 function M.requirements(plan: Plan): ({Requirement}?, string?)
     local pinned, pin_error = registry.snapshot()
     if not pinned then return nil, tostring(pin_error) end
@@ -79,7 +77,7 @@ function M.requirements(plan: Plan): ({Requirement}?, string?)
     end
     local delivery, delivery_error = configuration.call(plan.binding_ref, target, request)
     if not delivery then return nil, tostring(delivery_error) end
-    local launch: Launch = {binding_ref = plan.binding_ref, policy_ref = plan.policy_ref, placement_profile_ref = plan.placement_profile_ref, options = options}
+    local launch: configuration_check.Context = {binding_ref = plan.binding_ref, policy_ref = plan.policy_ref, placement_profile_ref = plan.placement_profile_ref, options = options}
     local result: {Requirement} = {}
     local seen: {[string]: boolean} = {}
     for _, file in ipairs(delivery.files) do

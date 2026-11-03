@@ -212,7 +212,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
                 store.transition(db, attempt_id, {evidence = {kind = kind, detail = detail}})
             end)
         end)
-        if observer_ok then observed = handle else store.transition(db, attempt_id, {evidence = {kind = "observer.failed", detail = "observer setup failed; ordinary CLI launch continues"}}) end
+        if observer_ok then observed = handle else store.transition(db, attempt_id, {evidence = {kind = "observer.failed", detail = "observer setup failed: " .. tostring(handle) .. "; ordinary CLI launch continues"}}) end
         if observed then
             argv = {request.launch.executable}
             for _, argument in ipairs(observed.arguments) do argv[#argv + 1] = argument end

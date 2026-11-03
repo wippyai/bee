@@ -33,23 +33,25 @@ local function define_tests()
                 spawn = function(_: string): boolean return true end,
                 ready = function(): {string}? return {} end,
                 release = function() end, stop = function() end,
-                record = function(kind: string, _: string) recorded[#recorded + 1] = kind end},
+                record = function(kind: string, detail: string) recorded[#recorded + 1] = kind .. " " .. detail end},
                 {process = "fixture", server_arguments = {}, endpoint_pattern = "fixture"})
             test.is_nil(handle)
-            test.eq(recorded[1], "observer.failed")
+            test.is_true(recorded[1]:find("observer.failed ", 1, true) == 1, recorded[1])
+            test.is_true(recorded[1]:find("fixture server failure", 1, true) ~= nil, recorded[1])
         end)
         test.it("records observer shutdown failure and still closes the server", function()
-            local facts = {closed = false, failed = false}
+            local facts = {closed = false, failed = false, detail = ""}
             local handle = assert(observer.lifecycle({server = function(_: {string}): (string?, (() -> ())?)
                 return "http://127.0.0.1:1234", function() facts.closed = true end
             end, spawn = function(_: string): boolean return true end, ready = function(): {string}? return {"attach"} end,
                 release = function() end, stop = function() error("fixture shutdown error") end,
-                record = function(kind: string, _: string) if kind == "observer.stop_failed" then facts.failed = true end end},
+                record = function(kind: string, detail: string) if kind == "observer.stop_failed" then facts.failed = true; facts.detail = detail end end},
                 {process = "fixture", server_arguments = {}, endpoint_pattern = "fixture"}))
             local stopped_ok = pcall(handle.stop)
             test.is_true(stopped_ok)
             test.is_true(facts.closed)
             test.is_true(facts.failed)
+            test.is_true(facts.detail:find("fixture shutdown error", 1, true) ~= nil, facts.detail)
         end)
         test.it("records setup failures and leaves the original CLI launch available", function()
             for _, failure in ipairs({"server", "spawn", "readiness"}) do

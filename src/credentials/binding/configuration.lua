@@ -15,6 +15,7 @@ local sources = require("sources")
 local formats = require("formats")
 local funcs = require("funcs")
 local configuration_admission = require("configuration_admission")
+local configuration_check = require("configuration_check")
 local identity = require("identity")
 local M = {}
 local ATTENTION = "bee.attention"
@@ -235,7 +236,7 @@ function M.availability(value: unknown): credential_protocol.Reply
     end
     return fail("UNAVAILABLE", "provider login path could not be inspected: " .. tostring(stat_error or "unknown filesystem error"))
 end
-local function configuration_io(workspace: string, provider: string, base_path: string): (configuration_admission.IO?, sql.DB?, sources.Setup?, credential_protocol.Reply?)
+local function configuration_io(workspace: string, provider: string, base_path: string, launch: configuration_check.Context?): (configuration_admission.IO?, sql.DB?, sources.Setup?, credential_protocol.Reply?)
     local admitted, source_error = sources.host_sources()
     if not admitted then return nil, nil, nil, fail("UNAVAILABLE", source_error or "Configuration sources are unavailable.") end
     local selected_ref: string? = nil
@@ -264,6 +265,10 @@ local function configuration_io(workspace: string, provider: string, base_path: 
             return {content = content, digest = digest, path = root .. "/" .. setup.path}, nil
         end,
         admitted = function(base: configuration_admission.Base): (boolean?, string?) return store.configuration_admitted(db, workspace, source_ref, setup.path, base.digest) end,
+        check = function(base: configuration_admission.Base): string?
+            if not launch then return "Configuration setup needs the launch it serves." end
+            return configuration_check.check(launch, base_path, setup.path, base.content)
+        end,
         finish = function(base: configuration_admission.Base?, approval: string, receipt: {[string]: unknown}): string?
             return store.finish_configuration(db, workspace, source_ref, setup.path, base and base.digest, approval, receipt)
         end,
@@ -290,7 +295,9 @@ local function configuration_io(workspace: string, provider: string, base_path: 
 end
 function M.configuration_setup(raw: unknown): credential_protocol.Reply
     local request = bounds.object(raw)
-    if not request or bounds.fields(request, {"workspace_id", "provider", "base_path", "operation", "attempt_id"}) then return fail("INVALID", "Configuration setup request is invalid.") end
+    if not request or bounds.fields(request, {"workspace_id", "provider", "base_path", "operation", "attempt_id", "launch"}) then return fail("INVALID", "Configuration setup request is invalid.") end
+    local launch, launch_error = configuration_check.decode(request.launch)
+    if not launch then return fail("INVALID", launch_error or "Configuration setup needs the launch it serves.") end
     local workspace, provider, base_path = bounds.id(request.workspace_id), bounds.id(request.provider), formats.path(request.base_path)
     local operation = bounds.member(request.operation, {"status", "admit", "materialize"})
     local attempt = bounds.id(request.attempt_id)
@@ -300,7 +307,7 @@ function M.configuration_setup(raw: unknown): credential_protocol.Reply
     if operation == "materialize" then
         if not security.can(M.MATERIALIZE, workspace) then return fail("DENIED", "Configuration setup is not authorized for this launch.") end
     elseif not security.can("bee.harness.setup", workspace) then return fail("DENIED", "Configuration setup is not authorized in this workspace.") end
-    local io, db, setup, problem = configuration_io(workspace, provider, base_path)
+    local io, db, setup, problem = configuration_io(workspace, provider, base_path, launch)
     if not io or not db or not setup then return problem or fail("UNAVAILABLE", "Configuration setup source is unavailable.") end
     if operation == "status" then
         local status, status_error = configuration_admission.status(io)

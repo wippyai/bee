@@ -748,7 +748,9 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             local workspace = request.workspace_id
             if workspace and provider_home and not composition_bases[file.composition.base_path] then
                 local raw, call_error = funcs.call("bee.credentials.binding:configuration_setup", {operation = "materialize",
-                    workspace_id = workspace, attempt_id = attempt_id, provider = provider_home.provider, base_path = file.composition.base_path})
+                    workspace_id = workspace, attempt_id = attempt_id, provider = provider_home.provider, base_path = file.composition.base_path,
+                    launch = {binding_ref = request.binding_ref, policy_ref = request.policy_ref, placement_profile_ref = request.placement_profile_ref,
+                        options = request.preferences and request.preferences.options or {}}})
                 if not owns_attempt() then return refused("The launch ended while configuration setup was waiting for approval.") end
                 local reply = bounds.object(raw)
                 local value = reply and bounds.object(reply.value)

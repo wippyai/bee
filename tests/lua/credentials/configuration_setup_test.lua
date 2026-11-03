@@ -5,6 +5,7 @@ local store = require("store")
 local bounds = require("bounds")
 local hash = require("hash")
 type Object = {[string]: unknown}
+local BASE = ".config/opencode/.bee-global-opencode.json"
 local function fixture(decision: string)
     local requests, reads, admissions, waits = 0, 0, 0, 0
     local admitted = ""
@@ -17,6 +18,7 @@ local function fixture(decision: string)
     io = {
         measure = function(): (admission.Base?, string?) return {path = "/synthetic/opencode.json", content = current, digest = assert(hash.sha256(current))}, nil end,
         admitted = function(base: admission.Base): (boolean?, string?) return admitted == base.digest, nil end,
+        check = function(_base: admission.Base): string? return nil end,
         finish = function(base: admission.Base?, _approval: string, result: Object): string?
             if base then admitted = base.digest; admissions = admissions + 1 end
             receipt = result
@@ -34,7 +36,8 @@ local function fixture(decision: string)
                 test.eq(request.contract_version, 2)
                 test.eq(assert(bounds.object(request.continuation)).destination, "credentials.configuration")
                 local prompt = assert(type(request.prompt) == "table" and request.prompt or nil)
-                test.is_true(tostring(prompt.text):find("/synthetic/opencode.json", 1, true) ~= nil)
+                test.is_true(tostring(prompt.text):find("Copy /synthetic/opencode.json into the opencode agent's session as .config/opencode/.bee-global-opencode.json?", 1, true) ~= nil, tostring(prompt.text))
+                test.is_true(tostring(prompt.text):find("your file stays unchanged", 1, true) ~= nil, tostring(prompt.text))
                 return {ok = true, value = {approval_id = "approval", state = "pending"}}, nil
             end
             if target == "bee.approvals.binding:effect" then
@@ -90,6 +93,7 @@ function run()
             io = {
                 measure = function(): (admission.Base?, string?) return {path = "/synthetic/config.json", content = content, digest = digest}, nil end,
                 admitted = function(base: admission.Base): (boolean?, string?) return store.configuration_admitted(db, workspace, "fixture-source", "config.json", base.digest) end,
+                check = function(_base: admission.Base): string? return nil end,
                 finish = function(base: admission.Base?, approval: string, result: Object): string? return store.finish_configuration(db, workspace, "fixture-source", "config.json", base and base.digest, approval, result) end,
                 receipt = function(approval: string): (Object?, string?) return store.configuration_receipt(db, approval) end,
                 call = function(target: string, input: Object): (unknown, string?)
@@ -114,19 +118,19 @@ function run()
                     end, close = function() end}, nil
                 end,
             }
-            local base, err = admission.ensure(io, workspace, "synthetic")
+            local base, err = admission.ensure(io, workspace, "synthetic", nil, "config.json")
             test.is_nil(err); test.eq(assert(base).digest, digest); test.eq(calls, 1)
             test.is_false(assert(admission.status(io)).needs_setup)
-            test.not_nil(admission.ensure(io, workspace, "synthetic")); test.eq(calls, 1)
+            test.not_nil(admission.ensure(io, workspace, "synthetic", nil, "config.json")); test.eq(calls, 1)
             db:release()
         end)
         test.it("files one request, waits for approval, admits and continues", function()
             local io, counts = fixture("approved")
-            local base, err = admission.ensure(io, "workspace", "opencode")
+            local base, err = admission.ensure(io, "workspace", "opencode", nil, BASE)
             test.is_nil(err); test.eq(assert(base).content, "first")
             local requests, reads, admitted = counts()
             test.eq(requests, 1); test.eq(reads, 2); test.eq(admitted, 1)
-            test.is_true(admission.ensure(io, "workspace", "opencode") ~= nil)
+            test.is_true(admission.ensure(io, "workspace", "opencode", nil, BASE) ~= nil)
             test.eq(counts(), 1)
         end)
         test.it("ends setup with the reason when Needs you stops announcing changes", function()
@@ -136,12 +140,12 @@ function run()
                 return {next = function(_approval_id: string): string? return "announcements ended" end,
                     close = function() closed = true end}, nil
             end
-            local base, err = admission.ensure(io, "workspace", "opencode")
+            local base, err = admission.ensure(io, "workspace", "opencode", nil, BASE)
             test.is_nil(base); test.eq(err, "announcements ended"); test.is_true(closed)
         end)
         test.it("denial ends launch with a clear reason and never admits", function()
             local io, counts = fixture("denied")
-            local base, err = admission.ensure(io, "workspace", "opencode")
+            local base, err = admission.ensure(io, "workspace", "opencode", nil, BASE)
             test.is_nil(base); test.is_true(assert(err):find("denied", 1, true) ~= nil)
             local requests, _, admitted = counts()
             test.eq(requests, 1); test.eq(admitted, 0)
@@ -180,18 +184,42 @@ function run()
         end)
         test.it("a new launch can request the same file after denial", function()
             local io, _, _, keys = fixture("denied")
-            test.is_nil(admission.ensure(io, "workspace", "opencode", "first-launch"))
-            test.is_nil(admission.ensure(io, "workspace", "opencode", "next-launch"))
+            test.is_nil(admission.ensure(io, "workspace", "opencode", "first-launch", BASE))
+            test.is_nil(admission.ensure(io, "workspace", "opencode", "next-launch", BASE))
             test.is_true(keys[1] ~= keys[2])
+        end)
+        test.it("reports a file the launch refuses before asking the person", function()
+            local io, counts = fixture("approved")
+            local checked = 0
+            io.check = function(base: admission.Base): string?
+                checked = checked + 1
+                test.eq(base.content, "first")
+                return BASE .. ": authority-bearing key provider has no admitted mapping"
+            end
+            local status, status_error = admission.status(io)
+            test.is_nil(status)
+            test.eq(status_error, "Bee cannot use /synthetic/opencode.json: " .. BASE .. ": authority-bearing key provider has no admitted mapping")
+            local base, err = admission.ensure(io, "workspace", "opencode", "launch", BASE)
+            test.is_nil(base)
+            test.eq(err, status_error)
+            test.eq(counts(), 0)
+            test.eq(checked, 2)
+        end)
+        test.it("asks once per workspace and file digest across launches", function()
+            local io, counts = fixture("approved")
+            for _, attempt in ipairs({"first-launch", "second-launch", "third-launch"}) do
+                test.eq(assert(admission.ensure(io, "workspace", "opencode", attempt, BASE)).content, "first")
+            end
+            test.eq(counts(), 1)
         end)
         test.it("a changed digest needs setup and asks again", function()
             local io, counts, change = fixture("approved")
             test.is_true(assert(admission.status(io)).needs_setup)
-            assert(admission.ensure(io, "workspace", "opencode"))
+            assert(admission.ensure(io, "workspace", "opencode", nil, BASE))
             test.is_false(assert(admission.status(io)).needs_setup)
             change("changed")
             test.is_true(assert(admission.status(io)).needs_setup)
-            test.eq(assert(admission.ensure(io, "workspace", "opencode")).content, "changed")
+            test.eq(assert(admission.ensure(io, "workspace", "opencode", nil, BASE)).content, "changed")
             test.eq(counts(), 2)
         end)
     end)

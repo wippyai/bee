@@ -224,6 +224,20 @@ entries:
     restart:
       max_attempts: 10
   host: bee:workers
+- name: configuration_check
+  kind: library.lua
+  source: file://configuration_check.lua
+  modules:
+  - registry
+  imports:
+    bounds: bee.drivers.values:bounds
+    formats: bee.drivers.credentials:format
+    types: bee.drivers:types
+    provider_projection: bee.placement.native.service:provider_projection
+    profile_values: bee.drivers.descriptor:profile_values
+    placement_profiles: bee.placement.profiles:profiles
+    effective_schema: bee.drivers.descriptor:effective
+    docker_spec: bee.placement.docker.binding:spec
 - name: provider_projection
   kind: library.lua
   source: file://provider_projection.lua

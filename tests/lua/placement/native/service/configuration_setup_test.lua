@@ -13,9 +13,11 @@ local fs = require("fs")
 local funcs = require("funcs")
 local function cases()
     test.describe("Composed launch without a login projection", function()
-        for _, selected in ipairs({{decision = "approved", admitted = false}, {decision = "denied", admitted = false}, {decision = "approved", admitted = true}}) do
+        for _, selected in ipairs({{decision = "approved", admitted = true}, {decision = "denied", admitted = true}, {decision = "never asked", admitted = false}}) do
         local decision = selected.decision
-        test.it("asks once in Needs you and handles " .. decision .. " without a login projection, admitted mapping " .. tostring(selected.admitted), function()
+        local title = selected.admitted and ("asks once in Needs you and handles " .. decision .. " without a login projection")
+            or "refuses a file without an admitted mapping before asking in Needs you"
+        test.it(title, function()
             local id = "composition-" .. principals.key()
             local volume = assert(fs.get("bee.tests.placement.native.service:configuration_source"))
             local source = selected.admitted and '{"provider":{"synthetic":{"npm":"@ai-sdk/openai-compatible","options":{"baseURL":"https://synthetic.test/v1","apiKey":"{env:OPENAI_API_KEY}"},"models":{"fixture":{"name":"Fixture"}}}}}'
@@ -93,9 +95,14 @@ local function cases()
                 local providers = assert(bounds.object(rendered.provider))
                 local provider = assert(bounds.object(providers.synthetic))
                 test.eq(assert(bounds.object(provider.options)).apiKey, "{env:OPENAI_API_KEY}")
-            elseif decision == "approved" then
-                test.is_true(assert(outcome.error):find("provider has no admitted mapping", 1, true) ~= nil)
+            elseif not selected.admitted then
+                test.is_true(assert(outcome.error):find("Bee cannot use ", 1, true) ~= nil, tostring(outcome.error))
+                test.is_true(assert(outcome.error):find("provider has no admitted mapping", 1, true) ~= nil, tostring(outcome.error))
                 test.eq(outcome.observed.publications, 0)
+                test.eq(approvals, 0)
+                test.is_nil(approval_id)
+                db:release()
+                return
             else
                 test.is_true(assert(outcome.error):find("was denied", 1, true) ~= nil)
                 test.eq(outcome.observed.publications, 0)

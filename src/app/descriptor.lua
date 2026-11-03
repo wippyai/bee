@@ -1,14 +1,15 @@
 -- MIT. An app's declaration: the meta.application record on a process.lua
 -- entry of meta.type bee.application. It names the app's title, icon, group and role,
 -- whether one instance or many run, how a kept instance comes back, the menus
--- it is placed in, and whether it runs a terminal page.
+-- it is placed in, whether it runs a terminal page, and whether it takes left
+-- drags inside its window, which otherwise select the window's text.
 local M = {}
 
 M.TYPE = "bee.application"
 
 type Descriptor = {definition_id: string, definition_revision: string, title: string, icon: string,
     group: string, role: string, singleton: boolean, resume_schema: string, restart_policy: string,
-    menus: {string}, terminal: boolean}
+    menus: {string}, terminal: boolean, drags: boolean}
 
 local function text(value: unknown, limit: integer): string?
     if type(value) ~= "string" or #value > limit or value:find("%c") then return nil end
@@ -59,6 +60,7 @@ function M.problem(value: unknown): string?
     end
     if not menus(value.menus) then return "meta.application.menus must be a list of at most 16 bee.menu entry ids" end
     if value.terminal ~= nil and type(value.terminal) ~= "boolean" then return "meta.application.terminal must be true or false" end
+    if value.drags ~= nil and type(value.drags) ~= "boolean" then return "meta.application.drags must be true or false" end
     return nil
 end
 
@@ -73,7 +75,7 @@ function M.decode(id: string, value: unknown): Descriptor?
         icon = (declared.icon or "") :: string, group = (declared.group or "") :: string,
         role = (declared.role or "") :: string, singleton = declared.instance_policy == "singleton",
         resume_schema = (declared.resume_schema or "") :: string, restart_policy = restart :: string,
-        menus = placed, terminal = declared.terminal == true}
+        menus = placed, terminal = declared.terminal == true, drags = declared.drags == true}
 end
 
 return M

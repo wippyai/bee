@@ -9,7 +9,7 @@ local appearance = require("appearance")
 local chrome = require("chrome")
 local menu = require("menu")
 local popup = require("popup")
-local selection = require("selection")
+local copy = require("copy")
 local bar = require("bar")
 local window_chrome = require("window_chrome")
 local workspace_menu = require("workspace_menu")
@@ -25,7 +25,7 @@ local function styled(style: string, text: string): string return style .. text 
 
 -- Overlays drawn above the desktop, at most one of each.
 type Overlays = {reviews: {[string]: {title: string, approval_id: string}}?, alert: Alert?, alert_popup: boolean?, start: menu.State?, catalog: {menu.Descriptor}?, destinations: {menu.Destination}?, editor: title_editor.State?,
-    modal: dialog.State?, selection: selection.State?, workspaces: workspace_menu.Menu?}
+    modal: dialog.State?, copy: copy.Overlay?, workspaces: workspace_menu.Menu?}
 
 function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Content},
     capture: layout.Capture?, preview: model.Rect?, status: string, label: string,
@@ -33,15 +33,15 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     local prefs = preferences
     local theme = prefs.theme
     local start, catalog = overlays.start, overlays.catalog
-    local editor, modal, active_selection, workspaces = overlays.editor, overlays.modal, overlays.selection, overlays.workspaces
+    local editor, modal, overlay, workspaces = overlays.editor, overlays.modal, overlays.copy, overlays.workspaces
     local FRAME = appearance.style(theme.border, theme.surface)
     local width, height = scene.width, scene.height
     local painter = frame.new(width, height, prefs)
     local canvas = painter.canvas
     local cursor: Cursor = {x = 1, y = 1, visible = false}
-    local selected_snapshot: selection.Snapshot? = active_selection and selection.snapshot(active_selection) or nil
-    local selected_span = active_selection and selection.range(active_selection) or nil
     local selected_style = appearance.style(appearance.selection_text(theme), appearance.selection_background(theme))
+    -- A mark's cells show plain text, so a styled slice cannot reset its highlight.
+    local MARKS = {selection = selected_style, label = selected_style .. "\27[1m", cursor = "\27[7m", token = "\27[4m"}
     chrome.background(canvas, width, height, prefs)
     if #model.visible(scene) == 0 then
         chrome.welcome(canvas, width, height, prefs, false)
@@ -56,23 +56,18 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
             window_chrome.draw(canvas, win, rect, win.id == scene.focus, theme)
         else
             local content = contents[win.id]
-            local frozen = selected_snapshot and selected_snapshot.binding.view_id == win.id
-                and selected_snapshot.binding.width == body.width and selected_snapshot.binding.height == body.height
+            local frozen = overlay and overlay.id == win.id and overlay.width == body.width and overlay.height == body.height
             if content or frozen then
                 local rows: {string} = {}
-                if frozen and selected_snapshot then rows = selected_snapshot.rows
+                if frozen and overlay then rows = overlay.rows
                 elseif content then rows = content.rows end
-                for y = 1, body.height do
-                    local row = rows[y] or ""
-                    canvas:put(body.x, body.y + y - 1, row, body.width)
-                    if frozen and selected_span and y >= selected_span.start.y and y <= selected_span.finish.y then
-                        local first = y == selected_span.start.y and selected_span.start.x - 1 or 0
-                        local last = y == selected_span.finish.y and selected_span.finish.x or body.width
-                        -- A selected ANSI slice must not reset its highlight.
-                        -- Native cut retains cell boundaries; plain drops controls.
-                        local slice = text.plain(text.cut(rows[y] or "", first, last))
-                        local mark = selected_style
-                        canvas:put(body.x + first, body.y + y - 1, mark .. slice .. "\27[0m", last - first)
+                for y = 1, body.height do canvas:put(body.x, body.y + y - 1, rows[y] or "", body.width) end
+                if frozen and overlay then
+                    for _, mark in ipairs(overlay.marks) do
+                        local cells = mark.last - mark.first + 1
+                        local shown = mark.text or text.plain(text.cut(rows[mark.y] or "", mark.first - 1, mark.last))
+                        if shown == "" then shown = " " end
+                        canvas:put(body.x + mark.first - 1, body.y + mark.y - 1, MARKS[mark.role] .. shown .. "\27[0m", cells)
                     end
                 end
                 local caret = content and content.cursor
@@ -124,7 +119,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     end
     if editor then cursor = title_editor.draw(canvas, editor, width, height, prefs) end
     if modal then cursor = dialog.draw(canvas, modal, width, height, prefs) end
-    if selected_snapshot then cursor.visible = false end
+    if overlay then cursor.visible = false end
     return {rows = frame.rows(painter, theme.ground), tabs = hits, cursor = cursor}
 end
 return M

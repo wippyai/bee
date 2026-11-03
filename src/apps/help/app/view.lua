@@ -5,21 +5,22 @@ local frame = require("frame")
 local manuals = require("manuals")
 local markdown = require("markdown")
 local text = require("text")
-type Pane = "desktop" | "windows" | "workspaces" | "mouse" | "manuals"
+type Pane = "desktop" | "windows" | "workspaces" | "mouse" | "copy" | "manuals"
 -- A binding belongs to a group, the section it is listed under.
 type Binding = {key: string, action: string, group: string}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 type Manuals = {documents: {manuals.Document}, selected: integer, query: string, searching: boolean, opened: manuals.Document?, status: string}
 local M = {}
 
-local PANES: {Pane} = {"desktop", "windows", "workspaces", "mouse", "manuals"}
+local PANES: {Pane} = {"desktop", "windows", "workspaces", "mouse", "copy", "manuals"}
 M.PANES = PANES
 local TABS: {frame.Tab} = {{kind = "desktop", label = "Desktop", short = "Desk"}, {kind = "windows", label = "Windows", short = "Win"},
-    {kind = "workspaces", label = "Bees", short = "Bees"}, {kind = "mouse", label = "Mouse", short = "Mouse"}, {kind = "manuals", label = "Agent manuals", short = "Manuals"}}
+    {kind = "workspaces", label = "Bees", short = "Bees"}, {kind = "mouse", label = "Mouse", short = "Mouse"},
+    {kind = "copy", label = "Copy and paste", short = "Copy"}, {kind = "manuals", label = "Agent manuals", short = "Manuals"}}
 local HINTS = frame.hints({{key = "↑↓", verb = "scroll"}, {key = "Tab", verb = "switch"}, {key = "Ctrl+W", verb = "close"}})
 local KEY_WIDTH = 14
 
-type Bindings = {desktop: {Binding}, windows: {Binding}, workspaces: {Binding}, mouse: {Binding}}
+type Bindings = {desktop: {Binding}, windows: {Binding}, workspaces: {Binding}, mouse: {Binding}, copy: {Binding}}
 local BINDINGS: Bindings = {
     desktop = {
         {group = "Start and switch", key = "F1", action = "Open or close the Start menu"},
@@ -34,8 +35,7 @@ local BINDINGS: Bindings = {
         {group = "Focused window", key = "Ctrl+W", action = "Close the focused app"},
         {group = "Focused window", key = "F11", action = "Full pane or floating"},
         {group = "Focused window", key = "Alt+F9", action = "Minimize the focused window"},
-        {group = "Text", key = "Esc", action = "Leave text selection or a window move"},
-        {group = "Text", key = "Ctrl+C", action = "Copy the selected text"},
+        {group = "Focused window", key = "Esc", action = "Cancel a window move"},
         {group = "Apps", key = "?", action = "An app's own help, in its footer"},
     },
     workspaces = {
@@ -54,6 +54,23 @@ local BINDINGS: Bindings = {
         {group = "Menus", key = "Right click", action = "Menu of a window's frame, a tab or the desktop; inside a window, the app's menu"},
         {group = "Menus", key = "Shift+Right", action = "Window menu from inside a window"},
         {group = "Menus", key = "Bar", action = "Start, tabs and the desktop label"},
+        {group = "Text", key = "Drag", action = "Select a window's text and copy it on release"},
+        {group = "Text", key = "Double click", action = "Copy a word, path or URL"},
+        {group = "Text", key = "Triple click", action = "Copy a line"},
+        {group = "Text", key = "Shift+Drag", action = "The terminal's own selection, across windows"},
+    },
+    copy = {
+        {group = "Copy", key = "Drag", action = "Select inside a window; release copies"},
+        {group = "Copy", key = "Alt+Q", action = "Quick copy: type the hint on a path, URL, id or line"},
+        {group = "Copy", key = "Alt+C", action = "Copy mode over the focused window; also Select text in its menu"},
+        {group = "Copy mode", key = "←↓↑→ hjkl", action = "Move the cursor"},
+        {group = "Copy mode", key = "PgUp PgDn", action = "Move a page"},
+        {group = "Copy mode", key = "g G 0 $", action = "Top, bottom, line start, line end"},
+        {group = "Copy mode", key = "v V", action = "Select characters or whole lines"},
+        {group = "Copy mode", key = "/ n N", action = "Search, next and previous match"},
+        {group = "Copy mode", key = "y Enter", action = "Copy the selection"},
+        {group = "Copy mode", key = "Esc", action = "Leave copy mode or quick copy"},
+        {group = "Paste", key = "Terminal paste", action = "Ctrl+Shift+V or the terminal's paste goes to the focused window as one paste"},
     },
 }
 
@@ -62,6 +79,7 @@ function M.bindings(pane: Pane): {Binding}
     if pane == "windows" then return BINDINGS.windows end
     if pane == "workspaces" then return BINDINGS.workspaces end
     if pane == "mouse" then return BINDINGS.mouse end
+    if pane == "copy" then return BINDINGS.copy end
     return BINDINGS.desktop
 end
 

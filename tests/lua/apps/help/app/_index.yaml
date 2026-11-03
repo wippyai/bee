@@ -44,6 +44,7 @@ entries:
     test: wippy.test:test
     client: bee.node:client
     manuals: bee.docs:manuals
+    view: bee.apps.help.app:view
 - name: captures
   kind: fs.directory
   meta: {type: test_support}

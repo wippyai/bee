@@ -55,6 +55,19 @@ entries:
   kind: library.lua
   source: file://selection.lua
   modules: [tty]
+- name: hints
+  kind: library.lua
+  source: file://hints.lua
+  modules: [tty]
+- name: copy
+  kind: library.lua
+  source: file://copy.lua
+  modules: [tty]
+  imports:
+    selection: bee.shell:selection
+    hints: bee.shell:hints
+    model: bee.shell:model
+    layout: bee.shell:layout
 - name: workspace_menu
   kind: library.lua
   source: file://workspace_menu.lua
@@ -77,7 +90,7 @@ entries:
     chrome: bee.shell:chrome
     menu: bee.shell:menu
     popup: bee.ui:popup
-    selection: bee.shell:selection
+    copy: bee.shell:copy
     bar: bee.shell:bar
     window_chrome: bee.shell:window_chrome
 - name: main
@@ -96,7 +109,7 @@ entries:
     dialog: bee.approvals.app:dialog
     title_editor: bee.shell:title_editor
     watch: bee.shell:watch
-    selection: bee.shell:selection
+    copy: bee.shell:copy
     workspace_menu: bee.shell:workspace_menu
     render: bee.shell:render
     part_handover: bee.shell:handover
@@ -125,7 +138,7 @@ entries:
     dialog: bee.approvals.app:dialog
     title_editor: bee.shell:title_editor
     watch: bee.shell:watch
-    selection: bee.shell:selection
+    copy: bee.shell:copy
     workspace_menu: bee.shell:workspace_menu
     render: bee.shell:render
     part_handover: bee.shell:handover

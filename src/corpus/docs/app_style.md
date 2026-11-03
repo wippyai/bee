@@ -216,6 +216,17 @@ never a zero.
   target is at least one row high and three cells wide.
 - Every mouse action has a keyboard route with the same verb, and every
   button's key is listed in the footer hints.
+- The desktop owns copy and paste, so an app needs no copy code of its own.
+  A left drag inside a window selects its text and copies it on release; a
+  click without motion reaches the app as a press and a release, a double
+  click copies a word and a triple click a line. Alt+Q labels the copyable
+  tokens of the focused window (paths, URLs, SHAs, UUIDs, ids, quoted text,
+  code blocks, error lines) and Alt+C opens copy mode over its text. Shift
+  and a drag is the terminal's own selection. An app whose surface uses left
+  drags itself declares `meta.application.drags: true` and receives every
+  pointer event as it comes. Paste arrives as one `paste` event with the
+  whole text, newlines included; a text field inserts it at the cursor.
+- Keep Alt+Q and Alt+C free: the desktop takes them before the app.
 
 ## 11. Archetypes
 

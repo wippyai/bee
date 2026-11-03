@@ -40,6 +40,17 @@ entries:
   imports:
     appearance: bee.ui:appearance
     app: bee.app:client
+- name: probe_drags
+  kind: process.lua
+  source: file://probe.lua
+  method: main
+  modules: [tty, process, channel, security, ctx]
+  meta:
+    type: bee.application
+    application: {api_version: 1, title: Drag probe, lifetime: view, revision: '1', instance_policy: multiple, drags: true}
+  imports:
+    appearance: bee.ui:appearance
+    app: bee.app:client
 - name: probe_single
   kind: process.lua
   source: file://probe.lua
@@ -80,6 +91,8 @@ entries:
   data:
     bindings:
     - definition_id: bee.tests.node:probe_app
+      policies: []
+    - definition_id: bee.tests.node:probe_drags
       policies: []
     - definition_id: bee.tests.node:broker_probe
       policies: []

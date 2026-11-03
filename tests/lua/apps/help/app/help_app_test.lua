@@ -7,6 +7,7 @@ local channel = require("channel")
 local fs = require("fs")
 local client = require("client")
 local manuals = require("manuals")
+local view = require("view")
 type Snapshot = {width: integer, height: integer, rows: {string}}
 local function call(operation: string, request: {[string]: unknown}): {[string]: unknown}
     return assert(client.call(assert(system.node.id()), operation, request))
@@ -41,7 +42,7 @@ local function define_tests()
             local ok, failure = pcall(function()
                 assert(viewport:resize(120, 40))
                 await(viewport, "BEE KEYBOARD HELP")
-                for _ = 1, 4 do key(viewport, "tab") end
+                for _ = 1, #view.PANES - 1 do key(viewport, "tab") end
                 local listing = await(viewport, expected)
                 capture("agent-manuals-120x40", listing)
                 key(viewport, "runes", "/")

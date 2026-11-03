@@ -22,6 +22,7 @@ An app definition carries `meta.application`:
 | `group`, `role` | optional presentation hints (at most 160 and 32 bytes) |
 | `menus` | optional list of up to 16 `bee.menu` entry ids |
 | `terminal` | optional boolean; `true` runs the app as a terminal page |
+| `drags` | optional boolean; `true` gives the app left-button drags inside its window, which otherwise select and copy the window's text |
 | `resume_schema`, `restart_policy` | see Checkpoint |
 | `commands` | optional list of up to 16 command handlers |
 

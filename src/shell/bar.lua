@@ -7,6 +7,7 @@ type TabHit = {id: string, x: integer, width: integer, action: string?, y: integ
 type Frame = {text: string, hits: {TabHit}}
 local M = {}
 type Strip = {text: string, hits: {TabHit}}
+local COPY_HINT = "Alt+Q copy · Alt+C select "
 local function mode_marker(win: model.Window): string
     return win.mode == "fullscreen" and "▣ " or (win.mode == "minimized" and "− " or (win.mode == "collapsed" and "▸ " or ""))
 end
@@ -107,7 +108,13 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
         text = text .. muted .. empty
         position = tty.text.width(empty) + 1
     end
-    text = text .. normal .. string.rep(" ", math.max(0, room - position + 1))
+    -- The copy keys show in the room the tabs leave.
+    local free = room - position + 1
+    if status == "" and free >= tty.text.width(COPY_HINT) + 2 then
+        text = text .. normal .. string.rep(" ", free - tty.text.width(COPY_HINT)) .. muted .. COPY_HINT
+    else
+        text = text .. normal .. string.rep(" ", math.max(0, free))
+    end
     if restore ~= "" then
         for index, action in ipairs({"minimize", "fullscreen", "close"}) do
             hits[#hits + 1] = {id = restore_id, x = origin + 1 + room + (index - 1) * 3, width = 3, action = action}

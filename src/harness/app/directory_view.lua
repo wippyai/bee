@@ -32,7 +32,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local scope = filtered and "this workspace" or nil
     frame.header(painter, "SESSIONS", tostring(#rows) .. (#rows == 1 and " session" or " sessions") .. (scope and (" · " .. scope) or ""))
     local names: {[string]: agents.Workspace} = workspaces or {}
-    local capacity = math.floor(math.max(0, (layout.work.height - 1) / 3))
+    -- A status of two lines, such as a question and its choices, takes one
+    -- more row above the status row.
+    local question, answer = status:match("^([^\n]*)\n(.*)$")
+    local capacity = math.floor(math.max(0, (layout.work.height - (question and 2 or 1)) / 3))
     local window = frame.window(#rows, capacity, selected, 0)
     local y = layout.work.y
     local previous_bee: string? = nil
@@ -55,7 +58,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         y = y + 2
     end
     if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "N start agent · P profiles") end
-    if height >= 6 and status ~= "" then frame.line(painter, height - 2, text.bound(status, 512), painter.theme.text) end
+    if height >= 7 and question and answer then
+        frame.line(painter, height - 3, text.bound(question, 512), painter.theme.text)
+        frame.line(painter, height - 2, text.bound(answer, 512), painter.theme.text)
+    elseif height >= 6 and status ~= "" then frame.line(painter, height - 2, text.bound(status, 512), painter.theme.text) end
     if height >= 6 then
         local chosen = rows[selected]
         local buttons: {frame.Button} = {}

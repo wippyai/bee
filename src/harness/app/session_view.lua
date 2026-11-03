@@ -202,7 +202,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if message == "" and conv.activity == "stalled" and conv.activity_evidence then
         message = "No progress for " .. tostring(conv.activity_evidence.quiet_for_ms) .. " ms · " .. conv.activity_evidence.turn
     end
-    if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
+    -- A message of two lines, such as a question and its choices, shows its
+    -- question over the input row while it waits for an answer.
+    local question, answer = message:match("^([^\n]*)\n(.*)$")
+    if height >= 6 and question and answer then
+        frame.line(painter, input_row, text.bound(question, 512), theme.text)
+        frame.line(painter, height - 2, text.bound(answer, 512), theme.text)
+    elseif height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
     if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and "" or HINTS, conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start agent"}, {key = "Ctrl+R", verb = "remove session"}, {key = "Ctrl+E", verb = "rename session"}, {key = "Esc", verb = "sessions"}}) or MORE, footer_buttons) end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end

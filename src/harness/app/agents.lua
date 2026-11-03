@@ -191,20 +191,22 @@ function M.rename(conv: Conversation, key: string, name: string): boolean
     return true
 end
 
--- removal_message asks how to remove a session: keeping its history, or
--- removing it too, which a thread shared with others does not offer.
+-- removal_message asks how to remove a session, on two lines: the question,
+-- then its choices. Keeping the history is one choice; removing it too is
+-- the other, which a thread shared with others does not offer.
 function M.removal_message(title: string, lifecycle: string, shared: boolean): string
     local stopped = lifecycle ~= "closed" and " · its agent stops first" or ""
     if shared then
-        return "Remove session " .. title .. "? Its thread is shared with other sessions, apps or peers, so its history stays."
-            .. " Enter: Remove session · Esc keeps it" .. stopped
+        return "Remove session " .. title .. "? Other sessions, apps or peers share its thread.\n"
+            .. "Its history stays · Enter: Remove session · Esc keeps it" .. stopped
     end
-    return "Remove session " .. title .. "? Enter: Remove session (keep its history) · H: Remove session and its history · Esc keeps it" .. stopped
+    return "Remove session " .. title .. "? Esc keeps it" .. stopped .. "\n"
+        .. "Enter: Remove session (keep its history) · H: Remove session and its history"
 end
 
--- rename_message shows the name being typed for a session.
+-- rename_message shows the name being typed for a session, then its keys.
 function M.rename_message(title: string, name: string): string
-    return "Rename " .. title .. ": " .. name .. "▏ · Enter saves · empty returns the automatic title · Esc keeps it"
+    return "Rename " .. title .. ": " .. name .. "▏\nEnter saves · an empty name returns the automatic title · Esc keeps the name"
 end
 
 local function render(value: unknown): string

@@ -1,15 +1,15 @@
 -- One bounded Start panel. Its layout is used unchanged by drawing and input.
-local frame = require("frame")
+local popup = require("popup")
 local model = require("model")
 -- A menu an app is placed in, declared in the registry (bee.menu).
 type Placement = {id: string, title: string, location: "start" | "desktop", order: integer}
 type Descriptor = {definition_id: string, title: string, menus: {Placement}}
 -- A desktop a window can move to.
 type Destination = {id: string, title: string}
-type Item = frame.MenuItem
-type State = frame.PopupState
-type Panel = frame.Panel
-type Response = frame.PopupResponse
+type Item = popup.Item
+type State = popup.State
+type Panel = popup.Panel
+type Response = popup.Response
 local M = {}
 -- placed lists the menus declared for location, ordered, each with the apps
 -- placed in it as items in catalog order.
@@ -110,7 +110,7 @@ end
 -- The Start panel opens under the bar at the left edge; the window and
 -- desktop menus open where the pointer was. The panel never covers the bar.
 function M.panel(width: integer, height: integer, items: {Item}, state: State?): Panel
-    return frame.popup_panel(width, height, items, state or {selected = 1, offset = 0}, 35, height >= 4 and 2 or 1)
+    return popup.panel(width, height, items, state or {selected = 1, offset = 0}, 35, height >= 4 and 2 or 1)
 end
 -- respond adds the shell's own keys to the shared popup's input: Ctrl+Q
 -- quits, Ctrl+W closes the window and the window menu's shortcuts act.
@@ -124,8 +124,8 @@ function M.respond(state: State, panel: Panel, items: {Item}, event: unknown): R
             local wanted = event.key_type == "f9" and event.alt == true and "minimize" or event.key_type == "f11" and "fullscreen" or ""
             for _, item in ipairs(items) do if wanted ~= "" and item.action == wanted and item.enabled then action = wanted end end
         end
-        if action ~= "" then return {state = frame.popup_fit(state, panel, items), action = action, close = false} end
+        if action ~= "" then return {state = popup.fit(state, panel, items), action = action, close = false} end
     end
-    return frame.popup_respond(state, panel, items, event)
+    return popup.respond(state, panel, items, event)
 end
 return M

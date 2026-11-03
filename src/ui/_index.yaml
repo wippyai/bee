@@ -10,12 +10,24 @@ entries:
 - name: appearance
   kind: library.lua
   source: file://appearance.lua
+- name: popup
+  kind: library.lua
+  source: file://popup.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
 - name: frame
   kind: library.lua
   source: file://frame.lua
   modules: [tty]
   imports:
     appearance: bee.ui:appearance
+    popup: bee.ui:popup
+- name: palette
+  kind: library.lua
+  source: file://palette.lua
+  imports:
+    frame: bee.ui:frame
 - name: markdown
   kind: library.lua
   source: file://markdown.lua

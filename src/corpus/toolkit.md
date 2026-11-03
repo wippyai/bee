@@ -85,7 +85,7 @@ type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, w
 type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?, more: boolean?}
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
-type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?}
+type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?, rows: {RowActions}}
 type Bar = {x: integer, buttons: {Button}}
 type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}, controls: Controls, bars: {[integer]: Bar}}
 type View = {rows: {string}, hits: {Hit}, controls: Controls?}
@@ -102,9 +102,8 @@ type Inspector = {entries: {Entry}, selected: integer, offset: integer, label_wi
 type LogLine = {text: string, role: string?}
 type LogView = {lines: {LogLine}, selected: integer, offset: integer, query: string?, focused: boolean?, area: Rect?}
 type Toast = {text: string, role: string?}
-type Choice = {label: string, key: string?, note: string?}
-type Palette = {query: string, choices: {Choice}, selected: integer, offset: integer}
 type Line = {heading: string?, summary: string?, label: string?, value: string?, role: string?, label_role: string?}
+type RowActions = {kind: string, index: integer, key: string, actions: {Button}, selected: boolean?}
 type Clicks = {kind: string, index: integer, at_ms: integer}
 ```
 
@@ -130,7 +129,7 @@ type Clicks = {kind: string, index: integer, at_ms: integer}
 | `frame.hints(hints: {Hint}) -> string` | Canonical key-hint text: "↑↓ select · Enter open · Esc close". |
 | `frame.footer(painter: Painter, status: string, hints: string, more: string?)` | The footer reserves a bounded region for hints and an always visible Help; more lists further keys that only Help shows. |
 | `frame.window(count: integer, capacity: integer, selected: integer, offset: integer) -> Window` | The visible window of a scrolling list of count rows in capacity slots, keeping the selected index (0 for none) visible. |
-| `frame.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)` | One content row at y; a selected row takes the row selection and the marker in column 1. Records a hit of kind, index and key covering span rows (default 1). |
+| `frame.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?, area: Rect?)` | One content row at y; a selected row takes the row selection and the marker in column 1. Records a hit of kind, index and key covering span rows (default 1). |
 | `frame.table(painter: Painter, first: integer, last: integer, value: Table) -> Window` | A table between rows first and last: a muted column caption on row first and rows below it. On a narrow canvas each row becomes its first cell followed by the other nonempty cells joined with " · ". Returns the visible window. |
 | `frame.size(width: integer, height: integer) -> string` | The size class of a canvas: "narrow" below 80x24, "compact" from 80x24, "standard" from 120x36 and "wide" from 160x48. Both dimensions must reach a class; layouts change only at these breakpoints. |
 | `frame.layout(painter: Painter, tabs: boolean, actions: boolean) -> Layout` | The canonical anatomy for this canvas: header on row 1, tabs on row 2 when requested and the canvas has at least 6 rows, one blank row, the work area from column 2 to the column before the last, the action bar on the penultimate row when requested and the canvas has at least 6 rows, and the footer on the final row when the canvas has at least 2 rows. |
@@ -153,14 +152,27 @@ type Clicks = {kind: string, index: integer, at_ms: integer}
 | `frame.badge(painter: Painter, x: integer, y: integer, text: string, role: string?) -> integer` | A status badge at (x, y): text padded with one cell on each side, filled in role's color (default accent) with a contrasting foreground. Returns the drawn width. |
 | `frame.toast(painter: Painter, y: integer, toast: Toast)` | A one-row toast notification: the message centered on row y, filled in role's color (default accent) with a contrasting foreground, overwriting whatever was on that row. The caller owns when a toast is shown and for how long; this only draws the row. |
 | `frame.modal(painter: Painter, width: integer, height: integer, title: string) -> Rect` | A centered modal panel: a box-drawing border in the border role clipped to width by height (each capped to the painter's size), the title on its top edge and the surface cleared underneath. Returns the inner rectangle for the caller's own content; too little room returns a zero rectangle and paints nothing. |
-| `frame.fuzzy(query: string, text: string) -> integer?` | A subsequence match score for a command palette: nil when query's characters (case-folded) do not all appear in order within text, else a score where a lower number ranks a tighter, earlier match higher. |
-| `frame.ranked(query: string, labels: {string}) -> {Choice}` | The palette choices for query over labels: every label that fuzzy matches, best match first and in list order among equal scores, each keyed by its label. |
-| `frame.palette(painter: Painter, width: integer, height: integer, value: Palette) -> Window` | A command palette overlay: a modal titled "Command Palette" sized to width by height, the query on its first content row with a block caret, and the choices below as selectable rows carrying hit kind "choice" and each choice's key. An empty choices list draws the empty state instead of a list. Returns the visible window of choices. |
+| `frame.row_actions(painter: Painter, row: RowActions)` | Declares the actions a row offers: a right click on the row's target (kind, index, key) or Shift+F10 on the selected row opens them as a popup menu; a chosen action reaches the app as a press on a target of its kind carrying the row's index and key. Declare before `frame.footer`, which then names Shift+F10. |
 | `frame.menu() -> Menu` | An app-owned More and Help state; the app retains it between redraws. |
 | `frame.render(view: View, menu: Menu, preferences: appearance.Preferences)` | Paints a shared overlay from this screen's declared buttons and hints. |
 | `frame.route(menu: Menu, value: unknown, text_entry: boolean?) -> (tty.TTYEvent?, boolean)` | Returns nil for consumed input. Selected actions reuse the app's mouse path. text_entry preserves letters and '?' while a form or editor owns input. |
 | `frame.clicks() -> Clicks` | Double-click memory the application retains between events. |
 | `frame.double_click(memory: Clicks, kind: string, index: integer, now_ms: integer) -> boolean` | True for a second press on the same target within `frame.DOUBLE_CLICK_MS` (400) of the first; the press that completes one starts over. |
+
+## Command palette
+
+`bee.ui:palette` (import it as `palette = "bee.ui:palette"`) filters and draws a command palette over the frame.
+
+```lua
+type Choice = {label: string, key: string?, note: string?}
+type Palette = {query: string, choices: {Choice}, selected: integer, offset: integer}
+```
+
+| Call | Meaning |
+|------|---------|
+| `palette.fuzzy(query: string, text: string) -> integer?` | A subsequence match score for a command palette: nil when query's characters (case-folded) do not all appear in order within text, else a score where a lower number ranks a tighter, earlier match higher. |
+| `palette.ranked(query: string, labels: {string}) -> {Choice}` | The palette choices for query over labels: every label that fuzzy matches, best match first and in list order among equal scores, each keyed by its label. |
+| `palette.palette(painter: frame.Painter, width: integer, height: integer, value: Palette) -> frame.Window` | A command palette overlay: a modal titled "Command Palette" sized to width by height, the query on its first content row with a block caret, and the choices below as selectable rows carrying hit kind "choice" and each choice's key. An empty choices list draws the empty state instead of a list. Returns the visible window of choices. |
 
 ## Visualization kit
 

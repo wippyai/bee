@@ -8,6 +8,7 @@ local layout = require("layout")
 local appearance = require("appearance")
 local chrome = require("chrome")
 local menu = require("menu")
+local popup = require("popup")
 local selection = require("selection")
 local bar = require("bar")
 local window_chrome = require("window_chrome")
@@ -114,7 +115,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     if start then
         local items = menu.entries(start, scene, catalog, overlays.destinations)
         local panel = menu.panel(width, height, items, start)
-        frame.popup_draw(canvas, panel, frame.popup_fit(start, panel, items), items, prefs.theme)
+        popup.draw(canvas, panel, popup.fit(start, panel, items), items, prefs.theme)
         cursor.visible = false
     end
     if workspaces then

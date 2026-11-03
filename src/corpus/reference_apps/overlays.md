@@ -1,6 +1,6 @@
 # Reference application: command palette, confirmation modal and toast
 
-Demonstrates the overlay stack of an application: one model with a single active overlay, the typed query and choice of the palette (frame.ranked filters and orders the commands), a two-button confirmation and a toast that expires after a number of ticks. Esc dismisses every overlay; while an overlay is open it owns all input. frame.toast.
+Demonstrates the overlay stack of an application: one model with a single active overlay, the typed query and choice of the palette (palette.ranked filters and orders the commands), a two-button confirmation and a toast that expires after a number of ticks. Esc dismisses every overlay; while an overlay is open it owns all input. frame.toast.
 
 ## Source
 
@@ -8,14 +8,15 @@ Demonstrates the overlay stack of an application: one model with a single active
 -- SPDX-License-Identifier: MIT
 -- Reference: command palette, confirmation modal and toast.
 -- Demonstrates the overlay stack of an application: one model with a single
--- active overlay, the typed query and choice of the palette (frame.ranked
+-- active overlay, the typed query and choice of the palette (palette.ranked
 -- filters and orders the commands), a two-button confirmation and a toast
 -- that expires after a number of ticks. Esc dismisses every overlay; while
 -- an overlay is open it owns all input.
 --
--- Library calls: frame.ranked, frame.palette, frame.modal, frame.button,
+-- Library calls: palette.ranked, palette.palette, frame.modal, frame.button,
 -- frame.toast.
 local frame = require("frame")
+local palette = require("palette")
 
 local M = {}
 
@@ -54,7 +55,7 @@ function M.key(model: Model, event: {[string]: unknown}, commands: {string}): st
         return nil
     end
     if model.kind ~= "palette" then return nil end
-    local found = frame.ranked(model.query, commands)
+    local found = palette.ranked(model.query, commands)
     if name == "up" then model.choice = math.max(1, model.choice - 1)
     elseif name == "down" then model.choice = math.min(math.max(1, #found), model.choice + 1)
     elseif name == "enter" then
@@ -79,8 +80,8 @@ end
 -- Draws the active overlay and the toast over the finished screen.
 function M.draw(painter: frame.Painter, model: Model, commands: {string}, confirm_title: string, confirm_text: string)
     if model.kind == "palette" then
-        local choices = frame.ranked(model.query, commands)
-        frame.palette(painter, 50, 12, {query = model.query, choices = choices,
+        local choices = palette.ranked(model.query, commands)
+        palette.palette(painter, 50, 12, {query = model.query, choices = choices,
             selected = math.floor(math.max(1, math.min(#choices, model.choice))), offset = 0})
     elseif model.kind == "confirm" then
         local inner = frame.modal(painter, 46, 6, confirm_title)

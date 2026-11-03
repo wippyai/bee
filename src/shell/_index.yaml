@@ -38,7 +38,7 @@ entries:
   source: file://menu.lua
   imports:
     model: bee.shell:model
-    frame: bee.ui:frame
+    popup: bee.ui:popup
 - name: title_editor
   kind: library.lua
   source: file://title_editor.lua
@@ -70,6 +70,7 @@ entries:
     workspace_menu: bee.shell:workspace_menu
     chrome: bee.shell:chrome
     menu: bee.shell:menu
+    popup: bee.ui:popup
     selection: bee.shell:selection
     bar: bee.shell:bar
     window_chrome: bee.shell:window_chrome

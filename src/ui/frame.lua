@@ -1173,10 +1173,9 @@ function M.route(menu: Menu, value: unknown, text_entry: boolean?): (tty.TTYEven
         if event.type == "key" and event.action == "release" then return nil, true end
         return context_input(menu, event), true
     end
-    -- Shift+F10 or the menu key opens the selected row's actions under the
-    -- row; the terminal reports the menu key as an unnamed key.
+    -- Shift+F10 opens the selected row's actions under the row.
     if menu.mode == "" and event.type == "key" and event.action ~= "release" and not event.ctrl and not event.alt
-        and ((event.key_type == "f10" and event.shift) or (event.key_type == "unknown" and event.key == "menu")) then
+        and event.key_type == "f10" and event.shift then
         for _, row in ipairs(menu.controls.rows) do
             if row.selected then
                 for _, hit in ipairs(menu.hits) do

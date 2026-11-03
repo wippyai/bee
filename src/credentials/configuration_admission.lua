@@ -2,6 +2,9 @@ local hash = require("hash")
 local canonical = require("canonical")
 local bounds = require("bounds")
 local M = {}
+-- DESTINATION is the approval effect destination the credentials service
+-- declares for configuration setup.
+M.DESTINATION = "credentials.configuration"
 type Object = {[string]: unknown}
 type Base = {path: string, content: string, digest: string}
 type Status = {needs_setup: boolean, path: string}
@@ -37,7 +40,7 @@ function M.ensure(io: IO, workspace: string, provider: string, attempt: string?,
     local requested, request_error = call(io, "bee.approvals.binding:request", {workspace_id = workspace,
         idempotency_key = "configuration:" .. key, request_kind = "permission", policy = "configuration-setup",
         contract_version = 2, presentation = "inbox",
-        origin = {attempt_id = attempt}, continuation = {destination = "credentials.configuration", effect_id = "configuration:" .. key, context = {}},
+        origin = {attempt_id = attempt}, continuation = {destination = M.DESTINATION, effect_id = "configuration:" .. key, context = {}},
         proposal = proposal, prompt = {text = "Allow Bee to use " .. base.path .. " as the configuration base for " .. provider
             .. "? Bee preserves your provider settings and adds the selected agent's tools and settings to its launch configuration. Approving continues the launch."}})
     if not requested then return nil, request_error end

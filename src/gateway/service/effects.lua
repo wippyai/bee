@@ -5,15 +5,12 @@ local funcs = require("funcs")
 local bounds = require("bounds")
 local M = {}
 local function executor(kind: string): (funcs.Executor, string, string)
-    local consumers = registry.find({["meta.type"] = "bee.approvals.effect-consumer", ["meta.worker_name"] = "bee.gateway.external"}) or {}
     for _, entry in ipairs(registry.find({["meta.type"] = "bee.gateway.effect_scope"}) or {}) do
         local data = bounds.object(entry.data)
         if data and data.kind == kind and type(data.entry) == "string" then
-            local destination: string? = nil
-            for _, consumer in ipairs(consumers) do
-                local meta = bounds.object(consumer.meta)
-                if consumer.id == data.entry and meta then destination = bounds.id(meta.destination) end
-            end
+            local consumer = registry.get(data.entry)
+            local meta = consumer and bounds.object(consumer.meta)
+            local destination = meta and meta.type == "bee.approvals.effect-consumer" and bounds.id(meta.destination) or nil
             if not destination then error("gateway effect consumer missing: " .. kind) end
             local policies: {security.Policy} = {}
             for _, id in ipairs(assert(bounds.array(data.policies, 64))) do

@@ -43,5 +43,5 @@ entries:
   kind: security.policy
   policy:
     actions: [registry.get]
-    resources: [bee.gov:activation_profiles, bee.gov:protected_kernel]
+    resources: [bee.gov:activation_profiles]
     effect: allow

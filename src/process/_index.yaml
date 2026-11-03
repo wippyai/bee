@@ -43,3 +43,9 @@ entries:
     actions: [funcs.call]
     resources: ["bee.credentials.service:backlog", "bee.node.persist:test_backlog", "bee.gov.service:backlog", "bee.gateway.service:backlog", "bee.gateway.service:access_backlog", "bee.placement.docker.service:backlog", "bee.placement.native.service:backlog"]
     effect: allow
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

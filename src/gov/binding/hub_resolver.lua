@@ -445,13 +445,9 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     -- excludes unrelated boot-local registry state while retaining every
     -- collision and binding input used by preflight.
     local relevant_ids: {[string]: boolean} = {}
-    local kernel_raw: unknown = nil
-    for _, entry in ipairs(captured.entries) do
-        if entry.id == protected_kernel.ID then kernel_raw = entry end
-    end
-    local kernel, kernel_error = protected_kernel.decode(kernel_raw)
-    if not kernel then return nil, nil, kernel_error end
-    relevant_ids[protected_kernel.ID] = true
+    local kernel, kernel_sources, kernel_error = protected_kernel.build(captured.entries)
+    if not kernel or not kernel_sources then return nil, nil, kernel_error end
+    for _, id in ipairs(kernel_sources) do relevant_ids[id] = true end
     for _, item in ipairs(candidate_entries) do
         for _, reference in ipairs(item.references) do relevant_ids[reference] = true end
     end

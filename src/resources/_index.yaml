@@ -61,3 +61,9 @@ entries:
     - {format: application/schema+json, definition: {"type":"object","properties":{"workspace_id":{"type":"string"},"text":{"type":"string"}},"additionalProperties":true,"description":"One workspace's associations whose name starts with text, for a caller that may read the workspace"}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

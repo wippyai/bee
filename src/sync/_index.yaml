@@ -22,3 +22,9 @@ entries:
   data:
     prefix: sync
     name: bee.sync
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

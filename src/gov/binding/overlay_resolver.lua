@@ -307,9 +307,9 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     -- selected overlay itself from this semantic digest. A missing relevant
     -- entry remains absent; when present, its measured definition is hashed.
     local relevant_ids: {[string]: boolean} = {}
-    local kernel, kernel_error = protected_kernel.decode(current_raw[protected_kernel.ID])
-    if not kernel then return nil, nil, kernel_error end
-    relevant_ids[protected_kernel.ID] = true
+    local kernel, kernel_sources, kernel_error = protected_kernel.build(captured.entries)
+    if not kernel or not kernel_sources then return nil, nil, kernel_error end
+    for _, id in ipairs(kernel_sources) do relevant_ids[id] = true end
     if capability_proposal or #requested > 0 then relevant_ids["bee.capability:catalog"] = true end
     for _, item in ipairs(candidate_entries) do
         for _, reference in ipairs(item.references) do relevant_ids[reference] = true end

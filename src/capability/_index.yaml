@@ -318,3 +318,9 @@ entries:
   variable: PATH
   default: /usr/local/bin:/usr/bin:/bin
   readonly: true
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

@@ -124,3 +124,9 @@ entries:
     prefix: mcp
     name: bee.gateway.external
     service: bee.gateway.service:external_service
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

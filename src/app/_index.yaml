@@ -32,3 +32,9 @@ entries:
 - name: descriptor
   kind: library.lua
   source: file://descriptor.lua
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

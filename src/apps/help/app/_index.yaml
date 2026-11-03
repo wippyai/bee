@@ -37,3 +37,9 @@ entries:
     markdown: bee.ui:markdown
   security:
     policies: [bee.security.docs:docs_policy]
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

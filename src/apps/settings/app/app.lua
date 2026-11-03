@@ -147,11 +147,14 @@ local function main(options: unknown)
         if not launch then status = "Open Settings from the desktop to use edit mode"; dirty = true; return end
         local listed, list_error = client.call(node, "list", {})
         local configuration, configuration_error = registry.get("bee.gov:activation_profiles")
-        local protection, protection_error = registry.get("bee.gov:protected_kernel")
-        if not listed or not configuration or not protection then
-            editing.problem = tostring(list_error or configuration_error or protection_error or "Editing areas are unavailable")
+        local answer, answer_error = funcs.new():call(SUPER_EDIT, {operation = "status", workspace_id = launch.workspace_id})
+        local reply = type(answer) == "table" and answer or nil
+        local value = reply and reply.ok == true and type(reply.value) == "table" and reply.value or nil
+        if not listed or not configuration or not value then
+            editing.problem = tostring(list_error or configuration_error or answer_error
+                or (reply and (reply.message or reply.code)) or "Editing areas are unavailable")
         else
-            edit_mode.load(editing, launch.workspace_id, listed.apps, configuration.data, protection)
+            edit_mode.load(editing, launch.workspace_id, listed.apps, configuration.data, value.protected)
         end
         dirty = true
     end

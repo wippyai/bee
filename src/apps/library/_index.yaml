@@ -89,3 +89,9 @@ entries:
     actions: [cdc.subscribe]
     resources: [bee:changes]
     effect: allow
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

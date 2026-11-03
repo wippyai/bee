@@ -45,8 +45,10 @@ local function fixture(policy_raw: Policy?): (Deps, Object, {captured: Captured,
             {id = "bee.host:db", kind = "db.sql.sqlite", data = {}, registry = {owner = "bee/host"}},
             {id = "private.app:old-overlay", kind = "function.lua", data = {source = "return 'old-overlay'"}},
             {id = "bee.gov:protected_kernel", kind = "registry.entry", meta = {type = "bee.protected_kernel"},
-                data = {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel"}},
+                data = {revision = 1, super_edit = {}},
                 registry = {owner = "bee/host"}},
+            {id = "bee.gov:kernel", kind = "registry.entry", meta = {type = "bee.kernel"},
+                data = {scope = "tree"}, registry = {owner = "bee/host"}},
         },
         overlay_ids = { ["private.app:old-overlay"] = true },
         owner = function(item: Entry): (string?, string?)
@@ -119,12 +121,8 @@ local function driver_fixture(target_path: string?, action: string?, base: strin
     local deps, spec, facts = fixture()
     facts.captured.entries[#facts.captured.entries + 1] = {id = "bee.harness.launch:harness_activation", kind = "registry.entry",
         data = {bindings = {"bee.drivers.claude.binding:binding"}}, registry = {owner = "bee/host"}}
-    for _, entry in ipairs(facts.captured.entries) do
-        if entry.id == "bee.gov:protected_kernel" then
-            entry.data = {revision = 1, super_edit = {},
-                entries = {"bee.gov:protected_kernel", "bee.harness.launch:harness_activation"}}
-        end
-    end
+    facts.captured.entries[#facts.captured.entries + 1] = {id = "bee.harness.launch:kernel", kind = "registry.entry",
+        meta = {type = "bee.kernel"}, data = {scope = "namespace"}, registry = {owner = "bee/host"}}
     deps.root = function(_: unknown): (resolver.Root?, string?) return {component = name, version = "v1"}, nil end
     deps.policy = function(_: unknown, _: resolver.Captured, _: resolver.Root): (Policy?, string?)
         return {node_id = "node-destination", policy_digest = SHA, packages = {[name] = true},

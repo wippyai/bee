@@ -144,3 +144,9 @@ entries:
     app_tools: bee.node:app_tools
     capability_access: bee.gov.binding:capability_access
     capability_grants: bee.gov.types:capability_grants
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

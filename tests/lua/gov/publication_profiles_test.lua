@@ -86,7 +86,7 @@ local function define_tests()
             test.not_nil((profiles.for_source(config, WORKSPACE, "driver.gemini")))
         end)
         test.it("ships a kernel that protects the shared driver core and leaves workspace drivers to governance", function()
-            local kernel = assert(protected_kernel.decode(assert(registry.get("bee.gov:protected_kernel")).data))
+            local kernel = assert((protected_kernel.build(assert(assert(registry.snapshot()):state()).entries)))
             for _, core in ipairs({"bee.drivers.binding", "bee.drivers.codec", "bee.driver.descriptor", "bee.drivers.locate",
                 "bee.drivers.permission", "bee.drivers.profiles", "bee.drivers.transport"}) do
                 local entries = assert(registry.find({[".ns"] = core}))

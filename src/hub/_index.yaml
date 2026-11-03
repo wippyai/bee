@@ -1,0 +1,9 @@
+version: '1.0'
+namespace: bee.hub
+entries:
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

@@ -38,3 +38,9 @@ entries:
   source: file://state_refusal.lua
   method: main
   modules: [io]
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

@@ -12,7 +12,6 @@ local protected_kernel = require("protected_kernel")
 
 local M = {}
 local PROFILE_ID = "bee.gov:activation_profiles"
-local KERNEL_ID = "bee.gov:protected_kernel"
 local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 type Object = {[string]: unknown}
 
@@ -88,6 +87,14 @@ function M.handle(raw: unknown): {[string]: unknown}
     if not profile_entry then return failure("UNAVAILABLE", profile_error or "activation profile entry is unavailable") end
     local data = bounds.object(profile_entry.data)
     if not data then return failure("INVALID", "host activation profiles are malformed") end
+    local manifest: protected_kernel.Manifest? = nil
+    if operation == "status" or operation == "enable" then
+        local state, state_error = snapshot:state()
+        if not state then return failure("UNAVAILABLE", tostring(state_error or "read host registry state")) end
+        local built, _, build_error = protected_kernel.build(state.entries)
+        if not built then return failure("UNAVAILABLE", tostring(build_error or "protected kernel is unavailable")) end
+        manifest = built
+    end
     if operation == "status" then
         local decoded, decode_error = activation_profiles.decode(data)
         if not decoded then return failure("INVALID", tostring(decode_error)) end
@@ -100,7 +107,7 @@ function M.handle(raw: unknown): {[string]: unknown}
             end
         end
         table.sort(grants)
-        return transaction.success({changed = false, enabled = enabled,
+        return transaction.success({changed = false, enabled = enabled, protected = manifest,
             message = enabled and ("Edit mode enabled for " .. table.concat(grants, ", "))
                 or "Edit mode is disabled for this workspace"}, false)
     end
@@ -111,10 +118,6 @@ function M.handle(raw: unknown): {[string]: unknown}
         if not namespaces or not duration then return failure("INVALID", parse_error or "edit mode request is invalid") end
         local node, node_error = system.node.id()
         if not node or node_error then return failure("UNAVAILABLE", "native node identity is unavailable") end
-        local kernel_entry, kernel_error = entry(snapshot, KERNEL_ID, "registry.entry", "bee.protected_kernel")
-        if not kernel_entry then return failure("UNAVAILABLE", kernel_error or "protected kernel entry is unavailable") end
-        local manifest, manifest_error = protected_kernel.decode(kernel_entry)
-        if not manifest then return failure("UNAVAILABLE", tostring(manifest_error or "protected kernel map is unavailable")) end
         local owners, owner_error = owner_ids(namespaces, assert(workspace_id))
         if not owners then return failure("UNAVAILABLE", owner_error or "allocate overlay identities") end
         local expires = time.now():add(duration):utc():format(FORMAT)

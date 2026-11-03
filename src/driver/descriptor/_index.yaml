@@ -10,3 +10,9 @@ entries:
     canonical: bee.drivers.values:canonical
     paths: bee.placement.profiles:paths
     quote: bee.drivers.binding:quote
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

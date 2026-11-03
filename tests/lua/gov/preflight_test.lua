@@ -212,8 +212,31 @@ local function define_tests()
             test.is_nil(open_map)
             test.not_nil((string.find(tostring(open_error), "protect itself", 1, true)))
         end)
+        test.it("refuses edits to a declared component's shipped entries and admits an application's own", function()
+            local function row(id: string, kind: string, module: string, meta: {[string]: unknown}, data: {[string]: unknown}): {[string]: unknown}
+                return {id = id, kind = kind, meta = meta, data = data, registry = {owner = module, root = false}}
+            end
+            local manifest = assert((protected_kernel.build({
+                row("bee.gov:protected_kernel", "registry.entry", "bee/bee", {type = "bee.protected_kernel"}, {revision = 1, super_edit = {}}),
+                row("bee.gov:kernel", "registry.entry", "bee/bee", {type = "bee.kernel"}, {scope = "tree"}),
+                row("bee.gov.binding:moved", "library.lua", "bee/bee", {}, {}),
+                row("demo:run", "function.lua", "", {}, {})})))
+            local candidate, context = fixture()
+            context.protected = manifest
+            context.kinds["library.lua"] = true
+            context.entries["bee.gov.binding:moved"] = candidate_entry("bee.gov.binding:moved", "library.lua", "bee/bee", SHA, EMPTY_STRINGS)
+            context.installed_entries = {["demo:run"] = candidate_entry("demo:run", "function.lua", "example/demo", SHA, {"host:db"})}
+            test.is_true(checked(candidate, context).ready)
+            context.namespaces["bee.gov.binding"] = true
+            candidate.artifacts[1].namespaces = {"demo", "bee.gov.binding"}
+            candidate.entries[#candidate.entries + 1] = entry_of("bee.gov.binding:moved")
+            local refused = checked(candidate, context)
+            test.is_false(refused.ready)
+            test.is_true(has(refused, "PROTECTED_KERNEL"))
+        end)
         test.it("protects exact shipped entries without reserving their namespace", function()
-            local manifest = assert(protected_kernel.decode(assert(registry.get("bee.gov:protected_kernel"))))
+            local snapshot = assert(registry.snapshot())
+            local manifest = assert((protected_kernel.build(assert(snapshot:state()).entries)))
             test.is_true(protected_kernel.names(manifest, "bee.gov.binding:preflight"))
             test.is_false(protected_kernel.names(manifest, "bee.gov.binding:unadmitted_shadow"))
             test.is_false(protected_kernel.opened(manifest, "bee.shell.unknown:entry"))

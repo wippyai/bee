@@ -49,3 +49,9 @@ entries:
   targets:
   - entry: bee.credentials.env:credential_sources
     path: .admission
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

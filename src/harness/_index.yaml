@@ -52,3 +52,9 @@ entries:
 - name: permission_types
   kind: library.lua
   source: file://permission_types.lua
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

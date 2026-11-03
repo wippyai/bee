@@ -12,3 +12,9 @@ entries:
   imports:
     corpus: bee.docs.binding:corpus
     resources: bee.docs.env:resources
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

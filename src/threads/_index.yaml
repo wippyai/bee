@@ -492,3 +492,9 @@ entries:
   data:
     prefix: threads
     name: bee.threads
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

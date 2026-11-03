@@ -54,7 +54,9 @@ local function deps_fixture(policy: Policy?): (Deps, Spec, {root: Object?, captu
         entry("app:removed", "vendor/app", "removed-by-preview"),
         entry("host:db", "host/base", "database"),
         {id = "bee.gov:protected_kernel", kind = "registry.entry", registry = {owner = "host/base"},
-            meta = {type = "bee.protected_kernel"}, data = KERNEL},
+            meta = {type = "bee.protected_kernel"}, data = {revision = 1, super_edit = {}}},
+        {id = "bee.gov:kernel", kind = "registry.entry", registry = {owner = "host/base"},
+            meta = {type = "bee.kernel"}, data = {scope = "tree"}},
     }
     local updated_entry = entry("app:claimed", "vendor/app", "registry-owner")
     local preview_entry = entry("app:new", "vendor/app", "preview-created")

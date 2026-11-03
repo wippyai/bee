@@ -72,3 +72,9 @@ entries:
   meta:
     server: bee:gateway_listener
   prefix: /
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: namespace

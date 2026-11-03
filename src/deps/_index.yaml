@@ -28,3 +28,9 @@ entries:
     value: bee.harness.host:environment
   - name: entered_values
     value: bee.credentials.env:entered_values
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

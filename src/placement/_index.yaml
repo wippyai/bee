@@ -137,3 +137,9 @@ entries:
     - {format: application/schema+json, definition: {"type":"object","properties":{"attempt_id":{"type":"string"},"working_directory":{"type":"string"},"write_roots":{"type":"array"},"options":{"type":"object"},"state":{"type":"object"}},"additionalProperties":true,"description":"Run cleanup after the child ends, using state recorded from setup"}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

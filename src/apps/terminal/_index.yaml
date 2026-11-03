@@ -68,3 +68,9 @@ entries:
   variable: LANG
   default: C.UTF-8
   readonly: true
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

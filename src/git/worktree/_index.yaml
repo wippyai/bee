@@ -1,3 +1,9 @@
 version: '1.0'
 namespace: bee.git.worktree
-entries: []
+entries:
+- name: kernel
+  kind: registry.entry
+  meta:
+    type: bee.kernel
+  data:
+    scope: tree

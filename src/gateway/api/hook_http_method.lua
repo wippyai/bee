@@ -25,11 +25,12 @@ local function command_of(request: http.Request): (Command?, string?)
 end
 -- command_payload reads a hook command's stdin: the driver's declared reader
 -- maps it, or it is the payload itself, whose own event agrees with the
--- command's. A nil payload with no error is an invocation that holds no work.
-local function command_payload(command: Command, raw: string): (Object?, string?)
+-- command's. The reader reads files of the binding's attempt only. A nil
+-- payload with no error is an invocation that holds no work.
+local function command_payload(command: Command, raw: string, attempt_id: string): (Object?, string?)
     local reader = command.driver and capabilities.declaration(command.driver).reader or nil
     if reader then
-        local reply, call_error = funcs.call(reader, {event = command.event, body = raw})
+        local reply, call_error = funcs.call(reader, {event = command.event, body = raw, attempt_id = attempt_id})
         local read = bounds.object(reply)
         if call_error or not read then return nil, "hook input reader " .. reader .. " failed: " .. tostring(call_error) end
         if read.skip == true then return nil, nil end
@@ -81,7 +82,7 @@ local function submit(): nil
     local payload: Object? = nil
     if command then
         local read_error: string? = nil
-        payload, read_error = command_payload(command, raw)
+        payload, read_error = command_payload(command, raw, binding.attempt_id)
         if read_error then refuse(response, http.STATUS.BAD_REQUEST, read_error); return nil end
         if not payload then response:set_status(http.STATUS.OK); return nil end
     else

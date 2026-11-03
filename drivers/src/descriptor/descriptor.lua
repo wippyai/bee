@@ -115,6 +115,9 @@ type Descriptor = {
     -- writable_roots: how the CLI admits extra writable roots, for profiles
     -- that opt into Git metadata roots.
     writable_roots: writable_roots.Declaration?,
+    -- hook_files: directories under the CLI's HOME whose files a host hook
+    -- reader may read, such as the conversation transcripts a hook names.
+    hook_files: {string},
     subscription_variables: {string},
 }
 
@@ -478,7 +481,7 @@ end
 function M.decode(value: unknown): (Descriptor?, string?)
     local item, object_error = object(value, "CLI descriptor")
     if not item then return nil, object_error end
-    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities", "endpoints", "subscription_variables", "writable_roots"})
+    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities", "endpoints", "subscription_variables", "writable_roots", "hook_files"})
     if extra then return nil, "CLI descriptor: " .. extra end
     if item.schema_revision ~= M.SCHEMA then return nil, "CLI descriptor schema_revision is unsupported" end
     local provider, executable, configure = bounds.id(item.provider), bounds.id(item.executable), bounds.id(item.configure)
@@ -918,6 +921,16 @@ function M.decode(value: unknown): (Descriptor?, string?)
             subscription_variables[#subscription_variables + 1] = name
         end
     end
+    local hook_files: {string} = {}
+    if item.hook_files ~= nil then
+        local rows = bounds.array(item.hook_files, 8)
+        if not rows then return nil, "CLI descriptor.hook_files must list at most eight directories" end
+        for _, raw in ipairs(rows) do
+            local directory = bounds.line(raw, 256)
+            if not directory or not safe_relative(directory) or directory:sub(-1) == "/" or directory:find("//", 1, true) then return nil, "CLI descriptor.hook_files names a directory outside HOME" end
+            hook_files[#hook_files + 1] = directory
+        end
+    end
     local roots: writable_roots.Declaration? = nil
     if item.writable_roots ~= nil then
         local decoded_roots, roots_error = writable_roots.decode(item.writable_roots)
@@ -927,7 +940,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
     return {schema_revision = M.SCHEMA, provider = provider, executable = executable, version_probe = probe,
         login_evidence = login, platform = platform, codec = codec, json_paths = paths, argv_templates = templates,
         options = options, flags = flags, provider_home = home, configure = configure, capabilities = declared,
-        endpoints = mappings, subscription_variables = subscription_variables, writable_roots = roots}, nil
+        endpoints = mappings, subscription_variables = subscription_variables, writable_roots = roots, hook_files = hook_files}, nil
 end
 
 function M.permission_answer(item: Descriptor, context: string): PermissionAnswer

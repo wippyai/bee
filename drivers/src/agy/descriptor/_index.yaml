@@ -33,6 +33,7 @@ entries:
       - arm64
       - aarch64
     codec: agy-stream-json
+    hook_files: [.gemini/antigravity-cli/brain]
     writable_roots:
       when_argv:
       - [--sandbox]

@@ -484,6 +484,14 @@ function M.project_attempt_login(home_path: string, value: unknown, opaque: stri
     end
     return target, nil
 end
+-- private_volume is the placement root that holds every isolated home.
+function M.private_volume(): (fs.FS?, string?)
+    local vol, vol_error = volume()
+    if not vol then return nil, vol_error end
+    local privacy_error = private_root(vol)
+    if privacy_error then return nil, privacy_error end
+    return vol, nil
+end
 function M.os_path(path: string): (string?, string?)
     local root, root_error = resources.root()
     if not root then return nil, root_error end

@@ -157,3 +157,17 @@ entries:
   imports:
     types: bee.placement:types
     materialization: bee.placement.native.service:materialization
+- name: hook_file
+  kind: function.lua
+  meta:
+    comment: Reads one file a native attempt's CLI wrote under the hook_files directories its descriptor declares in the attempt's own HOME, for a host hook reader
+  source: file://hook_file_method.lua
+  method: handle
+  imports:
+    hook_files: bee.placement.native.service:hook_files
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.placement.native.security:hook_file_policy

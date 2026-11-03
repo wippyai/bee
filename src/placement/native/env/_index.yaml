@@ -141,3 +141,10 @@ entries:
     comment: The host's workdir preparers; the git worktree preparer sets up dedicated worktrees
   data:
     preparers: [bee.git.worktree.binding:binding]
+- name: machine_home_files
+  kind: fs.directory
+  meta:
+    comment: The person's HOME, read-only, for host hook readers of a CLI that runs with the machine HOME; links stay inside it
+  directory: ${env:bee.env:machine_home}
+  auto_init: false
+  readonly: true

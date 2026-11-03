@@ -1,20 +1,13 @@
 version: '1.0'
 namespace: bee.driver.agy.hooks
 entries:
-- name: host_files
-  kind: fs.directory
-  meta:
-    comment: The host filesystem, read-only, where an Agy conversation's transcript lives under the agent's home
-  directory: /
-  auto_init: false
-  readonly: true
 - name: input
   kind: function.lua
   meta:
-    comment: Reads an Agy hook's stdin as the Bee hook payload, taking a turn's prompt and answer from the conversation transcript
+    comment: Reads an Agy hook's stdin as the Bee hook payload, taking a turn's prompt and answer from the conversation transcript the session's placement reads
   source: file://input.lua
   method: read
-  modules: [fs, json]
+  modules: [funcs, json]
   imports:
     bounds: bee.drivers.values:bounds
   security:
@@ -22,6 +15,6 @@ entries:
 - name: transcript_read
   kind: security.policy
   policy:
-    actions: [fs.get]
-    resources: [bee.driver.agy.hooks:host_files]
+    actions: [funcs.call]
+    resources: [bee.placement.native.binding:hook_file]
     effect: allow

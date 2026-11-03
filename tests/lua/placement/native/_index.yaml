@@ -1114,3 +1114,38 @@ entries:
     actions: [db.get]
     resources: [bee.tests.placement.native:writable_roots_migration_db]
     effect: allow
+- name: agy_hook_input_test
+  kind: function.lua
+  source: file://agy_hook_input_test.lua
+  method: run
+  meta:
+    type: test
+    suite: bee
+    timeout: 180s
+  modules: [fs, funcs, json, registry, hash]
+  security:
+    policies:
+    - bee.tests.placement.native:agy_hook_reader_policy
+    - bee.tests.placement.native:apply_test_policy
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_store_policy
+    - bee.credentials.security:credential_store_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    store: bee.placement.native.persist:store
+    homes: bee.placement.native.service:homes
+    native_fixture: bee.tests.placement.native:native_fixture
+    request_codec: bee.placement:request
+    placement_types: bee.placement:types
+- name: agy_hook_reader_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.driver.agy.hooks:input]
+    effect: allow

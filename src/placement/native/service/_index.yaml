@@ -378,3 +378,12 @@ entries:
     placement_profiles: bee.placement.profiles:profiles
     identity: bee.security.identity:identity
     configuration_types: bee.drivers:configuration_types
+- name: hook_files
+  kind: library.lua
+  source: file://hook_files.lua
+  modules: [fs, env, registry, funcs]
+  imports:
+    bounds: bee.drivers.values:bounds
+    store: bee.placement.native.persist:store
+    homes: bee.placement.native.service:homes
+    resolver: bee.drivers.binding:resolver

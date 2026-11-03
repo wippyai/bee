@@ -6,16 +6,44 @@ local interaction = require("interaction")
 local bounds = require("bounds")
 local appearance = require("appearance")
 local M = {}
+-- The registry identities of the application's installed grants: file
+-- volumes by approved subpath, databases by name and command executors by
+-- command, then folder.
+type Resources = {volumes: {[string]: string}, databases: {[string]: string}, executors: {[string]: {[string]: string}}}
 type Launch = {version: integer, broker_pid: string, workspace_pid: string, workspace_id: string, instance_id: string,
     view_id: string, definition_id: string, thread_id: string?, execution_generation: integer,
     definition_revision: string, registry_revision: string, execution_id: string?, launch_token: string, resume_schema: string, resume_state: string, arguments: {string},
-    appearance: appearance.Preferences}
+    appearance: appearance.Preferences, resources: Resources}
 local function field(value: unknown, size: integer): string?
     if type(value) ~= "string" or value == "" or #value > size or value:find("%c") then return nil end
     return value
 end
 local function workspace_identity(value: unknown): string?
     return bounds.id(value)
+end
+local function identities(raw: unknown): {[string]: string}?
+    if raw == nil then return {} end
+    if type(raw) ~= "table" then return nil end
+    local result: {[string]: string} = {}
+    for key, value in pairs(raw) do
+        local id = bounds.id(value)
+        if type(key) ~= "string" or key == "" or #key > 160 or not id then return nil end
+        result[key] = id
+    end
+    return result
+end
+local function resources(raw: unknown): Resources?
+    if raw ~= nil and type(raw) ~= "table" then return nil end
+    local given: {[string]: unknown} = type(raw) == "table" and raw or {}
+    local volumes, databases = identities(given.volumes), identities(given.databases)
+    if not volumes or not databases or (given.executors ~= nil and type(given.executors) ~= "table") then return nil end
+    local executors: {[string]: {[string]: string}} = {}
+    for command, folders in pairs(type(given.executors) == "table" and given.executors or {}) do
+        local decoded = identities(folders)
+        if type(command) ~= "string" or command == "" or #command > 160 or not decoded then return nil end
+        executors[command] = decoded
+    end
+    return {volumes = volumes, databases = databases, executors = executors}
 end
 function M.launch(value: unknown): Launch?
     if type(value) ~= "table" or value.version ~= 1 then return nil end
@@ -37,11 +65,12 @@ function M.launch(value: unknown): Launch?
     local state = type(value.resume_state) == "string" and value.resume_state or ""
     if #schema > 80 or #state > 65536 then return nil end
     local args = arguments.decode(value.arguments)
-    if not args then return nil end
+    local granted = resources(value.resources)
+    if not args or not granted then return nil end
     return {version = 1, broker_pid = broker, workspace_pid = workspace, workspace_id = workspace_id, instance_id = instance,
         view_id = view, definition_id = definition, thread_id = thread_id, execution_generation = math.floor(generation),
         definition_revision = revision, registry_revision = registry_revision, execution_id = execution_id, launch_token = token, resume_schema = schema, resume_state = state, arguments = args,
-        appearance = appearance.chosen(value)}
+        appearance = appearance.chosen(value), resources = granted}
 end
 -- A logical view reference carries no PID, mount, token or permission.
 type ViewReference = {workspace_id: string, instance_id: string, view_id: string}

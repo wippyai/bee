@@ -129,8 +129,8 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
         and (grant.operation == "files.read" or grant.operation == "files.write")
         and grant.resource == "workspace" and type(scope.subpath) == "string" then
         local writable = grant.capability == "workspace.files.write"
-        local volume, volume_error = files.volume(owner, folder, scope.subpath, writable)
-        local generated, policy_error = volume and files.file_policy(owner, folder, scope.subpath, writable, id) or nil
+        local volume, volume_error = files.volume(app, folder, scope.subpath, writable)
+        local generated, policy_error = volume and files.file_policy(app, folder, scope.subpath, writable, id) or nil
         if not volume or not generated then
             return nil, volume_error or policy_error or "workspace file grant is not installable"
         end
@@ -138,9 +138,9 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
     end
     if grant.capability == "workspace.files.watch" and grant.operation == "files.watch"
         and grant.resource == "workspace" and type(scope.subpath) == "string" then
-        local volume, volume_error = files.volume(owner, folder, scope.subpath, false)
-        local watched, watched_error = files.watch_volume(owner, folder, scope.subpath)
-        local generated, policy_error = files.watch_policy(owner, folder, scope.subpath, id)
+        local volume, volume_error = files.volume(app, folder, scope.subpath, false)
+        local watched, watched_error = files.watch_volume(app, owner, folder, scope.subpath)
+        local generated, policy_error = files.watch_policy(app, folder, scope.subpath, id)
         if not volume or not watched or not generated then
             return nil, volume_error or watched_error or policy_error or "workspace watch grant is not installable"
         end
@@ -300,6 +300,11 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
             -- volume serves the read-only grants on that folder too.
             local volume_id = (volume).id
             local index = volume_ids[volume_id]
+            local directory = (bounds.object(volume.data) or {}).directory
+            if index and (bounds.object(volumes[index].data) or {}).directory ~= directory then
+                return nil, "application " .. app .. " requests two folders named " .. tostring(volume_id)
+                    .. "; a folder's name joins its subpath with dots, so list subpaths whose names differ"
+            end
             if not index then
                 volumes[#volumes + 1] = volume
                 volume_ids[volume_id] = #volumes
@@ -408,7 +413,9 @@ function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
     for _, raw_volume in ipairs(volumes) do
         local volume = bounds.object(raw_volume)
         local id = volume and bounds.text(volume.id, 160) or nil
-        if not volume or not id or id:sub(1, #files.VOLUME_PREFIX) ~= files.VOLUME_PREFIX
+        local folder_namespace = id and id:match("^([^:]+):") or nil
+        if not volume or not id or (id:sub(1, #files.VOLUME_PREFIX) ~= files.VOLUME_PREFIX
+                and folder_namespace ~= app:match("^([^:]+):"))
             or volume.kind ~= "fs.directory" then
             return nil, "installed capability volume is malformed"
         end

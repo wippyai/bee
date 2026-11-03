@@ -149,6 +149,13 @@ function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requested: {
         end
         local proposed, proposed_error = capability_grants.propose(model_vocabulary, owner, app_id, requested, nil, folder)
         if not proposed then return nil, proposed_error end
+        for _, entry in ipairs(incoming) do
+            for _, volume in ipairs(proposed.volumes) do
+                if entry.id == volume.id then
+                    return nil, tostring(entry.id) .. " is the folder a file capability approves; rename that entry", true
+                end
+            end
+        end
         capability_proposal = proposed
         local record_id = capability_grants.record_id(owner)
         local prior = record_id and current_raw[record_id] or nil

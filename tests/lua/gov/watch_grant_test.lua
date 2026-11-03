@@ -15,16 +15,18 @@ local WORKSPACE = string.rep("f", 32)
 local NAME = "watchgrant"
 local APP = "app." .. NAME .. ":app"
 local OWNER = "bee.gov.apps:" .. WORKSPACE .. "." .. NAME
+local OTHER_APP = "app.othergrant:app"
+local OTHER_OWNER = "bee.gov.apps:" .. WORKSPACE .. ".othergrant"
 local PROBE = "bee.tests.gov:watch_grant_probe"
 local CALL_POLICY = "bee.tests.gov:watch_grant_call_policy"
 local FOLDER = {root_ref = "bee.env:workspace_root", directory = ".", base = "project", subpath = ""}
 local SUBPATH = "lua/gov/watch_grant_folder"
 type Object = {[string]: unknown}
 
-local function install(): (Object, {string})
+local function install(app: string, owner: string): (Object, {string})
     local vocabulary = assert(model.decode(assert(registry.get("bee.capability:catalog"))))
-    local proposal = assert(grants.propose(vocabulary, OWNER, APP, {
-        {application = APP, package = "test", capability = "workspace.files.watch", parameters = {subpath = SUBPATH},
+    local proposal = assert(grants.propose(vocabulary, owner, app, {
+        {application = app, package = "test", capability = "workspace.files.watch", parameters = {subpath = SUBPATH},
             template_revision = 1, catalog_revision = model.revisions(vocabulary, "workspace.files.watch"),
             reason = "watch the folder"}}, nil, FOLDER))
     local policy = assert(bounds.object(proposal.policies[1]))
@@ -51,19 +53,25 @@ local function remove(created: {string})
     assert(changes:apply())
 end
 
+local function probe(policy: Object, folder: string, source: string): Object
+    local actor = security.new_actor("bee.application:" .. WORKSPACE .. ":instance-1",
+        {workspace_id = WORKSPACE, definition_id = APP, definition_revision = "1", execution_generation = 1})
+    local scope = app_scope.boundary({assert(bounds.id(policy.id)), CALL_POLICY})
+    local raw, err = funcs.new():with_actor(actor):with_scope(scope):call(PROBE, {folder = folder, source = source})
+    if err then error(tostring(err)) end
+    return assert(bounds.object(raw))
+end
+
 local function define_tests()
     test.describe("approved watch grant", function()
-        test.it("reads and watches the folder through one name and never writes, creates or removes there", function()
-            local policy, created = install()
-            local folder = assert(files.volume_id(OWNER, FOLDER, SUBPATH))
+        test.it("reads and watches its own folder by its namespaced name and never writes, creates or removes there", function()
+            local policy, created = install(APP, OWNER)
+            local folder = assert(files.folder_id(APP, SUBPATH))
             local source = assert(files.watch_volume_id(OWNER, FOLDER, SUBPATH))
-            local actor = security.new_actor("bee.application:" .. WORKSPACE .. ":instance-1",
-                {workspace_id = WORKSPACE, definition_id = APP, definition_revision = "1", execution_generation = 1})
-            local scope = app_scope.boundary({assert(bounds.id(policy.id)), CALL_POLICY})
-            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call(PROBE, {folder = folder, source = source})
+            local ok, result = pcall(probe, policy, folder, source)
             remove(created)
-            test.is_nil(err)
-            local result = assert(bounds.object(raw))
+            assert(ok, tostring(result))
+            test.eq(folder, "app.watchgrant:lua.gov.watch_grant_folder")
             test.eq(result.read, "A watch grant reads this file and can never change it.\n")
             test.is_true(result.watch_folder == true)
             test.is_false(result.writefile == true)
@@ -72,6 +80,19 @@ local function define_tests()
             test.is_false(result.remove == true)
             test.is_false(result.source_get == true)
             test.is_false(result.watch_source == true)
+        end)
+        test.it("reaches no other application's folder", function()
+            local policy, created = install(APP, OWNER)
+            local other_policy, other_created = install(OTHER_APP, OTHER_OWNER)
+            local ok, result = pcall(probe, policy, assert(files.folder_id(OTHER_APP, SUBPATH)),
+                assert(files.watch_volume_id(OTHER_OWNER, FOLDER, SUBPATH)))
+            remove(other_created)
+            remove(created)
+            assert(ok, tostring(result))
+            test.not_nil(other_policy)
+            test.is_nil(result.read)
+            test.is_false(result.watch_folder == true)
+            test.is_false(result.source_get == true)
         end)
     end)
 end

@@ -4,7 +4,6 @@ local principals = require("principals")
 local bounds = require("bounds")
 local capability_model = require("capability_model")
 local grants = require("capability_grants")
-local files = require("capability_files")
 local registry = require("registry")
 local hash = require("hash")
 
@@ -180,7 +179,7 @@ local function define_tests()
             installed_entries[proposed.volumes[1].id] = nil
             test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
         end)
-        test.it("gives a watched folder one read-only name the application both reads and watches", function()
+        test.it("names a watched folder in the application's namespace, read-only, with a watch source it cannot acquire", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("workspace.files.watch", {subpath = "docs"})}, nil, FOLDER))
             test.eq(#proposed.capabilities, 1)
@@ -193,24 +192,18 @@ local function define_tests()
                 test.is_false(data.auto_init)
                 if data.readonly then read = volume else source = volume end
             end
-            assert(read and source and read.id ~= source.id, "one read-only folder and one host-backed watch source")
-            test.eq((assert(bounds.object(source.meta))).watch_for, read.id)
-            test.is_nil((assert(bounds.object(read.meta))).watch_for)
-            test.eq(read.id, assert(files.volume_id(OWNER, FOLDER, "docs")))
+            assert(read and source, "one read-only folder and one host-backed watch source")
+            test.eq(read.id, "app.notes:docs")
+            test.eq((assert(bounds.object(source.meta))).watch_for, "app.notes:docs")
             local policy = assert(bounds.object(proposed.policies[1]))
-            test.eq(policy.kind, "security.policy.expr")
+            test.eq(policy.kind, "security.policy")
             local body = assert(bounds.object((assert(bounds.object(policy.data))).policy))
-            local actions = principals.strings(body.actions)
-            table.sort(actions)
-            test.eq(table.concat(actions, ","), "fs.get,funcs.call,ioevents.watch")
-            local expression = tostring(body.expression)
-            test.contains(expression, '(action == "fs.get" && resource == "' .. tostring(read.id) .. '")')
-            test.contains(expression, '(action == "ioevents.watch" && resource == "' .. tostring(read.id) .. '")')
-            test.is_false(expression:find(tostring(source.id), 1, true) ~= nil)
-            test.is_true(grants.expression("workspace.files.watch"))
+            test.eq(table.concat(principals.strings(body.actions), ","), "fs.get,ioevents.watch")
+            test.eq(table.concat(principals.strings(body.resources), ","), "app.notes:docs")
             test.is_true(capability_model.modules(vocabulary(), proposed.capabilities).ioevents)
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-watch", 1))
             test.is_true(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()) ~= nil)
+            test.is_nil(grants.decode(record, OWNER, "workspace-1", "app.other:app", vocabulary()))
         end)
         test.it("keeps the watch source of a folder the application both reads and watches", function()
             local watch = request("workspace.files.watch", {subpath = "docs"})
@@ -220,12 +213,16 @@ local function define_tests()
                 test.eq(#proposed.volumes, 2)
                 local sources = 0
                 for _, volume in ipairs(proposed.volumes) do
-                    if (assert(bounds.object(volume.meta))).watch_for == assert(files.volume_id(OWNER, FOLDER, "docs")) then
-                        sources = sources + 1
-                    end
+                    if (assert(bounds.object(volume.meta))).watch_for == "app.notes:docs" then sources = sources + 1 end
                 end
                 test.eq(sources, 1)
             end
+        end)
+        test.it("refuses two folders whose names collide", function()
+            local proposed, err = grants.propose(vocabulary(), OWNER, APP, {request("workspace.files.read", {subpath = "a.b"}),
+                request("workspace.files.read", {subpath = "a/b"})}, nil, FOLDER)
+            test.is_nil(proposed)
+            test.contains(tostring(err), "two folders named app.notes:a.b")
         end)
         test.it("keeps one writable volume for a folder the application both writes and watches", function()
             local watch = request("workspace.files.watch", {subpath = "docs"})

@@ -94,7 +94,7 @@ local function define_tests()
                 data = {groups = {"bee.security.hive:hive_exposure_scope"},
                     policy = {actions = {"hive.expose.open"}, resources = {"app.notes:run"}, effect = "allow"}}}},
                 capabilities = {{capability = "hive.expose"}},
-                record = {id = "bee.gov.grants:record." .. string.rep("b", 64), kind = "registry.entry", data = {}}}
+                record = {id = "bee.gov.grants:record." .. string.rep("b", 64), kind = "registry.entry", data = {application = "app.notes:app"}}}
             assert(materializer.reconcile_composed_with(api(state), is_conflict, "bee.gov:overlay", portable, nil, generated))
             test.is_nil((assert(bounds.object(state.entries["app.notes:app"].data))).security)
             test.not_nil(state.entries[policy_id])
@@ -169,7 +169,7 @@ local function define_tests()
                 data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.binding:get"}, effect = "allow"}}}},
                 capabilities = {{capability = "threads.read"}},
                 record = {id = "bee.gov.grants:record." .. string.rep("b", 64),
-                    kind = "registry.entry", data = {digest = string.rep("c", 64)}}}
+                    kind = "registry.entry", data = {digest = string.rep("c", 64), application = "app.notes:app"}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, generated))
             test.eq(applied.entries, 1)
@@ -200,7 +200,7 @@ local function define_tests()
                 databases = {{id = database_id, kind = "db.sql.sqlite",
                     data = {file = "${env:bee.capability:app_database_root}/" .. string.rep("d", 64) .. ".db"}}},
                 record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
-                    kind = "registry.entry", data = {digest = string.rep("f", 64)}}}
+                    kind = "registry.entry", data = {digest = string.rep("f", 64), application = "app.notes:app"}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, generated))
             test.eq(applied.overlay_entries, 5)
@@ -218,6 +218,33 @@ local function define_tests()
             test.is_nil(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, dangling))
         end)
+        test.it("installs a folder named in the application's namespace and refuses a collision or another namespace", function()
+            local policy_id = "bee.gov.grants:policy." .. string.rep("a", 64)
+            local record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
+                kind = "registry.entry", data = {digest = string.rep("f", 64), application = "app.notes:app"}}
+            local function generated(folder_id: string): {[string]: unknown}
+                return {policies = {{id = policy_id, kind = "security.policy",
+                    data = {policy = {actions = {"fs.get", "ioevents.watch"}, resources = {folder_id}, effect = "allow"}}}},
+                    capabilities = {{capability = "workspace.files.watch"}},
+                    volumes = {{id = folder_id, kind = "fs.directory", data = {directory = "docs",
+                        base = "project", auto_init = false, readonly = true, mode = "0500"}}},
+                    record = record}
+            end
+            local portable = {{id = "app.notes:app", kind = "process.lua",
+                meta = {type = "bee.application"}, data = {source = "return true"}}}
+            local state: State = {entries = {}, generation = 1, conflicts = 0}
+            assert(materializer.reconcile_composed_with(api(state), is_conflict,
+                "bee.gov:overlay", portable, nil, generated("app.notes:docs")))
+            test.not_nil(state.entries["app.notes:docs"])
+            local other: State = {entries = {}, generation = 1, conflicts = 0}
+            test.is_nil(materializer.reconcile_composed_with(api(other), is_conflict,
+                "bee.gov:overlay", portable, nil, generated("app.other:docs")))
+            local declared = {portable[1], {id = "app.notes:docs", kind = "library.lua", data = {source = "return {}"}}}
+            local collided: State = {entries = {}, generation = 1, conflicts = 0}
+            local _, collision = materializer.reconcile_composed_with(api(collided), is_conflict,
+                "bee.gov:overlay", declared, nil, generated("app.notes:docs"))
+            test.contains(tostring(collision), "app.notes:docs")
+        end)
         test.it("installs contract and HTTP gateway grants and refuses direct expressions", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local call_id = "bee.gov.grants:policy." .. string.rep("a", 64)
@@ -234,7 +261,7 @@ local function define_tests()
                 capabilities = {{capability = "contract.call"},
                     {capability = "http.api"}},
                 record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
-                    kind = "registry.entry", data = {digest = string.rep("f", 64)}}}
+                    kind = "registry.entry", data = {digest = string.rep("f", 64), application = "app.notes:app"}}}
             local applied = assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, generated))
             test.eq(applied.overlay_entries, 4)
@@ -269,7 +296,7 @@ local function define_tests()
                 data = {policy = {actions = {"bee.harness.launch"}, resources = "*", effect = "allow",
                     expression = 'action == "bee.harness.launch" && resource in ["acme:research"]'}}}
             local record = {id = "bee.gov.grants:record." .. string.rep("e", 64),
-                kind = "registry.entry", data = {digest = string.rep("f", 64)}}
+                kind = "registry.entry", data = {digest = string.rep("f", 64), application = "app.notes:app"}}
             local capabilities = {{capability = "process.exec"},
                 {capability = "agents.launch"}}
             local generated = {policies = {exec_policy(executor_id), agents_policy}, capabilities = capabilities,

@@ -114,18 +114,19 @@ function M.rooted(requests: {unknown}): boolean
     return false
 end
 
-function M.volume_id(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (string?, string?)
-    if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
-        return nil, "file grant owner is invalid"
-    end
-    local root, root_error = folder(folder_raw)
-    if not root then return nil, root_error end
+-- The registry ID of an approved folder: an fs.directory entry in the
+-- application's own namespace, named by the subpath with its segments joined
+-- by dots, so docs/notes of app.notes:app is app.notes:docs.notes. The
+-- application reads it with fs.get and watches it with ioevents.watch by that
+-- ID. One overlay owner holds an application namespace on a node, so the ID
+-- names one workspace's folder.
+function M.folder_id(app_raw: unknown, subpath_raw: unknown): (string?, string?)
+    local namespace = type(app_raw) == "string" and app_raw:match("^([a-z][a-z0-9_.]*):[A-Za-z0-9_.-]+$") or nil
+    if not namespace or #app_raw > 160 then return nil, "file grant application is invalid" end
     local subpath, subpath_error = M.verify_subpath(subpath_raw)
     if not subpath then return nil, subpath_error end
-    local relative = root.subpath == "" and subpath or root.subpath .. "/" .. subpath
-    local suffix, suffix_error = hex(owner_raw .. "\n" .. root.root_ref .. "\n" .. relative)
-    if not suffix then return nil, suffix_error end
-    return M.VOLUME_PREFIX .. suffix, nil
+    local name = subpath:gsub("/", ".")
+    return namespace .. ":" .. name, nil
 end
 
 -- The host-created directory at the verified subroot of the workspace folder.
@@ -138,11 +139,12 @@ type Database = {id: string, kind: "db.sql.sqlite", meta: {comment: string}, dat
 type Policy = {id: string, kind: "security.policy", meta: {comment: string},
     data: {policy: {actions: {string}, resources: {string}, effect: "allow"}}}
 
-function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
+function M.volume(app_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
     writable_raw: unknown): (Volume?, string?)
-    local id, id_error = M.volume_id(owner_raw, folder_raw, subpath_raw)
+    local id, id_error = M.folder_id(app_raw, subpath_raw)
     if not id then return nil, id_error end
-    local root = assert(folder(folder_raw))
+    local root, root_error = folder(folder_raw)
+    if not root then return nil, root_error end
     local subpath = assert(M.verify_subpath(subpath_raw))
     if writable_raw ~= nil and type(writable_raw) ~= "boolean" then
         return nil, "file grant mode is invalid"
@@ -150,28 +152,35 @@ function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
     local mode: "0700" | "0500" = writable_raw == true and "0700" or "0500"
     local config: VolumeConfig = {directory = located(root, subpath), base = root.base,
         auto_init = writable_raw == true, readonly = writable_raw ~= true, mode = mode}
-    return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace file grant volume"},
+    return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace file grant folder"},
         data = config}, nil
 end
 
 -- The host-backed directory behind a watched folder. Native watches need the
--- host directory, which the read-only volume withholds; this entry names the
+-- host directory, which the read-only folder withholds; this entry names the
 -- folder it serves in meta.watch_for, and ioevents resolves a watch on the
 -- folder through it. No grant lets the application acquire it, so it stays
 -- unreadable and unwritable through fs.
 function M.watch_volume_id(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (string?, string?)
-    local read_id, id_error = M.volume_id(owner_raw, folder_raw, subpath_raw)
-    if not read_id then return nil, id_error end
-    local suffix, suffix_error = hex("watch\n" .. read_id)
+    if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
+        return nil, "file grant owner is invalid"
+    end
+    local root, root_error = folder(folder_raw)
+    if not root then return nil, root_error end
+    local subpath, subpath_error = M.verify_subpath(subpath_raw)
+    if not subpath then return nil, subpath_error end
+    local relative = root.subpath == "" and subpath or root.subpath .. "/" .. subpath
+    local suffix, suffix_error = hex("watch\n" .. owner_raw .. "\n" .. root.root_ref .. "\n" .. relative)
     if not suffix then return nil, suffix_error end
     return M.VOLUME_PREFIX .. suffix, nil
 end
 
 type WatchVolume = {id: string, kind: "fs.directory", meta: {comment: string, watch_for: string}, data: VolumeConfig}
-function M.watch_volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (WatchVolume?, string?)
+function M.watch_volume(app_raw: unknown, owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown): (WatchVolume?, string?)
+    local folder_id, folder_error = M.folder_id(app_raw, subpath_raw)
+    if not folder_id then return nil, folder_error end
     local id, id_error = M.watch_volume_id(owner_raw, folder_raw, subpath_raw)
     if not id then return nil, id_error end
-    local folder_id = assert(M.volume_id(owner_raw, folder_raw, subpath_raw))
     local root = assert(folder(folder_raw))
     local subpath = assert(M.verify_subpath(subpath_raw))
     return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace watch source", watch_for = folder_id},
@@ -253,24 +262,6 @@ function M.process_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: 
             effect = "allow"}}}, nil
 end
 
--- The application reads and watches the folder through its read-only volume
--- and reads its granted identities; no filesystem operation reaches the watch
--- source behind it.
-function M.watch_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
-    policy_id_raw: unknown): (ExprPolicy?, string?)
-    local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, false)
-    local id = bounds.id(policy_id_raw)
-    if not volume or not id then
-        return nil, volume_error or "watch grant policy identity is invalid"
-    end
-    local expression = '(action == "funcs.call" && resource == "' .. gateway.GRANTED_RESOURCES .. '")'
-        .. ' || (action == "fs.get" && resource == "' .. volume.id .. '")'
-        .. ' || (action == "ioevents.watch" && resource == "' .. volume.id .. '")'
-    return {id = id, kind = "security.policy.expr", meta = {comment = "Host-generated workspace watch grant"},
-        data = {policy = {actions = {"funcs.call", "fs.get", "ioevents.watch"}, resources = "*",
-            expression = expression, effect = "allow"}}}, nil
-end
-
 local DATABASE_FILE_PATTERN ="^" .. (M.DATABASE_ROOT:gsub("%p", "%%%0")) .. "/[0-9a-f]+%.db$"
 
 function M.database_file(file: unknown): boolean
@@ -307,17 +298,28 @@ local function policy(id: string, actions: {string}, resources: {string}, commen
 end
 
 -- Acquisition is the policy boundary; the installed volume's readonly flag
--- enforces the read-only mode below it. The same grant lets the application
--- read its own granted identities from the gateway.
-function M.file_policy(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown, writable_raw: unknown,
+-- enforces the read-only mode below it.
+function M.file_policy(app_raw: unknown, folder_raw: unknown, subpath_raw: unknown, writable_raw: unknown,
     policy_id_raw: unknown): (Policy?, string?)
-    local volume, volume_error = M.volume(owner_raw, folder_raw, subpath_raw, writable_raw)
+    local volume, volume_error = M.volume(app_raw, folder_raw, subpath_raw, writable_raw)
     local id = bounds.id(policy_id_raw)
     if not volume or not id then
         return nil, volume_error or "file grant policy identity is invalid"
     end
-    return policy(id, {"fs.get", "funcs.call"}, {volume.id, gateway.GRANTED_RESOURCES},
-        "Host-generated workspace file grant"), nil
+    return policy(id, {"fs.get"}, {volume.id}, "Host-generated workspace file grant"), nil
+end
+
+-- The application reads the folder through its read-only volume and watches
+-- it through the fs handle fs.get returns; no filesystem operation reaches
+-- the watch source behind it.
+function M.watch_policy(app_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
+    policy_id_raw: unknown): (Policy?, string?)
+    local volume, volume_error = M.volume(app_raw, folder_raw, subpath_raw, false)
+    local id = bounds.id(policy_id_raw)
+    if not volume or not id then
+        return nil, volume_error or "watch grant policy identity is invalid"
+    end
+    return policy(id, {"fs.get", "ioevents.watch"}, {volume.id}, "Host-generated workspace watch grant"), nil
 end
 
 -- The application reaches only its own database through this policy; every

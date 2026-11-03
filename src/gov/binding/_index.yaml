@@ -147,6 +147,7 @@ entries:
     bounds: bee.drivers.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
     capability_access: bee.gov.binding:capability_access
+    capability_files: bee.gov.types:capability_files
     capability_http: bee.gov.binding:capability_http
   security:
     policies:
@@ -542,6 +543,7 @@ entries:
     application_admission: bee.gov.types:governed_application_admission
     capability_grants: bee.gov.types:capability_grants
     capability_files: bee.gov.types:capability_files
+    capability_gateway: bee.gov.types:capability_gateway
     canonical: bee.drivers.values:canonical
     bounds: bee.drivers.values:bounds
 - name: requirement
@@ -625,7 +627,6 @@ entries:
     bounds: bee.drivers.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
     capability_grants: bee.gov.types:capability_grants
-    capability_files: bee.gov.types:capability_files
     capability_model: bee.capability:model
     workspace_applications: bee.gov.types:workspace_applications
 - name: source

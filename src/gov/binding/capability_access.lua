@@ -4,7 +4,6 @@ local security = require("security")
 local gateway = require("capability_gateway")
 local grants = require("capability_grants")
 local capability_model = require("capability_model")
-local files = require("capability_files")
 local bounds = require("bounds")
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
@@ -46,41 +45,6 @@ function M.granted(): (unknown?, Object?, boolean, Reply?)
     if refusal then return nil, nil, false, refusal end
     if not selected then return nil, nil, false, fail("DENIED", "the caller holds no live installed application grants") end
     return caller, selected, true, nil
-end
-
--- The registry identities of a grant record's installed resources: file
--- volumes keyed by approved subpath, databases by name, and command
--- executors by command then folder; empty without a record. An application
--- addresses its grants through them on any node without embedding
--- host-generated identities.
-type Resources = {volumes: {[string]: string}, databases: {[string]: string}, executors: {[string]: {[string]: string}}}
-function M.resources(record: grants.Installed?): (Resources?, string?)
-    local volumes: {[string]: string} = {}
-    local databases: {[string]: string} = {}
-    local executors: {[string]: {[string]: string}} = {}
-    if not record then return {volumes = volumes, databases = databases, executors = executors}, nil end
-    for _, raw_grant in ipairs(record.capabilities) do
-        local grant = bounds.object(raw_grant)
-        local scope = grant and bounds.object(grant.scope) or nil
-        if grant and scope and (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write"
-            or grant.capability == "workspace.files.watch") then
-            local id, id_error = files.volume_id(record.overlay_owner, record.folder, scope.subpath)
-            if not id then return nil, id_error end
-            volumes[tostring(scope.subpath)] = id
-        elseif grant and scope and grant.capability == "app.database" then
-            local id, id_error = files.database_id(record.overlay_owner, scope.name)
-            if not id then return nil, id_error end
-            databases[tostring(scope.name)] = id
-        elseif grant and scope and grant.capability == "process.exec" then
-            local id, id_error = files.executor_id(record.overlay_owner, record.folder, scope.subpath, grant.resource)
-            if not id then return nil, id_error end
-            local command = tostring(grant.resource)
-            local folders = executors[command] or {}
-            folders[tostring(scope.subpath)] = id
-            executors[command] = folders
-        end
-    end
-    return {volumes = volumes, databases = databases, executors = executors}, nil
 end
 
 return M

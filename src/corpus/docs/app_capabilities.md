@@ -80,16 +80,14 @@ Grants:
 
 workspace.files.watch: Watch files under {subpath} for changes, with read-only access to them. Risk class: standard. Template revision: 1.
 
-The app receives the folder as one resource: its process gets the folder's registry ID in `launch.resources.volumes[subpath]` of `bee.app:client` `client.launch` (functions read the same map from `bee.gov.binding:granted_resources`). The app reads it with `fs.get(folder)`, which is read-only, and watches it with `ioevents.watch(folder, path, {recursive = true})`; it cannot write, delete or rename there. `path` is a directory relative to the folder (default `.`); `recursive` follows every directory below it, including new ones, never through symbolic links. Each event has `kind` (`change` or `rescan`), `resource` (the folder), `path` (relative to the folder) and `operation` for a change (`create`, `write`, `rename`, `remove` or `other`). A `rescan` names a directory to list again because notices there may be missing: the first event of every watch, after the operating system's queue overflows, for a directory a recursive watch starts following, and when the app falls 128 events behind (later notices are dropped until it receives that rescan). The channel closes when the watch ends: `watch:close()`, the watched directory removed or renamed, or a native failure; open it again to continue, which starts with a rescan. Failures return `nil, err`, and `err:kind()` is `errors.INVALID` (bad path or option, or a file), `errors.NOT_FOUND`, `errors.PERMISSION_DENIED` (outside the folder or unreadable), `errors.RATE_LIMITED` (32 watches per process, 1024 directories per recursive watch) or `errors.UNAVAILABLE`. For example, with the `fs`, `ioevents`, `channel` and `process` modules and the `client` import:
+The approved folder is an fs.directory entry in the app's own namespace, named by the subpath with its slashes as dots: `docs` of `app.notes:app` is `app.notes:docs`, and `docs/notes` is `app.notes:docs.notes`. The app reads it with `fs.get("app.notes:docs")`, which is read-only, and watches it by passing that filesystem to `ioevents.watch(files, path, {recursive = true})`; it cannot write, delete or rename there, and it reaches no other app's folder. Do not declare an entry with the folder's name. `path` is a directory in the folder (default `.`); `recursive` follows every directory below it, including new ones, never through symbolic links. Each event has `kind` (`change` or `rescan`), `resource` (the folder), `path` (relative to the folder, ready for `files:readdir`) and `operation` for a change (`create`, `write`, `rename`, `remove` or `other`). A `rescan` names a directory to list again because notices there may be missing: the first event of every watch, after the operating system's queue overflows, for a directory a recursive watch starts following, and when the app falls 128 events behind (later notices are dropped until it receives that rescan). The channel closes when the watch ends: `watch:close()`, the watched directory removed or renamed, or a native failure; open it again to continue, which starts with a rescan. Failures return `nil, err`, and `err:kind()` is `errors.INVALID` (not a filesystem from `fs.get`, a bad path or option, or a file), `errors.NOT_FOUND`, `errors.PERMISSION_DENIED` (no watch grant, outside the folder or unreadable), `errors.RATE_LIMITED` (32 watches per process, 1024 directories per recursive watch) or `errors.UNAVAILABLE`. For example, with the `fs`, `ioevents`, `channel` and `process` modules:
 
 ```lua
-local function main(value)
-    local launch = assert(client.launch(value))
-    local folder = launch.resources.volumes["docs"]
-    local files, err = fs.get(folder)
+local function main()
+    local files, err = fs.get("app.notes:docs")
     if not files then return nil, err end
     local watch
-    watch, err = ioevents.watch(folder, ".", {recursive = true})
+    watch, err = ioevents.watch(files, ".", {recursive = true})
     if not watch then return nil, err end
     local inbox = process.inbox()
     while true do
@@ -97,10 +95,10 @@ local function main(value)
         if selected.channel == inbox then
             if selected.value:topic() == "stop" then break end
         elseif not selected.ok then
-            watch, err = ioevents.watch(folder, ".", {recursive = true})
+            watch, err = ioevents.watch(files, ".", {recursive = true})
             if not watch then return nil, err end
         elseif selected.value.kind == "rescan" then
-            local entries, list_err = files:readdir("/" .. selected.value.path)
+            local entries, list_err = files:readdir(selected.value.path)
             if entries then
                 for entry in entries do
                     -- reconcile entry.name under selected.value.path

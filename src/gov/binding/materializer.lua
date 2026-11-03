@@ -9,6 +9,7 @@ local bounds = require("bounds")
 local application_admission = require("application_admission")
 local capability_grants = require("capability_grants")
 local capability_files = require("capability_files")
+local capability_gateway = require("capability_gateway")
 
 local source_check = require("source_check")
 local M = {}
@@ -156,12 +157,21 @@ end
 -- installs and appends them to complete. An expression policy is admitted
 -- only for a policy capability_of names a capability enforced through one.
 type Provisioned = {volumes: unknown?, databases: unknown?, executors: unknown?, policies: unknown}
-local function provision(complete: {Entry}, generated: Provisioned, capability_of: {[string]: unknown}): string?
+local function provision(complete: {Entry}, generated: Provisioned, capability_of: {[string]: unknown},
+    application: string): string?
     local volumes, databases, executors, policies = generated.volumes, generated.databases, generated.executors, generated.policies
     if type(policies) ~= "table" or (volumes ~= nil and type(volumes) ~= "table")
         or (databases ~= nil and type(databases) ~= "table")
         or (executors ~= nil and type(executors) ~= "table") then
         return "generated capability entries are invalid"
+    end
+    -- A folder is named in the application's own namespace; the watch source
+    -- behind a watched folder carries a host-generated grant identity.
+    local namespace = application:match("^([^:]+):") or ""
+    local entry_ids: {[string]: boolean} = {}
+    for _, entry in ipairs(complete) do
+        local id = bounds.id(entry.id)
+        if id then entry_ids[id] = true end
     end
     local volume_ids: {[string]: boolean} = {}
     for _, raw_volume in ipairs((volumes or {})) do
@@ -169,7 +179,12 @@ local function provision(complete: {Entry}, generated: Provisioned, capability_o
         local id = volume and bounds.id(volume.id) or nil
         local config = volume and bounds.object(volume.data) or nil
         local directory = config and config.directory or nil
-        if not volume or not id or not id:match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
+        local folder = id ~= nil and namespace ~= "" and id:sub(1, #namespace + 1) == namespace .. ":"
+            and id:sub(#namespace + 2):match("^[A-Za-z0-9_.-]+$") ~= nil
+        if id and entry_ids[id] then
+            return "the application declares " .. id .. ", the name of an approved folder; rename that entry"
+        end
+        if not volume or not id or not (folder or id:match("^bee%.gov%.grants:volume%.[0-9a-f]+$"))
             or volume.kind ~= "fs.directory" or type(directory) ~= "string"
             or (config.base ~= nil and config.base ~= "project") or type(config.auto_init) ~= "boolean"
             or type(config.readonly) ~= "boolean"
@@ -264,6 +279,24 @@ local function provision(complete: {Entry}, generated: Provisioned, capability_o
                 end
             end
         end
+        -- A file grant reaches only folders this grant installs.
+        local capability = capability_of[id]
+        if type(capability) == "string" and capability:sub(1, 16) == "workspace.files." then
+            local targets: {string} = {}
+            if type(expression) == "string" then
+                for target in expression:gmatch('resource == "([^"]+)"') do targets[#targets + 1] = target end
+            end
+            if type(resources) == "table" then
+                for _, resource in ipairs(resources) do
+                    if type(resource) == "string" then targets[#targets + 1] = resource end
+                end
+            end
+            for _, target in ipairs(targets) do
+                if target ~= capability_gateway.GRANTED_RESOURCES and not volume_ids[target] then
+                    return "generated capability policy references an absent folder"
+                end
+            end
+        end
         complete[#complete + 1] = policy
     end
     return nil
@@ -318,8 +351,11 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             local policy_id = policy and bounds.id(policy.id) or nil
             if policy_id and grant then capability_of[policy_id] = grant.capability end
         end
+        local record_data = bounds.object(record.data)
+        local application = record_data and bounds.id(record_data.application) or nil
+        if not application then return nil, nil, nil, "generated capability entries are invalid" end
         local provision_error = provision(complete, {volumes = volumes, databases = databases,
-            executors = executors, policies = policies}, capability_of)
+            executors = executors, policies = policies}, capability_of, application)
         if provision_error then return nil, nil, nil, provision_error end
         complete[#complete + 1] = record
     end
@@ -401,7 +437,7 @@ local function provided(provisioned_raw: unknown): ({Entry}?, string?)
     end
     local entries: {Entry} = {}
     local provision_error = provision(entries, {databases = provisioned.databases,
-        policies = provisioned.policies or {}}, {})
+        policies = provisioned.policies or {}}, {}, "")
     if provision_error then return nil, provision_error end
     return entries, nil
 end

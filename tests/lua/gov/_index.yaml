@@ -772,7 +772,6 @@ entries:
     test: wippy.test:test
     capability_model: bee.capability:model
     capability_grants: bee.gov.types:capability_grants
-    capability_files: bee.gov.types:capability_files
 - name: capability_files_test
   kind: function.lua
   source: file://capability_files_test.lua

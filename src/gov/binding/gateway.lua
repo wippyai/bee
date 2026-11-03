@@ -10,6 +10,7 @@ local contract = require("contract")
 local bounds = require("bounds")
 local gateway = require("capability_gateway")
 local access = require("capability_access")
+local files = require("capability_files")
 local capability_http = require("capability_http")
 
 type Object = {[string]: unknown}
@@ -86,15 +87,34 @@ local function http_request(request_raw: unknown): Reply
     end)
 end
 
--- The registry identities of the calling application's own installed
--- grants, the same map its process reads as launch.resources from client.launch.
+-- The registry identities of the calling application's own databases and
+-- command executors, keyed by database name, and command then folder, so an
+-- application addresses them on any node without embedding host-generated
+-- identities. Approved folders need no lookup: each is the fs.directory
+-- entry named by its subpath in the application's own namespace.
 local function granted_resources(_request: unknown): Reply
     local _, record, live, refusal = access.granted()
     if refusal then return refusal end
     if not live or not record then return fail("DENIED", "the caller holds no live application grants") end
-    local resources, resources_error = access.resources(record)
-    if not resources then return fail("UNAVAILABLE", tostring(resources_error)) end
-    return succeed(resources)
+    local databases: {[string]: string} = {}
+    local executors: {[string]: {[string]: string}} = {}
+    for _, raw_grant in ipairs((record.capabilities or {})) do
+        local grant = bounds.object(raw_grant)
+        local scope = grant and bounds.object(grant.scope) or nil
+        if grant and scope and grant.capability == "app.database" then
+            local id, id_error = files.database_id(record.overlay_owner, scope.name)
+            if not id then return fail("UNAVAILABLE", tostring(id_error)) end
+            databases[tostring(scope.name)] = id
+        elseif grant and scope and grant.capability == "process.exec" then
+            local id, id_error = files.executor_id(record.overlay_owner, record.folder, scope.subpath, grant.resource)
+            if not id then return fail("UNAVAILABLE", tostring(id_error)) end
+            local command = tostring(grant.resource)
+            local folders = executors[command] or {}
+            folders[tostring(scope.subpath)] = id
+            executors[command] = folders
+        end
+    end
+    return succeed({databases = databases, executors = executors})
 end
 
 return {contract_call = contract_call, http_request = http_request, granted_resources = granted_resources}

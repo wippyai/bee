@@ -508,10 +508,11 @@ end
 function M.check_config(descriptor: descriptors.Descriptor, policy: Object, filename: string, content: string, placement: unknown?, consent_values: Object?): string?
     local format = filename:match("%.(json)$") or filename:match("%.(toml)$")
     if not format then return nil end
-    local document: unknown = nil
-    if format == "json" then document = json.decode(content) else document = toml.decode(content) end
+    local document: unknown = {}
+    if not content:match("^%s*$") then
+        if format == "json" then document = json.decode(content) else document = toml.decode(content) end
+    end
     local root = bounds.object(document)
-    if format == "toml" and content:match("^%s*$") then root = {} end
     if not root then return "Configuration is not an object: " .. filename end
     local compiled, invalid = M.compile(descriptor, policy, nil, consent_values, nil, nil, nil, placement)
     if not compiled then return invalid end

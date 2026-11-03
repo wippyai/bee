@@ -262,6 +262,16 @@ local function define_tests()
             test.is_nil(effective.check_config(cli, {}, file, json.encode({schema_version = 1, provider = "meta"}), placements.NATIVE))
             test.not_nil(effective.check_config(cli, {}, file, json.encode({schema_version = 1, provider = "local"}), placements.NATIVE))
         end)
+        test.it("admits the empty base a person without a configuration file starts from", function()
+            for _, case in ipairs({
+                {ref = "bee.drivers.muse.descriptor:cli", file = ".config/muse/.bee-global-settings.json"},
+                {ref = "bee.drivers.opencode.descriptor:cli", file = ".config/opencode/.bee-global-opencode.json"},
+                {ref = "bee.drivers.codex.descriptor:cli", file = ".codex/.bee-user-config.toml"},
+            }) do
+                local err = effective.check_config(assert(descriptors.load(case.ref)), {}, case.file, "", placements.NATIVE)
+                test.is_nil(err, case.ref .. ": " .. tostring(err))
+            end
+        end)
         test.it("uses installed Claude modes and the full Muse effort set", function()
             local claude = assert(descriptors.load("bee.drivers.claude.descriptor:cli"))
             local fields = assert(bounds.object(claude.options.fields))

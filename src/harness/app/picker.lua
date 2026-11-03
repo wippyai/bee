@@ -529,7 +529,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         else
             local data = input_event.decode(event.value)
             if data then
-                local routed, handled = frame.route(menu, data, spawning ~= nil or editing ~= nil or conversation ~= nil)
+                local routed, handled = frame.route(menu, data, spawning ~= nil or editing ~= nil or renaming ~= nil or conversation ~= nil)
                 if handled then dirty = true end
                 data = routed
             end

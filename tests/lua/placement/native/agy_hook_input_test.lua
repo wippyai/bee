@@ -183,8 +183,8 @@ local function define_tests()
 
         test.it("reads a hook file under a third-party driver's declared directory", function()
             local owner = session("bee.tests.placement.native:third_party_cli")
-            write(owner, ".solo/logs/turn.json", "{}")
-            write(owner, ".solo/private.json", "{}")
+            write(owner, ".outside/logs/turn.json", "{}")
+            write(owner, ".outside/private.json", "{}")
             local reader = assert(funcs.new():with_scope(security.new_scope({})))
             local function hook_file(relative: string): Object
                 local reply, err = reader:call("bee.placement.native.binding:hook_file",
@@ -192,10 +192,10 @@ local function define_tests()
                 if err then error(tostring(err)) end
                 return assert(bounds.object(reply))
             end
-            local declared = hook_file(".solo/logs/turn.json")
+            local declared = hook_file(".outside/logs/turn.json")
             test.is_true(declared.ok == true, tostring(declared.error and bounds.object(declared.error) and (bounds.object(declared.error) or {}).message))
             test.eq((bounds.object(declared.value) or {}).data, "{}")
-            test.is_false(hook_file(".solo/private.json").ok == true)
+            test.is_false(hook_file(".outside/private.json").ok == true)
         end)
 
         test.it("reads a captured resumed turn of Antigravity 1.4.12", function()

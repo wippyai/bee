@@ -1197,10 +1197,10 @@ entries:
     comment: A driver outside the shipped bee.drivers set whose descriptor declares hook files
   data:
     schema_revision: bee.driver.cli-descriptor@4
-    provider: solo
-    executable: solo-agent
+    provider: outside
+    executable: outside-agent
     version_probe: {argv: [--version]}
     configure: plain
     options: {profiles: [window], fields: {}}
     argv_templates: {window: {argv: [], readiness: none}}
-    hook_files: [.solo/logs]
+    hook_files: [.outside/logs]

@@ -12,6 +12,8 @@
 -- by their frame, uses their controls, and opens context menus on a right
 -- click on a window's frame, a tab or the desktop; a right click inside a
 -- window goes to its app, and Shift+Right there opens the window's menu.
+-- A left drag inside a window copies its text, Alt+Q labels the focused
+-- window's tokens to copy and Alt+C opens copy mode over it.
 --
 -- The display follows the node's owner process and closes when it stops. The
 -- shell is upgradable: on new code it hands its desktop and windows to the new
@@ -33,7 +35,7 @@ local dialog = require("dialog")
 local confirmation = require("confirmation")
 local title_editor = require("title_editor")
 local watch = require("watch")
-local selection = require("selection")
+local copy = require("copy")
 local workspace_menu = require("workspace_menu")
 local render = require("render")
 
@@ -115,7 +117,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     -- shows those of the apps on its desktop, one at a time.
     local app_dialogs: {[string]: client.Dialog} = {}
     local APP_DIALOG = "app:"
-    local active_selection: selection.State? = nil
+    local clip = copy.new()
     local workspaces_open: workspace_menu.Menu? = nil
     local capture: layout.Capture? = nil
     local preview: model.Rect? = nil
@@ -231,7 +233,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             views[id] = nil
         end
         updates, contents, sizes, revisions, attaching = {}, {}, {}, {}, {}
-        active_selection = nil
+        copy.cancel(clip)
         capture, preview = nil, nil
     end
 
@@ -416,47 +418,34 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         run(function(): Result return call_job("close", {id = id}) end)
     end
 
-    local function selection_body(state: selection.State): model.Rect?
-        local binding = selection.binding(state)
-        local current = scene()
-        for _, win in ipairs(model.visible(current)) do
-            if win.id == binding.view_id and win.mode ~= "collapsed" then
-                local body = layout.interior(win, layout.rectangle(current, win, nil, nil))
-                local check: selection.Binding = {view_id = win.id, attachment = win.id, mount_generation = 0,
-                    width = body.width, height = body.height}
-                if selection.valid(state, check) then return body end
+    local function now(): integer return math.floor(time.now():unix_nano() / 1000000) end
+
+    -- copied applies a copy outcome: events for the window's app, text for
+    -- the clipboard and the status that tells the person what happened.
+    local function copied(id: string?, outcome: copy.Outcome)
+        local view = id and views[id]
+        if view then for _, item in ipairs(outcome.forward) do view:send(item) end end
+        local value = outcome.copy
+        if value then
+            local done, err = surface:clipboard(value)
+            status, noticed = copy.report(value, done == true, err and tostring(err)), true
+        elseif outcome.status then status = outcome.status end
+    end
+
+    local function begin_copy(mode: string, id: string)
+        local body, content = copy.body(scene(), id), contents[id]
+        if not body or not content then status = "Text selection unavailable: the window shows no text"; return end
+        copied(id, copy.begin(clip, mode, id, body, content.rows))
+    end
+
+    -- drags is whether window id's app declares it takes left drags.
+    local function drags(id: string): boolean
+        for _, instance in ipairs(running) do
+            if instance.id == id then
+                for _, app in ipairs(catalog) do if app.definition_id == instance.app then return app.drags == true end end
             end
         end
-        return nil
-    end
-
-    local function begin_selection(id: string)
-        local current = scene()
-        local chosen: model.Window? = nil
-        for _, win in ipairs(model.visible(current)) do
-            if win.id == id and win.mode ~= "collapsed" then chosen = win end
-        end
-        if not chosen then status = "Text selection unavailable: window is not visible"; return end
-        local content = contents[id]
-        if not content then status = "Text selection unavailable: view has no content"; return end
-        local body = layout.interior(chosen, layout.rectangle(current, chosen, nil, nil))
-        local rows: {string} = {}
-        for y = 1, body.height do rows[y] = tty.text.cut(content.rows[y] or "", 0, body.width) end
-        local captured, capture_error = selection.capture({view_id = id, attachment = id, mount_generation = 0,
-            width = body.width, height = body.height}, rows)
-        if not captured then status = "Text selection unavailable: " .. tostring(capture_error); return end
-        active_selection = captured
-        status = "Select text: drag to select; Ctrl+C copies; Esc cancels"
-    end
-
-    local function copy_selection()
-        local state = active_selection
-        if not state then return end
-        local text, err = selection.text(state)
-        if not text then status = "Nothing copied: " .. tostring(err or "select text first"); return end
-        local copied, copy_error = surface:clipboard(text)
-        active_selection = nil
-        status = copied and "Copied" or ("Copy failed: " .. tostring(copy_error))
+        return false
     end
 
     local function ask(spec: dialog.Spec)
@@ -499,7 +488,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             if instance.id ~= id then kept[#kept + 1] = instance end
         end
         running = kept
-        if active_selection and selection.binding(active_selection).view_id == id then active_selection = nil end
+        copy.forget(clip, id)
         forget(id)
         drop_app_dialog(id)
     end
@@ -557,7 +546,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
                 if app then open_app(app, alert.installed and {} or {"--approval", alert.approval_id}) end
                 if views[alert.id] then focus(alert.id) end
             end
-        elseif action == "select_text" then begin_selection(id)
+        elseif action == "select_text" then begin_copy("cursor", id)
         elseif action == "rename" and win then editor = title_editor.open(win.id, model.display_title(win), win.accent or "")
         elseif action:sub(1, 7) == "accent:" and win then set_scene(model.personalize(current, win.id, win.user_title or "", action:sub(8)))
         elseif action == "quit" then stopped = ""
@@ -631,7 +620,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         for _, instance in ipairs(running) do if instance.review then reviews[instance.id] = instance.review end end
         local drawn = render.draw(current, order(), contents, capture, preview, status, desktop_label(), preferences,
             {reviews = reviews, alert = current_alert(), alert_popup = alert_popup, start = start, catalog = catalog, destinations = destinations(), editor = editor,
-                modal = modal, selection = active_selection, workspaces = workspaces_open})
+                modal = modal, copy = copy.overlay(clip), workspaces = workspaces_open})
         tab_hits = drawn.tabs
         assert(surface:present(drawn.rows, {cursor = drawn.cursor}))
         presented_focus = current.focus
@@ -641,7 +630,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
 
     local function descriptors(apps: {client.App}): {menu.Descriptor}
         local found: {menu.Descriptor} = {}
-        for _, app in ipairs(apps) do found[#found + 1] = {definition_id = app.id, title = app.title, menus = app.menus} end
+        for _, app in ipairs(apps) do found[#found + 1] = {definition_id = app.id, title = app.title, menus = app.menus, drags = app.drags} end
         return found
     end
 
@@ -957,11 +946,8 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
                     if edge ~= "" then capture = {id = win.id, x = x, y = y, bounds = rect, edge = edge} end
                 end
                 if not capture and win.mode ~= "collapsed" and layout.contains(body, x, y) then
-                    local view = views[win.id]
-                    if view then
-                        view:send({type = "mouse", x = x - body.x + 1, y = y - body.y + 1, action = event.action,
-                            button = event.button, ctrl = event.ctrl, alt = event.alt, shift = event.shift})
-                    end
+                    local content = contents[win.id]
+                    if views[win.id] then copied(win.id, copy.pointer(clip, win.id, body, content and content.rows or {}, event, now(), drags(win.id))) end
                 end
                 return
             end
@@ -1042,6 +1028,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             if kind == "f9" and event.alt == true then invoke("minimize"); return end
             if kind == "f11" then invoke("fullscreen"); return end
             if kind == "f12" then invoke("rejoin"); return end
+            if event.alt == true and (event.key == "q" or event.key == "c") then begin_copy(event.key == "q" and "hints" or "cursor", input_focus()); return end
             if kind == "tab" and event.alt == true then
                 local list = order()
                 if #list > 0 then
@@ -1064,7 +1051,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         if event.type == "close" then return true end
         if event.type == "resize" then
             width, height = math.floor(event.width), math.floor(event.height)
-            active_selection = nil
+            copy.cancel(clip)
             capture, preview = nil, nil
             if workspaces_open and not workspace_menu.available(width, height) then workspaces_open = nil end
             return false
@@ -1110,24 +1097,11 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             elseif response.action == "cancel" then editor = nil end
             return false
         end
-        local current_selection = active_selection
-        if current_selection then
-            local body = selection_body(current_selection)
-            if not body then
-                active_selection = nil
-                status = "Text selection unavailable: view changed"
-            elseif event.type == "key" and event.action ~= "release" and (event.key_type == "esc" or event.key_type == "escape") then
-                active_selection = nil
-                status = ""
-            elseif event.type == "key" and event.action ~= "release" and event.ctrl == true and event.key:lower() == "c" then
-                copy_selection()
-            elseif event.type == "mouse" then
-                local x, y = event.x - body.x + 1, event.y - body.y + 1
-                if event.action == "press" and event.button == "left" then active_selection = selection.press(current_selection, x, y)
-                elseif event.action == "motion" then active_selection = selection.motion(current_selection, x, y)
-                elseif event.action == "release" and event.button == "left" then active_selection = selection.release(current_selection, x, y) end
-            end
-            return false
+        if copy.engaged(clip) then
+            local id = copy.view(clip)
+            local outcome = copy.input(clip, event, id and copy.body(scene(), id) or nil, now())
+            copied(id, outcome)
+            if not outcome.pass then return false end
         end
         local current_menu = workspaces_open
         if current_menu then

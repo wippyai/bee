@@ -390,6 +390,57 @@ local function define_tests()
             exits(lifecycle, {pid})
         end)
 
+        display_case("copies a drag inside a window, gives a click to its app and leaves drags to an app that takes them", function(fixture: Fixture)
+            local lifecycle = assert(process.events())
+            local viewport, pid = fixture:start()
+            expect(viewport, "the desktop opens", " BEE ", true)
+            open_probe(viewport)
+            local function row(y: integer): string
+                local snapshot = assert(viewport:snapshot())
+                return tty.text.plain(snapshot.rows[y] or "")
+            end
+            local function pointer(action: string, x: integer, y: integer)
+                assert(viewport:send({type = "mouse", action = action, button = "left", x = x, y = y}))
+            end
+            local x, y = cell(viewport, "label ")
+            local mouse_row = y + 11
+            test.not_nil((row(mouse_row):find("mouse none", 1, true)))
+            pointer("press", x, y); pointer("motion", x + 4, y); pointer("release", x + 4, y)
+            expect(viewport, "the drag copies the window's text", "Copy failed: ", true)
+            test.not_nil((row(mouse_row):find("mouse none", 1, true)))
+            pointer("press", x, y); pointer("release", x, y)
+            expect(viewport, "a click without motion reaches the app", "mouse left", true)
+
+            key(viewport, "q", {alt = true})
+            expect(viewport, "Alt+Q labels the window's tokens", "Quick copy", true)
+            key(viewport, "esc")
+            expect(viewport, "Esc ends quick copy", "Quick copy", false)
+            key(viewport, "c", {alt = true})
+            expect(viewport, "Alt+C opens copy mode", "Copy mode", true)
+            key(viewport, "esc")
+            expect(viewport, "Esc ends copy mode", "Copy mode", false)
+
+            local node = assert(system.node.id())
+            local desktop = ""
+            for _, instance in ipairs(assert(client.state(assert(client.call(node, "list", {})))).running) do
+                if instance.app == "bee.tests.node:probe_app" then desktop = instance.desktop end
+            end
+            assert(client.call(node, "open", {app = "bee.tests.node:probe_drags", desktop = desktop, args = {label = "drags"}}))
+            expect(viewport, "the drag probe opens", "label drags", true)
+            local dx, dy = cell(viewport, "label drags")
+            test.not_nil((row(dy + 11):find("mouse none", 1, true)))
+            pointer("press", dx, dy)
+            local updates = assert(viewport:updates())
+            local deadline = time.after("8s")
+            while not row(dy + 11):find("mouse left", 1, true) do
+                local selected = channel.select({updates:case_receive(), deadline:case_receive()})
+                assert(selected.channel ~= deadline, "an app that takes drags receives the press at once; screen was\n" .. screen(viewport))
+            end
+            pointer("motion", dx + 4, dy); pointer("release", dx + 4, dy)
+            test.is_nil((bar(viewport):find("Cop", 1, true)))
+            exits(lifecycle, {pid})
+        end)
+
         display_case("opens the app a command names full-pane when bee runs with that command", function(fixture: Fixture)
             local lifecycle = assert(process.events())
             local view = fixture:viewport()

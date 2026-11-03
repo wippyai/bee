@@ -27,6 +27,16 @@ entries:
   imports:
     test: wippy.test:test
     hints: bee.shell:hints
+- name: copy_test
+  kind: function.lua
+  source: file://copy_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    copy: bee.shell:copy
+    model: bee.shell:model
 - name: dialog_test
   kind: function.lua
   source: file://dialog_test.lua

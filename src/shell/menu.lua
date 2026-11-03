@@ -3,7 +3,9 @@ local popup = require("popup")
 local model = require("model")
 -- A menu an app is placed in, declared in the registry (bee.menu).
 type Placement = {id: string, title: string, location: "start" | "desktop", order: integer}
-type Descriptor = {definition_id: string, title: string, menus: {Placement}}
+-- drags says the app takes left drags inside its window instead of the
+-- display selecting text there.
+type Descriptor = {definition_id: string, title: string, menus: {Placement}, drags: boolean?}
 -- A desktop a window can move to.
 type Destination = {id: string, title: string}
 type Item = popup.Item

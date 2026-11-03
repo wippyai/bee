@@ -14,7 +14,8 @@ type Instance = {review: Review?, id: string, app: string, title: string, deskto
 type Dialog = {id: string, request_id: string, kind: "confirm" | "text", title: string, message: string, accept: string, initial: string}
 -- A menu places apps: in the Start panel or the desktop's context menu, by order.
 type Menu = {id: string, title: string, location: "start" | "desktop", order: integer}
-type App = {id: string, title: string, menus: {Menu}}
+-- drags says the app takes left drags inside its window.
+type App = {id: string, title: string, menus: {Menu}, drags: boolean}
 -- A workspace is a folder; a desktop works in one workspace and is shown on
 -- at most one display.
 type Workspace = {id: string, path: string, label: string}
@@ -140,7 +141,7 @@ function M.apps(value: unknown): {App}
     if type(value) ~= "table" then return apps end
     for _, item in ipairs(value) do
         if type(item) == "table" and type(item.id) == "string" and type(item.title) == "string" then
-            apps[#apps + 1] = {id = item.id, title = item.title, menus = menus(item.menus)}
+            apps[#apps + 1] = {id = item.id, title = item.title, menus = menus(item.menus), drags = item.drags == true}
         end
     end
     return apps

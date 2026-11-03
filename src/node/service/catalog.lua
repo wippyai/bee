@@ -8,7 +8,7 @@ local application = require("application")
 local M = {}
 -- A menu an app names and an installed app, as the catalog lists them.
 type Menu = {id: string, title: string, location: string, order: integer}
-type CatalogApp = {id: string, title: string, menus: {Menu}, singleton: boolean}
+type CatalogApp = {id: string, title: string, menus: {Menu}, singleton: boolean, drags: boolean}
 type Theme = appearance.Theme
 
 local MENU_TYPE = "bee.menu"
@@ -70,7 +70,8 @@ local function catalog(workspace_id: string?): ({CatalogApp}?, string?)
                 if menu then placed[#placed + 1] = menu
                 else logger:warn("App names a menu that is not installed", {id = entry.id, menu = id}) end
             end
-            apps[#apps + 1] = {id = entry.id, title = declared.title, menus = placed, singleton = declared.singleton}
+            apps[#apps + 1] = {id = entry.id, title = declared.title, menus = placed, singleton = declared.singleton,
+                drags = declared.drags}
         elseif not declared then
             logger:warn("App entry declares no valid application", {id = entry.id})
         end

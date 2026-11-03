@@ -46,7 +46,7 @@ type Policy = {
     placement_profiles: {string},
     placement_binding: string?,
     placement_options: {[string]: unknown}?,
-    allowed_overrides: {string},
+    allowed_overrides: {string}?,
 }
 
 return {}

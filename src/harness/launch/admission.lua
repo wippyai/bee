@@ -345,7 +345,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     -- Resolve placement alongside the driver and policy from this immutable
     -- registry snapshot. The policy may select an implementation; absent that
     -- field the resolver's native host default is used.
-    if placement_override and (not definition.allows(launch, "placement") or not bounds.member("placement", launch_policy.allowed_overrides)) then
+    if placement_override and (not definition.allows(launch, "placement") or not definition.policy_admits(launch_policy.allowed_overrides, "placement")) then
         return nil, fail("FORBIDDEN", "The definition and host policy must both admit a placement override")
     end
     if not selected and (requested.traits or requested.context or parent) then
@@ -454,7 +454,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     end
     local overrides: {string} = {}
     for _, name in ipairs(launch.allowed_overrides) do
-        if not bounds.member(name, policy.OVERRIDES) or bounds.member(name, launch_policy.allowed_overrides) then overrides[#overrides + 1] = name end
+        if not bounds.member(name, policy.OVERRIDES) or definition.policy_admits(launch_policy.allowed_overrides, name) then overrides[#overrides + 1] = name end
     end
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
         placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,

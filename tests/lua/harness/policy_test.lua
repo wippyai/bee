@@ -352,14 +352,19 @@ local function define_tests()
 
         test.it("admits only workdir, thread and placement as launch overrides and measures them", function()
             local raw = entry({sh = "/bin/sh"})
-            local closed = policy.decode("test:policy", raw)
-            if not closed then error("policy without overrides") end
-            test.eq(#closed.allowed_overrides, 0)
+            local unlisted = policy.decode("test:policy", raw)
+            if not unlisted then error("policy without overrides") end
+            test.is_nil(unlisted.allowed_overrides, "a policy that lists none leaves its definitions' overrides in force")
             local data = assert(bounds.object(raw.data))
+            data.allowed_overrides = {}
+            local closed = policy.decode("test:policy", raw)
+            if not closed then error("policy with no overrides") end
+            test.eq(#assert(closed.allowed_overrides), 0)
+            test.neq(closed.digest, unlisted.digest)
             data.allowed_overrides = {"workdir", "thread", "placement"}
             local open, open_error = policy.decode("test:policy", raw)
             if not open then error(tostring(open_error)) end
-            test.eq(#open.allowed_overrides, 3)
+            test.eq(#assert(open.allowed_overrides), 3)
             test.neq(open.digest, closed.digest)
             for _, rejected in ipairs({"mode", "brief", "driver"}) do
                 data.allowed_overrides = {rejected}

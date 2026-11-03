@@ -357,10 +357,16 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: vocabulary.
     elseif selected and (#(selected.active_traits or {}) > 0 or #(selected.requestable or {}) > 0) then
         return nil, ref .. ": trait outside launch ceiling: " .. ((selected.active_traits or {})[1] or (selected.requestable or {})[1])
     end
-    local allowed_overrides, overrides_error = bounds.ids(data.allowed_overrides == nil and {} or data.allowed_overrides, true)
-    if not allowed_overrides then return nil, ref .. ": allowed_overrides: " .. tostring(overrides_error) end
-    for _, override in ipairs(allowed_overrides) do
-        if not bounds.member(override, M.OVERRIDES) then return nil, ref .. ": allowed_overrides names " .. override .. ", which a launch policy does not admit" end
+    -- A policy that lists no allowed_overrides leaves the overrides its
+    -- definitions declare in force; a list restricts them to its members.
+    local allowed_overrides: {string}? = nil
+    if data.allowed_overrides ~= nil then
+        local listed, overrides_error = bounds.ids(data.allowed_overrides, true)
+        if not listed then return nil, ref .. ": allowed_overrides: " .. tostring(overrides_error) end
+        for _, override in ipairs(listed) do
+            if not bounds.member(override, M.OVERRIDES) then return nil, ref .. ": allowed_overrides names " .. override .. ", which a launch policy does not admit" end
+        end
+        allowed_overrides = listed
     end
     if selected and selected.context then
         gateway_surface = gateway_surface or {tools = {}, traits = {}, base_tools = gateway_tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}

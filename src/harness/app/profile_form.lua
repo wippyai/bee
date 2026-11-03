@@ -216,9 +216,8 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean, initial:
     end
     -- A folder or thread choice is offered only where the definition and its
     -- launch policy both allow the override; admission checks it again.
-    local admitted = bounds.ids(policy_data.allowed_overrides or {}, true) or {}
     local function allows(name: string): boolean
-        return definition.allows(decoded, name) and bounds.member(name, admitted) ~= nil
+        return definition.allows(decoded, name) and definition.policy_admits(policy_data.allowed_overrides, name)
     end
     local binding_entry = catalog.binding(pinned, decoded.binding_ref)
     local binding_meta = binding_entry and bounds.object(binding_entry.meta)

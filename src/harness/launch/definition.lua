@@ -181,4 +181,11 @@ function M.allows(definition: Definition, override: string): boolean
     end
     return false
 end
+-- policy_admits: whether a launch policy's allowed_overrides, as declared,
+-- keep an override its definition allows. A policy that lists none leaves the
+-- definition's overrides in force; a list restricts them to its members.
+function M.policy_admits(allowed_overrides: unknown, override: string): boolean
+    if allowed_overrides == nil then return true end
+    return bounds.member(override, bounds.ids(allowed_overrides, true) or {}) ~= nil
+end
 return M

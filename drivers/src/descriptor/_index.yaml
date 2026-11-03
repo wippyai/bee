@@ -7,6 +7,17 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
+- name: shape
+  kind: library.lua
+  source: file://shape.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+- name: templates
+  kind: library.lua
+  source: file://templates.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+    shape: bee.drivers.descriptor:shape
 - name: descriptor
   kind: library.lua
   source: file://descriptor.lua
@@ -15,6 +26,8 @@ entries:
   imports:
     codec_registry: bee.drivers.codec:codec_registry
     writable_roots: bee.drivers.descriptor:writable_roots
+    shape: bee.drivers.descriptor:shape
+    template_checks: bee.drivers.descriptor:templates
     bounds: bee.drivers.values:bounds
     login_evidence: bee.drivers.locate:login_evidence
     schema_values: bee.drivers.descriptor:schema_values

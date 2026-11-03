@@ -98,14 +98,8 @@ function M.view(ctl: Controller): string?
     return nil
 end
 
--- holding is whether pointer input belongs to the controller wherever it
--- moves: a press held back or a drag in progress.
-function M.holding(ctl: Controller): boolean
-    local active = ctl.active
-    return ctl.pending ~= nil or (active ~= nil and active.mode == "drag")
-end
-
--- engaged is whether every input belongs to the controller.
+-- engaged is whether every input belongs to the controller: a press held
+-- back, a drag, quick copy or copy mode.
 function M.engaged(ctl: Controller): boolean return ctl.active ~= nil or ctl.pending ~= nil end
 
 function M.cancel(ctl: Controller)
@@ -302,7 +296,7 @@ local function on_cursor(ctl: Controller, active: Active, event: tty.TTYEvent, b
 end
 
 -- input takes an event while the controller is engaged, with body the
--- current interior of its window, nil when the window no longer shows.
+-- current interior of its window, nil when the window is hidden or closed.
 function M.input(ctl: Controller, event: tty.TTYEvent, body: Rect?, now: integer): Outcome
     local active, pending = ctl.active, ctl.pending
     local id = M.view(ctl)

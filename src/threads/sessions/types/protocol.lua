@@ -11,6 +11,11 @@ local hook_capabilities = require("hook_capabilities")
 local M = {}
 
 M.MAX_TEXT_BYTES = 16384
+-- A text input of one work is at most this many bytes. Typed under the sender
+-- line Sessions puts above a message, at most 80 bytes, it stays within the
+-- 64 KiB that a window's launch prompt, a message typed into its terminal and
+-- the agent's prompt hook carry.
+M.MAX_INPUT_BYTES = 65536 - 128
 M.MAX_REF_BYTES = 256
 M.MAX_KEY_BYTES = 128
 M.MAX_CURSOR_BYTES = 2048

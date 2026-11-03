@@ -73,7 +73,7 @@ end
 -- limit is the most bytes the draft holds, by default what one session input
 -- carries; an insertion past it leaves the draft as it was and returns why.
 function M.edit(draft: string, event: {[string]: unknown}, limit: integer?): (string, string?)
-    local bound = limit or protocol.MAX_TEXT_BYTES
+    local bound = limit or protocol.MAX_INPUT_BYTES
     local value = draft
     if event.type == "paste" then
         value = draft .. tostring(event.text)

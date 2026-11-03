@@ -172,6 +172,20 @@ local function define_tests()
             test.eq(stop.prompt_id, "800")
         end)
 
+        test.it("reads a prompt up to the 64 KiB a session hook prompt carries and refuses a larger one", function()
+            local owner = session()
+            local function transcript(prompt: string): string
+                return assert(json.encode({step_index = 0, source = "USER_EXPLICIT", type = "USER_INPUT", status = "DONE",
+                    content = "<USER_REQUEST>\n" .. prompt .. "\n</USER_REQUEST>"})) .. "\n"
+            end
+            local row = '\t{"level":"info","msg":"a \\"quoted\\" log line"}\n'
+            local large = string.rep(row, 65536 // #row)
+            large = large .. string.rep("x", 65536 - #large)
+            local located = conversation(owner, "conversation-large", transcript(large))
+            test.eq(payload_of(read(owner, "UserPromptSubmit", with(located, {invocationNum = 0, initialNumSteps = 1}))).prompt, large)
+            local oversized = conversation(owner, "conversation-oversized", transcript(large .. "x"))
+            test.contains(refused(read(owner, "UserPromptSubmit", with(oversized, {invocationNum = 0, initialNumSteps = 1}))), "exceeds its bound")
+        end)
         test.it("holds no prompt for an invocation after the model answered the latest prompt", function()
             local owner = session()
             local located = conversation(owner, "conversation-1", table.concat({

@@ -15,7 +15,7 @@ type Reply = {payload: Object?, skip: boolean?, error: string?}
 
 M.HOOK_FILE = "bee.placement.native.binding:hook_file"
 M.TRANSCRIPT = ".system_generated/logs/transcript_full.jsonl"
-M.MAX_TEXT_BYTES = 24576
+M.MAX_TEXT_BYTES = 65536
 M.MAX_LINE_BYTES = 1048576
 M.MAX_TURN_BYTES = 33554432
 M.CHUNK_BYTES = 65536

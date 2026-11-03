@@ -157,7 +157,7 @@ end
 
 local function input_of(value: unknown): (unknown, Fault?)
     if type(value) == "string" then
-        if #value > protocol.MAX_TEXT_BYTES then return nil, invalid("input text exceeds " .. tostring(protocol.MAX_TEXT_BYTES) .. " bytes") end
+        if #value > protocol.MAX_INPUT_BYTES then return nil, invalid("input text exceeds " .. tostring(protocol.MAX_INPUT_BYTES) .. " bytes") end
         return value, nil
     end
     local object = bounds.object(value)

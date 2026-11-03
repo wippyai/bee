@@ -57,6 +57,7 @@ M.session_remove = part_session_store.session_remove
 M.session_rename = part_session_store.session_rename
 local part_work_records = require("part_work_records")
 local budget_json = part_work_records.budget_json
+local MAX_INPUT_BYTES = part_work_records.MAX_INPUT_BYTES
 type Turn = journal.Turn
 local function result_value(value: unknown, expected_schema: string?): (string?, Row?, string?)
     local result = object(value)
@@ -101,7 +102,7 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
     if not input or not has_only(input, {session = true, operation_key = true, input = true, output_schema = true, budget = true}) then return missing_request() end
     local session_ref, operation_key = ref(input.session), key(input.operation_key)
     local output_schema = input.output_schema == nil and "bee:Text@1" or text(input.output_schema, MAX_REF_BYTES)
-    local input_json, input_error = encode(input.input)
+    local input_json, input_error = encode(input.input, MAX_INPUT_BYTES)
     local selected_budget_json, budget_error = budget_json(input.budget)
     if not session_ref or not operation_key or not output_schema or input.input == nil or not input_json or not selected_budget_json then
         return failure("INVALID_ARGUMENT", input_error or budget_error or "session, key, input, output schema or budget is invalid")
@@ -114,7 +115,7 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
         or tostring(origin.session):match("^bs:([^:]+):") ~= peer_context.node) then
         return failure("DENIED", "session origin requires an authenticated Hive peer")
     end
-    local arguments = {session = session_ref, input = input_json, output_schema = output_schema, budget = selected_budget_json}
+    local arguments = {session = session_ref, input_digest = input_digest, output_schema = output_schema, budget = selected_budget_json}
     workspace = mutation_workspace(session_ref, workspace, "send")
     if not workspace then return failure("DENIED", "sending requires a host workspace grant") end
     return transaction.write(db, function(tx: sql.Transaction): Result

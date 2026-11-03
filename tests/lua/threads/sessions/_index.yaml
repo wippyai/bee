@@ -29,6 +29,7 @@ entries:
     bounds: bee.drivers.values:bounds
     admission: bee.harness.launch:admission
     session_tools: bee.gateway.catalog:session_tools
+    protocol: bee.threads.sessions.types:protocol
 - name: locate_test
   kind: function.lua
   source: file://locate_test.lua

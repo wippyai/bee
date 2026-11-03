@@ -23,6 +23,9 @@ type Session = journal.Session
 local MAX_KEY_BYTES = 128
 local MAX_REF_BYTES = 256
 local MAX_VALUE_BYTES = 65536
+-- A work input is JSON of at most this many bytes: the encoding of a 64 KiB
+-- text whose every byte is escaped, which is six bytes at most.
+local MAX_INPUT_BYTES = 6 * 65536
 local function failure(code: string, message: string): Result
     return transaction.failure(code, message)
 end
@@ -232,6 +235,7 @@ end
 M.MAX_KEY_BYTES = MAX_KEY_BYTES
 M.MAX_REF_BYTES = MAX_REF_BYTES
 M.MAX_VALUE_BYTES = MAX_VALUE_BYTES
+M.MAX_INPUT_BYTES = MAX_INPUT_BYTES
 M.failure = failure
 M.object = object
 M.has_only = has_only

@@ -10,6 +10,7 @@ local process = require("process")
 local channel = require("channel")
 local json = require("json")
 local session_tools = require("session_tools")
+local protocol = require("protocol")
 local WORKSPACE = string.rep("a", 32)
 -- owner_text is the text Sessions types into the agent for a queued message.
 local function owner_text(input: string, sender: string): string
@@ -287,6 +288,35 @@ local function define_tests()
                     reports[#reports + 1] = tostring(report.state)
                 end
                 test.eq(table.concat(reports, ","), "idle")
+            end)
+        end)
+        test.it("carries a message of the session input bound in full through its queue, the terminal it is typed into and the agent's prompt hook", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", provider = "claude"}}))
+            harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "large-terminal", operation_key = harness.key()}))
+            local session_ref = assert(bounds.id(opened.session))
+            local row = '\t{"level":"info","msg":"a \\"quoted\\" log line"}\n'
+            local large = string.rep(row, protocol.MAX_INPUT_BYTES // #row)
+            large = large .. string.rep("x", protocol.MAX_INPUT_BYTES - #large)
+            with_window_probes(function(resumed: process.Listener, typed: process.Listener, _: process.Listener)
+                local sent = owner_call("send", {session = opened.session, input = large, operation_key = harness.key()})
+                test.eq(assert(received(resumed)).session, opened.session)
+                local actor = assert(security.new_actor(session_ref, {workspace_id = WORKSPACE}))
+                local boundary = funcs.new():with_actor(actor):with_scope(security.new_scope({assert(security.policy("bee.gateway.security:session_boundary_policy"))}))
+                local function hook(event: string, input: string?, answer: string?)
+                    local raw, err = boundary:call("bee.threads.sessions.binding:hook_boundary", {session = opened.session, event = event,
+                        operation_key = harness.key(), attempt_id = "large-terminal", input = input, answer = answer})
+                    if err then error(tostring(err)) end
+                    local reply = assert(bounds.object(raw))
+                    if reply.ok ~= true then error(event .. ": " .. tostring((assert(bounds.object(reply.error))).message)) end
+                end
+                hook("UserPromptSubmit", "first")
+                hook("Stop", nil, "The first answer.")
+                local delivered = assert(received(typed), "the large message was not typed")
+                test.eq(delivered.text, owner_text(large, "sessions-owner"))
+                hook("UserPromptSubmit", delivered.text)
+                hook("Stop", nil, "Read it all.")
+                test.eq(harness.value(journal:call("work_describe", {work = sent.work})).phase, "settled")
             end)
         end)
         test.it("gives a starting terminal the message waiting for it as its prompt, the same message each time it asks", function()

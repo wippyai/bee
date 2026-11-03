@@ -25,10 +25,10 @@ local function fixture(path: string): string
 end
 
 -- session records an Agy attempt with a retained private HOME.
-local function session(): Session
+local function session(binding_ref: string?): Session
     local session_ref = native_fixture.fresh("agy-session")
     local request = native_fixture.launch({"sh", "-c", "true"}, "direct_process")
-    request.binding_ref = "bee.drivers.agy.binding:binding"
+    request.binding_ref = binding_ref or "bee.drivers.agy.binding:binding"
     request.session_ref = session_ref
     local declared = assert(bounds.object(request.launch))
     declared.home_ref = "session"
@@ -179,6 +179,23 @@ local function define_tests()
                 '{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"Started."}\n',
                 '{"step_index":2,"source":"SYSTEM","type":"SYSTEM_MESSAGE","status":"DONE","content":"background command finished"}\n'}))
             test.is_true(read(owner, "UserPromptSubmit", with(located, {invocationNum = 0, initialNumSteps = 3})).skip == true)
+        end)
+
+        test.it("reads a hook file under a third-party driver's declared directory", function()
+            local owner = session("bee.tests.placement.native:third_party_cli")
+            write(owner, ".solo/logs/turn.json", "{}")
+            write(owner, ".solo/private.json", "{}")
+            local reader = assert(funcs.new():with_scope(security.new_scope({})))
+            local function hook_file(relative: string): Object
+                local reply, err = reader:call("bee.placement.native.binding:hook_file",
+                    {attempt_id = owner.attempt_id, path = owner.home .. "/" .. relative, offset = 0, length = 16})
+                if err then error(tostring(err)) end
+                return assert(bounds.object(reply))
+            end
+            local declared = hook_file(".solo/logs/turn.json")
+            test.is_true(declared.ok == true, tostring(declared.error and bounds.object(declared.error) and (bounds.object(declared.error) or {}).message))
+            test.eq((bounds.object(declared.value) or {}).data, "{}")
+            test.is_false(hook_file(".solo/private.json").ok == true)
         end)
 
         test.it("reads a captured resumed turn of Antigravity 1.4.12", function()

@@ -161,8 +161,14 @@ executable path and the descriptor's options and argv. Do not copy a codec.
   `{"render": "<field>", "context": "window"}` inserts an option's tokens.
   Every template names its `readiness` (`none` when the CLI reports nothing).
   A window-only CLI declares only `window`.
-- `codec` names a shared stream decoder and is required once the CLI runs
-  turns (`first_turn` or `resume`); a window decodes no stream. `json_paths`,
+- `codec` names the stream decoder a codec function registers under
+  `meta.codec` (`meta.type: bee.driver.codec`); it is required once the CLI
+  runs turns (`first_turn` or `resume`); a window decodes no stream.
+- `writable_roots` (optional) declares how the CLI admits extra writable
+  roots: `when_argv` lists the argv token sequences that put it in such a
+  mode, and `argv` (once, with `{roots}` as a JSON list) or `argv_each` (per
+  root, with `{root}`) renders them for a profile whose sandbox sets
+  `git_writable_roots: true`. `json_paths`,
   `flags` and `provider_home` default to empty.
 - `configure` names the configure renderer; `plain` delivers nothing beyond
   what the options render. A descriptor driver supports `plain`; a CLI with its
@@ -179,7 +185,7 @@ hooks Bee can answer declares them in one `registry.entry` with
 ```json
 {"id": "bee.driver.echoagent.descriptor:hooks", "kind": "registry.entry",
  "meta": {"type": "bee.driver_hooks", "driver_id": "echoagent"},
- "data": {"response": "hook_specific_output", "transport": "command",
+ "data": {"response": "bee.driver.descriptor:hook_specific_output", "transport": "command",
           "points": {"tool.before": {"results": ["pass", "change", "deny"],
                                      "reason": "PreToolUse updatedInput and permissionDecision=deny"}}}}
 ```
@@ -187,10 +193,17 @@ hooks Bee can answer declares them in one `registry.entry` with
 `points` names `session.start`, `prompt.submit`, `tool.before` and
 `tool.after` with the results Bee may return (`pass`, `add_context`,
 `change`, `deny`); `transport` (`command`, `http` or `mcp`, per point or for
-all) bounds the hook chain; `response` is the answer format
-(`hook_specific_output` as Claude Code reads it, `agy`, or `host` for an
-in-process driver). Optional rules: `allow_on_change` adds
-`permissionDecision=allow` to a change, `input` (`command` or `additive`)
+all) bounds the hook chain; `response` names the `bee.driver_hook_response`
+entry that shapes answers: each of its `parts` renders a JSON template when its
+fact (`context`, `denied`, `changed`, `output`) holds for the event (`events`,
+`except_events`, `unless` narrow it), with `{event}`, `{reason}`, `{context}`,
+`{input}` and `{output}` filled in; `permission` shapes a permission decision
+from `{behavior}` and `{message}`. `bee.driver.descriptor:hook_specific_output`
+is the answer Claude Code reads, and `:hook_specific_output_allowing_changes`
+also allows a changed call. Optional rules: `host: true` marks a driver the
+host answers in process, `reader` names a function that reads the CLI's hook
+stdin as the Bee payload for a hook command whose event is qualified with the
+driver id (`bee hook-post ... <driver>:<Event>`), `input` (`command` or `additive`)
 restricts changed tool input, `input_bytes` and `output_bytes` bound changes,
 `unsupported` explains the points not listed, and `mcp_meta` names the request
 metadata fields a CLI sets on MCP hook-engine and model calls. The shipped

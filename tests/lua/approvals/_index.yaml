@@ -18,7 +18,14 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.approvals.binding:waiting, bee.approvals.binding:effect, bee.approvals.binding:effect_queue, bee.approvals.binding:events, bee.approvals.binding:end_request, bee.approvals.binding:grant, bee.approvals.binding:grant_window, bee.approvals.binding:node_summary, bee.approvals.binding:runtime_lease, bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.approvals.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:list, bee.approvals.binding:deliveries, bee.approvals.binding:reconcile, bee.approvals.binding:capabilities, bee.threads.binding:append, bee.threads.binding:create, bee.threads.binding:get, bee.threads.binding:read_after, bee.threads.binding:watch]
+    resources: [bee.approvals.binding:waiting, bee.approvals.binding:effect, bee.approvals.binding:effect_queue, bee.approvals.binding:events, bee.approvals.binding:end_request, bee.approvals.binding:grant, bee.approvals.binding:grant_window, bee.approvals.binding:node_summary, bee.approvals.binding:runtime_lease, bee.approvals.binding:request, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.binding:forget_session, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.approvals.binding:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:list, bee.approvals.binding:deliveries, bee.approvals.binding:reconcile, bee.approvals.binding:capabilities, bee.threads.binding:append, bee.threads.binding:create, bee.threads.binding:get, bee.threads.binding:read_after, bee.threads.binding:watch]
+    effect: allow
+- name: forget_session_test_policy
+  kind: security.policy
+  meta: {type: test_support, comment: The Sessions owner removing a session asks approvals to end that session's requests}
+  policy:
+    actions: [bee.approvals.forget_session]
+    resources: '*'
     effect: allow
 - name: manage_test_policy
   kind: security.policy
@@ -179,6 +186,25 @@ entries:
     test: wippy.test:test
     service: bee.approvals.binding:service
     dispatch: bee.approvals.persist:dispatch
+    thread_harness: bee.tests.threads:harness
+    fixture: bee.tests.approvals:service_fixture
+- name: forget_session_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-forget-session-test.db
+  lifecycle: {auto_start: true}
+- name: forget_session_test
+  kind: function.lua
+  source: file://forget_session_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs]
+  security:
+    policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
+  imports:
+    bounds: bee.drivers.values:bounds
+    test: wippy.test:test
+    service: bee.approvals.binding:service
     thread_harness: bee.tests.threads:harness
     fixture: bee.tests.approvals:service_fixture
 - name: service_worker_db

@@ -148,3 +148,10 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-31T00:01:00Z'}
   imports:
     migration: wippy.migration:migration
+- name: session_names
+  kind: function.lua
+  source: file://session_names.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-11-02T00:01:00Z'}
+  imports:
+    migration: wippy.migration:migration

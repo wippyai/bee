@@ -9,6 +9,8 @@ M.REQUEST = "bee.approvals.request"
 M.DECIDE = "bee.approvals.decide"
 M.MANAGE = "bee.approvals.manage"
 M.OWN = "bee.approvals.own"
+-- Removing a session withdraws its approval requests; the resource is the session ref.
+M.FORGET_SESSION = "bee.approvals.forget_session"
 M.CONSUME = "bee.approvals.consume"
 M.WORKER_NAME = "bee.approvals.outbox"
 M.AUTHORITY_NAME = "bee.approvals.authority"

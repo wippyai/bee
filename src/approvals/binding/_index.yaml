@@ -227,6 +227,16 @@ entries:
     service: bee.approvals.binding:service
   security:
     policies: *id001
+- name: forget_session
+  kind: function.lua
+  meta:
+    type: bee.sessions.forget
+  source: file://forget_session_method.lua
+  method: handle
+  imports:
+    service: bee.approvals.binding:service
+  security:
+    policies: *id001
 - name: consume
   kind: function.lua
   source: file://consume_method.lua
@@ -536,6 +546,7 @@ entries:
   modules:
   - sql
   - json
+  - security
   imports:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical

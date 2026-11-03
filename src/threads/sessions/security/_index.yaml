@@ -24,6 +24,7 @@ entries:
     - bee.threads.binding:session_scan
     - bee.threads.binding:session_transition
     - bee.threads.binding:session_remove
+    - bee.threads.binding:session_rename
     - bee.threads.binding:work_send
     - bee.threads.binding:work_describe
     - bee.threads.binding:work_await
@@ -100,10 +101,11 @@ entries:
   meta:
     comment: Removing a session asks each owner to forget what it keeps for that session
   policy:
-    actions: [registry.find, funcs.call, bee.gateway.manage]
+    actions: [registry.find, funcs.call, bee.gateway.manage, bee.approvals.forget_session]
     resources: '*'
     expression: (action == "registry.find" && resource == "*") || (action == "bee.gateway.manage" && resource == "bindings") || (action == "funcs.call" && resource in ["bee.placement.native.binding:forget_session",
-      "bee.gateway.binding:forget_session", "bee.harness.binding:forget_session_windows"])
+      "bee.gateway.binding:forget_session", "bee.harness.binding:forget_session_windows", "bee.approvals.binding:forget_session"])
+      || (action == "bee.approvals.forget_session" && resource startsWith "bs:")
     effect: allow
 - name: owner_registry_read_policy
   kind: security.policy

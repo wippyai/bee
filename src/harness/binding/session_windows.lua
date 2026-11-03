@@ -23,7 +23,7 @@ end
 
 function M.forget(value: unknown): Reply
     local request = bounds.object(value)
-    if not request or bounds.fields(request, {"session", "thread_id", "owner_id"}) then return fail("INVALID", "forget_session_windows takes session, thread_id and owner_id") end
+    if not request or bounds.fields(request, {"session", "thread_id", "owner_id", "history"}) then return fail("INVALID", "forget_session_windows takes session, thread_id, owner_id and history") end
     local session, thread = bounds.id(request.session), bounds.id(request.thread_id)
     if not session or not thread then return fail("INVALID", "session and thread_id must be identifiers") end
     local node = assert(system.node.id())

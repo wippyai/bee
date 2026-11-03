@@ -3,7 +3,7 @@ local sql = require("sql")
 local bounds = require("bounds")
 local M = {}
 type Row = {[string]: unknown}
-type Session = {session_ref: string, thread_id: string, workspace_id: string, owner_actor: string, title: string,
+type Session = {session_ref: string, thread_id: string, workspace_id: string, owner_actor: string, title: string, name: string?,
     state: string, revision: integer, created_at: string, updated_at: string, route_json: string, context_json: string}
 type Work = {work_ref: string, session_ref: string, workspace_id: string, sequence: integer, revision: integer,
     phase: string, input_json: string, input_digest: string, output_schema: string, sender_kind: string, sender_id: string,
@@ -41,15 +41,18 @@ local function session_row(row: Row): (Session?, string?)
     local session_ref, thread_id = text(row.session_ref, MAX_REF_BYTES), text(row.thread_id, 160)
     local workspace, owner_actor = text(row.workspace_id, 32), text(row.owner_actor, 160)
     local title, state = text(row.title, 512), text(row.state, 32)
+    local name: string? = nil
+    if row.name ~= nil then name = text(row.name, 128) end
     local revision = integer(row.revision)
     local created_at, updated_at = text(row.created_at, 64), text(row.updated_at, 64)
     local route_json = type(row.route_json) == "string" and row.route_json or nil
     local context_json = type(row.context_json) == "string" and row.context_json or nil
-    if not session_ref or not thread_id or not workspace or not owner_actor or not title or not state or not revision or not created_at or not updated_at or not route_json or not context_json then
+    if not session_ref or not thread_id or not workspace or not owner_actor or not title or not state or not revision or not created_at or not updated_at or not route_json or not context_json
+        or (row.name ~= nil and not name) then
         return nil, "session row is corrupt"
     end
     return {session_ref = session_ref, thread_id = thread_id, workspace_id = workspace, owner_actor = owner_actor,
-        title = title, state = state, revision = revision, created_at = created_at, updated_at = updated_at,
+        title = title, name = name, state = state, revision = revision, created_at = created_at, updated_at = updated_at,
         route_json = route_json, context_json = context_json}, nil
 end
 
@@ -111,7 +114,7 @@ function M.decode_turn(row: Row): (Turn?, string?)
 end
 
 function M.session(tx: sql.Transaction, session_ref: string, workspace: string?): (Session?, string?)
-    local row, query_error = query_one(tx, "SELECT session_ref, thread_id, workspace_id, owner_actor, title, state, revision, created_at, updated_at, route_json, context_json " ..
+    local row, query_error = query_one(tx, "SELECT session_ref, thread_id, workspace_id, owner_actor, title, name, state, revision, created_at, updated_at, route_json, context_json " ..
         "FROM bee_sessions WHERE session_ref = ? AND (? IS NULL OR workspace_id = ?)", {session_ref, workspace or sql.NULL, workspace or sql.NULL}, "session")
     if query_error then return nil, query_error end
     if not row then return nil, nil end
@@ -391,11 +394,69 @@ function M.settle_work(tx: sql.Transaction, next_revision: integer, checked_json
 end
 
 -- removal_requested reports whether a removal of the session waits for its
--- close.
-function M.removal_requested(tx: sql.Transaction, session_ref: string): (boolean?, string?)
-    local row, err = query_one(tx, "SELECT COUNT(*) AS count FROM bee_session_operations WHERE operation = 'session_remove' AND target_ref = ?", {session_ref}, "session removal")
-    if err or not row then return nil, err or "read session removal" end
-    return (integer(row.count) or 0) > 0, nil
+-- close, and whether any of its requests asked to remove the history too.
+function M.removal_requested(tx: sql.Transaction, session_ref: string): (boolean?, boolean?, string?)
+    local row, err = query_one(tx, "SELECT COUNT(*) AS count, COALESCE(MAX(json_extract(receipt_json, '$.history') = 1), 0) AS history " ..
+        "FROM bee_session_operations WHERE operation = 'session_remove' AND target_ref = ?", {session_ref}, "session removal")
+    if err or not row then return nil, nil, err or "read session removal" end
+    return (integer(row.count) or 0) > 0, integer(row.history) == 1, nil
+end
+
+function M.rename_session(tx: sql.Transaction, name: string?, revision: integer, now: string, session_ref: string): string?
+    return execute(tx, "UPDATE bee_sessions SET name = ?, revision = ?, updated_at = ? WHERE session_ref = ?",
+        {name or sql.NULL, revision, now, session_ref}, "rename session")
+end
+
+-- thread_shared reports whether anyone besides the session and the thread's
+-- owner takes part in the session's thread: another session, a member such
+-- as an app instance, a peer bee or a session removed before, or another
+-- thread whose messages, replies or watches point at it.
+function M.thread_shared(tx: sql.Transaction, thread_id: string, session_ref: string): (boolean?, string?)
+    local row, err = query_one(tx, "SELECT " ..
+        "EXISTS(SELECT 1 FROM bee_sessions WHERE thread_id = ?1 AND session_ref <> ?2) " ..
+        "OR EXISTS(SELECT 1 FROM bee_thread_members m JOIN bee_thread_heads h ON h.thread_id = m.thread_id " ..
+        "WHERE m.thread_id = ?1 AND m.actor <> ?2 AND m.actor <> h.owner_actor) " ..
+        "OR EXISTS(SELECT 1 FROM bee_thread_notices WHERE target_thread_id = ?1 AND watcher_thread_id <> ?1) " ..
+        "OR EXISTS(SELECT 1 FROM bee_thread_inbox_items WHERE thread_id <> ?1 AND (sender_thread_id = ?1 OR in_reply_to_thread_id = ?1 OR reply_thread_id = ?1)) " ..
+        "OR EXISTS(SELECT 1 FROM bee_thread_inbox_outbox WHERE dest_thread_id = ?1 AND sender_thread_id <> ?1) AS shared",
+        {thread_id, session_ref}, "thread sharing")
+    if err or not row then return nil, err or "read thread sharing" end
+    return integer(row.shared) == 1, nil
+end
+
+-- remove_thread deletes a thread no one else takes part in, children first:
+-- its deliveries, carriers, notices, inbox, work lifecycle, projections,
+-- records, members and head. Its sessions are removed before.
+function M.remove_thread(tx: sql.Transaction, thread_id: string): string?
+    for _, statement in ipairs({
+        "DELETE FROM bee_thread_subscription_pages WHERE subscription_id IN (SELECT subscription_id FROM bee_thread_subscriptions WHERE thread_id = ?1)",
+        "DELETE FROM bee_thread_subscriptions WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_dispatches WHERE delivery_id IN (SELECT delivery_id FROM bee_thread_deliveries WHERE thread_id = ?1)",
+        "DELETE FROM bee_thread_deliveries WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_claim_batches WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_obligations WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_carrier_events WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_carriers WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_cancel_intents WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_notices WHERE watcher_thread_id = ?1 OR target_thread_id = ?1",
+        "DELETE FROM bee_thread_inbox_items WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_inbox_rules WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_inbox_epochs WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_inbox_outbox WHERE sender_thread_id = ?1 OR dest_thread_id = ?1",
+        "DELETE FROM bee_thread_settlements WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_turns WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_attempts WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_actions WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_commands WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_projections WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_records WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_members WHERE thread_id = ?1",
+        "DELETE FROM bee_thread_heads WHERE thread_id = ?1",
+    }) do
+        local err = execute(tx, statement, {thread_id}, "remove thread")
+        if err then return err end
+    end
+    return nil
 end
 
 -- remove_session deletes the rows the journal keeps only for one closed

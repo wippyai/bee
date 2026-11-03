@@ -1,6 +1,7 @@
 -- MIT. Removal of a closed session: every owner forgets what it keeps only
--- for the session, then the journal deletes the session itself. The
--- session's thread and its records stay; so do the agent's own files.
+-- for the session, then the journal deletes the session itself. Its thread
+-- and records go too when the removal asked for its history and no one else
+-- takes part in the thread; otherwise they stay. The agent's own files stay.
 local bounds = require("bounds")
 local funcs = require("funcs")
 local registry = require("registry")
@@ -11,7 +12,8 @@ local M = {}
 type Object = {[string]: unknown}
 
 -- A function declaring this type forgets what its owner keeps for one
--- removed session. It takes {session, thread_id, owner_id} and answers
+-- removed session. It takes {session, thread_id, owner_id, history}, where
+-- history says the session's thread is removed with it, and answers
 -- {ok, value} or {ok = false, error}; a repeated call forgets nothing.
 M.FORGET = "bee.sessions.forget"
 
@@ -57,10 +59,11 @@ function M.complete(stored: Object, operation_key: string): (Object?, string?)
     if not session or not thread then return nil, "session snapshot omits its identity" end
     local actor, owner, owner_error = session_owner(route)
     if not actor or not owner then return nil, owner_error end
+    local history = stored.removal_history == true and stored.thread_shared ~= true
     local targets, targets_error = forgetters()
     if not targets then return nil, targets_error end
     for _, target in ipairs(targets) do
-        local raw, call_error = funcs.new():with_actor(actor):call(target, {session = session, thread_id = thread, owner_id = owner})
+        local raw, call_error = funcs.new():with_actor(actor):call(target, {session = session, thread_id = thread, owner_id = owner, history = history})
         local refused = failure(target, raw, call_error)
         if refused then return nil, refused end
     end

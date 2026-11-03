@@ -100,6 +100,7 @@ entries:
     - bee.threads.binding:session_scan
     - bee.threads.binding:session_transition
     - bee.threads.binding:session_remove
+    - bee.threads.binding:session_rename
     - bee.threads.binding:work_send
     - bee.threads.binding:work_describe
     - bee.threads.binding:work_scan

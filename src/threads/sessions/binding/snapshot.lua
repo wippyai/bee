@@ -48,7 +48,8 @@ function M.decode(value: unknown): (Object?, string?)
     end
     local limits: Object = table.create(0, 1)
     for name, limit in pairs(object(route.budgets) or {}) do limits[name] = limit end
-    return {terminal = route.delivery == "hook", session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
+    local name = type(row.name) == "string" and row.name or nil
+    return {terminal = route.delivery == "hook", session = row.session, thread_ref = row.thread_ref, thread_shared = row.thread_shared == true, name = name, workspace = row.workspace,
         driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
         revision = row.revision, incarnation = 1, title = row.title,
         lifecycle = lifecycle, activity = activity, activity_evidence = activity_evidence,

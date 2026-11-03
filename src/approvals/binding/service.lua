@@ -40,6 +40,7 @@ local op_decide = part_decisions.op_decide
 local op_decide_batch = part_decisions.op_decide_batch
 local op_withdraw_origin = part_decisions.op_withdraw_origin
 local op_withdraw = part_decisions.op_withdraw
+local op_forget_session = part_decisions.op_forget_session
 local op_revalidate = part_effects.op_revalidate
 local op_consume = part_effects.op_consume
 local op_end = part_effects.op_end
@@ -84,7 +85,7 @@ function M.reply(result: Result): Reply
 end
 local operations: {[string]: Operation} = {consumed_decision = part_queries.op_consumed_decision}
 local preparations: {[string]: Preparation} = {}
-local mutating: {[string]: boolean} = {read = true, request = true, decide = true, decide_batch = true, withdraw = true, withdraw_origin = true, consume = true, revalidate = true,
+local mutating: {[string]: boolean} = {read = true, request = true, decide = true, decide_batch = true, withdraw = true, withdraw_origin = true, forget_session = true, consume = true, revalidate = true,
     grant_window = true, runtime_lease = true, reconcile = true, effect = true, events = true, end_request = true, grant = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
@@ -213,6 +214,7 @@ operations.attention_count = op_attention_count
 operations.node_summary = op_node_summary
 operations.decide_batch = op_decide_batch
 operations.withdraw_origin = op_withdraw_origin
+operations.forget_session = op_forget_session
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.effect_queue = op_effect_queue
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
@@ -253,6 +255,7 @@ function M.decide(value: unknown): Reply return run(value, "decide") end
 function M.decide_batch(value: unknown): Reply return run(value, "decide_batch") end
 function M.withdraw_origin(value: unknown): Reply return run(value, "withdraw_origin") end
 function M.withdraw(value: unknown): Reply return run(value, "withdraw") end
+function M.forget_session(value: unknown): Reply return run(value, "forget_session") end
 function M.consume(value: unknown): Reply return run(value, "consume") end
 function M.effect_queue(value: unknown): Reply return run(value, "effect_queue") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end

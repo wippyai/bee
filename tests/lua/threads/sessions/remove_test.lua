@@ -1,4 +1,6 @@
--- MIT. Removing a session deletes what Bee keeps for it and keeps its thread.
+-- MIT. Removing a session deletes what Bee keeps for it; its thread stays,
+-- or goes with it when the removal asks for its history and no one else
+-- takes part in the thread.
 local test = require("test")
 local harness = require("harness")
 local funcs = require("funcs")
@@ -92,6 +94,25 @@ local function with_placement(handler: string, body: () -> ())
     if not ok then error(tostring(failure)) end
 end
 
+-- thread_rows counts the rows any table keeps for thread: every column that
+-- names a thread, in every table the database holds.
+local function thread_rows(thread: string): integer
+    local db = harness.open()
+    local total = 0
+    for _, table_row in ipairs(harness.query(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")) do
+        local name = tostring(table_row.name)
+        for _, column in ipairs(harness.query(db, "SELECT name FROM pragma_table_info(?)", {name})) do
+            local column_name = tostring(column.name)
+            if column_name == "thread_id" or column_name:match("_thread_id$") then
+                local rows = harness.query(db, "SELECT COUNT(*) AS count FROM \"" .. name .. "\" WHERE \"" .. column_name .. "\" = ?", {thread})
+                total = total + math.floor(tonumber(rows[1].count) or -1)
+            end
+        end
+    end
+    db:release()
+    return total
+end
+
 local function define_tests()
     test.describe("Session removal", function()
         test.it("removes an idle session and everything kept for it while its thread stays", function()
@@ -165,6 +186,84 @@ local function define_tests()
             test.eq(kept_rows(session), 0)
             local replay = value_of(reply_of(owner, "remove", {session = session, operation_key = key}))
             test.eq(replay.session, session)
+        end)
+        test.it("removes an idle session with its history: the thread, its records and every row naming it go", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {}}))
+            local session = assert(bounds.id(opened.session))
+            local thread = assert(bounds.id(harness.value(journal:call("session_describe", {session = session})).thread_ref))
+            local work = harness.value(journal:call("work_send", {session = session, input = "queued", operation_key = harness.key()}))
+            local owner = caller("sessions-owner", WORKSPACE)
+            value_of(reply_of(owner, "cancel", {work = work.work, operation_key = harness.key()}))
+            seed_session_state(session, thread)
+            local shown = assert(bounds.object(value_of(reply_of(owner, "get", {session = session})).value))
+            test.is_false(shown.thread_shared)
+            test.is_true(thread_rows(thread) > 0)
+            local removed = value_of(reply_of(owner, "remove", {session = session, history = true, operation_key = harness.key()}))
+            test.eq(removed.state, "removed")
+            test.eq(kept_rows(session), 0)
+            test.eq(thread_rows(thread), 0)
+            test.eq(count("SELECT COUNT(*) AS count FROM bee_thread_records WHERE thread_id = ?", {thread}), 0)
+            test.eq(harness.code(journal:call("session_describe", {session = session})), "NOT_FOUND")
+        end)
+        test.it("keeps the history of a removal without it, and the removed session leaves its thread", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {}}))
+            local session = assert(bounds.id(opened.session))
+            local thread = assert(bounds.id(harness.value(journal:call("session_describe", {session = session})).thread_ref))
+            local owner = caller("sessions-owner", WORKSPACE)
+            value_of(reply_of(owner, "remove", {session = session, history = false, operation_key = harness.key()}))
+            test.eq(count("SELECT COUNT(*) AS count FROM bee_thread_heads WHERE thread_id = ?", {thread}), 1)
+            test.is_true(count("SELECT COUNT(*) AS count FROM bee_thread_records WHERE thread_id = ?", {thread}) > 0)
+            test.eq(count("SELECT COUNT(*) AS count FROM bee_thread_members WHERE thread_id = ? AND actor = ? AND active = 1", {thread, session}), 0)
+        end)
+        test.it("refuses to remove the history of a thread another session shares, and removes nothing", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local first = assert(bounds.id(harness.value(journal:call("session_create", {operation_key = harness.key(), route = {}})).session))
+            local thread = assert(bounds.id(harness.value(journal:call("session_describe", {session = first})).thread_ref))
+            local second = assert(bounds.id(harness.value(journal:call("session_create", {operation_key = harness.key(), route = {}, thread_id = thread})).session))
+            local owner = caller("sessions-owner", WORKSPACE)
+            local shown = assert(bounds.object(value_of(reply_of(owner, "get", {session = first})).value))
+            test.is_true(shown.thread_shared)
+            local refused = reply_of(owner, "remove", {session = first, history = true, operation_key = harness.key()})
+            test.is_false(refused.ok)
+            test.eq((assert(bounds.object(refused.error))).code, "CONFLICT")
+            test.eq(harness.value(journal:call("session_describe", {session = first})).state, "active")
+            value_of(reply_of(owner, "remove", {session = first, operation_key = harness.key()}))
+            test.eq(count("SELECT COUNT(*) AS count FROM bee_thread_heads WHERE thread_id = ?", {thread}), 1)
+            test.eq(harness.value(journal:call("session_describe", {session = second})).state, "active")
+        end)
+        test.it("treats a thread an earlier removed session took part in as shared", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local first = assert(bounds.id(harness.value(journal:call("session_create", {operation_key = harness.key(), route = {}})).session))
+            local thread = assert(bounds.id(harness.value(journal:call("session_describe", {session = first})).thread_ref))
+            local second = assert(bounds.id(harness.value(journal:call("session_create", {operation_key = harness.key(), route = {}, thread_id = thread})).session))
+            local owner = caller("sessions-owner", WORKSPACE)
+            value_of(reply_of(owner, "remove", {session = first, operation_key = harness.key()}))
+            local refused = reply_of(owner, "remove", {session = second, history = true, operation_key = harness.key()})
+            test.eq((assert(bounds.object(refused.error))).code, "CONFLICT")
+            test.eq(count("SELECT COUNT(*) AS count FROM bee_thread_heads WHERE thread_id = ?", {thread}), 1)
+        end)
+        test.it("stops a running session first and removes its history once placement proves its exit", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local methods = {reconcile = "bee.tests.threads.sessions:removal_placement", stop = "bee.tests.threads.sessions:removal_placement"}
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook", placement_methods = methods,
+                owner_id = "sessions-owner", workspace_id = WORKSPACE}}))
+            local session = assert(bounds.id(opened.session))
+            local thread = assert(bounds.id(harness.value(journal:call("session_describe", {session = session})).thread_ref))
+            local attempt = "removal-" .. harness.key()
+            harness.value(journal:call("session_attach", {session = session, attempt_id = attempt, operation_key = harness.key()}))
+            local owner = caller("sessions-owner", WORKSPACE)
+            with_placement("interactive_running", function()
+                local pending = value_of(reply_of(owner, "remove", {session = session, history = true, operation_key = harness.key()}))
+                test.eq(pending.state, "removing")
+                test.eq(count("SELECT COUNT(*) AS count FROM bee_thread_heads WHERE thread_id = ?", {thread}), 1)
+            end)
+            with_placement("interactive_exited", function()
+                value_of(reply_of(owner, "detach", {session = session, attempt_id = attempt, operation_key = harness.key()}))
+            end)
+            test.eq(harness.code(journal:call("session_describe", {session = session})), "NOT_FOUND")
+            test.eq(thread_rows(thread), 0)
         end)
     end)
 end

@@ -1,5 +1,6 @@
 -- MIT. Decisions for the approvals authority.
 local sql = require("sql")
+local security = require("security")
 local json = require("json")
 local bounds = require("bounds")
 local canonical = require("canonical")
@@ -261,6 +262,40 @@ local function op_withdraw(tx: sql.Transaction, actor: string, object: Object, n
     if not settled then return storage(settle_error or "withdraw request") end
     return success({withdrawn = true, request = part_records.view(settled)}, false)
 end
+-- forget_session: a removed session's Needs-you requests end. Its pending
+-- requests are withdrawn; when its thread is removed with it, no request
+-- names that thread and no undelivered thread post waits for it.
+local function op_forget_session(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"session", "thread_id", "owner_id", "history"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local session, thread = bounds.id(object.session), bounds.id(object.thread_id)
+    if not session or session:sub(1, 3) ~= "bs:" or not thread or (object.history ~= nil and type(object.history) ~= "boolean") then
+        return failure("INVALID_ARGUMENT", "forget_session takes a session ref, its thread_id and history")
+    end
+    if not security.can(part_model.FORGET_SESSION, session) then return failure("DENIED", "caller does not remove this session") end
+    local rows, err = tx:query("SELECT * FROM bee_approval_requests WHERE requester_id = ? AND state = 'pending'", {session})
+    if err or not rows then return storage("read the removed session's pending approvals") end
+    local withdrawn = 0
+    for _, raw in ipairs(rows) do
+        local row, decode_error = decode_row(raw, tx)
+        if not row then return storage(decode_error or "decode removed session approval") end
+        local current, expire_error = expire_if_due(tx, row, now)
+        if not current then return storage(expire_error or "expire removed session approval") end
+        if current.state == "pending" then
+            local settled, settle_error = settle(tx, current, "withdrawn", nil, nil, nil, actor, "the session was removed", now)
+            if not settled then return storage(settle_error or "withdraw removed session approval") end
+            withdrawn = withdrawn + 1
+        end
+    end
+    if object.history == true then
+        local _, outbox_error = tx:execute("DELETE FROM bee_approval_outbox WHERE thread_id = ?", {thread})
+        if outbox_error then return storage("remove approval posts to the removed thread") end
+        local _, request_error = tx:execute("UPDATE bee_approval_requests SET thread_id = NULL WHERE thread_id = ?", {thread})
+        if request_error then return storage("detach approvals from the removed thread") end
+    end
+    return success({withdrawn = withdrawn}, false)
+end
+M.op_forget_session = op_forget_session
 M.op_decide = op_decide
 M.op_decide_batch = op_decide_batch
 M.op_withdraw = op_withdraw

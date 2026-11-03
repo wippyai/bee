@@ -15,6 +15,8 @@ M.MAX_REF_BYTES = 256
 M.MAX_KEY_BYTES = 128
 M.MAX_CURSOR_BYTES = 2048
 M.MAX_TITLE_BYTES = 512
+-- An explicit session name is at most this many bytes of text.
+M.MAX_NAME_BYTES = 128
 M.MAX_CODE_BYTES = 128
 M.MAX_VALUE_BYTES = 65536
 M.MAX_VALUE_DEPTH = 16
@@ -51,6 +53,9 @@ type Cleanup = "complete" | "pending" | "uncertain"
 -- A removal is removing while the agent of a session that was not closed is
 -- stopped, and removed once the session is gone.
 type Removal = {operation: string, session: string, state: "removed" | "removing"}
+-- A rename answers the title the session shows and its explicit name; a
+-- rename back to the automatic title answers no name.
+type Rename = {operation: string, session: string, title: string, name: string?}
 type ControlResult = {effect: "cancel", state: "stopped" | "already_terminal", work: string, evidence: Evidence}
     | {effect: "close", state: "closed", session: string, cleanup: Cleanup}
 type OperationResult = {kind: "receipt", value: OperationReceipt} | {kind: "control", value: ControlResult} | {kind: "result", result: Result}
@@ -82,7 +87,7 @@ type HistoryItem = {work: string, sequence: integer, input: unknown, created_at:
 type HistoryPage = {items: {HistoryItem}, next: integer?}
 type ProfileRef = {id: string, revision: integer}
 type SessionSnapshot = {node: string?, peer_scope: string?, saved_profile: ProfileRef?, effective_profile: profile_values.Profile?, profile_digest: string?,
-    budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, terminal: boolean?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
+    budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, terminal: boolean?, thread_ref: string?, thread_shared: boolean?, name: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
     activity: Activity, activity_evidence: ActivityEvidence?, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type OperationReceipt = OpenReceipt | WorkReceipt | ControlReceipt
@@ -389,6 +394,17 @@ function M.decode_control_receipt(value: unknown): (ControlReceipt?, string?)
     return {operation = operation, subject = subject, state = "requested", effect = effect == "close" and "close" or "cancel"}, nil
 end
 
+function M.decode_rename(value: unknown): (Rename?, string?)
+    local object, failure = shape(value, "rename", {"operation", "session", "title", "name"})
+    if not object then return nil, failure end
+    local operation, session = M.ref("operation", object.operation), M.ref("session", object.session)
+    local title = bounds.text(object.title, M.MAX_TITLE_BYTES)
+    local name: string? = nil
+    if object.name ~= nil then name = bounds.text(object.name, M.MAX_NAME_BYTES) end
+    if not operation or not session or not title or (object.name ~= nil and not name) then return nil, "rename is malformed" end
+    return {operation = operation, session = session, title = title, name = name}, nil
+end
+
 function M.decode_removal(value: unknown): (Removal?, string?)
     local object, failure = shape(value, "removal", {"operation", "session", "state"})
     if not object then return nil, failure end
@@ -575,8 +591,14 @@ end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "terminal", "effective_profile", "profile_digest", "budget_consumption", "saved_profile"})
+        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "terminal", "effective_profile", "profile_digest", "budget_consumption", "saved_profile", "thread_shared", "name"})
     if not object then return nil, failure end
+    if object.thread_shared ~= nil and type(object.thread_shared) ~= "boolean" then return nil, "session thread_shared is invalid" end
+    local name: string? = nil
+    if object.name ~= nil then
+        name = bounds.text(object.name, M.MAX_NAME_BYTES)
+        if not name then return nil, "session name is invalid" end
+    end
     if object.terminal ~= nil and type(object.terminal) ~= "boolean" then return nil, "session terminal is invalid" end
     local terminal = object.terminal == true
     local extras: {[string]: string} = {}
@@ -678,7 +700,7 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
         if not steps or not tools or not tokens or not wall then return nil, "session consumption is malformed" end
         consumed = {provider_steps = steps, tool_calls = tools, tokens = tokens, wall_time_ms = wall}
     end
-    return {saved_profile = saved_profile, effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, terminal = terminal, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
+    return {saved_profile = saved_profile, effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, terminal = terminal, thread_ref = extras.thread_ref, thread_shared = object.thread_shared == true, name = name, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
         definition = extras.definition, last_result = last_result,
         session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
         activity = decoded_activity, activity_evidence = activity_evidence,

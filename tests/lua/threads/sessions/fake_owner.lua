@@ -166,9 +166,16 @@ end
 
 function M.remove(request: unknown): Reply
     local input = object(request)
-    local problem = closed(request, {"session", "operation_key"})
+    local problem = closed(request, {"session", "history", "operation_key"})
     if problem then return refuse("INVALID", problem, input.operation_key) end
     return ok({operation = "bo:n:w:" .. segment(input.operation_key), session = input.session, state = "removed"})
+end
+
+function M.rename(request: unknown): Reply
+    local input = object(request)
+    local problem = closed(request, {"session", "name", "operation_key"})
+    if problem then return refuse("INVALID", problem, input.operation_key) end
+    return ok({operation = "bo:n:w:" .. segment(input.operation_key), session = input.session, title = input.name, name = input.name})
 end
 
 function M.list(request: unknown): Reply
@@ -233,6 +240,7 @@ function M.fixture_client(script: ClientScript): sessions.Client
         cancel = function(_: sessions.Client, _: sessions.CancelOptions): (sessions.Operation?, sessions.Fault?) error("unexpected fixture cancel") end,
         close = function(_: sessions.Client, _: sessions.CloseOptions): (sessions.Operation?, sessions.Fault?) error("unexpected fixture close") end,
         remove = function(_: sessions.Client, _: sessions.RemoveOptions): (protocol.Removal?, sessions.Fault?) error("unexpected fixture remove") end,
+        rename = function(_: sessions.Client, _: sessions.RenameOptions): (protocol.Rename?, sessions.Fault?) error("unexpected fixture rename") end,
         await = function(_: sessions.Client, _: sessions.ClientAwaitOptions): (sessions.AnyAwait?, sessions.Fault?) error("unexpected fixture await") end,
         join = function(_: sessions.Client, _: sessions.JoinOptions): (sessions.JoinAwait?, sessions.Fault?) error("unexpected fixture join") end,
         get = function(_: sessions.Client, _: string): (sessions.Session?, sessions.Fault?) error("unexpected fixture get") end,
@@ -254,6 +262,7 @@ function M.fixture_session(snapshot: protocol.SessionSnapshot, script: SessionSc
         await = function(_: sessions.Session, _: sessions.Work, _: sessions.AwaitOptions?): (protocol.WorkAwait?, sessions.Fault?) error("unexpected fixture session await") end,
         close = function(_: sessions.Session, _: sessions.CloseOptions): (sessions.Operation?, sessions.Fault?) error("unexpected fixture session close") end,
         remove = function(_: sessions.Session, _: sessions.RemoveOptions): (protocol.Removal?, sessions.Fault?) error("unexpected fixture session remove") end,
+        rename = function(_: sessions.Session, _: sessions.RenameOptions): (protocol.Rename?, sessions.Fault?) error("unexpected fixture session rename") end,
         history = function(_: sessions.Session, _: {cursor: integer?, limit: integer?}?): (protocol.HistoryPage?, sessions.Fault?) error("unexpected fixture session history") end,
     }
 end

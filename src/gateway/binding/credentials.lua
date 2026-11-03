@@ -349,7 +349,7 @@ end
 function M.forget_session(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"session", "thread_id", "owner_id"})
+    local unknown_field = bounds.fields(object, {"session", "thread_id", "owner_id", "history"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local session = bounds.id(object.session)
     if not session or session:sub(1, 3) ~= "bs:" then return fail("INVALID", "session is not a session ref") end

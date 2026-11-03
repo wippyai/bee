@@ -690,29 +690,35 @@ function M.close(raw_request: unknown): Reply
     return succeed(control_receipt(operation, session, "close"))
 end
 
-local REMOVAL_CODES: {[string]: string} = {NOT_FOUND = "NOT_FOUND", DENIED = "DENIED", CONFLICT = "CONFLICT", INVALID_ARGUMENT = "INVALID"}
+-- A refusal the journal answers keeps its meaning; anything else is the
+-- journal being unavailable.
+local JOURNAL_CODES: {[string]: string} = {NOT_FOUND = "NOT_FOUND", DENIED = "DENIED", CONFLICT = "CONFLICT", INVALID_ARGUMENT = "INVALID"}
 
-local function removal_fault(fault: {code: string, message: string}, operation_key: string): Reply
-    local code = REMOVAL_CODES[fault.code]
+local function journal_fault(fault: {code: string, message: string}, operation_key: string): Reply
+    local code = JOURNAL_CODES[fault.code]
     if code then return fail(code, fault.message, operation_key) end
     return unavailable(fault.message, operation_key)
 end
 
--- remove deletes a session and what Bee keeps only for it; its thread and
--- records stay. The request is recorded first. A session that is not closed
--- closes: its agent stops, and the close completes the removal once
--- placement proves the agent exited. Until then the session is removing.
+-- remove deletes a session and what Bee keeps only for it. Its thread and
+-- records stay, unless history asks to remove them too, which a thread
+-- shared with other sessions, apps or peers refuses. The request is recorded
+-- first. A session that is not closed closes: its agent stops, and the close
+-- completes the removal once placement proves the agent exited. Until then
+-- the session is removing.
 function M.remove(raw_request: unknown): Reply
     local request, refused = request_input(raw_request)
     if not request then return assert(refused) end
     local operation_key = key(request.operation_key)
     local session = ref(request.session)
-    if not operation_key or not session or session:sub(1, 3) ~= "bs:" or bounds.fields(request, {"session", "operation_key"}) then
-        return fail("INVALID", "remove requires a session and operation_key", operation_key)
+    if not operation_key or not session or session:sub(1, 3) ~= "bs:" or bounds.fields(request, {"session", "history", "operation_key"})
+        or (request.history ~= nil and type(request.history) ~= "boolean") then
+        return fail("INVALID", "remove requires a session and operation_key; history is a boolean", operation_key)
     end
     local current = describe(session)
-    local recorded, record_fault = journal.call("session_remove", {session = session, operation_key = operation_key})
-    if record_fault then return removal_fault(record_fault, operation_key) end
+    local recorded, record_fault = journal.call("session_remove", {session = session, operation_key = operation_key,
+        history = request.history == true or nil})
+    if record_fault then return journal_fault(record_fault, operation_key) end
     local receipt = object(recorded)
     local operation = receipt and ref(receipt.operation)
     if not operation then return unavailable("Threads returned a malformed removal receipt", operation_key) end
@@ -720,7 +726,7 @@ function M.remove(raw_request: unknown): Reply
         if current.lifecycle ~= "closing" and current.lifecycle ~= "closed" then
             local close_key = assert(internal_key("remove-close", operation_key))
             local _, transition_fault = journal.call("session_transition", {session = session, state = "closing", operation_key = close_key})
-            if transition_fault then return removal_fault(transition_fault, operation_key) end
+            if transition_fault then return journal_fault(transition_fault, operation_key) end
         end
         local finish_error: string?
         if current.lifecycle == "closed" then finish_error = part_observation.finish_removal(session)
@@ -730,6 +736,26 @@ function M.remove(raw_request: unknown): Reply
     local _, absent = journal.call("session_describe", {session = session})
     if absent and absent.code ~= "NOT_FOUND" then return unavailable(absent.message, operation_key) end
     return succeed({operation = operation, session = session, state = absent and "removed" or "removing"})
+end
+
+-- rename gives the session an explicit name that its title shows from then
+-- on; an empty name returns it to its automatic title.
+function M.rename(raw_request: unknown): Reply
+    local request, refused = request_input(raw_request)
+    if not request then return assert(refused) end
+    local operation_key = key(request.operation_key)
+    local session = ref(request.session)
+    local name = type(request.name) == "string" and (request.name):match("^%s*(.-)%s*$") or nil
+    if not operation_key or not session or session:sub(1, 3) ~= "bs:" or not name or bounds.fields(request, {"session", "name", "operation_key"}) then
+        return fail("INVALID", "rename requires a session, a name and operation_key", operation_key)
+    end
+    local renamed, rename_fault = journal.call("session_rename", {session = session, operation_key = operation_key,
+        name = name ~= "" and name or nil})
+    if rename_fault then return journal_fault(rename_fault, operation_key) end
+    local receipt = object(renamed)
+    local operation, title = receipt and ref(receipt.operation), receipt and bounds.text(receipt.title, 512)
+    if not receipt or not operation or not title then return unavailable("Threads returned a malformed rename receipt", operation_key) end
+    return succeed({operation = operation, session = session, title = title, name = receipt.name})
 end
 
 function M.cancel(raw_request: unknown): Reply
@@ -819,7 +845,7 @@ function M.run(raw_request: unknown): Reply
         expected_incarnation = 1, operation_key = operation_key})
 end
 
-for _, name in ipairs({"open", "run", "send", "await", "join", "get", "history", "cancel", "close", "remove", "catalog"}) do
+for _, name in ipairs({"open", "run", "send", "await", "join", "get", "history", "cancel", "close", "remove", "rename", "catalog"}) do
     local local_method = M[name]
     M[name] = function(raw: unknown): Reply
         local input = object(raw)

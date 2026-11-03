@@ -34,6 +34,7 @@ function M.probe(request: unknown): Object
         await = function(): (nil, nil) return nil, nil end,
         close = function(): (nil, nil) return nil, nil end,
         remove = function(): (nil, nil) return nil, nil end,
+        rename = function(): (nil, nil) return nil, nil end,
         history = function(): (nil, nil) return nil, nil end}
     local work: sessions.Work = {session = session_ref, incarnation = 1, ref = function(): string return work_ref end,
         cancel = function(): (nil, nil) return nil, nil end, state = function(): (nil, nil) return nil, nil end,

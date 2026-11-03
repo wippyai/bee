@@ -30,7 +30,8 @@ type CatalogKind = "definition" | "profile"
 type AwaitOptions = {node: string?, timeout_ms: integer?}
 type CancelOptions = {node: string?, work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
 type CloseOptions = {node: string?, session: SessionArg?, incarnation: integer?, operation_key: string}
-type RemoveOptions = {node: string?, session: SessionArg?, operation_key: string}
+type RemoveOptions = {node: string?, session: SessionArg?, history: boolean?, operation_key: string}
+type RenameOptions = {node: string?, session: SessionArg?, name: string, operation_key: string}
 type SendOptions = {node: string?, session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
 type OpenOptions = {overrides: profiles.Overrides?, node: string?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, operation_key: string}
 type CallOptions = {overrides: profiles.Overrides?, node: string?, definition: string, profile: ProfileRef?, workdir: protocol.Workdir?, workspace: string?, input: Input?, output: string?,
@@ -54,6 +55,7 @@ type Session = {receipt: protocol.OpenReceipt?, snapshot: protocol.SessionSnapsh
     await: (Session, Work, AwaitOptions?) -> (WorkAwait?, Fault?),
     close: (Session, CloseOptions) -> (Operation?, Fault?),
     remove: (Session, RemoveOptions) -> (protocol.Removal?, Fault?),
+    rename: (Session, RenameOptions) -> (protocol.Rename?, Fault?),
     get: (Session) -> (Session?, Fault?),
     history: (Session, {cursor: integer?, limit: integer?}?) -> (protocol.HistoryPage?, Fault?)}
 type Call = {work: Work, observation: WorkAwait}
@@ -66,6 +68,7 @@ type Client = {
     cancel: (Client, CancelOptions) -> (Operation?, Fault?),
     close: (Client, CloseOptions) -> (Operation?, Fault?),
     remove: (Client, RemoveOptions) -> (protocol.Removal?, Fault?),
+    rename: (Client, RenameOptions) -> (protocol.Rename?, Fault?),
     await: (Client, ClientAwaitOptions) -> (AnyAwait?, Fault?),
     join: (Client, JoinOptions) -> (JoinAwait?, Fault?),
     get: (Client, string) -> (Session?, Fault?),
@@ -291,7 +294,10 @@ local function new_client(node: string?): Client
             return client:close(request)
         end
         local handle_remove = function(_: Session, options: RemoveOptions): (protocol.Removal?, Fault?)
-            return client:remove({session = snapshot.session, operation_key = options.operation_key, node = selected_node})
+            return client:remove({session = snapshot.session, history = options.history, operation_key = options.operation_key, node = selected_node})
+        end
+        local handle_rename = function(_: Session, options: RenameOptions): (protocol.Rename?, Fault?)
+            return client:rename({session = snapshot.session, name = options.name, operation_key = options.operation_key, node = selected_node})
         end
         local handle_get = function(_: Session): (Session?, Fault?)
             local value, failure = invoke(M.SESSIONS, "get", {session = snapshot.session, node = selected_node}, nil)
@@ -303,7 +309,7 @@ local function new_client(node: string?): Client
         local handle_history = function(_: Session, options: {cursor: integer?, limit: integer?}?): (protocol.HistoryPage?, Fault?)
             return client:history({session = snapshot.session, cursor = options and options.cursor, limit = options and options.limit, node = selected_node})
         end
-        return {receipt = handle_receipt, snapshot = handle_snapshot, incarnation = handle_incarnation, ref = handle_ref, send = handle_send, await = handle_await, close = handle_close, remove = handle_remove, get = handle_get, history = handle_history}
+        return {receipt = handle_receipt, snapshot = handle_snapshot, incarnation = handle_incarnation, ref = handle_ref, send = handle_send, await = handle_await, close = handle_close, remove = handle_remove, rename = handle_rename, get = handle_get, history = handle_history}
     end
 
     -- Opens a session with its first work in one owner operation.
@@ -424,12 +430,27 @@ local function new_client(node: string?): Client
         if not session then return nil, session_fault end
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
-        local value, failure = invoke(M.SESSIONS, "remove", {session = session, operation_key = key, node = options.node}, key)
+        if options.history ~= nil and type(options.history) ~= "boolean" then return nil, invalid("history is a boolean") end
+        local value, failure = invoke(M.SESSIONS, "remove", {session = session, history = options.history, operation_key = key, node = options.node}, key)
         if failure then return nil, failure end
         local removal, decode_error = protocol.decode_removal(value)
         if not removal then return nil, unreadable(decode_error, key) end
         if removal.session ~= session then return nil, unreadable("removal names another session", key) end
         return removal, nil
+    end
+
+    local client_rename = function(_: Client, options: RenameOptions): (protocol.Rename?, Fault?)
+        local session, session_fault = ref_of(options.session, "session")
+        if not session then return nil, session_fault end
+        local key, key_fault = operation_key(options.operation_key)
+        if not key then return nil, key_fault end
+        if type(options.name) ~= "string" then return nil, invalid("name is a string; an empty name returns the automatic title") end
+        local value, failure = invoke(M.SESSIONS, "rename", {session = session, name = options.name, operation_key = key, node = options.node}, key)
+        if failure then return nil, failure end
+        local renamed, decode_error = protocol.decode_rename(value)
+        if not renamed then return nil, unreadable(decode_error, key) end
+        if renamed.session ~= session then return nil, unreadable("rename names another session", key) end
+        return renamed, nil
     end
 
     local client_await = function(_: Client, options: ClientAwaitOptions): (AnyAwait?, Fault?)
@@ -598,7 +619,7 @@ local function new_client(node: string?): Client
         return page, nil
     end
 
-    client = {run = function(_: Client, options: CallOptions): (Work?, Fault?) return run(options) end, open = client_open, call = client_call, send = client_send, cancel = client_cancel, close = client_close, remove = client_remove, await = client_await, join = client_join, get = client_get, work = client_work, history = client_history, list = client_list, catalog = client_catalog}
+    client = {run = function(_: Client, options: CallOptions): (Work?, Fault?) return run(options) end, open = client_open, call = client_call, send = client_send, cancel = client_cancel, close = client_close, remove = client_remove, rename = client_rename, await = client_await, join = client_join, get = client_get, work = client_work, history = client_history, list = client_list, catalog = client_catalog}
     return client
 end
 
@@ -612,6 +633,7 @@ function M.send(options: SendOptions): (Work?, Fault?) return ambient_client:sen
 function M.cancel(options: CancelOptions): (Operation?, Fault?) return ambient_client:cancel(options) end
 function M.close(options: CloseOptions): (Operation?, Fault?) return ambient_client:close(options) end
 function M.remove(options: RemoveOptions): (protocol.Removal?, Fault?) return ambient_client:remove(options) end
+function M.rename(options: RenameOptions): (protocol.Rename?, Fault?) return ambient_client:rename(options) end
 function M.await(options: ClientAwaitOptions): (AnyAwait?, Fault?) return ambient_client:await(options) end
 function M.join(options: JoinOptions): (JoinAwait?, Fault?) return ambient_client:join(options) end
 function M.get(ref: string): (Session?, Fault?) return ambient_client:get(ref) end

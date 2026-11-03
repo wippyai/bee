@@ -121,6 +121,7 @@ entries:
       cancel: bee.tests.threads.sessions:fake_cancel
       close: bee.tests.threads.sessions:fake_close
       remove: bee.tests.threads.sessions:fake_remove
+      rename: bee.tests.threads.sessions:fake_rename
       list: bee.tests.threads.sessions:fake_list
       history: bee.tests.threads.sessions:fake_history
 - name: fake_catalog_owner
@@ -212,6 +213,14 @@ entries:
   kind: function.lua
   source: file://fake_owner.lua
   method: remove
+  meta: {type: test_support}
+  modules: [security]
+  imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.support.principals:bound, bounds: bee.drivers.values:bounds}
+
+- name: fake_rename
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: rename
   meta: {type: test_support}
   modules: [security]
   imports: {protocol: bee.threads.sessions.types:protocol, sessions: bee.threads.sessions.client:sessions, principals: bee.tests.support.principals:bound, bounds: bee.drivers.values:bounds}
@@ -519,6 +528,16 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   modules: [funcs, security, sql, uuid, registry]
+  imports:
+    test: wippy.test:test
+    harness: bee.tests.threads:harness
+    bounds: bee.drivers.values:bounds
+- name: rename_test
+  kind: function.lua
+  source: file://rename_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, sql, uuid]
   imports:
     test: wippy.test:test
     harness: bee.tests.threads:harness

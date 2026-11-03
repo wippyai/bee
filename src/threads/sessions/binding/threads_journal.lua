@@ -5,7 +5,7 @@ local funcs = require("funcs")
 local M = {}
 M.CONTRACT = "bee.threads:journal"
 M.BINDING_REF = "bee.threads.sessions.env:threads_journal_ref"
-M.METHODS = {"session_create", "session_attach", "session_describe", "session_scan", "session_transition", "session_remove", "work_send", "work_describe", "work_await",
+M.METHODS = {"session_create", "session_attach", "session_describe", "session_scan", "session_transition", "session_remove", "session_rename", "work_send", "work_describe", "work_await",
     "work_history", "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "turn_observation", "work_settle", "work_uncertain", "work_cancel",
     "operation_lookup", "operation_describe", "feed_read"}
 

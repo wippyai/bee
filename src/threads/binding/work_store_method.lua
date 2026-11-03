@@ -25,6 +25,9 @@ end
 function M.session_remove(request: unknown): types.Reply
     return boundary.run(work_store.session_remove, request)
 end
+function M.session_rename(request: unknown): types.Reply
+    return boundary.run(work_store.session_rename, request)
+end
 function M.work_send(request: unknown): types.Reply
     return boundary.run(work_store.work_send, request)
 end

@@ -167,9 +167,15 @@ entries:
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: session_remove
-    description: Record a session removal request, or delete a closed session whose removal was requested
+    description: Record a session removal request, with or without its thread history, or delete a closed session whose removal was requested
     input_schemas:
-    - {format: application/schema+json, definition: {"type":"object","properties":{"session":{"type":"string"},"operation_key":{"type":"string"},"delete":{"type":"boolean"}},"additionalProperties":true,"description":"Record a session removal request, or delete a closed session whose removal was requested"}}
+    - {format: application/schema+json, definition: {"type":"object","properties":{"session":{"type":"string"},"operation_key":{"type":"string"},"delete":{"type":"boolean"},"history":{"type":"boolean"}},"additionalProperties":true,"description":"Record a session removal request, with or without its thread history, or delete a closed session whose removal was requested"}}
+    output_schemas:
+    - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
+  - name: session_rename
+    description: Give a session an explicit name, or return it to its automatic title
+    input_schemas:
+    - {format: application/schema+json, definition: {"type":"object","properties":{"session":{"type":"string"},"operation_key":{"type":"string"},"name":{"type":"string"}},"additionalProperties":true,"description":"Give a session an explicit name, or return it to its automatic title"}}
     output_schemas:
     - {format: application/schema+json, definition: {"oneOf":[{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":true}},"additionalProperties":true,"required":["ok"]},{"type":"object","properties":{"value":{},"replayed":{"type":"boolean"},"ok":{"const":false},"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"},"retryable":{"type":"boolean"}},"additionalProperties":true,"required":["code","message"]}},"additionalProperties":true,"required":["ok","error"]}]}}
   - name: work_send

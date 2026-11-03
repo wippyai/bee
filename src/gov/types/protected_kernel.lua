@@ -165,4 +165,30 @@ function M.names(manifest: Manifest, id: string): boolean
     return false
 end
 
+local function namespace_of(id: string): string
+    return (id:match("^([^:]+):") or "")
+end
+
+-- area is how the kernel holds one namespace: "protected" when it covers an
+-- entry there, "opened" when the host trust map opens entries there to a
+-- super-edit profile, otherwise nil.
+function M.area(manifest: Manifest, namespace: string): string?
+    for _, id in ipairs(manifest.entries) do if namespace_of(id) == namespace then return "protected" end end
+    for _, id in ipairs(manifest.super_edit) do if namespace_of(id) == namespace then return "opened" end end
+    return nil
+end
+
+-- opened_areas are the namespaces the host trust map opens to a super-edit
+-- profile, in order.
+function M.opened_areas(manifest: Manifest): {string}
+    local seen: {[string]: boolean} = {}
+    local result: {string} = {}
+    for _, id in ipairs(manifest.super_edit) do
+        local namespace = namespace_of(id)
+        if not seen[namespace] then seen[namespace] = true; result[#result + 1] = namespace end
+    end
+    table.sort(result)
+    return result
+end
+
 return M

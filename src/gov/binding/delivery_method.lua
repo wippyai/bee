@@ -52,29 +52,6 @@ local function object(value: unknown): Object?
     return bounds.object(value)
 end
 
--- The host profile names the component and source workspace for one
--- destination workspace; the agent names only the overlay it authored in. A
--- refusal carries what the author or the host changes to deliver it.
-local function profile_for(workspace_id: string, source_workspace: string): (Object?, Result?)
-    local entry, entry_error = resources.publication_profiles()
-    if not entry then return nil, failure("UNAVAILABLE", tostring(entry_error or "publication profiles are unavailable")) end
-    local activation_entry, activation_error = resources.activation_profiles()
-    if not activation_entry then return nil, failure("UNAVAILABLE", tostring(activation_error)) end
-    local activation, decode_error = activation_profiles.decode(activation_entry.data)
-    if not activation then return nil, failure("UNAVAILABLE", tostring(decode_error)) end
-    local node, node_error = system.node.id()
-    if not node then return nil, failure("UNAVAILABLE", tostring(node_error)) end
-    local configuration, configuration_error = publication_profiles.configuration(entry.data, activation, node)
-    if not configuration then return nil, failure("UNAVAILABLE", configuration_error or "publication profiles are unavailable") end
-    local profile, refused = publication_profiles.for_source(configuration, workspace_id, source_workspace)
-    if not profile then
-        local reason = refused or {message = "publication profile is unavailable", remedy = ""}
-        return nil, transaction.failure("BLOCKED", reason.message, {remedy = reason.remedy})
-    end
-    return {workspace_id = profile.workspace_id, source_workspace = profile.source_workspace,
-        component = profile.component, overlay_owner = profile.overlay_owner}, nil
-end
-
 local function forward(target: string, request: unknown): (Object?, Result?)
     local raw, call_error = funcs.call(target, request)
     if call_error then return nil, failure("UNAVAILABLE", target .. ": " .. tostring(call_error)) end
@@ -92,6 +69,42 @@ local function forward(target: string, request: unknown): (Object?, Result?)
     local value = object(reply.value)
     if not value then return nil, failure("INTERNAL", target .. " returned no value") end
     return value, nil
+end
+
+-- The host profile names the component and source workspace for one
+-- destination workspace; the agent names only the overlay it authored in. A
+-- refusal carries what the author or the host changes to deliver it.
+local function profile_for(workspace_id: string, source_workspace: string): (Object?, Result?)
+    local entry, entry_error = resources.publication_profiles()
+    if not entry then return nil, failure("UNAVAILABLE", tostring(entry_error or "publication profiles are unavailable")) end
+    local activation_entry, activation_error = resources.activation_profiles()
+    if not activation_entry then return nil, failure("UNAVAILABLE", tostring(activation_error)) end
+    local activation, decode_error = activation_profiles.decode(activation_entry.data)
+    if not activation then return nil, failure("UNAVAILABLE", tostring(decode_error)) end
+    local node, node_error = system.node.id()
+    if not node then return nil, failure("UNAVAILABLE", tostring(node_error)) end
+    local configuration, configuration_error = publication_profiles.configuration(entry.data, activation, node)
+    if not configuration then return nil, failure("UNAVAILABLE", configuration_error or "publication profiles are unavailable") end
+    local profile, refused = publication_profiles.for_source(configuration, workspace_id, source_workspace)
+    if not profile then
+        local kernel, kernel_error = forward("bee.gov.binding:kernel_area", {namespace = source_workspace})
+        if not kernel then return nil, kernel_error end
+        local area = bounds.id(kernel.area)
+        if area == "protected" then
+            local opened = bounds.ids(kernel.opened)
+            if not opened then return nil, failure("INTERNAL", "bee.gov.binding:kernel_area returned malformed opened areas") end
+            return nil, transaction.failure("PROTECTED_KERNEL", source_workspace
+                .. " is part of Bee's protected kernel; no overlay or edit grant can change it",
+                {remedy = "only a Bee update changes it; Edit mode in Bee Settings opens only " .. table.concat(opened, ", ")})
+        elseif area == "opened" then
+            return nil, transaction.failure("BLOCKED", source_workspace .. " has no active edit grant in this workspace",
+                {remedy = "the person enables Edit mode for it in Bee Settings, then deliver this overlay again"})
+        end
+        local reason = refused or {message = "publication profile is unavailable", remedy = ""}
+        return nil, transaction.failure("BLOCKED", reason.message, {remedy = reason.remedy})
+    end
+    return {workspace_id = profile.workspace_id, source_workspace = profile.source_workspace,
+        component = profile.component, overlay_owner = profile.overlay_owner}, nil
 end
 
 local function diagnostic_rows(report: Object): {unknown}

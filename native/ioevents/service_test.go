@@ -103,7 +103,7 @@ func TestRecursiveWatchFollowsExistingAndNewDirectories(t *testing.T) {
 	await(t, events, rescan("."))
 	write(t, filepath.Join(root, "docs", "deep", "a.txt"))
 	await(t, events, change("docs/deep/a.txt"))
-	if err := os.MkdirAll(filepath.Join(root, "docs", "new", "inner"), 0700); err != nil {
+	if err := os.Mkdir(filepath.Join(root, "docs", "new"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	created := await(t, events, change("docs/new"))
@@ -111,6 +111,11 @@ func TestRecursiveWatchFollowsExistingAndNewDirectories(t *testing.T) {
 		t.Fatalf("new directory reported as %q", created.Operation)
 	}
 	await(t, events, rescan("docs/new"))
+	if err := os.Mkdir(filepath.Join(root, "docs", "new", "inner"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	await(t, events, change("docs/new/inner"))
+	await(t, events, rescan("docs/new/inner"))
 	write(t, filepath.Join(root, "docs", "new", "inner", "b.txt"))
 	await(t, events, change("docs/new/inner/b.txt"))
 	if err := os.Rename(filepath.Join(root, "docs", "new"), filepath.Join(root, "moved")); err != nil {

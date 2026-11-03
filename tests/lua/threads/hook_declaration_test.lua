@@ -5,6 +5,7 @@ local capabilities = require("capabilities")
 local response = require("response")
 local security = require("security")
 local funcs = require("funcs")
+local canonical = require("canonical")
 local ID = "bee.tests.threads:echo_hooks"
 local READ = "bee.threads.sessions.security:owner_registry_read_policy"
 local function declare(data: {[string]: unknown}?, id: string?)
@@ -27,7 +28,7 @@ local function define_tests()
         end)
         test.it("reads a new driver's declared points, transport and response", function()
             local ok, err = pcall(function()
-                declare({response = "hook_specific_output", transport = "command", allow_on_change = true,
+                declare({response = "bee.driver.descriptor:hook_specific_output_allowing_changes", transport = "command",
                     points = {["tool.before"] = {results = {"pass", "change", "deny"}, reason = "Echo PreToolUse"}}})
                 local before = assert(capabilities.at("echoagent", "tool.before"))
                 test.is_true(before.supported)
@@ -35,7 +36,7 @@ local function define_tests()
                 test.is_false(capabilities.allows(before, "add_context"))
                 test.is_false(assert(capabilities.at("echoagent", "tool.after")).supported)
                 test.eq(capabilities.seconds("echoagent", "tool.before"), 3)
-                local rendered = response.render("PreToolUse", {changed = true, input = {command = "ls"}}, "echoagent")
+                local rendered = assert(response.render("PreToolUse", {changed = true, input = {command = "ls"}}, "echoagent"))
                 test.eq(rendered.hookSpecificOutput.permissionDecision, "allow")
                 declare({transport = "command", points = {["tool.before"] = {results = {"pass"}, reason = "no response named"}}})
                 local refused = assert(capabilities.at("echoagent", "tool.before"))
@@ -47,7 +48,7 @@ local function define_tests()
         end)
         test.it("is found by meta under any id with the Agents stack's registry read", function()
             local ok, err = pcall(function()
-                declare({response = "hook_specific_output", transport = "command",
+                declare({response = "bee.driver.descriptor:hook_specific_output", transport = "command",
                     points = {["tool.before"] = {results = {"pass", "deny"}, reason = "Echo PreToolUse"}}})
                 local scope = security.new_scope({assert(security.policy(READ))})
                 local actor = security.new_actor("fixture:hook-endpoint", {})
@@ -78,9 +79,35 @@ local function define_tests()
             test.eq(capabilities.seconds("claude", "tool.before"), 2)
             test.eq(capabilities.seconds("codex", "tool.before"), 2)
             test.is_false(assert(capabilities.at("opencode", "tool.before")).supported)
-            test.eq(capabilities.declaration("wippy").response, "host")
+            test.is_true(capabilities.declaration("wippy").host)
             test.eq(capabilities.declaration("agy").input, "additive")
             test.eq(#assert(capabilities.mcp_meta()), 1)
+        end)
+        test.it("shapes each built-in driver's answers as its CLI reads them", function()
+            local cases = {
+                {"claude", "PreToolUse", {denied = true, reason = "no", additional_context = "ctx"},
+                    '{"hookSpecificOutput":{"additionalContext":"ctx","hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"no"}}'},
+                {"claude", "UserPromptSubmit", {denied = true, reason = "no"}, '{"decision":"block","reason":"no"}'},
+                {"claude", "PreToolUse", {changed = true, input = {command = "ls"}}, '{"hookSpecificOutput":{"hookEventName":"PreToolUse","updatedInput":{"command":"ls"}}}'},
+                {"codex", "PreToolUse", {changed = true, input = {command = "ls"}}, '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{"command":"ls"}}}'},
+                {"claude", "PostToolUse", {original_refs = {"r"}, output = "x"}, '{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedToolOutput":"x"}}'},
+                {"claude", "PostToolUse", {original_refs = {}, additional_context = ""}, "{}"},
+                {"agy", "PreToolUse", {denied = true, reason = "no", changed = true, input = {a = 1}}, '{"decision":"deny","reason":"no"}'},
+                {"agy", "PreToolUse", {changed = true, input = {a = 1}, additional_context = "ctx"}, '{"overwrite":{"a":1}}'},
+                {"agy", "UserPromptSubmit", {denied = true, reason = "no", additional_context = "ctx"}, '{"injectSteps":[{"ephemeralMessage":"ctx"}]}'},
+                {"agy", "PostToolUse", {original_refs = {"r"}, output = "x"}, "{}"},
+            }
+            for _, case in ipairs(cases) do
+                local rendered, render_error = response.render(case[2], case[3], case[1])
+                local answer = assert(rendered, render_error)
+                if case[4] == "{}" then test.is_nil(next(answer), case[1] .. " " .. case[2])
+                else test.eq(canonical.encode(answer), case[4], case[1] .. " " .. case[2]) end
+            end
+            local decision = {hookSpecificOutput = {hookEventName = "PermissionRequest", decision = {behavior = "deny", message = "no"}}}
+            test.eq(canonical.encode(assert(response.permission(decision, "agy"))), '{"decision":"deny","reason":"no"}')
+            local allowed = {hookSpecificOutput = {hookEventName = "PermissionRequest", decision = {behavior = "allow"}}}
+            test.eq(canonical.encode(assert(response.permission(allowed, "agy"))), '{"decision":"allow"}')
+            test.eq(assert(response.permission(decision, "claude")), decision)
         end)
     end)
 end

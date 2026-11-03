@@ -351,9 +351,9 @@ local function define_tests(group: string, selected_driver: string?)
             end
             test.eq(table.concat(capabilities.for_driver("codex")[4].allowed_results, ","), "pass,add_context")
             local changed = {changed = true, input = {command = "pwd"}, original_refs = {}, additional_context = "", denied = false}
-            local wire = response.render("PreToolUse", changed, "codex")
+            local wire = assert(response.render("PreToolUse", changed, "codex"))
             test.eq(assert(bounds.object(wire.hookSpecificOutput)).permissionDecision, "allow")
-            local denied = response.render("UserPromptSubmit", {denied = true, reason = "no", additional_context = ""}, "claude")
+            local denied = assert(response.render("UserPromptSubmit", {denied = true, reason = "no", additional_context = ""}, "claude"))
             test.eq(denied.decision, "block")
         end)
         end

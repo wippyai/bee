@@ -18,7 +18,8 @@ entries:
     type: bee.driver_hooks
     driver_id: agy
   data:
-    response: agy
+    response: bee.driver.agy.descriptor:hook_response
+    reader: bee.driver.agy.hooks:input
     transport: command
     input: additive
     unsupported: Agy's installed contract has no synchronous response for this point.
@@ -29,3 +30,21 @@ entries:
       tool.before:
         results: [pass, change, deny]
         reason: PreToolUse decision=deny blocks execution; overwrite merges top-level arguments. Changes cannot remove existing fields. Host authorization still applies.
+- name: hook_response
+  kind: registry.entry
+  meta:
+    type: bee.driver_hook_response
+    comment: Agy answers - PreToolUse decision deny or overwrite, PreInvocation injectSteps, and a permission gate decision
+  data:
+    parts:
+    - fact: denied
+      events: [PreToolUse]
+      value: {decision: deny, reason: '{reason}'}
+    - fact: changed
+      events: [PreToolUse]
+      unless: [denied]
+      value: {overwrite: '{input}'}
+    - fact: context
+      events: [UserPromptSubmit]
+      value: {injectSteps: [{ephemeralMessage: '{context}'}]}
+    permission: {decision: '{behavior}', reason: '{message}'}

@@ -62,7 +62,9 @@ local function answer(binding: subject_call.Binding, outcome: Object, payload: O
         return decoded, nil
     end
     if value.extension_response ~= nil then
-        return hook_response.render(tostring(event), value.extension_response, bounds.id(value.hook_driver) or "unknown"), nil
+        local rendered, render_error = hook_response.render(tostring(event), value.extension_response, bounds.id(value.hook_driver) or "unknown")
+        if not rendered then return fault("INTERNAL", tostring(render_error)) end
+        return rendered, nil
     end
     if value.additional_context == nil then return {}, nil end
     local context = bounds.text(value.additional_context, 24576)

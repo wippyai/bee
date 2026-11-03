@@ -591,6 +591,7 @@ entries:
     test: wippy.test:test
     capabilities: bee.threads.hooks:capabilities
     response: bee.threads.hooks:response
+    canonical: bee.drivers.values:canonical
   security: {policies: [bee.tests.harness:apply_test_policy, bee.tests.threads:hook_declaration_test_policy]}
 - name: hook_declaration_test_policy
   kind: security.policy

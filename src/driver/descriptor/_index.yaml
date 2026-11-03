@@ -16,3 +16,49 @@ entries:
     type: bee.kernel
   data:
     scope: tree
+- name: hook_specific_output
+  kind: registry.entry
+  meta:
+    type: bee.driver_hook_response
+    comment: Hook answers as hookSpecificOutput for the event; a denied non-tool event blocks with a reason
+  data:
+    parts:
+    - fact: context
+      value: {hookSpecificOutput: {hookEventName: '{event}', additionalContext: '{context}'}}
+    - fact: denied
+      events: [PreToolUse]
+      value: {hookSpecificOutput: {hookEventName: '{event}', permissionDecision: deny, permissionDecisionReason: '{reason}'}}
+    - fact: denied
+      except_events: [PreToolUse]
+      value: {decision: block, reason: '{reason}'}
+    - fact: changed
+      events: [PreToolUse]
+      unless: [denied]
+      value: {hookSpecificOutput: {hookEventName: '{event}', updatedInput: '{input}'}}
+    - fact: output
+      events: [PostToolUse]
+      unless: [denied]
+      value: {hookSpecificOutput: {hookEventName: '{event}', updatedToolOutput: '{output}'}}
+- name: hook_specific_output_allowing_changes
+  kind: registry.entry
+  meta:
+    type: bee.driver_hook_response
+    comment: Hook answers as hookSpecificOutput, where a changed tool input also allows the call
+  data:
+    parts:
+    - fact: context
+      value: {hookSpecificOutput: {hookEventName: '{event}', additionalContext: '{context}'}}
+    - fact: denied
+      events: [PreToolUse]
+      value: {hookSpecificOutput: {hookEventName: '{event}', permissionDecision: deny, permissionDecisionReason: '{reason}'}}
+    - fact: denied
+      except_events: [PreToolUse]
+      value: {decision: block, reason: '{reason}'}
+    - fact: changed
+      events: [PreToolUse]
+      unless: [denied]
+      value: {hookSpecificOutput: {hookEventName: '{event}', updatedInput: '{input}', permissionDecision: allow}}
+    - fact: output
+      events: [PostToolUse]
+      unless: [denied]
+      value: {hookSpecificOutput: {hookEventName: '{event}', updatedToolOutput: '{output}'}}

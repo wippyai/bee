@@ -18,7 +18,7 @@ entries:
     type: bee.driver_hooks
     driver_id: claude
   data:
-    response: hook_specific_output
+    response: bee.driver.descriptor:hook_specific_output
     transport: http
     points:
       session.start:

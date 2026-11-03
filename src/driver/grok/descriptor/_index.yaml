@@ -18,7 +18,7 @@ entries:
     type: bee.driver_hooks
     driver_id: grok
   data:
-    response: hook_specific_output
+    response: bee.driver.descriptor:hook_specific_output
     transport: command
     unsupported: Grok 1.0.30 ignores SessionStart stdout.
     points:

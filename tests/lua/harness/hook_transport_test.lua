@@ -105,6 +105,48 @@ local function define_tests()
             test.is_nil((stored:find("xxxxxxxx", 1, true)))
             call("bee.gateway.binding:revoke", {binding_id = binding_id})
         end)
+        test.it("reads a hook command's stdin by the event it names and the driver that qualifies it", function()
+            call("bee.gateway.binding:open", {address = address()})
+            local thread = call("bee.threads.binding:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Hook command"})
+            local attempt_id = fresh("attempt")
+            local action_id = "action-" .. attempt_id
+            local admitted = call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action_id, attempt_id = attempt_id,
+                thread_id = thread.thread_id, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"},
+                hooks = {"PostToolUse", "PreToolUse", "UserPromptSubmit"}})
+            local binding_id = tostring((assert(bounds.object(admitted.binding))).binding_id)
+            local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id})
+            local minted = call("bee.gateway.binding:materialize", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id,
+                materialization_key = authorized.materialization_key})
+            local url = "http://" .. address() .. "/hook/" .. action_id
+            local function post(event: string, body: string): (integer, string)
+                local response, err = http_client.post(url, {headers = {["Content-Type"] = "application/json", ["X-Bee-Hook-Event"] = event,
+                    Authorization = "Bearer " .. tostring(minted.hook_token)}, body = body, timeout = 30})
+                if err or not response then error("hook post: " .. tostring(err)) end
+                return math.floor(tonumber(response.status_code) or 0), tostring(response.body or "")
+            end
+            local status = post("PostToolUse", '{"session_id":"s","tool_name":"Read","tool_use_id":"tool-plain","tool_input":{}}')
+            test.is_true(status == 200 or status == 202, "plain command answered " .. tostring(status))
+            test.eq((post("PostToolUse", '{"hook_event_name":"PreToolUse","session_id":"s"}')), 400)
+            test.eq((post("PostToolUse", "{")), 400)
+            test.eq((post("Unknown", "{}")), 400)
+            test.eq((post("agy:Unknown", "{}")), 400)
+            status = post("agy:PreToolUse", '{"conversationId":"conversation-1","stepIdx":7,"toolCall":{"name":"run_command","args":{"CommandLine":"pwd"}}}')
+            test.is_true(status == 200 or status == 202, "agy gate answered " .. tostring(status))
+            test.eq((post("agy:PreToolUse", '{"conversationId":"conversation-1","toolCall":{"name":"run_command","args":{}}}')), 400)
+            local skipped, skipped_body = post("agy:UserPromptSubmit", '{"conversationId":"conversation-1","invocationNum":1}')
+            test.eq(skipped, 200)
+            test.eq(skipped_body, "")
+            local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding_id})
+            local seen: {[string]: Object} = {}
+            for _, raw in ipairs(principals.objects(queue.hooks)) do
+                local fields = assert(bounds.object(raw.fields))
+                seen[tostring(fields.event)] = fields
+            end
+            test.eq(assert(seen.PostToolUse).tool_use_id, "tool-plain")
+            test.eq(assert(seen.PreToolUse).tool_name, "run_command")
+            test.is_nil(seen.UserPromptSubmit)
+            call("bee.gateway.binding:revoke", {binding_id = binding_id})
+        end)
     end)
 end
 return test.run_cases(define_tests)

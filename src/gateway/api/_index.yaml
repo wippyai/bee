@@ -51,8 +51,11 @@ entries:
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
     bounds: bee.drivers.values:bounds
+    capabilities: bee.threads.hooks:capabilities
+    hook_response: bee.threads.hooks:response
   security:
     policies:
+    - bee.gateway.api:hook_reader_policy
     - bee.threads.sessions.security:owner_registry_read_policy
     - bee.gateway.security:address_call_policy
     - bee.gateway.security:store_policy
@@ -71,12 +74,16 @@ entries:
   modules:
   - http
   - json
+  - funcs
+  - registry
   imports:
     gateway: bee.gateway.binding:gateway
     hooks: bee.gateway.hooks:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
     bounds: bee.drivers.values:bounds
+    capabilities: bee.threads.hooks:capabilities
+    hook_response: bee.threads.hooks:response
   security:
     policies:
     - bee.gateway.security:address_call_policy
@@ -244,3 +251,11 @@ entries:
     record_bounds: bee.drivers.records:bounds
     app_requests: bee.node:app_tool_request
     requirements: bee.hub.package:requirements
+- name: hook_reader_policy
+  kind: security.policy
+  meta:
+    comment: The hook endpoint calls the input reader a driver's hook declaration names for a hook command the driver qualifies
+  policy:
+    actions: [funcs.call]
+    resources: '*'
+    effect: allow

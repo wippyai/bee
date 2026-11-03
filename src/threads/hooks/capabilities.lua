@@ -8,17 +8,21 @@ M.TYPE = "bee.driver_hooks"
 M.POINTS = {"session.start", "prompt.submit", "tool.before", "tool.after"}
 M.EVENTS = {SessionStart = "session.start", UserPromptSubmit = "prompt.submit", PreToolUse = "tool.before", PostToolUse = "tool.after"}
 M.RESULTS = {"pass", "add_context", "change", "deny"}
-M.RESPONSES = {"hook_specific_output", "agy", "host"}
 M.TRANSPORTS = {command = hook_limits.COMMAND_SECONDS, http = hook_limits.HTTP_SECONDS, mcp = hook_limits.MCP_SECONDS}
 M.UNDECLARED = "The driver declares no synchronous hook response."
 type Capability = {point: string, supported: boolean, allowed_results: {string}, reason: string}
 type Point = {results: {string}, reason: string, transport: string?}
 type McpMeta = {hook: {string}, model: {string}}
+-- response: the bee.driver_hook_response entry that shapes the driver's answers.
+-- host: the host answers the driver's hook points in process, over no transport.
+-- reader: the function that reads the driver's hook stdin as the Bee payload
+-- for a hook command whose event the driver qualifies with its id.
 type Declaration = {
     response: string?,
+    host: boolean,
+    reader: string?,
     unsupported: string,
     points: {[string]: Point},
-    allow_on_change: boolean,
     input: string?,
     input_bytes: integer?,
     output_bytes: integer?,
@@ -42,13 +46,13 @@ end
 function M.decode(raw: unknown): (Declaration?, string?)
     local data = bounds.object(raw)
     if not data then return nil, "hook declaration data must be an object" end
-    local extra = bounds.fields(data, {"response", "transport", "unsupported", "points", "allow_on_change", "input",
+    local extra = bounds.fields(data, {"response", "transport", "unsupported", "points", "host", "reader", "input",
         "input_bytes", "output_bytes", "mcp_meta"})
     if extra then return nil, "hook declaration: " .. extra end
     local response: string? = nil
     if data.response ~= nil then
-        response = bounds.member(data.response, M.RESPONSES)
-        if not response then return nil, "hook declaration response must be hook_specific_output, agy or host" end
+        response = bounds.id(data.response)
+        if not response then return nil, "hook declaration response must name a hook response entry" end
     end
     local default_transport, transport_error = transport(data.transport, "hook declaration transport")
     if transport_error then return nil, transport_error end
@@ -75,11 +79,16 @@ function M.decode(raw: unknown): (Declaration?, string?)
         local selected, selected_error = transport(point.transport, "hook point " .. name .. " transport")
         if selected_error then return nil, selected_error end
         selected = selected or default_transport
-        if response ~= "host" and not selected then return nil, "hook point " .. name .. " names no transport" end
+        if data.host ~= true and not selected then return nil, "hook point " .. name .. " names no transport" end
         points[name] = {results = results, reason = reason, transport = selected}
     end
     if next(points) ~= nil and not response then return nil, "a hook declaration with points names its response" end
-    if data.allow_on_change ~= nil and type(data.allow_on_change) ~= "boolean" then return nil, "allow_on_change must be a boolean" end
+    if data.host ~= nil and type(data.host) ~= "boolean" then return nil, "host must be a boolean" end
+    local reader: string? = nil
+    if data.reader ~= nil then
+        reader = bounds.id(data.reader)
+        if not reader then return nil, "reader must name a hook input function" end
+    end
     local input: string? = nil
     if data.input ~= nil then
         input = bounds.member(data.input, {"command", "additive"})
@@ -99,7 +108,7 @@ function M.decode(raw: unknown): (Declaration?, string?)
         if not model then return nil, model_error end
         mcp_meta = {hook = hook, model = model}
     end
-    return {response = response, unsupported = unsupported, points = points, allow_on_change = data.allow_on_change == true,
+    return {response = response, unsupported = unsupported, points = points, host = data.host == true, reader = reader,
         input = input, input_bytes = input_bytes, output_bytes = output_bytes, mcp_meta = mcp_meta}, nil
 end
 
@@ -115,7 +124,7 @@ end
 -- declaration returns the driver's hook declaration; a driver that declares
 -- none has no hook points.
 function M.declaration(driver: string): (Declaration, string?)
-    local none: Declaration = {unsupported = M.UNDECLARED, points = {}, allow_on_change = false}
+    local none: Declaration = {unsupported = M.UNDECLARED, points = {}, host = false}
     local found, find_error = declarations({["meta.driver_id"] = driver})
     if not found then return none, find_error end
     if #found == 0 then return none, nil end

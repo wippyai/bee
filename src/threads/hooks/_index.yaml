@@ -59,6 +59,7 @@ entries:
 - name: response
   kind: library.lua
   source: file://response.lua
+  modules: [registry]
   imports: {bounds: bee.drivers.values:bounds, capabilities: bee.threads.hooks:capabilities}
 - name: original
   kind: library.lua

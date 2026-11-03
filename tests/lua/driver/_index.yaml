@@ -159,3 +159,25 @@ entries:
     configuration: bee.drivers.muse.binding:configuration
     placement_configuration: bee.placement.native.env:configuration
     placement_types: bee.placement:types
+- name: agy_artifact_root
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native.env:environment
+  variable: TMPDIR
+  readonly: true
+- name: agy_artifacts
+  kind: fs.directory
+  meta:
+    type: test_support
+    comment: Agy conversation artifact directories the hook input suite writes transcripts into
+  directory: ${env:bee.tests.driver:agy_artifact_root}
+  auto_init: false
+- name: agy_hook_input_test
+  kind: function.lua
+  source: file://agy_hook_input_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: 120s}
+  modules: [fs, env, funcs, json, time]
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds

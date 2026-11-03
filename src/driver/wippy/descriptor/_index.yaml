@@ -7,7 +7,8 @@ entries:
     type: bee.driver_hooks
     driver_id: wippy
   data:
-    response: host
+    response: bee.driver.descriptor:hook_specific_output
+    host: true
     input_bytes: 8192
     output_bytes: 3000
     points:

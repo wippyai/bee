@@ -24,6 +24,8 @@ entries:
     path: .imports.seam
   - entry: bee.apps.settings.app:edit_mode
     path: .imports.seam
+  - entry: bee.node.binding:tests_call
+    path: .imports.seam
 - name: demand_state
   kind: library.lua
   source: file://demand_state.lua

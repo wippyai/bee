@@ -61,6 +61,7 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     tests: bee.node:tests
+    seam: bee.process:seam
     peers: bee.node:peer_tools
   security:
     policies:

@@ -271,19 +271,6 @@ def managed_gateway(src):
     update_entries(src / "gateway/security/_index.yaml", pin)
 
 
-def malformed_overlay_listing(src):
-    """The fixture actor `overlay-listing-fault` receives a malformed overlay list from the overlay call the tests facade makes."""
-    source = src / "node/binding/tests_call.lua"
-    replace_once(source, 'local function overlays()', '''local function listing(): string
-    local actor = security.actor()
-    if actor and actor:id() == "overlay-listing-fault" then return "bee.tests.node:overlay_listing_fault" end
-    return OVERLAYS
-end
-
-local function overlays()''')
-    replace_once(source, 'funcs.new():call(OVERLAYS, {operation = "list"})', 'funcs.new():call(listing(), {operation = "list"})')
-
-
 def runner_fixture_type(src):
     """The runner finds the fixture applications' tests by their own type, so the suites' unrestricted runner leaves them alone."""
     source = src / "hub/binding/artifact_source.lua"
@@ -929,7 +916,6 @@ def compose():
     yield_session_defaults(src)
     managed_gateway(src)
     runner_fixture_type(src)
-    malformed_overlay_listing(src)
     fixture_hub_updates(src)
     shutil.copy2(ROOT / "src/placement/native/service/materialization.lua",
                  TESTS / "lua/placement/native/service/materialization.lua")

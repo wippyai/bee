@@ -4,13 +4,15 @@ local security = require("security")
 local bounds = require("bounds")
 local tests = require("tests")
 local peers = require("peers")
+local seam = require("seam")
 
 local OVERLAYS = "bee.gov.binding:overlay_call"
 local BACKEND = "bee.node.binding:tests_backend"
 local SCOPE = "bee.node.security:tests_backend"
 
 local function overlays(): ({[string]: boolean}?, tests.Reply?)
-    local raw, call_error = funcs.new():call(OVERLAYS, {operation = "list"})
+    local raw: unknown, call_error: unknown = seam.call("bee.node.binding.overlay_listing"), nil
+    if raw == nil then raw, call_error = funcs.new():call(OVERLAYS, {operation = "list"}) end
     if call_error then return nil, tests.fail("UNAVAILABLE", "overlay listing: " .. tostring(call_error)) end
     local reply = bounds.object(raw)
     local value = reply and reply.ok == true and bounds.object(reply.value) or nil

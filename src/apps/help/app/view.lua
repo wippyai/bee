@@ -55,8 +55,6 @@ local BINDINGS: Bindings = {
         {group = "Menus", key = "Shift+Right", action = "Window menu from inside a window"},
         {group = "Menus", key = "Bar", action = "Start, tabs and the desktop label"},
         {group = "Text", key = "Drag", action = "Select a window's text and copy it on release"},
-        {group = "Text", key = "Double click", action = "Copy a word, path or URL"},
-        {group = "Text", key = "Triple click", action = "Copy a line"},
         {group = "Text", key = "Shift+Drag", action = "The terminal's own selection, across windows"},
     },
     copy = {

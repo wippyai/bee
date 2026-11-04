@@ -101,24 +101,11 @@ local function define_tests()
             test.eq(selection.text(selection.drag(selection.press(wide, 1, 1), 2, 1)), "A界")
         end)
 
-        test.it("selects a whole word, path or URL on a double click and the row on a triple click", function()
-            local rows = {"open (/srv/me1/a.lua) now", "see https://x.io/p?q=1, ok", "   "}
-            local state = captured(rows, binding("view", "mount", 1, 26, 3))
-            test.eq(selection.text(selection.word(state, 10, 1)), "/srv/me1/a.lua")
-            test.eq(selection.text(selection.word(state, 2, 1)), "open")
-            test.eq(selection.text(selection.word(state, 8, 2)), "https://x.io/p?q=1")
-            test.eq(selection.text(selection.word(state, 5, 1)), "")
-            test.eq(selection.text(selection.line(state, 2)), "see https://x.io/p?q=1, ok")
-            local span = selection.range(selection.line(state, 1))
-            test.not_nil(span)
-            if span then test.eq(span.start.x, 1); test.eq(span.finish.x, 26) end
-        end)
-
         test.it("copies rows without the padding after their text", function()
             local state = captured({"one   ", "two   ", "      "}, binding("view", "mount", 1, 6, 3))
             test.eq(selection.text(selection.span(state, {x = 1, y = 1}, {x = 6, y = 3}, false)), "one\ntwo\n")
             test.eq(selection.text(selection.span(state, {x = 3, y = 1}, {x = 2, y = 2}, true)), "one\ntwo")
-            test.is_nil(selection.range(selection.clear(selection.line(state, 1))))
+            test.is_nil(selection.range(selection.clear(selection.span(state, {x = 1, y = 1}, {x = 1, y = 1}, true))))
         end)
 
         test.it("finds a query forward and backward, wrapping, case-insensitively without capitals", function()

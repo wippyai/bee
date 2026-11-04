@@ -174,39 +174,6 @@ function M.plain(value: State, y: integer): string
     return text.plain(value.snapshot.rows[y] or "")
 end
 
--- WORD_BREAK holds the characters that end a word for a double click, so a
--- path, URL or id selects whole while brackets and quotes around it stay out.
-local WORD_BREAK = "[%s\"'`()%[%]{}<>,;|]"
-
--- cell_text is the character covering cell x of row y, or "" past the row.
-local function cell_text(value: State, x: integer, y: integer): string
-    local row = value.snapshot.rows[y] or ""
-    local first, last = whole_cells(row, x - 1, x, value.snapshot.binding.width)
-    return text.plain(text.cut(row, first, last))
-end
-
-local function word_cell(value: State, x: integer, y: integer): boolean
-    local found = cell_text(value, x, y)
-    return found ~= "" and not found:find(WORD_BREAK)
-end
-
--- word selects the word covering cell x of row y; a cell between words
--- selects only itself.
-function M.word(value: State, x: integer, y: integer): State
-    local at = point(value, x, y)
-    if not word_cell(value, at.x, at.y) then return M.span(value, at, at, false) end
-    local first, last = at.x, at.x
-    while first > 1 and word_cell(value, first - 1, at.y) do first = first - 1 end
-    while last < value.snapshot.binding.width and word_cell(value, last + 1, at.y) do last = last + 1 end
-    return M.span(value, {x = first, y = at.y}, {x = last, y = at.y}, false)
-end
-
--- line selects row y whole.
-function M.line(value: State, y: integer): State
-    local at = point(value, 1, y)
-    return M.span(value, at, at, true)
-end
-
 -- cell is the first cell of byte offset index in plain row text.
 local function cell(row: string, index: integer): integer
     return text.width(row:sub(1, index - 1)) + 1

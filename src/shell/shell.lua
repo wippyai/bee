@@ -418,8 +418,6 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         run(function(): Result return call_job("close", {id = id}) end)
     end
 
-    local function now(): integer return math.floor(time.now():unix_nano() / 1000000) end
-
     -- copied applies a copy outcome: events for the window's app, text for
     -- the clipboard and the status that tells the person what happened.
     local function copied(id: string?, outcome: copy.Outcome)
@@ -947,7 +945,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
                 end
                 if not capture and win.mode ~= "collapsed" and layout.contains(body, x, y) then
                     local content = contents[win.id]
-                    if views[win.id] then copied(win.id, copy.pointer(clip, win.id, body, content and content.rows or {}, event, now(), drags(win.id))) end
+                    if views[win.id] then copied(win.id, copy.pointer(clip, win.id, body, content and content.rows or {}, event, drags(win.id))) end
                 end
                 return
             end
@@ -1099,7 +1097,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         end
         if copy.engaged(clip) then
             local id = copy.view(clip)
-            local outcome = copy.input(clip, event, id and copy.body(scene(), id) or nil, now())
+            local outcome = copy.input(clip, event, id and copy.body(scene(), id) or nil)
             copied(id, outcome)
             if not outcome.pass then return false end
         end

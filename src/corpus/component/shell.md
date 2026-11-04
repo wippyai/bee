@@ -24,8 +24,8 @@ shell draws through `bee.ui:appearance` and reaches the node through
 `bee.node:client`; applications do not import shell libraries.
 
 The shell copies text out of windows for every application: a left drag inside
-a window body copies on release, a double click copies a word and a triple
-click a line, Alt+Q (`bee.shell:hints`) labels the focused window's copyable
+a window body copies on release, a click reaches the application as its press
+and release, Alt+Q (`bee.shell:hints`) labels the focused window's copyable
 tokens, and Alt+C or the window menu's Select text opens copy mode
 (`bee.shell:copy`) with cursor keys, `v`/`V`, `/` search and `y` to copy. Copy
 works on a frozen snapshot of the window's visible rows and writes the

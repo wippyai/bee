@@ -104,6 +104,45 @@ entries:
   - entry: bee.gateway.service:external
     path: .imports.seam
   - entry: bee.gateway.service:backlog
+  - entry: bee.harness.service:carrier
+    path: .imports.seam
+  - entry: bee.placement.native.persist:store
+    path: .imports.seam
+  - entry: bee.placement.native.service:runner
+    path: .imports.seam
+  - entry: bee.placement.native.service:process_runner
+    path: .imports.seam
+  - entry: bee.placement.native.service:service
+    path: .imports.seam
+  - entry: bee.placement.native.service:workdir_preparers
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:prepare
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:start
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:status
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:activity
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:stop
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:reconcile
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:cleanup
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:evidence
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:attach
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:capabilities
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:measure_executable
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:close_stdin
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:prepare_environment
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:methods
     path: .imports.seam
 - name: demand_state
   kind: library.lua

@@ -11,8 +11,9 @@ local placement_protocol = require("placement_protocol")
 local eventbus = require("events")
 local commits = require("commits")
 local bounds = require("bounds")
+local seam = require("seam")
 type Mode = "open" | "resume"
-local function io_for(after: ((string) -> ())?): machine.IO
+local function io_for(after: ((string) -> ())?, controller: string?): machine.IO
     return {
         call = function(target: string, request: unknown): (unknown, string?)
             local result, err = funcs.call(target, request)
@@ -29,14 +30,17 @@ local function io_for(after: ((string) -> ())?): machine.IO
             if err or not id then error("uuid: " .. tostring(err)) end
             return id
         end,
-        after = after,
+        after = function(step: string)
+            seam.call("bee.harness.service.carrier.step", {step = step, controller = controller})
+            if after then after(step) end
+        end,
     }
 end
 local TOPIC_INPUT = "bee.carrier.input"
 -- run drives one attempt; the test harness passes hooks, production none.
 -- controller is the only process whose input requests are honoured.
 local function drive(request: machine.Request, mode: Mode, controller: string?, after: ((string) -> ())?): {[string]: unknown}
-    local io = io_for(after)
+    local io = io_for(after, controller)
     -- Subscriptions come first: the runner announces itself and may emit
     -- output the moment placement starts it.
     local outputs = assert(process.listen(placement_protocol.TOPIC_OUTPUT, {message = true}))

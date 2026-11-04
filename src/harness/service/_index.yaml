@@ -311,6 +311,7 @@ entries:
     bounds: bee.drivers.values:bounds
     placement_protocol: bee.placement.native:protocol
     commits: bee.threads.delivery:commits
+    seam: bee.process:seam
   security:
     policies:
     - bee.harness.security:carrier_policy

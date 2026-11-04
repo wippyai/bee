@@ -2,6 +2,7 @@
 -- owner, reads the recorded attempt, and changes it only through a
 -- transition with evidence. The runner does the external work.
 local process = require("process")
+local seam = require("seam")
 local funcs = require("funcs")
 local channel = require("channel")
 local time = require("time")
@@ -802,6 +803,7 @@ function M.attach(value: unknown): Reply
         local current, current_error = load(attempt.attempt_id)
         local awaiting_start = current ~= nil and current.execution_state == "starting"
         local failure: string? = nil
+        if awaiting_start then seam.call("bee.placement.native.service.service.attach_startup", {attempt_id = attempt.attempt_id}) end
         while awaiting_start do
             local selected = channel.select({updates:case_receive(), events:case_receive()})
             if not selected.ok then failure = "attachment startup observation closed"; break end
@@ -833,7 +835,7 @@ function M.attach(value: unknown): Reply
         -- it cannot acknowledge replacement of the execution-channel recipient.
         local fences = assert(process.listen(protocol.TOPIC_FENCED, {message = true}))
         process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", control_token = control_token, recipient = recipient, generation = generation})
-        local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
+        local timer = seam.after("bee.placement.native.service.service.fence_timer", tostring(protocol.FENCE_TIMEOUT_MS) .. "ms", {attempt_id = attempt.attempt_id})
         local fenced = false
         local answered = false
         local refused = false

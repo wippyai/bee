@@ -530,7 +530,9 @@ func newNode(prefix string) (Node, ed25519.PrivateKey, error) {
 	return node, ed25519.NewKeyFromSeed(seed), nil
 }
 
-// loadNode reads this folder's node identity, creating it on first use.
+// loadNode reads this folder's node identity, creating it on first use. A
+// folder whose records already name its node keeps that name; any other gets
+// a new one.
 func loadNode(state string) (Node, ed25519.PrivateKey, error) {
 	path := filepath.Join(state, nodeFile)
 	data, err := os.ReadFile(path)
@@ -538,6 +540,13 @@ func loadNode(state string) (Node, ed25519.PrivateKey, error) {
 		node, key, err := newNode("bee-")
 		if err != nil {
 			return Node{}, nil, err
+		}
+		recorded, err := recordedName()
+		if err != nil {
+			return Node{}, nil, err
+		}
+		if recorded != "" {
+			node.Name = recorded
 		}
 		encoded, err := json.Marshal(node)
 		if err != nil {

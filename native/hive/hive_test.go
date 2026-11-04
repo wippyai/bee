@@ -3,9 +3,12 @@
 package hive
 
 import (
+	"database/sql"
+
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	_ "github.com/rqlite/go-sqlite3"
 	"os"
 	"path/filepath"
 	"strings"
@@ -325,7 +328,7 @@ func TestAStandaloneFolderRunsUnderItsOwnStoredIdentity(t *testing.T) {
 	isolatedConfig(t)
 	state := t.TempDir()
 	name := runFolder(t, state)
-	require.True(t, strings.HasPrefix(name, nodePrefix), name)
+	require.True(t, isNodeName(name), name)
 	node, _, err := loadNode(state)
 	require.NoError(t, err)
 	require.Equal(t, node.Name, name, "the identity lives in the folder's state")
@@ -365,4 +368,70 @@ func TestHiveInitAndJoinKeepTheFolderIdentity(t *testing.T) {
 	config, _, err = plan.Prepare(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, standalone, config.Sub("cluster").GetString("name", ""), "a joined machine keeps the node")
+}
+
+// writeAuthority records the node ids a folder's approvals authority was
+// established under, the way the node writes them at every start.
+func writeAuthority(t *testing.T, path string, rows map[string]string) {
+	t.Helper()
+	db, err := sql.Open("sqlite3", path)
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec("CREATE TABLE bee_approval_authority (owner_node TEXT PRIMARY KEY, incarnation INTEGER NOT NULL, established_at TEXT NOT NULL)")
+	require.NoError(t, err)
+	for owner, at := range rows {
+		_, err = db.Exec("INSERT INTO bee_approval_authority VALUES (?, 1, ?)", owner, at)
+		require.NoError(t, err)
+	}
+}
+
+func TestAFolderWithStateAdoptsTheIdItsRecordsUse(t *testing.T) {
+	isolatedConfig(t)
+	state := t.TempDir()
+	database := filepath.Join(state, "bee.db")
+	t.Setenv(databaseVariable, database)
+	const previous = "793c2287-0ef9-5880-89ae-881bade4c960"
+	writeAuthority(t, database, map[string]string{
+		"0b7cd5e2-3a41-5c2e-9f00-2d4b8e6a1c37": "2026-10-01T10:00:00.000Z",
+		previous:                               "2026-10-27T21:04:37.793Z",
+	})
+	require.Equal(t, previous, runFolder(t, state), "the folder keeps the id it last ran under")
+	node, _, err := loadNode(state)
+	require.NoError(t, err)
+	require.Equal(t, previous, node.Name, "the adopted id is stored")
+
+	require.NoError(t, os.Remove(database))
+	writeAuthority(t, database, map[string]string{"bee-00000000000000000000000000000001": "2026-11-01T00:00:00.000Z"})
+	require.Equal(t, previous, runFolder(t, state), "the stored identity is never derived again")
+}
+
+func TestAFolderWithoutRecordsGetsANewIdentity(t *testing.T) {
+	isolatedConfig(t)
+	for _, kind := range []string{"no database", "no authority table", "no authority rows"} {
+		t.Run(kind, func(t *testing.T) {
+			state := t.TempDir()
+			database := filepath.Join(state, "bee.db")
+			t.Setenv(databaseVariable, database)
+			switch kind {
+			case "no authority table":
+				db, err := sql.Open("sqlite3", database)
+				require.NoError(t, err)
+				_, err = db.Exec("CREATE TABLE other (id TEXT)")
+				require.NoError(t, err)
+				require.NoError(t, db.Close())
+			case "no authority rows":
+				writeAuthority(t, database, nil)
+			}
+			name := runFolder(t, state)
+			require.Regexp(t, `^bee-[0-9a-f]{32}$`, name)
+		})
+	}
+}
+
+func TestTheStoredIdentityOutranksTheRuntimeVariable(t *testing.T) {
+	isolatedConfig(t)
+	t.Setenv("WIPPY_NODE_ID", "793c2287-0ef9-5880-89ae-881bade4c960")
+	state := t.TempDir()
+	name := runFolder(t, state)
+	require.Regexp(t, `^bee-[0-9a-f]{32}$`, name, "the relay node is named by the folder, not the variable")
 }

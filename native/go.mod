@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/rqlite/go-sqlite3 v1.53.0
 	github.com/stretchr/testify v1.12.1
 	github.com/wippyai/go-lua v1.6.8
 	github.com/wippyai/runtime v0.1.14-0.20261017174019-c398a0bbce70
@@ -140,7 +141,6 @@ require (
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
-	github.com/rqlite/go-sqlite3 v1.53.0 // indirect
 	github.com/safchain/ethtool v0.7.0 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect

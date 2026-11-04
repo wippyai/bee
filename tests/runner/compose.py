@@ -373,60 +373,6 @@ def owner_scheduling(src):
     path.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
-def gate_retired_display(src):
-    replace_once(src / "node/service/owner.lua", '    local function stop(instance: Instance): protocol.Reply', '''    local function stop(instance: Instance): protocol.Reply
-        local controller = process.registry.lookup("bee.test.retired.cancel", process.registry.LOCAL)
-        if controller then
-            local release = assert(process.listen("bee.test.retired.release", {message = true}))
-            assert(process.send(tostring(controller), "bee.test.retired.held", {id = instance.id}))
-            assert(tostring(assert((release:receive())):from()) == tostring(controller))
-            process.unlisten(release)
-        end''')
-    jobs = src / "shell/jobs.lua"
-    shell = src / "shell/shell.lua"
-    replace_once(jobs, '    local function attach_job(id: string, shown: string): Result', '''    local function retirement_gate(op: string, id: unknown)
-        local controller = process.registry.lookup("bee.test.retired." .. op, process.registry.LOCAL)
-        if not controller then return end
-        local release = assert(process.listen("bee.test.retired.release", {message = true}))
-        assert(process.send(tostring(controller), "bee.test.retired.held", {id = id}))
-        assert(tostring(assert((release:receive())):from()) == tostring(controller))
-        process.unlisten(release)
-    end
-    local function attach_job(id: string, shown: string): Result
-        retirement_gate("attach", id)''')
-    replace_once(jobs, '    local function call_job(op: string, args: {[string]: unknown}): Result',
-                 '    local function call_job(op: string, args: {[string]: unknown}): Result\n        retirement_gate(op, args.id)')
-    replace_once(shell, '    local function node_event(event: client.Event)', '''    local function retired_observed()
-        local observer = process.registry.lookup("bee.test.retired.closed", process.registry.LOCAL)
-        if observer then assert(process.send(tostring(observer), "bee.test.retired.closed", {})) end
-    end
-    local function node_event(event: client.Event)
-        if event.kind == "closed" and process.registry.lookup("bee.test.retired.drop", process.registry.LOCAL) then
-            retired_observed()
-            return
-        end''')
-    replace_once(shell, '            retire(id)', '            retire(id)\n            retired_observed()')
-    replace_once(shell, '            apply(chosen.value)', '''            apply(chosen.value)
-            local observer = process.registry.lookup("bee.test.retired.applied", process.registry.LOCAL)
-            if observer and (chosen.value.kind == "failed" or chosen.value.kind == "retired" or chosen.value.kind == "done") then
-                paint()
-                assert(process.send(tostring(observer), "bee.test.retired.applied", {status = status, running = running, kind = chosen.value.kind}))
-            end''')
-    replace_once(shell, '    local function handle(chosen: channel.SelectResult): boolean',
-                 '    local move_requests = assert(process.listen("bee.test.retired.move", {message = true}))\n    local function handle(chosen: channel.SelectResult): boolean')
-    replace_once(shell, '        if chosen.channel == alert_fade then', '''        if chosen.channel == move_requests then
-            local args = chosen.value:payload():data()
-            run(function(): Result return call_job("move", args) end)
-        elseif chosen.channel == alert_fade then''')
-    replace_once(shell, '        local quit = handle(channel.select(cases()))',
-                 '        local waiting = cases()\n        waiting[#waiting + 1] = move_requests:case_receive()\n        local quit = handle(channel.select(waiting))')
-
-
-def observe_node_ready(src):
-    replace_once(src / "node/service/owner.lua", '    logger:info("Node ready",',
-                 '\n'.join(['    local observer = process.registry.lookup("bee.test.node.ready", process.registry.LOCAL)',
-                            '    if observer then assert(process.send(tostring(observer), "bee.test.node.ready", {})) end',
-                            '    logger:info("Node ready",']))
 
 
 def observe_hive_upgrade(src):
@@ -584,26 +530,6 @@ def hold_access_readiness(src):
     end''')
 
 
-def fail_owner_registry_reads(src):
-    """Fail the node owner's installed app, menu and theme reads while a controller holds the failure name."""
-    owner = src / "node/service/catalog.lua"
-    text = owner.read_text()
-    assert text.count("registry.find(") == 4, f"{owner}: expected four registry reads"
-    text = text.replace("registry.find(", "find_installed(")
-    owner.write_text(text)
-    replace_once(owner, 'local registry = require("registry")', '''local registry = require("registry")
-local process = require("process")
-local function find_installed(filter)
-    local controller = process.registry.lookup("bee.test.node.registry_failure", process.registry.LOCAL)
-    if controller then
-        process.send(tostring(controller), "bee.test.node.registry_failed", {pid = tostring(process.pid())})
-        return nil, "injected registry failure"
-    end
-    return registry.find(filter)
-end''')
-
-    add_modules(src / "node/service/_index.yaml", "catalog", ["process"])
-
 
 def fail_remote_registry_reads(src):
     """Fail the Hive receiver's grant and overlay reads while a controller holds the failure name."""
@@ -626,30 +552,6 @@ local read_registry = {
 }''')
     add_modules(src / "hive/_index.yaml", "remote", ["process"])
 
-
-def hold_test_runner_quiet(src):
-    replace_once(src / "node/service/tests.lua",
-                 "if #waiting == 0 then assert(demand.quiet(tests.NAME, generation)) else sweep() end",
-                 """if #waiting == 0 then
-                local controller = process.registry.lookup("bee.test.node.quiet", process.registry.LOCAL)
-                if controller then
-                    local release = assert(process.listen("bee.test.node.quiet.release", {message = true}))
-                    assert(process.send(tostring(controller), "bee.test.node.quiet", {}))
-                    while true do
-                        local selected = channel.select({release:case_receive(), lifecycle:case_receive()})
-                        if not selected.ok or (selected.channel == lifecycle and selected.value.kind == process.event.CANCEL) then
-                            process.unlisten(release)
-                            return
-                        end
-                        if selected.channel == release then
-                            assert(tostring(selected.value:from()) == tostring(controller))
-                            break
-                        end
-                    end
-                    process.unlisten(release)
-                end
-                assert(demand.quiet(tests.NAME, generation))
-            else sweep() end""")
 
 
 def observe_preparer_cleanup(src):
@@ -916,13 +818,9 @@ def compose():
     # beside src, so module-relative directories resolve as they do in a pack.
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
     owner_scheduling(src)
-    hold_test_runner_quiet(src)
-    fail_owner_registry_reads(src)
     fail_remote_registry_reads(src)
     hold_hive_backlog(src)
     compose_thread_recovery()
-    gate_retired_display(src)
-    observe_node_ready(src)
     observe_hive_upgrade(src)
     order_hive_readiness(src)
     inject_registry_faults(src)

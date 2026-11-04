@@ -20,6 +20,18 @@ entries:
   targets:
   - entry: bee.threads.service:threads
     path: .imports.seam
+  - entry: bee.node.service:tests
+    path: .imports.seam
+  - entry: bee.node.service:catalog
+    path: .imports.seam
+  - entry: bee.node.service:owner
+    path: .imports.seam
+  - entry: bee.shell:main
+    path: .imports.seam
+  - entry: bee.shell:client
+    path: .imports.seam
+  - entry: bee.shell:jobs
+    path: .imports.seam
 - name: demand_state
   kind: library.lua
   source: file://demand_state.lua

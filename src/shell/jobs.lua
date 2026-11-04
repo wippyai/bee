@@ -4,6 +4,7 @@ local channel = require("channel")
 local process = require("process")
 local client = require("client")
 local part_handover = require("part_handover")
+local seam = require("seam")
 local M = {}
 type Result = part_handover.Result
 type Binding = part_handover.Binding
@@ -23,6 +24,7 @@ function M.new(current_target: () -> string, results: channel.Channel<Result>)
     end
 
     local function attach_job(id: string, shown: string): Result
+        seam.hold("bee.shell.jobs.operation", {op = "attach", id = id})
         local attached = client.call(current_target(), "attach", {id = id})
         if not attached then return reconcile(id, "Cannot show this app.") end
         if type(attached.ref) ~= "string" then return reconcile(id, "Cannot show this app.") end
@@ -34,6 +36,7 @@ function M.new(current_target: () -> string, results: channel.Channel<Result>)
     end
 
     local function call_job(op: string, args: {[string]: unknown}): Result
+        seam.hold("bee.shell.jobs.operation", {op = op, id = args.id})
         local _, err = client.call(current_target(), op, args)
         local id = args.id
         if type(id) == "string" and (op == "close" or op == "move" or op == "answer") then

@@ -35,6 +35,7 @@ entries:
     part_handover: bee.node.service:handover
     canonical: bee.drivers.values:canonical
     part_instance: bee.node.service:instance
+    seam: bee.process:seam
 - name: owner_service
   meta:
     title: "Node \xB7 owner"
@@ -82,6 +83,7 @@ entries:
     demand: bee.process:demand
     receiver: bee.hive:receiver
     bounds: bee.drivers.values:bounds
+    seam: bee.process:seam
 - name: tests_service
   meta:
     title: "Node \xB7 tests"
@@ -121,6 +123,7 @@ entries:
     descriptor: bee.app:descriptor
     settings: bee.node.persist:settings
     appearance: bee.ui:appearance
+    seam: bee.process:seam
 - name: waiting
   kind: library.lua
   source: file://waiting.lua

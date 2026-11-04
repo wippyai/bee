@@ -21,6 +21,7 @@ local test_runs = require("test_runs")
 local receiver = require("receiver")
 local bounds = require("bounds")
 local demand = require("demand")
+local seam = require("seam")
 
 type Object = {[string]: unknown}
 type Case = {name: string, status: string, error: string?, duration_ms: integer}
@@ -243,7 +244,13 @@ local function main()
         if active == 0 and generation > 0 then
             local waiting, problem = test_runs.waiting()
             assert(waiting, problem)
-            if #waiting == 0 then assert(demand.quiet(tests.NAME, generation)) else sweep() end
+            if #waiting == 0 then
+                local _, cancelled = seam.hold("bee.node.service.tests.quiet", nil, lifecycle)
+                if cancelled then return end
+                assert(demand.quiet(tests.NAME, generation))
+            else
+                sweep()
+            end
         end
         local selected = channel.select({lifecycle:case_receive(), wakes:case_receive(), demanded:case_receive(), completed:case_receive()})
         if selected.channel == lifecycle then

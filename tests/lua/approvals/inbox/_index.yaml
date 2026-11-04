@@ -182,3 +182,7 @@ entries:
     application: bee.tests.support.principals:application
     principal: bee.node:principal
     thread_harness: bee.tests.threads:harness
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}

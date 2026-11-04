@@ -21,21 +21,21 @@ entries:
   meta: {type: test_support, comment: A suite may run node migrations against its own database}
   policy:
     actions: [funcs.call, registry.find]
-    resources: '*'
+    resources_points: '*'
     effect: allow
 - name: gateway_admit_policy
   kind: security.policy
   meta: {type: test_support, comment: A carrier admits and revokes gateway bindings for the actions it runs}
   policy:
     actions: [bee.gateway.admit]
-    resources: '*'
+    resources_points: '*'
     effect: allow
 - name: gateway_manage_policy
   kind: security.policy
   meta: {type: test_support, comment: The managed host opens and drains the listener and may revoke any binding}
   policy:
     actions: [bee.gateway.manage]
-    resources: [listener, bindings]
+    resources_points: [listener, bindings]
     effect: allow
 - name: approval_effect
   kind: library.lua
@@ -50,7 +50,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [cdc.stream]
-    resources: ['bee:changes']
+    resources_points: ['bee:changes']
     effect: allow
 - name: committed
   kind: library.lua
@@ -114,3 +114,30 @@ entries:
     type: test_support
   modules:
   - security
+- name: controllers
+  kind: library.lua
+  source: file://controllers.lua
+  meta: {type: test_support, comment: Hold specifications for seam points whose controller registers a local process name}
+  modules: [process]
+- name: seam
+  kind: library.lua
+  source: file://seam.lua
+  meta: {type: test_support, comment: The test composition's binding of bee.process:seams}
+  modules: [process, channel, time]
+  imports:
+    placement_native_points: bee.tests.placement.native:seams
+    placement_docker_points: bee.tests.placement.docker:seams
+    harness_points: bee.tests.harness:seams
+    process_points: bee.tests.process:seams
+    hive_points: bee.tests.hive:seams
+    approvals_points: bee.tests.approvals:seams
+    inbox_points: bee.tests.approvals.inbox:seams
+    node_points: bee.tests.node:seams
+    shell_points: bee.tests.shell:seams
+    gov_points: bee.tests.gov:seams
+    sync_points: bee.tests.sync:seams
+    gateway_points: bee.tests.gateway:seams
+    credentials_points: bee.tests.credentials:seams
+    resources_points: bee.tests.resources:seams
+    hub_points: bee.tests.hub:seams
+    threads_points: bee.tests.threads:seams

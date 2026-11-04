@@ -7,6 +7,19 @@ entries:
   modules: [process, channel, time]
   imports:
     demand: bee.process:demand
+- name: seam
+  kind: library.lua
+  source: file://seam.lua
+  modules: [time, channel]
+- name: seams
+  kind: ns.requirement
+  meta:
+    value_kind: library.lua
+    comment: The library every component seam point calls; the host keeps the pass-through, a test composition binds its own
+  default: bee.process:seam
+  targets:
+  - entry: bee.threads.service:threads
+    path: .imports.seam
 - name: demand_state
   kind: library.lua
   source: file://demand_state.lua

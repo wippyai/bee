@@ -380,3 +380,7 @@ entries:
     test: wippy.test:test
     plan: bee.hub.package:plan
     support: bee.tests.hub:plan_fixture
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}

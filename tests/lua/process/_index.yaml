@@ -181,3 +181,7 @@ entries:
   meta: {type: test_support}
   modules: [process, system, sql]
   imports: *boot_lifecycle_imports
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}

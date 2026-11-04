@@ -555,3 +555,7 @@ entries:
     actions: [db.get]
     resources: [bee.tests.node:home_workspace_db]
     effect: allow
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}

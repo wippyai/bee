@@ -411,3 +411,7 @@ entries:
     actions: [events.subscribe]
     resources: '*'
     effect: allow
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}

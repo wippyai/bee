@@ -148,3 +148,7 @@ entries:
   meta: {type: test_support}
   imports:
     protocol: bee.hive:protocol
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}

@@ -101,3 +101,7 @@ entries:
     bounds: bee.drivers.values:bounds
     grants: bee.gov.types:capability_grants
     protocol: bee.hive:protocol
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}

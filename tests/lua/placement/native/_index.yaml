@@ -1204,3 +1204,7 @@ entries:
     options: {profiles: [window], fields: {}}
     argv_templates: {window: {argv: [], readiness: none}}
     hook_files: [.outside/logs]
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}

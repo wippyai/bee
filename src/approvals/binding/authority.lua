@@ -49,6 +49,7 @@ local function eligible(actor: string, row: Row): (boolean, string?)
     for _, approver in ipairs(policy.approvers) do
         if type(approver) == "string" and approver == actor then return true, nil end
         if type(approver) == "table" and definition and approver.definition_id == definition then return true, nil end
+        if type(approver) == "table" and approver.hive_peers == true and part_model.hive_peer(actor) then return true, nil end
     end
     return false, nil
 end

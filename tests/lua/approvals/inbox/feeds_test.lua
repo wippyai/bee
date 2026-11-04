@@ -39,6 +39,26 @@ local function define_tests()
             test.is_nil(source_config.operation(nil, "vendor.other:lookup"))
             test.is_nil(source_config.operation({routes[1], routes[1]}, "vendor.other:lookup"))
         end)
+        test.it("reads a peer source the inbox adds after it started through the same client", function()
+            local configured = assert(source_config.configure("node-a", {"ws"}))
+            local asked: {string} = {}
+            local client = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
+                asked[#asked + 1] = source.node_id .. " " .. target
+                return snapshot(source, {}), nil
+            end)
+            local added, add_error = source_config.add(configured, "node-a", "node-b", "ws")
+            test.is_nil(add_error)
+            if not added then error("add peer source") end
+            test.is_false(added.local_owner)
+            test.eq(#configured.workspaces, 2)
+            test.eq(configured.workspaces[2], added.id)
+            local again = source_config.add(configured, "node-a", "node-b", "ws")
+            test.eq(again and again.id, added.id)
+            test.eq(#configured.workspaces, 2)
+            local reply = client:invoke("bee.approvals.binding:inbox", {workspace_id = added.id, after_seq = 0, limit = 64})
+            test.eq(reply and reply.kind, "success")
+            test.eq(asked[1], "node-b bee.approvals.binding:feed_snapshot")
+        end)
         test.it("routes grant inspection and revocation only to the local authority", function()
             local configured = assert(source_config.configure("node-a", {"ws"}))
             local calls = 0

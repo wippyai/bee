@@ -233,6 +233,7 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
             for _, approver in ipairs(policy.approvers) do
                 if type(approver) == "string" and approver == grant.granted_by then authorized = true end
                 if type(approver) == "table" and approver.definition_id == grant.granted_definition then authorized = true end
+                if type(approver) == "table" and approver.hive_peers == true and part_model.hive_peer(grant.granted_by) then authorized = true end
             end
             if authorized and not grant.revoked_at and grant.until_ms > now and (grant.until_ms - grant.granted_ms <= policy.max_ttl_ms or (policy.allow_permanent and grant.until_ms == windows.PERMANENT_UNTIL_MS)) then
                 local attach_error = store.attach_window(tx, row.approval_id, grant.grant_id, true)

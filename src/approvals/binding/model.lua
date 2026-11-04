@@ -9,6 +9,13 @@ M.REQUEST = "bee.approvals.request"
 M.DECIDE = "bee.approvals.decide"
 M.MANAGE = "bee.approvals.manage"
 M.OWN = "bee.approvals.own"
+-- A hive peer decides as PEER followed by its node id; the approvals hive
+-- service builds that actor for an operation the Hive supervisor forwarded.
+M.PEER = "bee.approvals.peer."
+function M.hive_peer(actor: string): boolean
+    local node = actor:sub(1, #M.PEER) == M.PEER and actor:sub(#M.PEER + 1) or ""
+    return node ~= "" and not node:find("[^A-Za-z0-9_.-]")
+end
 -- Removing a session withdraws its approval requests; the resource is the session ref.
 M.FORGET_SESSION = "bee.approvals.forget_session"
 M.CONSUME = "bee.approvals.consume"

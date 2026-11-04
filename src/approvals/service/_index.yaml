@@ -38,6 +38,7 @@ entries:
     protocol: bee.hive:protocol
     worker: bee.process:worker
     bounds: bee.drivers.values:bounds
+    part_model: bee.approvals.binding:model
 - name: hive_route
   kind: registry.entry
   meta:

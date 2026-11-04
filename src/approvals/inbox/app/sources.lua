@@ -15,20 +15,25 @@ end
 function M.remote_id(source_id: string, approval_id: string): string
     return "remote:" .. digest(source_id .. "\n" .. approval_id)
 end
+-- add admits the source of workspace on node, once. The model and the feed
+-- client share the configuration's lists, so they read a source that joins
+-- them while the inbox runs like one configured at its start.
+function M.add(configured: Config, local_node: string, node: string, workspace: string): (Source?, string?)
+    local local_owner = node == local_node
+    local id = local_owner and workspace or "source:" .. digest(node .. "\n" .. workspace)
+    local known = configured.sources[id]
+    if known then return known, nil end
+    if #configured.workspaces >= 16 then return nil, "inbox exceeds 16 admitted sources" end
+    local source: Source = {id = id, node_id = node, workspace_id = workspace, local_owner = local_owner,
+        feed = "approvals." .. digest(workspace)}
+    configured.sources[id] = source
+    configured.workspaces[#configured.workspaces + 1] = id
+    return source, nil
+end
 function M.configure(local_node: string, local_workspaces: {string}, raw_sources: unknown): (Config?, string?)
     local configured: Config = {workspaces = {}, sources = {}}
-    local function add(node: string, workspace: string): string?
-        local local_owner = node == local_node
-        local id = local_owner and workspace or "source:" .. digest(node .. "\n" .. workspace)
-        if configured.sources[id] then return nil end
-        if #configured.workspaces >= 16 then return "inbox exceeds 16 admitted sources" end
-        configured.sources[id] = {id = id, node_id = node, workspace_id = workspace, local_owner = local_owner,
-            feed = "approvals." .. digest(workspace)}
-        configured.workspaces[#configured.workspaces + 1] = id
-        return nil
-    end
     for _, workspace in ipairs(local_workspaces) do
-        local add_error = add(local_node, workspace)
+        local _, add_error = M.add(configured, local_node, local_node, workspace)
         if add_error then return nil, add_error end
     end
     if raw_sources == nil then return configured, nil end
@@ -45,7 +50,7 @@ function M.configure(local_node: string, local_workspaces: {string}, raw_sources
         local extra = bounds.fields(item, {"node_id", "workspace_id"})
         local node, workspace = bounds.id(item.node_id), bounds.id(item.workspace_id)
         if extra or not node or not workspace then return nil, extra or "invalid inbox source identity" end
-        local add_error = add(node, workspace)
+        local _, add_error = M.add(configured, local_node, node, workspace)
         if add_error then return nil, add_error end
     end
     return configured, nil

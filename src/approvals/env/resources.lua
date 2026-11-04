@@ -5,8 +5,11 @@ local bounds = require("bounds")
 local M = {}
 M.POLICIES_REF = "bee.approvals.env:policies_ref"
 M.THREAD_APPEND = "bee.threads.binding:append"
+-- An approver is an actor id, an application definition, or the hive's
+-- peers: every node of this hive deciding through the approvals route.
 type DefinitionSelector = {definition_id: string}
-type Approver = string | DefinitionSelector
+type HivePeers = {hive_peers: true}
+type Approver = string | DefinitionSelector | HivePeers
 type Confirmation = "standard" | "explicit"
 type Policy = {name: string, approvers: {Approver}, max_ttl_ms: integer, request_ttl_ms: integer?, confirm: Confirmation, allow_permanent: boolean}
 M.MAX_POLICIES = 64
@@ -90,15 +93,23 @@ function M.policies(): ({[string]: Policy}?, string?)
                 subjects[#subjects + 1] = actor
             elseif type(approver) == "table" then
                 local selector = bounds.object(approver)
-                if not selector or bounds.fields(selector, {"definition_id"}) then
+                if not selector or bounds.fields(selector, {"definition_id", "hive_peers"}) then
                     return nil, "approver policy " .. name .. " has an invalid selector object"
                 end
-                local definition = bounds.id(selector.definition_id)
-                if not definition or seen["definition:" .. definition] then
-                    return nil, "approver policy " .. name .. " has an invalid application definition selector"
+                if selector.hive_peers ~= nil then
+                    if selector.hive_peers ~= true or selector.definition_id ~= nil or seen["selector:hive_peers"] then
+                        return nil, "approver policy " .. name .. " has an invalid hive peers selector"
+                    end
+                    seen["selector:hive_peers"] = true
+                    subjects[#subjects + 1] = {hive_peers = true}
+                else
+                    local definition = bounds.id(selector.definition_id)
+                    if not definition or seen["definition:" .. definition] then
+                        return nil, "approver policy " .. name .. " has an invalid application definition selector"
+                    end
+                    seen["definition:" .. definition] = true
+                    subjects[#subjects + 1] = {definition_id = definition}
                 end
-                seen["definition:" .. definition] = true
-                subjects[#subjects + 1] = {definition_id = definition}
             else
                 return nil, "approver policy " .. name .. " lists an invalid approver selector"
             end

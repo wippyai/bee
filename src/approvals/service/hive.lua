@@ -10,9 +10,9 @@ local logger = require("logger")
 local events = require("events")
 local bounds = require("bounds")
 local protocol = require("protocol")
+local part_model = require("part_model")
 
 local NAME = "bee.approvals"
-local PEER_ACTOR = "bee.approvals.peer."
 local PEER_POLICIES = {"bee.security.approvals:approval_hive_peer", "bee.security.approvals:approval_hive_peer_decide"}
 local OPERATIONS: {[string]: string} = {
     feed_snapshot = "bee.approvals.binding:feed_snapshot",
@@ -29,7 +29,6 @@ local OPERATIONS: {[string]: string} = {
 -- workspace, and the watcher reads what changed through the feed.
 local CHANGED = "bee.approvals.changed"
 local ATTENTION = "bee.attention"
-local DECIDE = "bee.approvals.decide"
 local MAX_WATCHERS = 64
 type Watcher = {pid: string, workspace_id: string}
 
@@ -41,7 +40,7 @@ local function peer(request: protocol.Forwarded, node: string): (security.Actor?
         if not policy then return nil, nil, "peer policy unavailable: " .. tostring(policy_error) end
         scope[#scope + 1] = policy
     end
-    return security.new_actor(PEER_ACTOR .. name, {node = name}), security.new_scope(scope), nil
+    return security.new_actor(part_model.PEER .. name, {node = name}), security.new_scope(scope), nil
 end
 
 local function serve(request: protocol.Forwarded, node: string): protocol.Reply
@@ -77,7 +76,7 @@ local function main()
         if not workspace then return protocol.fail("watch names a workspace") end
         local actor, scope, peer_error = peer(request, node)
         if not actor or not scope then return protocol.fail(tostring(peer_error)) end
-        if scope:evaluate(actor, DECIDE, workspace) ~= "allow" then return protocol.fail("peer may not read this workspace inbox") end
+        if scope:evaluate(actor, part_model.DECIDE, workspace) ~= "allow" then return protocol.fail("peer may not read this workspace inbox") end
         local key = request.caller .. "\n" .. workspace
         if not watchers[key] then
             if count >= MAX_WATCHERS then return protocol.fail("approval watchers are full") end

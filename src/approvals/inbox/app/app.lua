@@ -134,16 +134,39 @@ local function main(value: unknown)
         "bee_approval_requests", "bee_approval_grants", "bee_approval_window_grants",
     }}))
     local committed = assert(committed_stream:channel())
-    local remote = false
-    for _, source in pairs(configured.sources) do if not source.local_owner then remote = true end end
-    -- A remote owner tells this inbox of each change of a watched workspace;
-    -- a watch lasts while that owner's service lives and is renewed when the
-    -- owner's node joins the hive again.
-    local remote_changes = remote and assert(process.listen(CHANGED, {message = true})) or nil
-    local joins = remote and assert(events.subscribe("cluster", "node.joined")) or nil
-    local joined = joins and joins:channel() or nil
+    -- Every other node of the hive is a remote owner: the inbox reads each
+    -- workspace that node works in, and the owner tells it of each change of
+    -- a watched workspace. A watch lasts while that owner's service lives and
+    -- is renewed, with the node's workspaces read again, when the owner ends
+    -- or its node joins the hive again.
+    local remote_changes = assert(process.listen(CHANGED, {message = true}))
+    local joins = assert(events.subscribe("cluster", "node.joined"))
+    local joined = joins:channel()
     local owners: {[string]: string} = {}
-    local function watch(node: string?)
+    local refresh_pending = false
+    local function discover(node: string?)
+        local peers: {string} = {}
+        if node then peers[1] = node
+        else
+            for _, member in ipairs(system.cluster.members() or {}) do
+                if type(member.id) == "string" then peers[#peers + 1] = member.id end
+            end
+        end
+        for _, peer in ipairs(peers) do
+            local listed = peer ~= local_node and node_client.call(peer, "list", {}) or nil
+            for _, raw in ipairs(listed and bounds.array(listed.workspaces, 64) or {}) do
+                local item = bounds.object(raw)
+                local workspace = item and bounds.id(item.id)
+                if workspace then
+                    local source, add_error = source_config.add(configured, local_node, peer, workspace)
+                    if not source then status = tostring(add_error); dirty = true
+                    else
+                        local label, path = bounds.line(item.label, 240), bounds.line(item.path, 4096)
+                        workspace_names[source.id] = {label = label and label ~= "" and label or "Workspace", folder = path or ""}
+                    end
+                end
+            end
+        end
         for _, source in pairs(configured.sources) do
             if not source.local_owner and (node == nil or source.node_id == node) then
                 local answer = protocol.call(source.node_id, "approvals.watch", {workspace_id = source.workspace_id}, "5s")
@@ -152,8 +175,9 @@ local function main(value: unknown)
                 if owner and not owners[owner] and process.monitor(owner) then owners[owner] = source.node_id end
             end
         end
+        refresh_pending = true
+        updates:send(true)
     end
-    local refresh_pending = false
     local function refresh()
         for _, workspace in ipairs(local_workspaces) do
             local raw = funcs.call("bee.node.binding:read", {workspace_id = workspace})
@@ -425,7 +449,7 @@ local function main(value: unknown)
     end
     if #launch.arguments == 2 and (launch.arguments[1] == "--approval" or launch.arguments[1] == "--review") then model.select(state, launch.arguments[2]) end
     state.detail = nil
-    if remote then coroutine.spawn(function() watch(nil) end) end
+    coroutine.spawn(function() discover(nil) end)
     perform(function()
         refresh()
         if state.selected and not state.rows[state.selected] then model.select(state, nil) end
@@ -486,8 +510,8 @@ local function main(value: unknown)
         end
         local cases = {input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(),
             navigations:case_receive(), committed:case_receive(), updates:case_receive()}
-        if remote_changes then cases[#cases + 1] = remote_changes:case_receive() end
-        if joined then cases[#cases + 1] = joined:case_receive() end
+        cases[#cases + 1] = remote_changes:case_receive()
+        cases[#cases + 1] = joined:case_receive()
         local event = channel.select(cases)
         if not event.ok then break end
         if event.channel == lifecycle then
@@ -496,9 +520,9 @@ local function main(value: unknown)
             if (event.value.kind == process.event.EXIT or event.value.kind == process.event.MONITOR_DOWN) and owners[ended] then
                 local node = owners[ended]
                 owners[ended] = nil
-                coroutine.spawn(function() watch(node) end)
+                coroutine.spawn(function() discover(node) end)
             end
-        elseif remote_changes and event.channel == remote_changes then
+        elseif event.channel == remote_changes then
             local source_node = owners[tostring(event.value:from())]
             if source_node then
                 refresh_pending = true
@@ -507,9 +531,9 @@ local function main(value: unknown)
                     perform(function() if state.pending then recover() else refresh() end end)
                 end
             end
-        elseif joined and event.channel == joined then
-            local node = bounds.id(event.value.path)
-            if node then coroutine.spawn(function() watch(node) end) end
+        elseif event.channel == joined then
+            local node = node_client.member(event.value)
+            if node then coroutine.spawn(function() discover(node) end) end
         elseif event.channel == updates then
             dirty = true
             if refresh_pending and not busy and not action_busy then
@@ -718,8 +742,8 @@ local function main(value: unknown)
             end
         end
     end
-    if joins then joins:close() end
-    if remote_changes then process.unlisten(remote_changes) end
+    joins:close()
+    process.unlisten(remote_changes)
     for owner in pairs(owners) do process.unmonitor(owner) end
     committed_stream:close()
     process.unlisten(states)

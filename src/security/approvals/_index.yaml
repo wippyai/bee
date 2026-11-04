@@ -73,7 +73,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.approval_policies
-    comment: Host-owned approver policies; a request names one, and only its approvers decide it
+    comment: Host-owned approver policies; a request names one, and only its approvers decide it; hive_peers admits the nodes of this hive, deciding through the approvals route
   policies:
   - name: local-confirmation
     approvers:
@@ -92,33 +92,39 @@ entries:
   - name: workspace-application-delivery
     approvers:
     - definition_id: bee.approvals.inbox.app:app
+    - hive_peers: true
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
   - name: module-installation
     approvers:
     - definition_id: bee.approvals.inbox.app:app
+    - hive_peers: true
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
   - name: module-publication
     approvers:
     - definition_id: bee.approvals.inbox.app:app
+    - hive_peers: true
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
   - name: super-edit-person
     approvers:
     - definition_id: bee.approvals.inbox.app:app
+    - hive_peers: true
     confirm: explicit
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
   - name: configuration-setup
     approvers:
     - definition_id: bee.approvals.inbox.app:app
+    - hive_peers: true
     confirm: explicit
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
   - name: agent-access
     approvers:
     - definition_id: bee.approvals.inbox.app:app
+    - hive_peers: true
     confirm: explicit
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
@@ -126,6 +132,7 @@ entries:
     allow_permanent: true
     approvers:
     - definition_id: bee.approvals.inbox.app:app
+    - hive_peers: true
     confirm: explicit
     request_ttl_ms: 86400000
     max_ttl_ms: 86400000
@@ -133,6 +140,7 @@ entries:
     approvers:
     - bee.sessions.allowance.owner
     - definition_id: bee.approvals.inbox.app:app
+    - hive_peers: true
     confirm: explicit
     request_ttl_ms: 86400000
     max_ttl_ms: 2592000000

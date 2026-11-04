@@ -79,8 +79,10 @@ bee.approvals.inbox.workspaces`). Remote sources are listed by
     - {node_id: node-b, workspace_id: workspace-id}
 ```
 
-At most 16 sources are accepted. Each source uses a staged snapshot and
-incremental catch-up. The inbox watches each remote source with
+In a hive the app also reads every other node: it asks each node for the
+workspaces it works in (`node.list`) and adds a source per workspace, at start
+and whenever that node joins the hive again. At most 16 sources are accepted.
+Each source uses a staged snapshot and incremental catch-up. The inbox watches each remote source with
 `approvals.watch`: the owner node's approvals service, which admits the watch
 under the same peer decision gate as the feed, sends `bee.approvals.changed`
 naming the workspace whenever one of its approvals changes, and the inbox
@@ -106,7 +108,9 @@ sender PID's node as `bee.approvals.peer.<node>`. Its explicit operation map
 covers snapshots, catch-up, reads, decisions, batches, withdrawals and grant
 windows. The peer scope reaches only those bindings and the approval decision
 gate; destination approver policies must separately name the peer actor for
-request reads and decisions. The owner checks revision and proposal digest on
+request reads and decisions, either by its id or with the `hive_peers: true`
+selector, which admits every node of this hive. The bundled policies whose
+requests Needs you decides carry it, except `local-confirmation`. The owner checks revision and proposal digest on
 decisions and retains requester-only withdrawal and issuer-only window
 revocation.
 

@@ -209,26 +209,22 @@ local function define_tests()
             test.is_nil(migration_work.capture(candidate, exact, context))
         end)
 
-        test.it("decodes legacy work without rewriting its identity binding", function()
+        test.it("refuses work under the retired @2 schema", function()
             local exact, candidate, context = fixture(true)
             local current = assert(migration_work.capture(candidate, exact, context))
-            local legacy: {[string]: unknown} = {}
+            local retired: {[string]: unknown} = {}
             for field, value in pairs(current) do
                 if field ~= "bytes" and field ~= "digest" and field ~= "schema_revision" and field ~= "databases" then
-                    legacy[field] = value
+                    retired[field] = value
                 end
             end
-            legacy.schema_revision = migration_work.LEGACY_SCHEMA
-            legacy.databases = {{id = "host:db", kind = "db.sql.sqlite", package = "host/storage",
+            retired.schema_revision = "bee.governance-migration-work@2"
+            retired.databases = {{id = "host:db", kind = "db.sql.sqlite", package = "host/storage",
                 digest = SHA, planned = false}}
-            local bytes = assert(canonical.encode(legacy))
-            local digest = assert(hash.sha256(bytes))
-            local decoded = assert(migration_work.decode(bytes, digest))
-            test.eq(decoded.schema_revision, migration_work.LEGACY_SCHEMA)
-            test.eq(decoded.databases[1].target_db, "host:db")
-            test.eq(decoded.databases[1].database_id, "host:db")
-            test.eq(decoded.bytes, bytes)
-            test.eq(decoded.digest, digest)
+            local bytes = assert(canonical.encode(retired))
+            local decoded, problem = migration_work.decode(bytes, assert(hash.sha256(bytes)))
+            test.is_nil(decoded)
+            test.eq(problem, "migration work schema is invalid")
         end)
 
         test.it("rejects noncanonical, tampered, and semantically forged bytes", function()

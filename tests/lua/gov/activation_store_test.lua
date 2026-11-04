@@ -25,7 +25,7 @@ local function prepare(): {[string]: unknown}
     input.plan_digest = string.rep("a", 64)
     input.plan_revision, input.selection_revision = 4, 2
     input.artifact, input.resolution, input.preflight = blob("artifact-v1"), blob("resolved-v1"), blob("preflight-v1")
-    input.migration_work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
+    input.migration_work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@3",
         destination_node = "node-a", source_node = "source-a", base_revision = 0,
         base_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
         candidate_digest = string.rep("c", 64), artifact_digest = string.rep("d", 64),
@@ -38,13 +38,13 @@ local function migration_blob(): ({[string]: string}, string)
         data = {source = "return true"}}
     local definition_bytes = assert(canonical.encode(definition))
     local checksum = assert(hash.sha256(definition_bytes))
-    local bytes = assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
+    local bytes = assert(canonical.encode({schema_revision = "bee.governance-migration-work@3",
         destination_node = "node-a", source_node = "source-a", base_revision = 0,
         base_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
         candidate_digest = string.rep("c", 64), artifact_digest = string.rep("d", 64),
         plan_digest = string.rep("e", 64), migrations = {{id = "demo:001", target_db = "demo:db",
             ordinal = 1, checksum = checksum, package = "demo/app", definition = definition}},
-        databases = {{id = "demo:db", kind = "db.sql.sqlite", package = "base/db",
+        databases = {{target_db = "demo:db", database_id = "demo:db", kind = "db.sql.sqlite", package = "base/db",
             digest = string.rep("f", 64), planned = false}}}))
     return blob(bytes), checksum
 end

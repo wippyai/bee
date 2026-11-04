@@ -56,7 +56,7 @@ type Step = {observations: {Observation}, terminal: Terminal?, problems: {Proble
 type Reader = {feed: (Reader, string) -> (Step?, error?), finish: (Reader) -> (Step?, error?)}
 -- configure_target: the binding's configure method, which the configure
 -- function validates under its own authority when it renders.
-type Selected = {binding_ref: string, driver_id: string, profiles_ref: string?, credential_format_ref: string,
+type Selected = {binding_ref: string, driver_id: string, profiles_ref: string, credential_format_ref: string,
     configure_target: string, descriptor: descriptor.Descriptor, descriptor_ref: string}
 
 local M = {}
@@ -72,7 +72,8 @@ local function selected_in(pinned: registry.Snapshot, ref: string): (Selected?, 
     local driver_id = meta and bounds.id(meta.driver_id)
     local descriptor_ref = meta and bounds.id(meta.descriptor_ref)
     local credential_format_ref = meta and bounds.id(meta.credential_format_ref)
-    if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" or not driver_id or not descriptor_ref or not credential_format_ref then
+    local profiles_ref = meta and bounds.id(meta.profiles_ref)
+    if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" or not driver_id or not descriptor_ref or not credential_format_ref or not profiles_ref then
         return nil, fail(errors.INTERNAL, "activated binding " .. ref .. " is not a declarative driver")
     end
     local configure_target: string? = nil
@@ -83,7 +84,7 @@ local function selected_in(pinned: registry.Snapshot, ref: string): (Selected?, 
     if not configure_target then return nil, fail(errors.INTERNAL, "activated binding " .. ref .. " binds no configure method") end
     local loaded, load_error = descriptor.load_from(pinned, descriptor_ref)
     if not loaded then return nil, fail(errors.INTERNAL, ref .. " descriptor: " .. tostring(load_error)) end
-    return {binding_ref = ref, driver_id = driver_id, profiles_ref = bounds.id(meta.profiles_ref), credential_format_ref = credential_format_ref,
+    return {binding_ref = ref, driver_id = driver_id, profiles_ref = profiles_ref, credential_format_ref = credential_format_ref,
         configure_target = configure_target, descriptor = loaded, descriptor_ref = descriptor_ref}, nil
 end
 
@@ -210,17 +211,15 @@ local function driver_of(pinned: registry.Snapshot, selected: Selected): (Driver
         unattended = bounds.object(selected.descriptor.options.unattended),
         credentials = credentials, endpoints = {}}
     for _, mapping in ipairs(selected.descriptor.endpoints) do result.endpoints[#result.endpoints + 1] = mapping.protocol end
-    if selected.profiles_ref then
-        local binding = assert(resolver.binding(pinned, selected.binding_ref))
-        local entry, entry_error = resolver.declaration(pinned, binding)
-        if entry_error then return nil, fail(errors.INTERNAL, entry_error) end
-        local data = entry and bounds.object(entry.data)
-        local decoded, decode_error = profile_codec.decode(data and data.driver)
-        if not decoded then return nil, fail(errors.INTERNAL, selected.binding_ref .. " profiles: " .. tostring(decode_error)) end
-        result.title = decoded.title
-        result.default_profile = decoded.default_profile
-        for _, item in ipairs(decoded.profiles) do result.profiles[#result.profiles + 1] = {id = item.id, mode = item.mode} end
-    end
+    local binding = assert(resolver.binding(pinned, selected.binding_ref))
+    local entry, entry_error = resolver.declaration(pinned, binding)
+    if entry_error then return nil, fail(errors.INTERNAL, entry_error) end
+    local data = entry and bounds.object(entry.data)
+    local decoded, decode_error = profile_codec.decode(data and data.driver)
+    if not decoded then return nil, fail(errors.INTERNAL, selected.binding_ref .. " profiles: " .. tostring(decode_error)) end
+    result.title = decoded.title
+    result.default_profile = decoded.default_profile
+    for _, item in ipairs(decoded.profiles) do result.profiles[#result.profiles + 1] = {id = item.id, mode = item.mode} end
     return result, nil
 end
 

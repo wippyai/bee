@@ -1,67 +1,22 @@
 local bounds = require("bounds")
 local journal = require("journal")
 local json = require("json")
-local security = require("security")
 local remote = require("remote")
 local system = require("system")
-local snapshot = require("snapshot").decode
+local part_observation = require("part_observation")
 local M = {}
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value?: unknown, error?: Object}
 
-local function object(value: unknown): Object?
-    return bounds.object(value)
-end
-
-local function fail(code: string, message: string, operation_key: string?): Reply
-    local error: Object = {code = code, message = message, retry = "never"}
-    if operation_key then error.operation_key = operation_key end
-    return {ok = false, error = error}
-end
-
-local function unavailable(message: string, operation_key: string?): Reply
-    local reply = fail("UNAVAILABLE", message, operation_key)
-    local failure = reply.error
-    if failure then failure.retry = "refresh" end
-    return reply
-end
-
-local function succeed(value: unknown): Reply
-    return {ok = true, value = value}
-end
-
-local function request_input(request: unknown): (Object?, Reply?)
-    local input = object(request)
-    if not input then return nil, fail("INVALID", "request must be an object", nil) end
-    return input, nil
-end
-
-local function identity(): (string?, string?)
-    local caller = security.actor()
-    if not caller then return nil, nil end
-    local id = bounds.id(caller:id())
-    local meta = object(caller:meta())
-    local workspace = meta and bounds.id(meta.workspace_id)
-    if not id or not workspace then return nil, nil end
-    return id, workspace
-end
-
-local function key(value: unknown): string?
-    if type(value) ~= "string" or #value < 1 or #value > 128 or value:find("%c") then return nil end
-    return value
-end
-
-local function ref(value: unknown): string?
-    if type(value) ~= "string" or #value < 1 or #value > 256 or value:find("%c") then return nil end
-    return value
-end
-
-
-local function describe(session: string): (Object?, string?)
-    local value, err = journal.invoke("session_describe", {session = session})
-    if err or not value then return nil, err or "Threads returned no session" end
-    return snapshot(value)
-end
+local object = part_observation.object
+local fail = part_observation.fail
+local unavailable = part_observation.unavailable
+local succeed = part_observation.succeed
+local request_input = part_observation.request_input
+local identity = part_observation.identity
+local key = part_observation.key
+local ref = part_observation.ref
+local describe = part_observation.describe
 -- LIST_PAGE_BYTES is the published bound of one reply value; a page carries
 -- as many sessions as fit under it with its cursor.
 M.LIST_PAGE_BYTES = 65536

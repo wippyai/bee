@@ -73,6 +73,7 @@ entries:
   modules:
   - json
   imports:
+    states: bee.approvals.types:states
     windows: bee.approvals.types:windows
     grants: bee.approvals.grants:store
     text: bee.ui:text

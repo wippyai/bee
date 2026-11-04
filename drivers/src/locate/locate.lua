@@ -47,9 +47,7 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
             if not version or version == "" or version:find("[%c]") then return nil, "locate probe executable.version is invalid" end
             executable_version = version
         end
-        local present = raw_executable.present
-        if present ~= nil and type(present) ~= "boolean" then return nil, "locate probe executable.present must be boolean" end
-        executable_present = present
+        executable_present = raw_executable.present
     end
 
     local platform_os: string? = nil
@@ -70,9 +68,7 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
         if raw_platform.compatible ~= nil and type(raw_platform.compatible) ~= "boolean" then
             return nil, "locate probe platform.compatible must be boolean"
         end
-        local compatible = raw_platform.compatible
-        if compatible ~= nil and type(compatible) ~= "boolean" then return nil, "locate probe platform.compatible must be boolean" end
-        platform_compatible = compatible
+        platform_compatible = raw_platform.compatible
     end
 
     local executable = {present = executable_present, version = executable_version}

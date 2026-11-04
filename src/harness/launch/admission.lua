@@ -77,8 +77,8 @@ type Plan = {trait_ceiling: {string}?, spawn_overrides: profiles.Overrides?,
     catalog_generation: integer,
     mode: string,
     plan_digest: string,
-    -- The admitted framework agent closure, pinned by digest. Absent for
-    -- legacy routes without an agent reference.
+    -- The admitted framework agent closure, pinned by digest, when the
+    -- launch names an agent.
     agent_ref: string?,
     agent_digest: string?,
     spec_digest: string?,

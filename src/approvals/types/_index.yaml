@@ -6,6 +6,9 @@ entries:
   source: file://runtime_lease.lua
   imports:
     bounds: bee.drivers.values:bounds
+- name: states
+  kind: library.lua
+  source: file://states.lua
 - name: windows
   kind: library.lua
   source: file://windows.lua

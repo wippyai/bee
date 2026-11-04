@@ -82,7 +82,7 @@ local function define_tests()
                     source_node = node, source_workspace = "driver.ownerproof", version = "v1",
                     plan_digest = digest, plan_revision = 1, selection_revision = 1, artifact = captured,
                     resolution = blob("resolution"), preflight = blob("preflight"),
-                    migration_work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
+                    migration_work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@3",
                         destination_node = node, source_node = node, base_revision = 0, base_digest = digest,
                         policy_digest = digest, candidate_digest = digest, artifact_digest = captured.digest,
                         plan_digest = digest, migrations = {}, databases = {}})))})

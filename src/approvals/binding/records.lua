@@ -11,14 +11,15 @@ local windows = require("windows")
 local lifecycle = require("lifecycle")
 local part_model = require("part_model")
 local part_values = require("part_values")
+local states = require("states")
 local M = {}
 type Object = part_model.Object
 type Decision = part_model.Decision
 type Row = part_model.Row
 type ApprovalView = part_model.ApprovalView
 local text = part_values.text
-local request_kind = part_values.request_kind
-local approval_state = part_values.approval_state
+local request_kind = states.request_kind
+local approval_state = states.approval_state
 local digest_of = part_values.digest_of
 function M.view(row: Row): ApprovalView
     return {request_digest = row.request_digest, lifecycle_records = row.lifecycle_records, contract_version = row.contract_version, contract = row.contract, reviewed_digest = row.reviewed_digest, effect_admission_ms = row.effect_admission_ms, effect = row.effect, window_grant = row.window_grant, allowed_by_grant = row.allowed_by_grant, window_max_ttl_ms = row.window_max_ttl_ms, reallow = row.reallow, approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,

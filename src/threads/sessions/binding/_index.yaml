@@ -979,12 +979,12 @@ entries:
   kind: function.lua
   source: file://listing.lua
   method: list
-  modules: [json, security, system]
+  modules: [json, system]
   imports:
     bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
-    snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
+    part_observation: bee.threads.sessions.binding:observation
   security:
     policies: *id001
   meta:
@@ -2088,12 +2088,12 @@ entries:
   kind: function.lua
   source: file://listing.lua
   method: attention_count
-  modules: [json, security, system]
+  modules: [json, system]
   imports:
     bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
-    snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
+    part_observation: bee.threads.sessions.binding:observation
   security:
     policies: *id001
 - name: threads_journal
@@ -2105,7 +2105,10 @@ entries:
 - name: locate
   kind: library.lua
   source: file://locate.lua
-  imports: {protocol: bee.threads.sessions.types:protocol}
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    bounds: bee.drivers.values:bounds
+    driver_locate: bee.drivers.locate:locate
   modules:
   - time
 - name: catalog_service
@@ -2258,12 +2261,12 @@ entries:
 - name: listing
   kind: library.lua
   source: file://listing.lua
-  modules: [json, security, system]
+  modules: [json, system]
   imports:
     bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
-    snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
+    part_observation: bee.threads.sessions.binding:observation
 - name: observation
   kind: library.lua
   source: file://observation.lua

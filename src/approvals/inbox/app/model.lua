@@ -13,6 +13,7 @@ local windows = require("windows")
 local grants = require("grants")
 local glyphs = require("glyphs")
 local typed_form = require("typed_form")
+local states = require("states")
 local M = {}
 M.DISPLAY = "bee.approvals.display"
 M.TEXT_LIMIT = 512
@@ -23,8 +24,8 @@ M.INBOX_PAGE = 64
 type Object = {[string]: unknown}
 type Workspace = {label: string, folder: string}
 type Decision = "approved" | "denied"
-type ApprovalState = "pending" | "decided" | "expired" | "withdrawn" | "superseded" | "invalidated"
-type RequestKind = "permission" | "question"
+type ApprovalState = states.ApprovalState
+type RequestKind = states.RequestKind
 type ProposalKind = "operation" | "attempt"
 type Prompt = {text: string, artifact_ref: nil} | {text: nil, artifact_ref: string}
 type OperationProposal = {grant_adapter: string?, kind: "operation", ref: string, revision: string, action_id: nil, input_digest: string?, payload: Object}
@@ -116,22 +117,6 @@ local function proposal_kind(value: unknown): ProposalKind?
     return nil
 end
 
-local function request_kind(value: unknown): RequestKind?
-    if value == "permission" then return "permission" end
-    if value == "question" then return "question" end
-    return nil
-end
-
-local function approval_state(value: unknown): ApprovalState?
-    if value == "pending" then return "pending" end
-    if value == "decided" then return "decided" end
-    if value == "expired" then return "expired" end
-    if value == "withdrawn" then return "withdrawn" end
-    if value == "superseded" then return "superseded" end
-    if value == "invalidated" then return "invalidated" end
-    return nil
-end
-
 local function decision(value: unknown): Decision?
     if value == "approved" then return "approved" end
     if value == "denied" then return "denied" end
@@ -197,8 +182,8 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     local approval_id, owner_node, workspace_id = bounds.id(view.approval_id), bounds.id(view.owner_node), bounds.id(view.workspace_id)
     local requester_id, policy = bounds.id(view.requester_id), bounds.id(view.policy)
     local owner_incarnation, revision = bounds.count(view.owner_incarnation), bounds.count(view.revision)
-    local request_kind_value = request_kind(view.request_kind)
-    local state = approval_state(view.state)
+    local request_kind_value = states.request_kind(view.request_kind)
+    local state = states.approval_state(view.state)
     local proposal, proposal_error = decode_proposal(view.proposal)
     local prompt, prompt_error = decode_prompt(view.prompt)
     if not approval_id then return nil, "approval view approval_id is invalid" end

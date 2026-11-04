@@ -8,6 +8,7 @@ local canonical = require("canonical")
 local record_values = require("record_values")
 local record_types = require("record_types")
 local hook_capabilities = require("hook_capabilities")
+local driver_locate = require("driver_locate")
 local M = {}
 
 M.MAX_TEXT_BYTES = 16384
@@ -103,7 +104,7 @@ type ListPage = {items: {SessionSnapshot}, next: string?}
 type CandidateKind = "definition" | "profile"
 type HookCapability = hook_capabilities.Capability
 type Candidate = {ref: string, kind: CandidateKind, revision: integer?, title: string,
-    status: "ready" | "missing" | "unconfigured" | "incompatible" | "unknown", checked_at: string,
+    status: driver_locate.LocateStatus, checked_at: string,
     reasons: {string}, features: {string}, actions: {Action}, hook_capabilities: {HookCapability}?}
 type CatalogPage = {items: {Candidate}, next: string?, complete: boolean, unavailable_count: integer, diagnostics: {Fault}}
 
@@ -850,7 +851,7 @@ function M.decode_candidate(value: unknown): (Candidate?, string?)
     local ref = M.any_ref(object.ref)
     local kind = one_of(object.kind, {"definition", "profile"})
     local title = bounds.text(object.title, M.MAX_TITLE_BYTES)
-    local status = one_of(object.status, {"ready", "missing", "unconfigured", "incompatible", "unknown"})
+    local status = driver_locate.status(object.status)
     local checked = bounds.timestamp(object.checked_at)
     local reasons, features, actions = texts(object.reasons), refs(object.features, nil, 128), decode_actions(object.actions)
     if not ref or not kind or not title or not status or not checked or not reasons or not features
@@ -868,10 +869,7 @@ function M.decode_candidate(value: unknown): (Candidate?, string?)
     end
     local decoded_kind: CandidateKind = "definition"
     if kind == "profile" then decoded_kind = "profile" end
-    local decoded_status: "ready" | "missing" | "unconfigured" | "incompatible" | "unknown" = "ready"
-    if status == "missing" then decoded_status = "missing" elseif status == "unconfigured" then decoded_status = "unconfigured"
-    elseif status == "incompatible" then decoded_status = "incompatible" elseif status == "unknown" then decoded_status = "unknown" end
-    return {ref = ref, kind = decoded_kind, revision = revision, title = title, status = decoded_status,
+    return {ref = ref, kind = decoded_kind, revision = revision, title = title, status = status,
         checked_at = checked, reasons = reasons, features = features, actions = actions, hook_capabilities = capabilities}, nil
 end
 

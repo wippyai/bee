@@ -314,6 +314,7 @@ entries:
     type: harness.driver
     driver_id: fixture-agent
     test_support: true
+    profiles_ref: bee.tests.placement.native:fixture_agent_profiles
   contracts:
   - contract: bee.drivers:driver
     methods:
@@ -321,6 +322,33 @@ entries:
       dispatch: bee.tests.placement.native:fixture_agent_dispatch
       normalize: bee.tests.placement.native:fixture_agent_normalize
       configure: bee.tests.placement.native:fixture_agent_configure
+- name: fixture_agent_profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.tests.placement.native:fixture_agent_binding
+    test_support: true
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Fixture agent
+      implementation_version: 0.1.0
+      default_profile: batch
+      profiles:
+      - id: batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: fixture-agent-1
+        answer_path:
+          strategy: terminal_field
+          adapter_ref: bee.tests.support.driver:claude_protocol
+      - id: window
+        mode: window
+        protocol: pty
+        protocol_revision: fixture-agent-1
+        answer_path:
+          strategy: none
 - name: fixture_agent_prepare
   kind: function.lua
   source: file://fixture_agent.lua

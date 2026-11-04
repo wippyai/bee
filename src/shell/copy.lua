@@ -1,11 +1,11 @@
 -- MIT. Copying text out of windows. A left drag inside a window body selects
 -- its text and copies on release, while a click without motion reaches the
--- app; a double click copies a word and a triple click a line. Quick copy
--- labels the copyable tokens of the focused window with hints to type. Copy
--- mode moves a cursor over the window's text, selects by characters or
--- lines, and searches. Every mode works on one frozen snapshot of the
--- window, bounded to it; the shell routes input here and writes the text
--- each outcome carries to the clipboard.
+-- app as its press and release, so the app handles its own double clicks.
+-- Quick copy labels the copyable tokens of the focused window with hints to
+-- type. Copy mode moves a cursor over the window's text, selects by
+-- characters or lines, and searches. Every mode works on one frozen snapshot
+-- of the window, bounded to it; the shell routes input here and writes the
+-- text each outcome carries to the clipboard.
 local tty = require("tty")
 local selection = require("selection")
 local hints = require("hints")
@@ -19,23 +19,18 @@ type Point = selection.Point
 type Outcome = {forward: {tty.InputEvent}, copy: string?, status: string?, pass: boolean?}
 -- A left press held back from the app until it is a click or a drag.
 type Pending = {id: string, x: integer, y: integer, event: tty.MouseEvent, state: selection.State}
-type Click = {id: string, x: integer, y: integer, at: integer, count: integer}
 -- mode is "drag", "cursor" or "hints". In copy mode marking says a range
 -- runs from the anchor to the cursor; query is the search being typed and
 -- searched the last search.
 type Active = {mode: string, id: string, state: selection.State, cursor: Point, anchor: Point?, lines: boolean,
     tokens: {hints.Token}, typed: string, query: string?, searched: string}
-type Controller = {active: Active?, pending: Pending?, click: Click?}
+type Controller = {active: Active?, pending: Pending?}
 -- A mark the renderer draws over the frozen rows: cells first to last of row
 -- y in role "selection", "cursor", "token" or "label" (with text).
 type Mark = {y: integer, first: integer, last: integer, role: string, text: string?}
 type Overlay = {id: string, width: integer, height: integer, rows: {string}, marks: {Mark}}
 
 local M = {}
-
--- MULTI_CLICK_MS is the longest pause between the clicks of a double or
--- triple click.
-M.MULTI_CLICK_MS = 400
 
 M.COPY_STATUS = "Copy mode · v select · y copy"
 M.HINT_STATUS = "Quick copy · type a hint · Esc"
@@ -109,25 +104,15 @@ end
 -- forget drops what the controller holds of window id.
 function M.forget(ctl: Controller, id: string)
     if M.view(ctl) == id then M.cancel(ctl) end
-    local click = ctl.click
-    if click and click.id == id then ctl.click = nil end
 end
 
 -- pointer takes a mouse event inside window id's body, with rows its
 -- content. An app that takes drags receives every event as it comes.
-function M.pointer(ctl: Controller, id: string, body: Rect, rows: {string}, event: tty.MouseEvent, now: integer, drags: boolean): Outcome
+function M.pointer(ctl: Controller, id: string, body: Rect, rows: {string}, event: tty.MouseEvent, drags: boolean): Outcome
     local inside = relative(event, body)
     if drags or event.action ~= "press" or event.button ~= "left" then return {forward = {inside}} end
     local state, problem = capture(id, body, rows)
     if not state then return {forward = {inside}, status = "Text selection unavailable: " .. tostring(problem)} end
-    local click = ctl.click
-    if click and click.id == id and click.x == inside.x and click.y == inside.y and now - click.at <= M.MULTI_CLICK_MS then
-        click.count, click.at = click.count + 1, now
-        if click.count == 2 then return copied(selection.word(state, inside.x, inside.y)) end
-        ctl.click = nil
-        return copied(selection.line(state, inside.y))
-    end
-    ctl.click = nil
     ctl.pending = {id = id, x = inside.x, y = inside.y, event = inside, state = state}
     return none()
 end
@@ -163,7 +148,7 @@ local function letter(event: tty.KeyEvent): string?
     return event.key
 end
 
-local function on_pending(ctl: Controller, pending: Pending, event: tty.TTYEvent, body: Rect, now: integer): Outcome
+local function on_pending(ctl: Controller, pending: Pending, event: tty.TTYEvent, body: Rect): Outcome
     if event.type ~= "mouse" then
         ctl.pending = nil
         return {forward = {pending.event}, pass = true}
@@ -171,7 +156,6 @@ local function on_pending(ctl: Controller, pending: Pending, event: tty.TTYEvent
     local inside = relative(event, body)
     if event.action == "release" then
         ctl.pending = nil
-        ctl.click = {id = pending.id, x = pending.x, y = pending.y, at = now, count = 1}
         return {forward = {pending.event, inside}}
     end
     if event.action == "motion" and (inside.x ~= pending.x or inside.y ~= pending.y) then
@@ -297,7 +281,7 @@ end
 
 -- input takes an event while the controller is engaged, with body the
 -- current interior of its window, nil when the window is hidden or closed.
-function M.input(ctl: Controller, event: tty.TTYEvent, body: Rect?, now: integer): Outcome
+function M.input(ctl: Controller, event: tty.TTYEvent, body: Rect?): Outcome
     local active, pending = ctl.active, ctl.pending
     local id = M.view(ctl)
     local state = active and active.state or (pending and pending.state)
@@ -305,7 +289,7 @@ function M.input(ctl: Controller, event: tty.TTYEvent, body: Rect?, now: integer
         M.cancel(ctl)
         return {forward = {}, status = "Text selection unavailable: the window changed", pass = event.type ~= "mouse"}
     end
-    if pending then return on_pending(ctl, pending, event, body, now) end
+    if pending then return on_pending(ctl, pending, event, body) end
     if not active then return {forward = {}, pass = true} end
     if active.mode == "drag" then return on_drag(ctl, active, event, body) end
     if active.mode == "hints" then return on_hints(ctl, active, event) end

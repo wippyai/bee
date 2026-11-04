@@ -7,8 +7,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -16,8 +16,13 @@ import (
 	"github.com/wippyai/runtime/cluster/internode"
 )
 
-// nodePrefix starts the name of every hive node.
-const nodePrefix = "bee-"
+// nodeName matches the node ids Bee issues: a folder's `bee-<hex>`, an
+// in-memory client's `bee-client-<hex>`, and the runtime's host-and-folder
+// UUIDv5 a folder with earlier state adopted as its stored identity.
+var nodeName = regexp.MustCompile(`^(bee-(client-)?[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$`)
+
+// isNodeName reports whether name is a node id Bee issues.
+func isNodeName(name string) bool { return nodeName.MatchString(name) }
 
 // Members resolves the identity keys of nodes on other machines from the
 // membership the hive's gossip carries. The hive secret is the trust root
@@ -33,7 +38,7 @@ func (m *Members) bind(membership clusterapi.Membership) { m.membership.Store(&m
 // advertisedKey returns the identity key node advertises in gossip.
 func (m *Members) advertisedKey(node string) (ed25519.PublicKey, bool) {
 	bound := m.membership.Load()
-	if bound == nil || !strings.HasPrefix(node, nodePrefix) {
+	if bound == nil || !isNodeName(node) {
 		return nil, false
 	}
 	for _, member := range (*bound).Nodes() {

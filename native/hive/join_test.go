@@ -249,8 +249,14 @@ func TestNodesOfOtherMachinesAreTrustedUnderTheirAdvertisedKeyInASharedHive(t *t
 	advertised := base64.RawStdEncoding.EncodeToString(public)
 	members := &Members{}
 	members.bind(gossip{nodes: []clusterapi.NodeInfo{
-		{ID: "bee-remote", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
+		{ID: "bee-00000000000000000000000000000002", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
+		{ID: "793c2287-0ef9-5880-89ae-881bade4c960", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
 		{ID: "intruder", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
+		{ID: "bee-remote", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
+		{ID: "bee-0000000000000000000000000000000G", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
+		{ID: "793C2287-0EF9-5880-89AE-881BADE4C960", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
+		{ID: "793c2287-0ef9-4880-89ae-881bade4c960", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
+		{ID: "793c2287-0ef9-5880-89ae-881bade4c960x", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
 	}})
 	source := func(hive Hive) clusterapi.PeerKeySource {
 		config, _, err := Prepare(dir, t.TempDir(), &hive, members)
@@ -261,20 +267,26 @@ func TestNodesOfOtherMachinesAreTrustedUnderTheirAdvertisedKeyInASharedHive(t *t
 	}
 	secret := base64.StdEncoding.EncodeToString(make([]byte, 32))
 
-	key, ok := source(Hive{Secret: secret, Advertise: "192.0.2.1"})("bee-remote")
+	key, ok := source(Hive{Secret: secret, Advertise: "192.0.2.1"})("bee-00000000000000000000000000000002")
 	require.True(t, ok)
 	require.True(t, key.Equal(public))
-	_, ok = source(Hive{Secret: secret, Advertise: "192.0.2.1"})("intruder")
-	require.False(t, ok, "only hive node names are trusted")
-	_, ok = source(Hive{Secret: secret, Advertise: "192.0.2.1"})("bee-unseen")
+	key, ok = source(Hive{Secret: secret, Advertise: "192.0.2.1"})("793c2287-0ef9-5880-89ae-881bade4c960")
+	require.True(t, ok, "a folder node under its adopted id is trusted")
+	require.True(t, key.Equal(public))
+	for _, malformed := range []string{"intruder", "bee-remote", "bee-0000000000000000000000000000000G", "793C2287-0EF9-5880-89AE-881BADE4C960",
+		"793c2287-0ef9-4880-89ae-881bade4c960", "793c2287-0ef9-5880-89ae-881bade4c960x"} {
+		_, ok = source(Hive{Secret: secret, Advertise: "192.0.2.1"})(clusterapi.NodeID(malformed))
+		require.False(t, ok, "only node ids Bee issues are trusted: %s", malformed)
+	}
+	_, ok = source(Hive{Secret: secret, Advertise: "192.0.2.1"})("bee-000000000000000000000000000000ff")
 	require.False(t, ok, "a node absent from gossip is not trusted")
-	_, ok = source(Hive{Secret: secret})("bee-remote")
+	_, ok = source(Hive{Secret: secret})("bee-00000000000000000000000000000002")
 	require.False(t, ok, "a machine outside a shared hive trusts published keys only")
 
 	other, _, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	require.NoError(t, writeFile(filepath.Join(dir, nodesDir, "bee-remote"+keySuffix), []byte(base64.StdEncoding.EncodeToString(other))))
-	key, ok = source(Hive{Secret: secret, Advertise: "192.0.2.1"})("bee-remote")
+	require.NoError(t, writeFile(filepath.Join(dir, nodesDir, "bee-00000000000000000000000000000002"+keySuffix), []byte(base64.StdEncoding.EncodeToString(other))))
+	key, ok = source(Hive{Secret: secret, Advertise: "192.0.2.1"})("bee-00000000000000000000000000000002")
 	require.True(t, ok)
 	require.True(t, key.Equal(other), "a locally published key wins over the advertised one")
 }

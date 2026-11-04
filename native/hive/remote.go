@@ -27,7 +27,7 @@ const (
 // and an in-memory client, is not remembered.
 func rememberRemote(dir string, node clusterapi.NodeInfo) error {
 	name := string(node.ID)
-	if node.Addr == "" || !strings.HasPrefix(name, nodePrefix) || strings.HasPrefix(name, clientTag) || strings.ContainsAny(name, `/\`) {
+	if node.Addr == "" || !isNodeName(name) || strings.HasPrefix(name, clientTag) {
 		return nil
 	}
 	if _, err := os.Stat(filepath.Join(dir, nodesDir, name+keySuffix)); err == nil {

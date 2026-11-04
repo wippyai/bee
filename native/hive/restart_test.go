@@ -3,6 +3,7 @@
 package hive
 
 import (
+	"fmt"
 	"context"
 	"os"
 	"path/filepath"
@@ -72,12 +73,12 @@ func TestRemoteNodesAreRememberedAsSeedsForLaterStarts(t *testing.T) {
 	dir := isolatedConfig(t)
 	hive, err := Ensure(dir)
 	require.NoError(t, err)
-	require.NoError(t, writeFile(filepath.Join(dir, nodesDir, "bee-local"+keySuffix), []byte("key")))
+	require.NoError(t, writeFile(filepath.Join(dir, nodesDir, "bee-00000000000000000000000000000001"+keySuffix), []byte("key")))
 
-	for node, address := range map[string]string{"bee-local": "192.0.2.1:31000", "bee-remote": "192.0.2.9:32000", "bee-client-x": "192.0.2.9:32001", "stranger": "192.0.2.9:32002"} {
+	for node, address := range map[string]string{"bee-00000000000000000000000000000001": "192.0.2.1:31000", "bee-00000000000000000000000000000002": "192.0.2.9:32000", "793c2287-0ef9-5880-89ae-881bade4c960": "192.0.2.9:32003", "bee-client-00000000000000000000000000000003": "192.0.2.9:32001", "stranger": "192.0.2.9:32002", "bee-remote": "192.0.2.9:32004"} {
 		require.NoError(t, rememberRemote(dir, clusterapi.NodeInfo{ID: clusterapi.NodeID(node), Addr: address}))
 	}
-	require.Equal(t, []string{"192.0.2.9:32000"}, remoteAddresses(dir), "only nodes of other machines are remembered")
+	require.ElementsMatch(t, []string{"192.0.2.9:32000", "192.0.2.9:32003"}, remoteAddresses(dir), "only nodes of other machines are remembered, including one under an adopted id")
 
 	config, _, err := Prepare(dir, t.TempDir(), hive, &Members{})
 	require.NoError(t, err)
@@ -87,9 +88,9 @@ func TestRemoteNodesAreRememberedAsSeedsForLaterStarts(t *testing.T) {
 func TestRememberedAddressesAreBounded(t *testing.T) {
 	dir := isolatedConfig(t)
 	for index := 0; index < maxRemote+5; index++ {
-		require.NoError(t, rememberRemote(dir, clusterapi.NodeInfo{ID: clusterapi.NodeID("bee-" + strconv.Itoa(index)), Addr: "192.0.2.9:" + strconv.Itoa(32000+index)}))
+		require.NoError(t, rememberRemote(dir, clusterapi.NodeInfo{ID: clusterapi.NodeID(fmt.Sprintf("bee-%032x", index)), Addr: "192.0.2.9:" + strconv.Itoa(32000+index)}))
 		old := time.Now().Add(time.Duration(index-100) * time.Second)
-		require.NoError(t, os.Chtimes(filepath.Join(dir, remoteDir, "bee-"+strconv.Itoa(index)+addressSuffix), old, old))
+		require.NoError(t, os.Chtimes(filepath.Join(dir, remoteDir, fmt.Sprintf("bee-%032x", index)+addressSuffix), old, old))
 	}
 	require.NoError(t, pruneRemote(dir))
 	require.Len(t, remoteAddresses(dir), maxRemote)

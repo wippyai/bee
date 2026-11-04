@@ -796,3 +796,9 @@ entries:
   imports:
     recovery: bee.tests.threads:recovery
     runtime: bee.tests.threads:recovery_runtime
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}
+  imports:
+    controllers: bee.tests.support:controllers

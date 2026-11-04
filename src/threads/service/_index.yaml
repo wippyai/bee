@@ -113,6 +113,7 @@ entries:
     outbox: bee.threads.persist:outbox
     worker: bee.process:worker
     alias_retirements: bee.threads.service:alias_retirements
+    seam: bee.process:seam
 - name: service
   meta:
     title: "Threads \xB7 owner"

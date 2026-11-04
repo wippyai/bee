@@ -461,26 +461,6 @@ def compose_thread_recovery():
         '{settled = runtime.settled, announced = runtime.announced, released = runtime.released}))\nend\nreturn {main = main}\n')
 
 
-def hold_thread_commits(src):
-    service = src / "threads/service/service.lua"
-    replace_once(service, '            elseif selected.channel == committed then', '''            elseif selected.channel == committed then
-                local controller = process.registry.lookup("bee.test.threads.hold", process.registry.LOCAL)
-                if controller then
-                    local release = assert(process.listen("bee.test.threads.release", {message = true}))
-                    assert(process.send(tostring(controller), "bee.test.threads.hold", {}))
-                    assert(tostring(assert((release:receive())):from()) == tostring(controller))
-                    process.unlisten(release)
-                end''')
-    replace_once(service, '                    capture = changes()', '''                    local controller = process.registry.lookup("bee.test.threads.terminal", process.registry.LOCAL)
-                    if controller then
-                        local resume = assert(process.listen("bee.test.threads.resume", {message = true}))
-                        assert(process.send(tostring(controller), "bee.test.threads.terminal", {}))
-                        assert(tostring(assert((resume:receive())):from()) == tostring(controller))
-                        process.unlisten(resume)
-                    end
-                    capture = changes()''')
-
-
 def hold_hive_backlog(src):
     supervisor = src / "hive/service/supervisor.lua"
     replace_once(supervisor, '        local selected = channel.select(cases)',
@@ -941,7 +921,6 @@ def compose():
     fail_remote_registry_reads(src)
     hold_hive_backlog(src)
     compose_thread_recovery()
-    hold_thread_commits(src)
     gate_retired_display(src)
     observe_node_ready(src)
     observe_hive_upgrade(src)

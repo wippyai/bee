@@ -35,6 +35,7 @@ local pump_config = require("pump_config")
 local outbox = require("outbox")
 local worker = require("worker")
 local alias_retirements = require("alias_retirements")
+local seam = require("seam")
 
 local CHANGES = "bee:changes"
 local NAME = "bee.threads"
@@ -212,10 +213,12 @@ local function run(active: () -> boolean, stopped: channel.Channel<boolean>)
                     end
                 end
             elseif selected.channel == committed then
+                seam.hold("bee.threads.service.committed")
                 schedule_pump()
                 if not selected.ok then
                     if not active() then return end
                     capture:close()
+                    seam.hold("bee.threads.service.capture_closed")
                     capture = changes()
                     committed = capture:channel()
                     if not recover_commits(active) then return end

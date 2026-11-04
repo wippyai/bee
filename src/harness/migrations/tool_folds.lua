@@ -1,6 +1,7 @@
 local json = require("json")
 local canonical = require("canonical")
 local folds = require("folds")
+local rewrites = require("rewrites")
 return require("migration").define(function()
     migration("Move saved profile tool selections to the tools that carry them", function()
         database("sqlite", function()
@@ -13,9 +14,7 @@ return require("migration").define(function()
                         feeds[row.owner_id .. ":" .. row.feed] = {owner = row.owner_id, feed = row.feed}
                     end
                 end
-                for _, feed in pairs(feeds) do
-                    assert(db:execute("UPDATE bee_sync_feeds SET head_sequence = head_sequence + 1, earliest_sequence = head_sequence + 2 WHERE owner_id = ? AND feed = ?", {feed.owner, feed.feed}))
-                end
+                assert(not rewrites.fence_feeds(db, feeds))
             end)
         end)
     end)

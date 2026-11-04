@@ -2,11 +2,12 @@ local json = require("json")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local protocol = require("protocol")
+local rewrites = require("rewrites")
 return require("migration").define(function()
     migration("Pin saved driver options to their registry schema", function()
         database("sqlite", function()
             up(function(db)
-                local feeds: {[string]: {owner: string, feed: string}} = {}
+                local feeds: {[string]: rewrites.Feed} = {}
                 for _, row in ipairs(assert(db:query("SELECT owner_id,feed,projection_key,value_json FROM bee_sync_projections WHERE feed LIKE 'harness.profiles:%' AND tombstone = 0"))) do
                     local source = bounds.object(json.decode(row.value_json))
                     if source and source.schema_revision == protocol.SCHEMA then
@@ -33,9 +34,7 @@ return require("migration").define(function()
                         end
                     end
                 end
-                for _, item in pairs(feeds) do
-                    assert(db:execute("UPDATE bee_sync_feeds SET head_sequence = head_sequence + 1, earliest_sequence = head_sequence + 2 WHERE owner_id = ? AND feed = ?", {item.owner, item.feed}))
-                end
+                assert(not rewrites.fence_feeds(db, feeds))
             end)
         end)
     end)

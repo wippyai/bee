@@ -5,6 +5,10 @@ entries:
   kind: library.lua
   source: file://database.lua
   modules: [sql]
+- name: rewrites
+  kind: library.lua
+  source: file://rewrites.lua
+  modules: [sql]
 - name: transaction
   kind: library.lua
   source: file://transaction.lua

@@ -3,11 +3,12 @@ local hash = require("hash")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local mcp = require("mcp")
+local rewrites = require("rewrites")
 return require("migration").define(function()
     migration("Represent saved consent tools as active profile traits", function()
         database("sqlite", function()
             up(function(db)
-                local feeds: {[string]: {owner: string, feed: string}} = {}
+                local feeds: {[string]: rewrites.Feed} = {}
                 for _, row in ipairs(assert(db:query([[SELECT p.owner_id,p.feed,p.projection_key,p.value_json,g.grant_id,g.scope_json,g.provenance_json,g.workspace_id
                     FROM bee_sync_projections p JOIN bee_approval_grants g ON g.domain = 'profile_choices'
                     AND g.owner_node = p.owner_id AND json_extract(g.metadata_json,'$.profile_id') = p.projection_key
@@ -46,9 +47,7 @@ return require("migration").define(function()
                         end
                     end
                 end
-                for _, item in pairs(feeds) do
-                    assert(db:execute("UPDATE bee_sync_feeds SET head_sequence = head_sequence + 1, earliest_sequence = head_sequence + 2 WHERE owner_id = ? AND feed = ?", {item.owner, item.feed}))
-                end
+                assert(not rewrites.fence_feeds(db, feeds))
             end)
         end)
     end)

@@ -15,3 +15,26 @@ entries:
     test: wippy.test:test
     guard: bee.persist:state_guard
     schema: bee.approvals.migrations:schema
+- name: tool_selections_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/persist-tool-selections-test.db
+  lifecycle: {auto_start: true}
+- name: tool_selections_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.tests.persist:tool_selections_db]
+    effect: allow
+- name: tool_selections_test
+  kind: function.lua
+  source: file://tool_selections_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [sql, funcs, json]
+  imports:
+    test: wippy.test:test
+    canonical: bee.drivers.values:canonical
+  security:
+    policies: [bee.tests.persist:tool_selections_policy, bee.tests.support:schema_policy]

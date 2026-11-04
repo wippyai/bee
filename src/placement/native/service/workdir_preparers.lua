@@ -204,7 +204,9 @@ end
 -- caller holds the attempt's lock this one follows it: the end the holder
 -- records, any outcome it records, or the holder process's exit is a reason
 -- to try the lock again, and a failure recorded meanwhile is this call's
--- outcome too.
+-- outcome too. A CDC stream subscribes when its channel is first taken, so
+-- the follower takes it before it tries the lock again: an end recorded
+-- after that try reaches the follower.
 function M.cleanup(attempt: types.Attempt): (boolean, string?)
     local lock = M.LOCK .. attempt.attempt_id
     local db, open_error = store.open()
@@ -213,10 +215,11 @@ function M.cleanup(attempt: types.Attempt): (boolean, string?)
     db:release()
     if not row then return false, "cleanup attempt is not recorded" end
     local after = bounds.count(row.evidence_count)
-    local cleaned, cleanup_error, busy = locked(attempt, lock, nil)
+    local cleaned, cleanup_error, busy = locked(attempt, lock, after)
     if not busy then return cleaned == true, cleanup_error end
     local changes, stream_error = cdc.stream("bee:changes", {tables = {"bee_placement_evidence"}, ops = {"insert"}})
     if not changes then return false, "follow the attempt's cleanup: " .. tostring(stream_error) end
+    local feed = changes:channel()
     local events = assert(process.events())
     local own = tostring(process.pid())
     local watched: string? = nil
@@ -243,7 +246,7 @@ function M.cleanup(attempt: types.Attempt): (boolean, string?)
             else return finish(false, "follow the attempt's cleanup holder: " .. tostring(monitor_error)) end
         end
         if follow then
-            local cases = {changes:channel():case_receive()}
+            local cases = {feed:case_receive()}
             if watched then cases[#cases + 1] = events:case_receive() end
             local selected = channel.select(cases)
             if not selected.ok then return finish(false, "the attempt's cleanup could not be followed") end

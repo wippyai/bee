@@ -679,6 +679,10 @@ def observe_preparer_cleanup(src):
     if fixture and fixture.data and type(fixture.data.cleanup_observer) == "string" then
         assert(process.send(fixture.data.cleanup_observer, "bee.test.preparer.observed", {}))
     end
+    if fixture and fixture.data and type(fixture.data.cleanup_gate) == "string" then
+""" + textwrap.indent(message_barrier('fixture.data.cleanup_gate', 'bee.test.preparer.gate', 'bee.test.preparer.gate.release',
+                                      '{}', 'cleanup gate sender', 'opened'), " " * 8) + """
+    end
     local taken, take_error = process.registry.register(lock)
     if not taken then""")
     replace_once(src / "placement/native/service/workdir_preparers.lua",
@@ -693,14 +697,17 @@ def observe_preparer_cleanup(src):
     local db, open_error = store.open()
     if not db then return false, open_error end
     local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)''')
+    # A follower reports the holder it found and stays there until the
+    # controller releases it, so the holder can end before the follower waits.
     replace_once(src / "placement/native/service/workdir_preparers.lua",
-                 "            local selected = channel.select(cases)\n            if not selected.ok then return finish(false, \"the attempt's cleanup could not be followed\") end",
-                 """            local waiting = registry.get("bee.tests.placement.native:preparer_fixture_config")
+                 "        if follow then\n",
+                 """        if follow then
+            local waiting = registry.get("bee.tests.placement.native:preparer_fixture_config")
             if waiting and waiting.data and type(waiting.data.cleanup_waiter) == "string" then
-                assert(process.send(waiting.data.cleanup_waiter, "bee.test.preparer.waiting", {holder = tostring(holder)}))
+""" + textwrap.indent(message_barrier('waiting.data.cleanup_waiter', 'bee.test.preparer.waiting', 'bee.test.preparer.proceed',
+                                      '{holder = tostring(holder)}', 'follower barrier sender', 'proceed'), " " * 16) + """
             end
-            local selected = channel.select(cases)
-            if not selected.ok then return finish(false, "the attempt's cleanup could not be followed") end""")
+""")
 
 
 def hold_docker_cleanup(src):

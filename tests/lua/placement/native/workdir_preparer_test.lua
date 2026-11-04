@@ -259,6 +259,44 @@ local function define_tests()
         end
 
 
+        test.it("a cleanup that starts before a failure and takes the lock after it shares the failure", function()
+            local root = temp_dir()
+            local gate = assert(process.listen("bee.test.preparer.gate", {message = true}))
+            local results = assert(process.listen("bee.test.cleanup.result", {message = true}))
+            with_preparer({cleanup_failure = true, cleanup_gate = tostring(process.pid())}, function()
+                local db = assert(store.open())
+                local req = make_request(fresh("cleanup-late"))
+                claim_attempt(db, req)
+                test.not_nil((workdir_preparers.setup(db, req, req.attempt_id, root, {root})))
+                local attempt = assert(store.attempt(db, req.attempt_id))
+                db:release()
+                local callers: {string} = {}
+                for _ = 1, 2 do
+                    assert(process.spawn("bee.tests.placement.native:cleanup_caller", "bee:workers", attempt, tostring(process.pid())))
+                end
+                for _ = 1, 2 do
+                    local selected = channel.select({gate:case_receive(), results:case_receive()})
+                    assert(selected.ok and selected.channel == gate, "a cleanup caller passed the gate")
+                    callers[#callers + 1] = tostring(selected.value:from())
+                end
+                for _, caller in ipairs(callers) do
+                    assert(process.send(caller, "bee.test.preparer.gate.release", {}))
+                    local selected = channel.select({results:case_receive(), gate:case_receive()})
+                    assert(selected.ok and selected.channel == results, "a cleanup caller retried the lock while it was free")
+                    local reply = selected.value:payload():data()
+                    test.is_false(reply.ok)
+                    test.contains(reply.err or "", "fixture cleanup failure")
+                end
+                db = assert(store.open())
+                local rows = assert(db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'workdir_preparer.failed'", {req.attempt_id}))
+                db:release()
+                test.eq(#rows, 1, "preparer cleanup invocations")
+            end)
+            process.unlisten(gate)
+            process.unlisten(results)
+            cleanup_dir(root)
+        end)
+
         test.it("cleanup failures surface and a later call completes from evidence", function()
             local root = temp_dir()
             with_preparer({cleanup_failure = true}, function()
@@ -275,7 +313,8 @@ local function define_tests()
                 local entry = assert(registry.get("bee.tests.placement.native:preparer_fixture_config"))
                 entry.data = {}
                 local changes = registry.snapshot():changes(); changes:update(entry); assert(changes:apply())
-                test.is_true(service.cleanup_attempt(attempt).ok)
+                local completed = service.cleanup_attempt(attempt)
+                test.is_true(completed.ok, completed.error and completed.error.message)
             end)
             cleanup_dir(root)
         end)
@@ -541,6 +580,7 @@ local function define_tests()
                 selected = channel.select({waiting:case_receive(), results:case_receive()})
                 assert(selected.ok and selected.channel == waiting, "the caller did not wait on the holder")
                 test.eq(selected.value:payload():data().holder, tostring(process.pid()))
+                local follower = tostring(selected.value:from())
                 entry.data = {}
                 changes = registry.snapshot():changes(); changes:update(entry); assert(changes:apply())
                 assert(process.send(tostring(process.pid()), "bee.test.preparer.crash", {}))
@@ -548,6 +588,7 @@ local function define_tests()
                 assert(ended.ok and ended.channel == held, "the holder did not return")
                 test.is_false(ended.value.ok)
                 test.contains(ended.value.err or "", "fixture cleanup owner crashed")
+                assert(process.send(follower, "bee.test.preparer.proceed", {}))
                 local replied = channel.select({results:case_receive()})
                 assert(replied.ok and replied.channel == results, "the waiting caller did not return")
                 local reply = replied.value:payload():data()
@@ -594,10 +635,11 @@ local function define_tests()
                 assert(selected.ok and selected.channel == waiting, "the second cleanup invoked the preparer while the first held the attempt")
                 test.eq(selected.value:payload():data().holder, tostring(process.pid()))
                 assert(process.send(first, "bee.test.preparer.release", {}))
-                for _ = 1, 2 do
+                for index = 1, 2 do
                     local finished = channel.select({results:case_receive(), entered:case_receive()})
                     assert(finished.ok and finished.channel == results, "a cleanup invoked the preparer again")
                     test.is_true(finished.value.ok, finished.value.err)
+                    if index == 1 then assert(process.send(tostring(process.pid()), "bee.test.preparer.proceed", {})) end
                 end
                 db = assert(store.open())
                 local rows = assert(db:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'workdir_preparer.cleaned'", {req.attempt_id}))
@@ -612,7 +654,6 @@ local function define_tests()
         test.it("a cleanup caller settles the preparers itself while the sweeper cannot run", function()
             local root = temp_dir()
             with_preparer({}, function()
-                local holder = hold_sweeper_name()
                 local db = assert(store.open())
                 local req = make_request(fresh("cleanup-sweeper-down"))
                 claim_attempt(db, req)
@@ -627,7 +668,6 @@ local function define_tests()
                     result:send({ok = ok, err = err})
                 end)
                 local selected = channel.select({result:case_receive()})
-                release_sweeper_name(holder)
                 assert(selected.ok and selected.channel == result, "cleanup caller did not return")
                 test.is_true(selected.value.ok, selected.value.err)
                 db = assert(store.open())
@@ -641,7 +681,10 @@ local function define_tests()
 end
 
 local cases = test.run_cases(define_tests)
+-- The suite's cases are the only cleanup callers: the sweeper stays held off
+-- until every attempt they record is settled.
 return {run = function(options)
+    local sweeper = hold_sweeper_name()
     local ok, result = pcall(cases, options)
     local events = assert(process.events())
     local pending: {[string]: boolean} = {}
@@ -667,6 +710,7 @@ return {run = function(options)
         assert(store.transition(db, id, {cleanup = "complete", evidence = {kind = "workdir_preparers.settled", detail = "fixture roots removed after assertions"}}).ok)
     end
     db:release()
+    release_sweeper_name(sweeper)
     owners, attempts, roots = {}, {}, {}
     if not ok then error(tostring(result)) end
     return result

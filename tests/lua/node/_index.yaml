@@ -532,3 +532,26 @@ entries:
   imports:
     test: wippy.test:test
     client: bee.node:client
+- name: home_workspace_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/node-home-workspace-test.db
+  lifecycle: {auto_start: true}
+- name: home_workspace_test
+  kind: function.lua
+  source: file://home_workspace_test.lua
+  method: run
+  modules: [sql]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    workspaces: bee.node.persist:workspaces
+  security:
+    policies: [bee.tests.node:home_workspace_policy]
+- name: home_workspace_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.tests.node:home_workspace_db]
+    effect: allow

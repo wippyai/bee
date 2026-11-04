@@ -22,3 +22,15 @@ entries:
   source: file://test_backlog.lua
   method: pending
   modules: [sql]
+- name: home_bootloader
+  kind: function.lua
+  source: file://home_bootloader.lua
+  method: run
+  modules: [system]
+  imports:
+    workspaces: bee.node.persist:workspaces
+  meta:
+    type: bootloader
+    order: 30
+    description: Keep the folder's own workspace at the folder's path
+    requires: [bee:db]

@@ -82,7 +82,7 @@ local function main(saved: unknown)
         end
     end
     local folder = assert(system.process.cwd())
-    local home, home_error = workspaces.ensure(folder, nil)
+    local home, home_error = workspaces.follow(folder)
     if not home then error("register folder workspace: " .. tostring(home_error)) end
     local home_id = home.id
     local requests = assert(process.listen(protocol.FORWARD, {message = true}))

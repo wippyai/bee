@@ -109,6 +109,67 @@ function M.ensure(given: string, label: string?): (Workspace?, string?)
     return {id = tostring(rows[1].id), path = tostring(rows[1].path), label = tostring(rows[1].label)}, nil
 end
 
+-- HOME names the setting that records which workspace is the folder's own.
+local HOME = "home_workspace"
+
+local function row_of(rows: {any}?): Workspace?
+    local row = rows and rows[1]
+    if not row then return nil end
+    return {id = tostring(row.id), path = tostring(row.path), label = tostring(row.label)}
+end
+
+-- follow returns the folder's own workspace at the folder's normalized path.
+-- The folder's workspace is recorded once: the workspace at its path, else
+-- the first workspace its state holds, else a new one. A moved folder takes
+-- that workspace along, with the sessions, profiles and applications kept in
+-- it.
+function M.follow(given: string): (Workspace?, string?)
+    local path = M.normalize(given)
+    local db, err = open()
+    if not db then return nil, err end
+    local tx, begin_err = db:begin()
+    if not tx then db:release(); return nil, tostring(begin_err) end
+    local function fail(message: string): (Workspace?, string?)
+        tx:rollback()
+        db:release()
+        return nil, message
+    end
+    local recorded, recorded_err = tx:query("SELECT w.id, w.path, w.label FROM bee_node_settings s JOIN bee_node_workspaces w ON w.id = s.value WHERE s.key = ?", {HOME})
+    if not recorded then return fail(tostring(recorded_err)) end
+    local home = row_of(recorded)
+    if not home then
+        local at, at_err = tx:query("SELECT id, path, label FROM bee_node_workspaces WHERE path = ?", {path})
+        if not at then return fail(tostring(at_err)) end
+        home = row_of(at)
+        if not home then
+            local first, first_err = tx:query("SELECT id, path, label FROM bee_node_workspaces ORDER BY created_at, id LIMIT 1")
+            if not first then return fail(tostring(first_err)) end
+            home = row_of(first)
+        end
+        if not home then
+            home = {id = identity(), path = path, label = M.label_of(path)}
+            local _, insert_err = tx:execute("INSERT INTO bee_node_workspaces (id, path, label, created_at) VALUES (?, ?, ?, ?)", {home.id, home.path, home.label, now()})
+            if insert_err then return fail(tostring(insert_err)) end
+        end
+        local _, record_err = tx:execute("INSERT INTO bee_node_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", {HOME, home.id})
+        if record_err then return fail(tostring(record_err)) end
+    end
+    if home.path ~= path then
+        local held, held_err = tx:query("SELECT id FROM bee_node_workspaces WHERE path = ?", {path})
+        if not held then return fail(tostring(held_err)) end
+        if held[1] then
+            return fail("this folder moved to " .. path .. ", which Bee already keeps as another workspace; remove that workspace in Bee to open this folder here")
+        end
+        local _, move_err = tx:execute("UPDATE bee_node_workspaces SET path = ? WHERE id = ?", {path, home.id})
+        if move_err then return fail(tostring(move_err)) end
+        home.path = path
+    end
+    local committed, commit_err = tx:commit()
+    db:release()
+    if not committed then return nil, tostring(commit_err) end
+    return home, nil
+end
+
 -- workspace returns the workspace id.
 function M.workspace(id: string): (Workspace?, string?)
     local db, err = open()

@@ -122,7 +122,7 @@ local function publish_intent(raw: unknown, profile: Profile, node_id: string,
     if type(bytes) ~= "string" or type(digest) ~= "string" then
         return nil, nil, nil, "immutable application admission blob is incomplete"
     end
-    local measured, admission_error = application_admission.decode(bytes, digest, intent.application_admission_generation)
+    local measured, admission_error = application_admission.decode(bytes, digest)
     if not measured then return nil, nil, nil, tostring(admission_error) end
     local record = measured.record
     if record.workspace_id ~= workspace_id or record.overlay_owner ~= profile.overlay_owner
@@ -130,7 +130,7 @@ local function publish_intent(raw: unknown, profile: Profile, node_id: string,
         or record.artifact_digest ~= intent.artifact_digest then
         return nil, nil, nil, "immutable application admission does not match publication identity"
     end
-    return intent, entries, {bytes = measured.bytes, digest = measured.digest, identity_generation = intent.application_admission_generation}, nil
+    return intent, entries, {bytes = measured.bytes, digest = measured.digest}, nil
 end
 
 local function same_intent(before: Object, after: Object): boolean
@@ -224,15 +224,6 @@ function M.call(raw: unknown): Result
     if not activation_store then return failure("UNAVAILABLE", activation_error or "open application activation state") end
     local active: Profile = chosen
     local identity = workspace_applications.identity(workspace_id, chosen.source_workspace, true)
-    local prior_owner = workspace_applications.prior_owner(workspace_id, chosen.source_workspace)
-    if identity and prior_owner and chosen.overlay_owner == identity.overlay_owner then
-        local prior = activations.desired(activation_store, prior_owner)
-        if prior.ok then active.overlay_owner = prior_owner
-        elseif prior.code ~= "NOT_FOUND" then
-            activations.close(activation_store)
-            return failure("UNAVAILABLE", prior.message or "read prior application activation")
-        end
-    end
     local desired = activations.desired(activation_store, active.overlay_owner)
     local intent, entries, admission, intent_error = publish_intent(desired.ok and desired.value or nil,
         active, node_id, workspace_id, selected_version)
@@ -240,9 +231,8 @@ function M.call(raw: unknown): Result
     -- A workspace application's overlay also holds the host entries its live
     -- grant record installed; the comparison includes exactly those.
     local generated: Object? = nil
-    if identity and (active.overlay_owner == identity.overlay_owner or active.overlay_owner == prior_owner) then
-        local record_id = active.overlay_owner == prior_owner and capability_grants.prior_record_id(active.overlay_owner)
-            or capability_grants.record_id(active.overlay_owner)
+    if identity and active.overlay_owner == identity.overlay_owner then
+        local record_id = capability_grants.record_id(active.overlay_owner)
         local installed = record_id and registry.get(record_id) or nil
         if installed then
             local raw_catalog = registry.get("bee.capability:catalog")

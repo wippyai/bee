@@ -29,8 +29,8 @@ type Stored = {artifact_bytes: string, artifact_digest: string, admission_bytes:
 
 local function stored(intent_id: string): Stored
     local db = assert(sql.get("bee:db"))
-    local rows = assert(db:query("SELECT artifact_bytes, artifact_digest, application_admission_bytes, application_admission_digest, "
-        .. "application_admission_generation FROM bee_governance_activation_intents WHERE intent_id = ?", {intent_id}))
+    local rows = assert(db:query("SELECT artifact_bytes, artifact_digest, application_admission_bytes, application_admission_digest "
+        .. "FROM bee_governance_activation_intents WHERE intent_id = ?", {intent_id}))
     db:release()
     test.eq(#rows, 1, "the Library lists the left-out application")
     local row = assert(bounds.object(rows[1]))

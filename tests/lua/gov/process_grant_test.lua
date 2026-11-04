@@ -28,7 +28,7 @@ local function install(command: string, directory: string, recorded: boolean?): 
     local proposal = assert(grants.propose(vocabulary, OWNER, APP, {
         {application = APP, package = "test", capability = "process.exec", parameters = {command = command, directory = directory},
                 template_revision = 1, catalog_revision = model.revisions(vocabulary, "process.exec"),
-                reason = "run the approved command"}}, nil, FOLDER))
+                reason = "run the approved command"}}, FOLDER))
     local policy = assert(bounds.object(proposal.policies[1]))
     local executor = assert(bounds.object(proposal.executors[1]))
     local changes = assert(registry.snapshot()):changes()

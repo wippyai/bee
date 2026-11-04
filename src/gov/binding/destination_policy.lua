@@ -158,21 +158,10 @@ local function selected(config: Configuration, workspace_id: string, source_node
     source_workspace: string, activation_store: activations.Store?): (Profile?, string?)
     local installed: unknown = nil
     local vocabulary: unknown = nil
-    local owner_hint: string? = nil
     local slot_source: string? = nil
     local workspace_identity = activation_profiles.hub_identity(workspace_id, source_workspace)
         or workspace_applications.identity(workspace_id, source_workspace)
-    local prior_owner = workspace_applications.prior_owner(workspace_id, source_workspace)
-    if prior_owner then
-        local prior_id = capability_grants.prior_record_id(prior_owner)
-        if (prior_id and registry.get(prior_id)) then owner_hint = prior_owner end
-        if activation_store then
-            local desired = activations.desired(activation_store, prior_owner)
-            if desired.ok then owner_hint = prior_owner
-            elseif desired.code ~= "NOT_FOUND" then return nil, desired.message end
-        end
-    end
-    local owner = owner_hint or (workspace_identity and workspace_identity.overlay_owner)
+    local owner = workspace_identity and workspace_identity.overlay_owner
     if owner and activation_store then
         local desired = activations.desired(activation_store, owner)
         if desired.ok then
@@ -181,8 +170,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
             if not slot_source then return nil, "desired activation source is malformed" end
         elseif desired.code ~= "NOT_FOUND" then return nil, desired.message end
     end
-    local id = owner and (owner_hint and capability_grants.prior_record_id(owner)
-        or capability_grants.record_id(owner)) or nil
+    local id = owner and capability_grants.record_id(owner) or nil
     if id then
         installed = registry.get(id)
         if installed then
@@ -220,7 +208,7 @@ local function selected(config: Configuration, workspace_id: string, source_node
         end
     end
     local profile_value, profile_error = activation_profiles.select(config, workspace_id, source_node,
-        source_workspace, installed, vocabulary, owner_hint, slot_source)
+        source_workspace, installed, vocabulary, slot_source)
     if not profile_value then return nil, profile_error end
     local admitted, admission_error = M.super_edit_admission(profile_value)
     if not admitted then return nil, admission_error end
@@ -287,11 +275,9 @@ local function destination_resolver(config: Configuration, profile_value: Profil
         or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
         local base_policy_digest: string? = nil
         if identity and identity.component == profile_value.component
-            and (identity.overlay_owner == profile_value.overlay_owner
-                or workspace_applications.prior_owner(profile_value.workspace_id,
-                    profile_value.source_workspace) == profile_value.overlay_owner) then
+            and identity.overlay_owner == profile_value.overlay_owner then
             local base, base_error = activation_profiles.select(config, profile_value.workspace_id,
-                profile_value.source_node, profile_value.source_workspace, nil, nil, profile_value.overlay_owner)
+                profile_value.source_node, profile_value.source_workspace)
             if not base then return nil, base_error end
             base_policy_digest = base.policy_digest
         end
@@ -374,9 +360,7 @@ end
 local function generated_install(profile_value: Profile, intent_raw: unknown): (Object?, string?, boolean?)
     local identity = activation_profiles.hub_identity(profile_value.workspace_id, profile_value.source_workspace)
         or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
-    local prior_owner = workspace_applications.prior_owner(profile_value.workspace_id, profile_value.source_workspace)
-    local uses_prior = prior_owner ~= nil and prior_owner == profile_value.overlay_owner
-    if not identity or (identity.overlay_owner ~= profile_value.overlay_owner and not uses_prior)
+    if not identity or identity.overlay_owner ~= profile_value.overlay_owner
         or identity.component ~= profile_value.component then return nil, nil end
     local intent = bounds.object(intent_raw)
     if not intent or intent.overlay_owner ~= profile_value.overlay_owner
@@ -403,10 +387,9 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     local application_id, application_error = workspace_applications.application(artifact_entries)
     if not application_id then return nil, application_error, true end
     local proposed, proposed_error = capability_grants.propose(vocabulary, profile_value.overlay_owner,
-        application_id, requested, uses_prior, folder)
+        application_id, requested, folder)
     if not proposed then return nil, proposed_error end
-    local record_id = uses_prior and capability_grants.prior_record_id(profile_value.overlay_owner)
-        or capability_grants.record_id(profile_value.overlay_owner)
+    local record_id = capability_grants.record_id(profile_value.overlay_owner)
     local prior_raw = record_id and registry.get(record_id) or nil
     local prior: Object? = nil
     if prior_raw then
@@ -452,7 +435,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
     end
     local record, record_error = capability_grants.record(profile_value.overlay_owner,
         profile_value.workspace_id, application_id, proposed, approval_id, revision,
-        intent.artifact_digest, intent.version, uses_prior)
+        intent.artifact_digest, intent.version)
     if not record then return nil, record_error end
     return {policies = proposed.policies, capabilities = proposed.capabilities, record = record,
         volumes = proposed.volumes, databases = proposed.databases, executors = proposed.executors}, nil

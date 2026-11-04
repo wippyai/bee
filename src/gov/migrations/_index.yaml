@@ -112,3 +112,10 @@ entries:
     canonical: bee.drivers.values:canonical
     bounds: bee.drivers.values:bounds
     clock: bee.drivers.values:clock
+- name: admission_generation
+  kind: function.lua
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-11-04T00:00:00Z'}
+  source: file://admission_generation.lua
+  method: run
+  imports:
+    migration: wippy.migration:migration

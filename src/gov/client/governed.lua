@@ -63,7 +63,7 @@ local INTENT_FIELDS = {"owner_node", "workspace_id", "intent_id", "actor_id", "o
     "source_workspace", "version", "plan_digest", "plan_revision", "selection_revision", "artifact_bytes",
     "artifact_digest", "resolution_bytes", "resolution_digest", "preflight_bytes", "preflight_digest",
     "migration_work_bytes", "migration_work_digest", "grant_predecessor_digest", "grant_reuse_digest",
-    "application_admission_bytes", "application_admission_digest", "application_admission_generation",
+    "application_admission_bytes", "application_admission_digest",
     "authorization_digest", "effect_key", "revision", "phase",
     "approval_id", "approval_proposal_digest",
     "approval_owner_incarnation", "consumed_consumer_id", "consumed_proposal_digest", "consumed_effect_key",
@@ -246,8 +246,6 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
         or not valid_blob(value.preflight_bytes, 131072) or not valid_blob(value.migration_work_bytes, 1048576)
         or not valid_blob(value.migration_receipt_bytes, 262144)
         or not valid_blob(value.application_admission_bytes, 65536) or not optional_digest(value.application_admission_digest)
-        or (value.application_admission_generation ~= nil and value.application_admission_generation ~= "current"
-            and value.application_admission_generation ~= "prior")
         or (value.migrations_completed ~= nil and type(value.migrations_completed) ~= "boolean") then
         return nil, "activation evidence is malformed"
     end

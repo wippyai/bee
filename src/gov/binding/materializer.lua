@@ -319,10 +319,10 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
     end
     if admission_raw ~= nil then
         local blob = bounds.object(admission_raw)
-        if not blob or bounds.fields(blob, {"bytes", "digest", "identity_generation"}) then
+        if not blob or bounds.fields(blob, {"bytes", "digest"}) then
             return nil, nil, nil, "application admission blob is invalid"
         end
-        local derived, derived_error = application_admission.entry(blob.bytes, blob.digest, blob.identity_generation)
+        local derived, derived_error = application_admission.entry(blob.bytes, blob.digest)
         if not derived then return nil, nil, nil, derived_error end
         complete[#complete + 1] = derived
     end

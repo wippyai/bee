@@ -54,7 +54,6 @@ local function view(store: Store, row: Object, current_slot: Object?): Object
         migration_work_bytes = row.migration_work_bytes, migration_work_digest = row.migration_work_digest,
         application_admission_bytes = row.application_admission_bytes,
         application_admission_digest = row.application_admission_digest,
-        application_admission_generation = row.application_admission_generation,
         grant_predecessor_digest = row.grant_predecessor_digest,
         effect_key = row.effect_key, revision = row.revision, phase = row.phase,
         approval_id = row.approval_id, approval_proposal_digest = row.approval_proposal_digest,

@@ -55,38 +55,24 @@ local function define_tests()
             test.is_nil(admission.id("bad\nowner"))
         end)
 
-        test.it("retains the admission identity measured by an older workspace activation", function()
-            local old_owner = "bee.governance.workspace_applications:workspace-a.todo"
+        test.it("measures the admission identity under bee.gov whatever the owner's spelling", function()
             local value = record()
-            value.overlay_owner = old_owner
-            value.identity_generation = "prior"
-            local measured = assert(admission.measure(value))
-            test.eq(measured.id, admission.id(old_owner, "prior"))
-            local restored = assert(admission.entry(measured.bytes, measured.digest))
-            test.eq(restored.id, measured.id)
-        end)
-
-        test.it("selects the admission generation from the measured record, independently of owner spelling", function()
-            local value = record()
-            value.identity_generation = "prior"
-            test.eq(assert(admission.measure(value)).id, admission.id(value.overlay_owner, "prior"))
             value.identity_generation = "current"
             value.overlay_owner = "bee.governance.workspace_applications:workspace-a.todo"
-            test.eq(assert(admission.measure(value)).id, admission.id(value.overlay_owner))
-            value.identity_generation = "future"
-            test.is_nil(admission.measure(value))
+            local measured = assert(admission.measure(value))
+            test.eq(measured.id, admission.id(value.overlay_owner))
+            test.eq(measured.id:sub(1, #admission.RESERVED_PREFIX), admission.RESERVED_PREFIX)
+            test.eq(assert(admission.entry(measured.bytes, measured.digest)).id, measured.id)
         end)
 
-        test.it("restores historical admission bytes with the migrated generation without remeasuring their contents", function()
+        test.it("refuses a record that names the retired prior generation or an unknown one", function()
             local value = record()
-            value.overlay_owner = "bee.governance.workspace_applications:workspace-a.todo"
-            local historical = assert(admission.measure(value))
-            local restored = assert(admission.decode(historical.bytes, historical.digest, "prior"))
-            test.eq(restored.bytes, historical.bytes)
-            test.eq(restored.digest, historical.digest)
-            test.eq(restored.id, admission.id(value.overlay_owner, "prior"))
-            test.is_nil(restored.record.identity_generation)
-            test.is_nil(admission.decode(historical.bytes, historical.digest, "unknown"))
+            value.identity_generation = "prior"
+            test.is_nil(admission.measure(value))
+            value.identity_generation = "future"
+            test.is_nil(admission.measure(value))
+            test.is_false(admission.reserved("bee.governance:admission." .. string.rep("0", 64)))
+            test.is_false(admission.reserved("bee.governance.grants:record." .. string.rep("0", 64)))
         end)
 
         test.it("canonically decodes immutable bytes and builds the derived registry entry", function()

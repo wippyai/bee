@@ -1812,3 +1812,25 @@ entries:
     protected_kernel: bee.gov.types:protected_kernel
     super_edit: bee.gov.security:super_edit
     protected_baseline: bee.tests.gov:protected_baseline
+- name: admission_generation_db
+  kind: db.sql.sqlite
+  file: .wippy/governance-admission-generation.db
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}
+- name: admission_generation_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.tests.gov:admission_generation_db]
+    effect: allow
+- name: admission_generation_migration_test
+  kind: function.lua
+  source: file://admission_generation_migration_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: 60s}
+  modules: [sql, funcs]
+  security:
+    policies: [bee.tests.gov:admission_generation_policy, bee.tests.support:schema_policy]
+  imports:
+    test: wippy.test:test

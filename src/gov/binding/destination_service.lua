@@ -139,16 +139,11 @@ end
 
 local RECOVERY_ATTEMPTS = 4
 
--- The overlay owner an application of this workspace runs under: the one
--- holding a desired version, else the application's own owner.
-local function application_owner(activation_store: activations.Store, workspace_id: string, source_workspace: string): string?
+-- The overlay owner an application of this workspace runs under.
+local function application_owner(workspace_id: string, source_workspace: string): string?
     local identity = activation_profiles.hub_identity(workspace_id, source_workspace)
         or workspace_applications.identity(workspace_id, source_workspace, true)
-    if not identity then return nil end
-    for _, candidate in ipairs({workspace_applications.prior_owner(workspace_id, source_workspace), identity.overlay_owner}) do
-        if activations.desired(activation_store, candidate).ok then return candidate end
-    end
-    return identity.overlay_owner
+    return identity and identity.overlay_owner or nil
 end
 
 -- A person's removal of an application they installed: the activation owner
@@ -159,7 +154,7 @@ local function uninstall_application(request: Object, workspace_id: string, acto
     activation_store: activations.Store): Result
     if exact(request, {"source_workspace", "receipt_key", "expected_intent_id"}) then return failure("INVALID", "uninstall has unknown fields") end
     local source_workspace, key = bounds.id(request.source_workspace), bounds.id(request.receipt_key)
-    local overlay_owner = source_workspace and application_owner(activation_store, workspace_id, source_workspace) or nil
+    local overlay_owner = source_workspace and application_owner(workspace_id, source_workspace) or nil
     if not source_workspace or not key or not overlay_owner then return failure("INVALID", "uninstall names no application") end
     local paused = follows.disable(activation_store, source_workspace, "off")
     if not paused.ok then return paused end
@@ -184,7 +179,7 @@ local function revert_application(request: Object, workspace_id: string, actor_i
     local identity = source_workspace and (activation_profiles.hub_identity(workspace_id, source_workspace)
         or workspace_applications.identity(workspace_id, source_workspace, true)) or nil
     if not source_workspace or not key or not identity then return failure("INVALID", "revert names no application") end
-    local overlay_owner = application_owner(activation_store, workspace_id, source_workspace)
+    local overlay_owner = application_owner(workspace_id, source_workspace)
     if not overlay_owner or not activations.desired(activation_store, overlay_owner).ok then
         return failure("NOT_FOUND", "this application is not installed here")
     end
@@ -233,9 +228,7 @@ end
 local function installed_envelope(profile_value: Profile): (capability_model.Vocabulary?, {capability_model.Grant}?, string?)
     local identity = activation_profiles.hub_identity(profile_value.workspace_id, profile_value.source_workspace)
         or workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace, true)
-    local prior_owner = workspace_applications.prior_owner(profile_value.workspace_id, profile_value.source_workspace)
-    local uses_prior = prior_owner ~= nil and prior_owner == profile_value.overlay_owner
-    if not identity or (identity.overlay_owner ~= profile_value.overlay_owner and not uses_prior)
+    if not identity or identity.overlay_owner ~= profile_value.overlay_owner
         or identity.component ~= profile_value.component then
         return nil, nil, "activation profile is not a workspace application"
     end
@@ -243,8 +236,7 @@ local function installed_envelope(profile_value: Profile): (capability_model.Voc
     if not catalog_entry then return nil, nil, "host capability catalog lookup failed: " .. tostring(catalog_lookup_error) end
     local vocabulary, catalog_error = capability_model.decode(catalog_entry)
     if not vocabulary then return nil, nil, catalog_error end
-    local record_id = uses_prior and capability_grants.prior_record_id(profile_value.overlay_owner)
-        or capability_grants.record_id(profile_value.overlay_owner)
+    local record_id = capability_grants.record_id(profile_value.overlay_owner)
     local raw = record_id and registry.get(record_id) or nil
     if not raw then return nil, nil, "no installed grant record to lease over" end
     local decoded, decode_error = capability_grants.decode(raw, profile_value.overlay_owner,

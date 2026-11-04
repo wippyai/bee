@@ -78,9 +78,8 @@ function M.resolve(raw: unknown, workspace_id: string): (Resolved?, string?)
                 local installed = access.record(workspace_id, ref)
                 if installed and installed.overlay_owner == admission.overlay_owner then
                     local stored = registry.get(assert(grants.record_id(installed.overlay_owner)))
-                        or registry.get(assert(grants.prior_record_id(installed.overlay_owner)))
                     local profile = profiles.select_decoded(configuration, workspace_id, admission.source_node,
-                        admission.source_workspace, assert(system.node.id()), stored, vocabulary, installed.overlay_owner)
+                        admission.source_workspace, assert(system.node.id()), stored, vocabulary)
                     if profile and profile.overlay_owner == installed.overlay_owner and profile.component == asked.component then
                         if selected then return nil, "application address is ambiguous" end
                         selected = {application = ref, overlay_owner = installed.overlay_owner, identity = asked}

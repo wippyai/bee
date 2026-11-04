@@ -384,7 +384,6 @@ local function define_tests()
             local admitted = activation()
             admitted.application_admission_bytes = "admission"
             admitted.application_admission_digest = string.rep("1", 64)
-            admitted.application_admission_generation = "current"
             test.is_true(model.apply_activation(state, reply(admitted)))
             local unknown_generation = activation()
             unknown_generation.application_admission_generation = "later"

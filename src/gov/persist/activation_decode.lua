@@ -187,8 +187,6 @@ local function decode_intent(row: Object): (Intent?, Result?)
         if type(value) ~= "string" then return nil, failure("INTERNAL", "activation intent is malformed") end
         migration_work_digest = value
     end
-    local application_admission_generation = bounds.member(row.application_admission_generation, {"current", "prior"})
-    if not application_admission_generation then return nil, failure("INTERNAL", "activation admission generation is invalid") end
     local application_admission_bytes: string? = nil
     if row.application_admission_bytes ~= nil then
         local value = row.application_admission_bytes
@@ -305,7 +303,6 @@ local function decode_intent(row: Object): (Intent?, Result?)
         migration_work_digest = migration_work_digest,
         application_admission_bytes = application_admission_bytes,
         application_admission_digest = application_admission_digest,
-        application_admission_generation = application_admission_generation,
         grant_predecessor_digest = grant_predecessor_digest,
         revision = revision,
         phase = phase,

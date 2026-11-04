@@ -147,7 +147,7 @@ function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requested: {
             if not resolved_folder then return nil, folder_error or "workspace folder is unavailable" end
             folder = resolved_folder
         end
-        local proposed, proposed_error = capability_grants.propose(model_vocabulary, owner, app_id, requested, nil, folder)
+        local proposed, proposed_error = capability_grants.propose(model_vocabulary, owner, app_id, requested, folder)
         if not proposed then return nil, proposed_error end
         for _, entry in ipairs(incoming) do
             for _, volume in ipairs(proposed.volumes) do
@@ -159,10 +159,6 @@ function M.prepare(policy: Policy, spec: Object, incoming: {Entry}, requested: {
         capability_proposal = proposed
         local record_id = capability_grants.record_id(owner)
         local prior = record_id and current_raw[record_id] or nil
-        if not prior then
-            local old_id = capability_grants.prior_record_id(owner)
-            prior = old_id and current_raw[old_id] or nil
-        end
         if prior then
             local decoded, decoded_error = capability_grants.decode(prior, owner, spec.workspace_id,
                 app_id, model_vocabulary)

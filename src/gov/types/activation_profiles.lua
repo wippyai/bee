@@ -361,16 +361,12 @@ function M.hub_identity(workspace_raw: unknown, source_raw: unknown): workspace_
 end
 
 local function instantiate(rule: Template, workspace_id: string, source_node: string,
-    source_workspace: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
-    owner_hint: string?): (DecodedProfile?, Object?, string?)
+    source_workspace: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?): (DecodedProfile?, Object?, string?)
     local identity, identity_error = workspace_applications.identity(workspace_id, source_workspace, installed_raw ~= nil)
     local hub_identity = M.hub_identity(workspace_id, source_workspace)
     identity = hub_identity or identity
     if not identity then
         return nil, nil, tostring(identity_error) .. "; " .. missing(workspace_id, source_node, source_workspace)
-    end
-    if owner_hint and owner_hint == workspace_applications.prior_owner(workspace_id, source_workspace) then
-        identity.overlay_owner = owner_hint
     end
     local policies: {unknown} = empty_list()
     for index, policy in ipairs(rule.policies) do policies[index] = policy end
@@ -575,7 +571,7 @@ end
 -- configures.
 local function derived(rule: Template?, workspace_id: string, source_node: string, source_workspace: string,
     node_id: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
-    owner_hint: string?, slot_source: string?): (DecodedProfile?, Object?, string?)
+    slot_source: string?): (DecodedProfile?, Object?, string?)
     if not rule or (source_node ~= node_id and not rule.hive) then
         return nil, nil, missing(workspace_id, source_node, source_workspace)
     end
@@ -583,19 +579,19 @@ local function derived(rule: Template?, workspace_id: string, source_node: strin
         return nil, nil, "workspace application " .. source_workspace .. " is installed from node " .. slot_source
             .. "; an overlay from node " .. source_node .. " cannot replace it (workspace " .. workspace_id .. ")"
     end
-    return instantiate(rule, workspace_id, source_node, source_workspace, installed_raw, vocabulary, owner_hint)
+    return instantiate(rule, workspace_id, source_node, source_workspace, installed_raw, vocabulary)
 end
 
 function M.select_decoded(configuration: DecodedConfiguration, workspace_id: string, source_node: string,
     source_workspace: string, node_id: string, installed_raw: unknown?,
-    vocabulary: capability_model.Vocabulary?, owner_hint: string?): (DecodedProfile?, string?)
+    vocabulary: capability_model.Vocabulary?): (DecodedProfile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
     if M.hub_identity(workspace_id, source_workspace) then
         if source_node ~= node_id or not configuration.packages then return nil, "host does not admit this Hub application" end
         local item, _, problem = instantiate(configuration.packages, workspace_id, source_node,
-            source_workspace, installed_raw, vocabulary, nil)
+            source_workspace, installed_raw, vocabulary)
         return item, problem
     end
     if drivers.name(source_workspace) then
@@ -613,7 +609,7 @@ function M.select_decoded(configuration: DecodedConfiguration, workspace_id: str
         end
     end
     local item, _, derive_error = derived(configuration.workspace_applications, workspace_id, source_node,
-        source_workspace, node_id, installed_raw, vocabulary, owner_hint, nil)
+        source_workspace, node_id, installed_raw, vocabulary, nil)
     return item, derive_error
 end
 
@@ -622,14 +618,14 @@ end
 -- holds, when one exists.
 function M.select(configuration: Configuration, workspace_id: string, source_node: string,
     source_workspace: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
-    owner_hint: string?, slot_source: string?): (Profile?, string?)
+    slot_source: string?): (Profile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
     if M.hub_identity(workspace_id, source_workspace) then
         if source_node ~= configuration.node_id or not configuration.packages then return nil, "host does not admit this Hub application" end
         local item, policy, problem = instantiate(configuration.packages, workspace_id, source_node,
-            source_workspace, installed_raw, vocabulary, nil)
+            source_workspace, installed_raw, vocabulary)
         if not item or not policy then return nil, problem end
         return measure(item, policy, configuration.node_id)
     end
@@ -650,7 +646,7 @@ function M.select(configuration: Configuration, workspace_id: string, source_nod
         end
     end
     local item, policy, derive_error = derived(configuration.workspace_applications, workspace_id, source_node,
-        source_workspace, configuration.node_id, installed_raw, vocabulary, owner_hint, slot_source)
+        source_workspace, configuration.node_id, installed_raw, vocabulary, slot_source)
     if not item or not policy then return nil, derive_error end
     return measure(item, policy, configuration.node_id)
 end

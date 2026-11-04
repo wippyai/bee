@@ -203,7 +203,7 @@ local function admission_tests()
             selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
             local vocabulary: capability_model.Vocabulary = {revision = 1, never = {}, capabilities = {}}
             local proposal, proposal_error = capability_grants.propose(vocabulary, "bee.gov:test-overlay",
-                "demo:grant-recovery", {}, nil)
+                "demo:grant-recovery", {})
             if not proposal then error(tostring(proposal_error)) end
             local review, review_error = capability_grants.diff(vocabulary, nil, proposal)
             if not review then error(tostring(review_error)) end

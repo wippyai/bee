@@ -21,21 +21,21 @@ entries:
   meta: {type: test_support, comment: A suite may run node migrations against its own database}
   policy:
     actions: [funcs.call, registry.find]
-    resources_points: '*'
+    resources: '*'
     effect: allow
 - name: gateway_admit_policy
   kind: security.policy
   meta: {type: test_support, comment: A carrier admits and revokes gateway bindings for the actions it runs}
   policy:
     actions: [bee.gateway.admit]
-    resources_points: '*'
+    resources: '*'
     effect: allow
 - name: gateway_manage_policy
   kind: security.policy
   meta: {type: test_support, comment: The managed host opens and drains the listener and may revoke any binding}
   policy:
     actions: [bee.gateway.manage]
-    resources_points: [listener, bindings]
+    resources: [listener, bindings]
     effect: allow
 - name: approval_effect
   kind: library.lua
@@ -50,7 +50,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [cdc.stream]
-    resources_points: ['bee:changes']
+    resources: ['bee:changes']
     effect: allow
 - name: committed
   kind: library.lua

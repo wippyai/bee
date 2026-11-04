@@ -1,5 +1,6 @@
 -- MIT. Approval service effects.
 local test = require("test")
+local clock = require("clock")
 local events = require("events")
 local bounds = require("bounds")
 local time = require("time")
@@ -80,50 +81,52 @@ local function define_tests()
             test.eq(code(call(outsider, "effect_queue", {destination = "gov.activation", phase = "ready"})), "DENIED")
         end)
         test.it("lists an activation that ended without approval until its requester closes it", function()
-            local workspace = "ws-closure-" .. key()
-            local activation = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "r1", payload = {source_workspace = "todo"}}
-            local denied = value(call(requester, "request", request_of(workspace, {proposal = activation})))
-            local expired = value(call(requester, "request", request_of(workspace, {proposal = activation, ttl_ms = 1})))
-            local withdrawn = value(call(requester, "request", request_of(workspace, {proposal = activation})))
-            local approved = value(call(requester, "request", request_of(workspace, {proposal = activation})))
-            local unrelated = value(call(requester, "request", request_of(workspace)))
-            value(call(alice, "decide", {approval_id = denied.approval_id, expected_revision = denied.revision,
-                proposal_digest = denied.proposal_digest, reviewed_digest = denied.reviewed_digest, decision = "denied"}))
-            value(call(alice, "decide", {approval_id = approved.approval_id, expected_revision = approved.revision,
-                proposal_digest = approved.proposal_digest, reviewed_digest = approved.reviewed_digest, decision = "approved"}))
-            value(call(alice, "decide", {approval_id = unrelated.approval_id, expected_revision = unrelated.revision,
-                proposal_digest = unrelated.proposal_digest, reviewed_digest = unrelated.reviewed_digest, decision = "denied"}))
-            value(call(requester, "withdraw", {approval_id = withdrawn.approval_id, expected_revision = withdrawn.revision, proposal_digest = withdrawn.proposal_digest}))
-            time.sleep("5ms")
-            local store = open_test_store()
-            executed(service.execute(store, OUTBOX, "reconcile", {}, nil, nil))
-            store:release()
-            local worker = caller("bee.test.activation_worker", {"bee.security.approvals:approval_activation_effects_policy"})
-            local function listed(): {[string]: string}
-                local found: {[string]: string} = {}
-                for _, item in ipairs(value(call(worker, "effect_queue", {destination = "gov.activation", phase = "ended", limit = 64})).effects :: {unknown}) do
-                    local row = assert(bounds.object(item))
-                    found[tostring(row.approval_id)] = tostring(row.state) .. ":" .. tostring(row.decision)
+            clock.with_clock(function(advance)
+                local workspace = "ws-closure-" .. key()
+                local activation = {kind = "operation", ref = "bee.gov:establish-overlay", revision = "r1", payload = {source_workspace = "todo"}}
+                local denied = value(call(requester, "request", request_of(workspace, {proposal = activation})))
+                local expired = value(call(requester, "request", request_of(workspace, {proposal = activation, ttl_ms = 1})))
+                local withdrawn = value(call(requester, "request", request_of(workspace, {proposal = activation})))
+                local approved = value(call(requester, "request", request_of(workspace, {proposal = activation})))
+                local unrelated = value(call(requester, "request", request_of(workspace)))
+                value(call(alice, "decide", {approval_id = denied.approval_id, expected_revision = denied.revision,
+                    proposal_digest = denied.proposal_digest, reviewed_digest = denied.reviewed_digest, decision = "denied"}))
+                value(call(alice, "decide", {approval_id = approved.approval_id, expected_revision = approved.revision,
+                    proposal_digest = approved.proposal_digest, reviewed_digest = approved.reviewed_digest, decision = "approved"}))
+                value(call(alice, "decide", {approval_id = unrelated.approval_id, expected_revision = unrelated.revision,
+                    proposal_digest = unrelated.proposal_digest, reviewed_digest = unrelated.reviewed_digest, decision = "denied"}))
+                value(call(requester, "withdraw", {approval_id = withdrawn.approval_id, expected_revision = withdrawn.revision, proposal_digest = withdrawn.proposal_digest}))
+                advance(5)
+                local store = open_test_store()
+                executed(service.execute(store, OUTBOX, "reconcile", {}, nil, nil))
+                store:release()
+                local worker = caller("bee.test.activation_worker", {"bee.security.approvals:approval_activation_effects_policy"})
+                local function listed(): {[string]: string}
+                    local found: {[string]: string} = {}
+                    for _, item in ipairs(value(call(worker, "effect_queue", {destination = "gov.activation", phase = "ended", limit = 64})).effects :: {unknown}) do
+                        local row = assert(bounds.object(item))
+                        found[tostring(row.approval_id)] = tostring(row.state) .. ":" .. tostring(row.decision)
+                    end
+                    return found
                 end
-                return found
-            end
-            local ended = listed()
-            test.eq(ended[tostring(denied.approval_id)], "decided:denied")
-            test.eq(ended[tostring(expired.approval_id)], "expired:nil")
-            test.eq(ended[tostring(withdrawn.approval_id)], "withdrawn:nil")
-            test.is_nil(ended[tostring(approved.approval_id)])
-            test.is_nil(ended[tostring(unrelated.approval_id)])
-            test.eq(code(call(other_requester, "effect", {operation = "complete", result = {closed = true}, approval_id = denied.approval_id,
-                proposal_digest = denied.proposal_digest})), "DENIED")
-            test.eq(code(call(requester, "effect", {operation = "complete", result = {closed = true}, approval_id = approved.approval_id,
-                proposal_digest = approved.proposal_digest})), "CONFLICT")
-            value(call(requester, "effect", {operation = "complete", result = {closed = true}, approval_id = denied.approval_id, proposal_digest = denied.proposal_digest}))
-            test.eq(call(requester, "effect", {operation = "complete", result = {closed = true}, approval_id = denied.approval_id,
-                proposal_digest = denied.proposal_digest}).replayed, true)
-            local remaining = listed()
-            test.is_nil(remaining[tostring(denied.approval_id)])
-            test.eq(remaining[tostring(expired.approval_id)], "expired:nil")
-            test.eq(code(call(outsider, "effect_queue", {destination = "gov.activation", phase = "ended"})), "DENIED")
+                local ended = listed()
+                test.eq(ended[tostring(denied.approval_id)], "decided:denied")
+                test.eq(ended[tostring(expired.approval_id)], "expired:nil")
+                test.eq(ended[tostring(withdrawn.approval_id)], "withdrawn:nil")
+                test.is_nil(ended[tostring(approved.approval_id)])
+                test.is_nil(ended[tostring(unrelated.approval_id)])
+                test.eq(code(call(other_requester, "effect", {operation = "complete", result = {closed = true}, approval_id = denied.approval_id,
+                    proposal_digest = denied.proposal_digest})), "DENIED")
+                test.eq(code(call(requester, "effect", {operation = "complete", result = {closed = true}, approval_id = approved.approval_id,
+                    proposal_digest = approved.proposal_digest})), "CONFLICT")
+                value(call(requester, "effect", {operation = "complete", result = {closed = true}, approval_id = denied.approval_id, proposal_digest = denied.proposal_digest}))
+                test.eq(call(requester, "effect", {operation = "complete", result = {closed = true}, approval_id = denied.approval_id,
+                    proposal_digest = denied.proposal_digest}).replayed, true)
+                local remaining = listed()
+                test.is_nil(remaining[tostring(denied.approval_id)])
+                test.eq(remaining[tostring(expired.approval_id)], "expired:nil")
+                test.eq(code(call(outsider, "effect_queue", {destination = "gov.activation", phase = "ended"})), "DENIED")
+            end)
         end)
         test.it("routes a third-party continuation using registry metadata and fences its stable identity", function()
             local db = open_test_store()

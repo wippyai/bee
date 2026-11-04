@@ -64,6 +64,7 @@ entries:
   security:
     policies: [bee.tests.approvals.inbox:apply_test_policy, bee.tests.approvals.inbox:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy]
   imports:
+    clock: bee.tests.approvals:clock
     principals: bee.tests.support.principals:bound
     bounds: bee.drivers.values:bounds
     test: wippy.test:test

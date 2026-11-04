@@ -65,12 +65,10 @@ local function start_endpoint(record: string, command: string): (string, exec.Pr
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
+    local announced = proc:stdout_stream()
     assert(proc:start())
-    for _ = 1, 100 do
-        local port = shell("cat " .. record .. ".port 2>/dev/null"):match("%d+")
-        if port then return port, proc, executor end
-        time.sleep("50ms")
-    end
+    local port = tostring(announced:read(32)):match("%d+")
+    if port then return port, proc, executor end
     error("the endpoint did not report its port")
 end
 type Session = {proc: exec.Process, executor: exec.Executor, chunks: channel.Channel<string>, feed: (string) -> (), run: Run, ended: boolean}

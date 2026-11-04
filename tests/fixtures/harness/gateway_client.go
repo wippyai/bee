@@ -1142,6 +1142,7 @@ func endpoint(record string, hold time.Duration) error {
 			_, _ = file.Write(append(encoded, '\n'))
 			_ = file.Close()
 		}
+		_, _ = fmt.Fprintln(os.Stdout, "request", r.URL.RequestURI())
 		if hold > 0 {
 			time.Sleep(hold)
 		}
@@ -1192,7 +1193,7 @@ func endpoint(record string, hold time.Duration) error {
 		return err
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
-	if err := os.WriteFile(record+".port", []byte(strconv.Itoa(port)), 0o600); err != nil {
+	if _, err := fmt.Fprintln(os.Stdout, port); err != nil {
 		_ = listener.Close()
 		return err
 	}

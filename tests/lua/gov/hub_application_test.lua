@@ -6,6 +6,8 @@ local security = require("security")
 local bounds = require("bounds")
 local json = require("json")
 local time = require("time")
+local cdc = require("cdc")
+local channel = require("channel")
 local system = require("system")
 local registry = require("registry")
 local application = require("application")
@@ -101,13 +103,17 @@ local function define_tests()
             test.eq(#assert(bounds.array(output.migrations, 8)), 2)
             local listed = harness.value(call(agent, "bee.node.binding:tests_call", {operation = "list", application = APP}))
             test.eq(#assert(bounds.array(listed.tests, 64)), 4)
+            local runs = assert(cdc.stream("bee:changes", {tables = {"bee_node_test_runs"}, ops = {"update"}, buffer = 256}))
             local started = harness.value(call(agent, "bee.node.binding:tests_call", {operation = "run", application = APP}))
             local completed: Object? = nil
-            for _ = 1, 80 do
+            local deadline = time.after("20s")
+            while true do
                 local status = harness.value(call(agent, "bee.node.binding:tests_call", {operation = "status", run_id = started.run_id}))
                 if status.state == "complete" then completed = status; break end
-                time.sleep("250ms")
+                local selected = channel.select({runs:channel():case_receive(), deadline:case_receive()})
+                if selected.channel == deadline then break end
             end
+            runs:close()
             local totals = assert(bounds.object(assert(completed, "application tests do not complete").totals))
             test.eq(totals.passed, 4, tostring(json.encode(completed)))
             test.eq(totals.failed, 0)

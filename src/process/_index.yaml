@@ -65,6 +65,10 @@ entries:
     path: .imports.seam
   - entry: bee.resources.persist:authority
     path: .imports.seam
+  - entry: bee.approvals.binding:values
+    path: .imports.seam
+  - entry: bee.harness.launch:probe_cache
+    path: .imports.seam
   - entry: bee.threads.sessions.client:sessions
     path: .imports.seam
   - entry: bee.gateway.binding:directory
@@ -72,6 +76,7 @@ entries:
   - entry: bee.gov.binding:publication_service
     path: .imports.seam
   - entry: bee.gateway.security:subject_call
+    path: .imports.seam
   - entry: bee.threads.service:pump_config
     path: .imports.seam
   - entry: bee.gov.service:recovery
@@ -89,6 +94,7 @@ entries:
   - entry: bee.shell:client
     path: .imports.seam
   - entry: bee.shell:jobs
+    path: .imports.seam
   - entry: bee.process:worker
     path: .imports.seam
   - entry: bee.process:demand_owner

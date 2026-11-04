@@ -55,13 +55,7 @@ local function define_tests()
             local endpoint_out = endpoint:stdout_stream()
             local endpoint_started, endpoint_start_error = endpoint:start()
             if not endpoint_started then error("start endpoint: " .. tostring(endpoint_start_error)) end
-            local port: string? = nil
-            for _ = 1, 100 do
-                local written = shell("cat " .. record .. ".port 2>/dev/null")
-                port = written:match("%d+")
-                if port then break end
-                time.sleep("50ms")
-            end
+            local port: string? = tostring(endpoint_out:read(32)):match("%d+")
             if not port then error("the endpoint did not report its port") end
             -- The configuration the enablement needs: a provider that takes the
             -- key from OPENAI_API_KEY and speaks the responses API over HTTP to

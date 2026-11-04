@@ -20,6 +20,10 @@ entries:
   targets:
   - entry: bee.threads.service:threads
     path: .imports.seam
+  - entry: bee.approvals.inbox.app:app
+    path: .imports.seam
+  - entry: bee.apps.settings.app:edit_mode
+    path: .imports.seam
 - name: demand_state
   kind: library.lua
   source: file://demand_state.lua

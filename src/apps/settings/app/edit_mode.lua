@@ -5,6 +5,7 @@ local profiles = require("profiles")
 local kernel = require("kernel")
 local super_edit = require("super_edit")
 local time = require("time")
+local seam = require("seam")
 local M = {}
 type Area = {id: string, title: string}
 type Grant = {area: string, expires_at: string}
@@ -58,6 +59,8 @@ function M.load(state: State, workspace: string, apps: unknown, configuration: u
     return nil
 end
 function M.enable(state: State)
+    local offered = seam.call("bee.apps.settings.app.edit_areas")
+    if offered ~= nil then state.areas = offered :: {Area} end
     local options: {forms.Option} = {}
     for _, area in ipairs(state.areas) do options[#options + 1] = {label = area.title, value = area.id} end
     state.form = forms.form_new({

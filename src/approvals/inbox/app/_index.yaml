@@ -36,6 +36,7 @@ entries:
     source_config: bee.approvals.inbox.app:source_config
     protocol: bee.hive:protocol
     allowance_form: bee.threads.sessions.app:allowance_form
+    seam: bee.process:seam
   meta:
     type: bee.application
     application:

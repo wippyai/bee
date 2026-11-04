@@ -853,7 +853,16 @@ entries:
     part_observation: bee.threads.sessions.binding:observation
     remote: bee.threads.sessions.binding:remote
   security:
-    policies: *id002
+    policies:
+    - bee.threads.sessions.security:owner_removal_policy
+    - bee.threads.security:sessions_owner
+    - bee.threads.sessions.security:owner_registry_read_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.threads.sessions.security:owner_admission_policy
+    - bee.threads.sessions.security:owner_setup_policy
+    - bee.threads.sessions.security:owner_workspace_identity_policy
+    - bee.threads.sessions.security:owner_principal_policy
+    - bee.harness.security:profile_workspace_policy
   meta:
     application_ref: bee.harness.app:app
     hive: policy
@@ -2270,6 +2279,7 @@ entries:
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.drivers.records:values
     removal: bee.threads.sessions.binding:removal
+    admission: bee.harness.launch:admission
 - name: removal
   kind: library.lua
   source: file://removal.lua

@@ -6,6 +6,7 @@ local env = require("env")
 local exec = require("exec")
 local json = require("json")
 local time = require("time")
+local uuid = require("uuid")
 local bounds = require("bounds")
 local admission = require("admission")
 local catalog = require("catalog")
@@ -74,6 +75,23 @@ function M.with_host(provider: string, body: (admission.Plan?) -> (), answers: s
     local restore = assert(registry.snapshot()):changes()
     assert(restore:update(original)); assert(restore:delete(ACCEPTANCE)); assert(restore:apply())
     assert(ok, tostring(failure))
+end
+-- route is the hook-delivered session route the sessions owner records for
+-- a window admitted under plan.
+function M.route(plan: admission.Plan): Object
+    local route: Object = {delivery = "hook"}
+    for name, field in pairs(admission.session_admission(plan)) do route[name] = field end
+    return route
+end
+-- permission sends one PermissionRequest hook of the session's native attempt
+-- through the gateway boundary and returns the boundary's reply.
+function M.permission(session: string, thread: string, attempt: string, action: string, binding_id: string, payload: Object): Object
+    local raw, err = funcs.new():with_scope(security.new_scope({})):with_actor(assert(security.new_actor("gateway"))):call(
+        "bee.tests.threads.sessions:hook_boundary_probe", {binding = {binding_id = binding_id, subject = session,
+            action_id = action, attempt_id = attempt, thread_id = thread, workspace_id = WORKSPACE},
+            outcome = {event = "PermissionRequest", event_id = assert(uuid.v4())}, payload = payload, transport = "hook_http"})
+    if err then error(tostring(err)) end
+    return assert(bounds.object(raw))
 end
 function M.capture(provider: string, event: string): Object
     assert(event == "PermissionRequest" or event == "Stop")

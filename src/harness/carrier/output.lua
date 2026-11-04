@@ -187,16 +187,14 @@ local function revalidate_permission(io: IO, session: Session): string?
     local exchange = session.plan.exchange
     if not exchange then return "permission exchange no longer enabled" end
     if session.terminal or session.settled or not session.runner then return "attempt no longer waiting" end
-    local recorded = session.checkpoint.plan_digest
-    if not recorded then return "the checkpoint records no plan digest" end
+    -- The carrier answers under the exchange it was admitted with. The host
+    -- must still admit its request: a removed driver, policy or permission
+    -- transport refuses, while changed measurements of them apply when the
+    -- carrier next starts.
     local fresh, plan_error = M.plan(io, session.plan.request)
-    if not fresh then return "measurements unavailable: " .. tostring(plan_error) end
+    if not fresh then return "This session's launch plan is no longer admitted: " .. tostring(plan_error) .. "; restart this session." end
     if fresh.exchange_refusal then return fresh.exchange_refusal end
-    if fresh.plan_digest ~= recorded then return "plan measurements changed since the checkpoint" end
-    local current = fresh.exchange
-    if not current then return "permission exchange no longer enabled" end
-    if current.adapter.digest ~= exchange.adapter.digest then return "permission adapter changed" end
-    if current.acceptance_digest ~= exchange.acceptance_digest then return "acceptance record changed" end
+    if not fresh.exchange then return "permission exchange no longer enabled" end
     for _, state in ipairs(session.checkpoint.permissions) do
         local found: permission_types.Request = {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id,
             acknowledgment_id = state.acknowledgment_id or state.correlation_id, tool_name = state.tool_name,

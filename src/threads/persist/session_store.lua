@@ -114,18 +114,29 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
     end)
 end
 
+local ATTACH_RESERVED: {[string]: boolean} = {session_ref = true, thread_id = true, owner_id = true, workspace_id = true,
+    action_id = true, delivery = true, native_attempt_id = true, origin_request_id = true, operation_key = true}
 function M.session_attach(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
     local caller = assert(caller)
     local input = object(request)
-    if not input or not has_only(input, {session = true, attempt_id = true, operation_key = true}) then return missing_request() end
+    if not input or not has_only(input, {session = true, attempt_id = true, admission = true, operation_key = true}) then return missing_request() end
     local session_ref, attempt, operation_key = ref(input.session), text(input.attempt_id, 160), key(input.operation_key)
     if not session_ref or not attempt or not operation_key then return missing_request() end
+    -- The attempt's admission replaces the route's admitted facts; the
+    -- session's own identity and delivery stay as created.
+    local admitted = input.admission == nil and {} or object(input.admission)
+    if not admitted then return failure("INVALID_ARGUMENT", "admission must be an object") end
+    for name in pairs(admitted) do
+        if ATTACH_RESERVED[name] then return failure("INVALID_ARGUMENT", "admission cannot replace route." .. tostring(name)) end
+    end
     return transaction.write(db, function(tx: sql.Transaction): Result
         local session, session_error = journal.session(tx, session_ref, target_workspace(session_ref, workspace))
         if session_error then return transaction.storage_failure(session_error) end
         if not session or session.owner_actor ~= caller then return failure("DENIED", "interactive attachment belongs to its admitted owner") end
+        -- An attempt keeps the admission of its first attachment; a replay
+        -- for the same attempt reports that attachment.
         local arguments = {session = session_ref, attempt_id = attempt}
         local request_digest, replay, context_error = operation_context(tx, caller, session.workspace_id, operation_key, "session_attach", arguments)
         if context_error then return failure("INTERNAL", context_error) end
@@ -134,6 +145,7 @@ function M.session_attach(db: sql.DB, actor: string, request: unknown): Result
         local route = object(route_value)
         if route_error or not route or route.delivery ~= "hook" then return failure("CONFLICT", "only interactive sessions attach a native window") end
         if session.state ~= "active" and session.state ~= "suspended" then return failure("CONFLICT", "sealed sessions cannot attach a window") end
+        for name, value in pairs(admitted) do route[name] = value end
         route.native_attempt_id = attempt
         local route_json, encode_error = encode(route)
         if not route_json then return failure("INTERNAL", encode_error or "encode attached route") end

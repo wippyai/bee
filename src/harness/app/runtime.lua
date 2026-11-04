@@ -459,7 +459,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             error("Managed window restore request: " .. tostring(request_error))
         end
 
-        local function recovery_request(id: string, digest: string, reauthorize: boolean): admission.Request
+        local function recovery_request(id: string, digest: string, reauthorize: boolean, saved_revision: integer?): admission.Request
             local continuation: admission.Continuation = {origin_request_id = restored.origin_request_id,
                 previous_attempt_id = restored.previous_attempt_id, thread_id = restored.thread_id, reauthorize = reauthorize}
             -- The continuation identity remains the checkpoint's identity. A
@@ -467,11 +467,11 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             -- never a fresh conversation or an unbounded retry.
             return {request_id = id, definition_ref = restored.definition_ref, workspace_id = launch.workspace_id,
                 brief = "", mode = "window", saved_profile_id = restored.saved_profile_id,
-                saved_profile_revision = restored.saved_profile_revision, overrides = restored.overrides, expected_plan_digest = digest,
+                saved_profile_revision = saved_revision, overrides = restored.overrides, expected_plan_digest = digest,
                 continuation = continuation, origin_view = {view_id = launch.view_id, instance_id = launch.instance_id}}
         end
 
-        local request = recovery_request(request_id, restored.plan_digest, false)
+        local request = recovery_request(request_id, restored.plan_digest, false, restored.saved_profile_revision)
 
         -- Admission may reconcile a dead native process and drain gateway
         -- hooks. Keep the broker's readiness deadline independent of that
@@ -538,8 +538,15 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 local plan: admission.Plan? = nil
                 local refused: admission.Reply? = nil
                 local ok, unexpected = pcall(function()
+                    -- A resumed carrier is admitted under the saved profile's
+                    -- current revision, as a new session would be.
+                    local revision: integer? = nil
+                    if restored.saved_profile_id then
+                        revision, refused = admission.saved_revision(launch.workspace_id, restored.saved_profile_id)
+                        if not revision then return end
+                    end
                     plan, refused = admission.resolve(restored.definition_ref, "window", launch.workspace_id,
-                        restored.saved_profile_id, restored.saved_profile_revision, nil, nil, nil, nil, restored.overrides)
+                        restored.saved_profile_id, revision, nil, nil, nil, nil, restored.overrides)
                 end)
                 if not ok then refused = {ok = false, error = {code = "UNAVAILABLE", message = tostring(unexpected)}, value = nil} end
                 if cancelled or serial ~= operation then return end
@@ -603,7 +610,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                                 phase = "refused"
                             else
                                 logger:info("Agent terminal resumes under its definition's current launch plan", {definition = request.definition_ref})
-                                request = recovery_request(reauthorized_id, result.plan.plan_digest, true)
+                                request = recovery_request(reauthorized_id, result.plan.plan_digest, true, result.plan.saved_profile_revision)
                                 status = "Resuming under the current launch plan…"
                                 start_admission(request)
                             end

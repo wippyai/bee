@@ -167,6 +167,9 @@ function M.attach(raw_request: unknown): Reply
     if plan.plan_digest ~= request.plan_digest or plan.mode ~= "window" then return fail("CONFLICT", "interactive attach plan changed", operation_key) end
     local driver = ref(plan.binding_ref)
     if not driver then return unavailable("interactive plan omitted its driver", operation_key) end
+    -- The session records the admission of each attempt it attaches; its
+    -- hooks are judged under the attempt's own plan.
+    local admitted = admission.session_admission(assert(pinned))
     local prior_raw, lookup_error = journal.invoke("operation_lookup", {operation_key = operation_key})
     local prior = object(prior_raw)
     if lookup_error or not prior then return unavailable(lookup_error or "interactive operation lookup unavailable", operation_key) end
@@ -184,11 +187,10 @@ function M.attach(raw_request: unknown): Reply
             return fail("CONFLICT", "interactive key belongs to another admitted window", operation_key)
         end
     else
+        local route: Object = {delivery = "hook", origin_request_id = origin, operation_key = operation_key}
+        for name, field in pairs(admitted) do route[name] = field end
         created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
-            title = plan.title or definition, route = {trait_ceiling = plan.trait_ceiling, definition = definition, plan_digest = plan.plan_digest,
-                delivery = "hook", driver_binding_ref = driver, provider = bounds.id(plan.driver_id), effective_profile = plan.effective_profile, profile_digest = plan.effective_profile_digest, overrides = request.overrides,
-                saved_profile_id = profile_id, saved_profile_revision = revision, profile_id = plan.profile_id, placement_methods = plan.placement_methods,
-                origin_request_id = origin, operation_key = operation_key}})
+            title = plan.title or definition, route = route})
         if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
     end
     local receipt = object(created)
@@ -209,7 +211,8 @@ function M.attach(raw_request: unknown): Reply
             evidence = {summary = "interactive attachment ended without a proven turn result", artifacts = {}}})
         if mark_error then return unavailable(mark_error, operation_key) end
     end
-    local attached, attach_error = journal.invoke("session_attach", {session = receipt and receipt.session, attempt_id = request.attempt_id, operation_key = "attach:" .. tostring(request.attempt_id)})
+    local attached, attach_error = journal.invoke("session_attach", {session = receipt and receipt.session, attempt_id = request.attempt_id,
+        admission = admitted, operation_key = "attach:" .. tostring(request.attempt_id)})
     if attach_error or not attached then return unavailable(attach_error or "native attachment failed", operation_key) end
     return succeed(created)
 end
@@ -541,6 +544,7 @@ function M.hook_boundary(raw_request: unknown): Reply
         local active = bounds.object(stored.active_turn)
         if not permission then return fail("INVALID", "permission hook omitted its request", event_key) end
         local fields: Object = {session = session, definition = route.definition, plan_digest = route.plan_digest,
+            driver_binding_ref = route.driver_binding_ref, profile_id = route.profile_id, effective_profile = route.effective_profile,
             attempt_id = attempt, thread_id = stored.thread_ref, action_id = permission.action_id, binding_id = permission.binding_id,
             turn = active and active.turn, claim = active and active.claim, event_id = event_key, payload = permission.payload,
             saved_profile_id = route.saved_profile_id, saved_profile_revision = route.saved_profile_revision, transport = permission.transport}

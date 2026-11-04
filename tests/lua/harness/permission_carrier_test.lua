@@ -668,7 +668,7 @@ local function define_tests()
             test.eq(tool_results(records), 0)
             local closed = false
             for _, payload in ipairs(payloads(records, "bee.carrier.permission")) do
-                if payload.phase == "closed" and tostring(payload.reason):find("plan measurements changed", 1, true) then closed = true end
+                if payload.phase == "closed" and tostring(payload.reason):find("proposal no longer digests as recorded", 1, true) then closed = true end
             end
             test.is_true(closed)
         end)

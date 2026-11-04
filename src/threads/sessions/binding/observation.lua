@@ -9,6 +9,7 @@ local session_protocol = require("session_protocol")
 local record_values = require("record_values")
 local removal = require("removal")
 local snapshot = require("snapshot").decode
+local admission = require("admission")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -68,6 +69,21 @@ local function describe(session: string): (Object?, string?)
     return snapshot(value)
 end
 
+-- admission_refusal is the step the person takes before an active terminal
+-- session's agent may use its tools again: the hook refuses each tool call
+-- of a session whose admitted choices stand changed.
+local function admission_refusal(raw: unknown): string?
+    local row = object(raw)
+    local route = row and object(row.route)
+    if not row or not route or route.delivery ~= "hook" or row.state ~= "active" then return nil end
+    local definition, driver, profile = ref(route.definition), ref(route.driver_binding_ref), ref(route.profile_id)
+    local workspace = bounds.id(row.workspace)
+    if not definition or not driver or not profile or not workspace then return nil end
+    local _, _, refusal = admission.standing({definition_ref = definition, binding_ref = driver, profile_id = profile, workspace_id = workspace,
+        saved_profile_id = ref(route.saved_profile_id), saved_profile_revision = bounds.integer(route.saved_profile_revision)})
+    return refusal
+end
+
 local function work_value(value: unknown): (Object?, string?)
     local row = object(value)
     if not row or not ref(row.work) or not ref(row.session) or not bounds.integer(row.revision)
@@ -119,8 +135,11 @@ function M.get(raw_request: unknown): Reply
     if request.session ~= nil then
         local session = ref(request.session)
         if not session or request.work ~= nil or request.operation ~= nil then return fail("INVALID", "get needs exactly one subject") end
-        local value, err = describe(session)
+        local raw, read_error = journal.invoke("session_describe", {session = session})
+        if read_error or not raw then return unavailable(read_error or "Threads returned no session", nil) end
+        local value, err = snapshot(raw)
         if not value then return unavailable(err or "session is unavailable", nil) end
+        value.admission_refusal = admission_refusal(raw)
         return succeed({kind = "session", value = value})
     end
     if request.work ~= nil then

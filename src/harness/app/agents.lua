@@ -375,6 +375,8 @@ function M.refresh(conv: Conversation): boolean
             local review, err = waiting.read(thread_id)
             if err then conv.notice = err else conv.review = review end
         end
+        local refusal = conv.session.snapshot.admission_refusal
+        if refusal and conv.notice == "" then conv.notice = refusal end
     end
     return true
 end

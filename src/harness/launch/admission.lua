@@ -140,7 +140,7 @@ local function read_definition(pinned: catalog.Pinned, definition_ref: string): 
     return definition.decode(definition_ref, entry)
 end
 type Selected = {grant_id: string, profile_id: string, revision: integer, profile: profiles.Profile}
-local function selected_profile(workspace: string, id: string, revision: integer, definition_ref: string): (Selected?, Reply?)
+local function saved_record(workspace: string, id: string): ({[string]: unknown}?, Reply?)
     local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
     if err then return nil, fail("UNAVAILABLE", "saved profile did not answer") end
     local reply = bounds.object(raw)
@@ -148,6 +148,11 @@ local function selected_profile(workspace: string, id: string, revision: integer
     if reply.ok ~= true then return nil, fail(bounds.id(reply.code) or "DENIED", "saved profile is unavailable") end
     local value = bounds.object(reply.value)
     if not value or value.workspace_id ~= workspace or value.profile_id ~= id then return nil, fail("UNAVAILABLE", "saved profile identity differs") end
+    return value, nil
+end
+local function selected_profile(workspace: string, id: string, revision: integer, definition_ref: string): (Selected?, Reply?)
+    local value, refused = saved_record(workspace, id)
+    if not value then return nil, refused end
     if value.tombstone ~= false or value.revision ~= revision then return nil, fail("CONFLICT", "saved profile changed; select it again") end
     local profile, profile_error = profiles.profile(value.profile)
     if not profile then return nil, fail("UNAVAILABLE", profile_error or "invalid saved profile") end
@@ -459,7 +464,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
         placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest, placement_methods = placement.methods,
-        provider = provider_digest, mode = chosen, saved_profile = selected, placement_override = placement_override, spawn_overrides = spawn_overrides,
+        provider = provider_digest, mode = chosen, saved_profile = selected, placement_override = placement_override, spawn_overrides = next(requested) ~= nil and requested or nil,
         agent = agent and agent.digest or nil, agent_model = checked and checked.model or nil,
         declined_tuning = checked and checked.declined or nil,
         owner_component_revision = effective_owner_rev})
@@ -556,6 +561,64 @@ function M.resolve(definition_ref: string, mode: string?, workspace: string?, sa
     local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest, placement_override, spawn_overrides)
     if not plan then return nil, refused end
     return plan, nil
+end
+-- saved_revision is the saved profile's current revision, the one a new or
+-- resumed carrier is admitted under.
+function M.saved_revision(workspace: string, id: string): (integer?, Reply?)
+    local value, refused = saved_record(workspace, id)
+    if not value then return nil, refused end
+    local revision = bounds.integer(value.revision)
+    if value.tombstone ~= false or not revision or revision < 1 then return nil, fail("NOT_FOUND", "saved profile " .. id .. " was deleted") end
+    return revision, nil
+end
+-- The admitted facts a window session keeps for its current attempt. Its
+-- hooks are judged under them until its carrier starts again.
+type SessionAdmission = {definition: string, plan_digest: string, driver_binding_ref: string, provider: string,
+    profile_id: string, effective_profile: profiles.Profile?, profile_digest: string?, overrides: profiles.Overrides?,
+    saved_profile_id: string?, saved_profile_revision: integer?, placement_methods: {[string]: string}, trait_ceiling: {string}?}
+function M.session_admission(plan: Plan): SessionAdmission
+    return {definition = plan.definition_ref, plan_digest = plan.plan_digest, driver_binding_ref = plan.binding_ref, provider = plan.driver_id,
+        profile_id = plan.profile_id, effective_profile = plan.effective_profile, profile_digest = plan.effective_profile_digest,
+        overrides = plan.spawn_overrides, saved_profile_id = plan.saved_profile_id, saved_profile_revision = plan.saved_profile_revision,
+        placement_methods = plan.placement_methods, trait_ceiling = plan.trait_ceiling}
+end
+type Standing = {definition_ref: string, binding_ref: string, profile_id: string, workspace_id: string,
+    saved_profile_id: string?, saved_profile_revision: integer?}
+-- standing: a running session's admission stands while the choices it was
+-- admitted under hold: its launch definition still selects the same driver
+-- profile, that driver is usable, and its saved profile is at the admitted
+-- revision with active authority. Changed measurements of the same choices,
+-- as an upgrade makes, leave it standing; they apply when its carrier next
+-- starts. A refusal names the step the person takes.
+function M.standing(admitted: Standing): (definition.Definition?, catalog.Pinned?, string?)
+    local pinned, pin_error = catalog.pin()
+    if not pinned then return nil, nil, pin_error or "pin the registry" end
+    local launch = read_definition(pinned, admitted.definition_ref)
+    if not launch then return nil, nil, "This session's launch definition " .. admitted.definition_ref .. " is no longer installed; start a new session." end
+    if launch.binding_ref ~= admitted.binding_ref or launch.profile_id ~= admitted.profile_id then
+        return nil, nil, "This session's launch definition now selects another driver; restart this session to apply it."
+    end
+    local snapshot = catalog.read(pinned, nil, admitted.binding_ref)
+    local usable = snapshot and catalog.usable(snapshot)
+    local found = false
+    for _, candidate in ipairs(usable or {}) do
+        if candidate.binding_id == admitted.binding_ref and candidate.activated then found = true end
+    end
+    if not found then
+        return nil, nil, "This session's driver " .. admitted.binding_ref .. " is no longer usable on this host; install it again, then restart this session."
+    end
+    if admitted.saved_profile_id then
+        local value, refused = saved_record(admitted.workspace_id, admitted.saved_profile_id)
+        if not value then return nil, nil, refused and refused.error and refused.error.message or "saved profile is unavailable" end
+        if value.tombstone ~= false then return nil, nil, "The saved profile this session uses was deleted; start a new session." end
+        if value.revision ~= admitted.saved_profile_revision then
+            return nil, nil, "The saved profile this session uses changed; restart this session to apply the changed profile."
+        end
+        if value.grant_state ~= "active" then
+            return nil, nil, "The saved profile's authority is " .. tostring(value.grant_state) .. "; approve it again, then restart this session."
+        end
+    end
+    return launch, pinned, nil
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.

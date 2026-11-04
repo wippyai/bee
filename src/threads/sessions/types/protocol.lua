@@ -92,7 +92,7 @@ type HistoryItem = {work: string, sequence: integer, input: unknown, created_at:
 type HistoryPage = {items: {HistoryItem}, next: integer?}
 type ProfileRef = {id: string, revision: integer}
 type SessionSnapshot = {node: string?, peer_scope: string?, saved_profile: ProfileRef?, effective_profile: profile_values.Profile?, profile_digest: string?,
-    budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, terminal: boolean?, thread_ref: string?, thread_shared: boolean?, name: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
+    budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, terminal: boolean?, thread_ref: string?, thread_shared: boolean?, name: string?, workspace: string?, driver: string?, provider: string?, definition: string?, admission_refusal: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
     activity: Activity, activity_evidence: ActivityEvidence?, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type OperationReceipt = OpenReceipt | WorkReceipt | ControlReceipt
@@ -596,7 +596,7 @@ end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "terminal", "effective_profile", "profile_digest", "budget_consumption", "saved_profile", "thread_shared", "name"})
+        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "admission_refusal", "last_result", "terminal", "effective_profile", "profile_digest", "budget_consumption", "saved_profile", "thread_shared", "name"})
     if not object then return nil, failure end
     if object.thread_shared ~= nil and type(object.thread_shared) ~= "boolean" then return nil, "session thread_shared is invalid" end
     local name: string? = nil
@@ -606,6 +606,11 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     end
     if object.terminal ~= nil and type(object.terminal) ~= "boolean" then return nil, "session terminal is invalid" end
     local terminal = object.terminal == true
+    local admission_refusal: string? = nil
+    if object.admission_refusal ~= nil then
+        admission_refusal = bounds.text(object.admission_refusal, 4096)
+        if not admission_refusal then return nil, "session admission_refusal is invalid" end
+    end
     local extras: {[string]: string} = {}
     for _, name in ipairs({"thread_ref", "workspace", "driver", "provider", "definition"}) do
         if object[name] ~= nil then
@@ -705,7 +710,7 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
         if not steps or not tools or not tokens or not wall then return nil, "session consumption is malformed" end
         consumed = {provider_steps = steps, tool_calls = tools, tokens = tokens, wall_time_ms = wall}
     end
-    return {saved_profile = saved_profile, effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, terminal = terminal, thread_ref = extras.thread_ref, thread_shared = object.thread_shared == true, name = name, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
+    return {saved_profile = saved_profile, effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, terminal = terminal, thread_ref = extras.thread_ref, thread_shared = object.thread_shared == true, name = name, workspace = extras.workspace, driver = extras.driver, provider = extras.provider, admission_refusal = admission_refusal,
         definition = extras.definition, last_result = last_result,
         session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
         activity = decoded_activity, activity_evidence = activity_evidence,

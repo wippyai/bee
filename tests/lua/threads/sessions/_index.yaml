@@ -424,6 +424,7 @@ entries:
     - bee.threads.sessions.binding:await
     - bee.threads.sessions.binding:join
     - bee.threads.sessions.binding:restore
+    - bee.threads.sessions.binding:get
     effect: allow
 - name: await_test
   kind: function.lua
@@ -465,7 +466,7 @@ entries:
 - name: muse_permission_fixture
   kind: library.lua
   source: file://muse_permission_fixture.lua
-  modules: [registry, funcs, security, env, time, exec, json]
+  modules: [registry, funcs, security, env, time, exec, json, uuid]
   imports:
     bounds: bee.drivers.values:bounds
     admission: bee.harness.launch:admission

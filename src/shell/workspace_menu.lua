@@ -155,6 +155,37 @@ local function browse(menu: Menu, step: integer): string?
     return next_tab
 end
 
+-- join adds node, which joined the hive while the menu is open, to the
+-- strip in identity order after the shown node.
+function M.join(menu: Menu, node: string)
+    for _, item in ipairs(menu.nodes) do
+        if item == node then return end
+    end
+    local at = #menu.nodes + 1
+    for index = 2, #menu.nodes do
+        if node < menu.nodes[index] then at = index; break end
+    end
+    table.insert(menu.nodes, at, node)
+end
+
+-- leave drops node, which left the hive, from the strip; the shown node
+-- stays. It reports whether the menu browsed node and so returns to the
+-- shown node, whose catalog the caller supplies again.
+function M.leave(menu: Menu, node: string): boolean
+    if node == menu.node then return false end
+    for index, item in ipairs(menu.nodes) do
+        if item == node then
+            table.remove(menu.nodes, index)
+            if menu.tab ~= node then return false end
+            menu.tab, menu.desktops, menu.workspaces, menu.counts, menu.loaded = menu.node, {}, {}, {}, false
+            menu.selected, menu.query = 1, ""
+            rebuild(menu)
+            return true
+        end
+    end
+    return false
+end
+
 -- label records the folder node runs in.
 function M.label(menu: Menu, node: string, label: string)
     menu.labels[node] = label

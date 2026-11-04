@@ -121,7 +121,7 @@ entries:
       short: Open the shell of this folder's node, or with an app command name (bee claude) that app full-pane
       security:
         actor: {id: bee.shell}
-        policies: [bee.hive.security:caller, bee.hive.security:messaging, bee.shell:display]
+        policies: [bee.hive.security:caller, bee.hive.security:messaging, bee.shell:display, bee.shell:hive]
 - name: client
   kind: process.lua
   source: file://shell.lua
@@ -162,7 +162,7 @@ entries:
 - name: hive
   kind: security.policy
   meta:
-    comment: A client display follows nodes joining the hive to find one to show
+    comment: A display follows nodes joining and leaving the hive, to find one to show and to keep the Bees menu current
   policy:
     actions: [events.subscribe]
     resources: [cluster]

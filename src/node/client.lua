@@ -58,6 +58,12 @@ function M.nodes(): {string}
     return found
 end
 
+-- member is the node a cluster membership event names.
+function M.member(event: unknown): string?
+    local path = type(event) == "table" and event.path or nil
+    return bounds.id(path)
+end
+
 -- serving reports whether node's owner holds its directory name, waiting up
 -- to TIMEOUT for an owner to take it. An owner's name is released when it
 -- exits, so a name bound again means an owner is serving.

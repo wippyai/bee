@@ -56,6 +56,10 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     local lifecycle = assert(process.events())
     local inputs = assert(tty.events())
     local node_events = assert(process.listen(client.EVENTS, {message = true}))
+    -- The Bees menu follows the hive while it is open.
+    local joins = assert(events.subscribe("cluster", "node.joined"))
+    local departures = assert(events.subscribe("cluster", "node.left"))
+    local joined, departed = joins:channel(), departures:channel()
     assert(tty.start())
     tty.mouse(true)
     local surface = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
@@ -174,6 +178,19 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             local result = job()
             result.generation = stamp
             results:send(result)
+        end)
+    end
+
+    -- label_node asks node for the folder it runs in, which names its tab.
+    local function label_node(node: string)
+        run(function(): Result
+            local value = client.call(node, "workspaces", {})
+            if not value then return {kind = "done"} end
+            local home = value.home
+            for _, workspace in ipairs(client.workspaces(value.workspaces)) do
+                if workspace.id == home then return {kind = "labelled", id = node, title = workspace.label} end
+            end
+            return {kind = "done"}
         end)
     end
 
@@ -557,17 +574,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             local nodes = client.nodes()
             workspaces_open = workspace_menu.new(desktop, desktops, workspaces, app_counts(), nodes, target)
             if #nodes > 1 then
-                for _, node in ipairs(nodes) do
-                    run(function(): Result
-                        local value = client.call(node, "workspaces", {})
-                        if not value then return {kind = "done"} end
-                        local home = value.home
-                        for _, workspace in ipairs(client.workspaces(value.workspaces)) do
-                            if workspace.id == home then return {kind = "labelled", id = node, title = workspace.label} end
-                        end
-                        return {kind = "done"}
-                    end)
-                end
+                for _, node in ipairs(nodes) do label_node(node) end
             end
         elseif action == "new_desktop" then new_desktop()
         elseif action == "restore" and win then
@@ -720,6 +727,11 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             end
         elseif result.kind == "labelled" and result.id and result.title then
             if workspaces_open then workspace_menu.label(workspaces_open, result.id, result.title) end
+        elseif result.kind == "joined" and result.node then
+            if workspaces_open then
+                workspace_menu.join(workspaces_open, result.node)
+                label_node(result.node)
+            end
         elseif result.kind == "shown" and result.desktop then
             show(result.desktop)
             show_app_dialog()
@@ -1162,7 +1174,8 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     paint()
 
     local function cases()
-        local list = {inputs:case_receive(), lifecycle:case_receive(), results:case_receive(), node_events:case_receive()}
+        local list = {inputs:case_receive(), lifecycle:case_receive(), results:case_receive(), node_events:case_receive(),
+            joined:case_receive(), departed:case_receive()}
         if alert_fade then list[#list + 1] = alert_fade:case_receive() end
         for _, updated in pairs(updates) do list[#list + 1] = updated:case_receive() end
         return list
@@ -1198,6 +1211,22 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             end
         elseif chosen.channel == results then
             apply(chosen.value)
+        elseif chosen.channel == joined then
+            if not chosen.ok then return true end
+            local node = client.member(chosen.value)
+            -- A joined node shows on the strip once its owner serves desktops.
+            if node and workspaces_open then
+                run(function(): Result
+                    if client.serving(node) then return {kind = "joined", node = node} end
+                    return {kind = "done"}
+                end)
+            end
+        elseif chosen.channel == departed then
+            if not chosen.ok then return true end
+            local node = client.member(chosen.value)
+            if node and workspaces_open and workspace_menu.leave(workspaces_open, node) then
+                workspace_menu.update(workspaces_open, target, desktops, workspaces, app_counts())
+            end
         elseif chosen.channel == node_events then
             if not chosen.ok then return true end
             local message = chosen.value
@@ -1239,10 +1268,14 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         -- The surface lease belongs to this code; input and viewports stay
         -- with the process for the new code to take over.
         local saved_state = handover()
+        joins:close()
+        departures:close()
         surface:close()
         process.upgrade("", saved_state)
         return 0
     end
+    joins:close()
+    departures:close()
     detach()
     surface:close()
     tty.mouse(false)

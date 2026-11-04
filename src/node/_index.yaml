@@ -116,6 +116,7 @@ entries:
   source: file://application_tests.lua
   imports:
     bounds: bee.drivers.values:bounds
+    seam: bee.process:seam
 - name: app_tool_request
   kind: library.lua
   source: file://app_tool_request.lua

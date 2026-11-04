@@ -8,6 +8,7 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     limits: bee.hub.package:limits
+    seam: bee.process:seam
 - name: updates
   kind: library.lua
   source: file://updates.lua
@@ -22,6 +23,7 @@ entries:
     bounds: bee.drivers.values:bounds
     requirements: bee.hub.package:requirements
     semver: bee.hub.package:semver
+    seam: bee.process:seam
 - name: inspect
   kind: library.lua
   source: file://inspect.lua
@@ -31,6 +33,7 @@ entries:
     bounds: bee.drivers.values:bounds
     requirements: bee.hub.package:requirements
     inspection: bee.hub.package:inspection
+    seam: bee.process:seam
 - name: preview
   kind: library.lua
   source: file://preview.lua
@@ -66,6 +69,7 @@ entries:
     operations: bee.hub.types:operations
     service_lifecycle: bee.hub.binding:lifecycle
     review: bee.hub.package:review
+    seam: bee.process:seam
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
@@ -116,3 +120,4 @@ entries:
     inspection: bee.hub.package:inspection
     requirements: bee.hub.package:requirements
     inventory: bee.hub.package:inventory
+    seam: bee.process:seam

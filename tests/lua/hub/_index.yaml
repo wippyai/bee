@@ -53,7 +53,7 @@ entries:
   source: file://catalog_refresh.lua
   method: default_shared
   imports:
-    catalog: bee.hub.binding:catalog_transport
+    catalog: bee.hub.binding:catalog
     model: bee.apps.library.app:hub
     library: bee.apps.library.app:model
     view: bee.apps.library.app:view
@@ -384,3 +384,7 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
+  imports:
+    update_fixture: bee.tests.hub:update_fixture
+    catalog_fixture: bee.tests.hub:catalog_fixture
+    fixture_catalog: bee.tests.gov:hub_fixture_catalog

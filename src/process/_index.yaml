@@ -89,6 +89,18 @@ entries:
   - entry: bee.shell:client
     path: .imports.seam
   - entry: bee.shell:jobs
+  - entry: bee.hub.binding:catalog
+    path: .imports.seam
+  - entry: bee.hub.binding:inspect
+    path: .imports.seam
+  - entry: bee.hub.binding:artifact_source
+    path: .imports.seam
+  - entry: bee.hub.binding:updates
+    path: .imports.seam
+  - entry: bee.hub.binding:publication
+    path: .imports.seam
+  - entry: bee.node:application_tests
+    path: .imports.seam
   - entry: bee.process:worker
     path: .imports.seam
   - entry: bee.process:demand_owner

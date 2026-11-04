@@ -415,3 +415,4 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
+  modules: [process]

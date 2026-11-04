@@ -12,6 +12,7 @@ local external = require("external")
 local demand = require("demand")
 local task = require("task")
 local effects = require("effects")
+local seam = require("seam")
 local NAME = "bee.gateway.external"
 type Waiting = {request: protocol.Forwarded, client: string}
 local function main()
@@ -24,8 +25,12 @@ local function main()
     local waiting: {Waiting} = {}
     local callers: {[string]: boolean} = {}
     local demanded = assert(process.listen(demand.WAKE, {message = true}))
-    local installation = task.new("gateway installation", function(): boolean return effects.drain("installation") end)
-    local publication = task.new("gateway publication", function(): boolean return effects.drain("publication") end)
+    local function drain(kind: string): boolean
+        if seam.call("bee.gateway.service.external.drain_disabled", {kind = kind}) == true then return true end
+        return effects.drain(kind)
+    end
+    local installation = task.new("gateway installation", function(): boolean return drain("installation") end)
+    local publication = task.new("gateway publication", function(): boolean return drain("publication") end)
     local generation = 0
     assert(demand.ready(NAME))
     assert(protocol.ready(NAME))

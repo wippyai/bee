@@ -108,3 +108,4 @@ entries:
   imports:
     pass: bee.gov.service:activation_pass
     service: bee.gov.binding:destination_service
+    seam: bee.process:seam

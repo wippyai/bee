@@ -7,6 +7,7 @@ entries:
   modules: [process, channel, time]
   imports:
     demand: bee.process:demand
+    seam: bee.process:seam
 - name: seam
   kind: library.lua
   source: file://seam.lua
@@ -19,6 +20,22 @@ entries:
   default: bee.process:seam
   targets:
   - entry: bee.threads.service:threads
+    path: .imports.seam
+  - entry: bee.process:worker
+    path: .imports.seam
+  - entry: bee.process:demand_owner
+    path: .imports.seam
+  - entry: bee.hive.service:supervisor
+    path: .imports.seam
+  - entry: bee.hive:remote
+    path: .imports.seam
+  - entry: bee.approvals.persist:dispatch
+    path: .imports.seam
+  - entry: bee.gov.service:backlog
+    path: .imports.seam
+  - entry: bee.gateway.service:external
+    path: .imports.seam
+  - entry: bee.gateway.service:backlog
     path: .imports.seam
 - name: demand_state
   kind: library.lua
@@ -37,6 +54,7 @@ entries:
     state: bee.process:demand_state
     bounds: bee.drivers.values:bounds
     clock: bee.drivers.values:clock
+    seam: bee.process:seam
 - name: client_policy
   kind: security.policy
   policy:

@@ -7,4 +7,7 @@ return {
     ["bee.threads.service.capture_closed"] = function()
         return controllers.registered("bee.test.threads.terminal", "bee.test.threads.resume", nil, {})
     end,
+    ["bee.threads.service.pump"] = function()
+        return false
+    end,
 }

@@ -355,24 +355,6 @@ def host_environment():
     target.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
-def owner_scheduling(src):
-    replace_once(src / "credentials/service/worker.lua", 'funcs.call("bee.credentials.binding:configuration_effects")', 'nil, nil')
-    replace_once(src / "credentials/service/worker.lua", 'return not backlog.pending()', 'return true')
-    replace_once(src / "gov/service/activation_worker.lua", "pass = drain", "pass = function(): boolean return true end")
-    replace_once(src / "gov/service/backlog.lua", "return pass.pending() or service.following_pending()", "return false")
-    path = src / "threads/service/_index.yaml"
-    document = yaml.safe_load(path.read_text())
-    next(entry for entry in document["entries"] if entry["name"] == "service")["meta"]["pump"] = False
-    path.write_text(yaml.safe_dump(document, sort_keys=False))
-    path = src / "gateway/service/_index.yaml"
-    document = yaml.safe_load(path.read_text())
-    next(entry for entry in document["entries"] if entry["name"] == "external")["imports"]["effects"] = "bee.gateway.service:effects_fixture"
-    next(entry for entry in document["entries"] if entry["name"] == "backlog")["source"] = "file://effects_disabled.lua"
-    document["entries"].append({"name": "effects_fixture", "kind": "library.lua", "source": "file://effects_disabled.lua", "meta": {"type": "test_support"}})
-    shutil.copy2(TESTS / "lua/gateway/effects_disabled.lua", src / "gateway/service/effects_disabled.lua")
-    path.write_text(yaml.safe_dump(document, sort_keys=False))
-
-
 def gate_retired_display(src):
     replace_once(src / "node/service/owner.lua", '    local function stop(instance: Instance): protocol.Reply', '''    local function stop(instance: Instance): protocol.Reply
         local controller = process.registry.lookup("bee.test.retired.cancel", process.registry.LOCAL)
@@ -429,18 +411,6 @@ def observe_node_ready(src):
                             '    logger:info("Node ready",']))
 
 
-def observe_hive_upgrade(src):
-    replace_once(src / "hive/service/supervisor.lua", '    logger:info("Hive supervisor ready",',
-                 '\n'.join(['    local observer = process.registry.lookup("bee.test.hive.upgrade_ready", process.registry.LOCAL)',
-                            '    if observer then assert(process.send(tostring(observer), "bee.test.hive.upgrade_ready", {})) end',
-                            '    logger:info("Hive supervisor ready",']))
-
-    replace_once(src / "hive/service/supervisor.lua", '        parked[name] = waiting',
-                 '\n'.join(['        parked[name] = waiting',
-                            '        local observer = process.registry.lookup("bee.test.hive.upgrade_parked", process.registry.LOCAL)',
-                            '        if observer then assert(process.send(tostring(observer), "bee.test.hive.upgrade_parked", {})) end']))
-
-
 def compose_thread_recovery():
     service = (ROOT / "src/threads/service/service.lua").read_text()
     store = service.split("local function with_store", 1)[1].split("local function retire_aliases", 1)[0]
@@ -459,129 +429,6 @@ def compose_thread_recovery():
         + '    runtime.reset()\n    runtime.controller = controller\n    recovery.recover(active)\n    lifecycle:close()\n'
         '    assert(process.send(controller, "bee.test.recovery.done", '
         '{settled = runtime.settled, announced = runtime.announced, released = runtime.released}))\nend\nreturn {main = main}\n')
-
-
-def hold_hive_backlog(src):
-    supervisor = src / "hive/service/supervisor.lua"
-    replace_once(supervisor, '        local selected = channel.select(cases)',
-                 '''        local observer = process.registry.lookup("bee.test.hive.backlog_terminal", process.registry.LOCAL)
-        if observer then
-            local registry = process.registry.lookup("bee.test.hive.backlog_registry", process.registry.LOCAL)
-            cases = {registry and registry_changes:case_receive() or backlog:case_receive(), events:case_receive()}
-        end
-        local selected = channel.select(cases)''')
-    def closed(match):
-        indent = match[1]
-        lines = [
-            'local observer = process.registry.lookup("bee.test.hive.backlog_terminal", process.registry.LOCAL)',
-            'local holding = process.registry.lookup("bee.test.hive.backlog_hold", process.registry.LOCAL)',
-            'if observer and not holding then',
-            '    local resume = assert(process.listen("bee.test.hive.backlog_resume", {message = true}))',
-            '    assert(process.send(tostring(observer), "bee.test.hive.backlog_terminal", {}))',
-            '    local message = assert((resume:receive()))',
-            '    assert(tostring(message:from()) == tostring(observer))',
-            '    process.unlisten(resume)',
-            'end',
-        ]
-        return match[0] + "\n" + "\n".join(indent + line for line in lines)
-    text, count = re.subn(r'^( +)backlog_stream:close\(\)', closed, supervisor.read_text(), flags=re.M)
-    assert count > 0
-    supervisor.write_text(text)
-    replace_once(supervisor, '        elseif selected.channel == backlog then',
-                 '''        elseif selected.channel == backlog then
-            local controller = process.registry.lookup("bee.test.hive.backlog_hold", process.registry.LOCAL)
-            if controller then
-                local release = assert(process.listen("bee.test.hive.backlog_release", {message = true}))
-                assert(process.send(tostring(controller), "bee.test.hive.backlog_hold", {}))
-                local message = assert((release:receive()))
-                assert(tostring(message:from()) == tostring(controller))
-                process.unlisten(release)
-            end''')
-
-
-def order_hive_readiness(src):
-    replace_once(src / "hive/service/supervisor.lua",
-                 '        if retry then cases[#cases + 1] = retry:case_receive() end',
-                 '''        local owner = demanded["bee.gateway.external"]
-        if owner and owner.state.phase ~= "absent"
-            and process.registry.lookup("bee.test.hive.demand_ready", process.registry.LOCAL) then
-            table.remove(cases, 2)
-        end
-        if retry then cases[#cases + 1] = retry:case_receive() end''')
-
-
-def stop_hive_delivery(src):
-    replace_once(src / "process/demand_owner.lua", 'local M = {}',
-                 'local M = {}\nlocal stopped_delivery = false')
-    replace_once(src / "process/demand_owner.lua",
-                 '        local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})',
-                 '''        local controller = not stopped_delivery and owner.name == "bee.gateway.external"
-            and process.registry.lookup("bee.test.hive.delivery_stop", process.registry.LOCAL)
-        if controller then
-            local release = assert(process.listen("bee.test.hive.delivery_release", {message = true}))
-            assert(process.send(tostring(controller), "bee.test.hive.delivery_stop", {pid = pid}))
-            local message = assert((release:receive()))
-            assert(tostring(message:from()) == tostring(controller))
-            process.unlisten(release)
-            stopped_delivery = true
-        end
-        local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})''')
-    replace_once(src / "process/demand_owner.lua",
-                 '    local current = system.supervisor.state(owner.id)',
-                 '''    local current = system.supervisor.state(owner.id)
-        if stopped_delivery and owner.name == "bee.gateway.external" and current
-            and (current.status == "stopped" or current.status == "exited")
-            and process.registry.lookup("bee.test.hive.delivery_stop", process.registry.LOCAL) then
-            current.status = "stopped"
-        end''')
-
-
-def observe_transaction_demand(src):
-    """Observe owner commands and the completed readiness transition.
-
-    registry.begin/start/commit share the runtime supervisor's FIFO subscriber
-    and action queue. The command receipt lets the controller withhold commit
-    until the production owner has submitted its start inside that window.
-    """
-    replace_once(src / "process/demand_owner.lua", 'local ALLOWED: {[string]: boolean} = {',
-                 'local ALLOWED: {[string]: boolean} = {\n    ["bee.tests.process:transaction_service"] = true,')
-    replace_once(src / "process/demand_owner.lua",
-                 '        assert(events.send("supervisor", "service." .. action, owner.id))',
-                 '''        assert(events.send("supervisor", "service." .. action, owner.id))
-        local controller = owner.name == "bee.test.transaction.owner"
-            and process.registry.lookup("bee.test.transaction.demand", process.registry.LOCAL)
-        if controller then
-            assert(process.send(tostring(controller), "bee.test.transaction.command",
-                {action = action, phase = owner.state.phase, queued = #owner.queue}))
-        end''')
-    supervisor = src / "hive/service/supervisor.lua"
-    replace_once(supervisor, "            deliver(data.name, request)\n        end", """            deliver(data.name, request)
-        end
-        if data.name == "bee.test.transaction.owner" then
-            local controller = process.registry.lookup("bee.test.transaction.demand", process.registry.LOCAL)
-            if controller then
-                local owner = assert(demanded[data.name])
-                local current = assert(system.supervisor.state(owner.id))
-                assert(process.send(tostring(controller), "bee.test.transaction.running",
-                    {phase = owner.state.phase, queued = #owner.queue,
-                        parked = #(parked[data.name] or {}), status = current.status, desired = current.desired}))
-            end
-        end""")
-
-
-def hold_access_readiness(src):
-    replace_once(src / "process/demand.lua", 'function M.ready(name: string): (boolean, string?)',
-                 '''function M.ready(name: string): (boolean, string?)
-    local controller = name == "bee.gateway.access"
-        and process.registry.lookup("bee.test.access.start", process.registry.LOCAL)
-    if controller then
-        local lifecycle = assert(process.events())
-        assert(process.send(tostring(controller), "bee.test.access.start", {}))
-        while true do
-            local event = assert((lifecycle:receive()))
-            if event.kind == process.event.CANCEL then return false, "controlled stop before readiness" end
-        end
-    end''')
 
 
 def fail_owner_registry_reads(src):
@@ -603,28 +450,6 @@ local function find_installed(filter)
 end''')
 
     add_modules(src / "node/service/_index.yaml", "catalog", ["process"])
-
-
-def fail_remote_registry_reads(src):
-    """Fail the Hive receiver's grant and overlay reads while a controller holds the failure name."""
-    remote = src / "hive/remote.lua"
-    text = remote.read_text()
-    assert text.count("registry.find(") == 1 and text.count("registry.overlay(") == 1, f"{remote}: expected one find and one overlay read"
-    text = text.replace("registry.find(", "read_registry.find(").replace("registry.overlay(", "read_registry.overlay(")
-    remote.write_text(text)
-    replace_once(remote, 'local registry = require("registry")', '''local registry = require("registry")
-local process = require("process")
-local read_registry = {
-    find = function(filter)
-        if process.registry.lookup("bee.test.hive.find_failure", process.registry.LOCAL) then return nil, "injected registry failure" end
-        return registry.find(filter)
-    end,
-    overlay = function(owner)
-        if process.registry.lookup("bee.test.hive.overlay_failure", process.registry.LOCAL) then return nil, "injected overlay failure" end
-        return registry.overlay(owner)
-    end,
-}''')
-    add_modules(src / "hive/_index.yaml", "remote", ["process"])
 
 
 def hold_test_runner_quiet(src):
@@ -731,68 +556,6 @@ def advance_committed_transition(src):
         assert(M.transition(db, attempt_id, {cleanup = "complete",
             evidence = {kind = "test.transition_advanced", detail = "subsequent committed transition"}}).ok)
     end''')
-
-
-def pause_effect_dispatch(src):
-    path = src / "approvals/persist/dispatch.lua"
-    replace_once(path, 'local sql = require("sql")', 'local sql = require("sql")\nlocal process = require("process")')
-    replace_once(path, "function M.deliver(db: sql.DB, sender: Sender?): (integer?, string?)",
-                 """function M.deliver(db: sql.DB, sender: Sender?): (integer?, string?)
-    if not sender and process.registry.lookup("bee.test.effect_dispatch", process.registry.LOCAL) then return 0, nil end""")
-    add_modules(src / "approvals/persist/_index.yaml", "dispatch", ["process"])
-
-
-def observe_effect_delivery(src):
-    replace_once(src / "process/demand_owner.lua", "M.Owners = Owners", """M.Owners = Owners
-local stopped_observers: {[string]: {pid: string, topic: string, controller: string}} = {}
-local materialization_wakes: {[string]: integer} = {}
-local function notify_stopped(owner: Owner?)
-    if owner and owner.state.phase == "absent" then
-        local observer = stopped_observers[owner.name]
-        local controller = observer and process.registry.lookup(observer.controller, process.registry.LOCAL)
-        if observer and controller and tostring(controller) == observer.pid then
-            assert(process.send(observer.pid, observer.topic, {}))
-        end
-    end
-end""")
-    replace_once(src / "process/demand_owner.lua",
-                 '    else command(owner, action) end',
-                 '    else command(owner, action) end\n    notify_stopped(owner)')
-    replace_once(src / "process/demand_owner.lua",
-                 "function M.receive(owners: Owners, from: string, raw: unknown)",
-                 """function M.receive(owners: Owners, from: string, raw: unknown)
-    local fixture = process.registry.lookup("bee.test.materialization.wake", process.registry.LOCAL)
-    if fixture and tostring(fixture) == from and type(raw) == "table" and raw.name == "bee.placement.sweeper" then
-        if raw.action == "bee.test.materialization.wakes" then
-            assert(process.send(from, "bee.test.materialization.wakes", {count = materialization_wakes[from] or 0}))
-            return
-        elseif raw.action == "wake" then
-            materialization_wakes[from] = (materialization_wakes[from] or 0) + 1
-        end
-    end
-    if type(raw) == "table" and raw.action == "bee.test.owner.stopped" and type(raw.name) == "string" and type(raw.topic) == "string" then
-        local name = "bee.test.owner.stopped." .. raw.name
-        local controller = process.registry.lookup(name, process.registry.LOCAL)
-        if controller and tostring(controller) == from then
-            stopped_observers[raw.name] = {pid = from, topic = raw.topic, controller = name}
-            notify_stopped(owners[raw.name])
-        end
-        return
-    end
-    local controller = process.registry.lookup("bee.test.effect_delivery", process.registry.LOCAL)
-    if controller and tostring(controller) == from and type(raw) == "table" and raw.action == "bee.test.boot_backlog" then
-        M.recover(owners, nil)
-        assert(process.send(from, "bee.test.boot_backlog.recovered", {}))
-        return
-    end""")
-    replace_once(src / "process/demand_owner.lua",
-                 "        for _, request in ipairs(requests) do",
-                 """        local observer = process.registry.lookup("bee.test.effect_delivery")
-        if observer then
-            process.send(tostring(observer), "bee.test.effect_delivery", {
-                name = owner.name, pid = pid, generation = owner.state.generation, requests = requests})
-        end
-        for _, request in ipairs(requests) do""")
 
 
 def observe_sync_idle(src):
@@ -915,25 +678,15 @@ def compose():
     # The composition is a module root like the repository: its manifest
     # beside src, so module-relative directories resolve as they do in a pack.
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
-    owner_scheduling(src)
     hold_test_runner_quiet(src)
     fail_owner_registry_reads(src)
-    fail_remote_registry_reads(src)
-    hold_hive_backlog(src)
     compose_thread_recovery()
     gate_retired_display(src)
     observe_node_ready(src)
-    observe_hive_upgrade(src)
-    order_hive_readiness(src)
     inject_registry_faults(src)
-    stop_hive_delivery(src)
-    observe_transaction_demand(src)
-    hold_access_readiness(src)
     hold_docker_cleanup(src)
     advance_committed_transition(src)
     observe_preparer_cleanup(src)
-    pause_effect_dispatch(src)
-    observe_effect_delivery(src)
     observe_sync_idle(src)
     observe_boot_recovery(src)
     observe_carrier(src)

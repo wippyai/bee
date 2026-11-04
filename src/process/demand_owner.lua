@@ -13,6 +13,7 @@ local bounds = require("bounds")
 local clock = require("clock")
 local demand = require("demand")
 local state = require("state")
+local seam = require("seam")
 local M = {}
 local ALLOWED: {[string]: boolean} = {
     ["bee.credentials.service:configuration_service"] = true,
@@ -71,7 +72,7 @@ function M.discover(previous: Owners?, find: Find?): (Owners?, string?)
     for _, entry in ipairs(entries) do
         local meta: unknown = entry.meta
         local spec = type(meta) == "table" and meta.demand or nil
-        if ALLOWED[tostring(entry.id)] and entry.kind == "process.service" and type(spec) == "table" and type(spec.name) == "string" then
+        if (ALLOWED[tostring(entry.id)] or seam.call("bee.process.demand_owner.admitted", {id = tostring(entry.id)}) == true) and entry.kind == "process.service" and type(spec) == "table" and type(spec.name) == "string" then
             local owner, owner_error = declare(entry, spec, spec.name, previous)
             if not owner then return nil, owner_error end
             owners[spec.name] = owner
@@ -89,6 +90,7 @@ end
 local function command(owner: Owner, action: string)
     if action == "start" or action == "stop" then
         assert(events.send("supervisor", "service." .. action, owner.id))
+        seam.call("bee.process.demand_owner.command", {owner = owner.name, action = action, phase = owner.state.phase, queued = #owner.queue})
     end
 end
 local function deliver(owner: Owner)
@@ -100,11 +102,13 @@ local function deliver(owner: Owner)
         for index = 1, math.min(64, #owner.queue) do requests[index] = owner.queue[index] end
         if not first then state.transition(owner.state, "batch", nil, nil, nil) end
         first = false
+        seam.hold("bee.process.demand_owner.delivering", {name = owner.name, pid = pid})
         local sent = process.send(pid, demand.WAKE, {generation = owner.state.generation, requests = requests})
         if not sent then
             command(owner, state.transition(owner.state, "failed", pid, nil, snapshot(owner)))
             return
         end
+        seam.call("bee.process.demand_owner.delivered", {name = owner.name, pid = pid, generation = owner.state.generation, requests = requests})
         for _, request in ipairs(requests) do
             local data: unknown = request.data
             if type(data) == "table" and type(data.request_id) == "string" then
@@ -121,6 +125,7 @@ local function transition(owner: Owner, event: string, pid: string?, generation:
     local action = state.transition(owner.state, event, pid, generation, snapshot(owner))
     if action == "deliver" then deliver(owner)
     else command(owner, action) end
+    seam.call("bee.process.demand_owner.transitioned", {name = owner.name, phase = owner.state.phase})
 end
 function M.wake(owners: Owners, name: string, request: Dispatch?): boolean
     local owner = owners[name]
@@ -146,6 +151,9 @@ function M.ready(owners: Owners, name: string, pid: string)
     transition(owner, "ready", pid, nil)
 end
 function M.receive(owners: Owners, from: string, raw: unknown)
+    local consumed = seam.call("bee.process.demand_owner.received", {from = from, message = raw, owners = owners,
+        recover = function() M.recover(owners, nil) end})
+    if consumed == true then return end
     if type(raw) ~= "table" or type(raw.name) ~= "string" then return end
     local owner = owners[raw.name]
     if not owner then return end

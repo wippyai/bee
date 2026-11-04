@@ -247,23 +247,28 @@ func (h *Host) Plan(_ context.Context, launch app.Launch) (app.Plan, error) {
 	return h.nodePlan(dir, launch.State, hive), nil
 }
 
-// nodePlan runs the folder's node, joining the machine's hive when there is one.
+// nodePlan runs the folder's node under its identity, joining the machine's
+// hive when there is one.
 func (h *Host) nodePlan(dir, state string, hive *Hive) app.Plan {
 	return app.Plan{Prepare: func(context.Context) (boot.Config, func() error, error) {
 		if err := ensureStateIgnore(state); err != nil {
 			return nil, nil, fmt.Errorf("bee state: initialize ignore file: %w", err)
 		}
 		h.watchHive(dir, hive)
-		if hive == nil {
-			return boot.NewConfig(), h.finish, nil
-		}
-		config, node, err := Prepare(dir, state, *hive, &h.members)
+		config, node, err := Prepare(dir, state, hive, &h.members)
 		if err != nil {
 			return nil, nil, err
 		}
-		h.node = node
+		if hive != nil {
+			h.node = node
+		}
 		return config, h.finish, nil
 	}}
+}
+
+// relaySection names the runtime's relay node after the folder's identity.
+func relaySection(node Node) boot.ConfigOption {
+	return boot.WithSection("relay", map[string]any{"node_name": node.Name})
 }
 
 // watchHive makes this bee restart when the machine's hive differs from applied.
@@ -321,12 +326,9 @@ func (h *Host) clientPlan(dir, state string, hive *Hive, owned bool, command []s
 	}, nil
 }
 
-// folderNode names the hive node of the folder whose state is at state.
+// folderNode names the node of the folder whose state is at state.
 func folderNode(state string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(state, nodeFile))
-	if errors.Is(err, os.ErrNotExist) {
-		return "", errors.New("bee is already running in this folder and is not in a hive; run bee hive init and restart it to open more displays")
-	}
 	if err != nil {
 		return "", err
 	}
@@ -443,14 +445,17 @@ func ReadHive(dir string) (*Hive, error) {
 	return &hive, nil
 }
 
-// Prepare returns the boot configuration that joins this folder's node into
-// the hive, and the node's name.
-func Prepare(dir, state string, hive Hive, members *Members) (boot.Config, string, error) {
+// Prepare returns the boot configuration that runs this folder's node under
+// its identity, joined into the hive when there is one, and the node's name.
+func Prepare(dir, state string, hive *Hive, members *Members) (boot.Config, string, error) {
 	node, key, err := loadNode(state)
 	if err != nil {
 		return nil, "", err
 	}
-	config, err := configure(dir, hive, node, key, members)
+	if hive == nil {
+		return boot.NewConfig(relaySection(node)), node.Name, nil
+	}
+	config, err := configure(dir, *hive, node, key, members)
 	return config, node.Name, err
 }
 
@@ -506,7 +511,7 @@ func configure(dir string, hive Hive, node Node, key ed25519.PrivateKey, members
 		cluster["internode.bind_addr"] = "0.0.0.0"
 	}
 	return boot.NewConfig(
-		boot.WithSection("relay", map[string]any{"node_name": node.Name}),
+		relaySection(node),
 		boot.WithSection("cluster", cluster),
 	), nil
 }

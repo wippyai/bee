@@ -86,13 +86,13 @@ func TestPrepareKeepsOneIdentityPerFolder(t *testing.T) {
 	require.NoError(t, err)
 	state := t.TempDir()
 
-	_, first, err := Prepare(dir, state, *hive, &Members{})
+	_, first, err := Prepare(dir, state, hive, &Members{})
 	require.NoError(t, err)
-	_, again, err := Prepare(dir, state, *hive, &Members{})
+	_, again, err := Prepare(dir, state, hive, &Members{})
 	require.NoError(t, err)
 	require.Equal(t, first, again)
 
-	_, other, err := Prepare(dir, t.TempDir(), *hive, &Members{})
+	_, other, err := Prepare(dir, t.TempDir(), hive, &Members{})
 	require.NoError(t, err)
 	require.NotEqual(t, first, other)
 }
@@ -103,12 +103,12 @@ func TestPrepareJoinsTheHive(t *testing.T) {
 	hive, err := ReadHive(dir)
 	require.NoError(t, err)
 
-	_, peer, err := Prepare(dir, t.TempDir(), *hive, &Members{})
+	_, peer, err := Prepare(dir, t.TempDir(), hive, &Members{})
 	require.NoError(t, err)
 	require.NoError(t, writeFile(filepath.Join(dir, nodesDir, peer+addressSuffix), []byte("127.0.0.1:40001")))
 
 	state := t.TempDir()
-	config, name, err := Prepare(dir, state, *hive, &Members{})
+	config, name, err := Prepare(dir, state, hive, &Members{})
 	require.NoError(t, err)
 	cluster := config.Sub("cluster")
 	require.True(t, cluster.GetBool("enabled", false))
@@ -185,7 +185,7 @@ func TestAnOwnedFolderInAHiveStartsAnInMemoryClient(t *testing.T) {
 	hive, err := ReadHive(dir)
 	require.NoError(t, err)
 	state := t.TempDir()
-	_, folderNode, err := Prepare(dir, state, *hive, &Members{})
+	_, folderNode, err := Prepare(dir, state, hive, &Members{})
 	require.NoError(t, err)
 	holdState(t, state)
 
@@ -297,7 +297,7 @@ func TestPlanOpensAnAppCommandOnTheRunningFolderNode(t *testing.T) {
 	hive, err := ReadHive(dir)
 	require.NoError(t, err)
 	state := t.TempDir()
-	_, node, err := Prepare(dir, state, *hive, &Members{})
+	_, node, err := Prepare(dir, state, hive, &Members{})
 	require.NoError(t, err)
 	holdState(t, state)
 
@@ -307,4 +307,62 @@ func TestPlanOpensAnAppCommandOnTheRunningFolderNode(t *testing.T) {
 	require.Equal(t, clientCommand, plan.Command)
 	require.Equal(t, []string{node, "claude", "--resume"}, plan.Args)
 	require.True(t, plan.Transient)
+}
+
+// runFolder prepares one node start of the folder whose state is at state and
+// returns the relay node name the runtime boots under.
+func runFolder(t *testing.T, state string) string {
+	t.Helper()
+	plan, err := Component().Plan(context.Background(), app.Launch{Command: "bee", State: state, Op: app.OpRun})
+	require.NoError(t, err)
+	require.NotNil(t, plan.Prepare)
+	config, _, err := plan.Prepare(context.Background())
+	require.NoError(t, err)
+	return config.Sub("relay").GetString("node_name", "")
+}
+
+func TestAStandaloneFolderRunsUnderItsOwnStoredIdentity(t *testing.T) {
+	isolatedConfig(t)
+	state := t.TempDir()
+	name := runFolder(t, state)
+	require.True(t, strings.HasPrefix(name, nodePrefix), name)
+	node, _, err := loadNode(state)
+	require.NoError(t, err)
+	require.Equal(t, node.Name, name, "the identity lives in the folder's state")
+	require.Equal(t, name, runFolder(t, state), "every start reuses it")
+	require.NotEqual(t, name, runFolder(t, t.TempDir()), "each folder has its own")
+}
+
+func TestAMovedFolderKeepsItsIdentity(t *testing.T) {
+	isolatedConfig(t)
+	root := t.TempDir()
+	state := filepath.Join(root, "before", ".bee")
+	require.NoError(t, os.MkdirAll(state, 0o700))
+	name := runFolder(t, state)
+	moved := filepath.Join(root, "after")
+	require.NoError(t, os.Rename(filepath.Join(root, "before"), moved))
+	require.Equal(t, name, runFolder(t, filepath.Join(moved, ".bee")))
+}
+
+func TestHiveInitAndJoinKeepTheFolderIdentity(t *testing.T) {
+	dir := isolatedConfig(t)
+	state := t.TempDir()
+	standalone := runFolder(t, state)
+	require.NoError(t, Init(dir))
+	plan, err := Component().Plan(context.Background(), app.Launch{Command: "bee", State: state, Op: app.OpRun})
+	require.NoError(t, err)
+	config, _, err := plan.Prepare(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, standalone, config.Sub("relay").GetString("node_name", ""))
+	require.Equal(t, standalone, config.Sub("cluster").GetString("name", ""), "the hive member is the same node")
+
+	joined, err := ReadHive(dir)
+	require.NoError(t, err)
+	joined.Advertise, joined.Seeds = "127.0.0.1", []string{"127.0.0.1:40009"}
+	require.NoError(t, WriteHive(dir, *joined))
+	plan, err = Component().Plan(context.Background(), app.Launch{Command: "bee", State: state, Op: app.OpRun})
+	require.NoError(t, err)
+	config, _, err = plan.Prepare(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, standalone, config.Sub("cluster").GetString("name", ""), "a joined machine keeps the node")
 }

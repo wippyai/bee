@@ -97,14 +97,14 @@ func TestInviteAndJoinMergeTheHivesOfTwoMachines(t *testing.T) {
 		hive *Hive
 	}{{inviter, left}, {joiner, right}} {
 		for restart := 0; restart < 2; restart++ {
-			config, _, err := Prepare(side.dir, t.TempDir(), *side.hive, &Members{})
+			config, _, err := Prepare(side.dir, t.TempDir(), side.hive, &Members{})
 			require.NoError(t, err)
 			cluster := config.Sub("cluster")
 			require.Equal(t, "0.0.0.0", cluster.GetString("membership.bind_addr", ""))
 			require.Equal(t, side.hive.Advertise, cluster.GetString("membership.advertise_addr", ""))
 		}
 	}
-	_, _, err = Prepare(joiner, t.TempDir(), *right, &Members{})
+	_, _, err = Prepare(joiner, t.TempDir(), right, &Members{})
 	require.NoError(t, err)
 	require.Contains(t, mustSeeds(t, joiner, *right), net.JoinHostPort(left.Advertise, strconv.Itoa(left.Port)))
 
@@ -114,7 +114,7 @@ func TestInviteAndJoinMergeTheHivesOfTwoMachines(t *testing.T) {
 
 func mustSeeds(t *testing.T, dir string, hive Hive) string {
 	t.Helper()
-	config, _, err := Prepare(dir, t.TempDir(), hive, &Members{})
+	config, _, err := Prepare(dir, t.TempDir(), &hive, &Members{})
 	require.NoError(t, err)
 	return config.Sub("cluster").GetString("membership.join_addrs", "")
 }
@@ -195,7 +195,7 @@ func TestEnsureCompletesAnOlderHiveRecord(t *testing.T) {
 func TestNodesListenOnLoopbackUntilTheHiveSpansMachines(t *testing.T) {
 	dir := isolatedConfig(t)
 	local := Hive{Secret: base64.StdEncoding.EncodeToString(make([]byte, 32)), Machine: "m", Port: 31000}
-	config, _, err := Prepare(dir, t.TempDir(), local, &Members{})
+	config, _, err := Prepare(dir, t.TempDir(), &local, &Members{})
 	require.NoError(t, err)
 	cluster := config.Sub("cluster")
 	require.Equal(t, "127.0.0.1", cluster.GetString("membership.bind_addr", ""))
@@ -205,7 +205,7 @@ func TestNodesListenOnLoopbackUntilTheHiveSpansMachines(t *testing.T) {
 	shared := local
 	shared.Advertise = "100.64.0.2"
 	shared.Seeds = []string{"100.64.0.1:31001"}
-	config, _, err = Prepare(dir, t.TempDir(), shared, &Members{})
+	config, _, err = Prepare(dir, t.TempDir(), &shared, &Members{})
 	require.NoError(t, err)
 	cluster = config.Sub("cluster")
 	require.Equal(t, "0.0.0.0", cluster.GetString("membership.bind_addr", ""))
@@ -253,7 +253,7 @@ func TestNodesOfOtherMachinesAreTrustedUnderTheirAdvertisedKeyInASharedHive(t *t
 		{ID: "intruder", Meta: clusterapi.NodeMeta{internode.MetadataPublicKey: advertised}},
 	}})
 	source := func(hive Hive) clusterapi.PeerKeySource {
-		config, _, err := Prepare(dir, t.TempDir(), hive, members)
+		config, _, err := Prepare(dir, t.TempDir(), &hive, members)
 		require.NoError(t, err)
 		raw, ok := config.Sub("cluster").Get("internode.peer_key_source")
 		require.True(t, ok)

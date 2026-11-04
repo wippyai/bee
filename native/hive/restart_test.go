@@ -79,7 +79,7 @@ func TestRemoteNodesAreRememberedAsSeedsForLaterStarts(t *testing.T) {
 	}
 	require.Equal(t, []string{"192.0.2.9:32000"}, remoteAddresses(dir), "only nodes of other machines are remembered")
 
-	config, _, err := Prepare(dir, t.TempDir(), *hive, &Members{})
+	config, _, err := Prepare(dir, t.TempDir(), hive, &Members{})
 	require.NoError(t, err)
 	require.Contains(t, config.Sub("cluster").GetString("membership.join_addrs", ""), "192.0.2.9:32000")
 }

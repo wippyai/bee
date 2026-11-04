@@ -64,6 +64,14 @@ entries:
     path: .imports.seam
   - entry: bee.resources.persist:authority
     path: .imports.seam
+  - entry: bee.threads.sessions.client:sessions
+    path: .imports.seam
+  - entry: bee.gateway.binding:directory
+    path: .imports.seam
+  - entry: bee.gov.binding:publication_service
+    path: .imports.seam
+  - entry: bee.gateway.security:subject_call
+    path: .imports.seam
 - name: demand_state
   kind: library.lua
   source: file://demand_state.lua

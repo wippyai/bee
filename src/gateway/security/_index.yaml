@@ -222,6 +222,7 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     context: bee.gateway.catalog:context
+    seam: bee.process:seam
 - name: access
   kind: library.lua
   source: file://access.lua

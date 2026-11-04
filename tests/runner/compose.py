@@ -177,15 +177,6 @@ def observe_hook_cancellation(src):
     add_modules(src / "threads/hooks/_index.yaml", "supervisor", ["events"])
 
 
-def yield_session_defaults(src):
-    """The Sessions SDK suites select their synthetic contract owners as the defaults."""
-    def yield_defaults(entries):
-        for name in ("owner_binding", "catalog_binding"):
-            for contract in entries[name]["contracts"]:
-                contract["default"] = False
-    update_entries(src / "threads/sessions/binding/_index.yaml", yield_defaults)
-
-
 def managed_gateway(src):
     """Point the gateway listener, its endpoint and its readiness grant at one free loopback port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
@@ -846,7 +837,6 @@ def compose():
     observe_hook_cancellation(src)
     shutil.copytree(TESTS / "fixtures/memory", src / "test_memory")
     shutil.copytree(TESTS / "fixtures/persist/retained", src / "test_retained")
-    yield_session_defaults(src)
     managed_gateway(src)
     runner_fixture_type(src)
     fixture_hub_updates(src)

@@ -111,7 +111,6 @@ entries:
   meta: {type: test_support}
   contracts:
   - contract: bee.threads.sessions:contract
-    default: true
     methods:
       open: bee.tests.threads.sessions:fake_open
       run: bee.tests.threads.sessions:fake_run
@@ -130,7 +129,6 @@ entries:
   meta: {type: test_support}
   contracts:
   - contract: bee.threads.sessions:catalog
-    default: true
     methods:
       list: bee.tests.threads.sessions:fake_catalog
 - name: fake_open

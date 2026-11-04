@@ -269,6 +269,7 @@ entries:
     activation_store: bee.gov.persist:activation_store
     resources: bee.gov.binding:staging_resources
     transaction: bee.persist:transaction
+    seam: bee.process:seam
 - name: activation_uninstall
   kind: library.lua
   source: file://activation_uninstall.lua

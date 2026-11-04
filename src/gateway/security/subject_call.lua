@@ -10,6 +10,7 @@ local contract = require("contract")
 local registry = require("registry")
 local bounds = require("bounds")
 local context = require("context")
+local seam = require("seam")
 local M = {}
 M.REQUEST_POLICY_REF = "bee.gateway.env:approval_request_policy_ref"
 M.CONSUME_POLICY_REF = "bee.gateway.env:approval_consume_policy_ref"
@@ -95,7 +96,7 @@ function M.contract(binding: Binding, policies: {security.Policy}, values: Objec
     if not acted then return nil, M.fail("DENIED", tostring(actor_failure)) end
     local scoped, scope_error = acted:with_scope(security.new_scope(policies))
     if not scoped then return nil, M.fail("DENIED", tostring(scope_error)) end
-    local instance, open_error = scoped:open()
+    local instance, open_error = scoped:open(seam.call("bee.contract.binding", {contract = contract_id}))
     if not instance then return nil, M.fail("UNAVAILABLE", tostring(open_error)) end
     if type(instance) ~= "table" and type(instance) ~= "userdata" then
         return nil, M.fail("UNAVAILABLE", "owner binding is not an object")

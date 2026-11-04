@@ -10,3 +10,4 @@ entries:
     bounds: bee.drivers.values:bounds
     profiles: bee.harness.profiles:protocol
     protocol: bee.threads.sessions.types:protocol
+    seam: bee.process:seam

@@ -605,6 +605,7 @@ entries:
     sessions: bee.gateway.catalog:sessions
     part_model: bee.gateway.binding:model
     part_values: bee.gateway.binding:values
+    seam: bee.process:seam
 - name: calls
   kind: library.lua
   source: file://calls.lua

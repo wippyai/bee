@@ -161,15 +161,13 @@ function M.attach(raw_request: unknown): Reply
     if not workspace then return fail("DENIED", "interactive attach has no workspace", operation_key) end
     local profile_id = request.saved_profile_id == nil and nil or ref(request.saved_profile_id)
     local revision = request.saved_profile_revision == nil and nil or bounds.integer(request.saved_profile_revision)
-    local pinned, refused = admission.resolve(definition, "window", workspace, profile_id, revision, nil, nil, nil, nil, request.overrides)
-    local plan = object(pinned)
+    local plan, refused = admission.resolve(definition, "window", workspace, profile_id, revision, nil, nil, nil, nil, request.overrides)
     if not plan then return unavailable(tostring(refused and refused.error and refused.error.message or "interactive plan is unavailable"), operation_key) end
     if plan.plan_digest ~= request.plan_digest or plan.mode ~= "window" then return fail("CONFLICT", "interactive attach plan changed", operation_key) end
-    local driver = ref(plan.binding_ref)
-    if not driver then return unavailable("interactive plan omitted its driver", operation_key) end
+    local driver = plan.binding_ref
     -- The session records the admission of each attempt it attaches; its
     -- hooks are judged under the attempt's own plan.
-    local admitted = admission.session_admission(assert(pinned))
+    local admitted = admission.session_admission(plan)
     local prior_raw, lookup_error = journal.invoke("operation_lookup", {operation_key = operation_key})
     local prior = object(prior_raw)
     if lookup_error or not prior then return unavailable(lookup_error or "interactive operation lookup unavailable", operation_key) end
@@ -190,7 +188,7 @@ function M.attach(raw_request: unknown): Reply
         local route: Object = {delivery = "hook", origin_request_id = origin, operation_key = operation_key}
         for name, field in pairs(admitted) do route[name] = field end
         created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
-            title = plan.title or definition, route = route})
+            title = plan.title, route = route})
         if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
     end
     local receipt = object(created)

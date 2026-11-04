@@ -69,7 +69,7 @@
   "native": [
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261104161411-e720e56d523f",
+      "version": "v0.0.0-20261104164008-a73f3f56f4a0",
       "package": "github.com/wippyai/bee/native/hive",
       "factory": "Component",
       "private": true,
@@ -77,14 +77,14 @@
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261104161411-e720e56d523f",
+      "version": "v0.0.0-20261104164008-a73f3f56f4a0",
       "package": "github.com/wippyai/bee/native/host",
       "factory": "New",
       "private": true
     },
     {
       "module": "github.com/wippyai/bee/native",
-      "version": "v0.0.0-20261104161411-e720e56d523f",
+      "version": "v0.0.0-20261104164008-a73f3f56f4a0",
       "package": "github.com/wippyai/bee/native/ioevents",
       "factory": "Component",
       "private": true

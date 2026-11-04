@@ -21,6 +21,7 @@ entries:
     demand: bee.process:demand
     demand_owner: bee.process:demand_owner
     route_catalog: bee.hive.service:routing
+    seam: bee.process:seam
 - name: routing
   kind: library.lua
   source: file://routing.lua

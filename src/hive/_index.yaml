@@ -72,6 +72,7 @@ entries:
     test_runs: bee.node.persist:test_runs
     backend: bee.node.binding:tests_backend_library
     grants: bee.gov.types:capability_grants
+    seam: bee.process:seam
 - name: kernel
   kind: registry.entry
   meta:

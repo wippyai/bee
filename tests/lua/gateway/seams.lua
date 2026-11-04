@@ -12,4 +12,8 @@ M["bee.gateway.binding.clock"] = function(): unknown
     assert(type(value.at) == "string", "gateway fixture instant")
     return assert(time.parse("2006-01-02T15:04:05.000Z07:00", value.at)):unix_nano()
 end
+
+M["bee.gateway.service.external.drain_disabled"] = function(): unknown return true end
+M["bee.gateway.service.backlog.disabled"] = function(): unknown return true end
+
 return M

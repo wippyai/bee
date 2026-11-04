@@ -6,6 +6,7 @@ local process = require("process")
 local channel = require("channel")
 local time = require("time")
 local demand = require("demand")
+local seam = require("seam")
 local M = {}
 M.RETRY_FIRST_MS = 1000
 M.RETRY_LAST_MS = 30000
@@ -35,11 +36,19 @@ function M.run(options: Options)
         if not registered then error("register " .. options.name .. ": " .. tostring(register_error)) end
     end
     local demanded = options.demand and assert(process.listen(demand.WAKE, {message = true})) or nil
-    if demanded and options.name then assert(demand.ready(options.name)) end
+    if demanded and options.name then
+        local _, cancelled = seam.hold("bee.process.worker.ready", {name = options.name}, lifecycle)
+        if cancelled then return end
+        assert(demand.ready(options.name))
+    end
     local ticker = options.every and assert(time.ticker(options.every)) or nil
     local generation = 0
     local retry_ms = M.RETRY_FIRST_MS
-    local retrying = not options.pass()
+    local function pass(): boolean
+        if seam.call("bee.process.worker.pass", {name = options.name}) == true then return true end
+        return options.pass()
+    end
+    local retrying = not pass()
     while true do
         if demanded and options.name and generation > 0 and not retrying
             and (not options.active or not options.active()) then
@@ -55,7 +64,7 @@ function M.run(options: Options)
         if selected.channel == lifecycle then
             if selected.value.kind == process.event.CANCEL then break end
             if options.exits and selected.value.kind == process.event.EXIT then
-                retrying = not options.pass()
+                retrying = not pass()
                 retry_ms = retrying and math.min(retry_ms * 2, M.RETRY_LAST_MS) or M.RETRY_FIRST_MS
             end
         else
@@ -73,7 +82,7 @@ function M.run(options: Options)
                     if #value.requests > 0 then goto continue end
                 end
             end
-            retrying = not options.pass()
+            retrying = not pass()
             retry_ms = retrying and math.min(retry_ms * 2, M.RETRY_LAST_MS) or M.RETRY_FIRST_MS
         end
         ::continue::

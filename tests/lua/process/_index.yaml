@@ -65,6 +65,7 @@ entries:
     state: bee.process:demand_state
     bounds: bee.drivers.values:bounds
     clock: bee.drivers.values:clock
+    seam: bee.process:seam
 - name: demand_events
   kind: library.lua
   source: file://demand_events.lua
@@ -185,3 +186,6 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
+  modules: [process]
+  imports:
+    controllers: bee.tests.support:controllers

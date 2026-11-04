@@ -43,3 +43,4 @@ entries:
     demand: bee.process:demand
     resources: bee.approvals.env:resources
     bounds: bee.drivers.values:bounds
+    seam: bee.process:seam

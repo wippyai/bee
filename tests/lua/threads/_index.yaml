@@ -518,10 +518,10 @@ entries:
   kind: function.lua
   source: file://pump_fixture_test.lua
   method: run
-  modules: [registry]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+    seams: bee.tests.threads:seams
 - name: listen_test
   kind: function.lua
   source: file://listen_test.lua

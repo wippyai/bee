@@ -122,6 +122,7 @@ local function run(active: () -> boolean, stopped: channel.Channel<boolean>)
     local function serve()
         local pumping, pumping_error = pump_config.enabled()
         if pumping == nil then error(pumping_error) end
+        if seam.call("bee.threads.service.pump", {enabled = pumping}) == false then pumping = false end
         local pump_executor = funcs.new():with_actor(security.new_actor("bee.threads.pump"))
             :with_scope(assert(security.named_scope("bee.threads.security:pump_scope")))
         local pumping_round: funcs.Future? = nil

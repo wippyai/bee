@@ -764,13 +764,6 @@ entries:
     response: bee.threads.hooks:response
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 
-- name: recovery
-  kind: library.lua
-  source: file://recovery.lua
-  modules: [logger]
-  imports:
-    runtime: bee.tests.threads:recovery_runtime
-    commits: bee.threads.delivery:commits
 - name: recovery_runtime
   kind: library.lua
   source: file://recovery_runtime.lua
@@ -785,20 +778,22 @@ entries:
     suite: bee
   imports:
     test: wippy.test:test
-    recovery: bee.tests.threads:recovery
+    recovery: bee.threads.service:recovery
     runtime: bee.tests.threads:recovery_runtime
 
 - name: recovery_worker
   kind: process.lua
   source: file://recovery_worker.lua
   method: main
-  modules: [process, channel]
+  modules: [process]
   imports:
-    recovery: bee.tests.threads:recovery
+    cancellation: bee.threads.service:cancellation
+    recovery: bee.threads.service:recovery
     runtime: bee.tests.threads:recovery_runtime
 - name: seams
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
+  modules: [events, ctx]
   imports:
     controllers: bee.tests.support:controllers

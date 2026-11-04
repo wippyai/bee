@@ -20,6 +20,12 @@ entries:
   targets:
   - entry: bee.threads.service:threads
     path: .imports.seam
+  - entry: bee.threads.service:pump_config
+    path: .imports.seam
+  - entry: bee.gov.service:recovery
+    path: .imports.seam
+  - entry: bee.threads.hooks:supervisor
+    path: .imports.seam
   - entry: bee.node.service:tests
     path: .imports.seam
   - entry: bee.node.service:catalog

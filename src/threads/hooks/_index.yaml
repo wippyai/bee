@@ -28,6 +28,7 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     capabilities: bee.threads.hooks:capabilities
+    seam: bee.process:seam
 - name: budget
   kind: registry.entry
   meta: {type: bee.session.hook_budget}

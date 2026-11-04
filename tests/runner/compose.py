@@ -168,14 +168,6 @@ def gate_attachment(src):
 ''' + anchor)
 
 
-def observe_hook_cancellation(src):
-    supervisor = src / "threads/hooks/supervisor.lua"
-    replace_once(supervisor, 'local funcs = require("funcs")',
-        'local funcs = require("funcs")\nlocal events = require("events")')
-    replace_once(supervisor, '    pending.future:cancel()',
-        '    pending.future:cancel()\n    events.send("bee.test.hook/" .. pending.id, "cancelled", pending.id, {cancelled = pending.future:is_canceled()})')
-    add_modules(src / "threads/hooks/_index.yaml", "supervisor", ["events"])
-
 
 def fixture_clock(src):
     """The gateway reads the time from a fixture instant a suite may pin."""
@@ -386,25 +378,6 @@ def observe_hive_upgrade(src):
                             '        local observer = process.registry.lookup("bee.test.hive.upgrade_parked", process.registry.LOCAL)',
                             '        if observer then assert(process.send(tostring(observer), "bee.test.hive.upgrade_parked", {})) end']))
 
-
-def compose_thread_recovery():
-    service = (ROOT / "src/threads/service/service.lua").read_text()
-    store = service.split("local function with_store", 1)[1].split("local function retire_aliases", 1)[0]
-    recovery = service.split("local function recover_commits", 1)[1].split("local function forward", 1)[0]
-    (TESTS / "lua/threads/recovery.lua").write_text(
-        '-- SPDX-License-Identifier: MIT\nlocal sql = require("runtime")\nlocal database = sql\nlocal notices = sql\nlocal eventbus = sql\n'
-        'local logger = require("logger")\nlocal commits = require("commits")\n'
-        + "local function with_store" + store + "local function recover_commits" + recovery
-        + "return {recover = recover_commits}\n")
-
-    cancellation = service.split('    local lifecycle = assert(process.events())', 1)[1].split('    local handled, problem = pcall(run, active, stopped)', 1)[0]
-    (TESTS / "lua/threads/recovery_worker.lua").write_text(
-        '-- SPDX-License-Identifier: MIT\nlocal process = require("process")\nlocal channel = require("channel")\n'
-        'local runtime = require("runtime")\nlocal recovery = require("recovery")\n'
-        'local function main(controller: string)\n    local lifecycle = assert(process.events())' + cancellation
-        + '    runtime.reset()\n    runtime.controller = controller\n    recovery.recover(active)\n    lifecycle:close()\n'
-        '    assert(process.send(controller, "bee.test.recovery.done", '
-        '{settled = runtime.settled, announced = runtime.announced, released = runtime.released}))\nend\nreturn {main = main}\n')
 
 
 def hold_hive_backlog(src):
@@ -735,31 +708,6 @@ def observe_sync_idle(src):
         elseif selected.channel == lifecycle then""")
 
 
-def observe_boot_recovery(src):
-    shutil.copy2(TESTS / "lua/gov/recovery_trace.lua", src / "gov/service/recovery_trace.lua")
-    shutil.copy2(TESTS / "lua/gov/recovery_trace_schema.lua", src / "gov/service/recovery_trace_schema.lua")
-    replace_once(src / "gov/service/recovery.lua", 'local logger = require("logger")',
-                 'local trace = require("trace")\nlocal logger = require("logger")')
-    replace_once(src / "gov/service/recovery.lua", "local function main()", "local function main()\n    trace.record()")
-    path = src / "gov/service/_index.yaml"
-    document = yaml.safe_load(path.read_text())
-    next(entry for entry in document["entries"] if entry["name"] == "recovery")["imports"]["trace"] = "bee.gov.service:recovery_trace"
-    document["entries"].append({"name": "recovery_trace", "kind": "library.lua", "source": "file://recovery_trace.lua", "modules": ["sql"], "meta": {"type": "test_support"}})
-    document["entries"].append({"name": "recovery_trace_schema", "kind": "function.lua", "source": "file://recovery_trace_schema.lua", "method": "run",
-                                "imports": {"migration": "wippy.migration:migration"},
-                                "meta": {"type": "migration", "target_db": "bee:db", "timestamp": "2026-10-12T00:00:00Z", "test_support": True}})
-    path.write_text(yaml.safe_dump(document, sort_keys=False))
-
-
-def inject_registry_faults(src):
-    """Fail one named registry read for a caller that opts in through ctx."""
-    pumping = src / "threads/service/pump_config.lua"
-    replace_once(pumping, 'local registry = require("registry")',
-                 'local registry = require("registry")\nlocal ctx = require("ctx")')
-    replace_once(pumping, '    local owners, find_error = registry.find({["meta.type"] = "bee.threads.owner"})',
-                 '''    local owners, find_error = registry.find({["meta.type"] = "bee.threads.owner"})
-    if ctx.get("bee.test.registry.fault") == "bee.threads.owner" then owners, find_error = nil, "registry unavailable" end''')
-    add_modules(src / "threads/service/_index.yaml", "pump_config", ["ctx"])
 
 
 def fixture_hub_updates(src):
@@ -820,10 +768,8 @@ def compose():
     owner_scheduling(src)
     fail_remote_registry_reads(src)
     hold_hive_backlog(src)
-    compose_thread_recovery()
     observe_hive_upgrade(src)
     order_hive_readiness(src)
-    inject_registry_faults(src)
     stop_hive_delivery(src)
     observe_transaction_demand(src)
     hold_access_readiness(src)
@@ -833,7 +779,6 @@ def compose():
     pause_effect_dispatch(src)
     observe_effect_delivery(src)
     observe_sync_idle(src)
-    observe_boot_recovery(src)
     observe_carrier(src)
     hold_attempt_snapshot(src)
     gate_runner(src)
@@ -841,7 +786,6 @@ def compose():
     fixture_clock(src)
     credential_clock(src)
     resource_clock(src)
-    observe_hook_cancellation(src)
     shutil.copytree(TESTS / "fixtures/memory", src / "test_memory")
     shutil.copytree(TESTS / "fixtures/persist/retained", src / "test_retained")
     yield_session_defaults(src)

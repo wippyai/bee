@@ -17,5 +17,3 @@ __pycache__/
 
 /tests/lua/hub/root_pack_data.lua
 
-/tests/lua/threads/recovery.lua
-/tests/lua/threads/recovery_worker.lua

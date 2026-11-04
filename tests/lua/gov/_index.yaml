@@ -1816,3 +1816,10 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
+  modules: [sql]
+- name: recovery_trace_schema
+  kind: function.lua
+  source: file://recovery_trace_schema.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-12T00:00:00Z', test_support: true}
+  imports: {migration: 'wippy.migration:migration'}

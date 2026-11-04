@@ -21,6 +21,7 @@ local output_buffer = require("output_buffer")
 local service = require("service")
 local process_backend = require("process_backend")
 local bounds = require("bounds")
+local seam = require("seam")
 type Stream = "stdout" | "stderr"
 type Chunk = {stream: Stream, data: string?, eof: boolean}
 type Pending = {sequence: integer, stream: Stream, data: string?, eof: boolean, bytes: integer, truncated: boolean?}
@@ -136,6 +137,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         db:release()
         return
     end
+    seam.hold("bee.placement.native.service.runner.claimed", {attempt_id = attempt_id, environment = request.environment})
     local starting = store.transition(db, attempt_id, {expected_execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "runner " .. process.pid()}})
     if not starting.ok then return refuse(starting.message or "attempt is not starting") end
     local initial_carrier_loss: string? = nil
@@ -196,6 +198,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local stderr = not backend and proc:stderr_stream() or nil
     local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "executor process start"}})
     if not creating.ok then executor:release(); return refuse(creating.message or "attempt stopped before start") end
+    seam.hold("bee.placement.native.service.runner.starting", {attempt_id = attempt_id, environment = request.environment, recipient = recipient})
     local started, start_error = proc:start()
     assert(evidence(db, attempt_id, "child.start_returned", started and "executor start returned success" or tostring(start_error)))
     if not started then
@@ -350,11 +353,15 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     -- drains for a bounded time, then the streams are closed and the drain
     -- is recorded. Time spent with pipe reads paused by spool backpressure
     -- does not consume this drain budget; retention still bounds that wait.
+    local drain_point = {attempt_id = attempt_id, environment = request.environment}
+    local function drain_now(): time.Time
+        return seam.now("bee.placement.native.service.runner.drain_clock", drain_point)
+    end
     local drain_timer = time.after("1ms")
     local drain_armed = false
     local drain_expired = false
     local drain_remaining = request.timeouts.drain_ms
-    local drain_started = time.now()
+    local drain_started = drain_now()
     -- A lost carrier's binding outlives it only for the takeover grace: a
     -- replacement that attaches under a newer generation inherits it, and
     -- nothing else keeps it alive.
@@ -432,16 +439,21 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     while true do
         local reads_paused = spooled >= protocol.MAX_SPOOL_BYTES
+        if reads_paused then
+            seam.call("bee.placement.native.service.runner.spool_full", {attempt_id = attempt_id, environment = request.environment, spooled = spooled})
+        end
         if retain_armed and eof_seen < 2 and not reads_paused then retain_armed = false end
         if drain_armed and reads_paused then
-            drain_remaining = math.floor(math.max(0, drain_remaining - time.now():sub(drain_started):milliseconds()))
+            drain_remaining = math.floor(math.max(0, drain_remaining - drain_now():sub(drain_started):milliseconds()))
             drain_armed = false
         elseif exited and eof_seen < 2 and not reads_paused and not drain_armed and not streams_closed then
-            drain_started = time.now()
-            drain_timer = time.after(tostring(math.max(1, drain_remaining)) .. "ms")
+            drain_started = drain_now()
+            drain_timer = seam.after("bee.placement.native.service.runner.drain_timer", tostring(math.max(1, drain_remaining)) .. "ms", drain_point)
             drain_armed = true
             drain_expired = false
         end
+        seam.call("bee.placement.native.service.runner.drain_state", {attempt_id = attempt_id, environment = request.environment, exited = exited,
+            reads_paused = reads_paused, remaining = drain_remaining, armed = drain_armed, spooled = spooled})
         local cases = {controls:case_receive(), inputs:case_receive(), acks:case_receive(), events:case_receive(), exits:case_receive()}
         if spooled < protocol.MAX_SPOOL_BYTES and eof_seen < 2 then cases[#cases + 1] = chunks:case_receive() end
         if coalesce_armed then cases[#cases + 1] = coalesce_timer:case_receive() end
@@ -450,7 +462,9 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         if drain_armed and not drain_expired then cases[#cases + 1] = drain_timer:case_receive() end
         if drain_armed and drain_expired then cases.default = true end
         if takeover_armed then cases[#cases + 1] = takeover_timer:case_receive() end
-        local selected = channel.select(cases)
+        local drain_only = drain_armed and not drain_expired
+            and seam.call("bee.placement.native.service.runner.drain_only", {environment = request.environment}) == true
+        local selected = channel.select(drain_only and {drain_timer:case_receive()} or cases)
         if drain_armed and selected.default then selected = {ok = true, channel = drain_timer} end
         if not selected.ok then break end
         if drain_armed and selected.channel == drain_timer then
@@ -527,6 +541,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                     local next_generation = math.floor(data.generation)
                     local installed = false
                     local refusal_reason: string? = nil
+                    seam.hold("bee.placement.native.service.runner.attach_installing", {environment = request.environment})
                     if next_generation > generation then
                         local same_recipient = recipient == data.recipient
                         local monitored, monitor_error = true, nil
@@ -561,6 +576,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                     end
                     -- The fence answer goes to the service that asked: from here on
                     -- only the named generation writes or acknowledges.
+                    seam.hold("bee.placement.native.service.runner.attach_installed", {environment = request.environment})
                     process.send(tostring(message:from()), protocol.TOPIC_FENCED, {attempt_id = attempt_id, generation = next_generation,
                         fenced = installed, refused = not installed, reason = refusal_reason})
                 elseif data.command == "write_status" and type(data.write_id) == "string" then
@@ -676,7 +692,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         end
         if exited and eof_seen >= 2 and unacknowledged() == 0 then break end
         if exited and (eof_seen >= 2 or spooled >= protocol.MAX_SPOOL_BYTES) and not retain_armed then
-            retain_timer = time.after(tostring(request.timeouts.retain_ms) .. "ms")
+            retain_timer = seam.after("bee.placement.native.service.runner.retention", tostring(request.timeouts.retain_ms) .. "ms", {attempt_id = attempt_id, environment = request.environment})
             retain_armed = true
         end
     end

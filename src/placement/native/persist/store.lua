@@ -13,6 +13,7 @@ local transitions = require("transitions")
 local request_protocol = require("request_protocol")
 local configuration = require("configuration")
 local bounds = require("bounds")
+local seam = require("seam")
 local M = {}
 M.MAX_EVIDENCE_PAGE = 64
 M.MAX_DETAIL_BYTES = 2048
@@ -124,6 +125,7 @@ function M.attempt(db: sql.DB | sql.Transaction, attempt_id: string): (types.Att
     if err or not rows then return nil, "read attempt: " .. tostring(err or "query returned no rows") end
     if #rows == 0 then return nil, nil end
     local row = rows[1]
+    seam.hold("bee.placement.native.persist.store.attempt_read", {attempt_id = attempt_id})
     local attempt, project_error = project(row)
     if not attempt then return nil, project_error end
     if row.observed_start_failure ~= nil then
@@ -403,6 +405,8 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
         rollback(tx)
         return {ok = false, code = "STORAGE", message = "commit transition"}
     end
+    seam.call("bee.placement.native.persist.store.transition_committed", {attempt_id = attempt_id, evidence = update.evidence,
+        transition = function(next: Update): Result return M.transition(db, attempt_id, next) end})
     return {ok = true, attempt = attempt}
 end
 -- Records one preparer's plan whole in its own table and the fact of the plan

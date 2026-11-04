@@ -19,6 +19,7 @@ local lifecycle = require("lifecycle")
 local service_lifecycle = require("service_lifecycle")
 local operations = require("operations")
 local review = require("review")
+local seam = require("seam")
 local M = {}
 type Result = hub_result.Result
 type ExpectedModule = {component: string, version: string, change: string}
@@ -34,6 +35,8 @@ local function digest(raw: unknown): string?
 end
 
 local function captured_state(): (unknown?, integer?, string?)
+    local fixed = bounds.object(seam.call("bee.hub.binding.publication.captured"))
+    if fixed then return fixed.state, bounds.count(fixed.revision), nil end
     local snapshot, snapshot_error = registry.snapshot()
     if not snapshot then return nil, nil, tostring(snapshot_error) end
     local state, state_error = snapshot:state()

@@ -284,66 +284,6 @@ local function overlays()''')
     replace_once(source, 'funcs.new():call(OVERLAYS, {operation = "list"})', 'funcs.new():call(listing(), {operation = "list"})')
 
 
-def runner_fixture_type(src):
-    """The runner finds the fixture applications' tests by their own type, so the suites' unrestricted runner leaves them alone."""
-    source = src / "hub/binding/artifact_source.lua"
-    replace_once(source, 'local M = {}', 'local fixture_catalog = require("fixture_catalog")\nlocal M = {}')
-    replace_once(source, '    return {versions = catalog.available,', '    if target == "bee/progress" then return fixture_catalog.source() end\n    return {versions = catalog.available,')
-    index = src / "hub/binding/_index.yaml"
-    text = index.read_text()
-    anchor = text.index("- name: artifact_source\n")
-    index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_catalog: bee.tests.gov:hub_fixture_catalog\n", 1))
-    inspect = src / "hub/binding/inspect.lua"
-    replace_once(inspect, 'local M = {}', 'local fixture_catalog = require("fixture_catalog")\nlocal M = {}')
-    replace_once(inspect, '    if not request then return nil, request_error end', '''    if not request then return nil, request_error end
-    if request.component == "bee/progress" then
-        local selected, problem = fixture_catalog.source().artifact(request.component, request.version)
-        if not selected then return nil, problem end
-        local configured, invalid = requirements.read(selected.entries, request.parameters)
-        if not configured then return nil, invalid end
-        local page = complete and {entries = selected.entries, next_offset = nil, eof = true}
-            or inspection.page(selected.entries, request.entry_offset, request.entry_limit, request.include_data)
-        return {component = selected.component, version = selected.version, digest = selected.digest,
-            entries = page.entries, requirements = configured, metadata = selected.metadata,
-            next_offset = page.next_offset, eof = page.eof}, nil
-    end''')
-    text = index.read_text()
-    anchor = text.index("- name: inspect\n")
-    index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_catalog: bee.tests.gov:hub_fixture_catalog\n", 1))
-    catalog = src / "hub/binding/catalog.lua"
-    transport = src / "hub/binding/catalog_transport.lua"
-    transport.write_text(catalog.read_text().replace('local hub = require("hub")', 'local hub = require("fixture_hub")'))
-    with index.open("a") as stream:
-        stream.write('''
-- name: catalog_transport
-  kind: library.lua
-  source: file://catalog_transport.lua
-  modules: [registry, store]
-  imports:
-    fixture_hub: bee.tests.hub:catalog_fixture
-    bounds: bee.drivers.values:bounds
-    limits: bee.hub.package:limits
-''')
-    replace_once(catalog, 'local hub = require("hub")', 'local hub = require("fixture_hub")')
-    text = index.read_text()
-    anchor = text.index("- name: catalog\n")
-    index.write_text(text[:anchor] + text[anchor:].replace("  imports:\n", "  imports:\n    fixture_hub: bee.tests.hub:catalog_fixture\n", 1))
-    replace_once(catalog, '    local response, response_error', '''    if request.query == "fixture-unavailable" then return nil, "fixture catalog unavailable" end
-    if request.query == "fixture-long-failure" then return nil, string.rep("dependency unavailable; ", 300) .. "\\nreason-end" end
-    if request.query == nil or request.query == "progress" then
-        return {items = {{component = "bee/progress", title = "Progress", description = "Task tracking",
-            latest_version = "1.0.0", application = true}}, total = 1, page = request.page, page_size = M.PAGE_SIZE}, nil
-    end
-    local response, response_error''')
-    replace_once(catalog, '    local module, module_error = hub.modules.get(request.component, {timeout = M.TIMEOUT_SECONDS})', '''    if request.component == "bee/progress" then
-        return {component = request.component, latest_version = "1.0.0", title = "Progress", description = "Task tracking",
-            readme = "", readme_error = "fixture README unavailable", versions = {{version = "1.0.0", yanked = false},
-                {version = "9.0.0", yanked = false}, {version = "2.0.0", yanked = false}}, total_versions = 3, page = request.page, page_size = M.MAX_VERSIONS}, nil
-    end
-    local module, module_error = hub.modules.get(request.component, {timeout = M.TIMEOUT_SECONDS})''')
-    replace_once(src / "node/application_tests.lua", 'meta.type == "test"', 'meta.type == "app_test"')
-
-
 def host_environment():
     """The unit host facts, with the Claude fixture as the installed claude."""
     document = yaml.safe_load((TESTS / "fixtures/harness/host.yaml").read_text())
@@ -623,23 +563,6 @@ def inject_registry_faults(src):
     add_modules(src / "threads/service/_index.yaml", "pump_config", ["ctx"])
 
 
-def fixture_hub_updates(src):
-    index = src / "hub/binding/_index.yaml"
-    document = yaml.safe_load(index.read_text())
-    for name in ("updates", "publication", "inspect"):
-        path = src / f"hub/binding/{name}.lua"
-        replace_once(path, 'local M = {}', 'local update_fixture = require("update_fixture")\nlocal M = {}')
-        if name == "inspect":
-            replace_once(path, 'hub.versions.open(request.component, request.version, {timeout = 30})',
-                         'update_fixture.versions.open(request.component, request.version, {timeout = 30})')
-        else:
-            text = path.read_text().replace("registry.snapshot()", "update_fixture.snapshot()", 1)
-            path.write_text(text)
-        entry = next(entry for entry in document["entries"] if entry["name"] == name)
-        entry["imports"]["update_fixture"] = "bee.tests.hub:update_fixture"
-    index.write_text(yaml.safe_dump(document, sort_keys=False))
-
-
 def settings_area_fixture(src):
     """Offer an adversarial catalog area through the real Settings form."""
     model = src / "apps/settings/app/edit_mode.lua"
@@ -701,9 +624,7 @@ def compose():
     shutil.copytree(TESTS / "fixtures/persist/retained", src / "test_retained")
     yield_session_defaults(src)
     managed_gateway(src)
-    runner_fixture_type(src)
     malformed_overlay_listing(src)
-    fixture_hub_updates(src)
     settings_area_fixture(src)
     hold_inbox_review(src)
     shutil.copy2(ROOT / "src/placement/native/service/materialization.lua",

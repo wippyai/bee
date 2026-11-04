@@ -1,5 +1,6 @@
 -- MIT. Capabilities for the gateway authority.
 local time = require("time")
+local seam = require("seam")
 local bounds = require("bounds")
 local configuration = require("configuration")
 local surface = require("surface")
@@ -38,7 +39,7 @@ local function own_binding(value: unknown): (Binding?, Reply?)
     if binding.subject ~= caller then return nil, fail("DENIED", "only the bound subject acts for its own attempt") end
     if binding.revoked then return nil, fail("DENIED", "binding is revoked") end
     local expires = time.parse(FORMAT, binding.expires_at)
-    if not expires or not time.now():before(expires) then return nil, fail("DENIED", "binding has expired") end
+    if not expires or not seam.now("bee.gateway.binding.clock"):before(expires) then return nil, fail("DENIED", "binding has expired") end
     return binding, nil
 end
 local function elevation_policy(binding: Binding): (string?, Reply?)

@@ -17,7 +17,7 @@ local MANAGER, USER, OTHER, PLACEMENT = "bee.test.manager", "bee.test.user", "be
 local counter = 0
 type Advance = (integer) -> ()
 local function with_clock(body: (Advance) -> ())
-    local instant = assert(registry.get("bee.resources:fixture_instant"))
+    local instant = assert(registry.get("bee.tests.resources:fixture_instant"))
     local original = instant.data
     local milliseconds = math.floor(time.now():unix_nano() / 1000000)
     local function advance(duration: integer)

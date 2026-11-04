@@ -26,6 +26,44 @@ entries:
     path: .imports.seam
   - entry: bee.node.binding:tests_call
     path: .imports.seam
+  - entry: bee.gateway.binding:values
+    path: .imports.seam
+  - entry: bee.gateway.binding:listener
+    path: .imports.seam
+  - entry: bee.gateway.binding:capabilities
+    path: .imports.seam
+  - entry: bee.gateway.binding:credentials
+    path: .imports.seam
+  - entry: bee.credentials.binding:define
+    path: .imports.seam
+  - entry: bee.credentials.binding:set_value
+    path: .imports.seam
+  - entry: bee.credentials.binding:issue_projection
+    path: .imports.seam
+  - entry: bee.credentials.binding:check
+    path: .imports.seam
+  - entry: bee.credentials.binding:availability
+    path: .imports.seam
+  - entry: bee.credentials.binding:materialize
+    path: .imports.seam
+  - entry: bee.credentials.binding:write_back
+    path: .imports.seam
+  - entry: bee.credentials.binding:renew_attempt
+    path: .imports.seam
+  - entry: bee.credentials.binding:revoke
+    path: .imports.seam
+  - entry: bee.credentials.binding:revoke_all
+    path: .imports.seam
+  - entry: bee.credentials.binding:list
+    path: .imports.seam
+  - entry: bee.credentials.binding:capabilities
+    path: .imports.seam
+  - entry: bee.credentials.binding:configuration_setup
+    path: .imports.seam
+  - entry: bee.credentials.binding:configuration_effects
+    path: .imports.seam
+  - entry: bee.resources.persist:authority
+    path: .imports.seam
 - name: demand_state
   kind: library.lua
   source: file://demand_state.lua

@@ -1,6 +1,7 @@
 -- MIT. Listener for the gateway authority.
 local sql = require("sql")
 local time = require("time")
+local seam = require("seam")
 local json = require("json")
 local security = require("security")
 local system = require("system")
@@ -126,7 +127,7 @@ function M.valid(binding: Binding, generation: Generation): (boolean, string)
     if binding.revoked then return false, "binding is revoked" end
     if binding.epoch ~= generation.epoch then return false, "binding belongs to an earlier listener epoch" end
     local expires = time.parse(FORMAT, binding.expires_at)
-    if not expires or not time.now():before(expires) then return false, "binding has expired" end
+    if not expires or not seam.now("bee.gateway.binding.clock"):before(expires) then return false, "binding has expired" end
     return true, ""
 end
 -- open: the managed host brings the listener up, advances the epoch and
@@ -207,7 +208,7 @@ function M.draining(): (Drain?, Reply?)
     if not deadline_text then return nil, fail("STORAGE", "drain deadline is absent or corrupt") end
     local deadline, parse_error = time.parse(FORMAT, deadline_text)
     if parse_error or not deadline then return nil, fail("STORAGE", "drain deadline is corrupt") end
-    local past = not time.now():before(deadline)
+    local past = not seam.now("bee.gateway.binding.clock"):before(deadline)
     return {draining = true, past_deadline = past}, nil
 end
 -- The readiness proof: an HMAC over the generation and the caller's nonce

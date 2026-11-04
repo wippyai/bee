@@ -177,70 +177,6 @@ def observe_hook_cancellation(src):
     add_modules(src / "threads/hooks/_index.yaml", "supervisor", ["events"])
 
 
-def fixture_clock(src):
-    """The gateway reads the time from a fixture instant a suite may pin."""
-    shutil.copytree(TESTS / "fixtures/gateway_clock", src / "gateway_clock")
-    for name in ("values", "listener", "capabilities", "credentials"):
-        gateway = src / "gateway/binding" / (name + ".lua")
-        if "time.now()" not in gateway.read_text():
-            continue
-        replace_once(gateway, 'local time = require("time")',
-                     'local time = require("time")\nlocal fixture_clock = require("fixture_clock")')
-        gateway.write_text(gateway.read_text().replace("time.now()", "fixture_clock.now()"))
-        update_entries(src / "gateway/binding/_index.yaml",
-                       lambda entries: entries[name]["imports"].update(
-                           {"fixture_clock": "bee.gateway:fixture_clock"}))
-
-    hooks = src / "threads/hooks/supervisor.lua"
-    text = hooks.read_text()
-    if "time.now():unix_nano()" in text:
-        hooks.write_text(text.replace('local time = require("time")',
-            'local time = require("time")\nlocal fixture_clock = require("fixture_clock")')
-            .replace("time.now():unix_nano()", "fixture_clock.wall_nanoseconds()"))
-        update_entries(src / "threads/hooks/_index.yaml",
-            lambda entries: entries["supervisor"].setdefault("imports", {}).update(
-                {"fixture_clock": "bee.gateway:fixture_clock"}))
-
-    def read_instant(entries):
-        policy = entries["store_policy"]["policy"]
-        policy["actions"].append("registry.get")
-        policy["resources"].append("bee.gateway:fixture_instant")
-    update_entries(src / "gateway/security/_index.yaml", read_instant)
-
-
-def credential_clock(src):
-    """Credential lease tests select an instant in their function context."""
-    broker = src / "credentials/binding/broker.lua"
-    broker.write_text(broker.read_text().replace('clock.milliseconds()', 'milliseconds()'))
-    replace_once(broker, 'local clock = require("clock")', '''local clock = require("clock")
-local ctx = require("ctx")
-local function milliseconds(): integer
-    local instant = ctx.get("bee.test.credentials.milliseconds")
-    if instant == nil then return clock.milliseconds() end
-    assert(type(instant) == "number" and math.tointeger(instant), "credential fixture instant")
-    return math.floor(instant)
-end''')
-    def imports(entries):
-        for entry in entries.values():
-            if entry.get("source") == "file://broker.lua":
-                modules = entry.setdefault("modules", [])
-                if "ctx" not in modules:
-                    modules.append("ctx")
-    update_entries(src / "credentials/binding/_index.yaml", imports)
-
-
-def resource_clock(src):
-    """Resource callers and background supervision read the same fixture instant."""
-    shutil.copytree(TESTS / "fixtures/resource_clock", src / "resource_clock")
-    authority = src / "resources/persist/authority.lua"
-    replace_once(authority, 'local clock = require("clock")',
-                 'local clock = require("clock")\nlocal fixture_clock = require("fixture_clock")')
-    authority.write_text(authority.read_text().replace('clock.milliseconds()', 'fixture_clock.milliseconds()'))
-    def imports(entries):
-        entries["authority"]["imports"]["fixture_clock"] = "bee.resources:fixture_clock"
-    update_entries(src / "resources/persist/_index.yaml", imports)
-
-
 def yield_session_defaults(src):
     """The Sessions SDK suites select their synthetic contract owners as the defaults."""
     def yield_defaults(entries):
@@ -907,9 +843,6 @@ def compose():
     hold_attempt_snapshot(src)
     gate_runner(src)
     gate_attachment(src)
-    fixture_clock(src)
-    credential_clock(src)
-    resource_clock(src)
     observe_hook_cancellation(src)
     shutil.copytree(TESTS / "fixtures/memory", src / "test_memory")
     shutil.copytree(TESTS / "fixtures/persist/retained", src / "test_retained")

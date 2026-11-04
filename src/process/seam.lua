@@ -5,8 +5,8 @@
 -- A component imports `seam` and calls it at the point by name. The
 -- bee.process:seams requirement links every such import; its default is this
 -- library, which passes straight through: call returns nil, hold returns at
--- once, after is time.after and now is time.now. A test composition binds the
--- requirement to its own library with the same functions.
+-- once, after is time.after and the clock reads the current instant. A test composition
+-- binds the requirement to its own library with the same functions.
 local time = require("time")
 local channel = require("channel")
 

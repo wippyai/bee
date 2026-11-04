@@ -70,3 +70,8 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
+  modules: [registry]
+- name: fixture_instant
+  kind: registry.entry
+  meta: {type: test_support, comment: The instant the resource clock seam reads; empty data passes the real clock}
+  data: {}

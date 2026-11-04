@@ -8,6 +8,10 @@ local fs = require("fs")
 local json = require("json")
 local bounds = require("bounds")
 local clock = require("clock")
+local seam = require("seam")
+local function milliseconds(): integer
+    return math.floor(seam.now("bee.credentials.binding.clock"):unix_nano() / 1000000)
+end
 local canonical = require("canonical")
 local credential_protocol = require("credential_protocol")
 local store = require("store")
@@ -185,7 +189,7 @@ function M.define(value: unknown): credential_protocol.Reply
         end
         local definition_id, id_error = uuid.v7()
         if id_error or not definition_id then return transaction.failure("STORAGE", "definition id") end
-        local at = clock.stamp(clock.milliseconds())
+        local at = clock.stamp(milliseconds())
         local save_error = store.save_definition(tx, {workspace_id = workspace_id, name = name,
             definition_id = definition_id, revision = current_revision + 1, provider = provider,
             source_kind = source_kind, source_ref = source_ref, projection_kind = projection_kind,
@@ -338,7 +342,7 @@ function M.issue_projection(value: unknown): credential_protocol.Reply
         db:release()
         return fail("STORAGE", "projection id")
     end
-    local created = clock.milliseconds()
+    local created = milliseconds()
     local insert_error = store.insert_projection(db, {projection_id = projection_id,
         workspace_id = request.workspace_id, name = request.name, definition_id = definition.definition_id,
         definition_revision = definition.revision, issuer_owner = owner_node, subject = subject,
@@ -362,7 +366,7 @@ end
 local function binding_holds(admitted: sources.SourceSet, projection: Row, subject: string, audience: string, attempt_id: string,
     epoch: integer, definition: Row?): credential_protocol.Reply?
     if projection.revoked_at ~= nil then return fail("REVOKED", "projection was revoked at " .. tostring(projection.revoked_at)) end
-    if tostring(projection.expires_at) <= clock.stamp(clock.milliseconds()) then return fail("EXPIRED", "projection expired at " .. tostring(projection.expires_at)) end
+    if tostring(projection.expires_at) <= clock.stamp(milliseconds()) then return fail("EXPIRED", "projection expired at " .. tostring(projection.expires_at)) end
     if projection.subject ~= subject or projection.audience ~= audience then return fail("DENIED", "projection binds another subject or audience") end
     if projection.attempt_id ~= attempt_id then return fail("DENIED", "projection is scoped to another attempt") end
     local workspace_id = text(projection.workspace_id) or ""
@@ -523,7 +527,7 @@ function M.renew_attempt(value: unknown): credential_protocol.Reply
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
     if not db then return open_failure end
-    local now = clock.milliseconds()
+    local now = milliseconds()
     local rows, read_error = store.attempt_leases(db, attempt_id, subject, audience, clock.stamp(now))
     if not rows then db:release(); return fail("STORAGE", read_error or "read attempt projections") end
     local renewed = 0
@@ -591,7 +595,7 @@ function M.materialize(value: unknown): credential_protocol.Reply
             return transaction.failure("CONFLICT", "generation key " .. generation_key .. " was already used; a lost reply is not repaired by a second read")
         end
         local generation = current_generation + 1
-        local reservation_error = store.reserve_generation(tx, projection_id, generation_key, generation, materializer, clock.stamp(clock.milliseconds()))
+        local reservation_error = store.reserve_generation(tx, projection_id, generation_key, generation, materializer, clock.stamp(milliseconds()))
         if reservation_error then return transaction.failure("STORAGE", reservation_error) end
         return transaction.success({projection = projection, definition = definition, generation = generation}, false)
     end)
@@ -857,7 +861,7 @@ function M.revoke(value: unknown): credential_protocol.Reply
         return fail("DENIED", "only the subject or a workspace manager revokes a projection")
     end
     if projection.revoked_at == nil then
-        local update_error = store.revoke(db, projection_id, clock.stamp(clock.milliseconds()))
+        local update_error = store.revoke(db, projection_id, clock.stamp(milliseconds()))
         if update_error then
             db:release()
             return fail("STORAGE", "revoke projection")
@@ -903,7 +907,7 @@ function M.list(value: unknown): credential_protocol.Reply
     local db, open_failure = open()
     if not db then return open_failure end
     local definitions, definitions_error = store.definitions(db, workspace_id, M.MAX_LIST)
-    local projections, projections_error = store.active_projections(db, workspace_id, clock.stamp(clock.milliseconds()), M.MAX_LIST)
+    local projections, projections_error = store.active_projections(db, workspace_id, clock.stamp(milliseconds()), M.MAX_LIST)
     db:release()
     if definitions_error or not definitions or projections_error or not projections then return fail("STORAGE", "read workspace credentials") end
     local definition_views: {{[string]: unknown}} = {}

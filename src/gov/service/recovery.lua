@@ -3,8 +3,10 @@
 -- governance refuses leaves that overlay out and is reported; the node boots.
 local logger = require("logger")
 local service = require("service")
+local seam = require("seam")
 
 local function main()
+    seam.call("bee.gov.service.started")
     local recovered, recovery_error, refused = service.recover_all()
     if not recovered then error("recover destination applications: " .. tostring(recovery_error)) end
     for _, reason in ipairs(refused or {}) do

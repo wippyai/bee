@@ -36,6 +36,8 @@ local outbox = require("outbox")
 local worker = require("worker")
 local alias_retirements = require("alias_retirements")
 local seam = require("seam")
+local recovery = require("recovery")
+local cancellation = require("cancellation")
 
 local CHANGES = "bee:changes"
 local NAME = "bee.threads"
@@ -55,14 +57,7 @@ local function changes()
 end
 
 local function with_store(action: (sql.DB) -> ())
-    local db, err = database.open()
-    if not db then
-        logger:warn("Threads store unavailable", {error = err})
-        return
-    end
-    local handled, problem = pcall(action, db)
-    db:release()
-    if not handled then error(problem) end
+    recovery.with_store(function(): (any, string?) return database.open() end, action)
 end
 
 local function retire_aliases()
@@ -79,35 +74,14 @@ local function settle(thread_id: string?)
     end)
 end
 
--- CDC is a bounded live feed. Reopening it precedes this durable scan so
--- commits during the scan remain observable. Each captured head is announced
--- only after its notices settle, including records lost with an old stream.
-local function recover_commits(active: () -> boolean): boolean
-    if not active() then return false end
-    with_store(function(db: sql.DB)
-        local cursor = ""
-        while active() do
-            local heads, read_error = db:query([[SELECT thread_id, head_sequence FROM bee_thread_heads
-                WHERE thread_id > ? ORDER BY thread_id LIMIT 128]], {cursor})
-            if not active() then return end
-            if not heads then error("read committed thread heads: " .. tostring(read_error)) end
-            for _, head in ipairs(heads) do
-                if not active() then return end
-                local thread_id = tostring(head.thread_id)
-                local problem = notices.fire(db, thread_id)
-                if not active() then return end
-                if problem then error("settle recovered thread commits: " .. problem) end
-                local sequence = assert(tonumber(head.head_sequence))
-                if sequence > 0 then
-                    assert(eventbus.send(commits.system(thread_id), commits.KIND, thread_id, {sequence = sequence}))
-                end
-                cursor = thread_id
-            end
-            if #heads < 128 then return end
-        end
-    end)
-    return active()
-end
+local store = {
+    open = function(): (any, string?) return database.open() end,
+    fire = function(db: any, thread_id: string): string? return notices.fire(db, thread_id) end,
+    announce = function(thread_id: string, sequence: number): nil
+        assert(eventbus.send(commits.system(thread_id), commits.KIND, thread_id, {sequence = sequence}))
+        return nil
+    end,
+}
 
 local function forward(request: protocol.Forwarded, node: string): protocol.Reply
     if not PEER_OPERATIONS[request.op] then return protocol.fail("unknown threads operation " .. request.op) end
@@ -166,7 +140,7 @@ local function run(active: () -> boolean, stopped: channel.Channel<boolean>)
         end
         schedule_pump()
         local inflight = 0
-        if not recover_commits(active) then return end
+        if not recovery.recover(active, store) then return end
         retire_aliases()
         local announced, announce_error = protocol.ready(NAME)
         if not announced then logger:warn("Hive supervisor not told the threads service is ready", {error = announce_error}) end
@@ -221,7 +195,7 @@ local function run(active: () -> boolean, stopped: channel.Channel<boolean>)
                     seam.hold("bee.threads.service.capture_closed")
                     capture = changes()
                     committed = capture:channel()
-                    if not recover_commits(active) then return end
+                    if not recovery.recover(active, store) then return end
                     retire_aliases()
                 else
                     if selected.value.table == "bee_thread_app_alias_retirements" then retire_aliases() end
@@ -242,19 +216,7 @@ end
 local function main()
     if env.get("bee:role") == "client" then return idle() end
     local lifecycle = assert(process.events())
-    local stopped: channel.Channel<boolean> = channel.new(1)
-    local cancelled = false
-    local function active(): boolean return not cancelled end
-    coroutine.spawn(function()
-        while true do
-            local selected = channel.select({lifecycle:case_receive()})
-            if not selected.ok or selected.value.kind == process.event.CANCEL then
-                cancelled = true
-                stopped:send(true)
-                return
-            end
-        end
-    end)
+    local active, stopped = cancellation.follow(lifecycle)
     local handled, problem = pcall(run, active, stopped)
     lifecycle:close()
     if not handled then error(problem) end

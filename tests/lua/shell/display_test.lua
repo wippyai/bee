@@ -733,7 +733,22 @@ local function define_recovery_tests()
                     expect(view, "probe attached", "label ", true)
                     assert(process.registry.register("bee.test.retired." .. op))
                     if op == "close" then key(view, "w", {ctrl = true})
-                    else assert(process.send(pid, "bee.test.retired.move", {id = id, desktop = desktop})) end
+                    else
+                        local created = assert(client.call(node, "desktop_create", {}))
+                        local destination = ""
+                        for _, item in ipairs(node_state().desktops) do if item.id == created.desktop then destination = item.title end end
+                        assert(destination ~= "")
+                        local x, y = cell(view, "label ")
+                        assert(view:send({type = "mouse", action = "press", button = "right", x = x, y = y, shift = true}))
+                        expect(view, "the window menu opens", "Move to desktop", true)
+                        local menu_x, menu_y = cell(view, "Move to desktop")
+                        assert(view:send({type = "mouse", action = "press", button = "left", x = menu_x, y = menu_y}))
+                        assert(view:send({type = "mouse", action = "release", button = "left", x = menu_x, y = menu_y}))
+                        expect(view, "the destinations open", destination, true)
+                        local target_x, target_y = cell(view, destination)
+                        assert(view:send({type = "mouse", action = "press", button = "left", x = target_x, y = target_y}))
+                        assert(view:send({type = "mouse", action = "release", button = "left", x = target_x, y = target_y}))
+                    end
                 end
                 local request = assert((held:receive()))
                 test.eq(tostring(request:from()), pid)
@@ -746,7 +761,7 @@ local function define_recovery_tests()
                 test.eq(tostring(assert((observed:receive())):from()), pid)
                 assert(process.registry.register("bee.test.retired.applied"))
                 assert(process.send(pid, "bee.test.retired.release", {}))
-                local result = assert(bounds.object(assert((applied:receive())):payload():data()))
+                assert((applied:receive()))
                 process.registry.unregister("bee.test.retired." .. op)
                 process.registry.unregister("bee.test.retired.drop")
                 process.registry.unregister("bee.test.retired.applied")
@@ -754,10 +769,10 @@ local function define_recovery_tests()
                 process.unlisten(observed)
                 process.unlisten(held); process.unlisten(applied); process.unlisten(closed)
                 assert(client.call(node, "leave", {}))
-                test.eq(result.status, "")
-                local listed = assert(bounds.object(result.running))
-                for _, instance in pairs(listed) do test.neq(assert(bounds.object(instance)).id, id) end
-                test.is_false(screen(view):find("label ", 1, true) ~= nil)
+                expect(view, "the retired app is gone", "label ", false)
+                for _, problem in ipairs({"Cannot show this app.", "Cannot close this app.", "Cannot move this app."}) do
+                    test.is_false(screen(view):find(problem, 1, true) ~= nil)
+                end
                 exits(lifecycle, {pid})
             end)
         end

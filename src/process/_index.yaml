@@ -71,6 +71,23 @@ entries:
   - entry: bee.gov.binding:publication_service
     path: .imports.seam
   - entry: bee.gateway.security:subject_call
+  - entry: bee.threads.service:pump_config
+    path: .imports.seam
+  - entry: bee.gov.service:recovery
+    path: .imports.seam
+  - entry: bee.threads.hooks:supervisor
+    path: .imports.seam
+  - entry: bee.node.service:tests
+    path: .imports.seam
+  - entry: bee.node.service:catalog
+    path: .imports.seam
+  - entry: bee.node.service:owner
+    path: .imports.seam
+  - entry: bee.shell:main
+    path: .imports.seam
+  - entry: bee.shell:client
+    path: .imports.seam
+  - entry: bee.shell:jobs
     path: .imports.seam
 - name: demand_state
   kind: library.lua

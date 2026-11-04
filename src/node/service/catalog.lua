@@ -5,6 +5,14 @@ local settings = require("settings")
 local appearance = require("appearance")
 local descriptor = require("descriptor")
 local application = require("application")
+local seam = require("seam")
+
+local function find_registered(filter)
+    local failure = seam.call("bee.node.service.catalog.find", filter)
+    if failure then return nil, tostring(failure) end
+    return registry.find(filter)
+end
+
 local M = {}
 -- A menu an app names and an installed app, as the catalog lists them.
 type Menu = {id: string, title: string, location: string, order: integer}
@@ -14,7 +22,7 @@ type Theme = appearance.Theme
 local MENU_TYPE = "bee.menu"
 -- role_app is the installed app declaring role, the first by id.
 local function role_app(role: string, workspace_id: string): (string?, string?)
-    local entries, find_error = registry.find({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
+    local entries, find_error = find_registered({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
     if not entries then return nil, "installed apps cannot be read: " .. tostring(find_error) end
     local found: string? = nil
     for _, entry in ipairs(entries) do
@@ -32,7 +40,7 @@ end
 -- data names a title, the place the menu shows (the Start panel or the
 -- desktop's context menu) and its order there, by id.
 local function menus(): ({[string]: Menu}?, string?)
-    local entries, find_error = registry.find({["meta.type"] = MENU_TYPE})
+    local entries, find_error = find_registered({["meta.type"] = MENU_TYPE})
     if not entries then return nil, "installed menus cannot be read: " .. tostring(find_error) end
     local found: {[string]: Menu} = {}
     for _, entry in ipairs(entries) do
@@ -52,7 +60,7 @@ end
 local function catalog(workspace_id: string?): ({CatalogApp}?, string?)
     local installed, menus_error = menus()
     if not installed then return nil, menus_error end
-    local entries, find_error = registry.find({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
+    local entries, find_error = find_registered({[".kind"] = "process.lua", ["meta.type"] = descriptor.TYPE})
     if not entries then return nil, "installed apps cannot be read: " .. tostring(find_error) end
     local apps: {CatalogApp} = {}
     for _, entry in ipairs(entries) do
@@ -94,7 +102,7 @@ end
 -- appearance.TYPE whose data is a palette, ordered by title, and the id of
 -- the one marked meta.default.
 local function themes(): ({Theme}?, string?, string?)
-    local entries, find_error = registry.find({["meta.type"] = appearance.TYPE})
+    local entries, find_error = find_registered({["meta.type"] = appearance.TYPE})
     if not entries then return nil, nil, "installed themes cannot be read: " .. tostring(find_error) end
     local found: {Theme} = {}
     local default_id: string? = nil

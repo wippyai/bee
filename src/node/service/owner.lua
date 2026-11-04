@@ -31,7 +31,7 @@ local bounds = require("bounds")
 local waiting = require("waiting")
 local app_identity = require("app_identity")
 local canonical = require("canonical")
-
+local seam = require("seam")
 local part_instance = require("part_instance")
 local part_catalog = require("part_catalog")
 local part_handover = require("part_handover")
@@ -429,6 +429,7 @@ local function main(saved: unknown)
     end
 
     local function stop(instance: Instance): protocol.Reply
+        seam.hold("bee.node.service.stop", instance)
         local cancelled, cancel_error = process.cancel(instance.pid)
         if not cancelled and not errors.is(cancel_error, errors.NOT_FOUND) then
             return protocol.fail("stop " .. instance.title .. ": " .. tostring(cancel_error))
@@ -1105,6 +1106,7 @@ local function main(saved: unknown)
     update_instances()
     local announced, announce_error = protocol.ready(NAME)
     if not announced then logger:warn("Hive supervisor not told the node is ready", {error = announce_error}) end
+    seam.call("bee.node.service.ready")
     logger:info("Node ready", {node = node, folder = folder, theme = current.theme.id})
     while true do
         local cases = {requests:case_receive(), events:case_receive(), registry_changes:case_receive(), attention:case_receive()}

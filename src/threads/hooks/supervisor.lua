@@ -5,6 +5,7 @@ local process = require("process")
 local registry = require("registry")
 local bounds = require("bounds")
 local capabilities = require("capabilities")
+local seam = require("seam")
 local M = {}
 M.MAX_INVOCATIONS = 16
 M.MAX_REPLY_BYTES = 16384
@@ -36,6 +37,7 @@ end
 function M.cancel(pending: Pending)
     pending.active = false
     pending.future:cancel()
+    seam.call("bee.threads.hooks.cancelled", pending)
 end
 function M.run(executor: funcs.Executor, target: string, id: string, point: string, turn: unknown, limit_ms: integer): (unknown, string?)
     if limit_ms <= 0 then return nil, "chain budget exceeded" end

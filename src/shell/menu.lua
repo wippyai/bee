@@ -60,6 +60,14 @@ local function descend(items: {Item}, path: {integer}?): {Item}
     end
     return items
 end
+-- destinations are the desktops a window on current can move to.
+function M.destinations(desktops: {{id: string, title: string}}, current: string): {Destination}
+    local found: {Destination} = {}
+    for _, item in ipairs(desktops) do
+        if item.id ~= current then found[#found + 1] = {id = item.id, title = item.title} end
+    end
+    return found
+end
 function M.entries(state: State, scene: model.Scene, catalog: {Descriptor}?, destinations: {Destination}?): {Item}
     if state.kind == "window" then
         local moves: {Item} = {}

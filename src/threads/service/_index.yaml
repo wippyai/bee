@@ -82,11 +82,24 @@ entries:
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
+- name: recovery
+  kind: library.lua
+  source: file://recovery.lua
+  modules:
+  - logger
+- name: cancellation
+  kind: library.lua
+  source: file://cancellation.lua
+  modules:
+  - channel
+  - process
 - name: pump_config
   kind: library.lua
   source: file://pump_config.lua
   modules:
   - registry
+  imports:
+    seam: bee.process:seam
 - name: threads
   kind: process.lua
   source: file://service.lua
@@ -114,6 +127,8 @@ entries:
     worker: bee.process:worker
     alias_retirements: bee.threads.service:alias_retirements
     seam: bee.process:seam
+    recovery: bee.threads.service:recovery
+    cancellation: bee.threads.service:cancellation
 - name: service
   meta:
     title: "Threads \xB7 owner"

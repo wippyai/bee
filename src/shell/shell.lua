@@ -37,6 +37,7 @@ local title_editor = require("title_editor")
 local watch = require("watch")
 local copy = require("copy")
 local workspace_menu = require("workspace_menu")
+local membership = require("membership")
 local render = require("render")
 
 local part_handover = require("part_handover")
@@ -56,10 +57,22 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     local lifecycle = assert(process.events())
     local inputs = assert(tty.events())
     local node_events = assert(process.listen(client.EVENTS, {message = true}))
-    -- The Bees menu follows the hive while it is open.
-    local joins = assert(events.subscribe("cluster", "node.joined"))
-    local departures = assert(events.subscribe("cluster", "node.left"))
-    local joined, departed = joins:channel(), departures:channel()
+    -- The Bees menu lists the hive's nodes that serve desktops. Membership
+    -- events arrive on one subscription, in the order the cluster sends them,
+    -- and the members are read only after it is open, so no join goes unseen.
+    local membership_events = assert(events.subscribe("cluster"))
+    local cluster = membership_events:channel()
+    local hive = membership.new()
+    local served: channel.Channel<{check: membership.Check, serving: boolean}> = channel.new(16)
+    local function check(probe: membership.Check?)
+        if not probe then return end
+        coroutine.spawn(function()
+            served:send({check = probe, serving = client.serving(probe.node)})
+        end)
+    end
+    for _, member in ipairs(system.cluster.members() or {}) do
+        if type(member.id) == "string" then check(membership.member(hive, member.id)) end
+    end
     assert(tty.start())
     tty.mouse(true)
     local surface = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
@@ -230,6 +243,21 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
 
     local function app_counts(): {[string]: integer}
         return counts_of(running)
+    end
+
+    -- follow_hive keeps an open Bees menu on the nodes that serve desktops.
+    local function follow_hive(change: membership.Change)
+        local menu = workspaces_open
+        if not menu then return end
+        if change.serving then
+            -- A strip of one node has no tabs to label until a second joins.
+            workspace_menu.join(menu, change.node)
+            for _, node in ipairs(menu.nodes) do
+                if not menu.labels[node] then label_node(node) end
+            end
+        elseif workspace_menu.leave(menu, change.node) then
+            workspace_menu.update(menu, target, desktops, workspaces, app_counts())
+        end
     end
 
     -- origin is the node this display started on; another node's desktops
@@ -571,7 +599,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             local destination = action:sub(6)
             run(function(): Result return call_job("move", {id = id, desktop = destination}) end)
         elseif action == "workspaces" then
-            local nodes = client.nodes()
+            local nodes = membership.nodes(hive)
             workspaces_open = workspace_menu.new(desktop, desktops, workspaces, app_counts(), nodes, target)
             if #nodes > 1 then
                 for _, node in ipairs(nodes) do label_node(node) end
@@ -727,11 +755,6 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             end
         elseif result.kind == "labelled" and result.id and result.title then
             if workspaces_open then workspace_menu.label(workspaces_open, result.id, result.title) end
-        elseif result.kind == "joined" and result.node then
-            if workspaces_open then
-                workspace_menu.join(workspaces_open, result.node)
-                label_node(result.node)
-            end
         elseif result.kind == "shown" and result.desktop then
             show(result.desktop)
             show_app_dialog()
@@ -1175,7 +1198,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
 
     local function cases()
         local list = {inputs:case_receive(), lifecycle:case_receive(), results:case_receive(), node_events:case_receive(),
-            joined:case_receive(), departed:case_receive()}
+            cluster:case_receive(), served:case_receive()}
         if alert_fade then list[#list + 1] = alert_fade:case_receive() end
         for _, updated in pairs(updates) do list[#list + 1] = updated:case_receive() end
         return list
@@ -1211,22 +1234,15 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             end
         elseif chosen.channel == results then
             apply(chosen.value)
-        elseif chosen.channel == joined then
+        elseif chosen.channel == cluster then
             if not chosen.ok then return true end
-            local node = client.member(chosen.value)
-            -- A joined node shows on the strip once its owner serves desktops.
-            if node and workspaces_open then
-                run(function(): Result
-                    if client.serving(node) then return {kind = "joined", node = node} end
-                    return {kind = "done"}
-                end)
-            end
-        elseif chosen.channel == departed then
-            if not chosen.ok then return true end
-            local node = client.member(chosen.value)
-            if node and workspaces_open and workspace_menu.leave(workspaces_open, node) then
-                workspace_menu.update(workspaces_open, target, desktops, workspaces, app_counts())
-            end
+            local probe, change = membership.observe(hive, chosen.value)
+            check(probe)
+            if change then follow_hive(change) end
+        elseif chosen.channel == served then
+            local answer = chosen.value
+            local change = membership.served(hive, answer.check, answer.serving)
+            if change then follow_hive(change) end
         elseif chosen.channel == node_events then
             if not chosen.ok then return true end
             local message = chosen.value
@@ -1268,14 +1284,12 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         -- The surface lease belongs to this code; input and viewports stay
         -- with the process for the new code to take over.
         local saved_state = handover()
-        joins:close()
-        departures:close()
+        membership_events:close()
         surface:close()
         process.upgrade("", saved_state)
         return 0
     end
-    joins:close()
-    departures:close()
+    membership_events:close()
     detach()
     surface:close()
     tty.mouse(false)

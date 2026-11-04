@@ -117,3 +117,11 @@ entries:
     model: bee.shell:model
     render: bee.shell:render
     appearance: bee.ui:appearance
+- name: membership_test
+  kind: function.lua
+  source: file://membership_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    membership: bee.shell:membership

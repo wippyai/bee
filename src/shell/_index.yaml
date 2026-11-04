@@ -74,6 +74,11 @@ entries:
   modules: [tty]
   imports:
     appearance: bee.ui:appearance
+- name: membership
+  kind: library.lua
+  source: file://membership.lua
+  imports:
+    bounds: bee.drivers.values:bounds
 - name: render
   kind: library.lua
   source: file://render.lua
@@ -111,6 +116,7 @@ entries:
     watch: bee.shell:watch
     copy: bee.shell:copy
     workspace_menu: bee.shell:workspace_menu
+    membership: bee.shell:membership
     render: bee.shell:render
     part_handover: bee.shell:handover
     jobs: bee.shell:jobs
@@ -140,6 +146,7 @@ entries:
     watch: bee.shell:watch
     copy: bee.shell:copy
     workspace_menu: bee.shell:workspace_menu
+    membership: bee.shell:membership
     render: bee.shell:render
     part_handover: bee.shell:handover
     jobs: bee.shell:jobs

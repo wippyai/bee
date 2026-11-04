@@ -140,12 +140,21 @@ local function read_definition(pinned: catalog.Pinned, definition_ref: string): 
     return definition.decode(definition_ref, entry)
 end
 type Selected = {grant_id: string, profile_id: string, revision: integer, profile: profiles.Profile}
+-- The reasons a person reads when a session's saved profile stops admitting
+-- it, the same for its hooks, its restore and its session view.
+local PROFILE_DELETED = "The saved profile this session uses was deleted; start a new session."
+local function profile_authority(state: unknown): string
+    return "The saved profile's authority is " .. tostring(state) .. "; approve it again, then restart this session."
+end
 local function saved_record(workspace: string, id: string): ({[string]: unknown}?, Reply?)
     local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
     if err then return nil, fail("UNAVAILABLE", "saved profile did not answer") end
     local reply = bounds.object(raw)
     if not reply then return nil, fail("UNAVAILABLE", "invalid saved profile reply") end
-    if reply.ok ~= true then return nil, fail(bounds.id(reply.code) or "DENIED", "saved profile is unavailable") end
+    if reply.ok ~= true then
+        local code = bounds.id(reply.code) or "DENIED"
+        return nil, fail(code, code == "NOT_FOUND" and PROFILE_DELETED or "saved profile is unavailable")
+    end
     local value = bounds.object(reply.value)
     if not value or value.workspace_id ~= workspace or value.profile_id ~= id then return nil, fail("UNAVAILABLE", "saved profile identity differs") end
     return value, nil
@@ -153,12 +162,13 @@ end
 local function selected_profile(workspace: string, id: string, revision: integer, definition_ref: string): (Selected?, Reply?)
     local value, refused = saved_record(workspace, id)
     if not value then return nil, refused end
-    if value.tombstone ~= false or value.revision ~= revision then return nil, fail("CONFLICT", "saved profile changed; select it again") end
+    if value.tombstone ~= false then return nil, fail("NOT_FOUND", PROFILE_DELETED) end
+    if value.revision ~= revision then return nil, fail("CONFLICT", "saved profile changed; select it again") end
     local profile, profile_error = profiles.profile(value.profile)
     if not profile then return nil, fail("UNAVAILABLE", profile_error or "invalid saved profile") end
     if profile.definition_ref ~= definition_ref then return nil, fail("CONFLICT", "saved profile selects a different launch definition") end
     local grant_id = bounds.id(value.grant_id)
-    if not grant_id or value.grant_state ~= "active" then return nil,fail("DENIED","saved profile authority is " .. tostring(value.grant_state)) end
+    if not grant_id or value.grant_state ~= "active" then return nil, fail("DENIED", profile_authority(value.grant_state)) end
     return {grant_id = grant_id,profile_id = id, revision = revision, profile = profile}, nil
 end
 local function preference_value(selected: Selected?): placement_types.Preferences?
@@ -568,7 +578,7 @@ function M.saved_revision(workspace: string, id: string): (integer?, Reply?)
     local value, refused = saved_record(workspace, id)
     if not value then return nil, refused end
     local revision = bounds.integer(value.revision)
-    if value.tombstone ~= false or not revision or revision < 1 then return nil, fail("NOT_FOUND", "saved profile " .. id .. " was deleted") end
+    if value.tombstone ~= false or not revision or revision < 1 then return nil, fail("NOT_FOUND", PROFILE_DELETED) end
     return revision, nil
 end
 -- The admitted facts a window session keeps for its current attempt. Its
@@ -584,41 +594,55 @@ function M.session_admission(plan: Plan): SessionAdmission
 end
 type Standing = {definition_ref: string, binding_ref: string, profile_id: string, workspace_id: string,
     saved_profile_id: string?, saved_profile_revision: integer?}
--- standing: a running session's admission stands while the choices it was
--- admitted under hold: its launch definition still selects the same driver
--- profile, that driver is usable, and its saved profile is at the admitted
--- revision with active authority. Changed measurements of the same choices,
--- as an upgrade makes, leave it standing; they apply when its carrier next
--- starts. A refusal names the step the person takes.
-function M.standing(admitted: Standing): (definition.Definition?, catalog.Pinned?, string?)
-    local pinned, pin_error = catalog.pin()
-    if not pinned then return nil, nil, pin_error or "pin the registry" end
-    local launch = read_definition(pinned, admitted.definition_ref)
-    if not launch then return nil, nil, "This session's launch definition " .. admitted.definition_ref .. " is no longer installed; start a new session." end
-    if launch.binding_ref ~= admitted.binding_ref or launch.profile_id ~= admitted.profile_id then
-        return nil, nil, "This session's launch definition now selects another driver; restart this session to apply it."
+-- stands is why the choices a session runs under stop admitting it, as the
+-- step the person takes: a removed launch definition, an unusable driver, a
+-- deleted saved profile or inactive profile authority. A running carrier
+-- also refuses a definition that selects another driver profile and a saved
+-- profile past its admitted revision; a resumed carrier is admitted under
+-- the definition's driver and the profile's current revision.
+local function stands(pinned: catalog.Pinned, definition_ref: string, workspace: string, saved_id: string?, running: Standing?): (definition.Definition?, string?)
+    local launch = read_definition(pinned, definition_ref)
+    if not launch then return nil, "This session's launch definition " .. definition_ref .. " is no longer installed; start a new session." end
+    if running and (launch.binding_ref ~= running.binding_ref or launch.profile_id ~= running.profile_id) then
+        return nil, "This session's launch definition now selects another driver; restart this session to apply it."
     end
-    local snapshot = catalog.read(pinned, nil, admitted.binding_ref)
+    local snapshot = catalog.read(pinned, nil, launch.binding_ref)
     local usable = snapshot and catalog.usable(snapshot)
     local found = false
     for _, candidate in ipairs(usable or {}) do
-        if candidate.binding_id == admitted.binding_ref and candidate.activated then found = true end
+        if candidate.binding_id == launch.binding_ref and candidate.activated then found = true end
     end
     if not found then
-        return nil, nil, "This session's driver " .. admitted.binding_ref .. " is no longer usable on this host; install it again, then restart this session."
+        return nil, "This session's driver " .. launch.binding_ref .. " is no longer usable on this host; install it again, then restart this session."
     end
-    if admitted.saved_profile_id then
-        local value, refused = saved_record(admitted.workspace_id, admitted.saved_profile_id)
-        if not value then return nil, nil, refused and refused.error and refused.error.message or "saved profile is unavailable" end
-        if value.tombstone ~= false then return nil, nil, "The saved profile this session uses was deleted; start a new session." end
-        if value.revision ~= admitted.saved_profile_revision then
-            return nil, nil, "The saved profile this session uses changed; restart this session to apply the changed profile."
+    if saved_id then
+        local value, refused = saved_record(workspace, saved_id)
+        if not value then return nil, refused and refused.error and refused.error.message or "saved profile is unavailable" end
+        if value.tombstone ~= false then return nil, PROFILE_DELETED end
+        if running and value.revision ~= running.saved_profile_revision then
+            return nil, "The saved profile this session uses changed; restart this session to apply the changed profile."
         end
-        if value.grant_state ~= "active" then
-            return nil, nil, "The saved profile's authority is " .. tostring(value.grant_state) .. "; approve it again, then restart this session."
-        end
+        if value.grant_state ~= "active" then return nil, profile_authority(value.grant_state) end
     end
+    return launch, nil
+end
+-- standing: a running session's admission stands while the choices it was
+-- admitted under hold. Changed measurements of the same choices, as an
+-- upgrade makes, leave it standing; they apply when its carrier next starts.
+function M.standing(admitted: Standing): (definition.Definition?, catalog.Pinned?, string?)
+    local pinned, pin_error = catalog.pin()
+    if not pinned then return nil, nil, pin_error or "pin the registry" end
+    local launch, refusal = stands(pinned, admitted.definition_ref, admitted.workspace_id, admitted.saved_profile_id, admitted)
+    if not launch then return nil, nil, refusal end
     return launch, pinned, nil
+end
+-- resumable is why a session whose carrier is gone cannot resume under its
+-- definition and saved profile, or nil when it can.
+function M.resumable(definition_ref: string, workspace: string, saved_id: string?): string?
+    local pinned, pin_error = catalog.pin()
+    if not pinned then return pin_error or "pin the registry" end
+    local _, refusal = stands(pinned, definition_ref, workspace, saved_id, nil)
+    return refusal
 end
 -- The durable identities of a request: the same request id always names
 -- the same action and attempt.

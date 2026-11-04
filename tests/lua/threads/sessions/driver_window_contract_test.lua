@@ -281,6 +281,37 @@ local function define_tests()
                 test.is_nil(session_get(tostring(opened.session)).admission_refusal)
             end, "provider")
         end)
+        test.it("a window whose saved profile is gone refuses its hooks and its restore with the same reason", function()
+            muse.with_host("agy", function(_: admission.Plan?)
+                local raw, err = funcs.call("bee.harness.binding:call", {operation = "put", workspace_id = WORKSPACE,
+                    profile_id = "window-removed-profile", expected_revision = 0, idempotency_key = harness.key(),
+                    profile = {schema_revision = "bee.agent-profile@3", name = "Agy window removed",
+                        definition_ref = "bee.driver.agy.profiles:default_window", driver_binding_ref = "bee.drivers.agy.binding:binding",
+                        provider = {}, bee = {permission_answers = "provider"}, placement = {kind = "native", home = "machine"}}})
+                if err then error(tostring(err)) end
+                test.eq(assert(bounds.object(raw)).ok, true)
+                local plan = assert((admission.resolve("bee.driver.agy.profiles:default_window", "window", WORKSPACE, "window-removed-profile", 1)))
+                local opened, stored, attempt, action, binding_id = admitted_window(plan, "5")
+                local removed, remove_error = funcs.call("bee.harness.binding:call", {operation = "remove", workspace_id = WORKSPACE,
+                    profile_id = "window-removed-profile", expected_revision = 1, idempotency_key = harness.key()})
+                if remove_error then error(tostring(remove_error)) end
+                test.eq(assert(bounds.object(removed)).ok, true)
+                local reason = "The saved profile this session uses was deleted; start a new session."
+                local reply = muse.permission(tostring(opened.session), tostring(stored.thread_ref), attempt, action, binding_id, muse.capture("agy", "PermissionRequest"))
+                test.eq(denial(reply), reason)
+                local revision, refused = admission.saved_revision(WORKSPACE, "window-removed-profile")
+                test.is_nil(revision)
+                test.eq(assert(refused).error and assert(refused.error).message, reason)
+                local _, never_saved = admission.saved_revision(WORKSPACE, "window-never-saved-profile")
+                test.eq(assert(never_saved).error and assert(never_saved.error).message, reason)
+                local _, resolve_refused = admission.resolve("bee.driver.agy.profiles:default_window", "window", WORKSPACE, "window-removed-profile", 1)
+                test.eq(assert(resolve_refused).error and assert(resolve_refused.error).message, reason)
+                test.eq(admission.resumable("bee.driver.agy.profiles:default_window", WORKSPACE, "window-removed-profile"), reason)
+                test.eq(admission.resumable("bee.driver.agy.profiles:missing_window", WORKSPACE, nil),
+                    "This session's launch definition bee.driver.agy.profiles:missing_window is no longer installed; start a new session.")
+                test.is_nil(admission.resumable("bee.driver.agy.profiles:default_window", WORKSPACE, nil))
+            end, "provider")
+        end)
     end)
 end
 return test.run_cases(define_tests)

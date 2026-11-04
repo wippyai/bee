@@ -538,6 +538,11 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 local plan: admission.Plan? = nil
                 local refused: admission.Reply? = nil
                 local ok, unexpected = pcall(function()
+                    local reason = admission.resumable(restored.definition_ref, launch.workspace_id, restored.saved_profile_id)
+                    if reason then
+                        refused = {ok = false, error = {code = "DENIED", message = reason}, value = nil}
+                        return
+                    end
                     -- A resumed carrier is admitted under the saved profile's
                     -- current revision, as a new session would be.
                     local revision: integer? = nil
@@ -616,7 +621,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                             end
                         end
                     else
-                        status = "Current launch plan is unavailable: " .. failure(result.refused)
+                        status, refused_code = refusal(result.refused)
                         phase = "refused"
                     end
                     dirty = true

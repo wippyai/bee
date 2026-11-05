@@ -823,7 +823,7 @@ entries:
   kind: function.lua
   source: file://hooks_budget_test.lua
   method: run
-  modules: [funcs, process, events, channel, security]
+  modules: [funcs, process, security]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -863,6 +863,6 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
-  modules: [events, ctx, registry]
+  modules: [ctx, registry]
   imports:
     controllers: bee.tests.support:controllers

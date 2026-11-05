@@ -1,6 +1,5 @@
 -- SPDX-License-Identifier: MIT
 local controllers = require("controllers")
-local events = require("events")
 local ctx = require("ctx")
 local registry = require("registry")
 -- The Sessions SDK suites' synthetic owners answer the session contracts
@@ -32,8 +31,11 @@ return {
     end,
     ["bee.threads.hooks.cancelled"] = function(pending)
         local hook = pending :: {id: string, future: {is_canceled: (any) -> boolean}}
-        events.send("bee.test.hook/" .. hook.id, "cancelled", hook.id, {cancelled = hook.future:is_canceled()})
+        controllers.notify("bee.test.hook.cancelled", nil, {invocation_id = hook.id, cancelled = hook.future:is_canceled()})
         return nil
+    end,
+    ["bee.threads.hooks.budget"] = function(payload)
+        return controllers.registered("bee.test.hook.budget", "bee.test.hook.expire", nil, payload)
     end,
     ["bee.threads.service.committed"] = function()
         return controllers.registered("bee.test.threads.hold", "bee.test.threads.release", nil, {})

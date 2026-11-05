@@ -48,7 +48,7 @@ function M.run(executor: funcs.Executor, target: string, id: string, point: stri
     local response = future:response()
     if not response then M.cancel(pending); return nil, "hook response channel is unavailable" end
     local lifecycle = assert(process.events())
-    local budget = time.after(tostring(M.remaining(started, limit_ms)) .. "ms")
+    local budget = seam.after("bee.threads.hooks.budget", tostring(M.remaining(started, limit_ms)) .. "ms", {id = id})
     while true do
         local selected = channel.select({response:case_receive(), budget:case_receive(), lifecycle:case_receive()})
         if not selected.ok or selected.channel == budget then M.cancel(pending); return nil, "invocation budget exceeded" end

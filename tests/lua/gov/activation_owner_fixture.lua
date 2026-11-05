@@ -95,7 +95,7 @@ end
 local function installed_capability(review: capability_grants.Review?): preflight.CapabilityEvidence
     local vocabulary: capability_model.Vocabulary = {revision = 1, never = {}, capabilities = {}}
     local proposal, proposal_error = capability_grants.propose(vocabulary, "bee.gov:test-overlay",
-        "demo:run", {}, nil)
+        "demo:run", {})
     if not proposal then error(tostring(proposal_error)) end
     local raw, record_error = capability_grants.record("bee.gov:test-overlay", "workspace-owner",
         "demo:run", proposal, "prior-approval", 1, SHA, "v1")

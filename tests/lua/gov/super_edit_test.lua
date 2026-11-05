@@ -131,6 +131,17 @@ local function define_tests()
             end
             test.eq(assert(registry.snapshot()):version():string(), before)
         end)
+        test.it("admits the profile writer by its execution scope, never by the caller's name", function()
+            for _, case in ipairs({{actor = "bee.gov.super_edit", request = {operation = "status", workspace_id = WORKSPACE}},
+                {actor = "bee.gov.recovery", request = {operation = "disable_all"}}}) do
+                local executor = assert(funcs.new():with_actor(assert(security.new_actor(case.actor))):with_scope(assert(security.new_scope())))
+                local raw, err = executor:call("bee.gov.binding:super_edit_backend_call", case.request)
+                test.is_nil(err, tostring(err))
+                local result = assert(bounds.object(raw))
+                test.eq(result.code, "DENIED")
+                test.eq(result.message, "super-edit profile writer is not authorized")
+            end
+        end)
         test.it("parses an exact namespace list and bounded duration", function()
             local namespaces, duration, invalid = super_edit.parse_enable("vendor.alpha app.clock --for 45m")
             test.is_nil(invalid)

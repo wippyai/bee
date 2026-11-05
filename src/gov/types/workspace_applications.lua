@@ -7,7 +7,6 @@ M.NAMESPACE_ROOT = "app"
 M.OWNER_PREFIX = "bee.gov.apps:"
 -- This measured owner remains in activation and grant records made by the
 -- previous release. Existing work resumes under its original owner.
-local PRIOR_OWNER_PREFIX = "bee.governance.workspace_applications:"
 M.MAX_NAME = 48
 
 type Identity = {name: string, namespace: string, component: string, overlay_owner: string}
@@ -64,11 +63,6 @@ function M.application(raw: unknown): (string?, string?)
         return nil, mistyped or "workspace artifact declares no application; declare one process.lua entry with meta.type bee.application and meta.application"
     end
     return selected, nil
-end
-
-function M.prior_owner(workspace_raw: unknown, source_workspace: unknown): string?
-    local identity = M.identity(workspace_raw, source_workspace, true)
-    return identity and PRIOR_OWNER_PREFIX .. (workspace_raw) .. "." .. identity.name or nil
 end
 
 return M

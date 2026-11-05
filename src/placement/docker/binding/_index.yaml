@@ -188,7 +188,6 @@ entries:
   modules:
   - system
   imports:
-    request_codec: bee.placement:request
     profiles: bee.placement.profiles:profiles
     types: bee.placement:types
     bounds: bee.drivers.values:bounds

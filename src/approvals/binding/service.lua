@@ -2,6 +2,7 @@
 local sql = require("sql")
 local funcs = require("funcs")
 local json = require("json")
+local registry = require("registry")
 local process = require("process")
 local events = require("events")
 local logger = require("logger")
@@ -115,6 +116,20 @@ function M.execute(db: sql.DB, actor: string, name: string, request: unknown, no
 end
 -- A new request waiting for the person is announced on this node, so the
 -- desktops working in its workspace open Needs you.
+-- failure_subject: the subject an operation's bee.approvals.display names
+-- when it asks Bee to announce a failed effect.
+local function failure_subject(ref: unknown): string?
+    local id = bounds.id(ref)
+    if not id then return nil end
+    local found, find_error = registry.find({["meta.type"] = "bee.approvals.display", ["meta.operation_ref"] = id})
+    if find_error or not found then
+        logger:warn("Approval displays unavailable", {operation_ref = id, error = tostring(find_error)})
+        return nil
+    end
+    if #found ~= 1 then return nil end
+    local data = bounds.object(found[1].data)
+    return data and data.announce_failure == true and bounds.line(data.subject, 64) or nil
+end
 local function announce(value: unknown, db: sql.DB, requested: boolean)
     local view = bounds.object(value)
     local workspace_id = view and bounds.id(view.workspace_id) or nil
@@ -144,7 +159,8 @@ local function announce(value: unknown, db: sql.DB, requested: boolean)
     local effect = bounds.object(view.effect)
     local receipt = effect and bounds.object(effect.receipt)
     local proposal = bounds.object(view.proposal)
-    local failed = proposal and proposal.ref == "bee.gov:establish-overlay" and effect and effect.state == "failed" and receipt and type(receipt.error) == "string"
+    local subject = proposal and failure_subject(proposal.ref) or nil
+    local failed = subject and effect and effect.state == "failed" and receipt and type(receipt.error) == "string"
     local target = counts and bounds.object(counts.target)
     if target and not failed then
         approval_id = bounds.id(target.approval_id)
@@ -153,7 +169,10 @@ local function announce(value: unknown, db: sql.DB, requested: boolean)
     end
     local title = prompt and bounds.line(prompt.text, 160) or nil
     if not title and prompt and type(prompt.text) == "string" then title = prompt.text:gsub("%c", " "):sub(1, 160) end
-    if failed then title = "Installation failed: " .. tostring(receipt and receipt.error):gsub("%c", " "):sub(1, 138) end
+    if failed then
+        local prefix = tostring(subject) .. " failed: "
+        title = prefix .. tostring(receipt and receipt.error):gsub("%c", " "):sub(1, 160 - #prefix)
+    end
     local sent, send_error = events.send(part_model.ATTENTION, failed and "approval.failed" or (requested and "approval.requested" or "approval.changed"), workspace_id,
         {approval_id = approval_id, title = title or "Review request", count = count, failed = failed == true, request = announced_request})
     if not sent then logger:warn("Approval not announced", {approval_id = approval_id, error = tostring(send_error)}) end

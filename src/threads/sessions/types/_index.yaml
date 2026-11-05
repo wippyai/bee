@@ -12,3 +12,4 @@ entries:
     budget_values: bee.drivers.records:budgets
     profile_values: bee.harness.profiles:protocol
     hook_capabilities: bee.threads.hooks:capabilities
+    driver_locate: bee.drivers.locate:locate

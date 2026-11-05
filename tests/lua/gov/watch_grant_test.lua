@@ -28,7 +28,7 @@ local function install(app: string, owner: string): (Object, {string})
     local proposal = assert(grants.propose(vocabulary, owner, app, {
         {application = app, package = "test", capability = "workspace.files.watch", parameters = {subpath = SUBPATH},
             template_revision = 1, catalog_revision = model.revisions(vocabulary, "workspace.files.watch"),
-            reason = "watch the folder"}}, nil, FOLDER))
+            reason = "watch the folder"}}, FOLDER))
     local policy = assert(bounds.object(proposal.policies[1]))
     local changes = assert(registry.snapshot()):changes()
     local created: {string} = {}

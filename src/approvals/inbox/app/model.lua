@@ -13,6 +13,7 @@ local windows = require("windows")
 local grants = require("grants")
 local glyphs = require("glyphs")
 local typed_form = require("typed_form")
+local states = require("states")
 local M = {}
 M.DISPLAY = "bee.approvals.display"
 M.TEXT_LIMIT = 512
@@ -23,8 +24,8 @@ M.INBOX_PAGE = 64
 type Object = {[string]: unknown}
 type Workspace = {label: string, folder: string}
 type Decision = "approved" | "denied"
-type ApprovalState = "pending" | "decided" | "expired" | "withdrawn" | "superseded" | "invalidated"
-type RequestKind = "permission" | "question"
+type ApprovalState = states.ApprovalState
+type RequestKind = states.RequestKind
 type ProposalKind = "operation" | "attempt"
 type Prompt = {text: string, artifact_ref: nil} | {text: nil, artifact_ref: string}
 type OperationProposal = {grant_adapter: string?, kind: "operation", ref: string, revision: string, action_id: nil, input_digest: string?, payload: Object}
@@ -73,7 +74,8 @@ type Pending =
     {kind: "withdraw", request_id: string, approval_id: string, revision: integer, decision: nil}
 type Intent = {target: string, request: Object}
 type Confirmation = {approval_id: string, revision: integer, proposal_digest: string, reviewed_digest: string?, owner_node: string, owner_incarnation: integer}
-type Display = {requester: string?, duration: string?, consequence: string?, lasting: boolean, subject: string?, approved: string?, form: string?}
+type Display = {requester: string?, duration: string?, consequence: string?, lasting: boolean, subject: string?, approved: string?, form: string?,
+    answered_where_asked: boolean, effect_field: string?, target_field: string?}
 type State = {
     requester_names: {[string]: string}?,
     displays: {[string]: Display}?,
@@ -113,22 +115,6 @@ end
 local function proposal_kind(value: unknown): ProposalKind?
     if value == "operation" then return "operation" end
     if value == "attempt" then return "attempt" end
-    return nil
-end
-
-local function request_kind(value: unknown): RequestKind?
-    if value == "permission" then return "permission" end
-    if value == "question" then return "question" end
-    return nil
-end
-
-local function approval_state(value: unknown): ApprovalState?
-    if value == "pending" then return "pending" end
-    if value == "decided" then return "decided" end
-    if value == "expired" then return "expired" end
-    if value == "withdrawn" then return "withdrawn" end
-    if value == "superseded" then return "superseded" end
-    if value == "invalidated" then return "invalidated" end
     return nil
 end
 
@@ -197,8 +183,8 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     local approval_id, owner_node, workspace_id = bounds.id(view.approval_id), bounds.id(view.owner_node), bounds.id(view.workspace_id)
     local requester_id, policy = bounds.id(view.requester_id), bounds.id(view.policy)
     local owner_incarnation, revision = bounds.count(view.owner_incarnation), bounds.count(view.revision)
-    local request_kind_value = request_kind(view.request_kind)
-    local state = approval_state(view.state)
+    local request_kind_value = states.request_kind(view.request_kind)
+    local state = states.approval_state(view.state)
     local proposal, proposal_error = decode_proposal(view.proposal)
     local prompt, prompt_error = decode_prompt(view.prompt)
     if not approval_id then return nil, "approval view approval_id is invalid" end
@@ -384,16 +370,15 @@ local function decode_page(value: unknown, workspace: string): (InboxPage?, stri
         replace_source = page.replace_source == true}, nil
 end
 -- The proposed effect in words: the tool or operation, then the target.
-local function effect_of(view: ApprovalView): (string, string)
+local function effect_of(view: ApprovalView, displays: {[string]: Display}?): (string, string)
     local proposal = view.proposal
     local payload = proposal.payload
     local effect = M.text(payload.tool_name or payload.operation or proposal.kind or view.request_kind, M.LINE_LIMIT)
     local target = M.text(proposal.ref, M.LINE_LIMIT)
-    if proposal.ref == "bee.approvals:confirmation" then
-        effect = M.text(payload.action, M.LINE_LIMIT)
-        local identity = bounds.object(payload.target)
-        if identity then target = M.text(identity.desktop_id or identity.instance_id or identity.profile_id or identity.app or identity.component or identity.client_id or identity.session or proposal.ref, M.LINE_LIMIT) end
-    end
+    local display = M.display(view, displays)
+    if display and display.effect_field then effect = M.text(payload[display.effect_field], M.LINE_LIMIT) end
+    local identity = display and display.target_field and bounds.object(payload[display.target_field])
+    if identity then target = M.text(identity.desktop_id or identity.instance_id or identity.profile_id or identity.app or identity.component or identity.client_id or identity.session or proposal.ref, M.LINE_LIMIT) end
     if proposal.action_id ~= nil then target = target .. " action " .. M.text(proposal.action_id, M.LINE_LIMIT) end
     return effect, target
 end
@@ -428,7 +413,9 @@ function M.displays(entries: unknown): {[string]: Display}
             local consequence = bounds.text(data.consequence, 2048)
             result[ref] = {requester = line(data.requester), duration = line(data.duration), subject = line(data.subject),
                 approved = line(data.approved), form = bounds.id(data.form), lasting = data.lasting == true,
-                consequence = consequence and M.text(consequence, 2048) or nil}
+                consequence = consequence and M.text(consequence, 2048) or nil,
+                answered_where_asked = data.answered_where_asked == true,
+                effect_field = bounds.id(data.effect_field), target_field = bounds.id(data.target_field)}
         end
     end
     return result
@@ -453,8 +440,14 @@ function M.duration(view: ApprovalView, displays: {[string]: Display}?): string
     if display and display.duration then return display.duration end
     return "One action" .. ((view.window_max_ttl_ms or 0) >= 1800000 and " (or choose 30 minutes)" or "")
 end
-function M.summary(view: ApprovalView, seq: integer): Row
-    local effect, target = effect_of(view)
+-- answered_where_asked: a pending request its display has answered in the
+-- application that asked, unless the request asks to be reviewed in the inbox.
+function M.answered_where_asked(view: ApprovalView, displays: {[string]: Display}?): boolean
+    local display = M.display(view, displays)
+    return display ~= nil and display.answered_where_asked and not (view.contract and view.contract.presentation == "inbox")
+end
+function M.summary(view: ApprovalView, seq: integer, displays: {[string]: Display}?): Row
+    local effect, target = effect_of(view, displays)
     local decision = view.decision
     local decider = view.decider_id
     local row: Row = {approval_id = M.text(view.approval_id, 200), workspace_id = M.text(view.workspace_id, 200), seq = seq, revision = view.revision,
@@ -487,7 +480,7 @@ local function fault_details(reply: Reply): (string, string)
     return "INTERNAL", "unexpected successful reply"
 end
 local function keep(state: State, view: ApprovalView, seq: integer)
-    local row = M.summary(view, seq)
+    local row = M.summary(view, seq, state.displays)
     local known = state.rows[row.approval_id]
     if known and known.revision > row.revision then return end
     if known and known.seq > seq then row.seq = known.seq end
@@ -567,7 +560,7 @@ end
 function M.rows(state: State): {Row}
     local list: {Row} = {}
     for _, row in pairs(state.rows) do
-        if row.view.proposal.ref ~= "bee.approvals:confirmation" or (row.view.contract and row.view.contract.presentation == "inbox") or row.state ~= "pending" then list[#list + 1] = row end
+        if row.state ~= "pending" or not M.answered_where_asked(row.view, state.displays) then list[#list + 1] = row end
     end
     table.sort(list, function(a: Row, b: Row): boolean
         local a_pending, b_pending = a.state == "pending", b.state == "pending"
@@ -609,7 +602,7 @@ end
 -- Bind the shell's question to exactly the owner revision the user opened.
 function M.confirmation(state: State): Confirmation?
     local detail = state.detail
-    if not detail or detail.approval_id ~= state.selected or detail.state ~= "pending" or (detail.proposal.ref == "bee.approvals:confirmation" and (not detail.contract or detail.contract.presentation ~= "inbox")) then return nil end
+    if not detail or detail.approval_id ~= state.selected or detail.state ~= "pending" or M.answered_where_asked(detail, state.displays) then return nil end
     return {approval_id = detail.approval_id, revision = detail.revision, proposal_digest = detail.proposal_digest, reviewed_digest = detail.reviewed_digest,
         owner_node = detail.owner_node, owner_incarnation = detail.owner_incarnation}
 end
@@ -693,8 +686,9 @@ function M.combined_intent(state: State, request_id: string, decision: string, t
     state.pending = {kind = "batch", request_id = request_id, approval_id = detail.approval_id, revision = detail.revision, decision = decision, items = group}
     return {target = "bee.approvals.binding:decide_batch", request = {decisions = items, window_ttl_ms = ttl_ms}}, nil
 end
-function M.history(view: ApprovalView): string?
-    if view.proposal.ref == "bee.approvals:confirmation" and view.decision == "approved" then return "confirmed" end
+function M.history(view: ApprovalView, displays: {[string]: Display}?): string?
+    local display = M.display(view, displays)
+    if display and display.approved and view.decision == "approved" then return display.approved:lower() end
     local grant = view.window_grant
     if view.allowed_by_grant and grant then return "allowed by your " .. windows.duration(grant.until_ms - grant.granted_ms) .. " grant" end
     return nil

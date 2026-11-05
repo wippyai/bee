@@ -7,5 +7,4 @@ entries:
   modules: []
   imports:
     bounds: bee.drivers.values:bounds
-    service_reply: bee.drivers.values:reply
     canonical: bee.drivers.values:canonical

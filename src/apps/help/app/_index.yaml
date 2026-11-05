@@ -4,8 +4,6 @@ entries:
 - name: view
   kind: library.lua
   source: file://view.lua
-  modules:
-  - tty
   imports:
     appearance: bee.ui:appearance
     frame: bee.ui:frame

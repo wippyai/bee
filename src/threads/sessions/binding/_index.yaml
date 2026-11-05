@@ -52,6 +52,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: &id001
@@ -223,6 +224,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -405,6 +407,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -553,6 +556,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: &id002
@@ -692,6 +696,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -851,6 +856,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies:
@@ -979,12 +985,12 @@ entries:
   kind: function.lua
   source: file://listing.lua
   method: list
-  modules: [json, security, system]
+  modules: [json, system]
   imports:
     bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
-    snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
+    replies: bee.threads.sessions.binding:replies
   security:
     policies: *id001
   meta:
@@ -1125,6 +1131,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -1248,6 +1255,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
@@ -1380,6 +1388,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
@@ -1509,6 +1518,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
@@ -1658,6 +1668,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
@@ -1812,6 +1823,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies:
@@ -1949,6 +1961,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -1974,6 +1987,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -1999,6 +2013,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -2024,6 +2039,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id002
@@ -2049,6 +2065,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -2081,6 +2098,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies: *id001
@@ -2088,12 +2106,12 @@ entries:
   kind: function.lua
   source: file://listing.lua
   method: attention_count
-  modules: [json, security, system]
+  modules: [json, system]
   imports:
     bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
-    snapshot: bee.threads.sessions.binding:snapshot
     remote: bee.threads.sessions.binding:remote
+    replies: bee.threads.sessions.binding:replies
   security:
     policies: *id001
 - name: threads_journal
@@ -2105,7 +2123,10 @@ entries:
 - name: locate
   kind: library.lua
   source: file://locate.lua
-  imports: {protocol: bee.threads.sessions.types:protocol}
+  imports:
+    protocol: bee.threads.sessions.types:protocol
+    bounds: bee.drivers.values:bounds
+    driver_locate: bee.drivers.locate:locate
   modules:
   - time
 - name: catalog_service
@@ -2239,6 +2260,7 @@ entries:
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
+    replies: bee.threads.sessions.binding:replies
     remote: bee.threads.sessions.binding:remote
   security:
     policies:
@@ -2258,20 +2280,28 @@ entries:
 - name: listing
   kind: library.lua
   source: file://listing.lua
-  modules: [json, security, system]
+  modules: [json, system]
+  imports:
+    bounds: bee.drivers.values:bounds
+    journal: bee.threads.sessions.binding:threads_journal
+    remote: bee.threads.sessions.binding:remote
+    replies: bee.threads.sessions.binding:replies
+- name: replies
+  kind: library.lua
+  source: file://replies.lua
+  modules: [security]
   imports:
     bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal
     snapshot: bee.threads.sessions.binding:snapshot
-    remote: bee.threads.sessions.binding:remote
 - name: observation
   kind: library.lua
   source: file://observation.lua
   modules:
   - hash
-  - security
   - time
   imports:
+    replies: bee.threads.sessions.binding:replies
     snapshot: bee.threads.sessions.binding:snapshot
     bounds: bee.drivers.values:bounds
     journal: bee.threads.sessions.binding:threads_journal

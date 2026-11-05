@@ -6,9 +6,12 @@ entries:
   meta:
     type: bee.approvals.display
     operation_ref: bee.approvals:confirmation
-    comment: How Needs you words an application's confirmation
+    comment: How Needs you words an application's confirmation, answered in the application that asks unless it asks for the inbox
   data:
     approved: Confirmed
+    answered_where_asked: true
+    effect_field: action
+    target_field: target
 - name: contract
   kind: contract.definition
   meta:

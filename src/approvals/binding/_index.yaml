@@ -431,6 +431,7 @@ entries:
   - sql
   - funcs
   imports:
+    states: bee.approvals.types:states
     transaction: bee.persist:transaction
     windows: bee.approvals.types:windows
 - name: values
@@ -478,6 +479,7 @@ entries:
   - process
   - events
   - logger
+  - registry
   imports:
     bounds: bee.drivers.values:bounds
     node_database: bee.persist:database
@@ -505,6 +507,7 @@ entries:
   - hash
   - json
   imports:
+    states: bee.approvals.types:states
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     values: bee.drivers.records:values

@@ -9,8 +9,6 @@ local part_model = require("part_model")
 local M = {}
 type Result = part_model.Result
 type Object = part_model.Object
-type RequestKind = part_model.RequestKind
-type ApprovalState = part_model.ApprovalState
 local function failure(code: string, message: string, value: unknown?): Result
     return transaction.failure(code, message, value)
 end
@@ -38,20 +36,6 @@ end
 local function integer(value: unknown): integer?
     return bounds.integer(value)
 end
-local function request_kind(value: unknown): RequestKind?
-    if value == "permission" then return "permission" end
-    if value == "question" then return "question" end
-    return nil
-end
-local function approval_state(value: unknown): ApprovalState?
-    if value == "pending" then return "pending" end
-    if value == "decided" then return "decided" end
-    if value == "expired" then return "expired" end
-    if value == "withdrawn" then return "withdrawn" end
-    if value == "superseded" then return "superseded" end
-    if value == "invalidated" then return "invalidated" end
-    return nil
-end
 local function advance_incarnation(value: unknown): (integer?, string?)
     if type(value) ~= "number" then return nil, "authority incarnation is corrupt" end
     local current: integer? = bounds.count(value)
@@ -73,14 +57,12 @@ local function response_schema_bytes(schema: Object): (string?, string?)
     return canonical.encode(schema, part_model.MAX_SCHEMA_BYTES)
 end
 M.advance_incarnation = advance_incarnation
-M.approval_state = approval_state
 M.digest_of = digest_of
 M.failure = failure
 M.integer = integer
 M.node = node
 M.now_ms = now_ms
 M.refusal = refusal
-M.request_kind = request_kind
 M.response_schema_bytes = response_schema_bytes
 M.stamp = stamp
 M.storage = storage

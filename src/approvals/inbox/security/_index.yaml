@@ -26,13 +26,12 @@ entries:
     effect: allow
 
 - name: display_discovery_policy
-  kind: security.policy.expr
+  kind: security.policy
   meta:
-    comment: The inbox finds the bee.approvals.display declarations operation owners publish to word their requests
+    comment: The inbox reads the registry to find, by meta type, the bee.approvals.display declarations operation owners publish to word their requests; it changes nothing
   policy:
-    actions: [registry.find]
+    actions: [registry.find, registry.get]
     resources: '*'
-    expression: action == "registry.find" && resource == "*"
     effect: allow
 
 - name: remote_watch_policy

@@ -143,7 +143,7 @@ local function define_tests()
                 modules = {"process"}, policies = {}, thread_access = "none", hive = false}}
             local configured = assert(profiles.configuration(raw, runtime_node))
             local mismatched, mismatch_error = profiles.select(configured, WORKSPACE, source_node,
-                "autoresearch", nil, nil, nil, source_node)
+                "autoresearch", nil, nil, source_node)
             test.is_nil(mismatched)
             test.not_nil((string.find(mismatch_error, "no activation profile for overlay", 1, true)))
             local local_profile = assert(profiles.select(configured, WORKSPACE, runtime_node, "autoresearch"))
@@ -152,7 +152,7 @@ local function define_tests()
             test.eq(local_profile.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".autoresearch")
             local decoded = assert(profiles.decode(raw))
             local projected, projected_error = profiles.select_decoded(decoded, WORKSPACE, source_node,
-                "autoresearch", runtime_node, nil, nil, local_profile.overlay_owner)
+                "autoresearch", runtime_node)
             test.is_nil(projected)
             test.not_nil((string.find(projected_error, "no activation profile for overlay", 1, true)))
         end)

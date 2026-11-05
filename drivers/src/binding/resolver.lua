@@ -153,7 +153,7 @@ end
 function M.declaration(pinned: registry.Snapshot, binding: Entry): (Entry?, string?)
     local meta = bounds.object(binding.meta) or {}
     local profiles_ref = bounds.id(meta.profiles_ref)
-    if not profiles_ref then return nil, nil end
+    if not profiles_ref then return nil, "binding " .. tostring(binding.id) .. " declares no profiles" end
     local id = bounds.id(binding.id)
     if not id or profiles_ref ~= id or meta.descriptor_ref ~= id then return M.entry(pinned, profiles_ref) end
     local source, source_error = M.entry(pinned, id)
@@ -287,10 +287,6 @@ function M.profile(pinned: registry.Snapshot, binding_ref: string, profile_id: s
     if not binding or binding.kind ~= "contract.binding" or not meta or meta.type ~= "harness.driver" then
         return nil, "binding " .. binding_ref .. " is not an activated driver"
     end
-    local profiles_ref = bounds.id(meta.profiles_ref)
-    -- Legacy and fixture drivers without declarative profiles cannot opt into
-    -- additional sandbox roots; they retain their existing configure path.
-    if not profiles_ref then return nil, nil end
     local profiles_entry, profiles_error = M.declaration(pinned, binding)
     if profiles_error then return nil, profiles_error end
     local profiles_meta = profiles_entry and bounds.object(profiles_entry.meta) or nil

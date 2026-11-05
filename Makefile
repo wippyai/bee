@@ -60,9 +60,6 @@ tools: .wippy/build/lua-parse
 .wippy/build/lua-parse: native/cmd/lua-parse/main.go native/go.mod native/go.sum
 	cd native && go build -o ../$@ ./cmd/lua-parse
 
-.wippy/build/test-migration: native/cmd/test-migration/main.go native/go.mod native/go.sum
-	cd native && go build -o ../$@ ./cmd/test-migration
-
 tools-key:
 	@python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --key
 
@@ -157,7 +154,7 @@ boot-check: test-prepare
 	python3 -m tests.runner.boot_lifecycle $(abspath $(WIPPY))
 	python3 -m tests.runner.boot $(abspath $(WIPPY)) $(LUA_CACHE) $(TEST_CACHE_MODE)
 
-test-python: .wippy/build/lua-parse .wippy/build/test-migration
+test-python: .wippy/build/lua-parse
 	python3 -m unittest discover -s tests/python -t .
 
 test-prepare: $(if $(CI_TESTS),fixture-install,fixture-lint test-python) $(TEST_FIXTURES)/harness/bin/gateway-client

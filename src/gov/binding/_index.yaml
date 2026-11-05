@@ -154,7 +154,6 @@ entries:
   - registry
   - security
   - contract
-  - hash
   imports: &id002
     bounds: bee.drivers.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
@@ -172,7 +171,6 @@ entries:
   - registry
   - security
   - contract
-  - hash
   imports: *id002
   security:
     policies:
@@ -185,7 +183,6 @@ entries:
   - registry
   - security
   - contract
-  - hash
   imports: *id002
   security:
     policies:
@@ -498,8 +495,6 @@ entries:
   - json
   imports:
     canonical: bee.drivers.values:canonical
-    lists: bee.gov.types:lists
-    bounds: bee.drivers.values:bounds
     protected_kernel: bee.gov.types:protected_kernel
     application_admission: bee.gov.types:governed_application_admission
     capability_grants: bee.gov.types:capability_grants
@@ -519,7 +514,6 @@ entries:
   source: file://activation_measure.lua
   modules:
   - hash
-  - json
   imports:
     artifact: bee.gov.types:artifact
     preflight: bee.gov.binding:preflight
@@ -634,13 +628,11 @@ entries:
   modules:
   - registry
   - security
-  - hash
   imports:
     bounds: bee.drivers.values:bounds
     capability_gateway: bee.gov.types:capability_gateway
     capability_grants: bee.gov.types:capability_grants
     capability_model: bee.capability:model
-    workspace_applications: bee.gov.types:workspace_applications
 - name: source
   kind: library.lua
   source: file://source.lua

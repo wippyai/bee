@@ -50,6 +50,15 @@ entries:
     resources:
     - bee.attention
     effect: allow
+- name: approval_display_policy
+  kind: security.policy
+  meta:
+    comment: The approval owner reads the bee.approvals.display declarations that word its announcements
+  policy:
+    actions:
+    - registry.find
+    resources: '*'
+    effect: allow
 - name: approval_store_policy
   kind: security.policy
   meta:

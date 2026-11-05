@@ -48,9 +48,9 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
     local entries, find_error = pinned:find({[".kind"] = "registry.entry", ["meta.type"] = governed_admission.SCHEMA})
     if find_error then error("Read governed application admissions: " .. tostring(find_error)) end
     for _, entry in ipairs(entries) do
-        local measured, measured_error = governed_admission.measure(entry.data, entry.meta and entry.meta.identity_generation)
+        local measured, measured_error = governed_admission.measure(entry.data)
         if not measured then error("Invalid governed application admission: " .. tostring(measured_error)) end
-        if measured.id ~= entry.id then error("Governed admission identity does not match its declared generation: " .. entry.id) end
+        if measured.id ~= entry.id then error("Governed admission identity does not match its record: " .. entry.id) end
         if measured.record.workspace_id == workspace_id then
             local prior = by_owner[measured.record.overlay_owner]
             if prior and prior.digest ~= measured.digest then error("Conflicting governed application admissions") end
@@ -68,10 +68,6 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
         local grant_id = identity and identity.overlay_owner == record.overlay_owner
             and capability_grants.record_id(record.overlay_owner) or nil
         local installed = grant_id and lookup(grant_id) or nil
-        if not installed and identity and identity.overlay_owner == record.overlay_owner then
-            local old_grant = capability_grants.prior_record_id(record.overlay_owner)
-            installed = old_grant and lookup(old_grant) or nil
-        end
         local application_id = identity and record.bindings[1] and record.bindings[1].definition_id or nil
         if not installed and not identity then
             local package_entry = configuration.packages
@@ -94,7 +90,7 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
         end
         local profile, profile_error = activation_profiles.select_decoded(configuration,
             workspace_id, record.source_node, record.source_workspace, node_id,
-            installed, vocabulary, record.overlay_owner)
+            installed, vocabulary)
         if profile and identity and profile.applications and profile.applications[1] then
             profile.applications[1].definition_id = application_id
         end
@@ -192,11 +188,6 @@ function M.revision(workspace_id: string, node_id: string): string
         if not overlay or overlay_error then return "unavailable" end
         local entry, entry_error = overlay:get(admission_id)
         if entry_error and entry_error:kind() ~= errors.NOT_FOUND then return "unavailable" end
-        if not entry then
-            local prior_id = governed_admission.id(owner, "prior")
-            if prior_id then entry, entry_error = overlay:get(prior_id) end
-            if entry_error and entry_error:kind() ~= errors.NOT_FOUND then return "unavailable" end
-        end
         local fingerprint = "absent"
         if entry then
             local measured = governed_admission.measure((entry).data)

@@ -16,19 +16,17 @@ M.MAX_BYTES = 65536
 M.MAX_POLICY_BYTES = 262144
 M.NAMESPACE = "bee.gov"
 M.RESERVED_PREFIX = M.NAMESPACE .. ":admission."
-local PRIOR_ADMISSION_PREFIX = "bee.governance:admission."
-local PRIOR_GRANTS_PREFIX = "bee.governance.grants:"
 
 type Object = {[string]: unknown}
 type ThreadAccess = "none" | "observe_post"
 type Binding = {definition_id: string, policies: {string}, thread_access: ThreadAccess,
     appearance_write: boolean, application_stop: boolean, scope_management: boolean,
     close_grace_ms: integer}
-type Record = {identity_generation: string?, schema_revision: string, workspace_id: string, overlay_owner: string,
+type Record = {identity_generation: "current"?, schema_revision: string, workspace_id: string, overlay_owner: string,
     source_node: string, source_workspace: string, artifact_digest: string,
     policy_digest: string, bindings: {Binding}}
 type Measurement = {id: string, record: Record, bytes: string, digest: string}
-type Entry = {id: string, kind: string, meta: {type: string, identity_generation: string}, data: Record}
+type Entry = {id: string, kind: string, meta: {type: string}, data: Record}
 
 local sha = bounds.digest_hex
 
@@ -150,35 +148,31 @@ function M.record(raw: unknown): (Record?, string?)
         or not source_node or not source_workspace or not artifact_digest or not policy_digest or not bindings then
         return nil, bindings_error or "application admission record is invalid"
     end
-    local generation = value.identity_generation
-    if generation ~= nil and generation ~= "prior" and generation ~= "current" then return nil, "application admission generation is invalid" end
+    if value.identity_generation ~= nil and value.identity_generation ~= "current" then return nil, "application admission generation is invalid" end
+    local generation: "current"? = value.identity_generation ~= nil and "current" or nil
     return {identity_generation = generation, schema_revision = M.SCHEMA, workspace_id = workspace_id, overlay_owner = overlay_owner,
         source_node = source_node, source_workspace = source_workspace,
         artifact_digest = artifact_digest, policy_digest = policy_digest, bindings = bindings}, nil
 end
 
-function M.id(owner_raw: unknown, generation: unknown?): (string?, string?)
+function M.id(owner_raw: unknown): (string?, string?)
     local owner = bounds.id(owner_raw)
     if not owner then return nil, "application admission overlay owner is invalid" end
     local digest, digest_error = hash.sha256(owner)
     if not digest then return nil, tostring(digest_error or "measure application admission owner") end
-    if generation ~= nil and generation ~= "current" and generation ~= "prior" then return nil, "application admission generation is invalid" end
-    local prefix = generation == "prior" and PRIOR_ADMISSION_PREFIX or M.RESERVED_PREFIX
-    return prefix .. digest, nil
+    return M.RESERVED_PREFIX .. digest, nil
 end
 -- Admission records live under an owner-derived private identity.  Treat the
 -- whole prefix as reserved, including malformed suffixes: a portable artifact
 -- must never get to claim a present or future admission identity.
 function M.reserved(raw: unknown): boolean
     return type(raw) == "string" and ((raw):sub(1, #M.RESERVED_PREFIX) == M.RESERVED_PREFIX
-        or (raw):sub(1, #"bee.gov.grants:") == "bee.gov.grants:"
-        or (raw):sub(1, #PRIOR_ADMISSION_PREFIX) == PRIOR_ADMISSION_PREFIX
-        or (raw):sub(1, #PRIOR_GRANTS_PREFIX) == PRIOR_GRANTS_PREFIX)
+        or (raw):sub(1, #"bee.gov.grants:") == "bee.gov.grants:")
 end
 
 -- Decode the immutable byte sequence exactly as it was measured.  JSON only
 -- parses the input; remeasurement rejects a valid-looking noncanonical body.
-function M.decode(bytes_raw: unknown, digest_raw: unknown, generation: unknown?): (Measurement?, string?)
+function M.decode(bytes_raw: unknown, digest_raw: unknown): (Measurement?, string?)
     if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > M.MAX_BYTES then
         return nil, "application admission bytes exceed bound"
     end
@@ -189,7 +183,7 @@ function M.decode(bytes_raw: unknown, digest_raw: unknown, generation: unknown?)
     if actual ~= digest then return nil, "application admission digest does not match bytes" end
     local raw, decode_error = json.decode(bytes_raw)
     if decode_error then return nil, "application admission bytes are malformed" end
-    local measured, measure_error = M.measure(raw, generation)
+    local measured, measure_error = M.measure(raw)
     if not measured or measured.bytes ~= bytes_raw or measured.digest ~= digest then
         return nil, tostring(measure_error or "application admission bytes are not canonical")
     end
@@ -198,22 +192,20 @@ end
 
 -- This record is deliberately outside the portable artifact envelope.  It is
 -- a registry entry only after the destination has measured and frozen it.
-function M.entry(bytes_raw: unknown, digest_raw: unknown, generation: unknown?): (Entry?, string?)
-    local measured, measure_error = M.decode(bytes_raw, digest_raw, generation)
+function M.entry(bytes_raw: unknown, digest_raw: unknown): (Entry?, string?)
+    local measured, measure_error = M.decode(bytes_raw, digest_raw)
     if not measured then return nil, measure_error end
-    return {id = measured.id, kind = "registry.entry", meta = {type = M.SCHEMA, identity_generation = measured.record.identity_generation or (generation == "prior" and "prior" or "current")}, data = measured.record}, nil
+    return {id = measured.id, kind = "registry.entry", meta = {type = M.SCHEMA}, data = measured.record}, nil
 end
 
-function M.measure(raw: unknown, generation: unknown?): (Measurement?, string?)
+function M.measure(raw: unknown): (Measurement?, string?)
     local record, record_error = M.record(raw)
     if not record then return nil, record_error end
-    if generation ~= nil and generation ~= "current" and generation ~= "prior" then return nil, "application admission generation is invalid" end
-    if record.identity_generation and generation and record.identity_generation ~= generation then return nil, "application admission generation conflicts with measured record" end
     local bytes, encode_error = canonical.encode(record, M.MAX_BYTES)
     if not bytes then return nil, tostring(encode_error or "encode application admission") end
     local digest, digest_error = hash.sha256(bytes)
     if not digest then return nil, tostring(digest_error or "measure application admission") end
-    local id, id_error = M.id(record.overlay_owner, record.identity_generation or generation)
+    local id, id_error = M.id(record.overlay_owner)
     if not id then return nil, id_error end
     return {id = id, record = record, bytes = bytes, digest = digest}, nil
 end

@@ -21,7 +21,7 @@ end
 
 -- install walks one intent to an applied, observed generation.
 local function install(state: activation_store.Store, intent_id: string, version: string): {[string]: unknown}
-    local work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
+    local work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@3",
         destination_node = "node-a", source_node = "source-a", base_revision = 0,
         base_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
         candidate_digest = string.rep("c", 64), artifact_digest = string.rep("d", 64),

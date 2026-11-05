@@ -17,9 +17,3 @@ Operations are `read`, `post`, `subscribe`, `page`, `ack_page`, `resume` and
 actor, authenticates execution and membership, and enforces host-selected
 permissions. Applications cannot select another thread or actor in a request.
 The request and reply schemas live in `bee.app.threads.types:protocol`.
-
-`bee.app.threads.client:status_reader` maintains a bounded status projection
-(`new`, `bind`, `unbind`, `update_intent`, `read_intent`, `watch_intent` with
-matching `apply_*` calls, `value`) and fences stale generations.
-`bee.app.threads.types:status_surface` decodes status snapshots for badge and
-presenter values. Neither library grants thread access.

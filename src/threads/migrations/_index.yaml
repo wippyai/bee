@@ -123,15 +123,17 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-23T00:03:00Z'}
   imports:
     migration: wippy.migration:migration
+    rewrites: bee.persist:rewrites
     canonical: bee.drivers.values:canonical
   modules: [json]
 - name: tool_selection_paths
   kind: function.lua
-  source: file://tool_selection_paths.lua
+  source: file://tool_selections.lua
   method: run
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-23T00:04:00Z'}
   imports:
     migration: wippy.migration:migration
+    rewrites: bee.persist:rewrites
     canonical: bee.drivers.values:canonical
   modules: [json]
 - name: driver_bindings
@@ -141,6 +143,7 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-24T00:05:00Z'}
   imports:
     migration: wippy.migration:migration
+    rewrites: bee.persist:rewrites
 - name: driver_binding_checkpoints
   kind: function.lua
   source: file://driver_binding_checkpoints.lua
@@ -148,6 +151,7 @@ entries:
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-31T00:01:00Z'}
   imports:
     migration: wippy.migration:migration
+    rewrites: bee.persist:rewrites
 - name: session_names
   kind: function.lua
   source: file://session_names.lua

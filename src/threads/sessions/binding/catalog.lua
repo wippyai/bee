@@ -20,7 +20,7 @@ M.PROFILE_CALL = "bee.harness.binding:call"
 
 type Object = {[string]: unknown}
 type Kind = "definition" | "profile"
-type Status = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
+type Status = locate.Status
 type Fault = {code: string, message: string, retry: "never" | "same_key" | "refresh" | "reconcile"}
 type ProfileRow = {workspace_id: string, profile_id: string, revision: integer, tombstone: boolean, profile: profile_protocol.Profile?, migration_diagnostic: Object?}
 type ProfilePage = {workspace_id: string, items: {ProfileRow}, cursor: integer, next_key: string?, complete: boolean}

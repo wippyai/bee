@@ -388,7 +388,7 @@ entries:
 - name: hook_files
   kind: library.lua
   source: file://hook_files.lua
-  modules: [fs, env, registry, funcs]
+  modules: [fs, env]
   imports:
     bounds: bee.drivers.values:bounds
     store: bee.placement.native.persist:store

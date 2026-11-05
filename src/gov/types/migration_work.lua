@@ -12,12 +12,11 @@ local bounds = require("bounds")
 local M = {}
 
 M.SCHEMA = "bee.governance-migration-work@3"
-M.LEGACY_SCHEMA = "bee.governance-migration-work@2"
 M.MAX_MIGRATIONS = 128
 M.MAX_DATABASES = 128
 M.MAX_BYTES = 1048576
 
-type Schema = "bee.governance-migration-work@3" | "bee.governance-migration-work@2"
+type Schema = "bee.governance-migration-work@3"
 type Object = {[string]: unknown}
 type Migration = {id: string, target_db: string, ordinal: integer, checksum: string, package: string, definition: Object}
 type DatabaseKind = "db.sql.sqlite" | "db.sql.postgres" | "db.sql.mysql"
@@ -107,8 +106,7 @@ local function normalize(raw: unknown): (Payload?, string?)
     local base_digest, policy_digest = sha(value.base_digest), sha(value.policy_digest)
     local candidate_digest, artifact_digest, plan_digest = sha(value.candidate_digest), sha(value.artifact_digest), sha(value.plan_digest)
     local schema: Schema? = nil
-    if value.schema_revision == M.SCHEMA then schema = M.SCHEMA
-    elseif value.schema_revision == M.LEGACY_SCHEMA then schema = M.LEGACY_SCHEMA end
+    if value.schema_revision == M.SCHEMA then schema = M.SCHEMA end
     if not schema then return nil, "migration work schema is invalid" end
     if not destination then return nil, "migration work identity is invalid" end
     if not source then return nil, "migration work identity is invalid" end
@@ -183,18 +181,12 @@ local function normalize(raw: unknown): (Payload?, string?)
     for index, raw_database in ipairs(supplied_databases) do
         local item = object(raw_database)
         if not item then return nil, "migration work databases[" .. tostring(index) .. "] must be an object" end
-        local database_fields: {string}
-        if schema == M.LEGACY_SCHEMA then
-            database_fields = {"id", "kind", "package", "digest", "planned", "definition"}
-        else
-            database_fields = {"target_db", "database_id", "table_prefix", "kind", "package", "digest", "planned", "definition"}
-        end
-        local extra_database = fields(item, database_fields)
+        local extra_database = fields(item, {"target_db", "database_id", "table_prefix", "kind", "package", "digest", "planned", "definition"})
         if extra_database then return nil, extra_database end
-        local target_db = schema == M.LEGACY_SCHEMA and registry_id(item.id) or target(item.target_db)
-        local database_id = registry_id(schema == M.LEGACY_SCHEMA and item.id or item.database_id)
+        local target_db = target(item.target_db)
+        local database_id = registry_id(item.database_id)
         local prefix: string? = nil
-        if schema ~= M.LEGACY_SCHEMA and item.table_prefix ~= nil then
+        if item.table_prefix ~= nil then
             prefix = identifier(item.table_prefix)
             if not prefix then return nil, "migration work contains an invalid database prefix" end
             if #prefix > 64 then return nil, "migration work contains an invalid database prefix" end
@@ -231,15 +223,10 @@ local function normalize(raw: unknown): (Payload?, string?)
             return nil, "migration work physical database evidence differs"
         end
         physical_evidence[database_id] = evidence
-        if schema == M.LEGACY_SCHEMA then
-            databases[#databases + 1] = {target_db = target_db, database_id = database_id, kind = kind,
-                package = package, digest = measured, planned = item.planned, definition = definition}
-        else
-            local database: Database = {target_db = target_db, database_id = database_id, kind = kind,
-                package = package, digest = measured, planned = item.planned, definition = definition}
-            if prefix then database.table_prefix = prefix end
-            databases[#databases + 1] = database
-        end
+        local database: Database = {target_db = target_db, database_id = database_id, kind = kind,
+            package = package, digest = measured, planned = item.planned, definition = definition}
+        if prefix then database.table_prefix = prefix end
+        databases[#databases + 1] = database
         seen_targets[target_db], previous_target = true, target_db
     end
     local required_databases: {[string]: boolean} = {}
@@ -474,8 +461,7 @@ function M.decode(bytes_raw: unknown, digest_raw: unknown): (Work?, string?)
     return work, nil
 end
 
--- Resolve one logical target from already validated immutable work. Legacy
--- work uses one `id` for both sides and carries no prefix.
+-- Resolve one logical target from already validated immutable work.
 function M.database(work: Work, target_raw: unknown): (Database?, string?)
     local wanted = target(target_raw)
     if not wanted then

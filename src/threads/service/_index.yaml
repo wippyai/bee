@@ -16,7 +16,6 @@ entries:
     transaction: bee.threads.persist:transaction
     types: bee.threads:types
     access: bee.threads.service:access
-    notices: bee.threads.service:notices
   modules:
   - sql
 - name: notices

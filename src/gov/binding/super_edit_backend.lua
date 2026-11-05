@@ -58,20 +58,17 @@ local function owner_ids(namespaces: {string}, workspace_id: string): ({[string]
     return result, nil
 end
 
-local function current_actor(operation: string): boolean
-    local actor = security.actor()
-    if operation == "disable_all" then
-        return actor ~= nil and actor:id() == "bee.gov.recovery"
-            and security.can("bee.gov.super_edit.recover", "host-activation-profiles")
-    end
-    return actor ~= nil and actor:id() == "bee.gov.super_edit"
-        and security.can("bee.gov.super_edit.execute", "host-activation-profiles")
+-- The facade's execution scope grants the profile writer: Settings' scope
+-- executes edits, the startup recovery scope disables every overlay.
+local function authorized(operation: string): boolean
+    if operation == "disable_all" then return security.can("bee.gov.super_edit.recover", "host-activation-profiles") end
+    return security.can("bee.gov.super_edit.execute", "host-activation-profiles")
 end
 
 function M.handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     local operation = request and bounds.id(request.operation) or nil
-    if not operation or not current_actor(operation) then return failure("DENIED", "super-edit profile writer is not authorized") end
+    if not operation or not authorized(operation) then return failure("DENIED", "super-edit profile writer is not authorized") end
     if operation == "disable_all" then
         if not request or bounds.fields(request, {"operation"}) then return failure("INVALID", "boot fallback request is invalid") end
     elseif operation ~= "enable" and operation ~= "disable" and operation ~= "status" then

@@ -7,6 +7,7 @@ local registry = require("registry")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local protocol = require("protocol")
+local rewrites = require("rewrites")
 type Row = {row_id: integer, owner: string, feed: string, key: string, value: {[string]: unknown}, name: string, driver: string}
 local function definition_title(pinned: registry.Snapshot, ref: unknown): string?
     local id = bounds.id(ref)
@@ -37,7 +38,7 @@ return require("migration").define(function()
                         rows[#rows + 1] = {row_id = raw.row_id, owner = raw.owner_id, feed = raw.feed, key = raw.projection_key, value = value, name = name, driver = driver}
                     end
                 end
-                local feeds: {[string]: {owner: string, feed: string}} = {}
+                local feeds: {[string]: rewrites.Feed} = {}
                 for _, group in ipairs(order) do
                     local taken: {string} = {}
                     for _, row in ipairs(groups[group]) do
@@ -54,9 +55,7 @@ return require("migration").define(function()
                         end
                     end
                 end
-                for _, item in pairs(feeds) do
-                    assert(db:execute("UPDATE bee_sync_feeds SET head_sequence = head_sequence + 1, earliest_sequence = head_sequence + 2 WHERE owner_id = ? AND feed = ?", {item.owner, item.feed}))
-                end
+                assert(not rewrites.fence_feeds(db, feeds))
             end)
         end)
     end)

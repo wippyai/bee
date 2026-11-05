@@ -15,11 +15,6 @@
     "reason": "Describes an immutable bound, scope, role or host-selected value."
   },
   {
-    "path": "drivers/src/binding/resolver.lua",
-    "text": "-- Legacy and fixture drivers without declarative profiles cannot opt into",
-    "reason": "Drivers without declarative profiles remain supported, with restrictions on opting into host policy."
-  },
-  {
     "path": "src/gateway/catalog/context.lua",
     "text": "-- an authorization mechanism; the host supplies fixed values separately.",
     "reason": "Describes an immutable bound, scope, role or host-selected value."
@@ -55,11 +50,6 @@
     "reason": "Describes an immutable bound, scope, role or host-selected value."
   },
   {
-    "path": "src/gov/types/migration_work.lua",
-    "text": "-- Resolve one logical target from already validated immutable work. Legacy",
-    "reason": "The decoder still accepts scalar targets and inline derived work."
-  },
-  {
     "path": "src/harness/binding/setup_method.lua",
     "text": "-- fixed host setup scope; metadata never grants workspace management.",
     "reason": "Describes an immutable bound, scope, role or host-selected value."
@@ -73,11 +63,6 @@
     "path": "src/harness/carrier/hook_records.lua",
     "text": "-- Only fixed labels leave the decoder; no prompt, tool input or arbitrary",
     "reason": "Describes an immutable bound, scope, role or host-selected value."
-  },
-  {
-    "path": "src/harness/launch/admission.lua",
-    "text": "-- legacy routes without an agent reference.",
-    "reason": "Admission still accepts routes without an agent reference."
   },
   {
     "path": "src/hub/binding/backend.lua",

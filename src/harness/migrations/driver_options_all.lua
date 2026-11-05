@@ -3,12 +3,13 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local profile_migration = require("profile_migration")
 local registry = require("registry")
+local rewrites = require("rewrites")
 return require("migration").define(function()
     migration("Pin all stored profile versions to their registry schema", function()
         database("sqlite", function()
             up(function(db)
                 local pinned = registry.snapshot()
-                local feeds: {[string]: {owner: string, feed: string}} = {}
+                local feeds: {[string]: rewrites.Feed} = {}
                 for _, row in ipairs(assert(db:query("SELECT owner_id,feed,projection_key,value_json FROM bee_sync_projections WHERE feed LIKE 'harness.profiles:%' AND tombstone = 0"))) do
                     local source = json.decode(row.value_json)
                     local stored = profile_migration.registered(source, pinned)
@@ -27,9 +28,7 @@ return require("migration").define(function()
                         feeds[row.owner_id .. ":" .. row.feed] = {owner = row.owner_id, feed = row.feed}
                     end
                 end
-                for _, item in pairs(feeds) do
-                    assert(db:execute("UPDATE bee_sync_feeds SET head_sequence = head_sequence + 1, earliest_sequence = head_sequence + 2 WHERE owner_id = ? AND feed = ?", {item.owner, item.feed}))
-                end
+                assert(not rewrites.fence_feeds(db, feeds))
             end)
         end)
     end)

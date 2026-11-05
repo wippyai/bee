@@ -43,8 +43,6 @@ entries:
   - json
   - funcs
   - security
-  - contract
-  - registry
   imports:
     gateway: bee.gateway.binding:gateway
     hooks: bee.gateway.hooks:hooks
@@ -75,7 +73,6 @@ entries:
   - http
   - json
   - funcs
-  - registry
   - security
   imports:
     gateway: bee.gateway.binding:gateway
@@ -102,10 +99,6 @@ entries:
   modules:
   - http
   - json
-  - funcs
-  - security
-  - contract
-  - registry
   imports:
     gateway: bee.gateway.binding:gateway
     mcp: bee.gateway.api:mcp
@@ -137,7 +130,6 @@ entries:
   - funcs
   - security
   - registry
-  - contract
   imports:
     app_tools: bee.node:app_tools
     profile_scope: bee.gateway.catalog:profile_scope

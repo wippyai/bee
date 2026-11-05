@@ -11,7 +11,8 @@ local service = require("service")
 local claude_launch = require("claude_launch")
 local json = require("json")
 local store = require("store")
-local materialization = require("materialization")
+local launch_checks = require("launch_checks")
+local launch_environment = require("launch_environment")
 local resources = require("resources")
 local request_codec = require("request_codec")
 local protocol = require("protocol")
@@ -224,21 +225,21 @@ local function home_tests()
                 if not request then error(tostring(err)) end
                 return request
             end
-            local roots, roots_error = materialization.write_roots(decoded(base .. "/granted", "write"), executor)
+            local roots, roots_error = launch_environment.write_roots(decoded(base .. "/granted", "write"), executor)
             test.is_nil(roots_error)
             test.eq(roots and #roots, 1)
             test.eq(roots and roots[1], root .. "/" .. base .. "/granted")
-            local whole, whole_error = materialization.write_roots(decoded("", "write"), executor)
+            local whole, whole_error = launch_environment.write_roots(decoded("", "write"), executor)
             test.is_nil(whole_error)
             test.eq(whole and #whole, 1)
             test.eq(whole and whole[1], root)
-            local read_only, read_error = materialization.write_roots(decoded(base .. "/granted", "read"), executor)
+            local read_only, read_error = launch_environment.write_roots(decoded(base .. "/granted", "read"), executor)
             test.is_nil(read_error)
             test.eq(read_only and #read_only, 0)
-            local escaped, escape_error = materialization.write_roots(decoded(base .. "/escape", "write"), executor)
+            local escaped, escape_error = launch_environment.write_roots(decoded(base .. "/escape", "write"), executor)
             test.is_nil(escaped)
             test.not_nil(escape_error)
-            local missing, missing_error = materialization.write_roots(decoded(base .. "/absent", "write"), executor)
+            local missing, missing_error = launch_environment.write_roots(decoded(base .. "/absent", "write"), executor)
             test.is_nil(missing)
             test.not_nil(missing_error)
             native_fixture.shell("rm -rf " .. quote.posix(root .. "/" .. base))
@@ -257,32 +258,32 @@ local function home_tests()
                 checked[#checked + 1] = path
                 return path == "/custom/auth.json"
             end
-            local missing = materialization.login_notice(decoded, "/owner", exists)
+            local missing = launch_checks.login_notice(decoded, "/owner", exists)
             test.eq(missing and missing.code, "LOGIN_REQUIRED")
             test.eq(missing and missing.provider, "codex")
             test.eq(missing and missing.command, "codex login")
             test.eq(checked[1], "/owner/.codex/auth.json")
             decoded.environment.CODEX_HOME = "/custom"
-            test.is_nil(materialization.login_notice(decoded, "/owner", exists))
+            test.is_nil(launch_checks.login_notice(decoded, "/owner", exists))
             test.eq(checked[2], "/custom/auth.json")
             decoded.environment.CODEX_HOME = "/other"
-            local other = materialization.login_notice(decoded, "/owner", exists)
+            local other = launch_checks.login_notice(decoded, "/owner", exists)
             test.eq(other and other.code, "LOGIN_REQUIRED")
             test.eq(checked[3], "/other/auth.json")
             decoded.profile_id = "batch"
-            test.is_nil(materialization.login_notice(decoded, "/owner", exists))
+            test.is_nil(launch_checks.login_notice(decoded, "/owner", exists))
             test.eq(#checked, 3)
             decoded.profile_id = "window"
             local projected_request, projected_error = request_codec.decode(raw)
             if not projected_request then error(tostring(projected_error)) end
-            test.is_nil(materialization.login_notice(projected_request, "/owner", exists, "/owner/.codex/auth.json"))
+            test.is_nil(launch_checks.login_notice(projected_request, "/owner", exists, "/owner/.codex/auth.json"))
             test.eq(#checked, 3)
             -- A retained login projection cannot satisfy a provider whose
             -- own home override points outside the retained home.
             projected_request.environment.CODEX_HOME = "/other"
-            local projected_elsewhere = materialization.login_notice(projected_request, "/owner", exists, "/owner/.codex/auth.json")
+            local projected_elsewhere = launch_checks.login_notice(projected_request, "/owner", exists, "/owner/.codex/auth.json")
             test.eq(projected_elsewhere and projected_elsewhere.code, "LOGIN_REQUIRED")
-            test.is_nil(materialization.login_notice(projected_request, "/owner", function(path: string): boolean? return nil end))
+            test.is_nil(launch_checks.login_notice(projected_request, "/owner", function(path: string): boolean? return nil end))
         end)
         test.it("checks all five provider layouts in the home selected for each window", function()
             local cases = {
@@ -301,7 +302,7 @@ local function home_tests()
                 local decoded, err = request_codec.decode(raw)
                 if not decoded then error(tostring(err)) end
                 local checked: string? = nil
-                local notice = materialization.login_notice(decoded, "/owner", function(path: string): boolean
+                local notice = launch_checks.login_notice(decoded, "/owner", function(path: string): boolean
                     checked = path
                     return false
                 end)
@@ -333,7 +334,7 @@ local function home_tests()
                 spec.login = {provider = "codex", command = "codex login", files = {{variable = "HOME", path = "etc/hosts"}}}
                 local decoded, decode_error = request_codec.decode(raw)
                 if not decoded then error(tostring(decode_error)) end
-                test.is_nil(materialization.prepare_login_notice(decoded, "/private-attempt-home", nil))
+                test.is_nil(launch_checks.prepare_login_notice(decoded, "/private-attempt-home", nil))
             end)
             local restore = registry.snapshot():changes()
             restore:update(native_fixture.registry_input(original))

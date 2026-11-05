@@ -27,7 +27,7 @@ entries:
     formats: bee.drivers.credentials:format
     driver_types: bee.drivers:types
     universal: bee.drivers.binding:universal
-    materialization: bee.placement.native.service:materialization
+    launch_checks: bee.placement.native.service.launch:checks
     placement_types: bee.placement:types
 - name: docker_probe_test
   kind: function.lua

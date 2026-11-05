@@ -1415,7 +1415,7 @@ entries:
     machine: bee.harness.carrier:machine
     types: bee.placement:types
     driver_types: bee.drivers:types
-    materialization: bee.placement.native.service:materialization
+    launch_checks: bee.placement.native.service.launch:checks
 - name: selection_test
   kind: function.lua
   source: file://selection_test.lua

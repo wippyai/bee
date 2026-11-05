@@ -10,7 +10,7 @@ local muse = require("muse_launch")
 local opencode = require("opencode_launch")
 local registry = require("registry")
 local universal = require("universal")
-local materialization = require("materialization")
+local launch_checks = require("launch_checks")
 local placement_types = require("placement_types")
 local provider_projection = require("provider_projection")
 local formats = require("formats")
@@ -73,17 +73,17 @@ local function define_tests()
                     timeouts = {stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
                 local selected_home = private and "/fixture-attempt-home" or "/fixture-machine-home"
                 local expected = selected_home .. "/" .. (case.directory and (case.directory .. "/") or "") .. case.path
-                local notice = materialization.login_notice(request, selected_home, function(path: string): boolean
+                local notice = launch_checks.login_notice(request, selected_home, function(path: string): boolean
                     test.eq(path, expected)
                     return true
                 end)
                 test.is_nil(notice)
                 if private then
-                    test.is_nil(materialization.login_notice(request, selected_home, function(_path: string): boolean
+                    test.is_nil(launch_checks.login_notice(request, selected_home, function(_path: string): boolean
                         error("projected login must not require another host read")
                     end, expected))
                 end
-                local missing = materialization.login_notice(request, selected_home, function(_path: string): boolean
+                local missing = launch_checks.login_notice(request, selected_home, function(_path: string): boolean
                     return false
                 end)
                 test.is_nil(missing, "unobserved environment/status alternatives cannot establish missing login")

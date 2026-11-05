@@ -1,0 +1,32 @@
+version: '1.0'
+namespace: bee.placement.native.service.attempt
+entries:
+- name: access
+  kind: library.lua
+  source: file://access.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+    types: bee.placement:types
+    store: bee.placement.native.persist:store
+    part_preparation: bee.placement.native.service:preparation
+- name: operations
+  kind: library.lua
+  source: file://operations.lua
+  modules:
+  - cdc
+  - channel
+  - process
+  - sql
+  - uuid
+  imports:
+    bounds: bee.drivers.values:bounds
+    types: bee.placement:types
+    transitions: bee.placement:transitions
+    store: bee.placement.native.persist:store
+    executable: bee.placement.native.service:executable
+    homes: bee.placement.native.service:homes
+    protocol: bee.placement.native:protocol
+    materialization: bee.placement.native.service:materialization
+    part_preparation: bee.placement.native.service:preparation
+    attempt_access: bee.placement.native.service.attempt:access
+    seam: bee.process:seam

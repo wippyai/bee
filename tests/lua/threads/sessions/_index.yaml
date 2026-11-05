@@ -60,7 +60,7 @@ entries:
     test: wippy.test:test
     catalog: bee.threads.sessions.binding:catalog_service
     machine: bee.harness.carrier:machine
-    materialization: bee.placement.native.service:materialization
+    launch_checks: bee.placement.native.service.launch:checks
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua

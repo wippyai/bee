@@ -10,7 +10,7 @@ local policy = require("policy")
 local preferences = require("preferences")
 local launch = require("launch")
 local claude_launch = require("claude_launch")
-local materialization = require("materialization")
+local launch_checks = require("launch_checks")
 local machine = require("machine")
 local types = require("types")
 local driver_types = require("driver_types")
@@ -209,10 +209,10 @@ local function define_tests()
             -- launch whose committed home carries it, and names the committed
             -- home when it does not.
             local installed: {driver_types.RequiredFile} = {{variable = "CODEX_HOME", path = "hostname"}}
-            local admitted = materialization.required_file_missing(launch_request(installed, {CODEX_HOME = "/etc", HOME = "/definitely-missing-bee-home"}))
+            local admitted = launch_checks.required_file_missing(launch_request(installed, {CODEX_HOME = "/etc", HOME = "/definitely-missing-bee-home"}))
             test.is_nil(admitted)
             local absent: {driver_types.RequiredFile} = {{variable = "CODEX_HOME", path = "definitely-missing-bee-profile.config.toml"}}
-            local refused = materialization.required_file_missing(launch_request(absent, {CODEX_HOME = "/etc", HOME = "/definitely-missing-bee-home"}))
+            local refused = launch_checks.required_file_missing(launch_request(absent, {CODEX_HOME = "/etc", HOME = "/definitely-missing-bee-home"}))
             test.not_nil(refused)
             test.is_true(refused:find("/etc", 1, true) ~= nil)
             test.is_true(refused:find("definitely-missing-bee-home", 1, true) == nil)
@@ -220,7 +220,7 @@ local function define_tests()
 
         test.it("reports an absent committed home instead of guessing the profile is missing", function()
             local declared: {driver_types.RequiredFile} = {{variable = "CODEX_HOME", path = PROFILE .. ".config.toml", default_directory = ".codex"}}
-            local absent_home = materialization.required_file_missing(launch_request(declared, nil, nil))
+            local absent_home = launch_checks.required_file_missing(launch_request(declared, nil, nil))
             test.not_nil(absent_home)
             test.is_true(absent_home:find("host home is unavailable", 1, true) ~= nil)
         end)
@@ -229,7 +229,7 @@ local function define_tests()
             local declared: {driver_types.RequiredFile} = {{variable = "CODEX_HOME", path = PROFILE .. ".config.toml", default_directory = ".codex"}}
             -- /etc exists and carries no such profile, so the refusal is about
             -- the missing name rather than an unavailable home.
-            local missing = materialization.required_file_missing(launch_request(declared, {CODEX_HOME = "/etc"}))
+            local missing = launch_checks.required_file_missing(launch_request(declared, {CODEX_HOME = "/etc"}))
             test.not_nil(missing)
             test.is_true(missing:find(PROFILE, 1, true) ~= nil)
             test.is_true(missing:find("not installed", 1, true) ~= nil)

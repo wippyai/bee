@@ -11,6 +11,7 @@ local profiles = require("profiles")
 local spec_codec = require("spec")
 local store = require("store")
 local local_attempts = require("local_attempts")
+local operations = require("operations")
 local homes = require("homes")
 local profile_home = require("profile_home")
 local types = require("types")
@@ -453,17 +454,17 @@ end
 function M.attach(value: unknown): Reply
     local loaded, load_error = M.load(value)
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
-    return local_attempts.attach(value)
+    return operations.attach(value)
 end
 function M.evidence(value: unknown): Reply
     local loaded, load_error = M.load(value)
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
-    return local_attempts.evidence(value)
+    return operations.evidence(value)
 end
 function M.close_stdin(value: unknown): Reply
     local loaded, load_error = M.load(value)
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
-    return local_attempts.close_stdin(value)
+    return operations.close_stdin(value)
 end
 function M.measure_executable(_value: unknown): Reply
     return fail("UNSUPPORTED_CAPABILITY", "Docker measures the runtime image; host executable bytes are not mounted")

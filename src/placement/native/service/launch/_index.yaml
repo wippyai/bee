@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.placement.native.service.launch
+entries:
+- name: checks
+  kind: library.lua
+  source: file://checks.lua
+  modules:
+  - env
+  - fs
+  imports:
+    resources: bee.placement.native.env:resources
+    types: bee.placement:types
+- name: environment
+  kind: library.lua
+  source: file://environment.lua
+  modules:
+  - env
+  - sql
+  imports:
+    resources: bee.placement.native.env:resources
+    workdir_preparers: bee.placement.native.service:workdir_preparers
+    writable_roots: bee.drivers.descriptor:writable_roots
+    types: bee.placement:types
+    paths: bee.placement.profiles:paths

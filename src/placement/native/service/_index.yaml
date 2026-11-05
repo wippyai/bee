@@ -72,14 +72,12 @@ entries:
   kind: library.lua
   source: file://service.lua
   modules:
-  - cdc
   - channel
   - env
   - funcs
   - hostprocess
   - process
   - sql
-  - time
   - uuid
   imports:
     bounds: bee.drivers.values:bounds
@@ -99,14 +97,13 @@ entries:
     supervision: bee.placement.native.persist:supervision
     demand: bee.process:demand
     part_preparation: bee.placement.native.service:preparation
-    seam: bee.process:seam
+    attempt_access: bee.placement.native.service.attempt:access
 - name: materialization
   kind: library.lua
   source: file://materialization.lua
   modules:
   - registry
   - env
-  - fs
   - funcs
   - sql
   - process
@@ -122,8 +119,6 @@ entries:
     store: bee.placement.native.persist:store
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
-    workdir_preparers: bee.placement.native.service:workdir_preparers
-    writable_roots: bee.drivers.descriptor:writable_roots
     bounds: bee.drivers.values:bounds
     configuration: bee.placement.native.env:configuration
     provider_projection: bee.placement.native.service:provider_projection
@@ -133,6 +128,8 @@ entries:
     credential_protocol: bee.credentials:protocol
     service_reply: bee.drivers.values:reply
     formats: bee.drivers.credentials:format
+    launch_checks: bee.placement.native.service.launch:checks
+    launch_environment: bee.placement.native.service.launch:environment
 - name: runner
   kind: process.lua
   source: file://runner.lua
@@ -381,7 +378,7 @@ entries:
     resources: bee.placement.native.env:resources
     capability: bee.placement.native.service:capability
     homes: bee.placement.native.service:homes
-    materialization: bee.placement.native.service:materialization
+    launch_checks: bee.placement.native.service.launch:checks
     gateway_protocol: bee.gateway:protocol
     service_reply: bee.drivers.values:reply
     credential_protocol: bee.credentials:protocol

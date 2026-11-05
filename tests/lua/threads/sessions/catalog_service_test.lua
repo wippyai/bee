@@ -6,7 +6,7 @@ local catalog = require("catalog")
 local registry = require("registry")
 local funcs = require("funcs")
 local machine = require("machine")
-local materialization = require("materialization")
+local launch_checks = require("launch_checks")
 local json = require("json")
 local env = require("env")
 
@@ -183,7 +183,7 @@ local function define_tests()
             }, request)
             if not plan then error(tostring(plan_error)) end
             test.eq(plan.placement_request.environment_refs.HOME, "bee.env:machine_home")
-            test.is_nil(materialization.prepare_login_notice(plan.placement_request, "/unused-private-home"))
+            test.is_nil(launch_checks.prepare_login_notice(plan.placement_request, "/unused-private-home"))
         end)
         test.it("lists a driver declared by its descriptor, launch definition and policy alone ready, with no hook points", function()
             local namespace = "bee.tests.threads.sessions.solo"

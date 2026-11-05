@@ -32,6 +32,7 @@ entries:
     spec: bee.placement.docker.binding:spec
     store: bee.placement.native.persist:store
     local_attempts: bee.placement.native.service:service
+    operations: bee.placement.native.service.attempt:operations
     homes: bee.placement.native.service:homes
     profile_home: bee.placement.docker.service:profile_home
     types: bee.placement:types

@@ -115,7 +115,7 @@ entries:
     path: .imports.seam
   - entry: bee.placement.native.service:process_runner
     path: .imports.seam
-  - entry: bee.placement.native.service:service
+  - entry: bee.placement.native.service.attempt:operations
     path: .imports.seam
   - entry: bee.placement.native.service:workdir_preparers
     path: .imports.seam

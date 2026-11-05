@@ -49,7 +49,7 @@ entries:
   source: file://status_method.lua
   method: handle
   imports:
-    service: bee.placement.native.service:service
+    operations: bee.placement.native.service.attempt:operations
   security:
     policies: *id001
 - name: activity
@@ -57,7 +57,7 @@ entries:
   source: file://activity_method.lua
   method: handle
   imports:
-    service: bee.placement.native.service:service
+    operations: bee.placement.native.service.attempt:operations
   security:
     policies: *id001
 - name: forget_session
@@ -67,7 +67,7 @@ entries:
   source: file://forget_session_method.lua
   method: handle
   imports:
-    service: bee.placement.native.service:service
+    operations: bee.placement.native.service.attempt:operations
   security:
     policies: *id001
 - name: stop
@@ -107,7 +107,7 @@ entries:
   source: file://measure_executable_method.lua
   method: handle
   imports:
-    service: bee.placement.native.service:service
+    operations: bee.placement.native.service.attempt:operations
   security:
     policies: *id001
 - name: close_stdin
@@ -115,7 +115,7 @@ entries:
   source: file://close_stdin_method.lua
   method: handle
   imports:
-    service: bee.placement.native.service:service
+    operations: bee.placement.native.service.attempt:operations
   security:
     policies: *id001
 - name: reconcile
@@ -139,7 +139,7 @@ entries:
   source: file://evidence_method.lua
   method: handle
   imports:
-    service: bee.placement.native.service:service
+    operations: bee.placement.native.service.attempt:operations
   security:
     policies: *id001
 - name: attach
@@ -147,7 +147,7 @@ entries:
   source: file://attach_method.lua
   method: handle
   imports:
-    service: bee.placement.native.service:service
+    operations: bee.placement.native.service.attempt:operations
   security:
     policies: *id001
 - name: process_backend

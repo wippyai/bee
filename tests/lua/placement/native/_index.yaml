@@ -527,7 +527,8 @@ entries:
     test: wippy.test:test
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
-    materialization: bee.placement.native.service:materialization
+    launch_checks: bee.placement.native.service.launch:checks
+    launch_environment: bee.placement.native.service.launch:environment
     resources: bee.placement.native.env:resources
     request_codec: bee.placement:request
     protocol: bee.placement.native:protocol

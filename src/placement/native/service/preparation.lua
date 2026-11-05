@@ -17,7 +17,7 @@ local placement_profiles = require("placement_profiles")
 local configuration_protocol = require("configuration")
 local preferences = require("preferences")
 local writable_roots = require("writable_roots")
-local materialization = require("materialization")
+local launch_checks = require("launch_checks")
 local gateway_protocol = require("gateway_protocol")
 local service_reply = require("service_reply")
 local credential_protocol = require("credential_protocol")
@@ -332,12 +332,12 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     if caller ~= request.owner_id then return fail("FORBIDDEN", "owner_id is not the caller") end
-    local environment_conflict = materialization.environment_conflict(request)
+    local environment_conflict = launch_checks.environment_conflict(request)
     if environment_conflict then return fail("INVALID", environment_conflict) end
     -- A declared host file is available only from the inherited user home.
     -- Refuse the launch before intent when it is absent, rather than letting
     -- the executable start and fail. Existence only; contents are never read.
-    local missing_file = materialization.required_file_missing(request)
+    local missing_file = launch_checks.required_file_missing(request)
     if missing_file then return fail("DENIED", missing_file) end
     local digest, digest_error = request_codec.digest(request)
     if not digest then return fail("INVALID", digest_error or "request is not measurable") end
@@ -359,7 +359,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
             end
         end
     end
-    local login_notice = materialization.prepare_login_notice(request, home_directory, projected_login_path)
+    local login_notice = launch_checks.prepare_login_notice(request, home_directory, projected_login_path)
     local prepare_pinned, prepare_pin_error = resolver.pin()
     if not prepare_pinned then return fail("UNAVAILABLE", prepare_pin_error or "pin registry") end
     local selected_placement, placement_error = placement_resolver.resolve(prepare_pinned, request.placement_binding_ref)

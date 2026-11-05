@@ -68,6 +68,8 @@ entries:
     types: bee.placement:types
     placement_profiles: bee.placement.profiles:profiles
     paths: bee.placement.profiles:paths
+    launch_checks: bee.placement.native.service.launch:checks
+    launch_environment: bee.placement.native.service.launch:environment
     gateway_protocol: bee.gateway:protocol
     credential_protocol: bee.credentials:protocol
     service_reply: bee.drivers.values:reply
@@ -114,7 +116,7 @@ entries:
     test: wippy.test:test
     types: bee.placement:types
     driver_types: bee.drivers:types
-    materialization: bee.tests.placement.native.service:materialization
+    launch_checks: bee.placement.native.service.launch:checks
 - name: publication_test
   kind: function.lua
   source: file://publication_test.lua

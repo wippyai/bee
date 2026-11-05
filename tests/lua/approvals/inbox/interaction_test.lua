@@ -168,6 +168,41 @@ local function define_tests()
             assert(process.cancel(pid)); viewport:close(); process.unlisten(queries)
             assert(ok, tostring(problem))
         end)
+        test.it("follows a navigation that arrives during a sync once the sync ends, without a sync status", function()
+            local syncs = assert(process.listen("bee.test.inbox.sync", {message = true}))
+            local id = request("Review the request a navigation opens?")
+            local viewport = assert(tty.viewport({width = 120, height = 40}))
+            local identity = assert(principal.value(WORKSPACE, "navigation-review", "bee.approvals.inbox.app:app", "1", 1))
+            local launch = {version = 1, broker_pid = tostring(process.pid()), workspace_pid = tostring(process.pid()), workspace_id = WORKSPACE,
+                instance_id = "navigation-review", view_id = "navigation-review", definition_id = "bee.approvals.inbox.app:app", definition_revision = "1",
+                execution_generation = 1, registry_revision = "1", launch_token = "navigation-token", resume_schema = "", resume_state = "", arguments = {}}
+            local pid = assert(process.with_options({terminal = assert(viewport:grant())}):with_actor(assert(security.new_actor(identity.id, identity.metadata)))
+                :with_scope(application.scope("bee.approvals.inbox.app:app"))
+                :with_context({["bee.test.inbox.sync"] = tostring(process.pid())})
+                :spawn_monitored("bee.approvals.inbox.app:app", "bee:workers", launch))
+            local ok, problem = pcall(function()
+                local held = assert((syncs:receive()))
+                assert(process.send(pid, "bee.app.navigate", {version = 1, instance_id = launch.instance_id, view_id = launch.view_id,
+                    execution_generation = 1, launch_token = launch.launch_token, arguments = {"--review", id}}))
+                assert(process.send(tostring(held:from()), "bee.test.inbox.synced", {}))
+                local updates = assert(viewport:updates())
+                local deadline = time.after("10s")
+                while true do
+                    local snapshot = viewport:snapshot()
+                    local shown = snapshot and tty.text.plain(table.concat(snapshot.rows, "\n")) or ""
+                    test.is_nil(shown:find("Sync in progress", 1, true), "the navigation showed a sync status")
+                    if shown:find("Reviewing request", 1, true) then
+                        test.contains(shown, "Review the request a navigation opens?")
+                        break
+                    end
+                    local selected = channel.select({updates:case_receive(), syncs:case_receive(), deadline:case_receive()})
+                    assert(selected.channel ~= deadline, "the navigation never opened its request: " .. shown)
+                    if selected.channel == syncs then assert(process.send(tostring(selected.value:from()), "bee.test.inbox.synced", {})) end
+                end
+            end)
+            assert(process.cancel(pid)); viewport:close(); process.unlisten(syncs)
+            assert(ok, tostring(problem))
+        end)
     end)
 end
 return test.run_cases(define_tests)

@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- A window spawned with the ctx key bee.test.inbox.review holds its first
 -- detail draw for that controller and reports each decision to it. A window
+-- spawned with bee.test.inbox.sync holds each sync for that controller. A window
 -- spawned with bee.test.settings.area offers that one area in the edit form.
 local ctx = require("ctx")
 local process = require("process")
@@ -11,6 +12,11 @@ return {
         if held or type(controller) ~= "string" or type(payload) ~= "table" or payload.detail ~= true then return nil end
         held = true
         return {controller = controller, report = "bee.test.inbox.review", release = "bee.test.inbox.display", payload = {}}
+    end,
+    ["bee.approvals.inbox.app.refresh"] = function(): unknown
+        local controller = ctx.get("bee.test.inbox.sync")
+        if type(controller) ~= "string" then return nil end
+        return {controller = controller, report = "bee.test.inbox.sync", release = "bee.test.inbox.synced", payload = {}}
     end,
     ["bee.approvals.inbox.app.act"] = function(payload: unknown?): unknown
         local controller = ctx.get("bee.test.inbox.review")

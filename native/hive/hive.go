@@ -216,6 +216,11 @@ func (h *Host) Plan(_ context.Context, launch app.Launch) (app.Plan, error) {
 		if !owned {
 			return app.Plan{}, errors.New("bee mcp connect: this folder needs a running node")
 		}
+		// The pairing CLI reaches the folder's node over the hive's cluster;
+		// a standalone node has no transport another process can reach.
+		if hive == nil {
+			return app.Plan{}, errors.New("bee mcp connect: this folder's node is in no hive; run bee hive init, restart the node and connect again")
+		}
 		plan, err := h.clientPlan(dir, launch.State, hive, owned, nil)
 		if err != nil {
 			return app.Plan{}, err

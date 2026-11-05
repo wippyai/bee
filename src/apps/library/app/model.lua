@@ -617,7 +617,7 @@ function M.version_lines(state: State, row: Row): {Line}
         lines[#lines + 1] = {label = "Next", value = "Approved; installing now"}
     elseif row.status == M.STATUS_LEFT_OUT then
         lines[#lines + 1] = {label = "Left out", value = row.note}
-        lines[#lines + 1] = {label = "Next", value = row.held_back and "Once the folder is back, Recover starts it; so does the next start of Bee"
+        lines[#lines + 1] = {label = "Next", value = row.held_back and "Once the folder is back, Enter recovers it; so does the next start of Bee"
             or "This Bee does not run this version; install a newer one or remove it"}
     end
     return lines

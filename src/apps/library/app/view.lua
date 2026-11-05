@@ -67,6 +67,8 @@ function M.actions(state: model.State, row: model.Row?, with_filters: boolean?):
             buttons[#buttons + 1] = {kind = "install", key = "Enter", label = "Install", enabled = true, primary = true}
         elseif model.can_update(row) then
             buttons[#buttons + 1] = {kind = "update", key = "Enter", label = "Update", enabled = true, primary = true}
+        elseif row and row.held_back then
+            buttons[#buttons + 1] = {kind = "recover", key = "Enter", label = "Recover", enabled = true, primary = true}
         else
             buttons[#buttons + 1] = {kind = "refresh", key = "Enter", label = "Check", enabled = true, primary = true}
         end

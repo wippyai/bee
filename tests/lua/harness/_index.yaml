@@ -831,6 +831,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
   imports:
+    await_changes: bee.tests.support:await
     processes: bee.tests.support:processes
     quote: bee.drivers.binding:quote
     principals: bee.tests.support.principals:bound
@@ -877,6 +878,7 @@ entries:
     - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
   imports:
+    await_changes: bee.tests.support:await
     processes: bee.tests.support:processes
     quote: bee.drivers.binding:quote
     principals: bee.tests.support.principals:bound
@@ -912,6 +914,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
   imports:
+    await_changes: bee.tests.support:await
     processes: bee.tests.support:processes
     quote: bee.drivers.binding:quote
     principals: bee.tests.support.principals:bound
@@ -2932,6 +2935,7 @@ entries:
   - sql
   - time
   imports:
+    await_changes: bee.tests.support:await
     harness: bee.tests.threads:harness
     bounds: bee.drivers.values:bounds
     principals: bee.tests.support.principals:bound

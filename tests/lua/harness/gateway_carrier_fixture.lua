@@ -20,6 +20,7 @@ local channel = require("channel")
 local json = require("json")
 local sql = require("sql")
 local placement_fixture = require("placement_fixture")
+local await_changes = require("await_changes")
 local harness = require("harness")
 local ACTOR = "bee.test.gateway_carrier"
 local POLICY = "bee.tests.harness:gateway_fixture_policy"
@@ -245,13 +246,14 @@ end
 -- Placement evidence the runner records on its own schedule; a marker
 -- narrows the wait to evidence of that kind whose detail carries it.
 local function await_evidence(attempt_id: string, kind: string, marker: string?)
-    for _ = 1, 200 do
+    local recorded = await_changes.until_changed({"bee_placement_evidence"}, function(): boolean
         local names, details = evidence_kinds(attempt_id)
         for index, name in ipairs(names) do
-            if name == kind and (marker == nil or details[index]:find(marker, 1, true)) then return end
+            if name == kind and (marker == nil or details[index]:find(marker, 1, true)) then return true end
         end
-        time.sleep("50ms")
-    end
+        return false
+    end, 10000)
+    if recorded then return end
     local _, details = evidence_kinds(attempt_id)
     error("evidence " .. kind .. (marker and (" with " .. tostring(marker)) or "") .. " never recorded: " .. table.concat(details, " | "))
 end
@@ -272,12 +274,28 @@ end
 -- acts on a child that is provably past its first calls whatever the
 -- runtime's start latency.
 local function await_presented(attempt_id: string, carrier_epoch: integer, wanted: integer)
-    for _ = 1, 200 do
+    local presented = await_changes.until_changed({"bee_gateway_credentials"}, function(): boolean
         local reply = raw_call("bee.gateway.binding:check", {attempt_id = attempt_id, carrier_epoch = carrier_epoch})
-        if reply.ok and (tonumber((assert(bounds.object(reply.value))).presented_count) or 0) >= wanted then return end
-        time.sleep("50ms")
-    end
+        return reply.ok == true and (tonumber((assert(bounds.object(reply.value))).presented_count) or 0) >= wanted
+    end, 10000)
+    if presented then return end
     error("the child never presented its credential " .. tostring(wanted) .. " times")
+end
+-- Waits until the attempt's binding holds at least the given number of
+-- queued hooks and returns the binding id.
+local function await_queued_hooks(attempt_id: string, carrier_epoch: integer, wanted: integer): string
+    local binding_id = ""
+    await_changes.until_changed({"bee_gateway_hooks", "bee_gateway_credentials"}, function(): boolean
+        local reply = raw_call("bee.gateway.binding:check", {attempt_id = attempt_id, carrier_epoch = carrier_epoch})
+        if not reply.ok then return false end
+        binding_id = tostring((assert(bounds.object(reply.value))).binding_id)
+        local queued = 0
+        for _, item in ipairs(principals.objects(call("bee.gateway.binding:hook_queue", {binding_id = binding_id}).hooks)) do
+            if item.status == "queued" then queued = queued + 1 end
+        end
+        return queued >= wanted
+    end, 10000)
+    return binding_id
 end
 -- The fixture child's hook report and the hook records the carrier
 -- committed for a thread.
@@ -323,4 +341,4 @@ local function run_cases(define)
         return result
     end
 end
-return {run_cases = run_cases, ACTOR = ACTOR, POLICY = POLICY, ROOT = ROOT, AUTHOR_WORKSPACE = AUTHOR_WORKSPACE, SCRIPTED_AUTHOR_TIMEOUT_MS = SCRIPTED_AUTHOR_TIMEOUT_MS, fresh = fresh, scope = scope, raw_call = raw_call, call = call, stream = stream, install_policy = install_policy, admit_root = admit_root, open_gateway = open_gateway, thread = thread, request = request, spawn_carrier = spawn_carrier, exited = exited, record_exit = record_exit, await_exit = await_exit, run_carrier = run_carrier, continue_carrier = continue_carrier, await_paused = await_paused, records_of = records_of, report = report, evidence_kinds = evidence_kinds, has = has, detail_with = detail_with, await_evidence = await_evidence, expect_evidence = expect_evidence, expect_detail = expect_detail, binding_of = binding_of, await_presented = await_presented, hook_report = hook_report, hook_records = hook_records, no_secret_in = no_secret_in, no_token_in = no_token_in}
+return {run_cases = run_cases, ACTOR = ACTOR, POLICY = POLICY, ROOT = ROOT, AUTHOR_WORKSPACE = AUTHOR_WORKSPACE, SCRIPTED_AUTHOR_TIMEOUT_MS = SCRIPTED_AUTHOR_TIMEOUT_MS, fresh = fresh, scope = scope, raw_call = raw_call, call = call, stream = stream, install_policy = install_policy, admit_root = admit_root, open_gateway = open_gateway, thread = thread, request = request, spawn_carrier = spawn_carrier, exited = exited, record_exit = record_exit, await_exit = await_exit, run_carrier = run_carrier, continue_carrier = continue_carrier, await_paused = await_paused, records_of = records_of, report = report, evidence_kinds = evidence_kinds, has = has, detail_with = detail_with, await_evidence = await_evidence, expect_evidence = expect_evidence, expect_detail = expect_detail, binding_of = binding_of, await_presented = await_presented, await_queued_hooks = await_queued_hooks, hook_report = hook_report, hook_records = hook_records, no_secret_in = no_secret_in, no_token_in = no_token_in}

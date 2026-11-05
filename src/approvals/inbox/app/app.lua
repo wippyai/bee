@@ -131,9 +131,7 @@ local function main(value: unknown)
     end
     -- One dialog at a time: what it asks and what accepting it does.
     local dialog: {request_id: string, kind: string, confirmation: model.Confirmation?, view: model.ApprovalView?, batch: leases.Intent?}? = nil
-    local committed_stream = assert(cdc.stream("bee:changes", {tables = {
-        "bee_approval_requests", "bee_approval_grants", "bee_approval_window_grants",
-    }}))
+    local committed_stream = assert(cdc.stream("bee:changes", {tables = {"bee_approval_requests", "bee_approval_grants"}}))
     local committed = assert(committed_stream:channel())
     -- Every other node of the hive is a remote owner: the inbox reads each
     -- workspace that node works in, and the owner tells it of each change of

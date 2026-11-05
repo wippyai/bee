@@ -156,7 +156,7 @@
   "bee.tests.harness.profiles:reopen_test": 0.862,
   "bee.tests.harness.profiles:repair_test": 1.433,
   "bee.tests.harness.profiles:selection_test": 0.88,
-  "bee.tests.harness.profiles:service_test": 2.5789999999999997,
+  "bee.tests.harness.profiles:service_test": 13.805,
   "bee.tests.harness.profiles:spawn_form_test": 0.857,
   "bee.tests.harness.profiles:view_test": 2.614,
   "bee.tests.harness:acceptance_test": 3.108,

@@ -26,24 +26,27 @@ function M.actions(item: protocol.SessionSnapshot): {frame.Button}
 end
 
 -- state names what the session is doing in a word a person reads at a glance.
-local function state(item: protocol.SessionSnapshot): string
+-- A session needs the person only while a request of its thread waits in
+-- Needs you.
+local function state(item: protocol.SessionSnapshot, waiting: boolean): string
     if item.lifecycle == "closed" then return "closed" end
     if item.lifecycle == "closing" then return "closing" end
+    if waiting then return "needs you" end
     if item.lifecycle == "suspended" then return "stopped · resumes on its next message" end
-    if item.activity == "working" or item.activity == "stalled" then return item.activity end
-    if item.activity == "blocked" then return "needs you" end
+    if item.activity == "working" or item.activity == "stalled" or item.activity == "blocked" then return item.activity end
     return "idle"
 end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     rows: {protocol.SessionSnapshot}, selected: integer, status: string, filtered: boolean, workspaces: {[string]: agents.Workspace}?,
-    show_closed: boolean?): Frame
+    show_closed: boolean?, waiting: {[string]: boolean}?): Frame
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
     local layout = frame.layout(painter, false, true)
     local scope = filtered and " · this workspace" or ""
     frame.header(painter, "SESSIONS", tostring(#rows) .. (#rows == 1 and " session" or " sessions") .. scope .. (show_closed and " · closed shown" or ""))
     local names: {[string]: agents.Workspace} = workspaces or {}
+    local requests: {[string]: boolean} = waiting or {}
     -- A status of two lines, such as a question and its choices, takes one
     -- more row above the status row.
     local question, answer = status:match("^([^\n]*)\n(.*)$")
@@ -61,7 +64,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             y = y + 1
             previous_bee = bee
         end
-        frame.row(painter, y, frame.tagged(width, text.bound(agents.label(item.provider, item.title), 512), state(item)), index == selected, "session", index, item.session, nil, true, 2)
+        frame.row(painter, y, frame.tagged(width, text.bound(agents.label(item.provider, item.title), 512), state(item, requests[item.session] == true)), index == selected, "session", index, item.session, nil, true, 2)
         frame.row_actions(painter, {kind = "session", index = index, key = item.session, selected = index == selected, actions = M.actions(item)})
         local last = item.last_result
         local home = agents.home(item.session)

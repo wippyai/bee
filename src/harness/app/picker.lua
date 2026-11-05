@@ -29,6 +29,7 @@ local confirmation = require("confirmation")
 local terminal_view = require("terminal_view")
 local text = require("text")
 local restore_view = require("restore_view")
+local waiting = require("waiting")
 local M = {}
 type Channel = channel.Channel
 -- The kinds a session row's menu chooses; each carries the row's index.
@@ -39,7 +40,7 @@ local function ask(target: string, request: {[string]: unknown}): caller.Reply
     if err then return caller.unknown() end
     return caller.decode(raw) or caller.unknown()
 end
-type Loaded = {drivers: {profile_view.Driver}?, serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
+type Loaded = {drivers: {profile_view.Driver}?, serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, waiting: {[string]: boolean}?, error: string?}
 type Opened = {serial: integer, conversation: agents.Conversation?, error: string?}
 type Progress = {conversation: agents.Conversation, error: string?}
 
@@ -78,6 +79,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local allowances: allowance_form.State? = nil
     local allowance_frame: allowance_form.Frame = {rows = {}, hits = {}}
     local workspace_names: {[string]: agents.Workspace} = {}
+    local waiting_sessions: {[string]: boolean} = {}
     local query = ""
     local sort: "name" | "driver" = "name"
     local searching = false
@@ -133,7 +135,17 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             peers = function() return funcs.call("bee.threads.sessions.binding:peers", {}) end,
             workspace = function(id: string) return agents.workspace(id, ask) end,
         }, launch.workspace_id, workspace_filter, closed_requested)
-        return {serial = serial, directory = rows, workspaces = names, error = load_error}
+        -- A session of this bee waits on the person while Needs you holds a
+        -- request of its thread.
+        local waiting_rows: {[string]: boolean} = {}
+        for _, row in ipairs(rows) do
+            if not row.node and row.thread_ref and row.lifecycle ~= "closed" then
+                local review, review_error = waiting.read(row.thread_ref)
+                if review_error then load_error = load_error or review_error end
+                if review then waiting_rows[row.session] = true end
+            end
+        end
+        return {serial = serial, directory = rows, workspaces = names, waiting = waiting_rows, error = load_error}
     end
     local function load()
         if loading then reload_pending = true; return end
@@ -399,7 +411,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 rows = session_frame.rows
             elseif not catalog_open then
                 local line = renaming and agents.rename_message(renaming.title, message_draft.line(renaming.name, sessions_protocol.MAX_NAME_BYTES)) or confirmation.active(review) and prompt or status
-                drawn = directory_view.draw(width, height, preferences, directory, selected, line, filtered, workspace_names, show_closed)
+                drawn = directory_view.draw(width, height, preferences, directory, selected, line, filtered, workspace_names, show_closed, waiting_sessions)
                 frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             elseif opening and launching then
@@ -473,6 +485,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     if not found then conversation.read_only = true; conversation.peer_scope = nil end
                 end
                 workspace_names = result.workspaces or workspace_names
+                waiting_sessions = result.waiting or waiting_sessions
                 local count = catalog_open and #listed.items or #directory
                 selected = math.floor(math.min(math.max(1, selected), count))
                 status = result.error or attachment_error or listed.notes[1] or ""

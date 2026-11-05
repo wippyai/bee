@@ -47,7 +47,7 @@ entries:
   kind: function.lua
   source: file://slow_test.lua
   method: run
-  modules: [time]
+  modules: [process]
   meta: {type: app_test, application: bee.tests.node.runner.fixture:app, suite: fixture, order: 3, timeout: 1s}
   imports:
     test: wippy.test:test

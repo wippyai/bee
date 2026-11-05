@@ -1,10 +1,16 @@
 -- MIT. Test association by registry ownership and explicit application metadata.
 local bounds = require("bounds")
+local seam = require("seam")
 local M = {}
 type Object = {[string]: unknown}
 type Found = {id: string, name: string, group: string, meta: Object}
 M.Found = Found
+local function declared_type(): string
+    local selected = seam.call("bee.node.application_tests.test_type")
+    return type(selected) == "string" and selected or "test"
+end
 function M.select(raw: unknown, application_id: string, owned: {[string]: boolean}): ({Found}?, string?)
+    local test_type = declared_type()
     local rows, problem = bounds.dense_list(raw, 16384, "application test registry entries")
     if not rows then return nil, problem end
     local entries: {Object} = {}
@@ -36,7 +42,7 @@ function M.select(raw: unknown, application_id: string, owned: {[string]: boolea
         local provenance = bounds.object(entry.registry)
         local same_source = owned[application_id] and owned[entry.id]
             or (not owned[application_id] and package and provenance and provenance.owner == package)
-        if same_source and entry.kind == "function.lua" and meta and meta.type == "test"
+        if same_source and entry.kind == "function.lua" and meta and meta.type == test_type
             and (meta.application == application_id or (meta.application == nil and applications == 1)) then
             local id = assert(bounds.id(entry.id))
             result[#result + 1] = {id = id, name = id, group = application_id, meta = meta}

@@ -547,3 +547,11 @@ entries:
     bounds: bee.drivers.values:bounds
   security:
     policies: [bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_store_policy, bee.placement.docker.security:docker_policy, bee.placement.docker.security:docker_socket_policy]
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}
+  modules: [process, ctx]
+  imports:
+    bounds: bee.drivers.values:bounds
+    controllers: bee.tests.support:controllers

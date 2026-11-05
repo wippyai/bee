@@ -414,13 +414,19 @@ local function define_tests()
             test.eq(seen.after_hold, 401)
         end)
         test.it("refuses a token that expires inside the takeover grace at once", function()
-            local instant = assert(registry.get("bee.gateway:fixture_instant"))
+            local instant = assert(registry.get("bee.tests.gateway:fixture_instant"))
             local succeeded, seen = pcall(function(): Object
                 return lose_carrier_then(nil, function(attempt_id: string)
                     local live = binding_of(attempt_id, 1)
                     test.eq(live.valid, true)
                     assert(type(live.expires_at) == "string", "binding expiry")
-                    instant.data = {at = live.expires_at}
+                    -- The live runner renews the lease while it supervises the
+                    -- attempt, so the pinned instant lies a day past the read
+                    -- expiry: past any renewal made before the pin, and no
+                    -- renewal follows an expired lease.
+                    local FORMAT = "2006-01-02T15:04:05.000Z07:00"
+                    local read_expiry = assert(time.parse(FORMAT, live.expires_at))
+                    instant.data = {at = read_expiry:add("24h"):utc():format(FORMAT)}
                     local changes = assert(registry.snapshot()):changes()
                     changes:update(instant)
                     assert(changes:apply())
@@ -500,20 +506,7 @@ local function define_tests()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
             local pid = spawn_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_HOOKS = "1", BEE_FIXTURE_HOOKS_FLOOD = "80"}), "open", nil, "attempt_started")
-            local binding_id = ""
-            for _ = 1, 200 do
-                local reply = raw_call("bee.gateway.binding:check", {attempt_id = attempt_id, carrier_epoch = 1})
-                if reply.ok then
-                    binding_id = tostring((assert(bounds.object(reply.value))).binding_id)
-                    local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding_id})
-                    local queued = 0
-                    for _, item in ipairs(principals.objects(queue.hooks)) do
-                        if item.status == "queued" then queued = queued + 1 end
-                    end
-                    if queued >= 64 then break end
-                end
-                time.sleep("50ms")
-            end
+            local binding_id = support.await_queued_hooks(attempt_id, 1, 64)
             test.neq(binding_id, "")
             continue_carrier(pid)
             local outcome = await_exit(pid, "flooded carrier")
@@ -634,7 +627,7 @@ local function define_tests()
             test.eq(#steps, 3)
         end)
         test.it("renews the binding of a live attempt for its supervisor past its first term, and never an ended one", function()
-            local instant = assert(registry.get("bee.gateway:fixture_instant"))
+            local instant = assert(registry.get("bee.tests.gateway:fixture_instant"))
             local original = instant.data
             local now = time.now()
             local function advance(duration: integer)

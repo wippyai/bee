@@ -42,6 +42,7 @@ local render = require("render")
 
 local part_handover = require("part_handover")
 local jobs = require("jobs")
+local seam = require("seam")
 type Binding = part_handover.Binding
 type Result = part_handover.Result
 type Launch = part_handover.Launch
@@ -633,15 +634,6 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         end
     end
 
-    -- destinations are the desktops a window here can move to.
-    local function destinations(): {menu.Destination}
-        local found: {menu.Destination} = {}
-        for _, item in ipairs(desktops) do
-            if item.id ~= desktop then found[#found + 1] = {id = item.id, title = item.title} end
-        end
-        return found
-    end
-
     local function paint()
         if not themed then
             surface:present(chrome.loader(width, height, status))
@@ -652,7 +644,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         local reviews: {[string]: client.Review} = {}
         for _, instance in ipairs(running) do if instance.review then reviews[instance.id] = instance.review end end
         local drawn = render.draw(current, order(), contents, capture, preview, status, desktop_label(), preferences,
-            {reviews = reviews, alert = current_alert(), alert_popup = alert_popup, start = start, catalog = catalog, destinations = destinations(), editor = editor,
+            {reviews = reviews, alert = current_alert(), alert_popup = alert_popup, start = start, catalog = catalog, destinations = menu.destinations(desktops, desktop), editor = editor,
                 modal = modal, copy = copy.overlay(clip), workspaces = workspaces_open})
         tab_hits = drawn.tabs
         assert(surface:present(drawn.rows, {cursor = drawn.cursor}))
@@ -782,6 +774,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
     end
 
     local function node_event(event: client.Event)
+        if seam.call("bee.shell.shell.node_event", event) then return end
         if event.kind == "opened" and event.instance then
             local instance = event.instance
             if event.attention then attention_pending[instance.id] = true end
@@ -1157,7 +1150,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
         local current_start = start
         if current_start and not (event.type == "mouse" and height >= 3 and event.y == 1 and event.x <= 7 and event.action == "press") then
             local current = scene()
-            local items = menu.entries(current_start, current, catalog, destinations())
+            local items = menu.entries(current_start, current, catalog, menu.destinations(desktops, desktop))
             local panel = menu.panel(width, height, items, current_start)
             local response = menu.respond(current_start, panel, items, event)
             start = response.state
@@ -1234,6 +1227,7 @@ local function display(target: string, saved: Saved?, launch: Launch?): integer
             end
         elseif chosen.channel == results then
             apply(chosen.value)
+            seam.call("bee.shell.shell.applied", chosen.value.kind)
         elseif chosen.channel == cluster then
             if not chosen.ok then return true end
             local probe, change = membership.observe(hive, chosen.value)

@@ -2,6 +2,7 @@
 local sql = require("sql")
 local hash = require("hash")
 local time = require("time")
+local seam = require("seam")
 local crypto = require("crypto")
 local base64 = require("base64")
 local bounds = require("bounds")
@@ -20,7 +21,7 @@ local function succeed(value: unknown): Reply
     return {ok = true, value = value}
 end
 local function now_ms(): integer
-    return math.floor(time.now():unix_nano() / 1000000)
+    return math.floor(seam.now("bee.gateway.binding.clock"):unix_nano() / 1000000)
 end
 local function stamp(ms: integer): string
     return time.unix(math.floor(ms / 1000), (ms % 1000) * 1000000):utc():format(FORMAT)

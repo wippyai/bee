@@ -129,14 +129,12 @@ local function start_endpoint(record: string): string
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_MCP_TOOL = "thread_read"}})
     if not proc then error("endpoint: " .. tostring(err)) end
+    local announced = proc:stdout_stream()
     local started, start_error = proc:start()
     if not started then error("start endpoint: " .. tostring(start_error)) end
     endpoint_handle, endpoint_executor = proc, executor
-    for _ = 1, 100 do
-        local port = shell("cat " .. record .. ".port 2>/dev/null"):match("%d+")
-        if port then return port end
-        time.sleep("50ms")
-    end
+    local port = tostring(announced:read(32)):match("%d+")
+    if port then return port end
     error("the endpoint did not report its port")
 end
 local function stop_endpoint()

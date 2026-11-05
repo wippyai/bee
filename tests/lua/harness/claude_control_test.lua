@@ -17,6 +17,8 @@ local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
 local registry = require("registry")
+local events = require("events")
+local cdc = require("cdc")
 local env = require("env")
 local time = require("time")
 local channel = require("channel")
@@ -116,13 +118,11 @@ local function start_endpoint(record: string, command: string): string
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
+    local announced = proc:stdout_stream()
     assert(proc:start())
     endpoint_handle, endpoint_executor = proc, executor
-    for _ = 1, 100 do
-        local port = shell("cat " .. record .. ".port 2>/dev/null"):match("%d+")
-        if port then return port end
-        time.sleep("50ms")
-    end
+    local port = tostring(announced:read(32)):match("%d+")
+    if port then return port end
     error("the endpoint did not report its port")
 end
 local function stop_endpoint()
@@ -247,15 +247,33 @@ local function await_carrier(pid: string, label: string): Outcome
     return exited[pid]
 end
 local function await_request(workspace: string): Object
-    for _ = 1, 400 do
+    local requested = assert(events.subscribe("bee.attention", "approval.requested"))
+    local deadline = time.after("20s")
+    while true do
         local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
         for _, change in ipairs(principals.objects(page.changes)) do
             local view = assert(bounds.object(change.request))
-            if view.state == "pending" then return view end
+            if view.state == "pending" then requested:close(); return view end
         end
-        time.sleep("50ms")
+        local selected = channel.select({requested:channel():case_receive(), deadline:case_receive()})
+        if selected.channel == deadline then break end
     end
+    requested:close()
     error("no pending approval request in workspace " .. workspace)
+end
+-- await_exited returns once placement records the attempt as exited; the
+-- changes stream is opened before the action that ends the attempt.
+local function await_exited(attempt_id: string, changes: any)
+    local deadline = time.after("60s")
+    while true do
+        local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
+        if (assert(bounds.object(status.attempt))).execution_state == "exited" then changes:close(); return end
+        local selected = channel.select({changes:channel():case_receive(), deadline:case_receive()})
+        if selected.channel == deadline then changes:close(); error("attempt " .. attempt_id .. " did not exit") end
+    end
+end
+local function attempt_changes(): any
+    return assert(cdc.stream("bee:changes", {tables = {"bee_placement_attempts"}, ops = {"insert", "update"}, buffer = 256}))
 end
 local function decide(view: Object, decision: string)
     approve_call("bee.approvals.binding:decide", {approval_id = view.approval_id, expected_revision = view.revision, decision = decision, proposal_digest = view.proposal_digest, reviewed_digest = view.reviewed_digest})
@@ -464,7 +482,6 @@ local function define_tests()
                 local db = assert(approvals.open())
                 assert(approvals.establish(db))
                 decide(view, "approved")
-                time.sleep("1500ms")
                 assert(approvals.establish(db))
                 db:release()
                 process.send(pid, "bee.carrier.continue", {go = true})
@@ -484,8 +501,9 @@ local function define_tests()
                 local first = spawn_faulted(launch_request, "open", "write_intended", nil)
                 decide(await_request(workspace), "approved")
                 await_carrier(first, "write_intended")
+                local changes = attempt_changes()
                 call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "forced"})
-                time.sleep("1500ms")
+                await_exited(attempt_id, changes)
                 local settlement = settlement_of(await_carrier(spawn_faulted(launch_request, "resume", nil, nil), "lost runner"), "lost runner")
                 local effects = finish(marker)
                 test.neq(settlement.outcome, "succeeded")
@@ -507,10 +525,17 @@ local function define_tests()
                 local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
                 local runner = tostring((assert(bounds.object(status.attempt))).runner or "")
                 if runner == "" then error("no runner recorded for the attempt") end
+                local lifecycle = assert(process.events())
+                assert(process.monitor(runner))
+                local changes = attempt_changes()
                 assert(process.terminate(runner))
-                time.sleep("500ms")
+                while true do
+                    local event = assert((lifecycle:receive()))
+                    if tostring(event.from) == runner and (event.kind == process.event.EXIT or event.kind == process.event.MONITOR_DOWN) then break end
+                end
+                lifecycle:close()
                 call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "forced"})
-                time.sleep("1500ms")
+                await_exited(attempt_id, changes)
                 local settlement = settlement_of(await_carrier(spawn_faulted(launch_request, "resume", nil, nil), "lost after dispatch"), "lost after dispatch")
                 local effects = finish(marker)
                 test.neq(settlement.outcome, "succeeded")
@@ -526,8 +551,12 @@ local function define_tests()
                 local marker, thread_id, workspace, _, launch_request = open_case("takeover")
                 local old = spawn_faulted(launch_request, "open", nil, "permission_requested")
                 local view = await_request(workspace)
-                local replacement = spawn_faulted(launch_request, "resume", nil, nil)
-                time.sleep("1000ms")
+                local paused = assert(process.listen("bee.carrier.paused", {message = true}))
+                local replacement = spawn_faulted(launch_request, "resume", nil, "permission_requested")
+                local holding = assert((paused:receive()))
+                test.eq(tostring(holding:from()), replacement)
+                process.unlisten(paused)
+                process.send(replacement, "bee.carrier.continue", {go = true})
                 decide(view, "approved")
                 process.send(old, "bee.carrier.continue", {go = true})
                 local stale = await_carrier(old, "old carrier")
@@ -548,12 +577,15 @@ local function define_tests()
                 local paused = spawn_faulted(launch_request, "open", "permission_requested", nil)
                 local view = await_request(workspace)
                 await_carrier(paused, "permission_requested")
+                local changes = attempt_changes()
                 call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "forced"})
-                time.sleep("1500ms")
+                await_exited(attempt_id, changes)
                 local settlement = settlement_of(await_carrier(spawn_faulted(launch_request, "resume", nil, nil), "ended attempt"), "ended attempt")
                 test.neq(settlement.outcome, "succeeded")
+                local changed = assert(events.subscribe("bee.attention", "approval.changed"))
                 decide(view, "approved")
-                time.sleep("500ms")
+                assert((changed:channel():receive()))
+                changed:close()
                 local effects = finish(marker)
                 test.eq(effects, 0)
                 local records = records_of(thread_id)

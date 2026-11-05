@@ -17,3 +17,4 @@ entries:
     transaction: bee.persist:transaction
     resources: bee.resources.env:resources
     identity: bee.security.identity:identity
+    seam: bee.process:seam

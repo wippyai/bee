@@ -7,9 +7,11 @@ local channel = require("channel")
 local time = require("time")
 local registry = require("registry")
 local hostprocess = require("hostprocess")
+local events = require("events")
 local service = require("service")
 local store = require("store")
 local protocol = require("protocol")
+local quote = require("quote")
 local native_fixture = require("native_fixture")
 
 local function cleanup_tests()
@@ -65,11 +67,13 @@ local function cleanup_tests()
             -- before this process calls sweep, including all three rows.
             local before = process.registry.lookup(service.SWEEPER_NAME)
             if not before then error("sweeper is not registered") end
+            local updates = assert(events.subscribe("supervisor", "service.update"))
             assert(process.terminate(tostring(before)))
             local restarted = native_fixture.wait_for(function()
                 local now = process.registry.lookup(service.SWEEPER_NAME)
                 return now ~= nil and tostring(now) ~= tostring(before)
-            end, 10000)
+            end, 10000, updates:channel())
+            updates:close()
             test.is_true(restarted)
             for _, id in ipairs(ids) do native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = id, mode = "forced"})) end
         end)
@@ -112,7 +116,8 @@ local function cleanup_tests()
                 test.eq(cleaned.cleanup_state, "complete")
             end)
             test.it("keeps a lost owner's outcome uncertain while its group has members, without reconstructing PID authority", function()
-                local request = native_fixture.launch({"sh", "-c", "sleep 8"}, "process_group")
+                local holders = native_fixture.holder_watch()
+                local request = native_fixture.launch({"sh", "-c", "exec 9>" .. quote.posix(holders.path) .. "; sleep 8"}, "process_group")
                 local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
                 native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))
                 local db = store.open()
@@ -140,8 +145,8 @@ local function cleanup_tests()
                 -- The runtime ends the child the runner owned when it releases
                 -- the runner's handles, after the runner's EXIT; the empty
                 -- recorded group, not the pid, proves the tree gone.
-                test.is_true(native_fixture.wait_for(function() return hostprocess.group_present(group) == false end, 15000),
-                    "the released runner's child group ends")
+                test.is_true(holders.wait(15000), "the released runner's child group ends")
+                test.eq((hostprocess.group_present(group)), false)
                 local outcome = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
                 test.eq(outcome.execution_state, "exited")
                 test.eq(outcome.exit_source, "reconcile")
@@ -172,7 +177,8 @@ local function cleanup_tests()
                 test.is_true(native_fixture.has(native_fixture.kinds(prepared.attempt_id), "group.ended"))
             end)
             test.it("removes the grandchild with the group on stop", function()
-                local request = native_fixture.launch({"sh", "-c", "sleep 8 & echo child:$!; wait"}, "process_group")
+                local holders = native_fixture.holder_watch()
+                local request = native_fixture.launch({"sh", "-c", "exec 9>" .. quote.posix(holders.path) .. "; sleep 8 & echo child:$!; wait"}, "process_group")
                 local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
                 local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
                 native_fixture.call(native_fixture.OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1})
@@ -198,7 +204,8 @@ local function cleanup_tests()
                     return (native_fixture.value(native_fixture.call(native_fixture.OWNER, "status", {attempt_id = prepared.attempt_id})).attempt).execution_state == "exited"
                 end, 8000) then error("forced stop did not end the child") end
                 test.eq(native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "exited")
-                test.is_true(native_fixture.wait_for(function() return not native_fixture.alive(grandchild) end, 5000))
+                test.is_true(holders.wait(5000), "the group's members end with the stop")
+                test.is_false(native_fixture.alive(grandchild))
                 -- The stop intent is on record before the runner's exit
                 -- observation, however fast the runner sees the kill land.
                 local order: {string} = {}

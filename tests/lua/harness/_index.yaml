@@ -831,6 +831,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
   imports:
+    await_changes: bee.tests.support:await
     processes: bee.tests.support:processes
     quote: bee.drivers.binding:quote
     principals: bee.tests.support.principals:bound
@@ -877,6 +878,7 @@ entries:
     - bee.placement.native.security:placement_preparer_lock_policy
     - bee.placement.native.security:placement_exec_policy
   imports:
+    await_changes: bee.tests.support:await
     processes: bee.tests.support:processes
     quote: bee.drivers.binding:quote
     principals: bee.tests.support.principals:bound
@@ -912,6 +914,7 @@ entries:
     - bee.tests.harness:apply_test_policy
     - bee.tests.harness:carrier_spawn_policy
   imports:
+    await_changes: bee.tests.support:await
     processes: bee.tests.support:processes
     quote: bee.drivers.binding:quote
     principals: bee.tests.support.principals:bound
@@ -1722,6 +1725,7 @@ entries:
     - bee.gateway.security:access_policy_read_policy
     - bee.security.approvals:approval_installation_effects_policy
   imports:
+    hub_override: bee.tests.gateway:hub_override
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -1768,6 +1772,7 @@ entries:
     - bee.gateway.security:access_policy_read_policy
     - bee.security.approvals:approval_publication_effects_policy
   imports:
+    hub_override: bee.tests.gateway:hub_override
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -2076,6 +2081,8 @@ entries:
   - json
   - exec
   - hash
+  - events
+  - cdc
   security:
     policies:
     - bee.tests.harness:apply_test_policy
@@ -2510,6 +2517,7 @@ entries:
     test: wippy.test:test
     probe_cache: bee.harness.launch:probe_cache
     measurements: bee.placement.native.persist:measurements
+    measure_clock: bee.tests.harness:measure_clock
   security:
     policies:
     - bee.tests.harness:probe_cache_test_policy
@@ -2932,6 +2940,7 @@ entries:
   - sql
   - time
   imports:
+    await_changes: bee.tests.support:await
     harness: bee.tests.threads:harness
     bounds: bee.drivers.values:bounds
     principals: bee.tests.support.principals:bound
@@ -3080,3 +3089,15 @@ entries:
     actions: [funcs.call]
     resources: [bee.tests.harness:escaping_reader]
     effect: allow
+- name: measure_clock
+  kind: library.lua
+  source: file://measure_clock.lua
+  meta: {type: test_support}
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}
+  modules: [process, ctx]
+  imports:
+    bounds: bee.drivers.values:bounds
+    measure_clock: bee.tests.harness:measure_clock

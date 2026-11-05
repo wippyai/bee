@@ -512,7 +512,7 @@ local function output_tests()
             end
         end)
         test.it("keeps a running attempt past its grant's first term by renewing the lease while it supervises it", function()
-            local instant = assert(registry.get("bee.resources:fixture_instant"))
+            local instant = assert(registry.get("bee.tests.resources:fixture_instant"))
             local original = instant.data
             local milliseconds = math.floor(time.now():unix_nano() / 1000000)
             local function advance(duration: integer)

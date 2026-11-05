@@ -31,10 +31,11 @@ local bounds = require("bounds")
 local waiting = require("waiting")
 local app_identity = require("app_identity")
 local canonical = require("canonical")
-
+local seam = require("seam")
 local part_instance = require("part_instance")
 local part_catalog = require("part_catalog")
 local part_handover = require("part_handover")
+local part_desktops = require("part_desktops")
 type Dialog = part_handover.Dialog
 type AppAlias = part_handover.AppAlias
 type Instance = part_handover.Instance
@@ -354,6 +355,7 @@ local function main(saved: unknown)
         announce_workspaces()
         local value = state(caller)
         value.desktop = chosen
+        seam.hold("bee.node.service.desktop_chosen")
         return protocol.ok(value)
     end
 
@@ -429,6 +431,7 @@ local function main(saved: unknown)
     end
 
     local function stop(instance: Instance): protocol.Reply
+        seam.hold("bee.node.service.stop", instance)
         local cancelled, cancel_error = process.cancel(instance.pid)
         if not cancelled and not errors.is(cancel_error, errors.NOT_FOUND) then
             return protocol.fail("stop " .. instance.title .. ": " .. tostring(cancel_error))
@@ -746,25 +749,16 @@ local function main(saved: unknown)
         return protocol.ok({desktop = desktop.id, title = desktop.title})
     end
 
-    -- use_workspace makes desktop id work in workspace_id; apps opened on it
-    -- from then on start there.
     local function use_workspace(id: unknown, workspace_id: unknown): protocol.Reply
-        if type(id) ~= "string" or not workspaces.desktop(id) then return protocol.fail("no such desktop") end
-        if type(workspace_id) ~= "string" or not workspaces.workspace(workspace_id) then return protocol.fail("no such workspace") end
-        local used, err = workspaces.use_workspace(id, workspace_id)
-        if not used then return protocol.fail(err or "workspace not used") end
-        broadcast({kind = "catalog"})
-        announce_workspaces()
-        return protocol.ok({desktop = id, workspace = workspace_id})
+        local reply = part_desktops.use_workspace(id, workspace_id)
+        if reply.ok then broadcast({kind = "catalog"}); announce_workspaces() end
+        return reply
     end
 
     local function rename_desktop(id: unknown, title: unknown): protocol.Reply
-        if type(id) ~= "string" or not workspaces.desktop(id) then return protocol.fail("no such desktop") end
-        if type(title) ~= "string" or title == "" then return protocol.fail("a desktop needs a title") end
-        local renamed, err = workspaces.rename_desktop(id, title)
-        if not renamed then return protocol.fail(err or "desktop not renamed") end
-        announce_workspaces()
-        return protocol.ok({desktop = id, title = title})
+        local reply = part_desktops.rename(id, title)
+        if reply.ok then announce_workspaces() end
+        return reply
     end
 
     -- close_desktop stops a desktop's apps and removes it; a desktop a display
@@ -1105,6 +1099,7 @@ local function main(saved: unknown)
     update_instances()
     local announced, announce_error = protocol.ready(NAME)
     if not announced then logger:warn("Hive supervisor not told the node is ready", {error = announce_error}) end
+    seam.call("bee.node.service.ready")
     logger:info("Node ready", {node = node, folder = folder, theme = current.theme.id})
     while true do
         local cases = {requests:case_receive(), events:case_receive(), registry_changes:case_receive(), attention:case_receive()}

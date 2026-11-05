@@ -452,6 +452,7 @@ entries:
     part_model: bee.gateway.binding:model
     part_values: bee.gateway.binding:values
     part_records: bee.gateway.binding:records
+    seam: bee.process:seam
 - name: model
   kind: library.lua
   source: file://model.lua
@@ -475,6 +476,7 @@ entries:
     node_database: bee.persist:database
     part_model: bee.gateway.binding:model
     identity: bee.security.identity:identity
+    seam: bee.process:seam
 - name: records
   kind: library.lua
   source: file://records.lua
@@ -551,6 +553,7 @@ entries:
     part_values: bee.gateway.binding:values
     part_records: bee.gateway.binding:records
     part_listener: bee.gateway.binding:listener
+    seam: bee.process:seam
 - name: surfaces
   kind: library.lua
   source: file://surfaces.lua
@@ -590,6 +593,7 @@ entries:
     part_values: bee.gateway.binding:values
     part_records: bee.gateway.binding:records
     part_surfaces: bee.gateway.binding:surfaces
+    seam: bee.process:seam
 - name: directory
   kind: library.lua
   source: file://directory.lua
@@ -601,6 +605,7 @@ entries:
     sessions: bee.gateway.catalog:sessions
     part_model: bee.gateway.binding:model
     part_values: bee.gateway.binding:values
+    seam: bee.process:seam
 - name: calls
   kind: library.lua
   source: file://calls.lua

@@ -24,6 +24,7 @@ local cdc = require("cdc")
 local demand = require("demand")
 local demand_owner = require("demand_owner")
 local route_catalog = require("route_catalog")
+local seam = require("seam")
 
 type Saved = {parked: {[string]: {protocol.Forwarded}}, supervised_callers: {[string]: integer},
     applications: {protocol.Forwarded}, services: {[string]: string}, names: {[string]: string}, demanded: demand_owner.Owners}
@@ -45,6 +46,7 @@ local function main(saved: Saved?)
             error("publish supervisor: " .. tostring(publish_error))
         end
     end
+    seam.call("bee.hive.service.supervisor.started")
     logger:info("Hive supervisor ready", {node = node})
     local calls = assert(process.listen(protocol.CALL, {message = true}))
     local readiness = assert(process.listen(protocol.READY, {message = true}))
@@ -206,6 +208,7 @@ local function main(saved: Saved?)
         end
         waiting[#waiting + 1] = request
         parked[name] = waiting
+        seam.call("bee.hive.service.supervisor.parked", {name = name})
         demand_owner.wake(demanded, name, nil)
     end
 
@@ -227,6 +230,7 @@ local function main(saved: Saved?)
             end
             deliver(data.name, request)
         end
+        seam.call("bee.hive.service.supervisor.announced", {name = data.name, owner = demanded[data.name], parked = #(parked[data.name] or {})})
     end
 
     adopt()
@@ -237,6 +241,7 @@ local function main(saved: Saved?)
     local backlog = backlog_stream:channel()
     local function rescan_backlog()
         backlog_stream:close()
+        seam.hold("bee.hive.service.supervisor.backlog_closed")
         backlog_stream = watch_backlog()
         backlog = backlog_stream:channel()
         demand_owner.recover(demanded, nil)
@@ -258,13 +263,20 @@ local function main(saved: Saved?)
         local retry = demand_owner.deadline(demanded)
         local cases = {calls:case_receive(), readiness:case_receive(), events:case_receive(),
             registry_changes:case_receive(), feeds:case_receive(), completions:case_receive(), demands:case_receive(), supervised:case_receive(), backlog:case_receive()}
+        if seam.call("bee.hive.service.supervisor.defer_readiness", {demanded = demanded}) == true then table.remove(cases, 2) end
         if retry then cases[#cases + 1] = retry:case_receive() end
+        local listening = seam.call("bee.hive.service.supervisor.listen", {backlog = backlog, registry = registry_changes, events = events})
+        if listening then
+            cases = {}
+            for index, source in ipairs(listening :: {channel.Channel<any>}) do cases[index] = source:case_receive() end
+        end
         local selected = channel.select(cases)
         if retry then process.unlisten(retry) end
         if not selected.ok and selected.channel ~= backlog then return end
         if retry and selected.channel == retry then
             demand_owner.retry(demanded)
         elseif selected.channel == backlog then
+            seam.hold("bee.hive.service.supervisor.backlog_changed")
             if not selected.ok then
                 logger:warn("Hive demand backlog stream ended; rescanning durable queues")
                 rescan_backlog()

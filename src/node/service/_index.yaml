@@ -33,8 +33,10 @@ entries:
     worker: bee.process:worker
     part_catalog: bee.node.service:catalog
     part_handover: bee.node.service:handover
+    part_desktops: bee.node.service:desktops
     canonical: bee.drivers.values:canonical
     part_instance: bee.node.service:instance
+    seam: bee.process:seam
 - name: owner_service
   meta:
     title: "Node \xB7 owner"
@@ -82,6 +84,7 @@ entries:
     demand: bee.process:demand
     receiver: bee.hive:receiver
     bounds: bee.drivers.values:bounds
+    seam: bee.process:seam
 - name: tests_service
   meta:
     title: "Node \xB7 tests"
@@ -121,6 +124,7 @@ entries:
     descriptor: bee.app:descriptor
     settings: bee.node.persist:settings
     appearance: bee.ui:appearance
+    seam: bee.process:seam
 - name: waiting
   kind: library.lua
   source: file://waiting.lua
@@ -128,6 +132,12 @@ entries:
     bounds: bee.drivers.values:bounds
     principal: bee.node:principal
     part_handover: bee.node.service:handover
+- name: desktops
+  kind: library.lua
+  source: file://desktops.lua
+  imports:
+    workspaces: bee.node.persist:workspaces
+    protocol: bee.hive:protocol
 - name: handover
   kind: library.lua
   source: file://handover.lua

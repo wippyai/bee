@@ -22,26 +22,12 @@ def check_restarted_attachment(toolchain, root, workspace, application, environm
     with sqlite3.connect(root / "bee.db") as database:
         assert database.execute("SELECT 1 FROM _migrations WHERE id = 'bee.persist:state_writer'").fetchone()
         assert database.execute("SELECT 1 FROM bee_node_desktops").fetchone()
-    owner = application / "src/node/service/owner.lua"
-    baseline = owner.read_text()
-    barrier = '''        local controller = process.registry.lookup("bee.test.display.snapshot", process.registry.LOCAL)
-        if controller then
-            local release = assert(process.listen("bee.test.display.release", {message = true}))
-            assert(process.send(tostring(controller), "bee.test.display.snapshot", {}))
-            assert((release:receive()))
-            process.unlisten(release)
-        end
-'''
-    owner.write_text(baseline.replace('        value.desktop = chosen\n', '        value.desktop = chosen\n' + barrier).replace(
-        '    logger:info("Node ready",', '''    local observer = process.registry.lookup("bee.test.node.ready", process.registry.LOCAL)
-    if observer then assert(process.send(tostring(observer), "bee.test.node.ready", {})) end
-    logger:info("Node ready",'''))
-    policy = application / "src/node/security/_index.yaml"
-    original_policy = policy.read_text()
-    document = yaml.safe_load(original_policy)
-    names = next(entry for entry in document["entries"] if entry["name"] == "owner_names")
-    names["policy"]["resources"].extend(["bee.test.display.snapshot", "bee.test.node.ready"])
-    policy.write_text(yaml.safe_dump(document, sort_keys=False))
+    index_path = workspace / "lua/_index.yaml"
+    unbound = index_path.read_text()
+    index = yaml.safe_load(unbound)
+    dependency = next(entry for entry in index["entries"] if entry["name"] == "dependency")
+    dependency["parameters"] = [{"name": "seams", "value": "bee.tests.support:seam"}]
+    index_path.write_text(yaml.safe_dump(index, sort_keys=False))
     try:
         result = subprocess.run([str(toolchain), "-c", "test", "--host", "bee:terminal",
                                  "--set", "security.strict_mode=true",
@@ -49,13 +35,12 @@ def check_restarted_attachment(toolchain, root, workspace, application, environm
                                  "-o", "bee:gateway_listener:addr=127.0.0.1:0",
                                  "test", "bee.tests.node:attach_restart_test"],
                                 cwd=workspace, env=environment, capture_output=True, text=True, timeout=60)
-        output = result.stdout + result.stderr
-        (root / "attach-restart.log").write_text(output)
-        assert result.returncode == 0, output
-        print("PASS: display attaches after its first watched owner exits on a restarted node")
     finally:
-        owner.write_text(baseline)
-        policy.write_text(original_policy)
+        index_path.write_text(unbound)
+    output = result.stdout + result.stderr
+    (root / "attach-restart.log").write_text(output)
+    assert result.returncode == 0, output
+    print("PASS: display attaches after its first watched owner exits on a restarted node")
 
 
 def check_app_namespaces(toolchain, root, workspace, application, environment):
@@ -156,7 +141,7 @@ def run(toolchain, fault):
         document = yaml.safe_load(gateway_index.read_text())
         backlog = next(entry for entry in document["entries"] if entry["name"] == "backlog")
         backlog["source"] = "file://boot_backlog_probe.lua"
-        backlog["modules"].append("sql")
+        backlog.setdefault("modules", []).append("sql")
         shutil.copy2(REPO / "tests/lua/node/boot_backlog_probe.lua", gateway_index.parent)
         gateway_index.write_text(yaml.safe_dump(document, sort_keys=False))
     workspace = root / "workspace"
@@ -164,8 +149,8 @@ def run(toolchain, fault):
     source.mkdir(parents=True)
     index = yaml.safe_load((REPO / "tests/lua/node/_index.yaml").read_text())
     entries = [entry for entry in index["entries"] if entry["name"] in
-               ("boot_residency_test", "idle_services_test", "app_namespace_restart_test", "attach_restart_test")]
-    assert len(entries) == 4
+               ("boot_residency_test", "idle_services_test", "app_namespace_restart_test", "attach_restart_test", "seams")]
+    assert len(entries) == 5
     for entry in entries:
         shutil.copy2(REPO / "tests/lua/node" / entry["source"].removeprefix("file://"), source)
         # The display boot case runs only in this fresh runtime; it must not
@@ -176,6 +161,18 @@ def run(toolchain, fault):
     entries.append({"name": "dependency", "kind": "ns.dependency", "component": "bee/bee", "version": "*"})
     (source / "_index.yaml").write_text(yaml.safe_dump(
         {"version": "1.0", "namespace": "bee.tests.node", "entries": entries}, sort_keys=False))
+    # The restarted-attachment check binds the application's seams to the
+    # suites' binding over the node points; every other boot runs unbound.
+    support = yaml.safe_load((REPO / "tests/lua/support/_index.yaml").read_text())
+    support["entries"] = [entry for entry in support["entries"] if entry["name"] in ("seam", "controllers", "boot_seam_areas")]
+    assert len(support["entries"]) == 3
+    support_source = source / "support"
+    support_source.mkdir()
+    for entry in support["entries"]:
+        shutil.copy2(REPO / "tests/lua/support" / entry["source"].removeprefix("file://"), support_source)
+        if entry["name"] == "seam":
+            entry["imports"] = {"areas": "bee.tests.support:boot_seam_areas"}
+    (support_source / "_index.yaml").write_text(yaml.safe_dump(support, sort_keys=False))
     gateway = yaml.safe_load((REPO / "tests/lua/gateway/_index.yaml").read_text())
     gateway["entries"] = [entry for entry in gateway["entries"] if entry["name"] in
                           ("effects_scope_probe", "effects_scope_test")]

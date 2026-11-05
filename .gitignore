@@ -5,17 +5,11 @@ dist/
 
 wippy.build.local.json
 tests/fixtures/harness/bin/gateway-client
-tests/lua/placement/native/service/materialization.lua
 .bee/
 
 src/env/identity/_index.yaml
 __pycache__/
 
-/tests/lua/placement/docker/service/image_owner.lua
-/tests/lua/gov/activation_worker.lua
-/tests/lua/process/demand_owner.lua
 
 /tests/lua/hub/root_pack_data.lua
 
-/tests/lua/threads/recovery.lua
-/tests/lua/threads/recovery_worker.lua

@@ -8,6 +8,7 @@ local uuid = require("uuid")
 local time = require("time")
 local probe_cache = require("probe_cache")
 local measurements = require("measurements")
+local measure_clock = require("measure_clock")
 
 local function counting(output: string?, code: integer?, failure: string?): ({count: integer}, ({string}) -> (string?, integer?, string?, boolean?))
     local calls = {count = 0}
@@ -48,8 +49,7 @@ local function define_tests()
             -- pins its version; the shard's fixture copy may be newer.
             local resolved = assert(probe_cache.resolve("claude"))
             local changed = assert(math.tointeger(resolved.info.ctime_ns or resolved.info.mtime_ns))
-            local wait_ns = changed + measurements.GRANULE_NS - time.now():unix_nano()
-            if wait_ns > 0 then time.sleep(math.floor(wait_ns / 1000000) + 100 .. "ms") end
+            measure_clock.instant = math.max(time.now():unix_nano(), changed + measurements.GRANULE_NS + 1)
             local home = "/fixture-home/" .. assert(uuid.v4())
             local calls, capture = counting("Claude Code 2.1.265\n", 0, nil)
             local first, first_code = probe_cache.measure({"claude", "--version"}, home, capture)
@@ -70,6 +70,7 @@ local function define_tests()
             test.eq(calls.count, 3)
             probe_cache.measure({"claude", "--version"}, home, capture)
             test.eq(calls.count, 3)
+            measure_clock.instant = nil
         end)
 
         test.it("never stores a probe that failed or an executable it cannot resolve", function()

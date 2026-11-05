@@ -11,6 +11,7 @@ local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
 local channel = require("channel")
+local await_changes = require("await_changes")
 local cdc = require("cdc")
 local time = require("time")
 local registry = require("registry")
@@ -415,13 +416,8 @@ local function activate_fixture_binding()
     local applied, err = changes:apply()
     if not applied then error("activate fixture binding: " .. tostring(err)) end
 end
-local function wait_for(predicate: () -> boolean, timeout_ms: integer): boolean
-    local deadline = time.now():unix_nano() + timeout_ms * 1000000
-    while time.now():unix_nano() < deadline do
-        if predicate() then return true end
-        time.sleep("50ms")
-    end
-    return predicate()
+local function wait_for(predicate: () -> boolean, timeout_ms: integer, source: channel.Channel<any>?): boolean
+    return await_changes.until_changed({"bee_placement_attempts", "bee_placement_evidence"}, predicate, timeout_ms, source)
 end
 local function kinds(attempt_id: string): {string}
     local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
@@ -456,6 +452,37 @@ local function shell(command: string): string
     executor:release()
     assert(code == 0, "fixture command exited " .. tostring(code) .. ": " .. tostring(err) .. ": " .. command)
     return output
+end
+type HolderWatch = {path: string, wait: (timeout_ms: integer) -> boolean}
+-- A FIFO whose write side the launched group holds open by running
+-- `exec 9><path`: the watch ends when the last member of that group has
+-- ended, however the group is ended.
+local function holder_watch(): HolderWatch
+    local path = shell("pwd"):gsub("\n$", "") .. "/.wippy/" .. fresh("holders")
+    shell("mkfifo " .. quote.posix(path))
+    local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
+    local proc = assert(executor:exec(quote.line({"cat", path})))
+    local stdout = proc:stdout_stream()
+    assert(proc:start())
+    local ended = channel.new(1)
+    coroutine.spawn(function()
+        while true do
+            local chunk: unknown = stdout:read(64)
+            if type(chunk) ~= "string" or chunk == "" then break end
+        end
+        ended:send(true)
+    end)
+    return {path = path, wait = function(timeout_ms: integer): boolean
+        local bound = time.after(tostring(timeout_ms) .. "ms")
+        local selected = channel.select({ended:case_receive(), bound:case_receive()})
+        local released = selected.channel == ended
+        if not released then proc:close(true) end
+        proc:wait()
+        stdout:close()
+        executor:release()
+        shell("rm -f " .. quote.posix(path))
+        return released
+    end}
 end
 local function fixture_home_file(home_path: string, relative: string): string
     local target = assert(homes.os_path(home_path .. "/home/" .. relative))
@@ -513,6 +540,7 @@ return {
     kinds = kinds,
     alive = alive,
     shell = shell,
+    holder_watch = holder_watch,
     fixture_home_file = fixture_home_file,
     has = has,
     CODEX_LOGIN_FORMAT = CODEX_LOGIN_FORMAT,

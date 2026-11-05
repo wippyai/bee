@@ -5,6 +5,9 @@ entries:
   kind: ns.dependency
   component: bee/bee
   version: '*'
+  parameters:
+  - name: seams
+    value: bee.tests.support:seam
 - name: test_framework
   kind: ns.dependency
   component: wippy/test

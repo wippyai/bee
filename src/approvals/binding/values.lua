@@ -5,6 +5,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local transaction = require("transaction")
 local clock = require("clock")
+local seam = require("seam")
 local part_model = require("part_model")
 local M = {}
 type Result = part_model.Result
@@ -21,7 +22,9 @@ end
 local function success(value: unknown, replayed: boolean): Result
     return transaction.success(value, replayed)
 end
-local now_ms = clock.milliseconds
+local function now_ms(): integer
+    return math.floor(seam.now("bee.approvals.binding.clock"):unix_nano() / 1000000)
+end
 local stamp = clock.stamp
 local function node(): (string?, string?)
     local id, err = system.node.id()

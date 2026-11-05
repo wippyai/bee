@@ -32,6 +32,7 @@ local allowance_form = require("allowance_form")
 local source_config = require("source_config")
 local protocol = require("protocol")
 local system = require("system")
+local seam = require("seam")
 local WORKSPACES = "bee.approvals.inbox.app:workspaces"
 -- CHANGED is the topic a remote approval owner sends to the inboxes that
 -- watch one of its workspaces when an approval there changes.
@@ -291,6 +292,7 @@ local function main(value: unknown)
         dirty = true
     end
     local function act(kind: string, ttl_ms: integer?, gesture: string?)
+        seam.call("bee.approvals.inbox.app.act", {approval_id = state.selected, kind = kind})
         local request_id = uuid.v7()
         local intent: model.Intent? = nil
         local refused: string? = nil
@@ -472,6 +474,7 @@ local function main(value: unknown)
                 frame.render(form_frame, menu, preferences)
                 assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             else
+                seam.hold("bee.approvals.inbox.app.draw", {detail = state.detail ~= nil})
                 local drawn = view.draw(width, height, preferences, state, rows, offset, status, slice, workspace_names)
                 frame.render(drawn, menu, preferences)
                 hits = drawn.hits

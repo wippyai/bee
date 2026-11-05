@@ -7,6 +7,168 @@ entries:
   modules: [process, channel, time]
   imports:
     demand: bee.process:demand
+    seam: bee.process:seam
+- name: seam
+  kind: library.lua
+  source: file://seam.lua
+  modules: [time, channel]
+- name: seams
+  kind: ns.requirement
+  meta:
+    value_kind: library.lua
+    comment: The library every component seam point calls; the host keeps the pass-through, a test composition binds its own
+  default: bee.process:seam
+  targets:
+  - entry: bee.threads.service:threads
+    path: .imports.seam
+  - entry: bee.approvals.inbox.app:app
+    path: .imports.seam
+  - entry: bee.apps.settings.app:edit_mode
+    path: .imports.seam
+  - entry: bee.node.binding:tests_call
+    path: .imports.seam
+  - entry: bee.gateway.binding:values
+    path: .imports.seam
+  - entry: bee.gateway.binding:listener
+    path: .imports.seam
+  - entry: bee.gateway.binding:capabilities
+    path: .imports.seam
+  - entry: bee.gateway.binding:credentials
+    path: .imports.seam
+  - entry: bee.credentials.binding:define
+    path: .imports.seam
+  - entry: bee.credentials.binding:set_value
+    path: .imports.seam
+  - entry: bee.credentials.binding:issue_projection
+    path: .imports.seam
+  - entry: bee.credentials.binding:check
+    path: .imports.seam
+  - entry: bee.credentials.binding:availability
+    path: .imports.seam
+  - entry: bee.credentials.binding:materialize
+    path: .imports.seam
+  - entry: bee.credentials.binding:write_back
+    path: .imports.seam
+  - entry: bee.credentials.binding:renew_attempt
+    path: .imports.seam
+  - entry: bee.credentials.binding:revoke
+    path: .imports.seam
+  - entry: bee.credentials.binding:revoke_all
+    path: .imports.seam
+  - entry: bee.credentials.binding:list
+    path: .imports.seam
+  - entry: bee.credentials.binding:capabilities
+    path: .imports.seam
+  - entry: bee.credentials.binding:configuration_setup
+    path: .imports.seam
+  - entry: bee.credentials.binding:configuration_effects
+    path: .imports.seam
+  - entry: bee.resources.persist:authority
+    path: .imports.seam
+  - entry: bee.gateway.security:publish
+    path: .imports.seam
+  - entry: bee.gateway.security:installation
+    path: .imports.seam
+  - entry: bee.approvals.binding:values
+    path: .imports.seam
+  - entry: bee.harness.launch:probe_cache
+    path: .imports.seam
+  - entry: bee.threads.sessions.client:sessions
+    path: .imports.seam
+  - entry: bee.gateway.binding:directory
+    path: .imports.seam
+  - entry: bee.gov.binding:publication_service
+    path: .imports.seam
+  - entry: bee.gateway.security:subject_call
+    path: .imports.seam
+  - entry: bee.threads.service:pump_config
+    path: .imports.seam
+  - entry: bee.gov.service:recovery
+    path: .imports.seam
+  - entry: bee.threads.hooks:supervisor
+    path: .imports.seam
+  - entry: bee.node.service:tests
+    path: .imports.seam
+  - entry: bee.node.service:catalog
+    path: .imports.seam
+  - entry: bee.node.service:owner
+    path: .imports.seam
+  - entry: bee.shell:main
+    path: .imports.seam
+  - entry: bee.shell:client
+    path: .imports.seam
+  - entry: bee.shell:jobs
+    path: .imports.seam
+  - entry: bee.hub.binding:catalog
+    path: .imports.seam
+  - entry: bee.hub.binding:inspect
+    path: .imports.seam
+  - entry: bee.hub.binding:artifact_source
+    path: .imports.seam
+  - entry: bee.hub.binding:updates
+    path: .imports.seam
+  - entry: bee.hub.binding:publication
+    path: .imports.seam
+  - entry: bee.node:application_tests
+    path: .imports.seam
+  - entry: bee.process:worker
+    path: .imports.seam
+  - entry: bee.process:demand_owner
+    path: .imports.seam
+  - entry: bee.hive.service:supervisor
+    path: .imports.seam
+  - entry: bee.hive:remote
+    path: .imports.seam
+  - entry: bee.approvals.persist:dispatch
+    path: .imports.seam
+  - entry: bee.gov.service:backlog
+    path: .imports.seam
+  - entry: bee.gateway.service:external
+    path: .imports.seam
+  - entry: bee.gateway.service:backlog
+    path: .imports.seam
+  - entry: bee.harness.service:carrier
+    path: .imports.seam
+  - entry: bee.placement.native.persist:store
+    path: .imports.seam
+  - entry: bee.placement.native.service:runner
+    path: .imports.seam
+  - entry: bee.placement.native.service:process_runner
+    path: .imports.seam
+  - entry: bee.placement.native.service:service
+    path: .imports.seam
+  - entry: bee.placement.native.service:workdir_preparers
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:prepare
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:start
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:status
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:activity
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:stop
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:reconcile
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:cleanup
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:evidence
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:attach
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:capabilities
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:measure_executable
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:close_stdin
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:prepare_environment
+    path: .imports.seam
+  - entry: bee.placement.docker.binding:methods
+    path: .imports.seam
+  - entry: bee.sync.service:sync
+    path: .imports.seam
 - name: demand_state
   kind: library.lua
   source: file://demand_state.lua
@@ -24,6 +186,7 @@ entries:
     state: bee.process:demand_state
     bounds: bee.drivers.values:bounds
     clock: bee.drivers.values:clock
+    seam: bee.process:seam
 - name: client_policy
   kind: security.policy
   policy:

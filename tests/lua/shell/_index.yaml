@@ -125,3 +125,10 @@ entries:
   imports:
     test: wippy.test:test
     membership: bee.shell:membership
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}
+  modules: [process]
+  imports:
+    controllers: bee.tests.support:controllers

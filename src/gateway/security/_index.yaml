@@ -222,6 +222,7 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     context: bee.gateway.catalog:context
+    seam: bee.process:seam
 - name: access
   kind: library.lua
   source: file://access.lua
@@ -399,6 +400,7 @@ entries:
     installation: bee.hub.activation:installation
     library: bee.gateway.security:library_installation
     subject_call: bee.gateway.security:subject_call
+    seam: bee.process:seam
 - name: session_boundary_policy
   kind: security.policy.expr
   policy:
@@ -502,6 +504,7 @@ entries:
     bounds: bee.drivers.values:bounds
     publishing: bee.hub.publication:publishing
     subject_call: bee.gateway.security:subject_call
+    seam: bee.process:seam
 - name: worker_host_policy
   kind: security.policy.expr
   policy:

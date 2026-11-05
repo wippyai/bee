@@ -5,6 +5,10 @@
 -- Replacing an association or changing a root never retargets a grant.
 local sql = require("sql")
 local clock = require("clock")
+local seam = require("seam")
+local function milliseconds(): integer
+    return math.floor(seam.now("bee.resources.persist.clock"):unix_nano() / 1000000)
+end
 local uuid = require("uuid")
 local security = require("security")
 local bounds = require("bounds")
@@ -170,7 +174,7 @@ function M.associate(value: unknown): Reply
             if not view then return transaction.failure("STORAGE", view_error or "association is corrupt") end
             return transaction.success(view, true)
         end
-        local at = clock.stamp(clock.milliseconds())
+        local at = clock.stamp(milliseconds())
         local revision = current_revision + 1
         local association_id, id_error = uuid.v7()
         if id_error or not association_id then return transaction.failure("STORAGE", "association id") end
@@ -301,7 +305,7 @@ function M.grant(value: unknown): Reply
         db:release()
         return fail("STORAGE", "grant id")
     end
-    local created = clock.milliseconds()
+    local created = milliseconds()
     local _, insert_error = db:execute([[INSERT INTO bee_resource_grants (grant_id, workspace_id, name, association_id, association_revision, issuer_owner, subject, thread_id, audience,
         root_ref, root_digest, subpath, access, purpose, attempt_id, expires_at, lease_ms, authorization_epoch, idempotency_key, request_digest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]],
         {grant_id, workspace_id, name, association.association_id, association.revision, issuer_node, subject, named_thread, audience, association.root_ref, association.root_digest,
@@ -379,7 +383,7 @@ function M.revoke(value: unknown): Reply
     local revocation, report_error = capability_model.revocation_report({meaning}, attempts)
     if not revocation then db:release(); return fail("STORAGE", report_error or "report resource revocation") end
     if grant.revoked_at == nil then
-        local _, update_error = db:execute("UPDATE bee_resource_grants SET revoked_at = ? WHERE grant_id = ?", {clock.stamp(clock.milliseconds()), grant_id})
+        local _, update_error = db:execute("UPDATE bee_resource_grants SET revoked_at = ? WHERE grant_id = ?", {clock.stamp(milliseconds()), grant_id})
         if update_error then
             db:release()
             return fail("STORAGE", "revoke grant")
@@ -410,7 +414,7 @@ function M.revoke_all(value: unknown): Reply
         return fail("STORAGE", epoch_error or "epoch")
     end
     local live, live_error = db:query("SELECT DISTINCT attempt_id FROM bee_resource_grants WHERE workspace_id = ? AND revoked_at IS NULL AND expires_at > ? AND attempt_id IS NOT NULL LIMIT ?",
-        {workspace_id, clock.stamp(clock.milliseconds()), M.MAX_LIST})
+        {workspace_id, clock.stamp(milliseconds()), M.MAX_LIST})
     if live_error or not live then
         db:release()
         return fail("STORAGE", "read fenced attempts")
@@ -483,7 +487,7 @@ function M.resolve(value: unknown): Reply
         db:release()
         return fail("REVOKED", "grant was revoked at " .. tostring(grant.revoked_at))
     end
-    if tostring(grant.expires_at) <= clock.stamp(clock.milliseconds()) then
+    if tostring(grant.expires_at) <= clock.stamp(milliseconds()) then
         db:release()
         return fail("EXPIRED", "grant expired at " .. tostring(grant.expires_at))
     end
@@ -549,7 +553,7 @@ function M.renew_attempt(value: unknown): Reply
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
     if not db then return open_failure end
-    local now = clock.milliseconds()
+    local now = milliseconds()
     local rows, read_error = db:query("SELECT grant_id, workspace_id, expires_at, lease_ms, authorization_epoch FROM bee_resource_grants " ..
         "WHERE attempt_id = ? AND subject = ? AND audience = ? AND revoked_at IS NULL AND expires_at > ?", {attempt_id, subject, audience, clock.stamp(now)})
     if read_error or not rows then db:release(); return fail("STORAGE", "read attempt grants") end
@@ -583,7 +587,7 @@ function M.list(value: unknown): Reply
     local db, open_failure = open()
     if not db then return open_failure end
     local associations, associations_error = db:query("SELECT * FROM bee_resource_associations WHERE workspace_id = ? ORDER BY name LIMIT ?", {workspace_id, M.MAX_LIST})
-    local grants, grants_error = db:query("SELECT * FROM bee_resource_grants WHERE workspace_id = ? AND revoked_at IS NULL AND expires_at > ? ORDER BY created_at LIMIT ?", {workspace_id, clock.stamp(clock.milliseconds()), M.MAX_LIST})
+    local grants, grants_error = db:query("SELECT * FROM bee_resource_grants WHERE workspace_id = ? AND revoked_at IS NULL AND expires_at > ? ORDER BY created_at LIMIT ?", {workspace_id, clock.stamp(milliseconds()), M.MAX_LIST})
     db:release()
     if associations_error or not associations or grants_error or not grants then return fail("STORAGE", "read workspace resources") end
     local association_views: {{[string]: unknown}} = {}

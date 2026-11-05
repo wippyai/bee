@@ -8,6 +8,55 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    machine: bee.harness.carrier:machine
-    profile_values: bee.drivers.descriptor:profile_values
+    planning: bee.tests.harness.carrier:counted_planning
+    counted: bee.tests.harness.carrier:counted_profile_values
     fixtures: bee.tests.harness:carrier_fixtures
+- name: counted_planning
+  kind: library.lua
+  source: file://planning.lua
+  modules:
+  - registry
+  imports:
+    profile_values: bee.tests.harness.carrier:counted_profile_values
+    effective_schema: bee.drivers.descriptor:effective
+    permission: bee.harness.permission:adapter
+    acceptance: bee.harness.permission:acceptance
+    gateway_configuration: bee.gateway.env:configuration
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    catalog: bee.harness.catalog:catalog
+    classify: bee.harness:classification
+    policy: bee.harness.carrier:policy
+    continuation: bee.harness.carrier:continuation
+    configuration: bee.drivers.binding:configuration
+    driver_resolver: bee.drivers.binding:resolver
+    driver_types: bee.drivers:types
+    placement_types: bee.placement:types
+    placement_resolver: bee.placement.binding:resolver
+    launch_request: bee.placement:request
+    placement_decode: bee.placement:decode
+    service_reply: bee.drivers.values:reply
+    carrier_types: bee.harness:types
+    descriptor: bee.drivers.descriptor:descriptor
+    readiness: bee.harness.launch:readiness
+    placement_profiles: bee.placement.profiles:profiles
+    driver_placement: bee.drivers.descriptor:placement
+    policy_types: bee.harness:policy_types
+    configuration_types: bee.drivers:configuration_types
+  meta:
+    type: test_support
+    comment: bee.harness.carrier:planning reading schemas through counted_profile_values
+- name: counted_profile_values
+  kind: library.lua
+  source: file://counted_profile_values.lua
+  meta:
+    type: test_support
+  modules:
+  - store
+  imports:
+    profile_values: bee.drivers.descriptor:profile_values
+- name: schema_reads
+  kind: store.memory
+  max_size: 10
+  meta: {type: test_support}
+  lifecycle: {auto_start: true}

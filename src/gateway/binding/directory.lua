@@ -5,6 +5,7 @@ local bounds = require("bounds")
 local sessions = require("sessions")
 local part_model = require("part_model")
 local part_values = require("part_values")
+local seam = require("seam")
 local M = {}
 type Reply = part_model.Reply
 type Object = part_model.Object
@@ -23,7 +24,7 @@ local function directory(value: unknown, fields: {string}): ({Object}?, Object?,
     if not definition then return nil, nil, fail("UNAVAILABLE", tostring(contract_error)) end
     local acted, acting_error = definition:with_actor(attributed)
     if not acted then return nil, nil, fail("DENIED", tostring(acting_error)) end
-    local owner, open_error = acted:open()
+    local owner, open_error = acted:open(seam.call("bee.contract.binding", {contract = "bee.threads.sessions:contract"}))
     if not owner then return nil, nil, fail("UNAVAILABLE", tostring(open_error)) end
     local rows: {Object} = {}
     local cursor: string? = nil

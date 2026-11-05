@@ -469,6 +469,7 @@ entries:
   - json
   imports:
     processes: bee.tests.support:processes
+    await_changes: bee.tests.support:await
     placement_decode: bee.placement:decode
     bounds: bee.drivers.values:bounds
     principals: bee.tests.support.principals:bound
@@ -736,6 +737,7 @@ entries:
   - time
   - registry
   - hostprocess
+  - events
   security:
     policies:
     - bee.tests.placement.native:apply_test_policy
@@ -754,6 +756,7 @@ entries:
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
     protocol: bee.placement.native:protocol
+    quote: bee.drivers.binding:quote
     native_fixture: bee.tests.placement.native:native_fixture
 - name: native_forget_session_test
   kind: function.lua
@@ -1232,3 +1235,10 @@ entries:
     options: {profiles: [window], fields: {}}
     argv_templates: {window: {argv: [], readiness: none}}
     hook_files: [.outside/logs]
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}
+  modules: [process, registry, ctx]
+  imports:
+    bounds: bee.drivers.values:bounds

@@ -1,11 +1,12 @@
 -- MIT. Outlasts its own meta.timeout, which the run reports as the test's error.
 local test = require("test")
-local time = require("time")
+local process = require("process")
 
 local function define_tests()
     test.describe("timeout", function()
-        test.it("sleeps past its limit", function()
-            time.sleep("5s")
+        test.it("outlasts its limit", function()
+            local never = assert(process.listen("bee.test.runner.never", {message = true}))
+            never:receive()
         end)
     end)
 end

@@ -22,6 +22,7 @@ local activation_profiles = require("activation_profiles")
 local workspace_applications = require("workspace_applications")
 local capability_grants = require("capability_grants")
 local capability_model = require("capability_model")
+local seam = require("seam")
 
 local M = {}
 M.BACKEND = "bee.gov.binding:publication_backend_call"
@@ -151,7 +152,7 @@ local function session_source(caller: security.Actor): author.Source
             if not definition then return nil end
             local acted = definition:with_actor(caller)
             if not acted then return nil end
-            local owner = acted:open()
+            local owner = acted:open(seam.call("bee.contract.binding", {contract = "bee.threads.sessions:contract"}))
             if not owner then return nil end
             local reply = bounds.object(owner:get({session = id}))
             local value = reply and reply.ok == true and bounds.object(reply.value) or nil

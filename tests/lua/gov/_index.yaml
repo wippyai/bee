@@ -1317,6 +1317,7 @@ entries:
     policies:
     - bee.tests.gov:app_expiry_test_policy
   imports:
+    clock: bee.tests.approvals:clock
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     harness: bee.tests.gov:delivery_harness
@@ -1337,7 +1338,7 @@ entries:
   kind: function.lua
   source: file://hub_application_test.lua
   method: run
-  modules: [funcs, security, time, registry, system, json]
+  modules: [funcs, security, time, registry, system, json, cdc, channel]
   meta: {type: test, suite: bee, timeout: 480s}
   security:
     policies: [bee.tests.gov:app_database_test_policy]
@@ -1834,3 +1835,14 @@ entries:
     policies: [bee.tests.gov:admission_generation_policy, bee.tests.support:schema_policy]
   imports:
     test: wippy.test:test
+- name: seams
+  kind: library.lua
+  source: file://seams.lua
+  meta: {type: test_support}
+  modules: [sql]
+- name: recovery_trace_schema
+  kind: function.lua
+  source: file://recovery_trace_schema.lua
+  method: run
+  meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-12T00:00:00Z', test_support: true}
+  imports: {migration: 'wippy.migration:migration'}

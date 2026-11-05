@@ -27,6 +27,7 @@ entries:
   - logger
   imports:
     service: bee.gov.binding:destination_service
+    seam: bee.process:seam
 - name: recovery_service
   meta:
     title: Library · boot recovery
@@ -106,3 +107,4 @@ entries:
   imports:
     pass: bee.gov.service:activation_pass
     service: bee.gov.binding:destination_service
+    seam: bee.process:seam

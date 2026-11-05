@@ -1,5 +1,6 @@
 -- MIT. Credentials for the gateway authority.
 local time = require("time")
+local seam = require("seam")
 local uuid = require("uuid")
 local security = require("security")
 local bounds = require("bounds")
@@ -92,7 +93,7 @@ function M.materialize(value: unknown): Reply
     end
     local window, window_error = time.parse(FORMAT, issued_expires_at)
     if window_error or not window then db:release(); return fail("STORAGE", "materialization expiry is corrupt") end
-    if not time.now():before(window) then db:release(); return fail("DENIED", "the materialization authorization has expired") end
+    if not seam.now("bee.gateway.binding.clock"):before(window) then db:release(); return fail("DENIED", "the materialization authorization has expired") end
     local generation, generation_failure = part_listener.generation(db)
     if not generation then db:release(); return assert(generation_failure) end
     local ok, reason = part_listener.valid(binding, generation)

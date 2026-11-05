@@ -12,14 +12,25 @@ local tests = require("tests")
 local test_runs = require("test_runs")
 local backend = require("backend")
 local grants = require("grants")
+local seam = require("seam")
 local M = {}
 type Object = {[string]: unknown}
 type Selection = {workspace: string, application: string, owner: string}
 
+local function find_grants()
+    local fault = seam.call("bee.hive.remote.find_fault")
+    if fault ~= nil then return nil, tostring(fault) end
+    return registry.find({["meta.type"] = grants.SCHEMA})
+end
+local function open_overlay(owner: string)
+    local fault = seam.call("bee.hive.remote.overlay_fault")
+    if fault ~= nil then return nil, tostring(fault) end
+    return registry.overlay(owner)
+end
 local function selections(): ({Selection}?, string?)
     local found: {Selection} = {}
     local seen: {[string]: boolean} = {}
-    local entries, find_error = registry.find({["meta.type"] = grants.SCHEMA})
+    local entries, find_error = find_grants()
     if not entries then return nil, "application grants cannot be read: " .. tostring(find_error) end
     for _, entry in ipairs(entries) do
         local data = bounds.object(entry.data)
@@ -101,7 +112,7 @@ function M.discover(raw: unknown, caller: string, node: string): protocol.Reply
 end
 
 local function planned(selected: Selection, caller: string, node: string, filter: string?): ({test_runs.Planned}?, string?)
-    local overlay, overlay_error = registry.overlay(selected.owner)
+    local overlay, overlay_error = open_overlay(selected.owner)
     if not overlay then return nil, "overlay " .. selected.owner .. " cannot be opened: " .. tostring(overlay_error) end
     local rows, rows_error = overlay:entries()
     if not rows then return nil, "overlay " .. selected.owner .. " entries cannot be read: " .. tostring(rows_error) end

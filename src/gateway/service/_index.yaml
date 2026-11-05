@@ -70,6 +70,7 @@ entries:
     demand: bee.process:demand
     task: bee.process:task
     effects: bee.gateway.service:effects
+    seam: bee.process:seam
 - name: external_service
   kind: process.service
   process: bee.gateway.service:external
@@ -169,14 +170,11 @@ entries:
     bounds: bee.drivers.values:bounds
 - name: backlog
   kind: function.lua
-  source: file://effects.lua
+  source: file://backlog.lua
   method: pending
-  modules:
-  - registry
-  - security
-  - funcs
   imports:
-    bounds: bee.drivers.values:bounds
+    effects: bee.gateway.service:effects
+    seam: bee.process:seam
 - name: access_effects
   kind: library.lua
   source: file://access_effects.lua

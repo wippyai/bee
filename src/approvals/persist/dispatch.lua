@@ -7,6 +7,7 @@ local clock = require("clock")
 local demand = require("demand")
 local resources = require("resources")
 local bounds = require("bounds")
+local seam = require("seam")
 local M = {}
 M.TOPIC = "bee.approvals.wake"
 type Sender = (string, string, {[string]: unknown}) -> (boolean, string?)
@@ -73,6 +74,7 @@ function M.notify_sessions(db: sql.DB): string?
     return failure
 end
 function M.deliver(db: sql.DB, sender: Sender?): (integer?, string?)
+    if not sender and seam.call("bee.approvals.persist.dispatch.paused") == true then return 0, nil end
     local consumers, err = resources.consumers()
     if not consumers then return nil, err end
     local send: Sender = sender or function(name: string, topic: string, body: {[string]: unknown}): (boolean, string?)

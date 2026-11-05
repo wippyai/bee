@@ -8,6 +8,7 @@ local contract = require("contract")
 local bounds = require("bounds")
 local protocol = require("protocol")
 local profiles = require("profiles")
+local seam = require("seam")
 local M = {}
 
 M.SESSIONS = "bee.threads.sessions:contract"
@@ -89,7 +90,7 @@ end
 local function call_owner(id: string, method: string, request: {[string]: unknown}): (unknown, string?)
     local definition, get_error = contract.get(id)
     if not definition then return nil, "contract " .. id .. ": " .. tostring(get_error) end
-    local instance, open_error = definition:open()
+    local instance, open_error = definition:open(seam.call("bee.contract.binding", {contract = id}))
     if not instance then return nil, "open " .. id .. ": " .. tostring(open_error) end
     local entry = (instance)[method]
     if type(entry) ~= "function" then return nil, id .. " has no method " .. method end

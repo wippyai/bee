@@ -119,6 +119,7 @@ entries:
     render: bee.shell:render
     part_handover: bee.shell:handover
     jobs: bee.shell:jobs
+    seam: bee.process:seam
   meta:
     command:
       name: bee
@@ -149,6 +150,7 @@ entries:
     render: bee.shell:render
     part_handover: bee.shell:handover
     jobs: bee.shell:jobs
+    seam: bee.process:seam
   meta:
     command:
       name: client
@@ -220,3 +222,4 @@ entries:
   imports:
     client: bee.node:client
     part_handover: bee.shell:handover
+    seam: bee.process:seam

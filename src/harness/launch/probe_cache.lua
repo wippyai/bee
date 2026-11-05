@@ -10,6 +10,7 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local resources = require("resources")
 local measurements = require("measurements")
+local seam = require("seam")
 local M = {}
 M.PATH_REF = "bee.placement.native.env:placement_path"
 
@@ -81,7 +82,7 @@ end
 -- held through the probe. home is part of the key because the probe runs
 -- with it.
 function M.measure(argv: {string}, home: string?, capture: Capture): (string?, integer?, string?, boolean?)
-    local started = time.now():unix_nano()
+    local started = seam.now("bee.harness.launch.measure"):unix_nano()
     local resolved = M.resolve(argv[1])
     local identity = resolved and measurements.settled(resolved.info, started) or nil
     local args: {string} = {}

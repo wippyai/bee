@@ -114,3 +114,55 @@ entries:
     type: test_support
   modules:
   - security
+- name: controllers
+  kind: library.lua
+  source: file://controllers.lua
+  meta: {type: test_support, comment: Hold specifications for seam points whose controller registers a local process name}
+  modules: [process]
+- name: seam
+  kind: library.lua
+  source: file://seam.lua
+  meta: {type: test_support, comment: The test composition's binding of bee.process:seams}
+  modules: [process, channel, time]
+  imports:
+    areas: bee.tests.support:seam_areas
+- name: seam_areas
+  kind: library.lua
+  source: file://seam_areas.lua
+  meta: {type: test_support}
+  imports:
+    placement_native: bee.tests.placement.native:seams
+    placement_docker: bee.tests.placement.docker:seams
+    harness: bee.tests.harness:seams
+    process: bee.tests.process:seams
+    hive: bee.tests.hive:seams
+    approvals: bee.tests.approvals:seams
+    inbox: bee.tests.approvals.inbox:seams
+    node: bee.tests.node:seams
+    shell: bee.tests.shell:seams
+    gov: bee.tests.gov:seams
+    sync: bee.tests.sync:seams
+    gateway: bee.tests.gateway:seams
+    credentials: bee.tests.credentials:seams
+    resources: bee.tests.resources:seams
+    hub: bee.tests.hub:seams
+    threads: bee.tests.threads:seams
+- name: seam_binding_test
+  kind: function.lua
+  source: file://seam_binding_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test
+- name: await
+  kind: library.lua
+  source: file://await.lua
+  meta: {type: test_support, comment: Database-state waits that wake on the node change stream}
+  modules: [cdc, channel, time]
+- name: boot_seam_areas
+  kind: library.lua
+  source: file://boot_seam_areas.lua
+  meta: {type: test_support, comment: The areas tests/runner/boot.py binds its seam binding to}
+  imports:
+    node: bee.tests.node:seams

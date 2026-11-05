@@ -4,7 +4,12 @@ local registry = require("registry")
 local store = require("store")
 local bounds = require("bounds")
 local limits = require("limits")
+local seam = require("seam")
 local M = {}
+
+local function client(): typeof(hub)
+    return (seam.call("bee.hub.binding.catalog.client") :: typeof(hub)?) or hub
+end
 
 M.MAX_QUERY_BYTES = 160
 M.MAX_COMPONENT_BYTES = 160
@@ -194,7 +199,7 @@ end
 
 local function application_package(item: Item): (boolean?, string?)
     if item.latest_version == "" then return false, nil end
-    local package, problem = hub.versions.open(item.component, item.latest_version, {timeout = M.TIMEOUT_SECONDS})
+    local package, problem = client().versions.open(item.component, item.latest_version, {timeout = M.TIMEOUT_SECONDS})
     if not package then return nil, tostring(problem) end
     local digest = package.digest:gsub("^sha256:", "")
     if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then package:close(); return nil, "invalid artifact digest" end
@@ -233,9 +238,9 @@ function M.browse(raw: unknown): (Browse?, string?)
     if request.keyword ~= "" then keywords[1] = request.keyword end
     local query = request.query or (request.keyword ~= "" and request.keyword or nil)
     if query then
-        response, response_error = hub.modules.search(query, {page = request.page, page_size = M.PAGE_SIZE, keywords = keywords, timeout = M.TIMEOUT_SECONDS})
+        response, response_error = client().modules.search(query, {page = request.page, page_size = M.PAGE_SIZE, keywords = keywords, timeout = M.TIMEOUT_SECONDS})
     else
-        response, response_error = hub.modules.list({page = request.page, page_size = M.PAGE_SIZE, timeout = M.TIMEOUT_SECONDS})
+        response, response_error = client().modules.list({page = request.page, page_size = M.PAGE_SIZE, timeout = M.TIMEOUT_SECONDS})
     end
     if not response then return nil, tostring(response_error) end
     local result, result_error = M.decode_browse(response)
@@ -278,10 +283,10 @@ end
 function M.detail(raw: unknown): (Detail?, string?)
     local request, request_error = M.decode_detail(raw)
     if not request then return nil, request_error end
-    local module, module_error = hub.modules.get(request.component, {timeout = M.TIMEOUT_SECONDS})
+    local module, module_error = client().modules.get(request.component, {timeout = M.TIMEOUT_SECONDS})
     if not module then return nil, tostring(module_error) end
-    local readme, readme_error = hub.modules.readme(request.component, {timeout = M.TIMEOUT_SECONDS})
-    local versions, versions_error = hub.versions.list(request.component,
+    local readme, readme_error = client().modules.readme(request.component, {timeout = M.TIMEOUT_SECONDS})
+    local versions, versions_error = client().versions.list(request.component,
         {page = request.page, page_size = M.MAX_VERSIONS, include_yanked = true, timeout = M.TIMEOUT_SECONDS})
     if not versions then return nil, tostring(versions_error) end
     return M.decode_detail_result(module, readme, versions, request.component,
@@ -290,7 +295,7 @@ end
 
 -- latest is the newest release Hub lists for component.
 function M.latest(component: string): (string?, string?)
-    local module, module_error = hub.modules.get(component, {timeout = M.TIMEOUT_SECONDS})
+    local module, module_error = client().modules.get(component, {timeout = M.TIMEOUT_SECONDS})
     if not module then return nil, tostring(module_error) end
     local item, invalid = decode_item(module)
     if not item then return nil, invalid end
@@ -299,7 +304,7 @@ end
 
 -- One page per request. A package's release count is not an admission limit.
 function M.available(component: string, page: integer): ({string}?, boolean?, string?)
-    local raw, problem = hub.versions.list(component, {page = page, page_size = M.MAX_VERSIONS,
+    local raw, problem = client().versions.list(component, {page = page, page_size = M.MAX_VERSIONS,
         include_yanked = true, timeout = M.TIMEOUT_SECONDS})
     if not raw then return nil, nil, tostring(problem) end
     local result, invalid = M.decode_versions(raw)

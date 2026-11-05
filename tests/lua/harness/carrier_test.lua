@@ -21,6 +21,7 @@ local exec = require("exec")
 local quote = require("quote")
 local placement_fixture = require("placement_fixture")
 local exits = require("exits")
+local await_changes = require("await_changes")
 local ACTOR = "bee.test.carrier"
 local POLICY = "bee.tests.harness:fixture_policy"
 local ROOT = "bee.tests.harness:project_fixture"
@@ -428,14 +429,14 @@ local function define_tests()
         -- generation's input and acknowledgements are refused from then on.
         local function await_fenced(attempt_id: string, generation: integer)
             local wanted = "runner installed generation " .. tostring(generation)
-            for _ = 1, 600 do
+            local fenced = await_changes.until_changed({"bee_placement_evidence"}, function(): boolean
                 local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
                 for _, item in ipairs(principals.objects(page.evidence)) do
-                    if item.kind == "attach.fenced" and item.detail == wanted then return end
+                    if item.kind == "attach.fenced" and item.detail == wanted then return true end
                 end
-                time.sleep("50ms")
-            end
-            error("generation " .. tostring(generation) .. " was never fenced on " .. attempt_id)
+                return false
+            end, 30000)
+            if not fenced then error("generation " .. tostring(generation) .. " was never fenced on " .. attempt_id) end
         end
         test.it("continues from what a live carrier committed between the replacement's checkpoint read and its claim", function()
             local thread_id = thread()

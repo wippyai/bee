@@ -11,6 +11,7 @@ local requirements = require("requirements")
 local hash = require("hash")
 local store = require("store")
 local semver = require("semver")
+local seam = require("seam")
 local M = {}
 
 type Pack = {component: string, installed_version: string, locked_version: string, available_version: string, update_available: boolean}
@@ -97,12 +98,20 @@ local function select_bee(state: unknown, installed: inventory.Result, installed
     return finish(result, nil)
 end
 
-function M.read(): (Result?, string?)
+local function captured_state(): (unknown?, integer?, string?)
+    local fixed = bounds.object(seam.call("bee.hub.binding.updates.captured"))
+    if fixed then return fixed.state, bounds.count(fixed.revision), nil end
     local snapshot, snapshot_error = registry.snapshot()
-    if not snapshot then return nil, tostring(snapshot_error) end
+    if not snapshot then return nil, nil, tostring(snapshot_error) end
     local state, state_error = snapshot:state()
-    if not state then return nil, tostring(state_error) end
-    local installed, inventory_error = inventory.decode(state, snapshot:version():id())
+    if not state then return nil, nil, tostring(state_error) end
+    return state, bounds.count(snapshot:version():id()), nil
+end
+
+function M.read(): (Result?, string?)
+    local state, revision, state_error = captured_state()
+    if not state or revision == nil then return nil, state_error end
+    local installed, inventory_error = inventory.decode(state, revision)
     if not installed then return nil, tostring(inventory_error) end
     local selected: {[string]: boolean} = {}
     if installed.deployment then selected[installed.deployment] = true end

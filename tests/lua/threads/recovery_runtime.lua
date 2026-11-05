@@ -37,8 +37,13 @@ function M.fire(_db: DB, _thread: string): string?
     if M.settle_error then return "injected settlement failure" end
     return nil
 end
-function M.send(_system: string, _kind: string, _path: string, _data: {sequence: number}): boolean
+function M.announce(_thread: string, _sequence: number): nil
     M.announced = M.announced + 1
-    return true
+    return nil
 end
+M.store = {
+    open = function(): (any, string?) return M.open() end,
+    fire = function(db: any, thread: string): string? return M.fire(db, thread) end,
+    announce = function(thread: string, sequence: number): nil return M.announce(thread, sequence) end,
+}
 return M

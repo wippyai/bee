@@ -44,6 +44,7 @@ entries:
     distributor: bee.sync.service:distributor
     replica_protocol: bee.sync:replica_protocol
     worker: bee.process:worker
+    seam: bee.process:seam
 - name: service
   meta:
     title: Sync

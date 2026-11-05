@@ -3,6 +3,7 @@ local sql = require("sql")
 local time = require("time")
 local uuid = require("uuid")
 local json = require("json")
+local events = require("events")
 local security = require("security")
 local bounds = require("bounds")
 local hooks = require("hooks")
@@ -168,6 +169,8 @@ function M.submit_hook(binding: Binding, payload: Object, provenance: string): R
     local _, commit_error = tx:commit()
     db:release()
     if commit_error then return fail("STORAGE", "commit intake") end
+    local signalled, signal_error = events.send(hooks.signal(binding.binding_id), hooks.QUEUED, event_id)
+    if not signalled then return fail("UNAVAILABLE", "signal the binding's carrier: " .. tostring(signal_error)) end
     return succeed({event = event, event_id = event_id, status = "queued", replayed = false, ambiguous = submission.ambiguous})
 end
 -- hook_status: what became of one submission; unknown when nothing under

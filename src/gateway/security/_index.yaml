@@ -30,6 +30,15 @@ entries:
     resources: '*'
     expression: (action == "registry.find" && resource == "*") || (action == "registry.get" && resource == "bee.gateway.security:grant_context")
     effect: allow
+- name: hook_signal_policy
+  kind: security.policy.expr
+  meta:
+    comment: Hook intake signals each queued hook on its binding's channel only
+  policy:
+    actions: [events.send]
+    resources: '*'
+    expression: action == "events.send" && resource matches "^bee[.]gateway[.]hooks/[A-Za-z0-9_.:-]+$"
+    effect: allow
 - name: readiness_policy
   kind: security.policy.expr
   meta:

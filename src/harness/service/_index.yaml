@@ -134,6 +134,7 @@ entries:
     - bee.credentials.security:credential_materialize_workspace_policy
     - bee.security.gateway:gateway_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
+    - bee.security.gateway:gateway_hook_signal_policy
     - bee.node.security:workspace_folder_browse_policy
     - bee.node.security:workspace_catalog_read_policy
     - bee.placement.docker.security:docker_policy

@@ -18,6 +18,11 @@ local M = {}
 M.MAX_PAYLOAD_BYTES = 4194304
 M.MAX_QUEUE = 64
 M.RETRY_AFTER_MS = 500
+-- The gateway signals each submission it queues on its binding's channel,
+-- so the binding's carrier claims it as it arrives; the event path is the
+-- queued event id.
+M.QUEUED = "queued"
+function M.signal(binding_id: string): string return "bee.gateway.hooks/" .. binding_id end
 type Object = {[string]: unknown}
 -- The closed catalog of events a binding may admit, as both harnesses name
 -- them. Nothing outside it is accepted, whatever a harness sends.

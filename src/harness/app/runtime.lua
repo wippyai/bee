@@ -27,6 +27,8 @@ local sessions = require("sessions")
 local hooks = require("hooks")
 local text = require("text")
 local delivery = require("delivery")
+local gateway_hooks = require("gateway_hooks")
+local events = require("events")
 local records = require("records")
 local appearance = require("appearance")
 local restore_view = require("restore_view")
@@ -982,9 +984,19 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     publish_review()
     local done = terminal:done()
     local closing = false
+    -- Hooks queued before the subscription are taken by the first claim; each
+    -- later one wakes the carrier as the gateway queues it.
+    local signals = nil
+    if state.hooks_enabled then
+        local subscribed, subscribe_error = events.subscribe(gateway_hooks.signal(assert(state.binding_id)), gateway_hooks.QUEUED)
+        if not subscribed then error("Managed window hook signal: " .. tostring(subscribe_error)) end
+        signals = subscribed
+    end
+    local queued = signals and signals:channel()
     local pending = delivery.advance(driver, now_ms())
     while true do
         local cases = {input:case_receive(), lifecycle:case_receive(), closes:case_receive(), done:case_receive(), checkpoint_results:case_receive()}
+        if queued then cases[#cases + 1] = queued:case_receive() end
         if reviews then cases[#cases + 1] = reviews:case_receive() end
         if pending then cases[#cases + 1] = pending.response:case_receive() end
         local timer: time.Timer? = nil
@@ -1012,6 +1024,13 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 publish_title()
             end
             pending = delivery.advance(driver, now_ms())
+        elseif queued and selected.channel == queued then
+            if selected.ok then
+                hooks.wake(state, now_ms())
+                pending = delivery.advance(driver, now_ms())
+            else
+                queued = nil
+            end
         elseif reviews and selected.channel == reviews then
             publish_review()
         elseif selected.channel == checkpoint_results and selected.ok then
@@ -1057,6 +1076,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         end
     end
     if review_ticks then review_ticks:stop(); client.review(launch, nil) end
+    if signals then signals:close() end
     terminal:close()
     terminal:done():receive()
     delivery.shutdown(driver, now_ms(), closing)

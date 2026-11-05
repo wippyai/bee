@@ -64,6 +64,7 @@ entries:
     - bee.gateway.security:tool_policy_reference_policy
     - bee.gateway.security:session_boundary_resolver_policy
     - bee.gateway.security:session_boundary_policy
+    - bee.gateway.security:hook_signal_policy
 - name: hook_status_http
   kind: function.lua
   source: file://hook_http_method.lua
@@ -119,6 +120,7 @@ entries:
     - bee.gateway.security:tool_policy_reference_policy
     - bee.gateway.security:session_boundary_resolver_policy
     - bee.gateway.security:session_boundary_policy
+    - bee.gateway.security:hook_signal_policy
 - name: mcp_http
   kind: function.lua
   source: file://mcp_method.lua

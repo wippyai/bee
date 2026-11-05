@@ -655,7 +655,7 @@ entries:
   kind: function.lua
   source: file://window_resume_test.lua
   method: claude
-  modules: [funcs]
+  modules: [funcs, events, channel, time]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -663,6 +663,7 @@ entries:
     harness: bee.tests.threads:harness
     bounds: bee.drivers.values:bounds
     hook_records: bee.harness.carrier:hook_records
+    gateway_hooks: bee.gateway.hooks:hooks
     checkpoint: bee.harness.carrier:checkpoint
     continuation: bee.harness.carrier:continuation
     claude: bee.tests.support.driver:claude_launch
@@ -674,7 +675,7 @@ entries:
   kind: function.lua
   source: file://window_resume_test.lua
   method: codex
-  modules: [funcs]
+  modules: [funcs, events, channel, time]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -682,6 +683,7 @@ entries:
     harness: bee.tests.threads:harness
     bounds: bee.drivers.values:bounds
     hook_records: bee.harness.carrier:hook_records
+    gateway_hooks: bee.gateway.hooks:hooks
     checkpoint: bee.harness.carrier:checkpoint
     continuation: bee.harness.carrier:continuation
     claude: bee.tests.support.driver:claude_launch
@@ -693,7 +695,7 @@ entries:
   kind: function.lua
   source: file://window_resume_test.lua
   method: agy
-  modules: [funcs]
+  modules: [funcs, events, channel, time]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -701,6 +703,7 @@ entries:
     harness: bee.tests.threads:harness
     bounds: bee.drivers.values:bounds
     hook_records: bee.harness.carrier:hook_records
+    gateway_hooks: bee.gateway.hooks:hooks
     checkpoint: bee.harness.carrier:checkpoint
     continuation: bee.harness.carrier:continuation
     claude: bee.tests.support.driver:claude_launch
@@ -712,7 +715,7 @@ entries:
   kind: function.lua
   source: file://window_resume_test.lua
   method: muse
-  modules: [funcs]
+  modules: [funcs, events, channel, time]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -720,6 +723,7 @@ entries:
     harness: bee.tests.threads:harness
     bounds: bee.drivers.values:bounds
     hook_records: bee.harness.carrier:hook_records
+    gateway_hooks: bee.gateway.hooks:hooks
     checkpoint: bee.harness.carrier:checkpoint
     continuation: bee.harness.carrier:continuation
     claude: bee.tests.support.driver:claude_launch

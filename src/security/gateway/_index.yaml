@@ -16,6 +16,15 @@ entries:
     - bee.gateway.binding:revoke
     - bee.gateway.binding:seal
     effect: allow
+- name: gateway_hook_signal_policy
+  kind: security.policy.expr
+  meta:
+    comment: Attached to window carriers only; a carrier subscribes to the gateway's signal of hooks queued for its bindings
+  policy:
+    actions: [events.subscribe]
+    resources: '*'
+    expression: action == "events.subscribe" && resource matches "^bee[.]gateway[.]hooks/[A-Za-z0-9_.:-]+$"
+    effect: allow
 - name: gateway_supervision_policy
   kind: security.policy
   meta:

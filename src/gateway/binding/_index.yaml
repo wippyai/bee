@@ -499,6 +499,7 @@ entries:
   - uuid
   - json
   - security
+  - events
   imports:
     bounds: bee.drivers.values:bounds
     hooks: bee.gateway.hooks:hooks

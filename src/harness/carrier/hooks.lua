@@ -33,7 +33,7 @@ type State = {
     checkpoint_key: string?,
     closing: boolean, closed: boolean, sealed: boolean, started: boolean,
     drain_deadline: integer?, unresolved: boolean,
-    activity: string?,
+    activity: string?, signalled: boolean,
 }
 local function object(value: unknown): Object
     return bounds.object(value) or {}
@@ -62,9 +62,17 @@ local function valid_revision(state: State, value: unknown): boolean
     return result.attempt_id == state.attempt_id and result.carrier_epoch == state.epoch
         and bounds.integer(result.checkpoint_revision) == state.revision + 1
 end
+-- A hook the gateway signalled while a claim was in flight may be absent
+-- from that claim, so the carrier claims again at once.
 local function idle(state: State)
     state.work = state.closing and "done" or "idle"
-    state.due = state.clock + M.IDLE_MS
+    state.due = state.signalled and state.clock or state.clock + M.IDLE_MS
+    state.signalled = false
+end
+-- wake takes the gateway's signal that a hook was queued for this binding.
+function M.wake(state: State, now: integer)
+    state.signalled = true
+    if state.work == "idle" then state.due = now end
 end
 function M.new(config: Config): State
     local point = checkpoint.new({binding_ref = config.binding_ref, binding_digest = config.binding_digest,
@@ -81,7 +89,7 @@ function M.new(config: Config): State
         batch = nil, checkpoint_intent = nil, commit = nil, ack = nil,
         checkpoint_key = nil,
         closing = false, closed = false, sealed = false, started = false,
-        drain_deadline = nil, unresolved = false, activity = nil,
+        drain_deadline = nil, unresolved = false, activity = nil, signalled = false,
     }
 end
 -- Rebuild hook delivery around a checkpoint already committed by an earlier
@@ -125,7 +133,7 @@ function M.resume(config: Config, point: checkpoint_types.Checkpoint?, revision:
         batch = nil, checkpoint_intent = nil, commit = nil, ack = nil,
         checkpoint_key = "launch:" .. config.attempt_id .. ":window:checkpoint:" .. tostring(epoch),
         closing = false, closed = false, sealed = false, started = false,
-        drain_deadline = nil, unresolved = false, activity = nil,
+        drain_deadline = nil, unresolved = false, activity = nil, signalled = false,
     }, nil
 end
 function M.decode(raw: unknown): Reply?
@@ -161,6 +169,7 @@ function M.next_intent(state: State, key: string, now: integer): Intent?
     if not binding_id or not state.hooks_enabled then return nil end
     if state.work == "seal" then return {target = M.SEAL, request = {binding_id = binding_id}} end
     state.work = "claim"
+    state.signalled = false
     return {target = M.CLAIM, request = {binding_id = binding_id, carrier_epoch = state.epoch, limit = M.CLAIM_LIMIT}}
 end
 function M.begin(state: State, identity: string, intent: Intent): boolean

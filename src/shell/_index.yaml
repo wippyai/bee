@@ -86,7 +86,6 @@ entries:
   imports:
     frame: bee.ui:frame
     title_editor: bee.shell:title_editor
-    watch: bee.shell:watch
     dialog: bee.approvals.app:dialog
     model: bee.shell:model
     layout: bee.shell:layout

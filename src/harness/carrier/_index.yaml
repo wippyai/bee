@@ -9,8 +9,6 @@ entries:
 - name: checkpoint
   kind: library.lua
   source: file://checkpoint.lua
-  modules:
-  - json
   imports:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
@@ -53,7 +51,6 @@ entries:
     canonical: bee.drivers.values:canonical
     placement_types: bee.placement:types
     configuration: bee.drivers.binding:configuration
-    driver_resolver: bee.drivers.binding:resolver
     mcp: bee.gateway.api:mcp
     gateway_protocol: bee.gateway:protocol
     surface: bee.gateway.catalog:surface

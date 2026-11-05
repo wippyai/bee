@@ -5,9 +5,6 @@ entries:
   kind: function.lua
   source: file://call.lua
   method: handle
-  modules:
-  - fs
-  - json
   imports:
     protocol: bee.docs:protocol
     corpus: bee.docs.binding:corpus

@@ -107,7 +107,6 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     sync: bee.sync:protocol
-    caller: bee.app:caller
     source_config: bee.approvals.inbox.app:source_config
     model: bee.approvals.inbox.app:model
 - name: view
@@ -121,7 +120,6 @@ entries:
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
     windows: bee.approvals.types:windows
-    grants: bee.approvals.grants:store
     clock: bee.drivers.values:clock
     names: bee.app:names
     glyphs: bee.ui:glyphs

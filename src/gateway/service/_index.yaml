@@ -62,7 +62,6 @@ entries:
   - cdc
   - env
   - system
-  - registry
   imports:
     protocol: bee.hive:protocol
     bounds: bee.drivers.values:bounds

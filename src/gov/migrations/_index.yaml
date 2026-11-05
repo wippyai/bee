@@ -105,7 +105,7 @@ entries:
     timestamp: '2026-10-14T00:01:00Z'
   source: file://follow_grants.lua
   method: run
-  modules: [sql, json]
+  modules: [json]
   imports:
     migration: wippy.migration:migration
     grants: bee.approvals.grants:store

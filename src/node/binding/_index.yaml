@@ -12,7 +12,7 @@ entries:
   kind: function.lua
   source: file://catalog.lua
   method: handle
-  modules: [registry, fs, sql, uuid, time, json]
+  modules: [registry, fs]
   imports:
     bounds: bee.drivers.values:bounds
     workspaces: bee.node.persist:workspaces

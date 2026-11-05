@@ -71,11 +71,6 @@ function M.join(path: string, child: string): string
     return path .. "/" .. child
 end
 
-function M.writable(picker: Picker): boolean
-    local root = picker.root
-    return root ~= nil and root.access == "write"
-end
-
 -- Where the picker stands, for people: the root and the folder inside it.
 function M.location(picker: Picker): string
     local root = picker.root

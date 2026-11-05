@@ -24,7 +24,6 @@ entries:
   source: file://recovery.lua
   method: main
   modules:
-  - process
   - logger
   imports:
     service: bee.gov.binding:destination_service
@@ -57,7 +56,6 @@ entries:
   source: file://activation_worker.lua
   method: main
   modules:
-  - funcs
   - logger
   imports:
     worker: bee.process:worker

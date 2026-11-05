@@ -12,7 +12,6 @@ entries:
     bounds: bee.drivers.values:bounds
     trust_lifetime: bee.placement.native.service:trust_lifetime
     node_database: bee.persist:database
-    resources: bee.placement.native.env:resources
     types: bee.placement:types
     placement_decode: bee.placement:decode
     transitions: bee.placement:transitions

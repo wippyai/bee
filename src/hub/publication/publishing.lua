@@ -13,7 +13,6 @@ M.REF = "bee.hub:publish"
 M.SOURCE = "hub-publish"
 type Object = {[string]: unknown}
 type Decoded = {component: string, version: string, visibility: string, source: string}
-type Resolution = {kind: string, hub_digest: string?, replayed: boolean?, message: string?}
 type Context = {binding_id: string, thread_id: string, action_id: string, attempt_id: string}
 type Request = {action: string, component: string, version: string, visibility: string,
     digest: string, organization: string, source: string}
@@ -114,10 +113,6 @@ function M.idempotency_key(context: Context, digest: string): string?
     return sum and "hub-publish:" .. sum or nil
 end
 
-function M.effect_key(approval_id: string): string
-    return "hub-publish:" .. approval_id
-end
-
 -- verify: the approval the agent names must be its own request for this
 -- thread and attempt under the host policy. The publication fields and
 -- digest come from the recorded proposal, never from the agent.
@@ -162,65 +157,6 @@ function M.decision(view_raw: unknown): Status
     end
     local reason = tostring(view.state)
     return {status = "refused", code = reason:upper(), message = "the request " .. reason .. " before a decision"}
-end
-
--- pack_command: the exact invocation sealing the admitted source tree into
--- one .wapp file. It runs with the source tree as its working directory and
--- carries no credential.
-function M.pack_command(component: string, cli: string, outfile: string): {string}
-    return {cli, "pack", "--module", component, outfile}
-end
-
--- publish_command: the exact uploader invocation for the sealed pack file.
--- It uploads that file byte for byte and carries no credential: the CLI
--- reads the person's publishing credential from its host-confined store
--- and the receipt records digests only.
-function M.publish_command(verified: Verified, cli: string, config_dir: string, wapp: string): {string}
-    return {cli, "publish", "--config", config_dir, "--wapp", wapp,
-        "--version", verified.request.version, "--create", "--protected",
-        "--module-visibility", verified.request.visibility}
-end
-
--- plan_command: the exact dry-run invocation that preflights the sealed pack
--- without uploading. A file the Hub would not record under the requested
--- version never reaches approval.
-function M.plan_command(decoded: Decoded, cli: string, config_dir: string, wapp: string): {string}
-    return {cli, "publish", "--config", config_dir, "--wapp", wapp,
-        "--version", decoded.version, "--dry-run"}
-end
-
--- resolve_upload: the upload outcome against the approved pack digest. A Hub
--- digest equal to the approved pack records the publication; a Hub digest
--- for other bytes fails it with both digests named, because Hub versions
--- are immutable and an existing version never holds our bytes by
--- assumption. No digest on either side leaves the upload uncertain.
-function M.resolve_upload(approved: string, uploaded: string?, inspected: string?): Resolution
-    if uploaded ~= nil then
-        if uploaded == "sha256:" .. approved then
-            return {kind = "published", hub_digest = uploaded, replayed = false}
-        end
-        return {kind = "failed",
-            message = "Hub recorded digest " .. uploaded .. " for the upload, which differs from the approved pack digest sha256:" ..
-                approved .. "; the approved file was not recorded"}
-    end
-    if inspected ~= nil then
-        if "sha256:" .. inspected == "sha256:" .. approved then
-            return {kind = "published", hub_digest = "sha256:" .. inspected, replayed = true}
-        end
-        return {kind = "failed",
-            message = "version already holds different bytes on the Hub (hub sha256:" .. inspected ..
-                " differs from the approved pack digest sha256:" .. approved ..
-                "); Hub versions are immutable: raise the version and file a new request"}
-    end
-    return {kind = "uncertain"}
-end
-
--- parse_digest: the Hub digest the uploader reports for the uploaded bytes.
-function M.parse_digest(output: unknown): string?
-    if type(output) ~= "string" then return nil end
-    local digest = output:match("Digest:%s+(sha256:[0-9a-f]+)")
-    if not digest or #digest ~= 7 + 64 then return nil end
-    return digest
 end
 
 -- status: the publish effect reply as the agent's outcome. An uncertain or

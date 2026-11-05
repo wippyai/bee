@@ -260,7 +260,6 @@ entries:
   - ctx
   - uuid
   - time
-  - sql
   imports:
     admission: bee.harness.launch:admission
     definitions: bee.harness.launch:definitions

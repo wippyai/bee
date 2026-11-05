@@ -87,7 +87,6 @@ M.hook_queue = part_hook_intake.hook_queue
 M.hook_claim = part_hook_intake.hook_claim
 M.hook_ack = part_hook_intake.hook_ack
 M.hook_reject = part_hook_intake.hook_reject
-M.hook_delivered = part_hook_intake.hook_delivered
 M.managed_binding = part_credentials.managed_binding
 M.admit_call = part_calls.admit_call
 M.record_external_call = part_calls.record_external_call

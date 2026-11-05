@@ -48,7 +48,7 @@ function M.approve(binding: gateway.Binding, approval: string?, trait_id: string
     assert(assert(bounds.object(question.effect)).destination == "gateway.access", "approval has no durable access continuation")
     return id .. ":grant", id, question
 end
-function M.bind(owner: harness.Client, session: string, thread: string, trait_id: string, seed: boolean?, prior: gateway.Binding?, action_id: string?, omit_hooks: boolean?): (gateway.Binding, {[string]: unknown})
+function M.bind(owner: harness.Client, session: string, thread: string, trait_id: string, seed: boolean?, prior: gateway.Binding?, action_id: string?, omit_hooks: boolean?, lifecycle: {string}?): (gateway.Binding, {[string]: unknown})
     local carrier = harness.principal("sessions-owner", harness.ALL, M.WORKSPACE)
     local attempt = prior and prior.attempt_id or ("attempt-" .. harness.key())
     local action = action_id or (prior and prior.action_id) or session
@@ -59,6 +59,8 @@ function M.bind(owner: harness.Client, session: string, thread: string, trait_id
     if not omit_hooks then
         for _, point in ipairs(declared.hooks or {}) do events[#events + 1] = assert(points[point]) end
     end
+    -- Lifecycle hooks a window driver declares beside its traits' points.
+    for _, event in ipairs(lifecycle or {}) do events[#events + 1] = event end
     local declarations = {declared}
     local offered = {trait_id}
     if trait_id == "bee.tests.memory:hooks_a" or trait_id == "bee.tests.memory:hooks_b" then
@@ -88,6 +90,17 @@ function M.transport(session: Session): (string, string, string?)
     session.binding = assert((gateway.managed_binding(binding.binding_id)))
     return assert(bounds.text(issued.token, 128)), assert(configuration.current()).address, bounds.text(issued.hook_token, 128)
 end
+-- carrier_drain claims what the gateway queued for the session's binding and
+-- acknowledges it, as the attempt's carrier does once its thread commit lands.
+function M.carrier_drain(session: Session): integer
+    local binding = session.binding
+    local claimed = M.call("bee.gateway.binding:hook_claim", {binding_id = binding.binding_id, carrier_epoch = binding.carrier_epoch, limit = 16})
+    local event_ids: {string} = {}
+    for index, item in ipairs(assert(bounds.array(claimed.hooks, 16))) do event_ids[index] = assert(bounds.id(assert(bounds.object(item)).event_id)) end
+    if #event_ids == 0 then return 0 end
+    M.call("bee.gateway.binding:hook_ack", {binding_id = binding.binding_id, carrier_epoch = binding.carrier_epoch, event_ids = event_ids})
+    return #event_ids
+end
 function M.rpc(session: Session, token: string, endpoint: string, method: string, params: {[string]: unknown}, rpc_failure: boolean?): {[string]: unknown}
     local response, err = http_client.post("http://" .. endpoint .. "/mcp/" .. session.binding.action_id, {headers = {
         ["Content-Type"] = "application/json", Authorization = "Bearer " .. token},
@@ -102,7 +115,7 @@ function M.reattach(session: Session): gateway.Binding
     session.binding = (M.bind(session.owner, session.session, session.thread, session.trait_id or M.TRAIT, nil, session.binding))
     return session.binding
 end
-function M.open(seed: boolean?, trait_id: string?, provider: string?, managed: boolean?, omit_hooks: boolean?): (Session, {[string]: unknown})
+function M.open(seed: boolean?, trait_id: string?, provider: string?, managed: boolean?, omit_hooks: boolean?, lifecycle: {string}?): (Session, {[string]: unknown})
     M.call("bee.gateway.binding:open", {address = assert(configuration.current()).address})
     local owner = harness.session_owner(M.WORKSPACE)
     local opened = harness.value(owner:call("session_create", {operation_key = harness.key(), route = {provider = provider or "fixture-host", delivery = provider and not managed and "hook" or nil}}))
@@ -116,7 +129,7 @@ function M.open(seed: boolean?, trait_id: string?, provider: string?, managed: b
     local admitted_action = harness.admitted(); admitted_action.principal_id = session
     local action = managed and ("action-" .. harness.key()) or session
     harness.value(carrier:call("admit_action", {thread_id = thread, action_id = action, admitted = admitted_action, idempotency_key = harness.key()}))
-    local binding, admitted = M.bind(owner, session, thread, trait_id or M.TRAIT, seed, nil, action, omit_hooks)
+    local binding, admitted = M.bind(owner, session, thread, trait_id or M.TRAIT, seed, nil, action, omit_hooks, lifecycle)
     local grant, approval, question = M.approve(binding, bounds.id(admitted.trait_approval_id), trait_id)
     return {session = session, thread = thread, binding = binding, owner = owner, grant_id = grant, approval_id = approval, trait_id = trait_id}, question
 end
@@ -233,7 +246,8 @@ end
 -- cli_hook posts one hook the way a CLI does and returns its decoded answer
 -- and the HTTP status it came with.
 function M.cli_hook(session: Session, event: string, fields: {[string]: unknown}, token: string, endpoint: string, mcp: boolean?): ({[string]: unknown}, integer)
-    fields.event, fields.session_id = event, session.session
+    fields.event = event
+    if fields.session_id == nil and fields.conversationId == nil then fields.session_id = session.session end
     local body: {[string]: unknown} = fields
     if mcp then body = {jsonrpc = "2.0", id = 1, method = "tools/call", params = {name = "hook", arguments = fields, _meta = {threadId = session.session}}} end
     local response, err = http_client.post("http://" .. endpoint .. "/hook/" .. session.binding.action_id .. (mcp and "/mcp" or ""),

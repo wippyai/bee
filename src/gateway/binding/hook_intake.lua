@@ -381,21 +381,6 @@ function M.hook_ack(value: unknown): Reply
     if prune_error then return fail("STORAGE", prune_error) end
     return succeed({binding_id = binding.binding_id, acknowledged = acknowledged})
 end
--- hook_delivered settles an occurrence its session owner took as the hook
--- was delivered: committed when the owner answered, rejected with the
--- refusal otherwise. A window session has no carrier to claim it later.
-function M.hook_delivered(binding_id: string, event_id: string, refusal: string?): Reply
-    local reason: string? = nil
-    if refusal then reason = bounds.line(refusal, 120) or "delivery refused" end
-    local db, open_failure = open()
-    if not db then return open_failure end
-    local _, settle_error = hook_store.settle_delivered(db, stamp(now_ms()), event_id, binding_id, reason)
-    if settle_error then db:release(); return fail("STORAGE", "settle delivered hook") end
-    local prune_error = prune(db, binding_id)
-    db:release()
-    if prune_error then return fail("STORAGE", prune_error) end
-    return succeed({binding_id = binding_id, event_id = event_id})
-end
 -- hook_reject: the carrier ends intake for its binding. Only unclaimed rows
 -- are proved never to have reached a thread commit; claimed rows stay for
 -- reconciliation rather than being falsely called rejected.

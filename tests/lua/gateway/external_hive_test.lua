@@ -7,7 +7,6 @@ local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
 local channel = require("channel")
-local owner_observer = require("owner_observer")
 local function value(raw: unknown): {[string]: unknown}
     local reply = assert(bounds.object(raw))
     if reply.ok ~= true then error(tostring((bounds.object(reply.error) or {}).message)) end
@@ -47,25 +46,6 @@ local function define_tests()
             test.is_true(type(connection.token) == "string")
             local again = assert(protocol.await(node, "mcp.wait", {client_id = pairing.client_id}))
             test.is_nil(value(again.value).token)
-            local manager = funcs.new():with_actor(security.new_actor("bee.application:" .. workspace .. ":mcp-manager",
-                {workspace_id = workspace, definition_id = "bee.gateway.app:app"}))
-            value(manager:call("bee.gateway.binding:external_call", {operation = "revoke", client_id = pairing.client_id}))
-        end)
-        test.it("serves a pairing decided while its owner is absent", function()
-            local node = assert(system.node.id())
-            local workspace = home(node)
-            local pairing = value(assert(protocol.await(node, "mcp.connect", {name = "Absent owner", workspace_id = workspace})).value)
-            owner_observer.stopped("bee.gateway.service:external_service", "bee.gateway.external")
-            local approver = funcs.new():with_actor(security.new_actor("bee.application:" .. workspace .. ":mcp-approver",
-                {workspace_id = workspace, definition_id = "bee.approvals.inbox.app:app"}))
-            local approval = value(approver:call("bee.approvals.binding:read", {approval_id = pairing.approval_id}))
-            value(approver:call("bee.approvals.binding:decide", {approval_id = pairing.approval_id, expected_revision = approval.revision,
-                proposal_digest = approval.proposal_digest, reviewed_digest = approval.reviewed_digest, decision = "approved"}))
-            local finished = assert(protocol.await(node, "mcp.wait", {client_id = pairing.client_id}))
-            test.is_true(finished.ok == true)
-            local connection = value(finished.value)
-            test.eq(connection.status, "connected")
-            test.is_true(type(connection.token) == "string")
             local manager = funcs.new():with_actor(security.new_actor("bee.application:" .. workspace .. ":mcp-manager",
                 {workspace_id = workspace, definition_id = "bee.gateway.app:app"}))
             value(manager:call("bee.gateway.binding:external_call", {operation = "revoke", client_id = pairing.client_id}))

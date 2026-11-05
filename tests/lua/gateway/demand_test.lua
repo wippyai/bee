@@ -8,12 +8,20 @@ local events = require("events")
 local channel = require("channel")
 local time = require("time")
 local effects = require("effects")
+local funcs = require("funcs")
+local security = require("security")
 local uuid = require("uuid")
 local demand = require("demand")
 local owner_observer = require("owner_observer")
 local bounds = require("bounds")
+local gateway = require("gateway")
 local NAME = "bee.gateway.external"
 local SERVICE = "bee.gateway.service:external_service"
+local function value(raw: unknown): {[string]: unknown}
+    local reply = assert(bounds.object(raw))
+    if reply.ok ~= true then error(tostring((bounds.object(reply.error) or {}).message)) end
+    return assert(bounds.object(reply.value))
+end
 local function define_tests()
     test.describe("Gateway demand", function()
         test.it("probes both registered consumer queues under their separate execution scopes", function()
@@ -90,6 +98,27 @@ local function define_tests()
             test.eq(selected.channel, accepted, "the absent owner does not take the approval owner's dispatch")
             test.eq(assert(bounds.object(selected.value:payload():data())).request_id, id)
             owner_observer.stopped(SERVICE, NAME)
+        end)
+        test.it("serves a pairing decided while its owner is absent", function()
+            value(gateway.open({address = assert(gateway.endpoint())}))
+            local node = assert(system.node.id())
+            local workspaces = assert(protocol.await(node, "node.workspaces", {}))
+            local workspace = assert(bounds.id(assert(bounds.object(workspaces.value)).home))
+            local pairing = value(assert(protocol.await(node, "mcp.connect", {name = "Absent owner", workspace_id = workspace})).value)
+            owner_observer.stopped(SERVICE, NAME)
+            local approver = funcs.new():with_actor(security.new_actor("bee.application:" .. workspace .. ":mcp-approver",
+                {workspace_id = workspace, definition_id = "bee.approvals.inbox.app:app"}))
+            local approval = value(approver:call("bee.approvals.binding:read", {approval_id = pairing.approval_id}))
+            value(approver:call("bee.approvals.binding:decide", {approval_id = pairing.approval_id, expected_revision = approval.revision,
+                proposal_digest = approval.proposal_digest, reviewed_digest = approval.reviewed_digest, decision = "approved"}))
+            local finished = assert(protocol.await(node, "mcp.wait", {client_id = pairing.client_id}))
+            test.is_true(finished.ok == true)
+            local connection = value(finished.value)
+            test.eq(connection.status, "connected")
+            test.is_true(type(connection.token) == "string")
+            local manager = funcs.new():with_actor(security.new_actor("bee.application:" .. workspace .. ":mcp-manager",
+                {workspace_id = workspace, definition_id = "bee.gateway.app:app"}))
+            value(manager:call("bee.gateway.binding:external_call", {operation = "revoke", client_id = pairing.client_id}))
         end)
         test.it("keeps installation and publication scopes separate", function()
             local count = 0

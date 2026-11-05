@@ -50,7 +50,7 @@ local function authority_tests()
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                     overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                     matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
-                    apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                    apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                         error("failed activation must never reach apply")
                     end}
                 local function execute(statement: string)
@@ -119,7 +119,7 @@ local function authority_tests()
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                    _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                     applied = true
                     return {changed = true}, nil
                 end}
@@ -174,7 +174,7 @@ local function authority_tests()
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                    _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                     applied = true
                     return {changed = true}, nil
                 end}
@@ -220,7 +220,7 @@ local function authority_tests()
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): ({[string]: unknown}?, string?, boolean?) return {changed = true}, nil end}
+                    _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?) return {changed = true}, nil end}
             test.eq(ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-made-by", receipt_key = "made-by"})).phase, "approval_bound")
             local asked = tostring(prompt)
@@ -259,7 +259,7 @@ local function authority_tests()
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
                     _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                    _intent: unknown): ({[string]: unknown}?, string?, boolean?) return {changed = true}, nil end}
+                    _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?) return {changed = true}, nil end}
             test.eq(ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-self-edit", receipt_key = "self-edit"})).phase, "approval_bound")
             local asked = tostring(prompt)
@@ -318,7 +318,7 @@ local function authority_tests()
                     matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
                         _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
                     apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
-                        _intent: unknown): ({[string]: unknown}?, string?, boolean?) return {changed = true}, nil end}
+                        _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?) return {changed = true}, nil end}
                 local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                     version = "v1", intent_id = "intent-ended", receipt_key = "ended"}))
                 test.eq(prepared.phase, "approval_bound")

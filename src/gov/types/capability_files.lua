@@ -94,12 +94,17 @@ local function folder(raw: unknown): (Folder?, string?)
     return {root_ref = root_ref, directory = directory, base = selected_base, subpath = subpath}, nil
 end
 
+-- The prefix a path under the workspace folder takes below its root's directory.
+local function workspace_prefix(root: Folder): string
+    local directory = ""
+    if root.directory:sub(-1) == "/" then directory = root.directory
+    elseif root.directory ~= "." then directory = root.directory .. "/" end
+    return root.subpath == "" and directory or directory .. root.subpath .. "/"
+end
+
 -- The grant's directory under the workspace folder's root.
 local function located(root: Folder, subpath: string): string
-    local relative = root.subpath == "" and subpath or root.subpath .. "/" .. subpath
-    if root.directory == "." then return relative end
-    if root.directory:sub(-1) == "/" then return root.directory .. relative end
-    return root.directory .. "/" .. relative
+    return workspace_prefix(root) .. subpath
 end
 
 -- Whether measured capability requests ask for workspace files or a
@@ -186,6 +191,36 @@ function M.watch_volume(app_raw: unknown, owner_raw: unknown, folder_raw: unknow
     return {id = id, kind = "fs.directory", meta = {comment = "Host-created workspace watch source", watch_for = folder_id},
         data = {directory = located(root, subpath), base = root.base, auto_init = false, readonly = false,
             mode = "0500"}}, nil
+end
+
+-- The folders a grant's volumes open as they stand: a volume without auto-init
+-- needs its directory to exist when it is installed. Each is named once, by
+-- its path under the workspace folder's root and its subpath in the workspace.
+type Required = {root_ref: string, path: string, subpath: string}
+function M.required(folder_raw: unknown, volumes: {unknown}): ({Required}?, string?)
+    local root, root_error = folder(folder_raw)
+    if not root then return nil, root_error end
+    local prefix = workspace_prefix(root)
+    local found: {Required} = {}
+    local seen: {[string]: boolean} = {}
+    for _, raw in ipairs(volumes) do
+        local volume = bounds.object(raw)
+        local data = volume and bounds.object(volume.data) or nil
+        local directory = data and data.directory or nil
+        if not data or type(directory) ~= "string" or type(data.auto_init) ~= "boolean" then
+            return nil, "generated capability volume is invalid"
+        end
+        if data.auto_init == false and not seen[directory] then
+            local subpath = directory:sub(#prefix + 1)
+            if directory:sub(1, #prefix) ~= prefix or M.verify_subpath(subpath) ~= subpath then
+                return nil, "generated capability volume lies outside the workspace folder"
+            end
+            seen[directory] = true
+            found[#found + 1] = {root_ref = root.root_ref,
+                path = root.subpath == "" and subpath or root.subpath .. "/" .. subpath, subpath = subpath}
+        end
+    end
+    return found, nil
 end
 
 M.EXECUTOR_PREFIX = "bee.gov.grants:executor."

@@ -723,9 +723,11 @@ end
 -- Governance refuses a restoration whose approval does not cover the host
 -- state; that overlay stays unrestored and its intent stays for the person to
 -- review again. A generation whose stored artifact the current host rules
--- reject settles blocked and is reported once. Only such refusals let
--- recovery continue.
-local REFUSALS: {[string]: boolean} = {CONFLICT = true, DENIED = true}
+-- reject settles blocked and is reported once. An application whose grant
+-- opens a folder missing from the workspace stays out of this start and is
+-- reported at each start until the folder returns; its intent is unchanged.
+-- Only such refusals let recovery continue.
+local REFUSALS: {[string]: boolean} = {CONFLICT = true, DENIED = true, MISSING = true}
 
 -- An application database the host provisioned is registered only in its
 -- owner's process-local overlay, while its data and migration ledger outlive

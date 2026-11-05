@@ -38,7 +38,7 @@ local function admission_tests()
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return applied, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                     applied = true
                     return {changed = true}, nil
                 end}
@@ -72,7 +72,7 @@ local function admission_tests()
                 approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:advance-overlay", approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return applied > 0, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                     applied = applied + 1
                     return {changed = true}, nil
                 end}
@@ -104,7 +104,7 @@ local function admission_tests()
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?)
                     return applied, nil
                 end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                     applied, apply_count = true, apply_count + 1
                     return {changed = true}, nil
                 end}
@@ -138,7 +138,7 @@ local function admission_tests()
                 consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
                 approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?) return {changed = true}, nil end}
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?) return {changed = true}, nil end}
             local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-admission-drift", receipt_key = "admission-drift"}))
             test.eq(prepared.application_admission_digest, (assert(bounds.object(world.application_admission))).digest)
@@ -171,7 +171,7 @@ local function admission_tests()
                         test.eq(blob.digest, frozen.digest)
                         return applied, nil
                     end,
-                    apply = function(_overlay: string, entries: unknown, admission_blob: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                    apply = function(_overlay: string, entries: unknown, admission_blob: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                         test.eq(#(principals.items(entries)), 1)
                         local blob = assert(bounds.object(admission_blob))
                         test.eq(blob.bytes, frozen.bytes)
@@ -219,7 +219,7 @@ local function admission_tests()
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?)
                     return application_entry_present, nil
                 end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, intent_raw: unknown): ({[string]: unknown}?, string?, boolean?)
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, intent_raw: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                     if installed_evidence == nil then
                         local intent = assert(bounds.object(intent_raw))
                         local record, record_error = capability_grants.record("bee.gov:test-overlay", workspace,
@@ -287,7 +287,7 @@ local function admission_tests()
                 consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
                 approval_policy = "local-install", migrations = migration_effect(),
                 matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
-                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?) return {changed = true}, nil end}
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?) return {changed = true}, nil end}
             local refused = owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-admission-owner", receipt_key = "admission-owner"})
             test.is_false(refused.ok)

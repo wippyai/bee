@@ -78,7 +78,7 @@ local function follow_tests()
                             end
                             return working == (assert(bounds.object(intent))).version, nil
                         end,
-                        apply = function(_overlay: string, _entries: unknown, _admission: unknown?, intent: unknown): ({[string]: unknown}?, string?, boolean?)
+                        apply = function(_overlay: string, _entries: unknown, _admission: unknown?, intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
                             local release = (assert(bounds.object(intent))).version
                             assert(type(release) == "string")
                             working, effects = release, effects + 1

@@ -34,7 +34,7 @@ type Intent = {owner_node: string, workspace_id: string, intent_id: string, over
     approval_proposal_digest: string?, consumed_proposal_digest: string?,
     desired_intent_id: string?, observed_intent_id: string?, observed_artifact_digest: string?, observed_outcome: string?,
     baseline_intent_id: string?, application: string?, title: string?, component: string?,
-    follow_state: string?, follow_outcome: string?, follow_message: string?}
+    follow_state: string?, follow_outcome: string?, follow_message: string?, left_out: string?}
 type EntryChange = {id: string, kind: string, digest: string}
 type Changes = {plan_digest: string, candidate_digest: string, artifact_digest: string,
     base_digest: string, composed_base_digest: string, base_revision: integer,
@@ -70,7 +70,8 @@ local INTENT_FIELDS = {"owner_node", "workspace_id", "intent_id", "actor_id", "o
     "outcome", "diagnostics", "migrations_completed", "migration_receipt_bytes", "migration_receipt_digest",
     "slot_revision", "desired_intent_id", "desired_execution_revision",
     "observed_intent_id", "observed_execution_revision", "observed_artifact_digest", "observed_outcome",
-    "baseline_intent_id", "application", "title", "component", "follow_state", "follow_outcome", "follow_message"}
+    "baseline_intent_id", "application", "title", "component", "follow_state", "follow_outcome", "follow_message",
+    "left_out"}
 local DESCRIPTOR_FIELDS = {"schema", "owner_id", "feed", "key", "object_id", "version_id", "content_digest",
     "manifest_digest", "content_kind", "total_bytes", "manifest", "digest"}
 local MANIFEST_FIELDS = {"schema_revision", "source_workspace", "component", "artifact_digest", "author"}
@@ -257,6 +258,8 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
     local component = optional_id(value.component)
     if (value.follow_outcome ~= nil and not follow_outcome) or (value.follow_message ~= nil and not follow_message)
         or (value.component ~= nil and not component) then return nil, "following outcome is malformed" end
+    local left_out = optional_text(value.left_out, 8192)
+    if value.left_out ~= nil and not left_out then return nil, "activation left-out reason is malformed" end
     return {owner_node = owner_node, workspace_id = workspace, intent_id = intent_id, overlay_owner = overlay_owner,
         source_node = source_node, source_workspace = source_workspace, version = version,
         revision = revision, phase = phase, outcome = outcome, diagnostics = diagnostics, approval_id = approval_id,
@@ -266,7 +269,8 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
         observed_artifact_digest = digest(value.observed_artifact_digest),
         observed_outcome = observed, baseline_intent_id = optional_id(value.baseline_intent_id),
         application = optional_text(value.application, 256), title = optional_text(value.title, 80), component = component,
-        follow_state = follow_state, follow_outcome = follow_outcome, follow_message = follow_message}, nil
+        follow_state = follow_state, follow_outcome = follow_outcome, follow_message = follow_message,
+        left_out = left_out}, nil
 end
 local function entry_change(raw: unknown): (EntryChange?, string?)
     local value = object(raw)

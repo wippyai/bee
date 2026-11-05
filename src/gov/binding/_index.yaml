@@ -694,6 +694,7 @@ entries:
   kind: library.lua
   source: file://destination_policy.lua
   modules:
+  - fs
   - funcs
   - registry
   - security
@@ -725,6 +726,8 @@ entries:
 - name: destination_inspection
   kind: library.lua
   source: file://destination_inspection.lua
+  modules:
+  - registry
   imports:
     follow_store: bee.gov.persist:follow_store
     artifact: bee.gov.types:artifact

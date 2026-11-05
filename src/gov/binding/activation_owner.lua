@@ -22,7 +22,10 @@ type Object = {[string]: unknown}
 type Result = transaction.Result
 type Resolver = resolution.Resolver
 type Executor = approval.Executor
-type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?, boolean?)
+-- An apply that does not happen is definite when nothing was written, and
+-- absent as well when a folder the grant opens is missing from the workspace,
+-- a host condition that holds the application back until the folder returns.
+type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?, boolean?, boolean?)
 -- An observation that cannot answer is refused when the current host rules
 -- reject the stored artifact, and unavailable otherwise.
 type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?, boolean?)
@@ -608,8 +611,9 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
         local matches, observe_error, refused = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
         if matches == nil then return failure(refused and "CONFLICT" or "UNAVAILABLE", tostring(observe_error)) end
         if not matches then
-            local applied, apply_error, definite = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
+            local applied, apply_error, definite, absent = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
             if not applied then
+                if absent then return failure("MISSING", tostring(apply_error)) end
                 if definite then
                     return failed_apply(config, intent, prefix, tostring(apply_error))
                 end
@@ -669,13 +673,14 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
         local restoration_error, rejected = remeasure_restoration(config, intent)
         if rejected and restoration_error then return blocked(config, intent, prefix, tostring(restoration_error.message)) end
         if restoration_error then return restoration_error end
-        local restored, restore_error = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
+        local restored, restore_error, _, absent = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
         if restored then
             local result: Object = {}
             for field, value in pairs(intent) do result[field] = value end
             result.recovered = true
             return observed(result)
         end
+        if absent then return failure("MISSING", tostring(restore_error)) end
         -- A settled activation may drift more than once during its lifetime.
         -- Fence each recovery observation by the execution revision while
         -- keeping retries of that same observation idempotent.

@@ -420,7 +420,13 @@ local function define_tests()
                     local live = binding_of(attempt_id, 1)
                     test.eq(live.valid, true)
                     assert(type(live.expires_at) == "string", "binding expiry")
-                    instant.data = {at = live.expires_at}
+                    -- The live runner renews the lease while it supervises the
+                    -- attempt, so the pinned instant lies a day past the read
+                    -- expiry: past any renewal made before the pin, and no
+                    -- renewal follows an expired lease.
+                    local FORMAT = "2006-01-02T15:04:05.000Z07:00"
+                    local read_expiry = assert(time.parse(FORMAT, live.expires_at))
+                    instant.data = {at = read_expiry:add("24h"):utc():format(FORMAT)}
                     local changes = assert(registry.snapshot()):changes()
                     changes:update(instant)
                     assert(changes:apply())

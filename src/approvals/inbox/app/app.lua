@@ -145,6 +145,8 @@ local function main(value: unknown)
     local joined = joins:channel()
     local owners: {[string]: string} = {}
     local refresh_pending = false
+    -- The latest navigation still to follow; it waits for a sync in flight.
+    local navigation: {string}? = nil
     local function discover(node: string?)
         local peers: {string} = {}
         if node then peers[1] = node
@@ -180,6 +182,7 @@ local function main(value: unknown)
         updates:send(true)
     end
     local function refresh()
+        seam.hold("bee.approvals.inbox.app.refresh")
         for _, workspace in ipairs(local_workspaces) do
             local raw = funcs.call("bee.node.binding:read", {workspace_id = workspace})
             workspace_names[workspace] = model.workspace(raw, workspace)
@@ -264,6 +267,16 @@ local function main(value: unknown)
         offset = 0; shown_review = nil; review_progress = nil; review_end = 0
         rows = model.rows(state)
         dirty = true
+    end
+    local function follow()
+        local target = navigation
+        if not target or busy or action_busy then return end
+        navigation = nil
+        perform(function()
+            refresh()
+            if not state.rows[target[2]] then status = "Request is unavailable"
+            elseif target[1] == "--review" then open_selected() end
+        end)
     end
     -- An answer that never arrived is recovered from the owner's record.
     local function recover()
@@ -540,6 +553,7 @@ local function main(value: unknown)
             if node then coroutine.spawn(function() discover(node) end) end
         elseif event.channel == updates then
             dirty = true
+            follow()
             if refresh_pending and not busy and not action_busy then
                 refresh_pending = false
                 perform(function() if state.pending then recover() else refresh() end end)
@@ -564,11 +578,8 @@ local function main(value: unknown)
                     model.select(state, args[2]); state.detail = nil; shown_review = nil; review_progress = nil; review_end = 0; offset = 0
                 end
                 state.grants_view = false; dirty = true
-                perform(function()
-                    refresh()
-                    if not state.rows[args[2]] then status = "Request is unavailable"
-                    elseif args[1] == "--review" then open_selected() end
-                end)
+                navigation = args
+                follow()
             end
         elseif event.channel == answers then
             local message = event.value

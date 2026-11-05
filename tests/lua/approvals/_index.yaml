@@ -79,7 +79,7 @@ entries:
   kind: library.lua
   source: file://service_fixture.lua
   meta: {type: test_support}
-  modules: [funcs, registry, time, sql, process, channel]
+  modules: [funcs, registry, time, sql, process]
   imports:
     support: bee.tests.approvals:test_principals
     principals: bee.tests.support.principals:bound

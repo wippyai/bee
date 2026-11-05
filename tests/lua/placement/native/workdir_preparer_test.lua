@@ -206,11 +206,15 @@ local function define_tests()
         end)
 
         for _, outcome in ipairs({"cleaned", "retained", "failed"}) do
+            -- The first caller holds the attempt inside its preparer until the
+            -- second caller reports that it follows that holder, so the two
+            -- cleanups overlap whatever the scheduling.
             test.it("concurrent cleanups from two processes invoke once and share the " .. outcome .. " outcome", function()
                 local root = temp_dir()
                 local entered = assert(process.listen("bee.test.preparer.entered", {message = true}))
-                local observed = assert(process.listen("bee.test.preparer.observed", {message = true}))
-                with_preparer({cleanup_observer = tostring(process.pid()), cleanup_failure = outcome == "failed", cleanup_retained = outcome == "retained"}, function()
+                local waiting = assert(process.listen("bee.test.preparer.waiting", {message = true}))
+                with_preparer({cleanup_observer = tostring(process.pid()), cleanup_waiter = tostring(process.pid()),
+                    cleanup_failure = outcome == "failed", cleanup_retained = outcome == "retained"}, function()
                     local db = assert(store.open())
                     local req = make_request(fresh("cleanup-race"))
                     claim_attempt(db, req)
@@ -222,21 +226,27 @@ local function define_tests()
                     local attempt = assert(store.attempt(db, req.attempt_id))
                     db:release()
                     local results = assert(process.listen("bee.test.cleanup.result", {message = true}))
-                    for _ = 1, 2 do
-                        assert(process.spawn("bee.tests.placement.native:cleanup_caller", "bee:workers", attempt, tostring(process.pid())))
-                    end
-                    for _ = 1, 2 do
-                        local selected = channel.select({observed:case_receive()})
-                        assert(selected.ok and selected.channel == observed, "cleanup caller did not observe its plans")
-                    end
-                    local calls = 0
+                    local holder = tostring(assert(process.spawn("bee.tests.placement.native:cleanup_caller", "bee:workers", attempt, tostring(process.pid()))))
+                    local selected = channel.select({entered:case_receive(), results:case_receive()})
+                    assert(selected.ok and selected.channel == entered, "the first cleanup did not invoke the preparer")
+                    local preparer = tostring(selected.value:from())
+                    local follower = tostring(assert(process.spawn("bee.tests.placement.native:cleanup_caller", "bee:workers", attempt, tostring(process.pid()))))
+                    selected = channel.select({waiting:case_receive(), entered:case_receive(), results:case_receive()})
+                    assert(selected.ok and selected.channel == waiting, "the second cleanup did not follow the first while it held the attempt")
+                    test.eq(tostring(selected.value:from()), follower)
+                    test.eq(selected.value:payload():data().holder, holder)
+                    assert(process.send(preparer, "bee.test.preparer.release", {}))
+                    assert(process.send(follower, "bee.test.preparer.proceed", {}))
+                    local calls = 1
                     local finished = 0
                     while finished < 2 do
-                        local selected = channel.select({entered:case_receive(), results:case_receive()})
-                        assert(selected.ok and (selected.channel == entered or selected.channel == results), "concurrent cleanup did not finish: " .. tostring(calls) .. " invocations, " .. tostring(finished) .. " replies")
+                        selected = channel.select({entered:case_receive(), waiting:case_receive(), results:case_receive()})
+                        assert(selected.ok, "concurrent cleanup did not finish: " .. tostring(calls) .. " invocations, " .. tostring(finished) .. " replies")
                         if selected.channel == entered then
                             calls = calls + 1
                             assert(process.send(tostring(selected.value:from()), "bee.test.preparer.release", {}))
+                        elseif selected.channel == waiting then
+                            assert(process.send(tostring(selected.value:from()), "bee.test.preparer.proceed", {}))
                         else
                             local reply = selected.value:payload():data()
                             test.eq(reply.ok, outcome ~= "failed", reply.err)
@@ -253,7 +263,7 @@ local function define_tests()
                     test.eq(#rows, 1, "cleanup outcome evidence rows")
                 end)
                 process.unlisten(entered)
-                process.unlisten(observed)
+                process.unlisten(waiting)
                 cleanup_dir(root)
             end)
         end

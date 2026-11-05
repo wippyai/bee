@@ -55,7 +55,6 @@ entries:
   - tty
   imports:
     frame: bee.ui:frame
-    lists: bee.ui:lists
     appearance: bee.ui:appearance
     model: bee.apps.library.app:model
     governed: bee.gov.client:governed
@@ -137,7 +136,6 @@ entries:
   imports:
     confirmation: bee.approvals.app:confirmation
     frame: bee.ui:frame
-    overlay: bee.ui:overlay
     client: bee.app:client
     appearance: bee.ui:appearance
     model: bee.apps.library.app:model

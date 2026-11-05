@@ -74,7 +74,6 @@ entries:
     appearance: bee.ui:appearance
     restore_view: bee.harness.app:restore_view
     frame: bee.ui:frame
-    overlay: bee.ui:overlay
 - name: app
   kind: process.lua
   source: file://app.lua
@@ -176,7 +175,6 @@ entries:
     preferences: bee.drivers.descriptor:effective
     profile_protocol: bee.harness.profiles:protocol
     frame: bee.ui:frame
-    lists: bee.ui:lists
     appearance: bee.ui:appearance
     text: bee.ui:text
     agents: bee.harness.app:agents
@@ -197,7 +195,6 @@ entries:
     spawn_form: bee.harness.app:spawn_form
     confirmation: bee.approvals.app:confirmation
     frame: bee.ui:frame
-    overlay: bee.ui:overlay
     bounds: bee.drivers.values:bounds
     client: bee.app:client
     caller: bee.app:caller
@@ -259,7 +256,6 @@ entries:
     settings: bee.harness.app:profile_settings
     bounds: bee.drivers.values:bounds
     frame: bee.ui:frame
-    lists: bee.ui:lists
     appearance: bee.ui:appearance
     text: bee.ui:text
     caller: bee.app:caller

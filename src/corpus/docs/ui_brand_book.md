@@ -74,7 +74,7 @@ Every application frame follows the same reading order:
 2. **Navigation:** `frame.tabs`. Selected tabs use
    `appearance.selection_background(theme)` plus
    `appearance.selection_text(theme)`; inactive tabs use `muted` on `surface`.
-3. **Work:** lists (`frame.row`), tables (`lists.table`), forms, metrics or a
+3. **Work:** lists (`frame.row`), tables (`frame.table`), forms, metrics or a
    focused detail. Selection uses the same foreground/background pair as tabs
    and a `›` marker in column 1.
 4. **Actions and hints:** one footer on the final row. Visible keys use the
@@ -97,7 +97,7 @@ target.
 
 List and table rows use the whole visible row as their mouse target. Keep a
 stable identity when rows refresh. Tables align their columns and right-align
-numbers; on compact widths `lists.table` turns columns into a primary label plus
+numbers; on compact widths `frame.table` turns columns into a primary label plus
 a short `·`-separated summary rather than clipping every column independently.
 
 Forms put the label before the value and keep errors next to the affected work.

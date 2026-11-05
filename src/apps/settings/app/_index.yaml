@@ -59,7 +59,6 @@ entries:
   imports:
     appearance: bee.ui:appearance
     frame: bee.ui:frame
-    overlay: bee.ui:overlay
     client: bee.node:client
     view: bee.apps.settings.app:view
     choice: bee.apps.settings.app:choice

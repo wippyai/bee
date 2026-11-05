@@ -5,14 +5,14 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local popup = require("popup")
-local frame = require("frame")
+local paint = require("paint")
 local M = {}
 
-type Hit = frame.Hit
-type Button = frame.Button
-type RowActions = frame.RowActions
-type Controls = frame.Controls
-type View = frame.View
+type Hit = paint.Hit
+type Button = paint.Button
+type RowActions = paint.RowActions
+type Controls = paint.Controls
+type View = paint.View
 type MenuItem = popup.Item
 type PopupState = popup.State
 type Panel = popup.Panel
@@ -59,13 +59,13 @@ local function render_context(view: View, menu: Menu, preferences: appearance.Pr
     local context = menu.context
     local buttons = choices(menu)
     if not context or #buttons == 0 then return false end
-    local painter = frame.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
+    local painter = paint.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
     painter.canvas:put_rows(1, 1, view.rows)
     local items = context_items(buttons)
     local panel = popup.panel(painter.width, painter.height, items, context.state)
     context.state, context.panel = popup.fit(context.state, panel, items), panel
     popup.draw(painter.canvas, panel, context.state, items, painter.theme)
-    view.rows, view.hits = frame.rows(painter), painter.hits
+    view.rows, view.hits = paint.rows(painter), painter.hits
     menu.hits = view.hits
     return true
 end
@@ -85,9 +85,9 @@ function M.render(view: View, menu: Menu, preferences: appearance.Preferences)
     if menu.mode == "context" and not render_context(view, menu, preferences) then menu.mode, menu.context = "", nil end
     if menu.mode == "context" then return end
     if menu.mode == "" then menu.hits = view.hits; return end
-    local painter = frame.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
-    frame.header(painter, menu.mode == "more" and "MORE ACTIONS" or "HELP", "Esc back")
-    frame.add_hit(painter, "frame_back", 0, "", maximum(1, painter.width - 8), 1, 8, 1)
+    local painter = paint.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
+    paint.header(painter, menu.mode == "more" and "MORE ACTIONS" or "HELP", "Esc back")
+    paint.add_hit(painter, "frame_back", 0, "", maximum(1, painter.width - 8), 1, 8, 1)
     local items = choices(menu)
     local lines: {string} = {}
     local muted: {[integer]: boolean} = {}
@@ -127,15 +127,15 @@ function M.render(view: View, menu: Menu, preferences: appearance.Preferences)
     end
     menu.count = #lines
     menu.selected = minimum(maximum(1, menu.selected), maximum(1, #lines))
-    local window = frame.window(#lines, painter.height - 4, menu.selected, menu.offset)
+    local window = paint.window(#lines, painter.height - 4, menu.selected, menu.offset)
     menu.offset = window.offset
     for slot = 1, window.capacity do
         local index = window.offset + slot
         if not lines[index] then break end
-        frame.row(painter, slot + 2, lines[index], index == menu.selected, "frame_choice", index, "", muted[index] and painter.theme.muted or nil)
+        paint.row(painter, slot + 2, lines[index], index == menu.selected, "frame_choice", index, "", muted[index] and painter.theme.muted or nil)
     end
-    frame.footer(painter, "", menu.mode == "more" and "↑↓ select · Enter choose" or "↑↓ scroll")
-    view.rows, view.hits = frame.rows(painter), painter.hits
+    paint.footer(painter, "", menu.mode == "more" and "↑↓ select · Enter choose" or "↑↓ scroll")
+    view.rows, view.hits = paint.rows(painter), painter.hits
     menu.hits = view.hits
 end
 
@@ -242,7 +242,7 @@ function M.route(menu: Menu, value: unknown, text_entry: boolean?): (tty.TTYEven
         end
     end
     if menu.mode == "" and event.type == "mouse" and event.action == "press" and event.button == "right" then
-        local hit = frame.hit(menu.hits, event.x or 0, event.y or 0)
+        local hit = paint.hit(menu.hits, event.x or 0, event.y or 0)
         local row = hit and row_at(menu, hit)
         if row then
             open_context(menu, row, event.x or 1, (event.y or 1) + 1)
@@ -279,7 +279,7 @@ function M.route(menu: Menu, value: unknown, text_entry: boolean?): (tty.TTYEven
             return nil, true
         end
     elseif event.type == "mouse" then
-        local hit = frame.hit(menu.hits, event.x or 0, event.y or 0)
+        local hit = paint.hit(menu.hits, event.x or 0, event.y or 0)
         if event.action == "press" and event.button == "left" and hit then
             if hit.kind == "frame_back" then
                 menu.mode = ""

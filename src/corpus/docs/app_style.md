@@ -2,7 +2,7 @@
 
 Read this page before drawing any Bee application. It states the rules every
 terminal application follows, and each rule names the
-`bee.ui:frame`, `bee.ui:lists` or `bee.ui:overlay` function that implements it. The
+`bee.ui:frame` function that implements it. The
 brand book (`docs/ui_brand_book`) explains the intent behind the rules; this page is the
 contract. When a rule and a wish conflict, follow the rule.
 
@@ -99,9 +99,9 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
   window drops whole hints before actions; it never wraps or splits an item. Help
   lists the screen's complete declared buttons, tabs and hints, plus the full
   status message.
-- Each app owns an `overlay.menu()` state. Return `controls = frame.controls(painter)`
-  beside rows and hits from the view; call `overlay.render(view, menu, preferences)`
-  before presenting and `overlay.route(menu, event, text_entry)` before app input.
+- Each app owns a `frame.menu()` state. Return `controls = frame.controls(painter)`
+  beside rows and hits from the view; call `frame.render(view, menu, preferences)`
+  before presenting and `frame.route(menu, event, text_entry)` before app input.
   A consumed event returns nil; the second result requests a redraw. An enabled
   More choice returns a mouse event for the existing app handler. Pass
   `text_entry = true` for editors so typed letters and `?` remain text;
@@ -167,7 +167,7 @@ Rules:
 
 - A selected row keeps its text, takes `selection_text(theme)` on
   `selection_background(theme)`, and
-  carries `›` in column 1 (`frame.row`, `lists.table`). Focus is visible
+  carries `›` in column 1 (`frame.row`, `frame.table`). Focus is visible
   without color.
 - When another pane owns focus the selection keeps `›` and `accent` text on
   `surface` (`focused = false`).
@@ -183,7 +183,7 @@ Rules:
   ellipsis (`frame.clip`).
 - Truncate in this order: the header summary, then metadata columns, then the
   flexible column. A table too narrow for its flexible column folds each row
-  into `first cell · other cells` (`lists.table`).
+  into `first cell · other cells` (`frame.table`).
 - External text passes through `bee.ui:text.bound` with a byte
   ceiling before it reaches the frame.
 - Numbers are right-aligned (`Column.align = "right"`) and never truncated;
@@ -210,7 +210,7 @@ never a zero.
 ## 10. Mouse targets
 
 - Every target is recorded while drawing (`frame.add_hit`, or implicitly by
-  `frame.row`, `lists.table`, `frame.tabs`, `frame.button`, `frame.field`) and
+  `frame.row`, `frame.table`, `frame.tabs`, `frame.button`, `frame.field`) and
   resolved with `frame.hit(hits, x, y)`.
 - Rows span the full width. Buttons and tabs span their padded label. A
   target is at least one row high and three cells wide.
@@ -235,7 +235,7 @@ are the `compact` class (80x24) unless marked.
 
 ### List and detail
 
-A collection of items with properties. `lists.table` for the list; on
+A collection of items with properties. `frame.table` for the list; on
 `standard` and `wide` a detail pane beside it through
 `frame.master_detail` (or `frame.split(work, {40, 0})`) with `frame.panel` and
 label/value lines.
@@ -337,25 +337,25 @@ never grow without bound.
 ### Log viewer and browsers
 
 Streaming logs, thread transcripts, workspace and database browsers.
-`lists.log` draws a virtualized window of lines with a highlighted search
+`frame.log` draws a virtualized window of lines with a highlighted search
 `query`; the process owns the line list, the offset and the follow flag.
-`lists.tree` draws a flattened, already-filtered tree (the process owns which
-nodes are expanded) and `lists.kv` a key-value inspector for the selected
+`frame.tree` draws a flattened, already-filtered tree (the process owns which
+nodes are expanded) and `frame.kv` a key-value inspector for the selected
 node, side by side through `frame.split(work, {40, 0})`. Rows carry hit kinds
 `log`, `tree` and `kv`.
 
 ### Deploy and CI board
 
 A row of headline numbers, a table of runs and a pipeline. `viz.tiles` on top,
-`lists.table` with `frame.badge` beside the state word, `viz.timeline` for what
+`frame.table` with `frame.badge` beside the state word, `viz.timeline` for what
 ran when, `viz.graph` for stage dependencies, `viz.progress` with `eta` for a
 running stage and `viz.spinner` for work in flight. Result history by attempt
 is `viz.candles` (range and open/close) or `viz.scatter` (score against cost).
 
 ### Inbox and approvals
 
-Who asked, from which bee, for what, by when. `lists.table` with columns
-`From`, `Bee`, `Request`, `Due`; `lists.kv` for the selected request's
+Who asked, from which bee, for what, by when. `frame.table` with columns
+`From`, `Bee`, `Request`, `Due`; `frame.kv` for the selected request's
 details; primary action `Approve`, destructive `Deny` last; `frame.toast`
 confirms the committed decision.
 
@@ -380,7 +380,7 @@ dismisses every overlay.
 A measurement over time. A top row of stat tiles, then one large chart, then
 a table of the items behind it. The redraw cadence is fixed (1 s by default)
 and stated in the header summary; data arriving faster is buffered, not
-drawn. Draw it with `viz.tiles`, `viz.line` and `lists.table` (section 12).
+drawn. Draw it with `viz.tiles`, `viz.line` and `frame.table` (section 12).
 
 ```
  MONITOR                                                          Live · 1s
@@ -426,7 +426,7 @@ The visualization kit is `bee.ui.viz:viz`. Choose by the question:
 | Which of many items pass or fail? | `viz.waffle` beside the counts in words |
 | How full is one capacity or how far is one task? | `viz.gauge`, `viz.progress` |
 | What are the headline numbers? | `viz.tiles` |
-| How do rows compare inside a table? | `viz.bar_cell` in a `lists.table` column |
+| How do rows compare inside a table? | `viz.bar_cell` in a `frame.table` column |
 | What ran when? | `viz.timeline` |
 | How are nodes connected? | `viz.graph` (layered), `diagram.mesh` (placed nodes) |
 | How do two measures relate, point by point? | `viz.scatter` |

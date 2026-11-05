@@ -12,13 +12,12 @@ Demonstrates who asked, from which bee, for what and by when: a table of request
 -- function decide commits a verdict and returns the text for a toast, so the
 -- application shows the outcome with the overlays reference.
 --
--- Library calls: frame.master_detail, lists.table, frame.panel, lists.kv.
+-- Library calls: frame.master_detail, frame.table, frame.panel, frame.kv.
 local frame = require("frame")
-local lists = require("lists")
 
 local M = {}
 
-type Request = {from: string, bee: string, request: string, due: string, detail: {lists.Entry}}
+type Request = {from: string, bee: string, request: string, due: string, detail: {frame.Entry}}
 type Model = {requests: {Request}, selected: integer, offset: integer}
 
 function M.sample(): Model
@@ -55,7 +54,7 @@ function M.draw(painter: frame.Painter, work: frame.Rect, model: Model): frame.W
         keys[index] = item.request
     end
     local window = frame.window(#model.requests, last - first, model.selected, model.offset)
-    lists.table(painter, first, last, {
+    frame.table(painter, first, last, {
         columns = {{title = "From", width = 9}, {title = "Bee", width = 10}, {title = "Request", width = 0}, {title = "Due", width = 9}},
         cells = cells, keys = keys, kind = "request", selected = model.selected, offset = window.offset,
         area = parts[2],
@@ -65,7 +64,7 @@ function M.draw(painter: frame.Painter, work: frame.Rect, model: Model): frame.W
     local inner = frame.panel(painter, detail, "Request details")
     if inner.height < 3 then return window end
     frame.put(painter, inner.x, inner.y, item.request, inner.width, painter.theme.text)
-    lists.kv(painter, inner.y + 2, inner.y + inner.height - 1, {entries = item.detail, selected = 0, offset = 0, area = inner})
+    frame.kv(painter, inner.y + 2, inner.y + inner.height - 1, {entries = item.detail, selected = 0, offset = 0, area = inner})
     return window
 end
 

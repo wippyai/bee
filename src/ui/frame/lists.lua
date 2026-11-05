@@ -4,12 +4,12 @@
 -- returns the window.
 local tty = require("tty")
 local appearance = require("appearance")
-local frame = require("frame")
+local paint = require("paint")
 local M = {}
 
-type Painter = frame.Painter
-type Rect = frame.Rect
-type Window = frame.Window
+type Painter = paint.Painter
+type Rect = paint.Rect
+type Window = paint.Window
 -- A table column: width 0 is flexible; flexible columns keep at least min
 -- cells (default 8 or the title) and share the remaining width, and the
 -- compact form applies when they cannot; align "right" for numbers.
@@ -57,7 +57,7 @@ end
 local function joined(values: {string}, widths: {integer}, columns: {Column}): string
     local parts: {string} = {}
     for index, value in ipairs(values) do
-        parts[#parts + 1] = frame.pad(value, widths[index], columns[index].align)
+        parts[#parts + 1] = paint.pad(value, widths[index], columns[index].align)
     end
     return table.concat(parts, "  ")
 end
@@ -80,9 +80,9 @@ function M.table(painter: Painter, first: integer, last: integer, value: Table):
         caption = captions[1]
         for index = 2, #captions do if captions[index] ~= "" then caption = caption .. " · " .. captions[index] end end
     end
-    if area then frame.band(painter, area, first, caption, painter.theme.muted)
-    else frame.line(painter, first, caption, painter.theme.muted) end
-    local window = frame.window(count, last - first, value.selected, value.offset)
+    if area then paint.band(painter, area, first, caption, painter.theme.muted)
+    else paint.line(painter, first, caption, painter.theme.muted) end
+    local window = paint.window(count, last - first, value.selected, value.offset)
     for slot = 1, window.capacity do
         local index = window.offset + slot
         local cells = value.cells[index]
@@ -93,7 +93,7 @@ function M.table(painter: Painter, first: integer, last: integer, value: Table):
             text = cells[1] or ""
             for column = 2, #cells do if cells[column] ~= "" then text = text .. " · " .. cells[column] end end
         end
-        frame.row(painter, first + slot, text, index == value.selected, value.kind, index,
+        paint.row(painter, first + slot, text, index == value.selected, value.kind, index,
             value.keys and value.keys[index] or "", nil, value.focused, nil, area)
     end
     return window
@@ -107,14 +107,14 @@ end
 function M.tree(painter: Painter, first: integer, last: integer, value: TreeView): Window
     local count = #value.rows
     if last < first then return {offset = 0, capacity = 0} end
-    local window = frame.window(count, last - first + 1, value.selected, value.offset)
+    local window = paint.window(count, last - first + 1, value.selected, value.offset)
     for slot = 1, window.capacity do
         local index = window.offset + slot
         local row = value.rows[index]
         if not row then break end
         local marker = row.expandable and (row.expanded and "▾ " or "▸ ") or "  "
         local text = string.rep("  ", maximum(0, row.depth)) .. marker .. row.label
-        frame.row(painter, first + slot - 1, text, index == value.selected, "tree", index, row.key or "",
+        paint.row(painter, first + slot - 1, text, index == value.selected, "tree", index, row.key or "",
             row.role and appearance.role(painter.theme, row.role) or nil, value.focused, nil, value.area)
     end
     return window
@@ -134,16 +134,16 @@ function M.kv(painter: Painter, first: integer, last: integer, value: Inspector)
     end
     local span = value.area and value.area.width or painter.width
     label_width = minimum(label_width, span // 3)
-    local window = frame.window(count, last - first + 1, value.selected, value.offset)
+    local window = paint.window(count, last - first + 1, value.selected, value.offset)
     for slot = 1, window.capacity do
         local index = window.offset + slot
         local entry = value.entries[index]
         if not entry then break end
         local y = first + slot - 1
-        local text = frame.pad(entry.label, label_width) .. "  " .. entry.value
-        frame.row(painter, y, text, index == value.selected, "kv", index, entry.label,
+        local text = paint.pad(entry.label, label_width) .. "  " .. entry.value
+        paint.row(painter, y, text, index == value.selected, "kv", index, entry.label,
             entry.role and appearance.role(painter.theme, entry.role) or nil, value.focused, nil, value.area)
-        if index ~= value.selected then frame.put(painter, value.area and value.area.x or 2, y, frame.pad(entry.label, label_width), label_width, painter.theme.muted) end
+        if index ~= value.selected then paint.put(painter, value.area and value.area.x or 2, y, paint.pad(entry.label, label_width), label_width, painter.theme.muted) end
     end
     return window
 end
@@ -153,8 +153,8 @@ end
 -- only ever matches on a UTF-8 character boundary of a valid UTF-8 text, so
 -- the split never lands inside a multi-byte glyph.
 local function highlighted(painter: Painter, x: integer, y: integer, text: string, room: integer, query: string?, fg: string?, bg: string?)
-    if not query or query == "" or room <= 0 then frame.put(painter, x, y, text, room, fg, bg); return end
-    local fitted = frame.fit(text, room)
+    if not query or query == "" or room <= 0 then paint.put(painter, x, y, text, room, fg, bg); return end
+    local fitted = paint.fit(text, room)
     local haystack = fitted:lower()
     local needle = query:lower()
     local theme = painter.theme
@@ -164,16 +164,16 @@ local function highlighted(painter: Painter, x: integer, y: integer, text: strin
     while budget > 0 do
         local found = haystack:find(needle, at, true)
         if not found then
-            column = column + frame.put(painter, column, y, fitted:sub(at), budget, fg, bg)
+            column = column + paint.put(painter, column, y, fitted:sub(at), budget, fg, bg)
             break
         end
         if found > at then
-            local used = frame.put(painter, column, y, fitted:sub(at, found - 1), budget, fg, bg)
+            local used = paint.put(painter, column, y, fitted:sub(at, found - 1), budget, fg, bg)
             column = column + used
             budget = budget - used
         end
         if budget <= 0 then break end
-        local used = frame.put(painter, column, y, fitted:sub(found, found + #query - 1), budget, appearance.selection_text(theme), appearance.selection_background(theme))
+        local used = paint.put(painter, column, y, fitted:sub(found, found + #query - 1), budget, appearance.selection_text(theme), appearance.selection_background(theme))
         column = column + used
         budget = budget - used
         at = found + maximum(1, #query)
@@ -188,7 +188,7 @@ end
 function M.log(painter: Painter, first: integer, last: integer, value: LogView): Window
     local count = #value.lines
     if last < first then return {offset = 0, capacity = 0} end
-    local window = frame.window(count, last - first + 1, value.selected, value.offset)
+    local window = paint.window(count, last - first + 1, value.selected, value.offset)
     local confined = value.area
     if confined and (confined.width <= 0 or confined.height <= 0) then return window end
     local theme = painter.theme
@@ -206,15 +206,15 @@ function M.log(painter: Painter, first: integer, last: integer, value: LogView):
         local area = value.area
         if area then
             local marker_x = maximum(1, area.x - 1)
-            frame.band(painter, area, y, "", fg, bg)
-            if selected and marker_x < area.x then frame.put(painter, marker_x, y, frame.MARKER, 1, fg, bg) end
+            paint.band(painter, area, y, "", fg, bg)
+            if selected and marker_x < area.x then paint.put(painter, marker_x, y, paint.MARKER, 1, fg, bg) end
             highlighted(painter, area.x, y, line.text, area.width, value.query, fg, bg)
-            frame.add_hit(painter, "log", index, "", marker_x, y, area.x + area.width - marker_x, 1)
+            paint.add_hit(painter, "log", index, "", marker_x, y, area.x + area.width - marker_x, 1)
         else
-            frame.fill(painter, y, bg)
-            if selected then frame.put(painter, 1, y, frame.MARKER, 1, fg, bg) end
+            paint.fill(painter, y, bg)
+            if selected then paint.put(painter, 1, y, paint.MARKER, 1, fg, bg) end
             highlighted(painter, 2, y, line.text, painter.width - 2, value.query, fg, bg)
-            frame.add_hit(painter, "log", index, "", 1, y, painter.width, 1)
+            paint.add_hit(painter, "log", index, "", 1, y, painter.width, 1)
         end
     end
     return window

@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.ui.frame
+entries:
+- name: paint
+  kind: library.lua
+  source: file://paint.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+- name: lists
+  kind: library.lua
+  source: file://lists.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+    paint: bee.ui.frame:paint
+- name: overlay
+  kind: library.lua
+  source: file://overlay.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+    popup: bee.ui:popup
+    paint: bee.ui.frame:paint

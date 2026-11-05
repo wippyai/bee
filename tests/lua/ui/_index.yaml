@@ -18,7 +18,6 @@ entries:
   imports:
     test: wippy.test:test
     frame: bee.ui:frame
-    lists: bee.ui:lists
     viz: bee.ui.viz:viz
     appearance: bee.ui:appearance
 - name: frame_test
@@ -30,7 +29,7 @@ entries:
   imports:
     test: wippy.test:test
     frame: bee.ui:frame
-    overlay: bee.ui:overlay
+    paint: bee.ui.frame:paint
     appearance: bee.ui:appearance
 - name: glyphs_test
   kind: function.lua

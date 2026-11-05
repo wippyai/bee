@@ -1,6 +1,6 @@
 # Reference application: deploy wizard
 
-Demonstrates the input kit inside an application: a wizard strip over one forms.Form per step, focus order and mouse clicks routed through forms.key and forms.click, per-field validation before Next, and a confirmation modal on the last step. The model returns "done" from key when the user confirms. forms.field_number, forms.field_toggle, forms.key, forms.click, forms.validate, forms.rows, forms.draw, frame.steps, frame.stack, frame.modal, frame.button, lists.kv.
+Demonstrates the input kit inside an application: a wizard strip over one forms.Form per step, focus order and mouse clicks routed through forms.key and forms.click, per-field validation before Next, and a confirmation modal on the last step. The model returns "done" from key when the user confirms. forms.field_number, forms.field_toggle, forms.key, forms.click, forms.validate, forms.rows, forms.draw, frame.steps, frame.stack, frame.modal, frame.button, frame.kv.
 
 ## Source
 
@@ -15,9 +15,8 @@ Demonstrates the input kit inside an application: a wizard strip over one forms.
 -- Library calls: forms.form_new, forms.field_text, forms.field_select,
 -- forms.field_number, forms.field_toggle, forms.key, forms.click,
 -- forms.validate, forms.rows, forms.draw, frame.steps, frame.stack,
--- frame.modal, frame.button, lists.kv.
+-- frame.modal, frame.button, frame.kv.
 local frame = require("frame")
-local lists = require("lists")
 local forms = require("forms")
 
 local M = {}
@@ -44,8 +43,8 @@ local function current(model: Model): forms.Form?
     return nil
 end
 
-local function summary(model: Model): {lists.Entry}
-    local entries: {lists.Entry} = {}
+local function summary(model: Model): {frame.Entry}
+    local entries: {frame.Entry} = {}
     for _, form in ipairs({model.target, model.rollout}) do
         for _, field in ipairs(form.fields) do entries[#entries + 1] = {label = field.label, value = forms.value(field)} end
     end
@@ -100,7 +99,7 @@ function M.draw(painter: frame.Painter, work: frame.Rect, model: Model)
         for index, field in ipairs(form.fields) do heights[index] = forms.rows(field) end
         for index, rect in ipairs(frame.stack(body, heights, 1)) do forms.draw(painter, rect, form, index) end
     else
-        lists.kv(painter, body.y, body.y + body.height - 1, {entries = summary(model), selected = 0, offset = 0})
+        frame.kv(painter, body.y, body.y + body.height - 1, {entries = summary(model), selected = 0, offset = 0})
     end
     if not model.confirming then return end
     local inner = frame.modal(painter, 46, 7, "Deploy " .. forms.value(model.target.fields[1]))

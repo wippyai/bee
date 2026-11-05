@@ -7,6 +7,5 @@ entries:
   imports:
     text: bee.ui:text
     frame: bee.ui:frame
-    lists: bee.ui:lists
     bounds: bee.drivers.values:bounds
     reply: bee.drivers.values:reply

@@ -16,7 +16,6 @@ entries:
   imports:
     view: bee.gateway.app:view
     frame: bee.ui:frame
-    overlay: bee.ui:overlay
     appearance: bee.ui:appearance
     client: bee.app:client
     bounds: bee.drivers.values:bounds

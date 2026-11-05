@@ -3,8 +3,8 @@
 How a Bee application draws. An application is one `process.lua` entry whose
 source is inline Lua; it renders into the window broker's terminal through the
 native `tty` module, composes screens with the shared UI libraries
-(`bee.ui:frame`, `bee.ui:lists`, `bee.ui:overlay`, `bee.ui.viz:viz`,
-`bee.ui.diagram:diagram`, `bee.ui.forms:forms`) and exchanges lifecycle with `bee.app:client`. This page
+(`bee.ui:frame`, `bee.ui.viz:viz`, `bee.ui.diagram:diagram`,
+`bee.ui.forms:forms`) and exchanges lifecycle with `bee.app:client`. This page
 is the call reference for those libraries; `runtime/lua/system/tty` documents
 the native module and `docs/app_style` the layout rules.
 
@@ -70,16 +70,15 @@ return {main = main}
 `bee.ui:frame` is the shared toolkit every Bee application draws with.
 Import it as `frame = "bee.ui:frame"` next to `appearance`. One frame
 reads top to bottom: row 1 header (uppercase title, muted summary at the right),
-optional tabs, the work area (rows, tables, empty states), the action bar on the
+optional tabs, the work area (tables, rows, empty states), the action bar on the
 penultimate row with one primary button, and the footer on the final row with the
 status at the left and the key hints at the right. Selected rows keep their text,
 use the accent pair and carry a `›` marker in column 1. Hits are recorded as the
 frame draws; resolve mouse input with `frame.hit(hits, x, y)`.
 `frame.tabs` records each tab's `kind` as its hit kind; `frame.field`
 records hit kind `field` and the supplied index. `frame.layout` returns
-0 for omitted `tabs` and `actions` rows. `bee.ui:lists` draws tables, trees,
-inspectors and logs on a frame painter, and `bee.ui:overlay` draws the More,
-Help and row-action overlay over a painted view and routes input through it.
+0 for omitted `tabs` and `actions` rows, and `Table.area` confines a table
+to one rectangle when a detail pane shares the screen.
 
 ```lua
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
@@ -90,12 +89,22 @@ type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: s
 type Bar = {x: integer, buttons: {Button}}
 type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}, controls: Controls, bars: {[integer]: Bar}}
 type View = {rows: {string}, hits: {Hit}, controls: Controls?}
+type Menu = {mode: string, selected: integer, offset: integer, controls: Controls, hits: {Hit}, signature: string, count: integer}
 type Window = {offset: integer, capacity: integer}
+type Column = {title: string, width: integer, align: string?, min: integer?}
 type Rect = {x: integer, y: integer, width: integer, height: integer}
+type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?, area: Rect?}
 type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
+type TreeRow = {label: string, depth: integer, expandable: boolean?, expanded: boolean?, role: string?, key: string?}
+type TreeView = {rows: {TreeRow}, selected: integer, offset: integer, focused: boolean?, area: Rect?}
+type Entry = {label: string, value: string, role: string?}
+type Inspector = {entries: {Entry}, selected: integer, offset: integer, label_width: integer?, focused: boolean?, area: Rect?}
+type LogLine = {text: string, role: string?}
+type LogView = {lines: {LogLine}, selected: integer, offset: integer, query: string?, focused: boolean?, area: Rect?}
 type Toast = {text: string, role: string?}
 type Line = {heading: string?, summary: string?, label: string?, value: string?, role: string?, label_role: string?}
 type RowActions = {kind: string, index: integer, key: string, actions: {Button}, selected: boolean?}
+type Clicks = {kind: string, index: integer, at_ms: integer}
 ```
 
 | Call | Meaning |
@@ -121,8 +130,7 @@ type RowActions = {kind: string, index: integer, key: string, actions: {Button},
 | `frame.footer(painter: Painter, status: string, hints: string, more: string?)` | The footer reserves a bounded region for hints and an always visible Help; more lists further keys that only Help shows. |
 | `frame.window(count: integer, capacity: integer, selected: integer, offset: integer) -> Window` | The visible window of a scrolling list of count rows in capacity slots, keeping the selected index (0 for none) visible. |
 | `frame.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?, area: Rect?)` | One content row at y; a selected row takes the row selection and the marker in column 1. Records a hit of kind, index and key covering span rows (default 1). |
-| `frame.band(painter: Painter, area: Rect, y: integer, value: string, fg: string?, bg: string?)` | One row confined to area's columns, with the marker column before it. |
-| `frame.MARKER` | The glyph in column 1 that marks a selected row (`›`). |
+| `frame.table(painter: Painter, first: integer, last: integer, value: Table) -> Window` | A table between rows first and last: a muted column caption on row first and rows below it. On a narrow canvas each row becomes its first cell followed by the other nonempty cells joined with " · ". Returns the visible window. |
 | `frame.size(width: integer, height: integer) -> string` | The size class of a canvas: "narrow" below 80x24, "compact" from 80x24, "standard" from 120x36 and "wide" from 160x48. Both dimensions must reach a class; layouts change only at these breakpoints. |
 | `frame.layout(painter: Painter, tabs: boolean, actions: boolean) -> Layout` | The canonical anatomy for this canvas: header on row 1, tabs on row 2 when requested and the canvas has at least 6 rows, one blank row, the work area from column 2 to the column before the last, the action bar on the penultimate row when requested and the canvas has at least 6 rows, and the footer on the final row when the canvas has at least 2 rows. |
 | `frame.split(rect: Rect, sizes: {integer}, gap: integer?) -> {Rect}` | Splits a rectangle into columns left to right. A size of 0 is flexible and shares the remaining width; gap (default 2) separates the columns. Columns that do not fit keep their position with a clipped width. |
@@ -138,57 +146,18 @@ type RowActions = {kind: string, index: integer, key: string, actions: {Button},
 | `frame.field(painter: Painter, y: integer, label: string, value: string, label_width: integer, selected: boolean, index: integer, error_text: string?)` | One form field on row y: the muted label padded to label_width, then the value. The selected field takes the row selection and its target; an error replaces the value's trailing room in the error role after " · ". |
 | `frame.steps(painter: Painter, y: integer, labels: {string}, current: integer)` | A wizard step strip on row y: "1 Source › 2 Review › 3 Deliver". The current step uses the accent pair, finished steps carry "✓" and later steps are muted. On a narrow row only the current step shows, as "Step 2/3 Review". |
 | `frame.empty(painter: Painter, y: integer, title: string, action: string?, area: Rect?)` | An empty, loading or failure state: what is absent or wrong on row y and the next useful action on the row below it. Inside a panel, area bounds both rows to the panel's columns and leaves the rest of the rows untouched. |
+| `frame.tree(painter: Painter, first: integer, last: integer, value: TreeView) -> Window` | A tree view between rows first and last: only the visible window is ever drawn. Each row is indented two cells per depth, then "▾" expanded, "▸" collapsed, or two blank cells for a leaf, then its label; role colors the label (default text). The selected row takes the row selection; every drawn row carries hit kind "tree" and its key. Returns the visible window. |
+| `frame.kv(painter: Painter, first: integer, last: integer, value: Inspector) -> Window` | A key-value inspector between rows first and last: the muted label padded to label_width (default the widest label, capped to a third of the canvas) then the value in role (default text). The selected row takes the row selection and carries hit kind "kv"; every row keeps its label as the key. Returns the visible window. |
+| `frame.log(painter: Painter, first: integer, last: integer, value: LogView) -> Window` | A virtualized log viewer between rows first and last: only the visible window of lines is ever drawn. Each line is colored by its role (default text), and every occurrence of query (case-insensitive) is picked out in the accent pair. The selected line takes the row selection; every drawn line carries hit kind "log" and its index. Returns the visible window. |
 | `frame.badge(painter: Painter, x: integer, y: integer, text: string, role: string?) -> integer` | A status badge at (x, y): text padded with one cell on each side, filled in role's color (default accent) with a contrasting foreground. Returns the drawn width. |
 | `frame.toast(painter: Painter, y: integer, toast: Toast)` | A one-row toast notification: the message centered on row y, filled in role's color (default accent) with a contrasting foreground, overwriting whatever was on that row. The caller owns when a toast is shown and for how long; this only draws the row. |
 | `frame.modal(painter: Painter, width: integer, height: integer, title: string) -> Rect` | A centered modal panel: a box-drawing border in the border role clipped to width by height (each capped to the painter's size), the title on its top edge and the surface cleared underneath. Returns the inner rectangle for the caller's own content; too little room returns a zero rectangle and paints nothing. |
 | `frame.row_actions(painter: Painter, row: RowActions)` | Declares the actions a row offers: a right click on the row's target (kind, index, key) or Shift+F10 on the selected row opens them as a popup menu; a chosen action reaches the app as a press on a target of its kind carrying the row's index and key. Declare before `frame.footer`, which then names Shift+F10. |
-
-## Lists
-
-`bee.ui:lists` draws scrolling data views on a frame painter. Import it as
-`lists = "bee.ui:lists"` next to `frame`. Each view draws only its visible
-window between rows first and last, takes the frame's row selection and hits,
-and returns the window; `area` confines a view to one rectangle when a detail
-pane shares the screen.
-
-```lua
-type Column = {title: string, width: integer, align: string?, min: integer?}
-type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?, area: frame.Rect?}
-type TreeRow = {label: string, depth: integer, expandable: boolean?, expanded: boolean?, role: string?, key: string?}
-type TreeView = {rows: {TreeRow}, selected: integer, offset: integer, focused: boolean?, area: frame.Rect?}
-type Entry = {label: string, value: string, role: string?}
-type Inspector = {entries: {Entry}, selected: integer, offset: integer, label_width: integer?, focused: boolean?, area: frame.Rect?}
-type LogLine = {text: string, role: string?}
-type LogView = {lines: {LogLine}, selected: integer, offset: integer, query: string?, focused: boolean?, area: frame.Rect?}
-```
-
-| Call | Meaning |
-|------|---------|
-| `lists.table(painter: frame.Painter, first: integer, last: integer, value: Table) -> frame.Window` | A table between rows first and last: a muted column caption on row first and rows below it. On a narrow canvas each row becomes its first cell followed by the other nonempty cells joined with " · ". Returns the visible window. |
-| `lists.tree(painter: frame.Painter, first: integer, last: integer, value: TreeView) -> frame.Window` | A tree view between rows first and last: only the visible window is ever drawn. Each row is indented two cells per depth, then "▾" expanded, "▸" collapsed, or two blank cells for a leaf, then its label; role colors the label (default text). The selected row takes the row selection; every drawn row carries hit kind "tree" and its key. Returns the visible window. |
-| `lists.kv(painter: frame.Painter, first: integer, last: integer, value: Inspector) -> frame.Window` | A key-value inspector between rows first and last: the muted label padded to label_width (default the widest label, capped to a third of the canvas) then the value in role (default text). The selected row takes the row selection and carries hit kind "kv"; every row keeps its label as the key. Returns the visible window. |
-| `lists.log(painter: frame.Painter, first: integer, last: integer, value: LogView) -> frame.Window` | A virtualized log viewer between rows first and last: only the visible window of lines is ever drawn. Each line is colored by its role (default text), and every occurrence of query (case-insensitive) is picked out in the accent pair. The selected line takes the row selection; every drawn line carries hit kind "log" and its index. Returns the visible window. |
-
-## Overlay
-
-`bee.ui:overlay` is the shared More, Help and row-action overlay. Import it as
-`overlay = "bee.ui:overlay"` next to `frame`. The app owns one `overlay.menu()`
-state, calls `overlay.render(view, menu, preferences)` on each painted view
-before presenting it and passes each terminal event through
-`overlay.route(menu, event, text_entry)` before its own input handling.
-
-```lua
-type Menu = {mode: string, selected: integer, offset: integer, controls: frame.Controls, hits: {frame.Hit}, signature: string, count: integer}
-type Clicks = {kind: string, index: integer, at_ms: integer}
-```
-
-| Call | Meaning |
-|------|---------|
-| `overlay.menu() -> Menu` | An app-owned More and Help state; the app retains it between redraws. |
-| `overlay.render(view: frame.View, menu: Menu, preferences: appearance.Preferences)` | Paints a shared overlay from this screen's declared buttons and hints. |
-| `overlay.route(menu: Menu, value: unknown, text_entry: boolean?) -> (tty.TTYEvent?, boolean)` | Returns nil for consumed input. Selected actions reuse the app's mouse path. text_entry preserves letters and '?' while a form or editor owns input. |
-| `overlay.clicks() -> Clicks` | Double-click memory the application retains between events. |
-| `overlay.double_click(memory: Clicks, kind: string, index: integer, now_ms: integer) -> boolean` | True for a second press on the same target within `overlay.DOUBLE_CLICK_MS` (400) of the first; the press that completes one starts over. |
+| `frame.menu() -> Menu` | An app-owned More and Help state; the app retains it between redraws. |
+| `frame.render(view: View, menu: Menu, preferences: appearance.Preferences)` | Paints a shared overlay from this screen's declared buttons and hints. |
+| `frame.route(menu: Menu, value: unknown, text_entry: boolean?) -> (tty.TTYEvent?, boolean)` | Returns nil for consumed input. Selected actions reuse the app's mouse path. text_entry preserves letters and '?' while a form or editor owns input. |
+| `frame.clicks() -> Clicks` | Double-click memory the application retains between events. |
+| `frame.double_click(memory: Clicks, kind: string, index: integer, now_ms: integer) -> boolean` | True for a second press on the same target within `frame.DOUBLE_CLICK_MS` (400) of the first; the press that completes one starts over. |
 
 ## Command palette
 
@@ -361,7 +330,7 @@ viz.bar_cell(3, 8, 4) --> "█▌  "
 viz.bar_cell(20, 10, 3) --> "███"
 viz.bar_cell(viz.GAP, 10, 2) --> "  "
 local rows = frame.new(50, 4, appearance.defaults())
-lists.table(rows, 1, 4, {columns = {{title = "Process", width = 0}, {title = "Steps", width = 12}, {title = "", width = 4, align = "right"}},
+frame.table(rows, 1, 4, {columns = {{title = "Process", width = 0}, {title = "Steps", width = 12}, {title = "", width = 4, align = "right"}},
     cells = {{"bee.host:main", viz.bar_cell(96, 96, 12), "96"}, {"bee.desktop.service:main", viz.bar_cell(16, 96, 12), "16"},
         {"bee.apps:broker", viz.bar_cell(70, 96, 12), "70"}}, kind = "row", selected = 0, offset = 0})
 ```
@@ -733,8 +702,6 @@ source requires, and its metadata names it an application:
 | Import | Entry |
 |--------|-------|
 | `frame` | `bee.ui:frame` |
-| `lists` | `bee.ui:lists` |
-| `overlay` | `bee.ui:overlay` |
 | `appearance` | `bee.ui:appearance` |
 | `text` | `bee.ui:text` (`text.bound(value, limit)` for display text from another authority) |
 | `viz` | `bee.ui.viz:viz` |
@@ -792,11 +759,10 @@ drawing, and the returned rows can be presented after each resize or input event
 
 ```lua
 local frame = require("frame")
-local lists = require("lists")
 local painter = frame.new(width, height, preferences)
 frame.header(painter, "TASKS", "3 open")
 frame.tabs(painter, 2, {{kind = "all", label = "All"}, {kind = "mine", label = "Mine"}}, "all")
-lists.table(painter, 4, height - 2, {
+frame.table(painter, 4, height - 2, {
     columns = {{title = "Task", width = 0}, {title = "State", width = 12}},
     cells = {{"Billing", "Ready"}, {"Sync", "Waiting"}},
     kind = "task", selected = 1, offset = 0,

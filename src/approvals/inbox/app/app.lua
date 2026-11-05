@@ -17,7 +17,6 @@ local funcs = require("funcs")
 local registry = require("registry")
 local appearance = require("appearance")
 local frame = require("frame")
-local overlay = require("overlay")
 local model = require("model")
 local review_lines = require("review_lines")
 local wire = require("wire")
@@ -54,7 +53,7 @@ local function main(value: unknown)
     if not launch then error("Invalid application launch") end
     local broker = launch.broker_pid
     local input = assert(tty.events())
-    local menu = overlay.menu()
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen(appearance.TOPIC, {message = true}))
     local answers = assert(process.listen("bee.app.query.result", {message = true}))
@@ -477,20 +476,20 @@ local function main(value: unknown)
             local open_form = request_form
             if answer_form then
                 form_frame = question_form.draw(width, height, preferences, answer_form)
-                overlay.render(form_frame, menu, preferences)
+                frame.render(form_frame, menu, preferences)
                 assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             elseif allowance_request then
                 form_frame = allowance_form.draw(width, height, preferences, allowance_request)
-                overlay.render(form_frame, menu, preferences)
+                frame.render(form_frame, menu, preferences)
                 assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             elseif open_form then
                 form_frame = lease_form.draw(width, height, preferences, open_form)
-                overlay.render(form_frame, menu, preferences)
+                frame.render(form_frame, menu, preferences)
                 assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             else
                 seam.hold("bee.approvals.inbox.app.draw", {detail = state.detail ~= nil})
                 local drawn = view.draw(width, height, preferences, state, rows, offset, status, slice, workspace_names)
-                overlay.render(drawn, menu, preferences)
+                frame.render(drawn, menu, preferences)
                 hits = drawn.hits
                 offset = drawn.offset
                 capacity = drawn.capacity
@@ -503,7 +502,7 @@ local function main(value: unknown)
                         elseif data.type == "close" then running = false end
                     end
                     drawn = view.draw(width, height, preferences, state, rows, offset, status, slice, workspace_names)
-                    overlay.render(drawn, menu, preferences); hits = drawn.hits; offset = drawn.offset; capacity = drawn.capacity
+                    frame.render(drawn, menu, preferences); hits = drawn.hits; offset = drawn.offset; capacity = drawn.capacity
                 end
                 assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
                 shown_review = nil
@@ -600,7 +599,7 @@ local function main(value: unknown)
                 end) end
             end
         else
-            local data, handled = overlay.route(menu, event.value, request_form ~= nil or answer_form ~= nil)
+            local data, handled = frame.route(menu, event.value, request_form ~= nil or answer_form ~= nil)
             if handled then dirty = true end
             if data then
                 if data.type == "close" then running = false

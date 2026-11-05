@@ -22,7 +22,6 @@ entries:
   - time
   imports:
     frame: bee.ui:frame
-    overlay: bee.ui:overlay
     appearance: bee.ui:appearance
     probe: bee.apps.processes.app:probe
     view: bee.apps.processes.app:view
@@ -45,7 +44,6 @@ entries:
   source: file://view.lua
   imports:
     frame: bee.ui:frame
-    lists: bee.ui:lists
     appearance: bee.ui:appearance
     probe: bee.apps.processes.app:probe
     text: bee.ui:text

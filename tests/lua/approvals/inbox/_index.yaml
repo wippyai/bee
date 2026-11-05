@@ -52,7 +52,6 @@ entries:
     question_form: bee.approvals.inbox.app:question_form
     bounds: bee.drivers.values:bounds
     frames: bee.ui:frame
-    overlay: bee.ui:overlay
     test: wippy.test:test
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model

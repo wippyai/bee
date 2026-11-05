@@ -10,7 +10,6 @@ local channel = require("channel")
 local governance_changes = require("governance_changes")
 local appearance = require("appearance")
 local frame = require("frame")
-local overlay = require("overlay")
 local client = require("client")
 local confirmation = require("confirmation")
 local model = require("model")
@@ -48,7 +47,7 @@ end
 
 local function main(options: unknown)
     local input = assert(tty.events())
-    local menu = overlay.menu()
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local changes = assert(process.listen(appearance.TOPIC, {message = true}))
     local committed_stream = governance_changes.activations()
@@ -101,7 +100,7 @@ local function main(options: unknown)
             local display_ui: view.Ui = {offset = ui.offset, status = ui.editor and ui.status or (ui.status ~= "" and ui.status or current_notice()),
                 reading = ui.reading, editor = ui.editor, content = ui.content}
             local drawn = view.draw(width, height, preferences, state, display_ui)
-            overlay.render(drawn, menu, preferences)
+            frame.render(drawn, menu, preferences)
             hits, ui.offset = drawn.hits, drawn.offset
             hub.set_operation_detail_offset(hubs, drawn.operation_detail_offset)
             ctx.visible_rows = math.floor(math.max(1, drawn.capacity))
@@ -149,7 +148,7 @@ local function main(options: unknown)
                     end
                     changed()
                 else
-                    local data, handled = overlay.route(menu, event.value, ui.editor ~= nil)
+                    local data, handled = frame.route(menu, event.value, ui.editor ~= nil)
                     if handled then changed() end
                     if data then
                         ctx.gesture = confirmation.gesture(data)

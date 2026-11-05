@@ -48,3 +48,15 @@ func TestMCPUsesTransientClientOnFolderNode(t *testing.T) {
 	require.NotNil(t, plan.Prepare)
 	require.Nil(t, plan.Run)
 }
+
+func TestMCPOnStandaloneNodeNamesTheHive(t *testing.T) {
+	isolatedConfig(t)
+	state := t.TempDir()
+	_, _, err := loadNode(state)
+	require.NoError(t, err)
+	holdState(t, state)
+	_, err = Component().Plan(context.Background(), app.Launch{Command: "bee", State: state, Op: app.OpRun, Args: []string{"mcp", "connect"}})
+	require.ErrorContains(t, err, "bee mcp connect")
+	require.ErrorContains(t, err, "bee hive init")
+	require.NotContains(t, err.Error(), "displays")
+}

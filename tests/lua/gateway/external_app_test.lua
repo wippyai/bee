@@ -23,7 +23,7 @@ local function shows(view: tty.Viewport, width: integer, height: integer)
     while true do
         local snapshot = view:snapshot()
         if snapshot and snapshot.width == width and snapshot.height == height and #snapshot.rows == height
-            and tty.text.plain(table.concat(snapshot.rows)):find("No external clients", 1, true)
+            and tty.text.plain(table.concat(snapshot.rows)):find("MCP CLIENTS", 1, true)
             and tty.text.plain(snapshot.rows[height]):find("Refresh", 1, true) then
             for _, row in ipairs(snapshot.rows) do test.eq(tty.text.width(row), width) end
             return
@@ -92,6 +92,7 @@ local function define_tests()
                 assert(viewport:send({type = "key", action = "press", key_type = "up", key = ""}))
                 assert(viewport:resize(120, 40))
                 shows(viewport, 120, 40)
+                key(viewport, "runes", "h")
                 await_text(viewport, "bee mcp connect --name <name>")
                 local captures = assert(fs.get("bee.tests.apps.help.app:captures"))
                 assert(captures:writefile("mcp-how-to-connect-120x40.txt", tty.text.plain(table.concat(assert(viewport:snapshot()).rows, "\n")) .. "\n"))
@@ -119,10 +120,17 @@ local function define_tests()
             local ok, failure = pcall(function()
                 assert(viewport:resize(100, 24))
                 await_text(viewport, "Keyboard client")
+                local listed = assert(bounds.object(external.list(workspace).value))
+                for index, raw in ipairs(assert(bounds.array(listed.clients, 128))) do
+                    if assert(bounds.object(raw)).client_id == client_id then
+                        for _ = 2, index do key(viewport, "down") end
+                        break
+                    end
+                end
                 key(viewport, "runes", "x")
-                await_text(viewport, "Enter confirms")
+                await_text(viewport, "Revoke Keyboard client? Enter confirms")
                 key(viewport, "esc")
-                await_text(viewport, "Enter confirms", false)
+                await_text(viewport, "Revoke Keyboard client? Enter confirms", false)
                 local requests = assert(db:query("SELECT state FROM bee_approval_requests WHERE json_extract(proposal_json, '$.payload.target.client_id') = ?", {client_id}))
                 test.eq(#requests, 1)
                 test.eq(requests[1].state, "withdrawn")
@@ -130,9 +138,15 @@ local function define_tests()
                     WHERE json_extract(r.proposal_json, '$.payload.target.client_id') = ?]]
                 test.eq(#assert(db:query(query, {client_id})), 0)
                 key(viewport, "runes", "x")
-                await_text(viewport, "Enter confirms")
+                await_text(viewport, "Revoke Keyboard client? Enter confirms")
                 key(viewport, "enter")
-                await_text(viewport, "revoked")
+                await_text(viewport, "Access revoked")
+                local revoked: string? = nil
+                for _, raw in ipairs(assert(bounds.array(assert(bounds.object(external.list(workspace).value)).clients, 128))) do
+                    local row = assert(bounds.object(raw))
+                    if row.client_id == client_id then revoked = tostring(row.status) end
+                end
+                test.eq(revoked, "revoked")
                 local decisions = assert(db:query(query, {client_id}))
                 test.eq(#decisions, 1)
                 local assurance = assert(bounds.object(json.decode(tostring(decisions[1].assurance_json))))

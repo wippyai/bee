@@ -20,7 +20,7 @@ type App = {id: string, title: string, menus: {Menu}, drags: boolean}
 -- at most one display.
 type Workspace = {id: string, path: string, label: string}
 type Desktop = {id: string, title: string, workspace: string, shown: boolean}
--- An event: "opened" and "moved" carry the instance, "closed" carries id, "appearance"
+-- An event: "opened" and "moved" carry the instance, "closed" carries id and, when an app failed, its problem, "appearance"
 -- carries the node's appearance and "workspaces" its workspaces and desktops.
 -- revision orders events after the snapshot a display applied.
 -- "catalog" carries the installed apps, "title" an app's new title with its
@@ -220,6 +220,7 @@ function M.event(data: unknown): Event?
         event.id = data.id
         if data.alert ~= nil then event.alert = M.alert(data.alert); if not event.alert then return nil end end
         if data.changed == true then event.changed = true end
+        if data.kind == "closed" and type(data.problem) == "string" then event.problem = data.problem end
     elseif data.kind == "review" then
         if type(data.id) ~= "string" then return nil end
         event.id, event.review = data.id, M.review(data.review)

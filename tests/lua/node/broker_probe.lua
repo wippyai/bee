@@ -21,6 +21,7 @@ local function main(options: unknown)
     local lifecycle = assert(process.events())
     assert(tty.start())
     local surface = assert(tty.surface({}))
+    if launch.arguments[1] == "fail" then error("probe failed at startup") end
     local close_action = launch.arguments[1] or "accept"
     local lines = {"resume " .. (launch.resume_state ~= "" and launch.resume_state or "none"), "answer none",
         "checkpoint none", "navigated none", "close none"}

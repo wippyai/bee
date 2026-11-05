@@ -458,7 +458,9 @@ function M.exited(state: State, pid: string, problem: string?)
             node_state.update_problem(state, instance, nil)
         end
         instance.view:close()
-        node_state.broadcast(state, {kind = "closed", id = id})
+        local failure = problem and not instance.relaunch and not instance.update_target
+            and instance.title .. " stopped: " .. problem or nil
+        node_state.broadcast(state, {kind = "closed", id = id, problem = failure})
     end
 end
 

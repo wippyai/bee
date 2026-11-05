@@ -45,6 +45,7 @@ local function node_event(state: State, event: client.Event)
         if instance.desktop == state.desktop then actions.attach(state, instance.id) else display_state.forget(state, instance.id) end
     elseif event.kind == "closed" and event.id then
         actions.retire(state, event.id)
+        if event.problem then state.status = event.problem end
     elseif event.kind == "review" and event.id then
         for _, instance in ipairs(state.running) do if instance.id == event.id then instance.review = event.review end end
     elseif event.kind == "title" and event.id and event.title then

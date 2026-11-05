@@ -14,6 +14,7 @@ local appearance = require("appearance")
 local probe = require("probe")
 local view = require("view")
 local frame = require("frame")
+local overlay = require("overlay")
 local clock = require("clock")
 local hive = require("hive")
 local application = require("application")
@@ -42,7 +43,7 @@ local function main(value: unknown)
     local launch = assert(application.launch(value))
     local review = confirmation.new({workspace_id = launch.workspace_id, origin = {app_id = launch.definition_id, instance_id = launch.instance_id, attempt_id = launch.execution_id}})
     local input = assert(tty.events())
-    local menu = frame.menu()
+    local menu = overlay.menu()
     local lifecycle = assert(process.events())
     local changes = assert(process.listen(appearance.TOPIC, {message = true}))
     local results: channel.Channel<Result> = channel.new(4)
@@ -159,7 +160,7 @@ local function main(value: unknown)
             local drawn = mode == "hive"
                 and view.draw_hive(width, height, hive.nodes(hive_state), preferences, hive_selected, offset, paused, status)
                 or view.draw(width, height, snapshot, history, preferences, selected, offset, paused, status, confirmation.active(review), services, rows, by_steps)
-            frame.render(drawn, menu, preferences)
+            overlay.render(drawn, menu, preferences)
             hits, capacity, offset = drawn.hits, drawn.capacity, drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
@@ -189,7 +190,7 @@ local function main(value: unknown)
                 sample()
             end
         else
-            local data, handled = frame.route(menu, event.value, false)
+            local data, handled = overlay.route(menu, event.value, false)
             if handled then dirty = true end
             if data then
                 if data.type == "close" then running = false

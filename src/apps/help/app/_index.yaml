@@ -30,6 +30,7 @@ entries:
   imports:
     appearance: bee.ui:appearance
     frame: bee.ui:frame
+    overlay: bee.ui:overlay
     view: bee.apps.help.app:view
     manuals: bee.docs:manuals
     markdown: bee.ui:markdown

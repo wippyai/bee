@@ -34,6 +34,7 @@ local records = require("records")
 local appearance = require("appearance")
 local restore_view = require("restore_view")
 local frame_ui = require("frame")
+local overlay = require("overlay")
 local bounds = require("bounds")
 local waiting = require("waiting")
 local placement_decode = require("placement_decode")
@@ -262,7 +263,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local preferences: appearance.Preferences = launch.appearance
         local states = assert(process.listen(appearance.TOPIC, {message = true}))
         local dirty = true
-        local menu = frame_ui.menu()
+        local menu = overlay.menu()
         local dismissed = false
         local settlement = settle and channel.new(1) or nil
         local settlement_done = false
@@ -277,7 +278,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             if not dirty then return end
             local hint = settlement and not settlement_done and "Cleanup pending; Esc closes without waiting" or "Esc or Ctrl+Q closes"
             local frame = restore_view.draw(width, height, preferences, status, "Agent launch failed", hint)
-            frame_ui.render(frame, menu, preferences)
+            overlay.render(frame, menu, preferences)
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
         end
@@ -316,7 +317,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             else
                 local data = input_event.decode(event.value)
                 if data then
-                    local routed, handled = frame_ui.route(menu, data)
+                    local routed, handled = overlay.route(menu, data)
                     if handled then dirty = true end
                     data = routed
                 end
@@ -346,12 +347,12 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local preferences = launch.appearance
         local states = assert(process.listen(appearance.TOPIC, {message = true}))
         local dirty = true
-        local menu = frame_ui.menu()
+        local menu = overlay.menu()
         client.title(launch, notice.provider .. " · Login needed")
         while true do
             if dirty then
                 local frame = restore_view.login(width, height, preferences, notice)
-                frame_ui.render(frame, menu, preferences)
+                overlay.render(frame, menu, preferences)
                 assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
                 dirty = false
             end
@@ -377,7 +378,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             else
                 local data = input_event.decode(event.value)
                 if data then
-                    local routed, handled = frame_ui.route(menu, data)
+                    local routed, handled = overlay.route(menu, data)
                     if handled then dirty = true end
                     data = routed
                 end
@@ -485,7 +486,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local preferences: appearance.Preferences = launch.appearance
         local status = "Restoring Agent…"
         local dirty = true
-        local menu = frame_ui.menu()
+        local menu = overlay.menu()
         local cancelled = false
         local states = assert(process.listen(appearance.TOPIC, {message = true}))
         type Completion = {kind: "resolve" | "admission", serial: integer, plan: admission.Plan?, choice: admission.Admitted?,
@@ -504,7 +505,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             if not dirty then return end
             local frame = phase == "refused" and restore_view.refused(width, height, preferences, status)
                 or restore_view.draw(width, height, preferences, status)
-            frame_ui.render(frame, menu, preferences)
+            overlay.render(frame, menu, preferences)
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
         end
@@ -648,7 +649,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             else
                 local data = input_event.decode(event.value)
                 if data then
-                    local routed, handled = frame_ui.route(menu, data)
+                    local routed, handled = overlay.route(menu, data)
                     if handled then dirty = true end
                     data = routed
                 end

@@ -7,6 +7,7 @@ local preferences = require("preferences")
 local profile_protocol = require("profile_protocol")
 local appearance = require("appearance")
 local frame = require("frame")
+local lists = require("lists")
 local text = require("text")
 local agents = require("agents")
 local directory_view = require("directory_view")
@@ -70,8 +71,8 @@ local function wrap(value: string, room: integer): {string}
 end
 
 -- Transcript rows: each input, then its state or result.
-function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
-    local lines: {frame.LogLine} = {}
+function M.lines(conv: agents.Conversation, room: integer): {lists.LogLine}
+    local lines: {lists.LogLine} = {}
     for _, turn in ipairs(conv.turns) do
         for index, row in ipairs(wrap(turn.input, room - 2)) do
             lines[#lines + 1] = {text = (index == 1 and "> " or "  ") .. row, role = "accent"}
@@ -180,7 +181,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local offset = math.floor(math.max(0, #lines - (last - 4)))
     if shown then offset = math.floor(math.min(draft.offset, offset)) end
     if last >= 3 then
-        frame.log(painter, 4, last - 1, {lines = lines, selected = 0, offset = offset, focused = false})
+        lists.log(painter, 4, last - 1, {lines = lines, selected = 0, offset = offset, focused = false})
     end
     if height >= 5 then
         frame.line(painter, input_row, conv.read_only and "Read-only · messaging is not allowed by this bee" or conv.lifecycle == "closed" and "Closed · history remains available" or "> " .. message_draft.line(draft, width - 4), theme.text)

@@ -7,6 +7,7 @@
 local text = require("text")
 local reply = require("reply")
 local frame = require("frame")
+local lists = require("lists")
 local bounds = require("bounds")
 
 type Access = "read" | "write"
@@ -266,7 +267,7 @@ function M.draw(painter: frame.Painter, rect: frame.Rect, picker: Picker, offset
     end
     local cells: {{string}} = {}
     local keys: {string} = {}
-    local columns: {frame.Column}
+    local columns: {lists.Column}
     if not picker.root then
         if #picker.roots == 0 then
             frame.empty(painter, rect.y, "No roots are admitted", "Esc cancel", rect)
@@ -292,7 +293,7 @@ function M.draw(painter: frame.Painter, rect: frame.Rect, picker: Picker, offset
         for index, row in ipairs(cells) do cells[index] = {row[1]} end
         columns = {columns[1]}
     end
-    return frame.table(painter, rect.y, rect.y + rect.height - 1, {columns = columns, cells = cells, keys = keys, kind = "folder",
+    return lists.table(painter, rect.y, rect.y + rect.height - 1, {columns = columns, cells = cells, keys = keys, kind = "folder",
         selected = picker.selected, offset = offset, focused = true, area = rect})
 end
 

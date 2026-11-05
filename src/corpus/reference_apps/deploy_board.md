@@ -13,9 +13,10 @@ Demonstrates a headline row of stat tiles over a run table with a detail pane. T
 -- application owns the selection, the table offset and the animation tick,
 -- and stores the returned window's offset for the next frame.
 --
--- Library calls: frame.stack, frame.master_detail, frame.table, frame.panel,
+-- Library calls: frame.stack, frame.master_detail, lists.table, frame.panel,
 -- frame.badge, viz.tiles, viz.progress, viz.graph, viz.spinner.
 local frame = require("frame")
+local lists = require("lists")
 local viz = require("viz")
 
 local M = {}
@@ -68,7 +69,7 @@ function M.draw(painter: frame.Painter, work: frame.Rect, model: Model): frame.W
         keys[index] = run.service
     end
     local window = frame.window(#model.runs, list.height - 1, model.selected, model.offset)
-    frame.table(painter, list.y, list.y + list.height - 1, {
+    lists.table(painter, list.y, list.y + list.height - 1, {
         columns = {{title = "Service", width = 0}, {title = "Env", width = 6}, {title = "Version", width = 9},
             {title = "State", width = 10}, {title = "Age", width = 5, align = "right"}},
         cells = cells, keys = keys, kind = "run", selected = model.selected, offset = window.offset, area = list,

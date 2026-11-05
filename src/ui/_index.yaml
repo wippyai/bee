@@ -22,7 +22,21 @@ entries:
   modules: [tty]
   imports:
     appearance: bee.ui:appearance
+- name: lists
+  kind: library.lua
+  source: file://lists.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
+- name: overlay
+  kind: library.lua
+  source: file://overlay.lua
+  modules: [tty]
+  imports:
+    appearance: bee.ui:appearance
     popup: bee.ui:popup
+    frame: bee.ui:frame
 - name: palette
   kind: library.lua
   source: file://palette.lua

@@ -22,6 +22,7 @@ local directory_view = require("directory_view")
 local allowance_form = require("allowance_form")
 local sessions_protocol = require("sessions_protocol")
 local frame = require("frame")
+local overlay = require("overlay")
 local forms = require("forms")
 local profile_view = require("profile_view")
 local spawn_form = require("spawn_form")
@@ -91,12 +92,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local loading = false
     local show_unavailable = false
     local show_closed = false
-    local clicks = frame.clicks()
+    local clicks = overlay.clicks()
     local conversation: agents.Conversation? = nil
     local draft = message_draft.new(sessions_protocol.MAX_INPUT_BYTES, true)
     local session_busy = false
     local session_frame: session_view.Frame = {rows = {}, hits = {}}
-    local menu = frame.menu()
+    local menu = overlay.menu()
     local ticks = 0
     local opening = false
     -- The profile a new session is opening for; the window shows its launch
@@ -381,34 +382,34 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if spawning then
                 local shown = spawn_form.draw(width, height, preferences, spawning)
                 spawning_frame = shown
-                frame.render(shown, menu, preferences)
+                overlay.render(shown, menu, preferences)
                 rows = shown.rows
             elseif allowances then
                 allowance_frame = allowance_form.draw(width, height, preferences, allowances)
-                frame.render(allowance_frame, menu, preferences)
+                overlay.render(allowance_frame, menu, preferences)
                 rows = allowance_frame.rows
             elseif editing then
                 edit_frame = profile_view.draw(width, height, preferences, editing)
-                frame.render(edit_frame, menu, preferences)
+                overlay.render(edit_frame, menu, preferences)
                 rows = edit_frame.rows
             elseif conversation then
                 client.review(launch, conversation.review)
                 local line = renaming and agents.rename_message(renaming.title, message_draft.line(renaming.name, sessions_protocol.MAX_NAME_BYTES)) or confirmation.active(review) and prompt or status
                 session_frame = session_view.draw(width, height, preferences, conversation, draft, line, directory, sidebar_mark)
-                frame.render(session_frame, menu, preferences)
+                overlay.render(session_frame, menu, preferences)
                 rows = session_frame.rows
             elseif not catalog_open then
                 local line = renaming and agents.rename_message(renaming.title, message_draft.line(renaming.name, sessions_protocol.MAX_NAME_BYTES)) or confirmation.active(review) and prompt or status
                 drawn = directory_view.draw(width, height, preferences, directory, selected, line, filtered, workspace_names, show_closed)
-                frame.render(drawn, menu, preferences)
+                overlay.render(drawn, menu, preferences)
                 rows = drawn.rows
             elseif opening and launching then
                 local shown = restore_view.draw(width, height, preferences, status, "Starting Agent", "Esc back")
-                frame.render(shown, menu, preferences)
+                overlay.render(shown, menu, preferences)
                 rows = shown.rows
             else
                 drawn = view.draw(width, height, preferences, listed, selected, status, opening, show_unavailable, query, sort, searching)
-                frame.render(drawn, menu, preferences)
+                overlay.render(drawn, menu, preferences)
                 rows = drawn.rows
             end
             assert(output:present(rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -544,7 +545,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         else
             local data = input_event.decode(event.value)
             if data then
-                local routed, handled = frame.route(menu, data, spawning ~= nil or editing ~= nil or renaming ~= nil or conversation ~= nil)
+                local routed, handled = overlay.route(menu, data, spawning ~= nil or editing ~= nil or renaming ~= nil or conversation ~= nil)
                 if handled then dirty = true end
                 data = routed
             end
@@ -672,7 +673,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         if hit and ROW_ACTIONS[kind] and directory[hit.index] then selected = hit.index end
                         if kind == "session" and hit then
                             selected = hit.index; dirty = true
-                            if frame.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then open = true end
+                            if overlay.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then open = true end
                         elseif kind == "open" then open = true
                         elseif kind == "refresh" then refresh = true end
                     end
@@ -721,7 +722,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif kind == "new" then edit = true; duplicate = true
                         elseif hit and kind == "choice" and idle() and listed.items[hit.index] then
                             selected = hit.index; dirty = true
-                            if frame.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then
+                            if overlay.double_click(clicks, kind, hit.index, time.now():unix_nano() // 1000000) then
                                 if listed.items[selected].ready then open = true else setup_agent() end
                             end
                         end

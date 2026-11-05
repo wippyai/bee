@@ -5,6 +5,7 @@
 local tty = require("tty")
 local appearance = require("appearance")
 local frame = require("frame")
+local lists = require("lists")
 local text = require("text")
 local caller = require("caller")
 local folder_picker = require("folder_picker")
@@ -623,7 +624,7 @@ local function draw_threads(painter: frame.Painter, state: State, threads: Threa
     local cells: {{string}} = {}
     for index, item in ipairs(threads.items) do cells[index] = {item.title} end
     if work.height >= 1 then
-        local window = frame.table(painter, work.y, work.y + work.height - 1, {columns = {{title = "Thread", width = 0}}, cells = cells,
+        local window = lists.table(painter, work.y, work.y + work.height - 1, {columns = {{title = "Thread", width = 0}}, cells = cells,
             kind = "thread", selected = threads.selected, offset = state.list_offset, focused = true, area = work})
         state.list_offset = window.offset
     end

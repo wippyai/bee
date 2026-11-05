@@ -18,6 +18,7 @@ entries:
   - events
   imports:
     frame: bee.ui:frame
+    overlay: bee.ui:overlay
     client: bee.app:client
     node_client: bee.node:client
     confirmation_ui: bee.approvals.app:confirmation

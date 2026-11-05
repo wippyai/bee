@@ -5,6 +5,7 @@ local tty = require("tty")
 local appearance = require("appearance")
 local glyphs = require("glyphs")
 local frame = require("frame")
+local lists = require("lists")
 local model = require("model")
 local governed = require("governed")
 local hub = require("hub")
@@ -185,7 +186,7 @@ local function cells(row: model.Row): {string}
     return {model.kind_glyph(row.kind) .. " " .. row.name, row.version, status, source}
 end
 
-local COLUMNS: {frame.Column} = {{title = "Name", width = 0, min = 16}, {title = "Version", width = 14},
+local COLUMNS: {lists.Column} = {{title = "Name", width = 0, min = 16}, {title = "Version", width = 14},
     {title = "Status", width = 28}, {title = "Source", width = 0, min = 30}}
 
 local function empty_title(state: model.State): (string, string)
@@ -232,7 +233,7 @@ local function draw_list(width: integer, height: integer, preferences: appearanc
         local title, action = empty_title(state)
         frame.empty(painter, 4, title, height >= 8 and action or nil)
     elseif height >= 6 then
-        window = frame.table(painter, 4, last, {columns = COLUMNS, cells = table_cells, keys = keys, kind = "row",
+        window = lists.table(painter, 4, last, {columns = COLUMNS, cells = table_cells, keys = keys, kind = "row",
             selected = selected_index, offset = ui.offset})
     end
     local detail_offset = 0
@@ -268,7 +269,7 @@ local function draw_platform(width: integer, height: integer, preferences: appea
     end
     local window = {offset = 0, capacity = 0}
     if #rows > 0 and height >= 6 then
-        window = frame.table(painter, 4, height - 2, {columns = {{title = "Package", width = 0, min = 16}, {title = "Version", width = 14},
+        window = lists.table(painter, 4, height - 2, {columns = {{title = "Package", width = 0, min = 16}, {title = "Version", width = 14},
             {title = "Part of", width = 0, min = 16}}, cells = table_cells, keys = keys, kind = "row", selected = selected_index, offset = ui.offset})
     end
     if height >= 4 then

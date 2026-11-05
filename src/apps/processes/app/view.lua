@@ -2,6 +2,7 @@ local history_values = require("history_values")
 -- Pure presentation of measured samples. No polling, process control or grants.
 local appearance = require("appearance")
 local frame = require("frame")
+local lists = require("lists")
 local probe = require("probe")
 local text = require("text")
 local viz = require("viz")
@@ -117,9 +118,9 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
     end
     local detail_y = height >= 10 and height - 2 or 0
     local last = (detail_y > 0 and detail_y or height - 1) - 1
-    local columns: {frame.Column} = {{title = services and "Service" or "Process", width = 0}, {title = "State", width = 10},
+    local columns: {lists.Column} = {{title = services and "Service" or "Process", width = 0}, {title = "State", width = 10},
         {title = services and "Restarts" or "Steps", width = 10, align = "right"}}
-    local window = frame.table(painter, first, last, {columns = columns, cells = cells, keys = keys, kind = "row",
+    local window = lists.table(painter, first, last, {columns = columns, cells = cells, keys = keys, kind = "row",
         selected = selected_index, offset = offset})
     if #rows == 0 then frame.empty(painter, first + 1, services and "No services" or "No processes", paused and "P resume updates" or "Apps appear here while they are running") end
     if detail_y > 0 and selected_index > 0 then
@@ -198,10 +199,10 @@ function M.draw_hive(width: integer, height: integer, nodes: {hive.Node}, prefer
     local detail_y = height >= 10 and height - 2 or 0
     local last = (detail_y > 0 and detail_y or height - 1) - 1
     frame.section(painter, first, "Nodes", tostring(#nodes), nil)
-    local columns: {frame.Column} = {{title = "Node", width = 0}, {title = "State", width = 10},
+    local columns: {lists.Column} = {{title = "Node", width = 0}, {title = "State", width = 10},
         {title = "Heap", width = 12, align = "right"}, {title = "Goroutines", width = 11, align = "right"},
         {title = "Apps", width = 6, align = "right"}}
-    local window = frame.table(painter, first + 1, last, {columns = columns, cells = cells, keys = keys_by_row, kind = "row",
+    local window = lists.table(painter, first + 1, last, {columns = columns, cells = cells, keys = keys_by_row, kind = "row",
         selected = selected_index, offset = offset})
     if #nodes == 0 then frame.empty(painter, first + 2, "No nodes answered yet", "Nodes of the hive appear as they answer") end
     if detail_y > 0 and selected_index > 0 then

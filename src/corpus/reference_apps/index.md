@@ -4,7 +4,7 @@ For a complete installable app, start with [Minimal Bee starter app](reference_a
 and follow [Build a Bee app](docs/build_bee_app).
 
 Self-contained Bee application screens for copying: each is a pure view over
-`frame` (`bee.ui:frame`), `palette` (`bee.ui:palette`), `viz` (`bee.ui.viz:viz`), `diagram`
+`frame` (`bee.ui:frame`), `lists` (`bee.ui:lists`), `palette` (`bee.ui:palette`), `viz` (`bee.ui.viz:viz`), `diagram`
 (`bee.ui.diagram:diagram`) or `forms` (`bee.ui.forms:forms`) with the model the
 application owns. Read one, copy it into an application's `view.lua`, declare
 the libraries it requires under `imports` of the view entry and replace the

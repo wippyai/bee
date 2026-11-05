@@ -403,7 +403,8 @@ function M.rendering(): string
         .. " canvas:put, output:present, client.launch, client.ready, and client.checkpoint when the"
         .. " metadata declares a resume_schema. Draw every frame through bee.ui:frame, the"
         .. " toolkit Bee's own applications use: frame.new, then frame.header for the uppercase title"
-        .. " and a muted summary, frame.tabs, frame.table or frame.row for selectable rows (a › marker"
+        .. " and a muted summary, frame.tabs, frame.row or lists.table from bee.ui:lists, imported as"
+        .. " lists = \"bee.ui:lists\", for selectable rows (a › marker"
         .. " shows selection without color), frame.empty for an empty or failed list with its next"
         .. " action, frame.footer with one primary button and secondary buttons at the left on"
         .. " the final row and frame.hints key help at the right; hints give way to actions. Status appears above; resolve mouse input with"
@@ -698,7 +699,7 @@ end
 type Archetype = {name: string, request: string, calls: {string}}
 local ARCHETYPES: {Archetype} = {
     {name = "list and detail", request = "a collection of items to browse, select and act on",
-        calls = {"frame.table", "frame.window", "frame.split", "frame.panel"}},
+        calls = {"lists.table", "frame.window", "frame.split", "frame.panel"}},
     {name = "dashboard grid", request = "several independent measurements at once",
         calls = {"frame.grid", "frame.panel", "viz.tiles", "viz.bars", "viz.line", "viz.gauge"}},
     {name = "form", request = "values the person enters or edits", calls = {"frame.field", "frame.footer"}},
@@ -706,7 +707,7 @@ local ARCHETYPES: {Archetype} = {
     {name = "log and stream", request = "an append-only sequence of lines or events",
         calls = {"frame.row", "frame.window", "viz.series"}},
     {name = "monitor", request = "a measurement that changes over time",
-        calls = {"viz.tiles", "viz.line", "viz.series", "viz.cadence", "frame.table"}},
+        calls = {"viz.tiles", "viz.line", "viz.series", "viz.cadence", "lists.table"}},
 }
 M.ARCHETYPES = ARCHETYPES
 

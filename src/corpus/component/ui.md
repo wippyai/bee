@@ -8,7 +8,9 @@ they grant no application, workspace or thread authority.
 |---|---|
 | `appearance` | Semantic color roles over a theme, `Preferences` (`theme`, `background`, `taskbar`), their decoding and styles. Themes are `bee.ui.theme` registry entries in `bee.ui.themes` (`honey`, the default, `ocean`, ...); the node reads them and apps receive the resolved preferences |
 | `text` | Bounded external text with control replacement and truncation on a UTF-8 character boundary |
-| `frame` | The application frame every Bee application draws with: size classes and layout, header, tabs, action bar, bounded status and reserved key-hint footer, declared-action Help and overflow More menu, list window, table, tree view, key-value inspector and log viewer (full width, or confined to a pane's `area`), panels, form fields, wizard steps, empty state, virtualized log viewer with search highlight, status badge, toast, modal and command palette (`fuzzy` filter) |
+| `frame` | The application frame every Bee application draws with: size classes and layout, header, tabs, action bar, bounded status and reserved key-hint footer, list window and rows, panels, documents, cards, form fields, wizard steps, empty state, status badge, toast and modal |
+| `lists` | Scrolling data views on a frame painter: table, tree view, key-value inspector and virtualized log viewer with search highlight (full width, or confined to a pane's `area`) |
+| `overlay` | The shared overlay over a painted frame view: declared-action Help, overflow More menu and row-action menus, the input routing that answers them, and double clicks |
 | `popup` | The popup menu anchored at a cell: panel geometry, selection, submenus, input and drawing. The shell's Start, window and desktop menus and the frame's row menus use it |
 | `palette` | The command palette over the frame: `fuzzy` subsequence score, `ranked` choices for a query and the `palette` overlay |
 | `bee.ui.viz:viz` | The visualization kit on the frame: sparklines, line and area charts, bars, columns, stacked bars, histograms, heatmaps, status grids, gauges, progress, stat tiles, inline table bars, timelines, small graphs, scatter plots, candlestick and range charts, a braille radial gauge, a spinner, 100% stacked bars, progress with ETA and bounded live series with a redraw cadence |
@@ -18,8 +20,8 @@ they grant no application, workspace or thread authority.
 
 Shared frame controls are application-owned values. Views return
 `controls = frame.controls(painter)` with their rows and hits. The actor owns
-a `frame.menu()` record, calls `frame.render(drawn, menu, preferences)` before
-presenting, and routes terminal events through `frame.route(menu, event, text_entry)`
+an `overlay.menu()` record, calls `overlay.render(drawn, menu, preferences)` before
+presenting, and routes terminal events through `overlay.route(menu, event, text_entry)`
 before its normal handlers. Nil means consumed; the second return value requests
 a redraw. More dispatches an enabled choice through the actor's existing mouse
 handler. Help lists declared buttons, tabs and hints, including unavailable
@@ -28,7 +30,8 @@ overflow. Text entry preserves case and literal `?`; the Help footer stays
 clickable. Neither overlay grants permissions or bypasses app confirmations.
 
 Apps import `frame: bee.ui:frame`, `appearance: bee.ui:appearance` and
-`text: bee.ui:text`. Import the kits as `forms: bee.ui.forms:forms`,
+`text: bee.ui:text`, with `lists: bee.ui:lists` for tables, trees, inspectors
+and logs and `overlay: bee.ui:overlay` for the shared overlay. Import the kits as `forms: bee.ui.forms:forms`,
 `viz: bee.ui.viz:viz`, `diagram: bee.ui.diagram:diagram` and
 `folder_picker: bee.ui.picker:folder`. The picker accepts the shared
 `bee.drivers.values:reply` envelope and returns workspace catalog call intents; the

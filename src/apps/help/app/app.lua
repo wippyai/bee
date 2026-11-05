@@ -5,13 +5,14 @@ local channel = require("channel")
 local process = require("process")
 local appearance = require("appearance")
 local frame = require("frame")
+local overlay = require("overlay")
 local view = require("view")
 local manuals = require("manuals")
 local markdown = require("markdown")
 
 local function main(options: unknown)
     local input = assert(tty.events())
-    local menu = frame.menu()
+    local menu = overlay.menu()
     local lifecycle = assert(process.events())
     local changes = assert(process.listen(appearance.TOPIC, {message = true}))
     assert(tty.start())
@@ -66,7 +67,7 @@ local function main(options: unknown)
     while running do
         if dirty then
             local drawn = view.draw(width, height, preferences, pane, offset, browser)
-            frame.render(drawn, menu, preferences)
+            overlay.render(drawn, menu, preferences)
             hits = drawn.hits
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
@@ -79,7 +80,7 @@ local function main(options: unknown)
             preferences = appearance.chosen(event.value:payload():data())
             dirty = true
         else
-            local data, handled = frame.route(menu, event.value, pane == "manuals" and browser.searching)
+            local data, handled = overlay.route(menu, event.value, pane == "manuals" and browser.searching)
             if handled then dirty = true end
             if data then
                 if data.type == "close" then running = false

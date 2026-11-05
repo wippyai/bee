@@ -8,8 +8,6 @@ local M = {}
 type Options = {page: integer?, page_size: integer?, include_data: boolean?, kind: string?}
 type Package = {version: string, digest: string, entries: (Package, Options?) -> (unknown, string?),
     metadata: (Package) -> (unknown, string?), close: (Package) -> (boolean, string?)}
-type Revision = {id: (Revision) -> integer}
-type Snapshot = {state: (Snapshot) -> (unknown, string?), version: (Snapshot) -> Revision}
 local function scenario(): string?
     local selected = ctx.get("bee.test.hub.updates")
     return type(selected) == "string" and selected or nil
@@ -28,26 +26,15 @@ function M.count(key: string): integer
     cache:release()
     return type(value) == "number" and math.floor(value) or 0
 end
-function M.snapshot(): (Snapshot?, string?)
-    if not scenario() then
-        local value, problem = registry.snapshot()
-        if not value then return nil, tostring(problem) end
-        return {state = function(_: Snapshot): (unknown, string?)
-            local state, err = value:state(); return state, err and tostring(err) or nil
-        end, version = function(_: Snapshot): Revision
-            return {id = function(_: Revision): integer return math.floor(value:version():id()) end}
-        end}, nil
-    end
-    return {state = function(_: Snapshot): (unknown, string?)
-        return {entries = {{id = "bee:deployment", kind = "ns.dependency", meta = {}, registry = {owner = "", root = true},
-            data = {component = "bee/bee", version = "0.2.0-alpha.5", parameters = {}}}},
-            resolution = {modules = {{name = "bee/bee", version = "0.2.0-alpha.5", digest = string.rep("a", 64)}},
-                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "0.2.0-alpha.5"}}}}}, nil
-    end, version = function(_: Snapshot): Revision return {id = function(_: Revision): integer
-        if scenario() == "native" then return 701 end
-        if scenario() == "packset" then return 702 end
-        return 700
-    end} end}, nil
+function M.captured(): {state: unknown, revision: integer}?
+    local mode = scenario()
+    if not mode then return nil end
+    local revision = 700
+    if mode == "native" then revision = 701 elseif mode == "packset" then revision = 702 end
+    return {state = {entries = {{id = "bee:deployment", kind = "ns.dependency", meta = {}, registry = {owner = "", root = true},
+        data = {component = "bee/bee", version = "0.2.0-alpha.5", parameters = {}}}},
+        resolution = {modules = {{name = "bee/bee", version = "0.2.0-alpha.5", digest = string.rep("a", 64)}},
+            lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "0.2.0-alpha.5"}}}}}, revision = revision}
 end
 local function listed(): {{version: string, yanked: boolean}}
     local mode = scenario()

@@ -28,6 +28,7 @@ local cdc = require("cdc")
 local protocol = require("protocol")
 local distributor = require("distributor")
 local replica_protocol = require("replica_protocol")
+local seam = require("seam")
 
 type Worker = {destination: distributor.Destination, name: string, wake: channel.Channel, stopped: boolean}
 
@@ -94,6 +95,7 @@ local function main()
     local joins = assert(eventbus.subscribe("cluster", "node.joined")):channel()
     local departures = assert(eventbus.subscribe("cluster", "node.left")):channel()
     local registry_changes = assert(eventbus.subscribe("registry", "registry.commit")):channel()
+    local inspections = seam.call("bee.sync.service.inspections") :: channel.Channel<process.Message>?
     local exports = assert(load())
     local workers: {[string]: Worker} = {}
 
@@ -109,9 +111,11 @@ local function main()
     end
 
     local function run(worker: Worker)
+        local key = distributor.key(worker.destination)
         while true do
             local _, ok = worker.wake:receive()
-            if not ok or worker.stopped then return end
+            if not ok or worker.stopped then seam.call("bee.sync.service.worker", {key = key, state = "stopped"}); return end
+            seam.call("bee.sync.service.worker", {key = key, state = "busy"})
             if reachable(worker) then
                 for feed, export in pairs(exports) do
                     local result = distributor.distribute(node, worker.destination, export)
@@ -125,10 +129,12 @@ local function main()
                     end
                 end
             end
+            seam.call("bee.sync.service.worker", {key = key, state = "idle"})
         end
     end
 
     local function wake(worker: Worker)
+        seam.call("bee.sync.service.worker", {key = distributor.key(worker.destination), state = "pending"})
         channel.select({worker.wake:case_send(true), default = true})
     end
 
@@ -186,9 +192,23 @@ local function main()
     if not announced then logger:warn("Hive supervisor not told the sync receiver is ready", {error = announce_error}) end
     logger:info("Sync ready", {node = node})
     while true do
-        local selected = channel.select({lifecycle:case_receive(), requests:case_receive(), committed:case_receive(),
-            joins:case_receive(), departures:case_receive(), registry_changes:case_receive()})
-        if selected.channel == lifecycle then
+        local cases = {lifecycle:case_receive(), requests:case_receive(), committed:case_receive(),
+            joins:case_receive(), departures:case_receive(), registry_changes:case_receive()}
+        if inspections then cases[#cases + 1] = inspections:case_receive() end
+        local selected = channel.select(cases)
+        if selected.channel == inspections then
+            -- An inspection settles the registry changes already queued and
+            -- reports to the seam, which answers once every worker is idle.
+            while true do
+                local change = channel.select({registry_changes:case_receive(), default = true})
+                if change.default then break end
+                assert(change.ok, "registry observation ended")
+            end
+            exports = assert(load())
+            local failed = refresh()
+            if failed then error("Sync destinations are unavailable: " .. failed) end
+            seam.call("bee.sync.service.inspected", selected.value)
+        elseif selected.channel == lifecycle then
             if not selected.ok or selected.value.kind == process.event.CANCEL then return end
         elseif selected.channel == requests then
             if not selected.ok then return end

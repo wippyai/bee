@@ -6,9 +6,13 @@ local inspect = require("inspect")
 local inspection = require("inspection")
 local requirements = require("requirements")
 local inventory = require("inventory")
+local seam = require("seam")
 local M = {}
-function M.new(state: unknown, installed: inventory.Result, target: string): {versions: (string, integer) -> ({string}?, boolean?, string?),
+type Source = {versions: (string, integer) -> ({string}?, boolean?, string?),
     artifact: (string, string) -> (inspection.Inspection?, string?)}
+function M.new(state: unknown, installed: inventory.Result, target: string): Source
+    local fixed = seam.call("bee.hub.binding.artifact_source.source", {target = target})
+    if fixed ~= nil then return fixed :: Source end
     return {versions = catalog.available,
         artifact = function(component: string, version: string): (inspection.Inspection?, string?)
             if component ~= target then

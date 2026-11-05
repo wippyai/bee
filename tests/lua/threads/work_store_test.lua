@@ -5,6 +5,10 @@ local harness = require("harness")
 local bounds = require("bounds")
 local owner_store = require("owner")
 local WORKSPACE = string.rep("a", 32)
+-- A workspace no other suite writes, for assertions over workspace-wide scans.
+local function own_workspace(): string
+    return (harness.key():gsub("-", ""))
+end
 
 local function result(state: string, value: unknown?): {[string]: unknown}
     local settled: {[string]: unknown} = {state = state}
@@ -110,8 +114,9 @@ local function define_tests()
             test.eq(described.title, "Claude Code · Fix the API")
         end)
         test.it("attaches windows to one durable session and excludes hook work from the pull executor", function()
-            local sessions = harness.session_owner(WORKSPACE)
-            local thread_owner = harness.principal("sessions-owner", harness.ALL, WORKSPACE)
+            local workspace = own_workspace()
+            local sessions = harness.session_owner(workspace)
+            local thread_owner = harness.principal("sessions-owner", harness.ALL, workspace)
             local thread = harness.thread(thread_owner, "interactive")
             local open_key = harness.key()
             local request = {thread_id = thread, route = {delivery = "hook", provider = "fixture"}, operation_key = open_key}
@@ -125,7 +130,7 @@ local function define_tests()
             test.eq(harness.value(sessions:call("session_create", request)).session, opened.session)
             local snapshot = harness.value(sessions:call("session_describe", {session = opened.session}))
             test.eq(snapshot.route.native_attempt_id, "window-two")
-            local stranger = harness.principal("stranger", {"bee.threads.security:sessions_owner"}, WORKSPACE)
+            local stranger = harness.principal("stranger", {"bee.threads.security:sessions_owner"}, workspace)
             test.eq(harness.code(stranger:call("session_attach", {session = opened.session, attempt_id = "forged", operation_key = harness.key()})), "DENIED")
             test.is_true(harness.value(sessions:call("work_scan", {include_hooks = true})).interactive_active)
             test.eq(harness.code(sessions:call("work_scan", {include_hooks = "invalid"})), "INVALID_ARGUMENT")
@@ -574,7 +579,7 @@ local function define_tests()
         end)
 
         test.it("cancels queued work immediately and records active cancellation for the scheduler", function()
-            local sessions = harness.session_owner(WORKSPACE)
+            local sessions = harness.session_owner(own_workspace())
             local opened = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
             local queued = harness.value(sessions:call("work_send", {session = opened.session,
                 operation_key = harness.key(), input = {text = "cancel before activation"}}))

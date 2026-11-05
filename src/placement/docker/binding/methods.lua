@@ -23,6 +23,7 @@ local environment = require("environment")
 local runtime_probe = require("runtime_probe")
 local supervision = require("supervision")
 local demand = require("demand")
+local seam = require("seam")
 local M = {}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
@@ -370,6 +371,7 @@ function M.cleanup(value: unknown): Reply
                 return fail(code, message)
             end
             if current.attempt.cleanup_state == "complete" then return succeed(current.attempt) end
+            seam.hold("bee.placement.docker.binding.methods.cleanup_observed", {attempt_id = current.attempt.attempt_id})
             local _, open = source:receive()
             if not open then return fail("UNAVAILABLE", "cleanup observation closed") end
         end
@@ -379,6 +381,8 @@ function M.cleanup(value: unknown): Reply
     return result
 end
 function M.cleanup_loaded(loaded: Loaded): Reply
+    local refusal = seam.call("bee.placement.docker.binding.methods.cleanup_loaded", {attempt_id = loaded.attempt.attempt_id})
+    if type(refusal) == "string" then return fail("UNAVAILABLE", refusal) end
     if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end
     if loaded.attempt.execution_state ~= "exited" and loaded.attempt.execution_state ~= "start_failed" then return fail("CONFLICT", "cleanup requires proven container exit") end
     local found, find_error, absent = M.find(loaded)
@@ -439,6 +443,7 @@ function M.sweep(): Reply
                 local cause = assert(result.error)
                 local recorded = M.change(loaded.attempt.attempt_id, {evidence = {kind = "docker.cleanup_failed", detail = cause.code .. ": " .. cause.message}})
                 if not recorded.ok then return recorded end
+                seam.hold("bee.placement.docker.binding.methods.cleanup_failure_recorded")
                 failure = failure or result
             end
         end

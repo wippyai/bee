@@ -12,6 +12,7 @@ local store = require("store")
 local process = require("process")
 local cdc = require("cdc")
 local channel = require("channel")
+local seam = require("seam")
 
 local M = {}
 type Preparer = {binding_id: string, plan: string, setup: string, cleanup: string}
@@ -176,6 +177,8 @@ local held: {[string]: boolean} = {}
 -- M.ENDED evidence row recorded after the lock is free, which wakes every
 -- caller waiting on it.
 local function locked(attempt: types.Attempt, lock: string, after: integer?): (boolean?, string?, boolean)
+    seam.call("bee.placement.native.service.workdir_preparers.cleanup_attempted", {attempt_id = attempt.attempt_id})
+    seam.hold("bee.placement.native.service.workdir_preparers.cleanup_gate", {attempt_id = attempt.attempt_id})
     local taken, take_error = process.registry.register(lock)
     if not taken then
         if take_error and take_error:kind() == errors.ALREADY_EXISTS then return nil, nil, true end
@@ -246,6 +249,7 @@ function M.cleanup(attempt: types.Attempt): (boolean, string?)
             else return finish(false, "follow the attempt's cleanup holder: " .. tostring(monitor_error)) end
         end
         if follow then
+            seam.hold("bee.placement.native.service.workdir_preparers.cleanup_follow", {holder = holder_id})
             local cases = {feed:case_receive()}
             if watched then cases[#cases + 1] = events:case_receive() end
             local selected = channel.select(cases)
@@ -258,6 +262,7 @@ function M.execute_cleanup(attempt: types.Attempt, after: integer?): (boolean, s
     if tostring(process.registry.lookup(M.LOCK .. attempt.attempt_id, process.registry.LOCAL)) ~= tostring(process.pid()) then
         return false, "preparer cleanup runs under the attempt's cleanup lock"
     end
+    seam.call("bee.placement.native.service.workdir_preparers.cleanup_claimed", {attempt_id = attempt.attempt_id})
     local db, open_error = store.open()
     if not db then return false, open_error end
     local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)

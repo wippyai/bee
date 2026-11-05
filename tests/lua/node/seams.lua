@@ -28,4 +28,7 @@ return {
         if not actor or actor:id() ~= "overlay-listing-fault" then return nil end
         return {ok = true, value = {overlays = {{overlay_id = "runner_fixture"}, {overlay_id = 7}}}}
     end,
+    -- The runner finds the fixture applications' tests by their own type, so
+    -- the suites' unrestricted runner leaves them alone.
+    ["bee.node.application_tests.test_type"] = function() return "app_test" end,
 }

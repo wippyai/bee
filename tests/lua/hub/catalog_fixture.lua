@@ -51,7 +51,15 @@ local function open(component: string, version: string, options: unknown): (Pack
             return value, problem and tostring(problem) or nil
         end}, nil
 end
-M.versions = {open = open, list = hub.versions.list}
+local PROGRESS_VERSIONS = {{version = "1.0.0", yanked = false}, {version = "9.0.0", yanked = false}, {version = "2.0.0", yanked = false}}
+M.versions = {open = open,
+    list = function(component: string, options: unknown): (unknown, string?)
+        if component == "bee/progress" then
+            local opts = type(options) == "table" and options or {}
+            return {items = PROGRESS_VERSIONS, total = #PROGRESS_VERSIONS, page = opts.page or 1, page_size = 100}, nil
+        end
+        return hub.versions.list(component, options)
+    end}
 local function catalog_page(options: unknown, filtered: boolean): unknown
     local opts = type(options) == "table" and options or {}
     return {items = filtered and {{full_name = "bee/progress", display_name = "Progress", description = "Tasks",
@@ -59,11 +67,24 @@ local function catalog_page(options: unknown, filtered: boolean): unknown
         description = "Developer package", latest_version = "1.0.0", type = "library"}},
         total = filtered and 1 or 177, page = opts.page or 1, page_size = opts.page_size or 50}
 end
-M.modules = {get = hub.modules.get, readme = hub.modules.readme,
+M.modules = {
+    get = function(component: string, options: unknown): (unknown, string?)
+        if component == "bee/progress" then
+            return {full_name = component, display_name = "Progress", description = "Task tracking", latest_version = "1.0.0"}, nil
+        end
+        return hub.modules.get(component, options)
+    end,
+    readme = function(component: string, options: unknown): (unknown, string?)
+        if component == "bee/progress" then return nil, "fixture README unavailable" end
+        return hub.modules.readme(component, options)
+    end,
     list = function(options: unknown): (unknown, string?)
         return catalog_page(options, false), nil
     end,
     search = function(query: string, options: unknown): (unknown, string?)
+        if query == "fixture-unavailable" then return nil, "fixture catalog unavailable" end
+        if query == "fixture-long-failure" then return nil, string.rep("dependency unavailable; ", 300) .. "\nreason-end" end
+        if query == "progress" then return catalog_page(options, true), nil end
         if query == "bee" then
             local opts = type(options) == "table" and options or {}
             local keywords = type(opts.keywords) == "table" and opts.keywords or {}

@@ -156,7 +156,7 @@ def run(toolchain, fault):
         document = yaml.safe_load(gateway_index.read_text())
         backlog = next(entry for entry in document["entries"] if entry["name"] == "backlog")
         backlog["source"] = "file://boot_backlog_probe.lua"
-        backlog["modules"].append("sql")
+        backlog.setdefault("modules", []).append("sql")
         shutil.copy2(REPO / "tests/lua/node/boot_backlog_probe.lua", gateway_index.parent)
         gateway_index.write_text(yaml.safe_dump(document, sort_keys=False))
     workspace = root / "workspace"

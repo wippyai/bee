@@ -3092,5 +3092,7 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
+  modules: [process, ctx]
   imports:
+    bounds: bee.drivers.values:bounds
     measure_clock: bee.tests.harness:measure_clock

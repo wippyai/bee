@@ -4,13 +4,17 @@ local bounds = require("bounds")
 local requirements = require("requirements")
 local inspection = require("inspection")
 local limits = require("limits")
+local seam = require("seam")
 local M = {}
+local function client(): typeof(hub)
+    return (seam.call("bee.hub.binding.inspect.client") :: typeof(hub)?) or hub
+end
 local function read(raw: unknown, complete: boolean): (inspection.Inspection?, string?)
     local request, request_error = inspection.decode(raw)
     if not request then return nil, request_error end
     -- Hub authorization uses the caller's exact module grant. No caller-selected
     -- registry, credentials, cache path or stronger scope enters this operation.
-    local package, open_error = hub.versions.open(request.component, request.version, {timeout = 30})
+    local package, open_error = client().versions.open(request.component, request.version, {timeout = 30})
     if not package then return nil, tostring(open_error) end
     local version, digest = package.version, package.digest
     local entries, entries_error = package:entries({include_data = true})

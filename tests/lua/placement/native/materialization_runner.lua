@@ -127,10 +127,10 @@ function M.release(runner: Runner)
     process.unmonitor(runner.pid)
     local db = assert(store.open())
     local attempt = assert(store.attempt(db, runner.attempt_id))
-    db:release()
     local reconciled = service.reconcile_attempt(attempt)
     assert(reconciled.ok, reconciled.error and reconciled.error.message)
-    service.wake_supervision("native")
+    service.wake_supervision(db, runner.attempt_id, "native")
+    db:release()
 end
 
 return M

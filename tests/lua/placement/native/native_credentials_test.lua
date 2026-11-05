@@ -666,7 +666,9 @@ local function credentials_tests()
             local started = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = revoked_attempt}))
             test.eq(started.execution_state, "running")
             native_fixture.credential_call("revoke", {projection_id = revocable.projection_id})
-            service.wake_supervision("native")
+            local db = assert(store.open())
+            service.wake_supervision(db, revoked_attempt, "native")
+            db:release()
             local function reconciled_kinds(): boolean
                 for _, kind in ipairs(native_fixture.kinds(revoked_attempt)) do
                     if kind == "credential.revoked" or kind:sub(1, 10) == "reconcile." then return true end

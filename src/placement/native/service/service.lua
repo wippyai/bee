@@ -570,7 +570,7 @@ end
 -- bounds how long a revoked grant or projection stays in use.
 -- wake_supervision asks the Hive supervisor to run the attempt's supervision
 -- owner. The attempt's state is already durable, and the Hive supervisor
--- probes every owner's backlog when it starts, so a wake it cannot take now is
+-- probes every owner's backlog when it starts, so a wake it cannot take while absent is
 -- recorded on the attempt and served by that probe.
 function M.wake_supervision(db: sql.DB, attempt_id: string, kind: unknown): boolean
     local owner = kind == "docker" and "bee.placement.docker/image" or M.SWEEPER_NAME

@@ -272,6 +272,13 @@ entries:
     external: bee.gateway.binding:external
     gateway: bee.gateway.binding:gateway
     app_scope: bee.tests.support.principals:application
+- name: owner_observer_policy
+  kind: security.policy
+  meta: {type: test_support, comment: A suite waits for a demand owner to retire through the Hive supervisor}
+  policy:
+    actions: [process.registry.register, process.registry.unregister, process.registry.lookup, process.send, process.listen, process.monitor, process.unmonitor, events.subscribe, system.read]
+    resources: '*'
+    effect: allow
 - name: external_hive_test
   kind: function.lua
   source: file://external_hive_test.lua
@@ -284,11 +291,13 @@ entries:
     - bee.gateway.security:external_view_policy
     - bee.hive.security:caller
     - bee.hive.security:messaging
+    - bee.tests.gateway:owner_observer_policy
   imports:
     test: wippy.test:test
     protocol: bee.hive:protocol
     bounds: bee.drivers.values:bounds
     gateway: bee.gateway.binding:gateway
+    owner_observer: bee.tests.support:owner_observer
 - name: node_tools_test
   kind: function.lua
   source: file://node_tools_test.lua
@@ -320,7 +329,7 @@ entries:
   kind: function.lua
   source: file://demand_test.lua
   method: run
-  modules: [registry, system, events, channel, time, process, funcs, security, uuid]
+  modules: [registry, system, events, channel, time, process, uuid]
   meta: {type: test, suite: bee, timeout: 15s}
   imports:
     test: wippy.test:test
@@ -329,7 +338,6 @@ entries:
     demand: bee.process:demand
     owner_observer: bee.tests.support:owner_observer
     bounds: bee.drivers.values:bounds
-    gateway: bee.gateway.binding:gateway
 - name: grants_migration_db
   kind: db.sql.sqlite
   file: .wippy/gateway-grants-migration.db

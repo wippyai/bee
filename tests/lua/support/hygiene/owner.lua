@@ -6,9 +6,9 @@ local sql = require("sql")
 local bounds = require("bounds")
 local supervision = require("supervision")
 local processes = require("processes")
+local owner_observer = require("owner_observer")
 local events = require("events")
 local exec = require("exec")
-local channel = require("channel")
 local json = require("json")
 type Object = {[string]: unknown}
 type Snapshot = {processes: {[string]: Object}, names: {[string]: string}, entries: {[string]: boolean}, pending: {[string]: boolean}, owners: {[string]: boolean}, services: {[string]: boolean}?}
@@ -106,6 +106,29 @@ local function snapshot(): Snapshot
     return value
 end
 
+M.snapshot = snapshot
+
+-- retire waits until every demand owner outside the baseline is retired: the
+-- Hive supervisor acknowledges the owner absent, which it is not while a start
+-- it commanded is in flight, its service is dormant and nothing holds its name.
+-- It reports whether an owner ran meanwhile, since that owner's work can wake
+-- another. waiting is told each owner it asks the Hive supervisor about.
+function M.retire(baseline: Snapshot, reported: {[string]: boolean}, updates: events.Subscription, waiting: ((string) -> ())?): boolean
+    local ran = false
+    for _, entry in ipairs(assert(registry.find({["meta.type"] = "bee.process.demand"}))) do
+        if not baseline.owners[entry.id] and not reported["demand owner " .. entry.id] then
+            local spec = assert(bounds.object(entry.meta.demand))
+            local name = assert(bounds.id(spec.name))
+            local before = assert(system.supervisor.state(entry.id))
+            if process.registry.lookup(name, process.registry.LOCAL) or before.status == "running" or before.status == "starting" or before.status == "stopping" then ran = true end
+            if waiting then waiting(entry.id) end
+            owner_observer.stopped(entry.id, name, updates)
+            if assert(system.supervisor.state(entry.id)).started_at ~= before.started_at then ran = true end
+        end
+    end
+    return ran
+end
+
 function M.compare(before: Snapshot, after: Snapshot, reported: {[string]: boolean}?): {string}
     local leaks: {string} = {}
     local used: {[string]: boolean} = {}
@@ -152,7 +175,6 @@ end
 function M.main()
     assert(process.registry.register("bee.test.hygiene", process.pid(), process.registry.LOCAL))
     local requests = assert(process.listen("bee.test.hygiene", {message = true}))
-    local lifecycle = assert(process.events())
     local updates = assert(events.subscribe("supervisor", "service.update"))
     while assert(system.supervisor.state("bee:changes")).status ~= "running" do
         assert(updates:channel():receive(), "change source startup ended")
@@ -176,7 +198,6 @@ function M.main()
         local after: Snapshot? = nil
         if request.operation == "check" then
             local updates = assert(events.subscribe("supervisor", "service.update"))
-            local monitored: {[string]: boolean} = {}
             while true do
                 -- Restoring registry entries can queue Sync work that wakes a
                 -- demand service. Settle it before deciding children are idle.
@@ -184,29 +205,8 @@ function M.main()
                 after = snapshot()
                 local pending = false
                 for name in pairs(after.pending) do if not assert(baseline).pending[name] then pending = true end end
-                if pending then break end
-                local draining = false
-                for _, entry in ipairs(assert(registry.find({["meta.type"] = "bee.process.demand"}))) do
-                    if not assert(baseline).owners[entry.id] and not reported["demand owner " .. entry.id] then
-                        local spec = assert(bounds.object(entry.meta.demand))
-                        local name = assert(bounds.id(spec.name))
-                        local pid = process.registry.lookup(name, process.registry.LOCAL)
-                        local state = assert(system.supervisor.state(entry.id))
-                        if pid or state.status == "running" or state.status == "starting" or state.status == "stopping" then
-                            draining = true
-                            if pid and not monitored[tostring(pid)] then
-                                local watched, problem = process.monitor(tostring(pid))
-                                assert(watched or processes.vanished(problem), tostring(problem))
-                                if watched then monitored[tostring(pid)] = true end
-                            end
-                        end
-                    end
-                end
-                if not draining then break end
-                local selected = channel.select({updates:channel():case_receive(), lifecycle:case_receive()})
-                assert(selected.ok, "demand lifecycle observation ended")
+                if pending or not M.retire(assert(baseline), reported, updates) then break end
             end
-            for pid in pairs(monitored) do process.unmonitor(pid) end
             updates:close()
             after = snapshot()
         end

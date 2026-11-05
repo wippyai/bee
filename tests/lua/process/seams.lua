@@ -39,6 +39,11 @@ M["bee.process.demand_owner.delivering"] = function(payload: any): unknown
     return hold
 end
 
+M["bee.process.demand_owner.commanding"] = function(payload: any): unknown
+    if payload.owner ~= "bee.gateway.access" or payload.action ~= "start" then return nil end
+    return controllers.registered("bee.test.hive.commanding", "bee.test.hive.command")
+end
+
 M["bee.process.demand_owner.delivered"] = function(payload: any): unknown
     controllers.notify("bee.test.effect_delivery", nil,
         {name = payload.name, pid = payload.pid, generation = payload.generation, requests = payload.requests})

@@ -89,6 +89,7 @@ local function snapshot(owner: Owner): state.Snapshot?
 end
 local function command(owner: Owner, action: string)
     if action == "start" or action == "stop" then
+        seam.hold("bee.process.demand_owner.commanding", {owner = owner.name, action = action})
         assert(events.send("supervisor", "service." .. action, owner.id))
         seam.call("bee.process.demand_owner.command", {owner = owner.name, action = action, phase = owner.state.phase, queued = #owner.queue})
     end

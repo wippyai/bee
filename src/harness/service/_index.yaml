@@ -309,6 +309,7 @@ entries:
   - events
   imports:
     machine: bee.harness.carrier:machine
+    part_gateway: bee.harness.carrier:gateway
     bounds: bee.drivers.values:bounds
     placement_protocol: bee.placement.native:protocol
     commits: bee.threads.delivery:commits

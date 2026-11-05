@@ -1,6 +1,7 @@
 -- MIT. Window plans cannot acquire a headless carrier or its durable effects.
 local test = require("test")
 local machine = require("machine")
+local part_launch = require("part_launch")
 local driver_types = require("driver_types")
 local policy = require("policy")
 local placement_types = require("placement_types")
@@ -377,7 +378,7 @@ local function define_tests()
                 now_ms = function(): integer return 0 end,
                 key = function(): string return "key" end,
             }
-            local prepared, err = machine.prepare_attempt(io, plan("window", "pty"))
+            local prepared, err = part_launch.prepare_attempt(io, plan("window", "pty"))
             if not prepared then error(tostring(err)) end
             test.eq(prepared.epoch, 7)
             test.is_nil(prepared.gateway_binding)
@@ -399,7 +400,7 @@ local function define_tests()
                 now_ms = function(): integer return 0 end,
                 key = function(): string return "key" end,
             }
-            local prepared, err = machine.prepare_attempt(io, plan("window", "pty"))
+            local prepared, err = part_launch.prepare_attempt(io, plan("window", "pty"))
             test.is_nil(prepared)
             test.eq(err, "placement prepare returned an invalid attempt: attempt notice is malformed")
         end)
@@ -427,7 +428,7 @@ local function define_tests()
                 now_ms = function(): integer return 0 end,
                 key = function(): string return "key" end,
             }
-            local prepared, err = machine.prepare_attempt(io, selected)
+            local prepared, err = part_launch.prepare_attempt(io, selected)
             if not prepared then error(tostring(err)) end
             test.eq(calls[#calls], "example.placement:prepare")
             test.is_nil((table.concat(calls, ","):find("bee.placement.native.binding:prepare", 1, true)))
@@ -459,7 +460,7 @@ local function define_tests()
                 now_ms = function(): integer return 0 end,
                 key = function(): string return "key" end,
             }
-            local prepared, err = machine.prepare_attempt(io, selected)
+            local prepared, err = part_launch.prepare_attempt(io, selected)
             if not prepared then error(tostring(err)) end
             test.eq(prepared_body and prepared_body.expected_previous_attempt_id, "attempt-1")
             local foreign: machine.IO = {
@@ -478,7 +479,7 @@ local function define_tests()
                 now_ms = function(): integer return 0 end,
                 key = function(): string return "key" end,
             }
-            local refused, refuse_error = machine.prepare_attempt(foreign, selected)
+            local refused, refuse_error = part_launch.prepare_attempt(foreign, selected)
             test.is_nil(refused)
             test.eq(refuse_error, "bee.threads.binding:admit_action: CONFLICT: action already exists")
         end)

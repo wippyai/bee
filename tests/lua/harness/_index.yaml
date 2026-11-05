@@ -292,6 +292,7 @@ entries:
   imports:
     test: wippy.test:test
     machine: bee.harness.carrier:machine
+    part_launch: bee.harness.carrier:launch
     driver_types: bee.drivers:types
     placement_decode: bee.placement:decode
     bounds: bee.drivers.values:bounds
@@ -2788,6 +2789,7 @@ entries:
     carrier_fixtures: bee.tests.harness:carrier_fixtures
     principals: bee.tests.support.principals:bound
     machine: bee.harness.carrier:machine
+    part_launch: bee.harness.carrier:launch
     placement_store: bee.placement.native.persist:store
     bounds: bee.drivers.values:bounds
     fixture: bee.tests.harness:launch_fixture
@@ -2862,6 +2864,7 @@ entries:
     principals: bee.tests.support.principals:bound
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
+    part_launch: bee.harness.carrier:launch
     checkpoint: bee.harness.carrier:checkpoint
     hook_records: bee.harness.carrier:hook_records
     placement_store: bee.placement.native.persist:store

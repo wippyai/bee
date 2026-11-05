@@ -18,6 +18,7 @@ local window_request = require("window_request")
 local input_event = require("input_event")
 local admission = require("admission")
 local machine = require("machine")
+local part_launch = require("part_launch")
 local picker = require("picker")
 local direct_launch = require("direct")
 local recovery = require("recovery")
@@ -805,11 +806,11 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     phase("Preparing process")
     local progress_events = assert(process.listen("bee.placement.image_progress", {message = true}))
     local completed = channel.new(1)
-    type Preparation = {prepared: machine.PreparedAttempt?, error: string?, failed: machine.FailedPreparation?}
+    type Preparation = {prepared: part_launch.PreparedAttempt?, error: string?, failed: part_launch.FailedPreparation?}
     local attempt_plan: machine.Plan = plan
     local finished: Preparation? = nil
     coroutine.spawn(function()
-        local result, reason, failed = machine.prepare_attempt(transport, attempt_plan)
+        local result, reason, failed = part_launch.prepare_attempt(transport, attempt_plan)
         finished = {prepared = result, error = reason, failed = failed}
         completed:send(true)
     end)

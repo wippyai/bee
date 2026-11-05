@@ -59,6 +59,7 @@ entries:
     input_event: bee.harness.app:input
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
+    part_launch: bee.harness.carrier:launch
     picker: bee.harness.app:picker
     direct: bee.harness.app:direct
     recovery: bee.harness.app:recovery

@@ -7,6 +7,7 @@ local time = require("time")
 local funcs = require("funcs")
 local uuid = require("uuid")
 local machine = require("machine")
+local part_gateway = require("part_gateway")
 local placement_protocol = require("placement_protocol")
 local eventbus = require("events")
 local commits = require("commits")
@@ -98,7 +99,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local hooking = plan.gateway ~= nil and #(plan.gateway).hooks > 0 and session.checkpoint.gateway_binding ~= nil
     local function drain_hooks()
         if not hooking then return end
-        local _, hooks_error = machine.drain_hooks(io, session)
+        local _, hooks_error = part_gateway.drain_hooks(io, session)
         if hooks_error then error("hooks: " .. tostring(hooks_error)) end
     end
     drain_hooks()
@@ -108,7 +109,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local function answer_held()
         local waiting: {{to: string, topic: string, event_id: string}} = {}
         for _, hook in ipairs(held) do
-            local line, err = machine.permission_hook_response(io, session, hook.event_id)
+            local line, err = part_gateway.permission_hook_response(io, session, hook.event_id)
             if line or err then
                 process.send(hook.to, hook.topic, {ok = line ~= nil, value = line and {permission_response = line} or nil, error = err})
             else waiting[#waiting + 1] = hook end
@@ -219,7 +220,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             local data = bounds.object(message:payload():data())
             local topic = data and bounds.text(data.reply_topic, 128)
             if topic and topic:match("^bee%.carrier%.permission%.reply/[a-zA-Z0-9%-]+$") then
-                local answer, err = machine.permission_hook(io, session, data)
+                local answer, err = part_gateway.permission_hook(io, session, data)
                 local event_id = data and bounds.id(data.event_id)
                 if answer and answer.pending == true and event_id then
                     held[#held + 1] = {to = tostring(message:from()), topic = topic, event_id = event_id}
@@ -233,7 +234,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             local data = bounds.object(message:payload():data())
             local topic = data and bounds.text(data.reply_topic, 128)
             if topic and topic:match("^bee%.carrier%.extension%.reply/[a-zA-Z0-9%-]+$") then
-                local answer, err = machine.extension_hook(io, session, data)
+                local answer, err = part_gateway.extension_hook(io, session, data)
                 process.send(tostring(message:from()), topic, {ok = answer ~= nil, value = answer, error = err})
             end
         elseif selected.channel == inputs then

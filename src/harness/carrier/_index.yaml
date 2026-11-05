@@ -85,30 +85,57 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.drivers.values:bounds
     checkpoint: bee.harness.carrier:checkpoint
     settle: bee.harness.carrier:settle
-    stream_json: bee.drivers.transport:stream_json
     placement_types: bee.placement:types
     prestart: bee.harness.carrier:prestart
     placement_decode: bee.placement:decode
-    record_types: bee.drivers.records:record_types
     placement_resolver: bee.placement.binding:resolver
     placement_protocol: bee.placement.native:protocol
-    thread_record: bee.drivers.records:record
-    gateway_protocol: bee.gateway:protocol
     carrier_types: bee.harness:types
-    admitted_request: bee.harness:request
     hints: bee.harness.carrier:hints
     permission_exchange: bee.harness.permission:exchange
-    hook_exchange: bee.harness.permission:hook_exchange
-    gateway_hooks_catalog: bee.gateway.hooks:hooks
-    hook_records: bee.harness.carrier:hook_records
-    record_bounds: bee.drivers.records:bounds
     part_planning: bee.harness.carrier:planning
     part_output: bee.harness.carrier:output
+    part_launch: bee.harness.carrier:launch
+    part_gateway: bee.harness.carrier:gateway
     checkpoint_types: bee.harness:checkpoint_types
     settle_types: bee.harness:settlement_types
+- name: gateway
+  kind: library.lua
+  source: file://gateway.lua
+  modules:
+  - json
+  imports:
+    bounds: bee.drivers.values:bounds
+    gateway_protocol: bee.gateway:protocol
+    hook_records: bee.harness.carrier:hook_records
+    hook_exchange: bee.harness.permission:hook_exchange
+    permission_exchange: bee.harness.permission:exchange
+    gateway_hooks_catalog: bee.gateway.hooks:hooks
+    part_output: bee.harness.carrier:output
+    part_planning: bee.harness.carrier:planning
+- name: launch
+  kind: library.lua
+  source: file://launch.lua
+  modules:
+  - json
+  imports:
+    bounds: bee.drivers.values:bounds
+    record_bounds: bee.drivers.records:bounds
+    checkpoint: bee.harness.carrier:checkpoint
+    prestart: bee.harness.carrier:prestart
+    stream_json: bee.drivers.transport:stream_json
+    placement_types: bee.placement:types
+    placement_decode: bee.placement:decode
+    record_types: bee.drivers.records:record_types
+    thread_record: bee.drivers.records:record
+    admitted_request: bee.harness:request
+    hints: bee.harness.carrier:hints
+    checkpoint_types: bee.harness:checkpoint_types
+    part_output: bee.harness.carrier:output
+    part_planning: bee.harness.carrier:planning
+    part_gateway: bee.harness.carrier:gateway
 - name: hooks
   kind: library.lua
   source: file://hooks.lua

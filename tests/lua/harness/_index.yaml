@@ -2079,6 +2079,7 @@ entries:
   - exec
   - hash
   - events
+  - cdc
   security:
     policies:
     - bee.tests.harness:apply_test_policy

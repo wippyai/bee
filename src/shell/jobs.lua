@@ -52,7 +52,7 @@ function M.new(current_target: () -> string, results: channel.Channel<Result>)
     -- serving owner reports "away", and the display waits for it again.
     local function watch_job(node: string, requested: string, stamp: integer): Result
         local holder = process.registry.lookup(client.DIRECTORY .. node, process.registry.EVENTUAL, {timeout = client.TIMEOUT})
-        if not holder then return {kind = "away", desktop = requested} end
+        if not holder then seam.call("bee.shell.jobs.away"); return {kind = "away", desktop = requested} end
         local bound: channel.Channel<Binding> = channel.new(1)
         results:send({kind = "following", following = tostring(holder), bound = bound, generation = stamp})
         local binding = assert((bound:receive()))

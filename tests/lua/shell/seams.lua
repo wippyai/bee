@@ -3,6 +3,10 @@ local process = require("process")
 local controllers = require("controllers")
 
 return {
+    ["bee.shell.jobs.away"] = function()
+        controllers.notify("bee.test.shell.away")
+        return nil
+    end,
     ["bee.shell.jobs.operation"] = function(payload)
         local request = payload :: {op: string, id: unknown}
         return controllers.registered("bee.test.retired." .. request.op, "bee.test.retired.release", "bee.test.retired.held")

@@ -91,6 +91,7 @@ local codex_bin = shared_executables.codex_bin
 local fixture_bin = shared_executables.fixture_bin
 
 local endpoint_handle: exec.Process? = nil
+local endpoint_output: any = nil
 local endpoint_executor: exec.Executor? = nil
 -- The endpoint holds each answer for the given seconds after recording
 -- the request, so the suite can act while the child is provably waiting.
@@ -100,14 +101,13 @@ local function start_endpoint(record: string, hold_seconds: integer, text: strin
     if text then environment = {PATH = "/usr/bin:/bin", BEE_ENDPOINT_TEXT = text} end
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record .. " " .. tostring(hold_seconds), {env = environment})
     if not proc then error("endpoint: " .. tostring(err)) end
+    local announced = proc:stdout_stream()
+    endpoint_output = announced
     local started, start_error = proc:start()
     if not started then error("start endpoint: " .. tostring(start_error)) end
     endpoint_handle, endpoint_executor = proc, executor
-    for _ = 1, 100 do
-        local port = shell("cat " .. record .. ".port 2>/dev/null"):match("%d+")
-        if port then return port end
-        time.sleep("50ms")
-    end
+    local port = tostring(announced:read(32)):match("%d+")
+    if port then return port end
     error("the endpoint did not report its port")
 end
 local function stop_endpoint()
@@ -326,9 +326,12 @@ local function define_tests()
             -- The late write goes in once the endpoint has recorded the
             -- request, while the child waits on the held answer.
             local requested = false
-            for _ = 1, 400 do
-                if shell("cat " .. record .. " 2>/dev/null"):find("/v1/responses", 1, true) then requested = true break end
-                time.sleep("50ms")
+            local seen = ""
+            while not requested do
+                local chunk = endpoint_output:read(256)
+                if not chunk or chunk == "" then break end
+                seen = seen .. tostring(chunk)
+                requested = seen:find("/v1/responses", 1, true) ~= nil
             end
             if not requested then error("codex never reached the endpoint") end
             process.send(pid, "bee.carrier.input", {write_id = "late", data = "more\\n"})

@@ -18,12 +18,7 @@ local function define_tests()
             local done = assert(process.listen("bee.test.probe_done", {message = true}))
             local pid = assert(process.spawn("bee.tests.process:probe_worker", "bee:workers", tostring(process.pid())))
             test.eq(next_value(passes, "5s"), 1)
-            local registered = nil
-            for _ = 1, 50 do
-                registered = process.registry.lookup("bee.test.probe_worker")
-                if registered then break end
-                time.sleep("20ms")
-            end
+            local registered = process.registry.lookup("bee.test.probe_worker")
             test.eq(tostring(registered), tostring(pid))
             process.send(tostring(pid), "bee.test.probe_wake", {})
             test.eq(next_value(passes, "5s"), 2)

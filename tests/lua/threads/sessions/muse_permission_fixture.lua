@@ -1,5 +1,7 @@
 -- SPDX-License-Identifier: MIT
 local registry = require("registry")
+local events = require("events")
+local channel = require("channel")
 local funcs = require("funcs")
 local security = require("security")
 local env = require("env")
@@ -122,8 +124,9 @@ function M.decide(session: string): string
     local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":fixture-inbox",
         {workspace_id = WORKSPACE, definition_id = "bee.approvals.inbox.app:app"}))
     local caller = funcs.new():with_actor(actor):with_scope(policies({"bee.tests.approvals:client_test_policy", "bee.security.approvals:approval_decide_policy"}))
-    local deadline = time.now():unix_nano() + 10000000000
-    while time.now():unix_nano() < deadline do
+    local requested = assert(events.subscribe("bee.attention", "approval.requested"))
+    local deadline = time.after("10s")
+    while true do
         local inbox = value(caller, "bee.approvals.binding:inbox", {workspace_id = WORKSPACE, limit = 64})
         for _, row in ipairs(assert(bounds.array(inbox.changes, 64))) do
             local item = assert(bounds.object(row))
@@ -131,11 +134,14 @@ function M.decide(session: string): string
             if approval and approval.requesting_session == session and approval.state == "pending" then
                 value(caller, "bee.approvals.binding:decide", {approval_id = approval.approval_id, expected_revision = approval.revision,
                     proposal_digest = approval.proposal_digest, decision = "approved"})
+                requested:close()
                 return assert(bounds.id(approval.approval_id))
             end
         end
-        time.sleep("50ms")
+        local selected = channel.select({requested:channel():case_receive(), deadline:case_receive()})
+        if selected.channel == deadline then break end
     end
+    requested:close()
     error("Driver permission did not reach Needs you")
 end
 return M

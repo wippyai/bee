@@ -445,6 +445,7 @@ entries:
     transaction: bee.persist:transaction
     clock: bee.drivers.values:clock
     part_model: bee.approvals.binding:model
+    seam: bee.process:seam
 - name: requests
   kind: library.lua
   source: file://requests.lua

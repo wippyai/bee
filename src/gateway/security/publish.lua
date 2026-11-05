@@ -10,6 +10,7 @@
 local registry = require("registry")
 local funcs = require("funcs")
 local bounds = require("bounds")
+local seam = require("seam")
 local publishing = require("publishing")
 local subject_call = require("subject_call")
 local M = {}
@@ -43,7 +44,8 @@ end
 function M.port(binding: Binding): Port
     return {
         approvals = subject_call.approvals(binding, M.CALL_POLICY),
-        hub = subject_call.hub(binding, M.CALL_POLICY, M.READ_POLICY, M.APPLY_POLICY, M.HUB),
+        hub = (seam.call("bee.gateway.security.publish_hub") :: ((Object, boolean) -> Object)?)
+            or subject_call.hub(binding, M.CALL_POLICY, M.READ_POLICY, M.APPLY_POLICY, M.HUB),
     }
 end
 

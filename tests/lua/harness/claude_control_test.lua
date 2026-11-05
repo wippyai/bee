@@ -17,6 +17,7 @@ local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
 local registry = require("registry")
+local events = require("events")
 local env = require("env")
 local time = require("time")
 local channel = require("channel")
@@ -116,13 +117,11 @@ local function start_endpoint(record: string, command: string): string
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
+    local announced = proc:stdout_stream()
     assert(proc:start())
     endpoint_handle, endpoint_executor = proc, executor
-    for _ = 1, 100 do
-        local port = shell("cat " .. record .. ".port 2>/dev/null"):match("%d+")
-        if port then return port end
-        time.sleep("50ms")
-    end
+    local port = tostring(announced:read(32)):match("%d+")
+    if port then return port end
     error("the endpoint did not report its port")
 end
 local function stop_endpoint()
@@ -247,14 +246,18 @@ local function await_carrier(pid: string, label: string): Outcome
     return exited[pid]
 end
 local function await_request(workspace: string): Object
-    for _ = 1, 400 do
+    local requested = assert(events.subscribe("bee.attention", "approval.requested"))
+    local deadline = time.after("20s")
+    while true do
         local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
         for _, change in ipairs(principals.objects(page.changes)) do
             local view = assert(bounds.object(change.request))
-            if view.state == "pending" then return view end
+            if view.state == "pending" then requested:close(); return view end
         end
-        time.sleep("50ms")
+        local selected = channel.select({requested:channel():case_receive(), deadline:case_receive()})
+        if selected.channel == deadline then break end
     end
+    requested:close()
     error("no pending approval request in workspace " .. workspace)
 end
 local function decide(view: Object, decision: string)

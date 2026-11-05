@@ -23,6 +23,7 @@ local OVERLAY = "expiryapp"
 local NAMESPACE = "app." .. OVERLAY
 local MENU = "bee.tests.gov:unplaced_menu"
 local POLICY = "workspace-application-delivery"
+local clock = require("clock")
 local TTL_MS = 1500
 type Object = {[string]: unknown}
 
@@ -89,76 +90,78 @@ local function define_tests()
     test.describe("an install that ends without approval", function()
         test.after_all(test_fixtures.registry_cleanup(true))
         test.it("returns to Shared when its approval expires or is denied and installs when asked again", function()
-            local restore = short_window()
-            local done, failure = pcall(function()
-                local workspace = harness.isolated("expiry")
-                local writer = harness.author(workspace, "expiry")
-                local before = harness.running()
-                -- Other suites' applications may already be installed in this workspace.
-                local held = library.summary(shown(workspace))
+            clock.with_clock(function(advance)
+                local restore = short_window()
+                local done, failure = pcall(function()
+                    local workspace = harness.isolated("expiry")
+                    local writer = harness.author(workspace, "expiry")
+                    local before = harness.running()
+                    -- Other suites' applications may already be installed in this workspace.
+                    local held = library.summary(shown(workspace))
 
-                local digest = harness.freeze(writer, OVERLAY, version(), "1.0.0")
-                local first = harness.value(harness.request(writer, OVERLAY, workspace, "1.0.0", digest))
-                test.eq(first.activation_phase, "approval_bound")
-                time.sleep(tostring(TTL_MS + 500) .. "ms")
-                reconcile()
-                -- Later requests get the host's own window, long enough to be answered and applied.
+                    local digest = harness.freeze(writer, OVERLAY, version(), "1.0.0")
+                    local first = harness.value(harness.request(writer, OVERLAY, workspace, "1.0.0", digest))
+                    test.eq(first.activation_phase, "approval_bound")
+                    advance(TTL_MS + 500)
+                    reconcile()
+                    -- Later requests get the host's own window, long enough to be answered and applied.
+                    restore()
+                    harness.drain()
+                    harness.close_presented(before)
+
+                    -- The agent asking about its delivery reads that the install ended.
+                    local reported = harness.value(harness.reply(writer:call("bee.gov.binding:delivery_call", {operation = "status",
+                        workspace_id = workspace, source_overlay_id = OVERLAY, version = "1.0.0"})))
+                    local ended_activation = assert(bounds.object(reported.activation), tostring(json.encode(reported)))
+                    test.eq(ended_activation.outcome, "expired")
+                    test.eq(ended_activation.diagnostics, "The approval request expired before the person answered; install again to ask anew.")
+
+                    local expired = shown(workspace)
+                    test.is_nil(row_of(expired, "installed"))
+                    local shared = assert(row_of(expired, "shared"))
+                    test.eq(shared.status, "Shared")
+                    test.eq(shared.note, "Approval expired — install again")
+                    -- The expired install is not counted as installed.
+                    test.eq(library.summary(expired):match("^%d+ installed"), held:match("^%d+ installed"))
+
+                    -- Install again from the Library raises a fresh approval; the person denies it.
+                    local ended = expired.governed.activations[1]
+                    test.eq(ended.outcome, "expired")
+                    local intent_id = "library-" .. assert(uuid.v7())
+                    local asked = harness.value(harness.library(workspace, {operation = "prepare",
+                        source_node = ended.source_node, source_workspace = ended.source_workspace, version = "1.0.0",
+                        intent_id = intent_id, receipt_key = intent_id}))
+                    test.eq(asked.phase, "approval_bound")
+                    test.is_false(asked.approval_id == first.approval_id)
+                    harness.answer(workspace, asked.approval_id, "denied")
+                    harness.drain()
+                    harness.close_presented(before)
+                    local denied = shown(workspace)
+                    test.is_nil(row_of(denied, "installed"))
+                    test.eq(assert(row_of(denied, "shared")).note, "Denied")
+
+                    -- The agent requests delivery again: a fresh approval, approved and installed.
+                    local again = harness.value(harness.request(writer, OVERLAY, workspace, "1.0.0", digest))
+                    test.eq(again.activation_phase, "approval_bound")
+                    test.is_false(again.approval_id == first.approval_id or again.approval_id == asked.approval_id)
+                    test.eq(harness.settle(writer, OVERLAY, workspace, again, "1.0.0").outcome, "applied")
+                    harness.close_presented(before)
+                    local installed = shown(workspace)
+                    local row = assert(row_of(installed, "installed"))
+                    test.eq(row.status, "Installed")
+                    test.is_nil(row_of(installed, "shared"))
+
+                    -- The person shares the installed version with the hive from the Library.
+                    test.is_true(library.can_share(row), "made here " .. tostring(row.made_here) .. " source " .. row.source)
+                    local shared_request = governed.share_request(installed.governed, OVERLAY, "1.0.0")
+                    test.eq(shared_request.operation, "publish")
+                    local published = harness.value(harness.share(workspace, OVERLAY, "1.0.0"))
+                    test.is_true(published.published == true, json.encode(published))
+                    test.eq(published.version, "1.0.0")
+                end)
                 restore()
-                harness.drain()
-                harness.close_presented(before)
-
-                -- The agent asking about its delivery reads that the install ended.
-                local reported = harness.value(harness.reply(writer:call("bee.gov.binding:delivery_call", {operation = "status",
-                    workspace_id = workspace, source_overlay_id = OVERLAY, version = "1.0.0"})))
-                local ended_activation = assert(bounds.object(reported.activation), tostring(json.encode(reported)))
-                test.eq(ended_activation.outcome, "expired")
-                test.eq(ended_activation.diagnostics, "The approval request expired before the person answered; install again to ask anew.")
-
-                local expired = shown(workspace)
-                test.is_nil(row_of(expired, "installed"))
-                local shared = assert(row_of(expired, "shared"))
-                test.eq(shared.status, "Shared")
-                test.eq(shared.note, "Approval expired — install again")
-                -- The expired install is not counted as installed.
-                test.eq(library.summary(expired):match("^%d+ installed"), held:match("^%d+ installed"))
-
-                -- Install again from the Library raises a fresh approval; the person denies it.
-                local ended = expired.governed.activations[1]
-                test.eq(ended.outcome, "expired")
-                local intent_id = "library-" .. assert(uuid.v7())
-                local asked = harness.value(harness.library(workspace, {operation = "prepare",
-                    source_node = ended.source_node, source_workspace = ended.source_workspace, version = "1.0.0",
-                    intent_id = intent_id, receipt_key = intent_id}))
-                test.eq(asked.phase, "approval_bound")
-                test.is_false(asked.approval_id == first.approval_id)
-                harness.answer(workspace, asked.approval_id, "denied")
-                harness.drain()
-                harness.close_presented(before)
-                local denied = shown(workspace)
-                test.is_nil(row_of(denied, "installed"))
-                test.eq(assert(row_of(denied, "shared")).note, "Denied")
-
-                -- The agent requests delivery again: a fresh approval, approved and installed.
-                local again = harness.value(harness.request(writer, OVERLAY, workspace, "1.0.0", digest))
-                test.eq(again.activation_phase, "approval_bound")
-                test.is_false(again.approval_id == first.approval_id or again.approval_id == asked.approval_id)
-                test.eq(harness.settle(writer, OVERLAY, workspace, again, "1.0.0").outcome, "applied")
-                harness.close_presented(before)
-                local installed = shown(workspace)
-                local row = assert(row_of(installed, "installed"))
-                test.eq(row.status, "Installed")
-                test.is_nil(row_of(installed, "shared"))
-
-                -- The person shares the installed version with the hive from the Library.
-                test.is_true(library.can_share(row), "made here " .. tostring(row.made_here) .. " source " .. row.source)
-                local shared_request = governed.share_request(installed.governed, OVERLAY, "1.0.0")
-                test.eq(shared_request.operation, "publish")
-                local published = harness.value(harness.share(workspace, OVERLAY, "1.0.0"))
-                test.is_true(published.published == true, json.encode(published))
-                test.eq(published.version, "1.0.0")
+                if not done then error(tostring(failure)) end
             end)
-            restore()
-            if not done then error(tostring(failure)) end
         end)
     end)
 end

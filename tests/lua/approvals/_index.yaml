@@ -122,6 +122,7 @@ entries:
     policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   modules: [funcs, security, registry, time, json, events]
   imports:
+    clock: bee.tests.approvals:clock
     principals: bee.tests.support.principals:bound
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
@@ -143,6 +144,7 @@ entries:
     policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   modules: [time, channel, json, events]
   imports:
+    clock: bee.tests.approvals:clock
     principals: bee.tests.support.principals:bound
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
@@ -162,6 +164,7 @@ entries:
     policies: [bee.tests.approvals:commits_test_policy, bee.tests.approvals:attention_test_policy, bee.tests.approvals:apply_test_policy, bee.tests.approvals:store_test_policy, bee.tests.support:schema_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   modules: [time, events]
   imports:
+    clock: bee.tests.approvals:clock
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     service: bee.approvals.binding:service
@@ -415,4 +418,13 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
-  modules: [process]
+  modules: [process, registry]
+- name: fixture_instant
+  kind: registry.entry
+  meta: {type: test_support, comment: The instant the approvals clock seam reads; empty data passes the real clock}
+  data: {}
+- name: clock
+  kind: library.lua
+  source: file://clock.lua
+  meta: {type: test_support, comment: Pins the approvals clock for a body and advances it}
+  modules: [registry, time]

@@ -21,6 +21,7 @@ local CONFIGURATION = "bee.gateway.env:module_installation"
 local DIGEST = string.rep("d", 64)
 local REMOVAL_DIGEST = string.rep("e", 64)
 local base_port = installation.port
+local hub_override = require("hub_override")
 type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, workspace_id: string?}
 local counter = 0
@@ -112,9 +113,8 @@ local function hub(apply_reply: Object?, uncertain_after_apply: boolean?): Hub
         value = {state = "complete", message = "Dependency root install completed"}}, receipts = {},
         uncertain_after_apply = uncertain_after_apply == true}
 end
-local function port(binding: Binding, fixture: Hub): installation.Port
-    local selected = base_port(binding)
-    selected.hub = function(value: Object, manage: boolean): Object
+local function hub_of(fixture: Hub): ((Object, boolean) -> Object)
+    return function(value: Object, manage: boolean): Object
         fixture.calls[#fixture.calls + 1] = {operation = value.operation, manage = manage}
         local request = assert(bounds.object((value.request or {})))
         if value.operation == "installed" then return {ok = true, replayed = false, value = {version = 1, modules = {}, roots = {}}} end
@@ -163,19 +163,20 @@ local function port(binding: Binding, fixture: Hub): installation.Port
         end
         return {ok = false, replayed = false, code = "INVALID", message = "unexpected Hub operation"}
     end
+end
+local function port(binding: Binding, fixture: Hub): installation.Port
+    local selected = base_port(binding)
+    selected.hub = hub_of(fixture)
     return selected
 end
 local function drain(fixture: Hub): (integer, string?)
-    local original_port = installation.port
     local drained: integer = 0
     local drain_error: string? = nil
-    installation.port = function(worker_binding: Binding): installation.Port
-        return port(worker_binding, fixture)
-    end
+    hub_override.installation = hub_of(fixture)
     local ok, failure = pcall(function()
         drained, drain_error = installation.drain_approved()
     end)
-    installation.port = original_port
+    hub_override.installation = nil
     if not ok then error(failure) end
     return drained, drain_error
 end

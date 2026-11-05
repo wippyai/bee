@@ -856,11 +856,14 @@ local function define_recovery_tests()
                 if event.kind == process.event.EXIT and tostring(event.from) == owner then break end
             end
 
+            local away = assert(process.listen("bee.test.shell.away", {message = true}))
+            assert(process.registry.register("bee.test.shell.away"))
             local view, pid = fixture:start()
             expect(view, "the display shows the loader while its node is away", "Connecting to", true)
             -- The owner stays away past the time one request waits for it.
-            time.sleep(client.TIMEOUT)
-            time.sleep("1s")
+            assert((away:receive()))
+            process.registry.unregister("bee.test.shell.away")
+            process.unlisten(away)
             assert(events.send("supervisor", "service.start", service))
             expect(view, "the display shows the node once its owner is back", "Bees", true)
             test.eq(assert(system.supervisor.state("wippy.bootloader:bootloader.service")).started_at, boot)

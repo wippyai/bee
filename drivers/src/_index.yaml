@@ -54,15 +54,6 @@ entries:
   targets:
   - entry: bee.drivers.security:host_access
     path: .groups +=
-- name: seams
-  kind: ns.requirement
-  default: bee.drivers.values:seam
-  meta:
-    value_kind: library.lua
-    comment: The library the drivers' seam points call; a host keeps the pass-through, a test composition binds its own
-  targets:
-  - entry: bee.drivers.descriptor:profile_values
-    path: .imports.seam
 - name: entered_values
   kind: ns.requirement
   meta:

@@ -1,6 +1,6 @@
 organization: bee
 module: drivers
-version: 0.1.23
+version: 0.1.22
 description: Declarative, installable agent CLI drivers (Claude Code, Codex, Antigravity, Muse, Grok, opencode, Pi) with their codecs, option descriptors and record types, for any host that runs agent CLIs.
 license: MIT
 exclude:

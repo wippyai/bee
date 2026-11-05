@@ -101,25 +101,21 @@ entries:
   kind: process.lua
   source: file://shell.lua
   method: main
-  modules: [tty, channel, io, system, process, events, time]
+  modules: [tty, channel, io, system, process, events]
   imports:
-    confirmation: bee.approvals.app:confirmation
-    appearance: bee.ui:appearance
     client: bee.node:client
     chrome: bee.shell:chrome
-    model: bee.shell:model
-    layout: bee.shell:layout
     menu: bee.shell:menu
-    dialog: bee.approvals.app:dialog
-    title_editor: bee.shell:title_editor
     watch: bee.shell:watch
     copy: bee.shell:copy
-    workspace_menu: bee.shell:workspace_menu
     membership: bee.shell:membership
     render: bee.shell:render
-    part_handover: bee.shell:handover
-    jobs: bee.shell:jobs
+    part_handover: bee.shell.display:handover
     seam: bee.process:seam
+    display_state: bee.shell.display:state
+    actions: bee.shell.display:actions
+    sync: bee.shell.display:sync
+    input: bee.shell.display:input
   meta:
     command:
       name: bee
@@ -132,25 +128,21 @@ entries:
   kind: process.lua
   source: file://shell.lua
   method: client
-  modules: [tty, channel, io, system, process, events, time]
+  modules: [tty, channel, io, system, process, events]
   imports:
-    confirmation: bee.approvals.app:confirmation
-    appearance: bee.ui:appearance
     client: bee.node:client
     chrome: bee.shell:chrome
-    model: bee.shell:model
-    layout: bee.shell:layout
     menu: bee.shell:menu
-    dialog: bee.approvals.app:dialog
-    title_editor: bee.shell:title_editor
     watch: bee.shell:watch
     copy: bee.shell:copy
-    workspace_menu: bee.shell:workspace_menu
     membership: bee.shell:membership
     render: bee.shell:render
-    part_handover: bee.shell:handover
-    jobs: bee.shell:jobs
+    part_handover: bee.shell.display:handover
     seam: bee.process:seam
+    display_state: bee.shell.display:state
+    actions: bee.shell.display:actions
+    sync: bee.shell.display:sync
+    input: bee.shell.display:input
   meta:
     command:
       name: client
@@ -202,24 +194,3 @@ entries:
     title: Desktop
     location: desktop
     order: 10
-- name: handover
-  kind: library.lua
-  source: file://handover.lua
-  modules:
-  - channel
-  - tty
-  imports:
-    appearance: bee.ui:appearance
-    client: bee.node:client
-    model: bee.shell:model
-- name: jobs
-  kind: library.lua
-  source: file://jobs.lua
-  modules:
-  - channel
-  - process
-  - tty
-  imports:
-    client: bee.node:client
-    part_handover: bee.shell:handover
-    seam: bee.process:seam

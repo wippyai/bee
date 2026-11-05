@@ -1,0 +1,91 @@
+version: '1.0'
+namespace: bee.shell.display
+entries:
+- name: edit_area
+  kind: registry.entry
+  meta:
+    type: bee.gov.edit_area
+    title: Desktop display
+    comment: Edit mode offers the desktop display state, node calls, event handling and input routing as one area
+- name: handover
+  kind: library.lua
+  source: file://handover.lua
+  modules:
+  - channel
+  - tty
+  imports:
+    appearance: bee.ui:appearance
+    client: bee.node:client
+    model: bee.shell:model
+- name: jobs
+  kind: library.lua
+  source: file://jobs.lua
+  modules:
+  - channel
+  - process
+  - tty
+  imports:
+    client: bee.node:client
+    part_handover: bee.shell.display:handover
+    seam: bee.process:seam
+- name: state
+  kind: library.lua
+  source: file://state.lua
+  modules: [tty, channel]
+  imports:
+    appearance: bee.ui:appearance
+    client: bee.node:client
+    model: bee.shell:model
+    layout: bee.shell:layout
+    menu: bee.shell:menu
+    dialog: bee.approvals.app:dialog
+    title_editor: bee.shell:title_editor
+    copy: bee.shell:copy
+    workspace_menu: bee.shell:workspace_menu
+    membership: bee.shell:membership
+    render: bee.shell:render
+    part_handover: bee.shell.display:handover
+    jobs: bee.shell.display:jobs
+- name: actions
+  kind: library.lua
+  source: file://actions.lua
+  modules: [process]
+  imports:
+    client: bee.node:client
+    model: bee.shell:model
+    dialog: bee.approvals.app:dialog
+    title_editor: bee.shell:title_editor
+    copy: bee.shell:copy
+    workspace_menu: bee.shell:workspace_menu
+    membership: bee.shell:membership
+    part_handover: bee.shell.display:handover
+    display_state: bee.shell.display:state
+- name: sync
+  kind: library.lua
+  source: file://sync.lua
+  modules: [time, process]
+  imports:
+    client: bee.node:client
+    model: bee.shell:model
+    workspace_menu: bee.shell:workspace_menu
+    part_handover: bee.shell.display:handover
+    seam: bee.process:seam
+    display_state: bee.shell.display:state
+    actions: bee.shell.display:actions
+- name: input
+  kind: library.lua
+  source: file://input.lua
+  modules: [tty]
+  imports:
+    client: bee.node:client
+    model: bee.shell:model
+    layout: bee.shell:layout
+    menu: bee.shell:menu
+    dialog: bee.approvals.app:dialog
+    confirmation: bee.approvals.app:confirmation
+    title_editor: bee.shell:title_editor
+    copy: bee.shell:copy
+    workspace_menu: bee.shell:workspace_menu
+    part_handover: bee.shell.display:handover
+    display_state: bee.shell.display:state
+    actions: bee.shell.display:actions

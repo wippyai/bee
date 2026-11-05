@@ -112,6 +112,13 @@ entries:
     - bee.apps.settings:hub_client
     - bee.apps.settings:hub_updates
     - bee.apps.settings:registry_commits
+    - bee.shell.display:actions
+    - bee.shell.display:edit_area
+    - bee.shell.display:handover
+    - bee.shell.display:input
+    - bee.shell.display:jobs
+    - bee.shell.display:state
+    - bee.shell.display:sync
     - bee.shell:apps_menu
     - bee.shell:bar
     - bee.shell:chrome
@@ -119,9 +126,7 @@ entries:
     - bee.shell:desktop_menu
     - bee.shell:display
     - bee.shell:edit_area
-    - bee.shell:handover
     - bee.shell:hive
-    - bee.shell:jobs
     - bee.shell:layout
     - bee.shell:main
     - bee.shell:menu

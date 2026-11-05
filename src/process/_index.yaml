@@ -97,7 +97,9 @@ entries:
     path: .imports.seam
   - entry: bee.shell:client
     path: .imports.seam
-  - entry: bee.shell:jobs
+  - entry: bee.shell.display:jobs
+    path: .imports.seam
+  - entry: bee.shell.display:sync
     path: .imports.seam
   - entry: bee.hub.binding:catalog
     path: .imports.seam

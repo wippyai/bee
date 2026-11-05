@@ -6,6 +6,10 @@ local bounds = require("bounds")
 local json = require("json")
 local fs = require("fs")
 local system = require("system")
+local tty = require("tty")
+local process = require("process")
+local channel = require("channel")
+local time = require("time")
 local registry = require("registry")
 local harness = require("harness")
 local library = require("library")
@@ -33,6 +37,33 @@ local function rows(workspace: string)
     local shown = library.new(workspace)
     test.is_true(governed.apply_activations(shown.governed, assert(governed.reply({ok = true, replayed = false, value = listed}))))
     return library.rows(shown, "installed")
+end
+
+-- The person's Library on a viewport of the workspace.
+type Screen = {shown: (string) -> (), press: (string, string?) -> (), close: () -> ()}
+local function open_library(workspace: string): Screen
+    local viewport = assert(tty.viewport({width = 150, height = 35}))
+    local pid = assert(process.with_options({terminal = assert(viewport:grant())})
+        :spawn_monitored("bee.apps.library.app:app", "bee:workers", {workspace = {id = workspace}}))
+    local function shown(needle: string)
+        local updates = assert(viewport:updates())
+        local deadline = time.after("10s")
+        while true do
+            local snapshot = viewport:snapshot()
+            local text = snapshot and table.concat(snapshot.rows, "\n") or ""
+            if text:find(needle, 1, true) then return end
+            local next_event = channel.select({updates:case_receive(), deadline:case_receive()})
+            assert(next_event.channel ~= deadline, "Library does not show " .. needle .. ": " .. text)
+        end
+    end
+    local function press(kind: string, value: string?)
+        assert(viewport:send({type = "key", action = "press", key_type = kind, key = value or ""}))
+    end
+    local function close()
+        assert(process.cancel(tostring(pid), "granted folder proof complete"))
+        viewport:close()
+    end
+    return {shown = shown, press = press, close = close}
 end
 
 local function define_tests()
@@ -67,6 +98,15 @@ local function define_tests()
             test.eq(shown[1].note, REASON)
             test.eq(#harness.restart({owner}), 1, "the application stays out while its folder is missing")
 
+            local screen = open_library(workspace)
+            local presented, problem = pcall(function()
+                screen.shown("Left out")
+                screen.press("runes", "d")
+                screen.shown(REASON)
+                screen.shown("Enter Recover")
+            end)
+            screen.close()
+            assert(presented, tostring(problem))
             assert(folders:mkdir(directory .. "/cmd"))
             harness.value(harness.library(workspace, {operation = "recover", source_node = assert(system.node.id()),
                 source_workspace = OVERLAY, receipt_key = OVERLAY .. "-recover"}))

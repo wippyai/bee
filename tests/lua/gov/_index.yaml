@@ -1851,6 +1851,8 @@ entries:
   source: file://granted_folder_recovery_test.lua
   method: run
   modules:
+  - tty
+  - channel
   - funcs
   - security
   - registry

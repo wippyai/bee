@@ -3101,3 +3101,31 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     measure_clock: bee.tests.harness:measure_clock
+- name: hook_signal_probe
+  kind: function.lua
+  source: file://hook_signal_probe.lua
+  method: run
+  modules: [events]
+  meta: {type: test_support}
+  imports:
+    gateway_hooks: bee.gateway.hooks:hooks
+- name: hook_signal_scope_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [registry.get, funcs.call, funcs.security, security.policy.get, security.actor.create, security.scope.create]
+    resources: '*'
+    effect: allow
+- name: hook_signal_scope_test
+  kind: function.lua
+  source: file://hook_signal_scope_test.lua
+  method: run
+  modules: [registry, security, funcs]
+  security:
+    policies: [bee.tests.harness:hook_signal_scope_policy]
+  meta:
+    type: test
+    suite: bee
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds

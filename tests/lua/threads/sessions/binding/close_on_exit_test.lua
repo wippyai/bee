@@ -24,6 +24,32 @@ local function define_tests()
             test.is_true(assert(bounds.object(raw)).ok)
             test.eq(harness.value(journal:call("session_describe", {session = opened.session})).state, "closed")
         end)
+        test.it("finishes a pending close on proven exit while a reserved message never reached the agent", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {
+                delivery = "hook", provider = "codex", definition = "interactive-fixture",
+                placement_methods = {reconcile = "bee.tests.threads.sessions:interactive_exited"}}}))
+            harness.value(journal:call("session_attach", {session = opened.session,
+                attempt_id = "speed-exit", operation_key = harness.key()}))
+            local work = harness.value(journal:call("work_send", {session = opened.session, input = "never typed", operation_key = harness.key()}))
+            harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+            harness.value(journal:call("session_transition", {session = opened.session,
+                state = "closing", operation_key = harness.key()}))
+            local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
+            local scope = security.new_scope({assert(security.policy("bee.threads.security:sessions_owner")),
+                assert(security.policy("bee.tests.threads.sessions:interactive_lifecycle_policy"))})
+            local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.threads.sessions.binding:detach",
+                {session = opened.session, attempt_id = "speed-exit", operation_key = harness.key()})
+            if err then error(tostring(err)) end
+            local reply = assert(bounds.object(raw))
+            local problem = bounds.object(reply.error)
+            test.is_true(reply.ok, tostring(problem and problem.message))
+            test.eq(harness.value(journal:call("session_describe", {session = opened.session})).state, "closed")
+            local settled = harness.value(journal:call("work_describe", {work = work.work}))
+            test.eq(settled.phase, "settled")
+            test.eq(settled.result.state, "cancelled")
+            test.is_nil(settled.uncertainty)
+        end)
     end)
 end
 return test.run_cases(define_tests)

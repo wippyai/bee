@@ -275,8 +275,11 @@ function M.detach(raw_request: unknown): Reply
     if evidence.execution_state ~= "exited" or evidence.exit_source == nil then
         return fail("CONFLICT", "interactive attachment has no proven process exit", operation_key)
     end
+    -- A turn the exited terminal accepted ends without a proven result. A
+    -- reserved turn reached no agent: the next terminal takes it, or closing
+    -- cancels it.
     local active = object(stored.active_turn)
-    if active then
+    if active and active.phase == "accepted" then
         local recovered, recovery_error = journal.invoke("turn_recover", {turn = active.turn, operation_key = "detach-recover:" .. operation_key})
         local claim = object(recovered)
         if recovery_error or not claim then return unavailable(recovery_error or "interactive claim unavailable", operation_key) end

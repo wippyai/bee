@@ -84,8 +84,9 @@ native-pin:
 	@test -n "$(NATIVE_VERSION)" || { echo "set NATIVE_VERSION=<pushed bee commit>"; exit 2; }
 	python3 build/native_pin.py $(NATIVE_VERSION)
 
-# tests/runner/compose.py writes the copy of src the suites load, with their
-# test-only seams; it never changes src or a pack.
+# tests/runner/compose.py writes the copy of src the suites load; it never
+# changes src or a pack. Test-only seams come from the bee.process:seams
+# requirement, which tests/lua binds to bee.tests.support:seam.
 compose: binary-identity
 	python3 -m tests.runner.compose
 
@@ -136,7 +137,7 @@ check:
 # executables in tests/fixtures/harness/bin by name and never reach the
 # person's home, PATH or provider credentials. Provider variables a developer
 # shell carries are set to fixture values the drivers must not read. Gateway,
-# activation and inbox forwarding drains are disabled by fixture composition:
+# activation and inbox forwarding drains are disabled by their seam points:
 # the store suites queue, reserve, claim and drain that work themselves.
 # TESTS keeps the native runner's substring filters. SHARDS defaults to four
 # or fewer on small machines; each process receives its share of Go CPUs.

@@ -141,3 +141,11 @@ entries:
     resources_points: bee.tests.resources:seams
     hub_points: bee.tests.hub:seams
     threads_points: bee.tests.threads:seams
+- name: seam_binding_test
+  kind: function.lua
+  source: file://seam_binding_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test

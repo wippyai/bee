@@ -57,6 +57,7 @@ entries:
   method: main
   modules:
   - process
+  - logger
   - channel
   - time
   - cdc

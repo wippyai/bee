@@ -39,7 +39,7 @@ function M.run(options: Options)
     if demanded and options.name then
         local _, cancelled = seam.hold("bee.process.worker.ready", {name = options.name}, lifecycle)
         if cancelled then return end
-        assert(demand.ready(options.name))
+        demand.ready(options.name)
     end
     local ticker = options.every and assert(time.ticker(options.every)) or nil
     local generation = 0
@@ -52,7 +52,7 @@ function M.run(options: Options)
     while true do
         if demanded and options.name and generation > 0 and not retrying
             and (not options.active or not options.active()) then
-            assert(demand.quiet(options.name, generation))
+            demand.quiet(options.name, generation)
         end
         local cases = {lifecycle:case_receive()}
         if wakes then cases[#cases + 1] = wakes:case_receive() end

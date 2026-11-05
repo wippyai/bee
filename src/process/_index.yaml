@@ -175,7 +175,7 @@ entries:
 - name: demand
   kind: library.lua
   source: file://demand.lua
-  modules: [process]
+  modules: [process, logger]
 - name: demand_owner
   kind: library.lua
   source: file://demand_owner.lua

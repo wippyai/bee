@@ -33,6 +33,12 @@ M["bee.hive.service.supervisor.backlog_closed"] = function(): unknown
     return controllers.registered("bee.test.hive.backlog_terminal", "bee.test.hive.backlog_resume")
 end
 
+M["bee.hive.service.supervisor.backlog_refused"] = function(): unknown
+    if not registered("bee.test.hive.backlog_refusal") then return nil end
+    controllers.notify("bee.test.hive.backlog_refusal")
+    return "injected change source refusal"
+end
+
 M["bee.hive.service.supervisor.backlog_changed"] = function(): unknown
     return controllers.registered("bee.test.hive.backlog_hold", "bee.test.hive.backlog_release")
 end

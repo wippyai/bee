@@ -227,7 +227,7 @@ local function main()
     local wakes = assert(process.listen(tests.WAKE, {message = true}))
     local lifecycle = assert(process.events())
     local demanded = assert(process.listen(demand.WAKE, {message = true}))
-    assert(demand.ready(tests.NAME))
+    demand.ready(tests.NAME)
     local interrupted, interrupt_error = test_runs.interrupt()
     if not interrupted then logger:error("Interrupted test runs not recorded", {error = interrupt_error}) end
     local active = 0
@@ -247,7 +247,7 @@ local function main()
             if #waiting == 0 then
                 local _, cancelled = seam.hold("bee.node.service.tests.quiet", nil, lifecycle)
                 if cancelled then return end
-                assert(demand.quiet(tests.NAME, generation))
+                demand.quiet(tests.NAME, generation)
             else
                 sweep()
             end

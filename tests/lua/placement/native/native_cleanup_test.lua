@@ -78,6 +78,37 @@ local function cleanup_tests()
             for _, id in ipairs(ids) do native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = id, mode = "forced"})) end
         end)
         if capability == "process_group" then
+            test.it("records a supervision wake the absent Hive supervisor cannot take and leaves the attempt to its restart", function()
+                local request = native_fixture.launch({"true"}, "direct_process")
+                local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
+                local updates = assert(events.subscribe("supervisor", "service.update"))
+                local lifecycle = assert(process.events())
+                local hive = tostring(assert(process.registry.lookup("bee.hive.supervisor", process.registry.LOCAL)))
+                assert(process.monitor(hive))
+                assert(process.terminate(hive))
+                while true do
+                    local event = assert((lifecycle:receive()))
+                    if event.kind == process.event.EXIT and tostring(event.from) == hive then break end
+                end
+                local db = assert(store.open())
+                local ok, woke = pcall(service.wake_supervision, db, prepared.attempt_id, "native")
+                db:release()
+                local restarted: string? = nil
+                while not restarted do
+                    local current = process.registry.lookup("bee.hive.supervisor", process.registry.LOCAL)
+                    if current and tostring(current) ~= hive then restarted = tostring(current) break end
+                    local selected = channel.select({updates:channel():case_receive(), time.after("10s"):case_receive()})
+                    assert(selected.ok and selected.channel == updates:channel(), "the Hive supervisor did not restart after its process ended")
+                end
+                updates:close()
+                test.is_true(ok, "a wake to an absent Hive supervisor must not raise: " .. tostring(woke))
+                test.is_false(woke)
+                local recorded: string? = nil
+                for _, item in ipairs(principals.objects(native_fixture.value(native_fixture.call(native_fixture.OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64})).evidence)) do
+                    if item.kind == "supervision.wake_deferred" then recorded = tostring(item.detail) end
+                end
+                test.is_true(recorded ~= nil and recorded:find("not registered", 1, true) ~= nil, "the deferred wake records its cause: " .. tostring(recorded))
+            end)
             test.it("records a refused cleanup with its reason", function()
                 local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", native_fixture.launch({"sh", "-c", "true"}, "process_group")))
                 native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "start", {attempt_id = prepared.attempt_id}))

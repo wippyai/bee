@@ -222,7 +222,11 @@ function M.cleanup(attempt: types.Attempt): (boolean, string?)
     if not busy then return cleaned == true, cleanup_error end
     local changes, stream_error = cdc.stream("bee:changes", {tables = {"bee_placement_evidence"}, ops = {"insert"}})
     if not changes then return false, "follow the attempt's cleanup: " .. tostring(stream_error) end
-    local feed = changes:channel()
+    local feed, feed_error = changes:channel()
+    if not feed then
+        changes:close()
+        return false, "follow the attempt's cleanup: " .. tostring(feed_error)
+    end
     local events = assert(process.events())
     local own = tostring(process.pid())
     local watched: string? = nil

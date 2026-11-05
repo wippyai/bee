@@ -568,8 +568,18 @@ function M.reconcile(value: unknown): Reply
 end
 -- sweep: placement's own supervision reconciles every live attempt, which
 -- bounds how long a revoked grant or projection stays in use.
-function M.wake_supervision(kind: unknown)
-    assert(demand.wake(kind == "docker" and "bee.placement.docker/image" or M.SWEEPER_NAME))
+-- wake_supervision asks the Hive supervisor to run the attempt's supervision
+-- owner. The attempt's state is already durable, and the Hive supervisor
+-- probes every owner's backlog when it starts, so a wake it cannot take now is
+-- recorded on the attempt and served by that probe.
+function M.wake_supervision(db: sql.DB, attempt_id: string, kind: unknown): boolean
+    local owner = kind == "docker" and "bee.placement.docker/image" or M.SWEEPER_NAME
+    local woke, problem = demand.wake(owner)
+    if not woke then
+        store.transition(db, attempt_id, {evidence = {kind = "supervision.wake_deferred",
+            detail = owner .. " wake deferred to the Hive supervisor's startup backlog probe: " .. tostring(problem)}})
+    end
+    return woke
 end
 function M.pending(): boolean
     local db, problem = store.open()
@@ -796,7 +806,8 @@ function M.attach(value: unknown): Reply
         -- Startup is supervised and unbounded. The fence protocol begins
         -- only once the runner can receive controls after materialization.
         local changes = assert(cdc.stream("bee:changes", {tables = {"bee_placement_attempts"}, ops = {"update"}}))
-        local updates = changes:channel()
+        local updates, updates_error = changes:channel()
+        if not updates then changes:close(); return fail("UNAVAILABLE", "attachment cannot follow the attempt: " .. tostring(updates_error)) end
         local events = assert(process.events())
         local monitored, monitor_error = process.monitor(runner)
         if not monitored then changes:close(); return fail("CONFLICT", "attachment cannot monitor runner: " .. tostring(monitor_error)) end

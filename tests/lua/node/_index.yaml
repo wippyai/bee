@@ -494,6 +494,27 @@ entries:
     runs: bee.node.persist:test_runs
     demand: bee.process:demand
     bounds: bee.drivers.values:bounds
+- name: backlog_refusal_test
+  kind: function.lua
+  source: file://backlog_refusal_test.lua
+  method: run
+  modules:
+  - process
+  - events
+  - channel
+  - cdc
+  - system
+  - uuid
+  - time
+  meta:
+    type: test
+    suite: demand_node
+    timeout: 20s
+  imports:
+    owner_observer: bee.tests.support:owner_observer
+    test: wippy.test:test
+    runs: bee.node.persist:test_runs
+    demand: bee.process:demand
 - name: retirement_test
   kind: function.lua
   source: file://retirement_test.lua

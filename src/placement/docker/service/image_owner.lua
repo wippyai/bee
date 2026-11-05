@@ -34,12 +34,12 @@ function M.main()
             if called then digest, route, failure = built, interactive, problem
             else failure = tostring(built) end
         end
-        assert(process.send(request.sender, image.REPLY, {version = 1, request_id = request.id, image = digest, route = route, error = failure}))
+        process.send(request.sender, image.REPLY, {version = 1, request_id = request.id, image = digest, route = route, error = failure})
         return true
     end)
     build.pending = false
     local sweep = task.new("Docker supervision", function(): boolean return service.sweep().ok end)
-    assert(demand.ready(image.OWNER))
+    demand.ready(image.OWNER)
     local function enqueue(sender: string, raw: unknown)
         local value = bounds.object(raw)
         local id = value and bounds.id(value.request_id)
@@ -53,7 +53,7 @@ function M.main()
         if not stopping then task.advance(build); task.advance(sweep) end
         if stopping and not build.active then break end
         if not stopping and generation > 0 and #queue == 0 and task.quiet(build) and task.quiet(sweep) then
-            assert(demand.quiet(image.OWNER, generation))
+            demand.quiet(image.OWNER, generation)
         end
         local cases = {requests:case_receive(), demanded:case_receive(), events:case_receive(),
             build.completed:case_receive(), sweep.completed:case_receive()}

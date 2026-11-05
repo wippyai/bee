@@ -234,16 +234,26 @@ local function main(saved: Saved?)
     end
 
     adopt()
+    -- The backlog stream observes the durable demand queues. A change source
+    -- that refuses the subscription (starting, replacing or stopping) leaves
+    -- the backlog unwatched; the next supervisor update or registry commit
+    -- subscribes again and rescans the durable queues.
     local function watch_backlog()
-        return assert(cdc.stream("bee:changes", {tables = demand_owner.tables(demanded), ops = {"insert", "update", "delete"}}))
+        local stream, problem = cdc.stream("bee:changes", {tables = demand_owner.tables(demanded), ops = {"insert", "update", "delete"}})
+        local source: channel.Channel<any>? = nil
+        if stream then source, problem = stream:channel() end
+        local refused = seam.call("bee.hive.service.supervisor.backlog_refused")
+        if refused then source, problem = nil, tostring(refused) end
+        if stream and source then return stream, source end
+        if stream then stream:close() end
+        logger:warn("Hive demand backlog is unwatched until the change source accepts its subscription", {cause = tostring(problem)})
+        return nil, nil
     end
-    local backlog_stream = watch_backlog()
-    local backlog = backlog_stream:channel()
+    local backlog_stream, backlog = watch_backlog()
     local function rescan_backlog()
-        backlog_stream:close()
+        if backlog_stream then backlog_stream:close() end
         seam.hold("bee.hive.service.supervisor.backlog_closed")
-        backlog_stream = watch_backlog()
-        backlog = backlog_stream:channel()
+        backlog_stream, backlog = watch_backlog()
         demand_owner.recover(demanded, nil)
     end
     demand_owner.recover(demanded, nil)
@@ -255,14 +265,15 @@ local function main(saved: Saved?)
             registry_subscription:close()
             feed_subscription:close()
             supervision:close()
-            backlog_stream:close()
+            if backlog_stream then backlog_stream:close() end
             process.upgrade("", {parked = parked, supervised_callers = supervised_callers,
                 applications = applications, services = services, names = names, demanded = demanded})
             return
         end
         local retry = demand_owner.deadline(demanded)
         local cases = {calls:case_receive(), readiness:case_receive(), events:case_receive(),
-            registry_changes:case_receive(), feeds:case_receive(), completions:case_receive(), demands:case_receive(), supervised:case_receive(), backlog:case_receive()}
+            registry_changes:case_receive(), feeds:case_receive(), completions:case_receive(), demands:case_receive(), supervised:case_receive()}
+        if backlog then cases[#cases + 1] = backlog:case_receive() end
         if seam.call("bee.hive.service.supervisor.defer_readiness", {demanded = demanded}) == true then table.remove(cases, 2) end
         if retry then cases[#cases + 1] = retry:case_receive() end
         local listening = seam.call("bee.hive.service.supervisor.listen", {backlog = backlog, registry = registry_changes, events = events})
@@ -296,6 +307,7 @@ local function main(saved: Saved?)
             end
         elseif selected.channel == supervised then
             demand_owner.update(demanded)
+            if not backlog then rescan_backlog() end
         elseif selected.channel == feeds then
             local event = selected.value
             if type(event) == "table" and type(event.path) == "string" then demand_owner.feed(demanded, event.path) end

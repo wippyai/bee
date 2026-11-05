@@ -13,6 +13,7 @@ local demand = require("demand")
 local task = require("task")
 local effects = require("effects")
 local seam = require("seam")
+local logger = require("logger")
 local NAME = "bee.gateway.external"
 type Waiting = {request: protocol.Forwarded, client: string}
 local function main()
@@ -21,7 +22,7 @@ local function main()
     local requests = assert(process.listen(protocol.FORWARD, {message = true}))
     local lifecycle = assert(process.events())
     local stream = assert(cdc.stream("bee:changes", {tables = {"bee_approval_requests", "bee_gateway_bindings"}, ops = {"update"}}))
-    local changes = stream:channel()
+    local changes = assert(stream:channel())
     local waiting: {Waiting} = {}
     local callers: {[string]: boolean} = {}
     local demanded = assert(process.listen(demand.WAKE, {message = true}))
@@ -32,17 +33,18 @@ local function main()
     local installation = task.new("gateway installation", function(): boolean return drain("installation") end)
     local publication = task.new("gateway publication", function(): boolean return drain("publication") end)
     local generation = 0
-    assert(demand.ready(NAME))
-    assert(protocol.ready(NAME))
+    demand.ready(NAME)
+    local announced, announce_error = protocol.ready(NAME)
+    if not announced then logger:warn("Hive supervisor not told the external pairing service is ready", {error = announce_error}) end
     local function finish(item: Waiting): boolean
         if protocol.expired(item.request.expires) then
-            assert(process.send(item.request.caller, item.request.reply_topic, protocol.fail("Pairing wait expires; connect again")))
+            process.send(item.request.caller, item.request.reply_topic, protocol.fail("Pairing wait expires; connect again"))
             return true
         end
         local reply = external.complete(item.client, item.request.caller)
         local value = bounds.object(reply.value)
         if reply.ok and value and (value.status == "pending" or value.status == "approved") then return false end
-        assert(process.send(item.request.caller, item.request.reply_topic, protocol.ok(reply)))
+        process.send(item.request.caller, item.request.reply_topic, protocol.ok(reply))
         return true
     end
     local function handle(request: protocol.Forwarded)
@@ -55,11 +57,11 @@ local function main()
             else
                 reply = external.request({name = request.args.name, workspace_id = workspace, caller = request.caller})
             end
-            assert(process.send(request.caller, request.reply_topic, protocol.ok(reply)))
+            process.send(request.caller, request.reply_topic, protocol.ok(reply))
         elseif request.op == "wait" then
             local id = bounds.id(request.args.client_id)
             if not id or #waiting >= 32 then
-                assert(process.send(request.caller, request.reply_topic, protocol.fail("Pairing wait is invalid or full")))
+                process.send(request.caller, request.reply_topic, protocol.fail("Pairing wait is invalid or full"))
             else
                 local item = {request = request, client = id}
                 if not finish(item) then
@@ -70,13 +72,13 @@ local function main()
                 end
             end
         else
-            assert(process.send(request.caller, request.reply_topic, protocol.fail("Unknown MCP pairing operation")))
+            process.send(request.caller, request.reply_topic, protocol.fail("Unknown MCP pairing operation"))
         end
     end
     while true do
         task.advance(installation)
         task.advance(publication)
-        if #waiting == 0 and task.quiet(installation) and task.quiet(publication) then assert(demand.quiet(NAME, generation)) end
+        if #waiting == 0 and task.quiet(installation) and task.quiet(publication) then demand.quiet(NAME, generation) end
         local cases = {lifecycle:case_receive(), requests:case_receive(), changes:case_receive(), demanded:case_receive(),
             installation.completed:case_receive(), publication.completed:case_receive()}
         local install_retry = task.deadline(installation)

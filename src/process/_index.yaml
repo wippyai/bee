@@ -65,6 +65,10 @@ entries:
     path: .imports.seam
   - entry: bee.resources.persist:authority
     path: .imports.seam
+  - entry: bee.gateway.security:publish
+    path: .imports.seam
+  - entry: bee.gateway.security:installation
+    path: .imports.seam
   - entry: bee.approvals.binding:values
     path: .imports.seam
   - entry: bee.harness.launch:probe_cache

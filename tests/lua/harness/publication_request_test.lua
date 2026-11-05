@@ -20,6 +20,7 @@ local APPROVER_POLICY = "publication-fixture"
 local CONFIGURATION = "bee.gateway.env:module_publication"
 local PACK = string.rep("a", 64)
 local base_port = publish.port
+local hub_override = require("hub_override")
 type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, workspace_id: string?}
 local counter = 0
@@ -118,9 +119,8 @@ local function hub(apply_reply: Object?): Hub
     return {calls = {}, applies = {}, apply_reply = apply_reply or {ok = true, replayed = false,
         value = {state = "published", message = "Publication completed"}}}
 end
-local function port(binding: Binding, fixture: Hub): publish.Port
-    local selected = base_port(binding)
-    selected.hub = function(value: Object, manage: boolean): Object
+local function hub_of(fixture: Hub): ((Object, boolean) -> Object)
+    return function(value: Object, manage: boolean): Object
         fixture.calls[#fixture.calls + 1] = {operation = value.operation, manage = manage}
         if value.operation == "publish_request" then
             return {ok = true, replayed = false, value = measured()}
@@ -133,19 +133,20 @@ local function port(binding: Binding, fixture: Hub): publish.Port
         end
         return {ok = false, replayed = false, code = "INVALID", message = "unexpected Hub operation"}
     end
+end
+local function port(binding: Binding, fixture: Hub): publish.Port
+    local selected = base_port(binding)
+    selected.hub = hub_of(fixture)
     return selected
 end
 local function drain(fixture: Hub): (integer, string?)
-    local original_port = publish.port
     local drained: integer = 0
     local drain_error: string? = nil
-    publish.port = function(worker_binding: Binding): publish.Port
-        return port(worker_binding, fixture)
-    end
+    hub_override.publish = hub_of(fixture)
     local ok, failure = pcall(function()
         drained, drain_error = publish.drain_approved()
     end)
-    publish.port = original_port
+    hub_override.publish = nil
     if not ok then error(failure) end
     return drained, drain_error
 end

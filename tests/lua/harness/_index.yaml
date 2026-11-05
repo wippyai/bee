@@ -1722,6 +1722,7 @@ entries:
     - bee.gateway.security:access_policy_read_policy
     - bee.security.approvals:approval_installation_effects_policy
   imports:
+    hub_override: bee.tests.gateway:hub_override
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
@@ -1768,6 +1769,7 @@ entries:
     - bee.gateway.security:access_policy_read_policy
     - bee.security.approvals:approval_publication_effects_policy
   imports:
+    hub_override: bee.tests.gateway:hub_override
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     principals: bee.tests.support.principals:bound

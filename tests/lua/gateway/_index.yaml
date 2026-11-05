@@ -434,6 +434,12 @@ entries:
   source: file://seams.lua
   meta: {type: test_support}
   modules: [registry, time]
+  imports:
+    hub_override: bee.tests.gateway:hub_override
+- name: hub_override
+  kind: library.lua
+  source: file://hub_override.lua
+  meta: {type: test_support}
 - name: fixture_instant
   kind: registry.entry
   meta: {type: test_support, comment: The instant the gateway clock seam reads; empty data passes the real clock}

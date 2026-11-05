@@ -3,6 +3,7 @@
 local registry = require("registry")
 local funcs = require("funcs")
 local bounds = require("bounds")
+local seam = require("seam")
 local installation = require("installation")
 local library = require("library")
 local subject_call = require("subject_call")
@@ -41,7 +42,8 @@ function M.port(binding: Binding): Port
         governed = function(value: Object): Reply
             return subject_call.call(binding, {M.LIBRARY_POLICY}, "bee.gov.binding:destination_call", value)
         end,
-        hub = subject_call.hub(binding, M.CALL_POLICY, M.READ_POLICY, M.APPLY_POLICY, M.HUB),
+        hub = (seam.call("bee.gateway.security.installation_hub") :: ((Object, boolean) -> Object)?)
+            or subject_call.hub(binding, M.CALL_POLICY, M.READ_POLICY, M.APPLY_POLICY, M.HUB),
     }
 end
 

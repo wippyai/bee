@@ -63,6 +63,58 @@ entries:
     contents: bee.apps.library.app:contents
     glyphs: bee.ui:glyphs
     text: bee.ui:text
+- name: session
+  kind: library.lua
+  source: file://session.lua
+  modules:
+  - channel
+  - funcs
+  imports:
+    confirmation: bee.approvals.app:confirmation
+    client: bee.app:client
+    model: bee.apps.library.app:model
+    governed: bee.gov.client:governed
+    hub: bee.apps.library.app:hub
+    view: bee.apps.library.app:view
+- name: reads
+  kind: library.lua
+  source: file://reads.lua
+  modules:
+  - funcs
+  imports:
+    model: bee.apps.library.app:model
+    hub: bee.apps.library.app:hub
+    contents: bee.apps.library.app:contents
+    delivery_actions: bee.apps.library.app:delivery_actions
+    session: bee.apps.library.app:session
+- name: package_flow
+  kind: library.lua
+  source: file://package_flow.lua
+  modules:
+  - json
+  imports:
+    confirmation: bee.approvals.app:confirmation
+    model: bee.apps.library.app:model
+    governed: bee.gov.client:governed
+    hub: bee.apps.library.app:hub
+    delivery_actions: bee.apps.library.app:delivery_actions
+    session: bee.apps.library.app:session
+    reads: bee.apps.library.app:reads
+- name: hits
+  kind: library.lua
+  source: file://hits.lua
+  imports:
+    client: bee.app:client
+    confirmation: bee.approvals.app:confirmation
+    model: bee.apps.library.app:model
+    governed: bee.gov.client:governed
+    hub: bee.apps.library.app:hub
+    view: bee.apps.library.app:view
+    contents: bee.apps.library.app:contents
+    delivery_actions: bee.apps.library.app:delivery_actions
+    session: bee.apps.library.app:session
+    reads: bee.apps.library.app:reads
+    package_flow: bee.apps.library.app:package_flow
 - name: app
   kind: process.lua
   meta:
@@ -79,8 +131,6 @@ entries:
   method: main
   modules:
   - channel
-  - funcs
-  - json
   - process
   - tty
   imports:
@@ -95,6 +145,10 @@ entries:
     view: bee.apps.library.app:view
     contents: bee.apps.library.app:contents
     delivery_actions: bee.apps.library.app:delivery_actions
+    session: bee.apps.library.app:session
+    reads: bee.apps.library.app:reads
+    package_flow: bee.apps.library.app:package_flow
+    hits_actions: bee.apps.library.app:hits
   security:
     policies:
     - bee.security.approvals:confirmation_client

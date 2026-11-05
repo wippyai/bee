@@ -15,7 +15,13 @@ end
 type Object = {[string]: unknown}
 type Gesture = "enter" | "space" | "click" | "shortcut"
 type Callbacks = {running: () -> boolean, gesture: () -> Gesture}
-function M.new(state: model.State, review: confirmation.State, wake: () -> (), callbacks: Callbacks)
+type Actions = {
+    invoke: (unknown) -> governed.Reply?, refresh_activations: () -> (), refresh_governed: () -> (), remove_now: (model.Removal) -> (),
+    share_now: (model.Row) -> (), review_transition: (boolean) -> boolean, select_transition: () -> boolean,
+    prepare_transition: (boolean?) -> boolean, install_now: (model.Row, boolean?) -> (), review_hub_now: (Object) -> (),
+    confirm_hub_now: () -> (), step_now: () -> (), status_now: () -> (), recover_now: () -> (), open_version_now: (model.Row) -> (),
+}
+function M.new(state: model.State, review: confirmation.State, wake: () -> (), callbacks: Callbacks): Actions
     local gov, hubs = state.governed, state.hub
     local function invoke(request: unknown): governed.Reply?
         local raw, err = funcs.new():call(governed.CALL, request)

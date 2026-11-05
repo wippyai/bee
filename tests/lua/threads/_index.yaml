@@ -651,6 +651,82 @@ entries:
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
+- name: window_resume_claude_test
+  kind: function.lua
+  source: file://window_resume_test.lua
+  method: claude
+  modules: [funcs]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    host: bee.tests.memory:host
+    harness: bee.tests.threads:harness
+    bounds: bee.drivers.values:bounds
+    hook_records: bee.harness.carrier:hook_records
+    checkpoint: bee.harness.carrier:checkpoint
+    continuation: bee.harness.carrier:continuation
+    claude: bee.tests.support.driver:claude_launch
+    codex: bee.tests.support.driver:codex_launch
+    agy: bee.tests.support.driver:agy_launch
+    muse: bee.tests.support.driver:muse_launch
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
+- name: window_resume_codex_test
+  kind: function.lua
+  source: file://window_resume_test.lua
+  method: codex
+  modules: [funcs]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    host: bee.tests.memory:host
+    harness: bee.tests.threads:harness
+    bounds: bee.drivers.values:bounds
+    hook_records: bee.harness.carrier:hook_records
+    checkpoint: bee.harness.carrier:checkpoint
+    continuation: bee.harness.carrier:continuation
+    claude: bee.tests.support.driver:claude_launch
+    codex: bee.tests.support.driver:codex_launch
+    agy: bee.tests.support.driver:agy_launch
+    muse: bee.tests.support.driver:muse_launch
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
+- name: window_resume_agy_test
+  kind: function.lua
+  source: file://window_resume_test.lua
+  method: agy
+  modules: [funcs]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    host: bee.tests.memory:host
+    harness: bee.tests.threads:harness
+    bounds: bee.drivers.values:bounds
+    hook_records: bee.harness.carrier:hook_records
+    checkpoint: bee.harness.carrier:checkpoint
+    continuation: bee.harness.carrier:continuation
+    claude: bee.tests.support.driver:claude_launch
+    codex: bee.tests.support.driver:codex_launch
+    agy: bee.tests.support.driver:agy_launch
+    muse: bee.tests.support.driver:muse_launch
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
+- name: window_resume_muse_test
+  kind: function.lua
+  source: file://window_resume_test.lua
+  method: muse
+  modules: [funcs]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    host: bee.tests.memory:host
+    harness: bee.tests.threads:harness
+    bounds: bee.drivers.values:bounds
+    hook_records: bee.harness.carrier:hook_records
+    checkpoint: bee.harness.carrier:checkpoint
+    continuation: bee.harness.carrier:continuation
+    claude: bee.tests.support.driver:claude_launch
+    codex: bee.tests.support.driver:codex_launch
+    agy: bee.tests.support.driver:agy_launch
+    muse: bee.tests.support.driver:muse_launch
+  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_claude_test
   kind: function.lua
   source: file://hooks_test.lua

@@ -52,7 +52,7 @@ CACHE_ROOT := $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)
 LUA_CACHE ?= $(CACHE_ROOT)/bee-lua/$(shell python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --key)
 LINT_FLAGS := --memory-limit 1G --set lua.cache.dir=$(LUA_CACHE) --set lua.cache.max_bytes=4294967296
 
-.PHONY: tools-key check boot-check fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test build release-pack install binary-identity hub-publish drivers-release test-python
+.PHONY: budgets tools-key check boot-check fixture-lint agent-corpus-local agent-corpus-check tools runtime-pin native-pin compose lint test build release-pack install binary-identity hub-publish drivers-release test-python
 
 tools: .wippy/build/lua-parse
 	python3 build/tools.py --manifest $(MANIFEST) --builder $(BUILDER_VERSION) --bin $(BIN)
@@ -139,9 +139,13 @@ check:
 # TESTS keeps the native runner's substring filters. SHARDS defaults to four
 # or fewer on small machines; each process receives its share of Go CPUs.
 # python3 -m tests.runner.run --measure regenerates the balancing map from native runner logs.
-# Copied metadata uses measured entry costs within existing deadline ceilings.
-# Unmeasured entries keep the 30s fallback; each shard shares one measured
-# suite_timeout among entries in the same named suite.
+# Copied metadata uses measured entry costs within existing deadline ceilings:
+# twice the entry's 95th-percentile cost plus 5s, or for an entry declaring
+# `latency: external` (Docker, real CLIs) the top of at least ten samples of its
+# own distribution. Entries with too few samples keep their declared ceiling
+# (30s by default); each shard shares one measured suite_timeout among entries
+# in the same named suite. make budgets RUNS=n measures n runs under declared
+# ceilings and appends each passing shard's costs to tests/runner/data/budgets.json.
 TEST_FIXTURES := $(abspath tests/fixtures)
 TESTS ?=
 
@@ -162,6 +166,10 @@ test-prepare: $(if $(CI_TESTS),fixture-install,fixture-lint test-python) $(TEST_
 
 test: boot-check test-drivers
 	python3 -m tests.runner.run --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --tests $(TESTS)
+
+RUNS ?= 5
+budgets: boot-check
+	for run in $$(seq $(RUNS)); do python3 -m tests.runner.run --wippy $(abspath $(WIPPY)) --lua-cache $(LUA_CACHE) --lua-cache-mode $(TEST_CACHE_MODE) --shards $(SHARDS) --ceilings --record-budgets --tests $(TESTS) || exit 1; done
 
 # The bee/drivers module's suites run in its standalone harness, drivers/test,
 # against drivers/src alone. Its lock pins the harness dependencies. The runner

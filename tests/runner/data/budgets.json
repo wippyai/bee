@@ -1,375 +1,3723 @@
 {
-  "bee.tests.approvals.inbox:admission_test": 1.101,
-  "bee.tests.approvals.inbox:changed_proposal_test": 1.1019999999999999,
-  "bee.tests.approvals.inbox:feeds_test": 1.091,
-  "bee.tests.approvals.inbox:leases_test": 1.729,
-  "bee.tests.approvals.inbox:model_test": 0.931,
-  "bee.tests.approvals.inbox:recovery_test": 16.323999999999998,
-  "bee.tests.approvals.inbox:surface_test": 2.4779999999999998,
-  "bee.tests.approvals.inbox:view_test": 1.014,
-  "bee.tests.approvals:confirmation_test": 0.822,
-  "bee.tests.approvals:effect_demand_test": 1.9829999999999999,
-  "bee.tests.approvals:effect_lifecycle_test": 1.427,
-  "bee.tests.approvals:grants_test": 0.972,
-  "bee.tests.approvals:hive_test": 1.113,
-  "bee.tests.approvals:lease_flow_test": 1.011,
-  "bee.tests.approvals:migration_test": 0.93,
-  "bee.tests.approvals:runtime_lease_test": 0.938,
-  "bee.tests.approvals:service_test": 6.146,
-  "bee.tests.approvals:trait_revocation_test": 0.998,
-  "bee.tests.approvals:window_test": 1.783,
-  "bee.tests.apps.library:app_test": 2.343,
-  "bee.tests.apps.library:contents_test": 0.858,
-  "bee.tests.apps.library:form_test": 0.847,
-  "bee.tests.apps.library:governed_test": 0.852,
-  "bee.tests.apps.library:hub_test": 0.86,
-  "bee.tests.apps.library:hub_view_test": 1.022,
-  "bee.tests.apps.library:model_test": 0.855,
-  "bee.tests.apps.library:names_test": 0.878,
-  "bee.tests.apps.library:revert_test": 0.834,
-  "bee.tests.apps.library:view_test": 1.1,
-  "bee.tests.apps.processes:app_test": 1.126,
-  "bee.tests.apps.processes:hive_test": 0.853,
-  "bee.tests.apps.processes:probe_test": 0.867,
-  "bee.tests.apps.processes:view_test": 0.938,
-  "bee.tests.apps.help.app:help_test": 0.898,
-  "bee.tests.apps.settings.app:native_theme_test": 1.067,
-  "bee.tests.apps.settings.app:settings_about_test": 0.971,
-  "bee.tests.apps.settings.app:settings_app_test": 1.142,
-  "bee.tests.apps.settings.app:settings_edit_test": 0.885,
-  "bee.tests.apps.settings.app:settings_test": 0.836,
-  "bee.tests.apps.terminal.app:terminal_test": 0.861,
-  "bee.tests.capability:catalog_test": 0.907,
-  "bee.tests.capability:containment_test": 0.853,
-  "bee.tests.credentials:broker_test": 2.5620000000000003,
-  "bee.tests.credentials:configuration_setup_test": 1.1320000000000001,
-  "bee.tests.credentials:formats_test": 0.864,
-  "bee.tests.credentials:sources_test": 0.884,
-  "bee.tests.docs:corpus_test": 1.121,
-  "bee.tests.docs:protocol_test": 0.883,
-  "bee.tests.docs:web_test": 0.878,
-  "bee.tests.driver.binding:configuration_test": 1.091,
-  "bee.tests.driver.opencode:carrier_test": 0.947,
-  "bee.tests.driver.opencode:configuration_test": 1.006,
-  "bee.tests.driver.opencode:hooks_test": 0.88,
-  "bee.tests.driver.opencode:supervisor_test": 0.853,
-  "bee.tests.driver:docker_probe_test": 1.365,
-  "bee.tests.driver:login_evidence_test": 1.056,
-  "bee.tests.gateway:address_test": 0.9,
-  "bee.tests.gateway:catalog_test": 1.065,
-  "bee.tests.gateway:context_test": 0.893,
-  "bee.tests.gateway:demand_test": 1.087,
-  "bee.tests.gateway:extension_test": 2.431,
-  "bee.tests.gateway:external_app_test": 1.3820000000000001,
-  "bee.tests.gateway:external_configuration_test": 0.905,
-  "bee.tests.gateway:external_hive_test": 1.713,
-  "bee.tests.gateway:external_test": 4.822,
-  "bee.tests.gateway:external_view_test": 0.871,
-  "bee.tests.gateway:grants_migration_test": 1.0070000000000001,
-  "bee.tests.gateway:hooks_test": 0.9420000000000001,
-  "bee.tests.gateway:hub_installation_test": 0.95,
-  "bee.tests.gateway:mcp_test": 0.9690000000000001,
-  "bee.tests.gateway:node_tools_test": 0.9380000000000001,
-  "bee.tests.gateway:policy_reference_test": 0.874,
-  "bee.tests.gateway:profile_scope_test": 0.906,
-  "bee.tests.gateway:reattachment_test": 1.631,
-  "bee.tests.gateway:session_boundary_test": 1.097,
-  "bee.tests.gateway:session_tools_test": 1.226,
-  "bee.tests.gateway:sessions_test": 0.918,
-  "bee.tests.gateway:surface_store_test": 0.9289999999999999,
-  "bee.tests.git.worktree:git_roots_test": 0.856,
-  "bee.tests.git.worktree:worktree_test": 3.452,
-  "bee.tests.gov:activation_drain_test": 0.86,
-  "bee.tests.gov:activation_measure_test": 0.9319999999999999,
-  "bee.tests.gov:activation_owner_admission_test": 1.238,
-  "bee.tests.gov:activation_owner_migration_test": 0.969,
-  "bee.tests.gov:activation_owner_recovery_test": 1.258,
-  "bee.tests.gov:activation_owner_test": 1.4,
-  "bee.tests.gov:activation_profiles_test": 0.907,
-  "bee.tests.gov:activation_store_test": 1.093,
-  "bee.tests.gov:activation_uninstall_test": 0.909,
-  "bee.tests.gov:activation_worker_test": 0.855,
-  "bee.tests.gov:app_database_test": 131.983,
-  "bee.tests.gov:app_expiry_test": 43.71,
-  "bee.tests.gov:application_admission_test": 0.937,
-  "bee.tests.gov:application_lifecycle_test": 28.147000000000002,
-  "bee.tests.gov:approval_test": 0.87,
-  "bee.tests.gov:artifact_test": 0.9299999999999999,
-  "bee.tests.gov:author_test": 0.877,
-  "bee.tests.gov:candidate_test": 0.862,
-  "bee.tests.gov:capability_containment_test": 0.866,
-  "bee.tests.gov:capability_files_test": 0.835,
-  "bee.tests.gov:capability_gateway_test": 1.017,
-  "bee.tests.gov:capability_grants_test": 1.033,
-  "bee.tests.gov:config_requirement_test": 0.872,
-  "bee.tests.gov:database_grant_test": 0.907,
-  "bee.tests.gov:delivery_preflight_test": 13.749,
-  "bee.tests.gov:delivery_protocol_test": 0.858,
-  "bee.tests.gov:delivery_test": 0.867,
-  "bee.tests.gov:destination_public_test": 0.921,
-  "bee.tests.gov:destination_service_test": 1.094,
-  "bee.tests.gov:destination_test": 1.082,
-  "bee.tests.gov:driver_link_test": 1.254,
-  "bee.tests.gov:follow_source_test": 1.3399999999999999,
-  "bee.tests.gov:follow_store_test": 0.9279999999999999,
-  "bee.tests.gov:gateway_test": 3.141,
-  "bee.tests.gov:grant_migration_test": 0.931,
-  "bee.tests.gov:guide_test": 0.85,
-  "bee.tests.gov:headless_revert_test": 0.856,
-  "bee.tests.gov:hive_delivery_test": 0.882,
-  "bee.tests.gov:hive_sdk_guide_test": 9.717,
-  "bee.tests.gov:hub_agent_test": 36.354,
-  "bee.tests.gov:hub_application_test": 40.564,
-  "bee.tests.gov:hub_resolver_test": 0.94,
-  "bee.tests.gov:hub_ui_test": 29.68,
-  "bee.tests.gov:lease_grants_test": 0.911,
-  "bee.tests.gov:lease_model_test": 0.842,
-  "bee.tests.gov:lease_store_test": 0.984,
-  "bee.tests.gov:materializer_test": 1.15,
-  "bee.tests.gov:migration_work_test": 0.9369999999999999,
-  "bee.tests.gov:overlay_resolver_test": 1.234,
-  "bee.tests.gov:plan_protocol_test": 0.868,
-  "bee.tests.gov:plan_store_test": 0.867,
-  "bee.tests.gov:preflight_test": 0.986,
-  "bee.tests.gov:process_grant_test": 1.142,
-  "bee.tests.gov:publication_profiles_test": 0.866,
-  "bee.tests.gov:publication_service_test": 0.89,
-  "bee.tests.gov:publisher_test": 0.995,
-  "bee.tests.gov:source_test": 0.889,
-  "bee.tests.gov:super_edit_test": 0.9640000000000001,
-  "bee.tests.gov:uninstall_pin_test": 0.875,
-  "bee.tests.gov:workspace_applications_test": 0.899,
-  "bee.tests.gov:workspace_method_test": 0.88,
-  "bee.tests.gov:workspace_protocol_test": 0.837,
-  "bee.tests.gov:workspace_test": 0.9129999999999999,
-  "bee.tests.harness.permission:permissions_test": 0.878,
-  "bee.tests.harness.profiles:agent_view_test": 0.983,
-  "bee.tests.harness.profiles:agents_test": 0.879,
-  "bee.tests.harness.profiles:codex_effort_test": 0.944,
-  "bee.tests.harness.profiles:editor_test": 0.9430000000000001,
-  "bee.tests.harness.profiles:form_test": 6.0360000000000005,
-  "bee.tests.harness.profiles:grants_migration_test": 1.329,
-  "bee.tests.harness.profiles:migration_test": 1.051,
-  "bee.tests.harness.profiles:observations_test": 2.74,
-  "bee.tests.harness.profiles:option_controls_test": 0.85,
-  "bee.tests.harness.profiles:preferences_test": 0.835,
-  "bee.tests.harness.profiles:reopen_test": 0.862,
-  "bee.tests.harness.profiles:repair_test": 1.433,
-  "bee.tests.harness.profiles:selection_test": 0.88,
-  "bee.tests.harness.profiles:service_test": 13.805,
-  "bee.tests.harness.profiles:spawn_form_test": 0.857,
-  "bee.tests.harness.profiles:view_test": 2.614,
-  "bee.tests.harness:acceptance_test": 3.108,
-  "bee.tests.harness:activation_test": 0.917,
-  "bee.tests.harness:agent_resolver_test": 0.937,
-  "bee.tests.harness:authoring_policy_test": 1.061,
-  "bee.tests.harness:capability_elevation_test": 2.271,
-  "bee.tests.harness:capability_test": 0.886,
-  "bee.tests.harness:carrier_drain_test": 12.617,
-  "bee.tests.harness:carrier_pure_test": 0.872,
-  "bee.tests.harness:carrier_stream_test": 18.578,
-  "bee.tests.harness:carrier_test": 61.451,
-  "bee.tests.harness:carrier_transport_test": 1.0939999999999999,
-  "bee.tests.harness:catalog_test": 1.3820000000000001,
-  "bee.tests.harness:classify_test": 0.9510000000000001,
-  "bee.tests.harness:claude_acceptance_test": 0.851,
-  "bee.tests.harness:claude_adapter_test": 1.044,
-  "bee.tests.harness:claude_control_test": 0.93,
-  "bee.tests.harness:claude_runner_test": 0.909,
-  "bee.tests.harness:codex_auth_test": 0.835,
-  "bee.tests.harness:codex_profile_test": 1.095,
-  "bee.tests.harness:codex_runner_test": 0.884,
-  "bee.tests.harness:continuation_test": 1.249,
-  "bee.tests.harness:exits_test": 0.867,
-  "bee.tests.harness:extension_carrier_test": 7.87,
-  "bee.tests.harness:gateway_carrier_test": 65.30799999999999,
-  "bee.tests.harness:gateway_fencing_test": 9.687000000000001,
-  "bee.tests.harness:gateway_harness_test": 0.882,
-  "bee.tests.harness:hook_transport_test": 2.0549999999999997,
-  "bee.tests.harness:installation_request_test": 1.949,
-  "bee.tests.harness:locate_probe_test": 0.869,
-  "bee.tests.harness:permission_carrier_test": 55.187000000000005,
-  "bee.tests.harness:permission_contexts_test": 1.1,
-  "bee.tests.harness:permission_exchange_test": 0.954,
-  "bee.tests.harness:permission_hook_test": 0.868,
-  "bee.tests.harness:permission_test": 0.8260000000000001,
-  "bee.tests.harness:policy_test": 1.062,
-  "bee.tests.harness:presentation_test": 1.166,
-  "bee.tests.harness:probe_cache_test": 0.876,
-  "bee.tests.harness:profile_environment_isolation_test": 4.228,
-  "bee.tests.harness:publication_request_test": 1.455,
-  "bee.tests.harness:saved_profiles_test": 0.891,
-  "bee.tests.harness:selection_test": 1.142,
-  "bee.tests.harness:startup_view_test": 0.853,
-  "bee.tests.harness:steer_permission_probe_test": 0.99,
-  "bee.tests.harness:window_hooks_test": 0.875,
-  "bee.tests.harness:window_ready_test": 5.836,
-  "bee.tests.harness:window_recovery_test": 0.867,
-  "bee.tests.hive:call_test": 1.009,
-  "bee.tests.hive:exposure_scope_test": 0.8979999999999999,
-  "bee.tests.hive:receiver_test": 12.479,
-  "bee.tests.hive:remote_discovery_test": 1.08,
-  "bee.tests.hive:routing_test": 1.062,
-  "bee.tests.hub:binary_identity_test": 0.944,
-  "bee.tests.hub:catalog_test": 1.3639999999999999,
-  "bee.tests.hub:facade_test": 1.349,
-  "bee.tests.hub:graph_test": 0.841,
-  "bee.tests.hub:inspect_test": 2.16,
-  "bee.tests.hub:inventory_test": 0.979,
-  "bee.tests.hub:lifecycle_service_test": 1.762,
-  "bee.tests.hub:lifecycle_test": 0.859,
-  "bee.tests.hub:migration_runner_test": 1.0,
-  "bee.tests.hub:migration_work_test": 0.929,
-  "bee.tests.hub:migrations_test": 1.078,
-  "bee.tests.hub:plan_test": 1.092,
-  "bee.tests.hub:preview_test": 0.837,
-  "bee.tests.hub:requirements_test": 1.181,
-  "bee.tests.hub:result_test": 0.905,
-  "bee.tests.hub:semver_test": 0.848,
-  "bee.tests.hub:updates_test": 1.0310000000000001,
-  "bee.tests.node:app_namespace_migration_test": 0.925,
-  "bee.tests.node:app_scope_test": 0.931,
-  "bee.tests.node:app_sessions_test": 3.235,
-  "bee.tests.node:app_tools_test": 1.5630000000000002,
-  "bee.tests.node:application_test": 0.873,
-  "bee.tests.node:application_tests_test": 0.851,
-  "bee.tests.node:backlog_overflow_test": 2.151,
-  "bee.tests.node:broker_test": 1.2269999999999999,
-  "bee.tests.node:demand_test": 1.1,
-  "bee.tests.node:idle_services_test": 1.346,
-  "bee.tests.node:names_test": 11.052,
-  "bee.tests.node:node_test": 2.645,
-  "bee.tests.node:retirement_test": 1.226,
-  "bee.tests.node:state_guard_test": 0.898,
-  "bee.tests.node:tests_runner_test": 6.07,
-  "bee.tests.node:upgrade_test": 1.384,
-  "bee.tests.node:workspace_catalog_test": 0.906,
-  "bee.tests.persist:guard_test": 1.249,
-  "bee.tests.placement.docker:boundary_test": 1.023,
-  "bee.tests.placement.docker:cleanup_test": 1.876,
-  "bee.tests.placement.docker:environment_test": 0.9430000000000001,
-  "bee.tests.placement.docker:image_test": 6.874,
-  "bee.tests.placement.docker:lifecycle_test": 9.515,
-  "bee.tests.placement.docker:profile_test": 0.833,
-  "bee.tests.placement.docker:projection_test": 0.855,
-  "bee.tests.placement.docker:readiness_test": 0.87,
-  "bee.tests.placement.docker:spec_test": 0.856,
-  "bee.tests.placement.docker:stdin_test": 1.8299999999999998,
-  "bee.tests.placement.native:grok_session_test": 1.411,
-  "bee.tests.placement.native:instruction_builder_test": 9.663,
-  "bee.tests.placement.native:native_cleanup_test": 13.369,
-  "bee.tests.placement.native:native_configuration_test": 37.25,
-  "bee.tests.placement.native:native_credentials_test": 22.457,
-  "bee.tests.placement.native:native_execution_test": 15.021,
-  "bee.tests.placement.native:native_output_test": 22.71,
-  "bee.tests.placement.native:native_startup_test": 3.378,
-  "bee.tests.placement.native:native_test": 16.36,
-  "bee.tests.placement.native:provider_configuration_test": 3.7359999999999998,
-  "bee.tests.placement.native:provider_projection_test": 0.859,
-  "bee.tests.placement.native:request_test": 0.911,
-  "bee.tests.placement.native:retirement_test": 0.857,
-  "bee.tests.placement.native:startup_test": 1.105,
-  "bee.tests.placement.native:workdir_preparer_test": 32.399,
-  "bee.tests.placement.docker.service:demand_dispatch_test": 0.876,
-  "bee.tests.placement.docker.service:docker_owner_test": 0.855,
-  "bee.tests.placement.native.persist:eligibility_test": 0.842,
-  "bee.tests.placement.native.service:configuration_setup_test": 1.474,
-  "bee.tests.placement.native.service:publication_test": 0.896,
-  "bee.tests.placement.native.service:required_file_test": 0.876,
-  "bee.tests.process:demand_model_absent_deferred_test": 13.902,
-  "bee.tests.process:demand_model_absent_test": 12.529,
-  "bee.tests.process:demand_model_ready_deferred_test": 14.936,
-  "bee.tests.process:demand_model_ready_test": 13.364,
-  "bee.tests.process:demand_model_test": 0.902,
-  "bee.tests.process:demand_owner_test": 0.924,
-  "bee.tests.process:demand_test": 0.864,
-  "bee.tests.process:supervisor_transaction_test": 0.98,
-  "bee.tests.process:task_test": 1.8719999999999999,
-  "bee.tests.process:worker_test": 2.977,
-  "bee.tests.resources:authority_test": 1.033,
-  "bee.tests.shell:attention_alert_test": 0.891,
-  "bee.tests.shell:dialog_test": 0.924,
-  "bee.tests.shell:display_test": 16.322,
-  "bee.tests.shell:model_test": 1.0399999999999998,
-  "bee.tests.shell:render_test": 0.9650000000000001,
-  "bee.tests.shell:selection_test": 0.986,
-  "bee.tests.shell:title_editor_test": 0.9390000000000001,
-  "bee.tests.shell:watch_test": 1.007,
-  "bee.tests.support.hygiene:compare_test": 0.834,
-  "bee.tests.support:committed_test": 0.888,
-  "bee.tests.sync:canonical_test": 1.019,
-  "bee.tests.sync:distribution_store_test": 0.87,
-  "bee.tests.sync:distribution_test": 1.157,
-  "bee.tests.sync:distributor_test": 0.965,
-  "bee.tests.sync:protocol_test": 0.971,
-  "bee.tests.sync:replica_method_test": 1.084,
-  "bee.tests.sync:replica_protocol_test": 0.929,
-  "bee.tests.sync:replicas_test": 1.026,
-  "bee.tests.sync:store_test": 1.007,
-  "bee.tests.sync:version_test": 0.903,
-  "bee.tests.threads.sessions:attention_test": 0.9339999999999999,
-  "bee.tests.threads.sessions:await_test": 1.361,
-  "bee.tests.threads.sessions:catalog_consumers_test": 16.351,
-  "bee.tests.threads.sessions:catalog_service_test": 17.664,
-  "bee.tests.threads.sessions:client_test": 0.978,
-  "bee.tests.threads.sessions:driver_window_contract_test": 2.762,
-  "bee.tests.threads.sessions:hive_authorization_test": 5.626,
-  "bee.tests.threads.sessions:interactive_test": 3.201,
-  "bee.tests.threads.sessions:locate_test": 0.98,
-  "bee.tests.threads.sessions:owner_boundary_test": 1.19,
-  "bee.tests.threads.sessions:peer_correlation_test": 1.076,
-  "bee.tests.threads.sessions:protocol_test": 0.945,
-  "bee.tests.threads.sessions:wiring_test": 0.9329999999999999,
-  "bee.tests.threads:addressing_test": 0.903,
-  "bee.tests.threads:app_alias_test": 0.934,
-  "bee.tests.threads:app_identity_test": 0.846,
-  "bee.tests.threads:approvals_test": 0.9570000000000001,
-  "bee.tests.threads:authority_test": 1.484,
-  "bee.tests.threads:canonical_test": 0.896,
-  "bee.tests.threads:capabilities_test": 0.999,
-  "bee.tests.threads:carrier_test": 1.142,
-  "bee.tests.threads:delivery_test": 1.139,
-  "bee.tests.threads:hooks_agy_test": 1.4329999999999998,
-  "bee.tests.threads:hooks_boundaries_test": 3.314,
-  "bee.tests.threads:hooks_budget_test": 3.463,
-  "bee.tests.threads:hooks_capabilities_test": 1.551,
-  "bee.tests.threads:hooks_claude_test": 1.62,
-  "bee.tests.threads:hooks_codex_test": 1.634,
-  "bee.tests.threads:hooks_grok_test": 1.605,
-  "bee.tests.threads:hooks_muse_test": 1.634,
-  "bee.tests.threads:hooks_replay_test": 18.297,
-  "bee.tests.threads:hooks_test": 8.015,
-  "bee.tests.threads:inbox_test": 1.039,
-  "bee.tests.threads:ledger_test": 1.014,
-  "bee.tests.threads:lifecycle_test": 1.461,
-  "bee.tests.threads:listen_test": 11.199,
-  "bee.tests.threads:listen_upgrade_test": 3.436,
-  "bee.tests.threads:notice_test": 1.7,
-  "bee.tests.threads:pump_deadline_test": 1.021,
-  "bee.tests.threads:pump_fixture_test": 0.878,
-  "bee.tests.threads:pump_test": 0.972,
-  "bee.tests.threads:recap_test": 1.164,
-  "bee.tests.threads:records_test": 0.853,
-  "bee.tests.threads:recovery_test": 0.997,
-  "bee.tests.threads:schema_test": 1.073,
-  "bee.tests.threads:search_test": 1.67,
-  "bee.tests.threads:send_test": 1.0919999999999999,
-  "bee.tests.threads:service_test": 1.046,
-  "bee.tests.threads:session_test": 0.976,
-  "bee.tests.threads:status_test": 1.148,
-  "bee.tests.threads:subscription_lifecycle_test": 1.737,
-  "bee.tests.threads:subscription_test": 1.295,
-  "bee.tests.threads:usage_test": 1.29,
-  "bee.tests.threads:wait_test": 1.349,
-  "bee.tests.threads:work_store_test": 2.0140000000000002,
-  "bee.tests.threads:workspace_test": 0.887,
-  "bee.tests.ui:appearance_test": 0.914,
-  "bee.tests.ui:footer_apps_test": 0.974,
-  "bee.tests.ui:frame_test": 0.937,
-  "bee.tests.ui:glyphs_test": 0.888,
-  "bee.tests.ui:native_theme_test": 0.925,
-  "bee.tests.ui:profile_discovery_test": 0.973,
-  "bee.tests.ui:viz_test": 1.112,
-  "bee.tests.values:bounds_test": 0.985,
-  "bee.tests.values:canonical_test": 1.045
+  "bee.tests.approvals.inbox:admission_test": [
+    1.101,
+    0.384,
+    0.238,
+    0.245,
+    0.252,
+    8.521
+  ],
+  "bee.tests.approvals.inbox:capture_test": [
+    0.09,
+    0.086,
+    0.097,
+    0.084,
+    0.086
+  ],
+  "bee.tests.approvals.inbox:changed_proposal_test": [
+    1.102,
+    0.23,
+    0.183,
+    0.162,
+    0.19,
+    0.153
+  ],
+  "bee.tests.approvals.inbox:feeds_test": [
+    1.091,
+    0.144,
+    0.151,
+    0.135,
+    0.159,
+    0.157
+  ],
+  "bee.tests.approvals.inbox:interaction_test": [
+    0.641,
+    0.651,
+    0.603,
+    5.093,
+    2.785
+  ],
+  "bee.tests.approvals.inbox:leases_test": [
+    1.729,
+    0.261,
+    0.272,
+    0.25,
+    0.299,
+    0.281
+  ],
+  "bee.tests.approvals.inbox:model_test": [
+    0.931,
+    0.088,
+    0.088,
+    0.08,
+    0.094,
+    0.078
+  ],
+  "bee.tests.approvals.inbox:recovery_test": [
+    16.324,
+    19.059,
+    18.163,
+    19.02,
+    20.465,
+    24.724
+  ],
+  "bee.tests.approvals.inbox:surface_test": [
+    2.478,
+    0.327,
+    0.257,
+    0.23,
+    0.287,
+    0.402
+  ],
+  "bee.tests.approvals.inbox:view_test": [
+    1.014,
+    0.179,
+    0.177,
+    0.164,
+    0.171,
+    0.214
+  ],
+  "bee.tests.approvals:confirmation_test": [
+    0.822,
+    0.07,
+    0.092,
+    0.089,
+    0.092,
+    0.098
+  ],
+  "bee.tests.approvals:effect_demand_test": [
+    1.983,
+    0.822,
+    0.568,
+    0.522,
+    0.582,
+    18.33
+  ],
+  "bee.tests.approvals:effect_lifecycle_test": [
+    1.427,
+    0.364,
+    0.329,
+    0.324,
+    0.386,
+    0.36
+  ],
+  "bee.tests.approvals:forget_session_test": [
+    2.473,
+    0.187,
+    0.162,
+    4.749,
+    8.123
+  ],
+  "bee.tests.approvals:grants_test": [
+    0.972,
+    0.79,
+    0.172,
+    0.157,
+    3.263,
+    3.509
+  ],
+  "bee.tests.approvals:hive_test": [
+    1.113,
+    0.378,
+    0.234,
+    0.233,
+    0.254,
+    0.292
+  ],
+  "bee.tests.approvals:lease_flow_test": [
+    1.011,
+    0.18,
+    0.161,
+    0.128,
+    0.135,
+    0.141
+  ],
+  "bee.tests.approvals:migration_test": [
+    0.93,
+    0.221,
+    0.133,
+    0.101,
+    0.128,
+    13.871
+  ],
+  "bee.tests.approvals:runtime_lease_test": [
+    0.938,
+    0.155,
+    0.134,
+    0.114,
+    0.579,
+    4.354
+  ],
+  "bee.tests.approvals:service_authority_test": [
+    0.421,
+    0.278,
+    0.236,
+    4.166,
+    0.434
+  ],
+  "bee.tests.approvals:service_decisions_test": [
+    0.802,
+    0.613,
+    0.53,
+    0.813,
+    8.382
+  ],
+  "bee.tests.approvals:service_effects_test": [
+    0.722,
+    0.782,
+    3.608
+  ],
+  "bee.tests.approvals:service_notifications_test": [
+    0.739,
+    0.448,
+    0.448,
+    0.662,
+    11.407
+  ],
+  "bee.tests.approvals:service_requests_test": [
+    0.658,
+    0.428,
+    0.37,
+    4.704,
+    16.644
+  ],
+  "bee.tests.approvals:service_test": [
+    6.146
+  ],
+  "bee.tests.approvals:service_worker_test": [
+    0.795,
+    0.186,
+    0.244,
+    0.987,
+    8.099
+  ],
+  "bee.tests.approvals:trait_revocation_test": [
+    0.998,
+    0.205,
+    0.176,
+    0.18,
+    1.548,
+    5.128
+  ],
+  "bee.tests.approvals:window_test": [
+    1.783,
+    0.672,
+    0.546,
+    0.469,
+    2.027,
+    5.516
+  ],
+  "bee.tests.apps.help.app:help_app_test": [
+    0.272,
+    0.137,
+    0.167,
+    0.213,
+    0.337
+  ],
+  "bee.tests.apps.help.app:help_test": [
+    0.898,
+    0.1,
+    0.083,
+    0.092,
+    0.086,
+    0.116
+  ],
+  "bee.tests.apps.help.app:manuals_test": [
+    0.191,
+    0.18,
+    0.194,
+    0.206,
+    0.325
+  ],
+  "bee.tests.apps.library:app_test": [
+    2.343,
+    0.861,
+    0.884,
+    0.785,
+    0.843,
+    1.268
+  ],
+  "bee.tests.apps.library:contents_test": [
+    0.858,
+    0.097,
+    0.072,
+    0.08,
+    0.085,
+    0.197
+  ],
+  "bee.tests.apps.library:form_test": [
+    0.847,
+    0.087,
+    0.08,
+    0.082,
+    0.075,
+    0.095
+  ],
+  "bee.tests.apps.library:governed_test": [
+    0.852,
+    0.121,
+    0.081,
+    0.079,
+    0.081,
+    0.09
+  ],
+  "bee.tests.apps.library:hub_test": [
+    0.86,
+    0.099,
+    0.07,
+    0.081,
+    0.089,
+    0.081
+  ],
+  "bee.tests.apps.library:hub_view_test": [
+    1.022,
+    0.127,
+    0.135,
+    0.115,
+    0.12,
+    0.113
+  ],
+  "bee.tests.apps.library:model_test": [
+    0.855,
+    0.102,
+    0.084,
+    0.095,
+    0.089,
+    0.122
+  ],
+  "bee.tests.apps.library:names_test": [
+    0.878,
+    0.087,
+    0.078,
+    0.075,
+    0.09,
+    0.204
+  ],
+  "bee.tests.apps.library:revert_test": [
+    0.834,
+    0.085,
+    0.069,
+    0.105,
+    0.081,
+    0.079
+  ],
+  "bee.tests.apps.library:view_test": [
+    1.1,
+    0.227,
+    0.242,
+    0.204,
+    0.272,
+    0.246
+  ],
+  "bee.tests.apps.processes:app_test": [
+    1.126,
+    0.339,
+    0.268,
+    0.309,
+    0.272,
+    0.274
+  ],
+  "bee.tests.apps.processes:hive_test": [
+    0.853,
+    0.094,
+    0.072,
+    0.086,
+    0.08,
+    0.084
+  ],
+  "bee.tests.apps.processes:probe_test": [
+    0.867,
+    0.082,
+    0.073,
+    0.091,
+    0.078,
+    0.079
+  ],
+  "bee.tests.apps.processes:view_test": [
+    0.938,
+    0.12,
+    0.117,
+    0.112,
+    0.107,
+    0.102
+  ],
+  "bee.tests.apps.settings.app:native_theme_test": [
+    1.067,
+    0.201,
+    0.176,
+    0.183,
+    0.222,
+    1.1
+  ],
+  "bee.tests.apps.settings.app:settings_about_test": [
+    0.971,
+    0.105,
+    0.097,
+    0.097,
+    0.131,
+    0.095
+  ],
+  "bee.tests.apps.settings.app:settings_app_test": [
+    1.142,
+    1.122,
+    0.264,
+    0.274,
+    0.247,
+    0.677
+  ],
+  "bee.tests.apps.settings.app:settings_edit_test": [
+    0.885,
+    0.094,
+    0.097,
+    0.081,
+    0.113,
+    0.117
+  ],
+  "bee.tests.apps.settings.app:settings_test": [
+    0.836,
+    0.084,
+    0.082,
+    0.074,
+    0.093,
+    0.08
+  ],
+  "bee.tests.apps.terminal.app:terminal_test": [
+    0.861,
+    0.172,
+    0.106,
+    0.135,
+    0.611,
+    0.134
+  ],
+  "bee.tests.capability:catalog_test": [
+    0.907,
+    0.134,
+    0.087,
+    0.085,
+    0.096,
+    0.1
+  ],
+  "bee.tests.capability:containment_test": [
+    0.853,
+    0.092,
+    0.075,
+    0.076,
+    0.078,
+    0.076
+  ],
+  "bee.tests.credentials:broker_test": [
+    2.562,
+    1.133,
+    0.972,
+    0.924,
+    3.867,
+    2.543
+  ],
+  "bee.tests.credentials:configuration_setup_test": [
+    1.132,
+    0.252,
+    0.247,
+    0.216,
+    0.205,
+    0.873
+  ],
+  "bee.tests.credentials:format_migration_test": [
+    0.106,
+    0.11,
+    0.092,
+    0.136,
+    0.232
+  ],
+  "bee.tests.credentials:formats_test": [
+    0.864
+  ],
+  "bee.tests.credentials:sources_test": [
+    0.884,
+    0.098,
+    0.095,
+    0.085,
+    0.137,
+    0.124
+  ],
+  "bee.tests.docs.traits:call_test": [
+    0.087,
+    0.081,
+    0.077,
+    0.08,
+    0.14
+  ],
+  "bee.tests.docs:corpus_test": [
+    1.121,
+    0.298,
+    0.278,
+    0.218,
+    0.228,
+    0.388
+  ],
+  "bee.tests.docs:protocol_test": [
+    0.883,
+    0.082,
+    0.089,
+    0.087,
+    0.075,
+    0.152
+  ],
+  "bee.tests.docs:web_test": [
+    0.878,
+    0.085,
+    0.08,
+    0.083,
+    0.074,
+    0.206
+  ],
+  "bee.tests.driver.binding:configuration_test": [
+    1.091,
+    0.41,
+    0.36,
+    0.375,
+    0.481,
+    0.391
+  ],
+  "bee.tests.driver.opencode:carrier_test": [
+    0.947,
+    0.259,
+    0.181,
+    0.146,
+    4.374,
+    4.051
+  ],
+  "bee.tests.driver.opencode:configuration_test": [
+    1.006,
+    0.12,
+    0.118,
+    0.109,
+    0.116,
+    0.148
+  ],
+  "bee.tests.driver.opencode:hooks_test": [
+    0.88,
+    0.083,
+    0.087,
+    0.076,
+    0.092,
+    0.187
+  ],
+  "bee.tests.driver.opencode:supervisor_test": [
+    0.853,
+    0.083,
+    0.074,
+    0.075,
+    0.076,
+    0.132
+  ],
+  "bee.tests.driver:allowall_test": [
+    1.438,
+    1.363,
+    1.373,
+    1.64,
+    1.756
+  ],
+  "bee.tests.driver:ambient_configuration_test": [
+    0.081,
+    0.077,
+    0.072,
+    0.079,
+    0.109
+  ],
+  "bee.tests.driver:docker_probe_test": [
+    1.365,
+    0.254,
+    0.249,
+    0.275,
+    0.249,
+    0.277
+  ],
+  "bee.tests.driver:login_evidence_test": [
+    1.056,
+    0.315,
+    0.286,
+    0.323,
+    0.287,
+    0.355
+  ],
+  "bee.tests.driver:muse_placement_test": [
+    0.09,
+    0.089,
+    0.087,
+    0.094,
+    0.099
+  ],
+  "bee.tests.driver:option_coverage_test": [
+    16.304,
+    14.64,
+    13.503,
+    15.708,
+    17.778
+  ],
+  "bee.tests.driver:option_profile_coverage_test": [
+    9.448,
+    8.928,
+    8.734,
+    9.594,
+    10.676
+  ],
+  "bee.tests.driver:route_hooks_test": [
+    0.12,
+    0.087,
+    0.081,
+    0.097,
+    0.094
+  ],
+  "bee.tests.driver:saved_profiles_test": [
+    0.237,
+    0.224,
+    0.253,
+    0.247,
+    0.252
+  ],
+  "bee.tests.gateway:address_test": [
+    0.9,
+    0.095,
+    0.092,
+    0.09,
+    0.119,
+    0.105
+  ],
+  "bee.tests.gateway:catalog_test": [
+    1.065,
+    0.156,
+    0.147,
+    0.13,
+    0.307,
+    0.175
+  ],
+  "bee.tests.gateway:context_test": [
+    0.893,
+    0.087,
+    0.078,
+    0.078,
+    0.081,
+    0.097
+  ],
+  "bee.tests.gateway:demand_test": [
+    1.087,
+    0.17,
+    0.154,
+    0.162,
+    0.16,
+    0.224
+  ],
+  "bee.tests.gateway:extension_test": [
+    2.431,
+    1.348,
+    1.212,
+    1.044,
+    4.884,
+    2.517
+  ],
+  "bee.tests.gateway:external_app_test": [
+    1.382,
+    0.403,
+    0.413,
+    0.42,
+    1.232,
+    2.509
+  ],
+  "bee.tests.gateway:external_configuration_test": [
+    0.905,
+    0.098,
+    0.072,
+    0.07,
+    0.077,
+    0.09
+  ],
+  "bee.tests.gateway:external_hive_test": [
+    1.713,
+    0.471,
+    0.41,
+    0.401,
+    1.109,
+    0.907
+  ],
+  "bee.tests.gateway:external_test": [
+    4.822,
+    3.35,
+    3.139,
+    3.082,
+    8.262,
+    11.035
+  ],
+  "bee.tests.gateway:external_view_test": [
+    0.871,
+    0.148,
+    0.116,
+    0.137,
+    0.708,
+    0.122
+  ],
+  "bee.tests.gateway:forget_session_test": [
+    0.433,
+    0.265,
+    0.249,
+    1.139,
+    0.29
+  ],
+  "bee.tests.gateway:grants_migration_test": [
+    1.007,
+    0.162,
+    0.15,
+    0.143,
+    0.29,
+    0.492
+  ],
+  "bee.tests.gateway:hook_occurrence_migration_test": [
+    0.102,
+    0.094,
+    0.099,
+    0.572,
+    1.929
+  ],
+  "bee.tests.gateway:hooks_test": [
+    0.942,
+    0.109,
+    0.103,
+    0.104,
+    0.13,
+    0.162
+  ],
+  "bee.tests.gateway:hub_installation_test": [
+    0.95,
+    0.099,
+    0.097,
+    0.126,
+    0.142,
+    0.124
+  ],
+  "bee.tests.gateway:mcp_test": [
+    0.969,
+    0.104,
+    0.089,
+    0.087,
+    0.681,
+    0.102
+  ],
+  "bee.tests.gateway:node_tools_test": [
+    0.938,
+    0.095,
+    0.088,
+    0.106,
+    0.121,
+    0.137
+  ],
+  "bee.tests.gateway:policy_reference_test": [
+    0.874,
+    0.094,
+    0.082,
+    0.073,
+    0.38,
+    0.08
+  ],
+  "bee.tests.gateway:profile_scope_test": [
+    0.906,
+    0.117,
+    0.107,
+    0.086,
+    0.141,
+    0.168
+  ],
+  "bee.tests.gateway:reattachment_test": [
+    1.631,
+    0.482,
+    0.445,
+    0.383,
+    0.671,
+    0.488
+  ],
+  "bee.tests.gateway:session_boundary_test": [
+    1.097,
+    0.15,
+    0.136,
+    0.145,
+    0.172,
+    0.359
+  ],
+  "bee.tests.gateway:session_tools_test": [
+    1.226,
+    0.297,
+    0.246,
+    0.289,
+    0.307,
+    0.267
+  ],
+  "bee.tests.gateway:sessions_test": [
+    0.918,
+    0.088,
+    0.092,
+    0.07,
+    0.083,
+    0.077
+  ],
+  "bee.tests.gateway:surface_store_test": [
+    0.929,
+    0.188,
+    0.177,
+    0.178,
+    2.576,
+    0.255
+  ],
+  "bee.tests.gateway:tool_folds_test": [
+    0.131,
+    0.1,
+    0.104,
+    4.551,
+    1.136
+  ],
+  "bee.tests.git.worktree:git_roots_test": [
+    0.856,
+    0.079,
+    0.078,
+    0.069,
+    0.238,
+    0.076
+  ],
+  "bee.tests.git.worktree:worktree_test": [
+    3.452,
+    1.989,
+    1.883,
+    1.657,
+    9.587,
+    13.257
+  ],
+  "bee.tests.gov.binding:application_admissions_dependencies_test": [
+    0.099,
+    0.072,
+    0.067,
+    0.226,
+    0.075
+  ],
+  "bee.tests.gov:activation_drain_test": [
+    0.86,
+    0.089,
+    0.071,
+    0.068,
+    0.418,
+    0.082
+  ],
+  "bee.tests.gov:activation_measure_test": [
+    0.932,
+    0.107,
+    0.087,
+    0.087,
+    0.345,
+    0.1
+  ],
+  "bee.tests.gov:activation_owner_admission_test": [
+    1.238,
+    0.323,
+    0.254,
+    0.225,
+    1.399,
+    0.676
+  ],
+  "bee.tests.gov:activation_owner_migration_test": [
+    0.969,
+    0.139,
+    0.122,
+    0.116,
+    0.535,
+    0.227
+  ],
+  "bee.tests.gov:activation_owner_recovery_test": [
+    1.258,
+    0.361,
+    0.332,
+    0.345,
+    0.333,
+    1.55
+  ],
+  "bee.tests.gov:activation_owner_test": [
+    1.4,
+    0.548,
+    0.466,
+    0.529,
+    0.547,
+    4.312
+  ],
+  "bee.tests.gov:activation_profiles_test": [
+    0.907,
+    0.093,
+    0.085,
+    0.082,
+    0.084,
+    0.127
+  ],
+  "bee.tests.gov:activation_store_test": [
+    1.093,
+    0.223,
+    0.218,
+    0.204,
+    1.116,
+    0.56
+  ],
+  "bee.tests.gov:activation_uninstall_test": [
+    0.909,
+    0.123,
+    0.111,
+    0.11,
+    0.112,
+    0.35
+  ],
+  "bee.tests.gov:activation_worker_test": [
+    0.855,
+    0.083,
+    0.075,
+    0.072,
+    0.08,
+    0.141
+  ],
+  "bee.tests.gov:admission_generation_migration_test": [
+    0.128,
+    0.088,
+    0.093,
+    1.518,
+    0.315
+  ],
+  "bee.tests.gov:app_database_test": [
+    131.983,
+    27.208,
+    25.014,
+    24.203,
+    50.045,
+    31.996
+  ],
+  "bee.tests.gov:app_expiry_test": [
+    43.71,
+    6.567,
+    6.879,
+    6.666,
+    7.122,
+    7.869
+  ],
+  "bee.tests.gov:app_open_test": [
+    6.045,
+    5.67,
+    5.46,
+    14.956,
+    10.004
+  ],
+  "bee.tests.gov:application_admission_test": [
+    0.937,
+    0.082,
+    0.1,
+    0.074,
+    0.083,
+    0.097
+  ],
+  "bee.tests.gov:application_lifecycle_test": [
+    28.147,
+    4.444,
+    4.647,
+    4.355,
+    5.333,
+    4.523
+  ],
+  "bee.tests.gov:approval_test": [
+    0.87,
+    0.079,
+    0.084,
+    0.085,
+    0.073,
+    0.081
+  ],
+  "bee.tests.gov:artifact_test": [
+    0.93,
+    0.122,
+    0.105,
+    0.104,
+    0.123,
+    0.141
+  ],
+  "bee.tests.gov:author_test": [
+    0.877,
+    0.09,
+    0.069,
+    0.072,
+    0.084,
+    0.081
+  ],
+  "bee.tests.gov:candidate_test": [
+    0.862,
+    0.083,
+    0.077,
+    0.08,
+    0.09,
+    0.088
+  ],
+  "bee.tests.gov:capability_containment_test": [
+    0.866,
+    0.08,
+    0.081,
+    0.073,
+    0.077,
+    0.085
+  ],
+  "bee.tests.gov:capability_files_test": [
+    0.835,
+    0.072,
+    0.084,
+    0.079,
+    0.084,
+    0.088
+  ],
+  "bee.tests.gov:capability_gateway_test": [
+    1.017,
+    0.12,
+    0.122,
+    0.113,
+    0.127,
+    0.121
+  ],
+  "bee.tests.gov:capability_grants_test": [
+    1.033,
+    0.185,
+    0.189,
+    0.18,
+    0.182,
+    0.176
+  ],
+  "bee.tests.gov:config_requirement_test": [
+    0.872,
+    0.082,
+    0.084,
+    0.074,
+    0.089,
+    0.078
+  ],
+  "bee.tests.gov:database_grant_test": [
+    0.907,
+    0.149,
+    0.123,
+    0.128,
+    0.529,
+    7.549
+  ],
+  "bee.tests.gov:delivery_preflight_test": [
+    13.749,
+    14.616,
+    12.964,
+    12.584,
+    14.706,
+    13.241
+  ],
+  "bee.tests.gov:delivery_protocol_test": [
+    0.858,
+    0.074,
+    0.078,
+    0.095,
+    0.125,
+    0.076
+  ],
+  "bee.tests.gov:delivery_test": [
+    0.867,
+    0.088,
+    0.074,
+    0.076,
+    0.081,
+    0.08
+  ],
+  "bee.tests.gov:destination_public_test": [
+    0.921,
+    0.157,
+    0.114,
+    0.129,
+    0.126,
+    0.129
+  ],
+  "bee.tests.gov:destination_service_test": [
+    1.094,
+    0.238,
+    0.234,
+    0.168,
+    0.387,
+    0.576
+  ],
+  "bee.tests.gov:destination_test": [
+    1.082,
+    0.159,
+    0.156,
+    0.172,
+    0.329,
+    0.141
+  ],
+  "bee.tests.gov:driver_link_test": [
+    1.254,
+    0.462,
+    0.443,
+    0.394,
+    1.079,
+    0.564
+  ],
+  "bee.tests.gov:follow_source_test": [
+    1.34,
+    0.383,
+    0.296,
+    0.307,
+    0.288,
+    0.303
+  ],
+  "bee.tests.gov:follow_store_test": [
+    0.928,
+    0.108,
+    0.108,
+    0.096,
+    0.167,
+    0.103
+  ],
+  "bee.tests.gov:gateway_test": [
+    3.141,
+    1.751,
+    1.415,
+    1.399,
+    1.582,
+    1.554
+  ],
+  "bee.tests.gov:grant_migration_test": [
+    0.931,
+    0.161,
+    0.147,
+    0.125,
+    0.16,
+    0.128
+  ],
+  "bee.tests.gov:guide_test": [
+    0.85,
+    0.093,
+    0.081,
+    0.082,
+    0.12,
+    0.082
+  ],
+  "bee.tests.gov:headless_revert_test": [
+    0.856,
+    0.079,
+    0.078,
+    0.087,
+    0.102,
+    0.078
+  ],
+  "bee.tests.gov:hive_delivery_test": [
+    0.882,
+    0.095,
+    0.091,
+    0.089,
+    0.194,
+    0.351
+  ],
+  "bee.tests.gov:hive_sdk_guide_test": [
+    9.717,
+    1.614,
+    1.417,
+    1.406,
+    1.504,
+    1.487
+  ],
+  "bee.tests.gov:hub_agent_test": [
+    36.354,
+    6.113,
+    5.594,
+    5.633,
+    5.623,
+    5.312
+  ],
+  "bee.tests.gov:hub_application_test": [
+    40.564,
+    6.491,
+    5.633,
+    5.576,
+    5.841,
+    5.69
+  ],
+  "bee.tests.gov:hub_resolver_test": [
+    0.94,
+    0.133,
+    0.145,
+    0.13,
+    0.174,
+    0.135
+  ],
+  "bee.tests.gov:hub_ui_test": [
+    29.68,
+    5.672,
+    6.147,
+    5.553,
+    7.046,
+    9.868
+  ],
+  "bee.tests.gov:lease_grants_test": [
+    0.911,
+    0.185,
+    0.141,
+    0.082,
+    0.096,
+    0.139
+  ],
+  "bee.tests.gov:lease_model_test": [
+    0.842,
+    0.089,
+    0.068,
+    0.07,
+    0.072,
+    0.079
+  ],
+  "bee.tests.gov:lease_store_test": [
+    0.984,
+    0.166,
+    0.143,
+    0.122,
+    0.123,
+    0.128
+  ],
+  "bee.tests.gov:materializer_test": [
+    1.15,
+    0.205,
+    0.205,
+    0.197,
+    0.226,
+    0.316
+  ],
+  "bee.tests.gov:migration_work_test": [
+    0.937,
+    0.115,
+    0.109,
+    0.112,
+    0.114,
+    0.141
+  ],
+  "bee.tests.gov:overlay_resolver_test": [
+    1.234,
+    0.256,
+    0.208,
+    0.202,
+    0.217,
+    0.22
+  ],
+  "bee.tests.gov:plan_protocol_test": [
+    0.868,
+    0.081,
+    0.079,
+    0.073,
+    0.086,
+    0.086
+  ],
+  "bee.tests.gov:plan_store_test": [
+    0.867,
+    0.11,
+    0.109,
+    0.089,
+    0.118,
+    0.103
+  ],
+  "bee.tests.gov:preflight_test": [
+    0.986,
+    0.208,
+    0.163,
+    0.157,
+    0.174,
+    0.166
+  ],
+  "bee.tests.gov:process_grant_test": [
+    1.142,
+    0.274,
+    0.237,
+    0.227,
+    0.212,
+    0.244
+  ],
+  "bee.tests.gov:protected_kernel_test": [
+    0.415,
+    0.432,
+    0.424,
+    0.527,
+    0.469
+  ],
+  "bee.tests.gov:publication_profiles_test": [
+    0.866,
+    0.146,
+    0.119,
+    0.131,
+    0.152,
+    0.13
+  ],
+  "bee.tests.gov:publication_service_test": [
+    0.89,
+    0.08,
+    0.069,
+    0.075,
+    0.072,
+    0.075
+  ],
+  "bee.tests.gov:publisher_test": [
+    0.995,
+    0.155,
+    0.144,
+    0.144,
+    0.493,
+    0.181
+  ],
+  "bee.tests.gov:source_test": [
+    0.889,
+    0.078,
+    0.078,
+    0.079,
+    0.081,
+    0.102
+  ],
+  "bee.tests.gov:starter_delivery_test": [
+    6.478,
+    5.742,
+    5.73,
+    5.669,
+    6.155
+  ],
+  "bee.tests.gov:stored_capabilities_recovery_test": [
+    6.149,
+    6.073,
+    6.215,
+    10.31,
+    7.572
+  ],
+  "bee.tests.gov:stored_rules_recovery_test": [
+    6.637,
+    5.739,
+    5.742,
+    5.834,
+    7.384
+  ],
+  "bee.tests.gov:super_edit_test": [
+    0.964,
+    0.923,
+    0.967,
+    0.879,
+    0.858,
+    0.951
+  ],
+  "bee.tests.gov:uninstall_pin_test": [
+    0.875,
+    0.092,
+    0.078,
+    0.079,
+    0.092,
+    0.107
+  ],
+  "bee.tests.gov:watch_grant_test": [
+    0.195,
+    0.212,
+    0.193,
+    0.282,
+    0.227
+  ],
+  "bee.tests.gov:workspace_applications_test": [
+    0.899,
+    0.084,
+    0.079,
+    0.083,
+    0.082,
+    0.087
+  ],
+  "bee.tests.gov:workspace_method_test": [
+    0.88,
+    0.087,
+    0.078,
+    0.072,
+    0.086,
+    0.084
+  ],
+  "bee.tests.gov:workspace_protocol_test": [
+    0.837,
+    0.097,
+    0.079,
+    0.074,
+    0.084,
+    0.074
+  ],
+  "bee.tests.gov:workspace_test": [
+    0.913,
+    0.138,
+    0.11,
+    0.136,
+    0.121,
+    0.122
+  ],
+  "bee.tests.harness.app:agent_picker_test": [
+    5.443,
+    4.138,
+    4.139,
+    4.316,
+    4.769
+  ],
+  "bee.tests.harness.app:direct_restore_test": [
+    0.09,
+    0.093,
+    0.082,
+    0.09,
+    0.089
+  ],
+  "bee.tests.harness.app:directory_test": [
+    0.095,
+    0.076,
+    0.07,
+    0.104,
+    0.079
+  ],
+  "bee.tests.harness.app:entry_dependencies_test": [
+    0.087,
+    0.073,
+    0.073,
+    0.081,
+    0.084
+  ],
+  "bee.tests.harness.app:entry_route_test": [
+    0.183,
+    0.142,
+    0.128,
+    0.143,
+    0.155
+  ],
+  "bee.tests.harness.app:message_draft_test": [
+    0.083,
+    0.075,
+    0.073,
+    0.088,
+    0.094
+  ],
+  "bee.tests.harness.app:session_controls_test": [
+    7.866,
+    7.929,
+    7.723,
+    7.744,
+    7.771
+  ],
+  "bee.tests.harness.app:terminal_view_test": [
+    0.197,
+    0.109,
+    0.1,
+    0.427,
+    0.143
+  ],
+  "bee.tests.harness.carrier:machine_schema_test": [
+    0.201,
+    0.536,
+    0.168,
+    0.171,
+    0.177
+  ],
+  "bee.tests.harness.catalog:selected_catalog_test": [
+    0.096,
+    0.111,
+    0.106,
+    0.118,
+    0.16
+  ],
+  "bee.tests.harness.launch:admission_dependencies_test": [
+    0.083,
+    0.197,
+    0.065,
+    0.073,
+    0.073
+  ],
+  "bee.tests.harness.launch:configuration_preview_test": [
+    0.088,
+    0.1,
+    0.1,
+    0.085,
+    0.112
+  ],
+  "bee.tests.harness.launch:locate_test": [
+    0.244,
+    0.516,
+    0.24,
+    0.204,
+    0.23
+  ],
+  "bee.tests.harness.permission.external.binding:answer_hook_test": [
+    0.108,
+    0.113,
+    0.115,
+    0.1,
+    0.126
+  ],
+  "bee.tests.harness.permission:permissions_test": [
+    0.878,
+    0.086,
+    0.078,
+    0.078,
+    0.073,
+    0.079
+  ],
+  "bee.tests.harness.profiles:agent_view_test": [
+    0.983,
+    0.181,
+    0.169,
+    0.164,
+    0.156,
+    0.176
+  ],
+  "bee.tests.harness.profiles:agents_test": [
+    0.879,
+    0.093,
+    0.127,
+    0.074,
+    0.078,
+    0.078
+  ],
+  "bee.tests.harness.profiles:allowall_service_test": [
+    2.414,
+    2.61,
+    1.998,
+    2.117,
+    2.153
+  ],
+  "bee.tests.harness.profiles:codex_effort_test": [
+    0.944,
+    0.189,
+    0.201,
+    0.16,
+    0.16,
+    0.174
+  ],
+  "bee.tests.harness.profiles:editor_test": [
+    0.943,
+    0.099,
+    0.095,
+    0.076,
+    0.081,
+    0.087
+  ],
+  "bee.tests.harness.profiles:form_test": [
+    6.036,
+    6.755,
+    6.616,
+    6.451,
+    11.049,
+    7.338
+  ],
+  "bee.tests.harness.profiles:grants_migration_test": [
+    1.329,
+    0.688,
+    0.581,
+    0.573,
+    0.666,
+    0.617
+  ],
+  "bee.tests.harness.profiles:migration_test": [
+    1.051,
+    0.288,
+    0.331,
+    0.313,
+    0.289,
+    0.317
+  ],
+  "bee.tests.harness.profiles:names_migration_test": [
+    0.113,
+    0.094,
+    0.094,
+    0.084,
+    0.101
+  ],
+  "bee.tests.harness.profiles:observations_test": [
+    2.74,
+    1.66,
+    0.826,
+    1.02,
+    0.753,
+    0.711
+  ],
+  "bee.tests.harness.profiles:option_controls_test": [
+    0.85,
+    0.081,
+    0.072,
+    0.073,
+    0.069,
+    0.081
+  ],
+  "bee.tests.harness.profiles:preferences_test": [
+    0.835,
+    0.081,
+    0.084,
+    0.069,
+    0.076,
+    0.075
+  ],
+  "bee.tests.harness.profiles:reopen_test": [
+    0.862,
+    0.078,
+    0.084,
+    0.082,
+    0.07,
+    0.101
+  ],
+  "bee.tests.harness.profiles:repair_test": [
+    1.433,
+    0.571,
+    0.491,
+    0.495,
+    0.523,
+    0.497
+  ],
+  "bee.tests.harness.profiles:selection_test": [
+    0.88,
+    0.076,
+    0.081,
+    0.076,
+    0.079,
+    0.08
+  ],
+  "bee.tests.harness.profiles:service_test": [
+    13.805,
+    10.159,
+    9.641,
+    8.865,
+    10.206,
+    9.823
+  ],
+  "bee.tests.harness.profiles:spawn_form_test": [
+    0.857,
+    0.085,
+    0.074,
+    0.069,
+    0.085,
+    0.068
+  ],
+  "bee.tests.harness.profiles:view_test": [
+    2.614,
+    5.259,
+    5.22,
+    5.07,
+    5.142,
+    4.646
+  ],
+  "bee.tests.harness.service:executor_handoff_test": [
+    0.149,
+    0.127,
+    0.124,
+    0.128,
+    0.159
+  ],
+  "bee.tests.harness.service:supervision_test": [
+    1.205,
+    1.214,
+    1.152,
+    1.085,
+    1.253
+  ],
+  "bee.tests.harness:acceptance_test": [
+    3.108,
+    2.278,
+    2.268,
+    2.276,
+    2.389,
+    2.553
+  ],
+  "bee.tests.harness:activation_test": [
+    0.917,
+    0.087,
+    0.076,
+    0.07,
+    0.076,
+    0.105
+  ],
+  "bee.tests.harness:agent_resolver_test": [
+    0.937,
+    0.126,
+    0.11,
+    0.117,
+    0.125,
+    0.239
+  ],
+  "bee.tests.harness:authoring_policy_test": [
+    1.061,
+    0.147,
+    0.133,
+    0.125,
+    0.149,
+    0.13
+  ],
+  "bee.tests.harness:capability_elevation_test": [
+    2.271,
+    0.729,
+    0.662,
+    0.63,
+    0.793,
+    1.004
+  ],
+  "bee.tests.harness:capability_test": [
+    0.886,
+    0.082,
+    0.075,
+    0.073,
+    0.082,
+    0.101
+  ],
+  "bee.tests.harness:carrier_drain_test": [
+    12.617,
+    6.476,
+    5.698,
+    5.666,
+    6.088,
+    8.771
+  ],
+  "bee.tests.harness:carrier_pure_test": [
+    0.872,
+    0.12,
+    0.089,
+    0.092,
+    0.093,
+    0.081
+  ],
+  "bee.tests.harness:carrier_stream_test": [
+    18.578,
+    6.376,
+    5.237,
+    4.823,
+    10.53,
+    4.6
+  ],
+  "bee.tests.harness:carrier_test": [
+    61.451,
+    25.429,
+    25.011,
+    24.926,
+    27.617,
+    25.661
+  ],
+  "bee.tests.harness:carrier_transport_test": [
+    1.094,
+    0.24,
+    0.232,
+    0.247,
+    0.552,
+    0.26
+  ],
+  "bee.tests.harness:catalog_test": [
+    1.382,
+    0.4,
+    0.395,
+    0.412,
+    0.738,
+    0.431
+  ],
+  "bee.tests.harness:classify_test": [
+    0.951,
+    0.118,
+    0.091,
+    0.08,
+    0.087,
+    0.082
+  ],
+  "bee.tests.harness:claude_acceptance_test": [
+    0.851,
+    0.086,
+    0.074,
+    0.086,
+    0.188,
+    0.089
+  ],
+  "bee.tests.harness:claude_adapter_test": [
+    1.044,
+    0.343,
+    0.301,
+    0.312,
+    0.341,
+    0.349
+  ],
+  "bee.tests.harness:claude_control_test": [
+    0.93,
+    0.095,
+    0.084,
+    0.091,
+    0.26,
+    0.096
+  ],
+  "bee.tests.harness:claude_runner_test": [
+    0.909,
+    0.098,
+    0.081,
+    0.1,
+    0.091,
+    0.085
+  ],
+  "bee.tests.harness:codex_auth_test": [
+    0.835,
+    0.08,
+    0.069,
+    0.072,
+    0.073,
+    0.073
+  ],
+  "bee.tests.harness:codex_profile_test": [
+    1.095,
+    0.48,
+    0.395,
+    0.366,
+    0.386,
+    0.364
+  ],
+  "bee.tests.harness:codex_runner_test": [
+    0.884,
+    0.092,
+    0.082,
+    0.081,
+    0.081,
+    0.094
+  ],
+  "bee.tests.harness:continuation_test": [
+    1.249,
+    0.747,
+    0.647,
+    0.66,
+    0.667,
+    0.639
+  ],
+  "bee.tests.harness:driver_bindings_migration_test": [
+    0.11,
+    0.084,
+    0.116,
+    0.936,
+    0.135
+  ],
+  "bee.tests.harness:exits_test": [
+    0.867,
+    0.074,
+    0.076,
+    0.082,
+    0.115,
+    0.082
+  ],
+  "bee.tests.harness:extension_carrier_test": [
+    7.87,
+    5.703,
+    3.582,
+    3.949,
+    4.934,
+    3.722
+  ],
+  "bee.tests.harness:gateway_carrier_test": [
+    65.308,
+    32.331,
+    29.122,
+    27.983,
+    29.244,
+    31.175
+  ],
+  "bee.tests.harness:gateway_fencing_test": [
+    9.687,
+    1.846,
+    1.77,
+    1.703,
+    2.312,
+    1.643
+  ],
+  "bee.tests.harness:gateway_harness_test": [
+    0.882,
+    0.127,
+    0.092,
+    0.088,
+    0.219,
+    0.103
+  ],
+  "bee.tests.harness:hook_transport_test": [
+    2.055,
+    0.57,
+    0.566,
+    0.547,
+    1.465,
+    0.538
+  ],
+  "bee.tests.harness:installation_request_test": [
+    1.949,
+    0.772,
+    0.635,
+    0.85,
+    0.806,
+    0.672
+  ],
+  "bee.tests.harness:launch_admission_test": [
+    0.647,
+    0.631,
+    0.644,
+    1.846,
+    0.636
+  ],
+  "bee.tests.harness:launch_agents_test": [
+    0.704,
+    0.63,
+    0.629,
+    0.725,
+    0.562
+  ],
+  "bee.tests.harness:launch_credentials_test": [
+    2.604,
+    2.692,
+    2.754,
+    5.803,
+    2.512
+  ],
+  "bee.tests.harness:launch_overrides_test": [
+    1.337,
+    1.189,
+    1.46,
+    1.514,
+    1.311
+  ],
+  "bee.tests.harness:launch_policy_test": [
+    0.206,
+    0.216,
+    0.302,
+    0.455,
+    0.197
+  ],
+  "bee.tests.harness:launch_profiles_test": [
+    1.605,
+    1.396,
+    1.844,
+    1.559,
+    1.505
+  ],
+  "bee.tests.harness:launch_provider_test": [
+    1.84,
+    1.719,
+    1.724,
+    2.694,
+    1.573
+  ],
+  "bee.tests.harness:launch_recovery_test": [
+    1.513,
+    1.384,
+    1.544,
+    1.49,
+    1.367
+  ],
+  "bee.tests.harness:launch_sessions_test": [
+    2.665,
+    1.589,
+    1.819,
+    1.993,
+    1.847
+  ],
+  "bee.tests.harness:launch_spec_boundary_test": [
+    15.055,
+    13.592,
+    20.571,
+    15.384,
+    13.997
+  ],
+  "bee.tests.harness:launch_spec_test": [
+    2.759,
+    2.533,
+    3.112,
+    3.22,
+    2.448
+  ],
+  "bee.tests.harness:locate_probe_test": [
+    0.869,
+    0.106,
+    0.111,
+    0.102,
+    0.098,
+    0.094
+  ],
+  "bee.tests.harness:permission_carrier_test": [
+    55.187,
+    26.41,
+    23.836,
+    28.278,
+    25.29,
+    24.304
+  ],
+  "bee.tests.harness:permission_contexts_test": [
+    1.1,
+    0.349,
+    0.33,
+    0.288,
+    0.358,
+    0.365
+  ],
+  "bee.tests.harness:permission_exchange_test": [
+    0.954,
+    0.169,
+    0.117,
+    0.129,
+    0.148,
+    0.172
+  ],
+  "bee.tests.harness:permission_hook_test": [
+    0.868,
+    0.089,
+    0.073,
+    0.079,
+    0.09,
+    0.089
+  ],
+  "bee.tests.harness:permission_test": [
+    0.826,
+    0.117,
+    0.083,
+    0.086,
+    0.091,
+    0.089
+  ],
+  "bee.tests.harness:policy_test": [
+    1.062,
+    0.223,
+    0.173,
+    0.178,
+    0.201,
+    0.216
+  ],
+  "bee.tests.harness:presentation_test": [
+    1.166,
+    0.267,
+    0.161,
+    0.214,
+    0.18,
+    0.187
+  ],
+  "bee.tests.harness:probe_cache_test": [
+    0.876,
+    0.087,
+    0.13,
+    0.083,
+    0.1,
+    0.09
+  ],
+  "bee.tests.harness:profile_environment_isolation_test": [
+    4.228,
+    1.54,
+    1.523,
+    1.639,
+    1.542,
+    1.54
+  ],
+  "bee.tests.harness:publication_request_test": [
+    1.455,
+    0.518,
+    0.442,
+    0.412,
+    0.412,
+    0.45
+  ],
+  "bee.tests.harness:saved_profiles_test": [
+    0.891,
+    0.115,
+    0.077,
+    0.077,
+    0.112,
+    0.082
+  ],
+  "bee.tests.harness:selection_test": [
+    1.142,
+    0.25,
+    0.244,
+    0.24,
+    0.291,
+    0.208
+  ],
+  "bee.tests.harness:single_owner_test": [
+    0.307,
+    0.225,
+    0.282,
+    0.29,
+    0.299
+  ],
+  "bee.tests.harness:startup_view_test": [
+    0.853,
+    0.082,
+    0.104,
+    0.076,
+    0.089,
+    0.113
+  ],
+  "bee.tests.harness:steer_permission_probe_test": [
+    0.99,
+    0.253,
+    0.173,
+    0.175,
+    0.195,
+    0.214
+  ],
+  "bee.tests.harness:window_hooks_test": [
+    0.875,
+    0.085,
+    0.164,
+    0.076,
+    0.089,
+    0.094
+  ],
+  "bee.tests.harness:window_ready_test": [
+    5.836,
+    1.724,
+    1.426,
+    1.638,
+    1.939,
+    1.733
+  ],
+  "bee.tests.harness:window_recovery_test": [
+    0.867,
+    0.108,
+    0.091,
+    0.078,
+    0.148,
+    0.079
+  ],
+  "bee.tests.hive:call_test": [
+    1.009,
+    0.238,
+    0.223,
+    0.222,
+    0.313,
+    0.235
+  ],
+  "bee.tests.hive:exposure_scope_test": [
+    0.898,
+    0.148,
+    0.108,
+    0.131,
+    0.144,
+    0.108
+  ],
+  "bee.tests.hive:receiver_test": [
+    12.479,
+    7.929,
+    7.429,
+    7.58,
+    8.761,
+    7.962
+  ],
+  "bee.tests.hive:remote_discovery_test": [
+    1.08,
+    0.28,
+    0.212,
+    0.229,
+    0.292,
+    0.218
+  ],
+  "bee.tests.hive:routing_test": [
+    1.062,
+    0.357,
+    0.333,
+    0.364,
+    0.368,
+    0.362
+  ],
+  "bee.tests.hub:binary_identity_test": [
+    0.944,
+    0.107,
+    0.09,
+    0.098,
+    0.111,
+    0.102
+  ],
+  "bee.tests.hub:catalog_test": [
+    1.364,
+    0.471,
+    0.464,
+    0.438,
+    0.448,
+    0.464
+  ],
+  "bee.tests.hub:facade_test": [
+    1.349,
+    0.456,
+    0.355,
+    0.326,
+    0.399,
+    0.35
+  ],
+  "bee.tests.hub:graph_test": [
+    0.841,
+    0.093,
+    0.076,
+    0.079,
+    0.087,
+    0.082
+  ],
+  "bee.tests.hub:inspect_test": [
+    2.16,
+    1.943,
+    2.042,
+    1.807,
+    2.412,
+    1.94
+  ],
+  "bee.tests.hub:inventory_test": [
+    0.979,
+    0.082,
+    0.077,
+    0.078,
+    0.091,
+    0.076
+  ],
+  "bee.tests.hub:lifecycle_service_test": [
+    1.762,
+    0.652,
+    0.662,
+    0.607,
+    0.651,
+    0.609
+  ],
+  "bee.tests.hub:lifecycle_test": [
+    0.859,
+    0.089,
+    0.08,
+    0.091,
+    0.077,
+    0.078
+  ],
+  "bee.tests.hub:migration_runner_test": [
+    1.0,
+    0.228,
+    0.2,
+    0.197,
+    0.204,
+    0.217
+  ],
+  "bee.tests.hub:migration_work_test": [
+    0.929,
+    0.111,
+    0.129,
+    0.101,
+    0.102,
+    0.103
+  ],
+  "bee.tests.hub:migrations_test": [
+    1.078,
+    0.145,
+    0.18,
+    0.14,
+    0.167,
+    0.145
+  ],
+  "bee.tests.hub:plan_test": [
+    1.092,
+    0.145,
+    0.149,
+    0.147,
+    0.163,
+    0.195
+  ],
+  "bee.tests.hub:preview_test": [
+    0.837,
+    0.079,
+    0.081,
+    0.073,
+    0.081,
+    0.078
+  ],
+  "bee.tests.hub:requirements_test": [
+    1.181,
+    0.182,
+    0.193,
+    0.176,
+    0.174,
+    0.198
+  ],
+  "bee.tests.hub:result_test": [
+    0.905,
+    0.086,
+    0.075,
+    0.095,
+    0.072,
+    0.077
+  ],
+  "bee.tests.hub:semver_test": [
+    0.848,
+    0.076,
+    0.077,
+    0.076,
+    0.087,
+    0.075
+  ],
+  "bee.tests.hub:updates_test": [
+    1.031,
+    0.115,
+    0.117,
+    0.113,
+    0.127,
+    0.119
+  ],
+  "bee.tests.ioevents:denied_test": [
+    0.099,
+    0.078,
+    0.078,
+    0.086,
+    0.079
+  ],
+  "bee.tests.ioevents:watch_test": [
+    0.087,
+    0.074,
+    0.085,
+    0.096,
+    0.072
+  ],
+  "bee.tests.node:app_namespace_migration_test": [
+    0.925,
+    0.113,
+    0.096,
+    0.103,
+    0.116,
+    0.091
+  ],
+  "bee.tests.node:app_scope_test": [
+    0.931,
+    0.226,
+    0.106,
+    0.112,
+    0.125,
+    0.106
+  ],
+  "bee.tests.node:app_sessions_test": [
+    3.235,
+    1.329,
+    1.094,
+    1.128,
+    1.221,
+    1.136
+  ],
+  "bee.tests.node:app_tools_test": [
+    1.563,
+    1.423,
+    1.212,
+    1.316,
+    1.361,
+    1.384
+  ],
+  "bee.tests.node:application_test": [
+    0.873,
+    0.094,
+    0.089,
+    0.094,
+    0.106,
+    0.101
+  ],
+  "bee.tests.node:application_tests_test": [
+    0.851,
+    0.075,
+    0.075,
+    0.073,
+    0.118,
+    0.076
+  ],
+  "bee.tests.node:application_upgrade_test": [
+    1.188,
+    1.081,
+    1.028,
+    1.282,
+    1.064
+  ],
+  "bee.tests.node:backlog_overflow_test": [
+    2.151,
+    1.405,
+    1.126,
+    1.165,
+    1.196,
+    0.765
+  ],
+  "bee.tests.node:backlog_refusal_test": [
+    0.134,
+    0.135,
+    0.156,
+    0.163,
+    2.208
+  ],
+  "bee.tests.node:broker_test": [
+    1.227,
+    0.605,
+    0.477,
+    0.48,
+    0.549,
+    0.529
+  ],
+  "bee.tests.node:demand_test": [
+    1.1,
+    0.236,
+    0.254,
+    0.194,
+    0.191,
+    0.229
+  ],
+  "bee.tests.node:home_workspace_test": [
+    0.11,
+    0.112,
+    0.103,
+    0.112,
+    0.111
+  ],
+  "bee.tests.node:idle_services_test": [
+    1.346,
+    0.075,
+    0.08,
+    0.078,
+    0.078,
+    0.08
+  ],
+  "bee.tests.node:names_test": [
+    11.052,
+    10.086,
+    10.075,
+    10.08,
+    10.077,
+    10.077
+  ],
+  "bee.tests.node:node_test": [
+    2.645,
+    2.401,
+    2.38,
+    2.278,
+    2.446,
+    2.442
+  ],
+  "bee.tests.node:retirement_test": [
+    1.226,
+    0.37,
+    0.271,
+    0.364,
+    0.336,
+    0.337
+  ],
+  "bee.tests.node:state_guard_test": [
+    0.898,
+    0.14,
+    0.094,
+    0.104,
+    0.101,
+    0.104
+  ],
+  "bee.tests.node:tests_runner_test": [
+    6.07,
+    3.015,
+    3.415,
+    3.488,
+    3.282,
+    3.382
+  ],
+  "bee.tests.node:upgrade_test": [
+    1.384,
+    0.717,
+    0.606,
+    0.657,
+    0.75,
+    0.652
+  ],
+  "bee.tests.node:workspace_catalog_test": [
+    0.906,
+    0.169,
+    0.187,
+    0.158,
+    0.166,
+    0.171
+  ],
+  "bee.tests.persist:guard_test": [
+    1.249,
+    0.322,
+    0.235,
+    2.712,
+    0.248,
+    0.246
+  ],
+  "bee.tests.persist:tool_selections_test": [
+    0.144,
+    0.14,
+    0.144,
+    0.15,
+    0.192
+  ],
+  "bee.tests.placement.docker.service:demand_dispatch_test": [
+    0.876,
+    0.087,
+    0.071,
+    0.08,
+    0.079,
+    0.08
+  ],
+  "bee.tests.placement.docker.service:docker_owner_test": [
+    0.855,
+    0.085,
+    0.084,
+    0.084,
+    0.1,
+    0.098
+  ],
+  "bee.tests.placement.docker:authority_test": [
+    0.15,
+    0.164,
+    0.192,
+    0.189,
+    0.142,
+    0.187,
+    0.17,
+    0.178,
+    0.235,
+    0.205,
+    0.238,
+    0.201,
+    0.197
+  ],
+  "bee.tests.placement.docker:boundary_test": [
+    1.023,
+    0.218,
+    0.15,
+    0.168,
+    0.174,
+    0.176,
+    0.188,
+    0.196,
+    0.144,
+    0.176,
+    0.167,
+    0.227,
+    0.183,
+    0.174
+  ],
+  "bee.tests.placement.docker:cleanup_test": [
+    1.876,
+    6.407,
+    5.857,
+    0.85,
+    3.26,
+    3.112,
+    2.026,
+    5.193,
+    4.761,
+    26.12,
+    2.561,
+    1.334
+  ],
+  "bee.tests.placement.docker:environment_test": [
+    0.943,
+    0.145,
+    0.097,
+    0.129,
+    0.175,
+    0.108,
+    0.139,
+    0.16,
+    0.146,
+    0.147,
+    0.159,
+    0.717,
+    0.136,
+    0.172
+  ],
+  "bee.tests.placement.docker:home_test": [
+    10.696,
+    5.156,
+    5.465,
+    7.543,
+    5.52,
+    68.351,
+    83.3,
+    6.589,
+    5.926,
+    6.747,
+    14.638,
+    5.688,
+    5.214
+  ],
+  "bee.tests.placement.docker:image_test": [
+    6.874,
+    6.106,
+    6.078,
+    6.075,
+    6.078,
+    6.091,
+    6.11,
+    6.099,
+    6.074,
+    6.097,
+    6.088,
+    6.094,
+    6.085,
+    6.089
+  ],
+  "bee.tests.placement.docker:lifecycle_test": [
+    9.515,
+    4.554,
+    1.851,
+    1.896,
+    1.846,
+    1.854,
+    10.777,
+    5.038,
+    1.959,
+    1.95,
+    2.076,
+    7.32,
+    1.985,
+    1.886
+  ],
+  "bee.tests.placement.docker:probe_cache_test": [
+    1.029,
+    0.57,
+    0.498,
+    0.488,
+    0.502,
+    4.302,
+    1.199,
+    0.976,
+    0.496,
+    0.746,
+    0.989,
+    0.52,
+    0.553
+  ],
+  "bee.tests.placement.docker:profile_test": [
+    0.833,
+    0.08,
+    0.072,
+    0.071,
+    0.072,
+    0.071,
+    0.084,
+    0.079,
+    0.072,
+    0.087,
+    0.079,
+    0.094,
+    0.075,
+    0.081
+  ],
+  "bee.tests.placement.docker:projection_test": [
+    0.855,
+    0.083,
+    0.072,
+    0.069,
+    0.074,
+    0.068,
+    0.079,
+    0.076,
+    0.071,
+    0.094,
+    0.083,
+    0.079,
+    0.088,
+    0.082
+  ],
+  "bee.tests.placement.docker:readiness_test": [
+    0.87,
+    0.101,
+    0.079,
+    0.088,
+    0.099,
+    0.085,
+    0.164,
+    0.096,
+    0.093,
+    0.087,
+    0.116,
+    0.098,
+    0.088,
+    0.099
+  ],
+  "bee.tests.placement.docker:spec_test": [
+    0.856,
+    0.079,
+    0.069,
+    0.075,
+    0.074,
+    0.072,
+    0.083,
+    0.074,
+    0.07,
+    0.077,
+    0.079,
+    0.098,
+    0.081,
+    0.077
+  ],
+  "bee.tests.placement.docker:stdin_test": [
+    1.83,
+    3.148,
+    1.254,
+    1.141,
+    1.17,
+    1.131,
+    4.938,
+    2.659,
+    1.658,
+    1.177,
+    1.309,
+    1.541,
+    1.197,
+    1.293
+  ],
+  "bee.tests.placement.docker:window_scope_test": [
+    0.094,
+    0.101,
+    0.101,
+    0.099,
+    0.093,
+    0.094,
+    0.099,
+    0.079,
+    0.091,
+    0.091,
+    0.11,
+    0.117,
+    0.088
+  ],
+  "bee.tests.placement.native.persist:completion_backlog_test": [
+    0.129,
+    0.105,
+    0.119,
+    0.147,
+    0.103
+  ],
+  "bee.tests.placement.native.persist:eligibility_test": [
+    0.842,
+    0.123,
+    0.103,
+    0.926,
+    0.094,
+    0.125
+  ],
+  "bee.tests.placement.native.service:capability_test": [
+    0.108,
+    0.111,
+    0.081,
+    0.08,
+    0.11
+  ],
+  "bee.tests.placement.native.service:configuration_setup_test": [
+    1.474,
+    0.363,
+    0.249,
+    2.044,
+    0.321,
+    0.272
+  ],
+  "bee.tests.placement.native.service:publication_test": [
+    0.896,
+    0.128,
+    0.107,
+    0.117,
+    0.127,
+    0.115
+  ],
+  "bee.tests.placement.native.service:required_file_test": [
+    0.876,
+    0.087,
+    0.072,
+    0.077,
+    0.078,
+    0.08
+  ],
+  "bee.tests.placement.native.service:runtime_supervision_test": [
+    0.948,
+    0.576,
+    0.572,
+    0.567,
+    0.606
+  ],
+  "bee.tests.placement.native:agy_hook_input_test": [
+    0.666,
+    0.415,
+    3.252,
+    0.595,
+    0.579
+  ],
+  "bee.tests.placement.native:grok_session_test": [
+    1.411,
+    0.467,
+    0.508,
+    0.533,
+    0.526,
+    0.471
+  ],
+  "bee.tests.placement.native:instruction_builder_test": [
+    9.663,
+    0.522,
+    0.439,
+    0.476,
+    0.469
+  ],
+  "bee.tests.placement.native:native_cleanup_test": [
+    13.369,
+    2.905,
+    2.917,
+    2.877,
+    2.965,
+    2.938
+  ],
+  "bee.tests.placement.native:native_configuration_test": [
+    37.25,
+    10.162,
+    7.516,
+    7.15,
+    7.621,
+    7.208
+  ],
+  "bee.tests.placement.native:native_credentials_test": [
+    22.457,
+    2.931,
+    2.998,
+    2.642,
+    2.8,
+    2.688
+  ],
+  "bee.tests.placement.native:native_execution_test": [
+    15.021,
+    2.186,
+    2.133,
+    2.121,
+    2.084,
+    2.103
+  ],
+  "bee.tests.placement.native:native_forget_session_test": [
+    0.256,
+    0.221,
+    0.234,
+    0.286,
+    0.223
+  ],
+  "bee.tests.placement.native:native_measurement_test": [
+    2.503,
+    2.526,
+    2.483,
+    2.545,
+    2.488
+  ],
+  "bee.tests.placement.native:native_output_test": [
+    22.71,
+    3.561,
+    3.479,
+    3.486,
+    3.656,
+    3.485
+  ],
+  "bee.tests.placement.native:native_startup_test": [
+    3.378,
+    0.511,
+    0.553,
+    0.475,
+    0.5,
+    0.476
+  ],
+  "bee.tests.placement.native:native_test": [
+    16.36,
+    2.599,
+    2.62,
+    2.3,
+    2.497,
+    2.249
+  ],
+  "bee.tests.placement.native:provider_configuration_test": [
+    3.736,
+    0.204,
+    0.272,
+    0.177,
+    0.191,
+    0.175
+  ],
+  "bee.tests.placement.native:provider_projection_test": [
+    0.859,
+    0.075,
+    0.088,
+    0.078,
+    0.085,
+    0.082
+  ],
+  "bee.tests.placement.native:request_test": [
+    0.911,
+    0.09,
+    0.11,
+    0.081,
+    0.089,
+    0.079
+  ],
+  "bee.tests.placement.native:retirement_test": [
+    0.857,
+    0.076,
+    0.107,
+    0.077,
+    0.086,
+    0.082
+  ],
+  "bee.tests.placement.native:startup_test": [
+    1.105,
+    0.216,
+    0.219,
+    0.196,
+    0.224,
+    0.212
+  ],
+  "bee.tests.placement.native:workdir_preparer_test": [
+    32.399,
+    1.08,
+    1.08,
+    1.132,
+    1.189,
+    1.119
+  ],
+  "bee.tests.placement.native:writable_roots_migration_test": [
+    0.127,
+    0.135,
+    0.128,
+    0.13,
+    0.122
+  ],
+  "bee.tests.process:demand_model_absent_deferred_test": [
+    13.902,
+    5.419,
+    6.019,
+    5.317,
+    5.395,
+    5.176
+  ],
+  "bee.tests.process:demand_model_absent_test": [
+    12.529,
+    5.418,
+    6.064,
+    5.382,
+    5.786,
+    5.357
+  ],
+  "bee.tests.process:demand_model_ready_deferred_test": [
+    14.936,
+    5.81,
+    5.852,
+    5.738,
+    7.165,
+    5.793
+  ],
+  "bee.tests.process:demand_model_ready_test": [
+    13.364,
+    5.88,
+    6.557,
+    5.77,
+    6.187,
+    6.177
+  ],
+  "bee.tests.process:demand_model_test": [
+    0.902,
+    0.079,
+    0.082,
+    0.082,
+    0.08,
+    0.076
+  ],
+  "bee.tests.process:demand_owner_test": [
+    0.924,
+    0.087,
+    0.085,
+    0.079,
+    0.081,
+    0.072
+  ],
+  "bee.tests.process:demand_test": [
+    0.864,
+    0.074,
+    0.073,
+    0.078,
+    0.08,
+    0.078
+  ],
+  "bee.tests.process:supervisor_transaction_test": [
+    0.98,
+    0.149,
+    0.115,
+    0.128,
+    0.115,
+    0.13
+  ],
+  "bee.tests.process:task_test": [
+    1.872,
+    1.081,
+    1.082,
+    1.075,
+    1.08,
+    1.085
+  ],
+  "bee.tests.process:worker_test": [
+    2.977,
+    2.075,
+    2.079,
+    2.093,
+    2.086,
+    2.075
+  ],
+  "bee.tests.resources:authority_test": [
+    1.033,
+    0.244,
+    0.217,
+    0.251,
+    0.198,
+    0.213
+  ],
+  "bee.tests.shell:attention_alert_test": [
+    0.891,
+    0.084,
+    0.085,
+    0.09,
+    0.084,
+    0.104
+  ],
+  "bee.tests.shell:copy_test": [
+    0.078,
+    0.084,
+    0.08,
+    0.079,
+    0.075
+  ],
+  "bee.tests.shell:dialog_test": [
+    0.924,
+    0.081,
+    0.086,
+    0.104,
+    0.107,
+    0.08
+  ],
+  "bee.tests.shell:display_test": [
+    16.322,
+    20.644
+  ],
+  "bee.tests.shell:hints_test": [
+    0.108,
+    0.075,
+    0.091,
+    0.083,
+    0.117
+  ],
+  "bee.tests.shell:membership_test": [
+    0.073,
+    0.079,
+    0.087,
+    0.081,
+    0.073
+  ],
+  "bee.tests.shell:model_test": [
+    1.04,
+    0.074,
+    0.081,
+    0.09,
+    0.077,
+    0.074
+  ],
+  "bee.tests.shell:render_test": [
+    0.965,
+    0.128,
+    0.085,
+    0.115,
+    0.092,
+    0.101
+  ],
+  "bee.tests.shell:selection_test": [
+    0.986,
+    0.098,
+    0.079,
+    0.078,
+    0.092,
+    0.131
+  ],
+  "bee.tests.shell:title_editor_test": [
+    0.939,
+    0.074,
+    0.087,
+    0.098,
+    0.079,
+    0.077
+  ],
+  "bee.tests.shell:watch_test": [
+    1.007,
+    0.088,
+    0.08,
+    0.074,
+    0.078,
+    0.102
+  ],
+  "bee.tests.support.hygiene:compare_test": [
+    0.834,
+    0.072,
+    0.09,
+    0.086,
+    0.075,
+    0.078
+  ],
+  "bee.tests.support.starter.tests:greeting_test": [
+    0.113,
+    0.079,
+    0.103,
+    0.089,
+    0.081
+  ],
+  "bee.tests.support:committed_test": [
+    0.888,
+    0.09,
+    0.082,
+    0.075,
+    0.078,
+    0.083
+  ],
+  "bee.tests.support:processes_test": [
+    0.072,
+    0.078,
+    0.081,
+    0.074,
+    0.074
+  ],
+  "bee.tests.support:seam_binding_test": [
+    0.104,
+    0.105,
+    0.092,
+    0.094,
+    0.101
+  ],
+  "bee.tests.sync:canonical_test": [
+    1.019,
+    0.092,
+    0.091,
+    0.083,
+    0.078,
+    0.091
+  ],
+  "bee.tests.sync:distribution_store_test": [
+    0.87,
+    0.09,
+    0.079,
+    0.083,
+    0.078,
+    0.088
+  ],
+  "bee.tests.sync:distribution_test": [
+    1.157,
+    0.177,
+    0.147,
+    0.161,
+    0.175,
+    0.174
+  ],
+  "bee.tests.sync:distributor_test": [
+    0.965,
+    0.117,
+    0.075,
+    0.105,
+    0.089,
+    0.094
+  ],
+  "bee.tests.sync:protocol_test": [
+    0.971,
+    0.086,
+    0.072,
+    0.075,
+    0.086,
+    0.085
+  ],
+  "bee.tests.sync:replica_method_test": [
+    1.084,
+    0.089,
+    0.075,
+    0.084,
+    0.097,
+    0.103
+  ],
+  "bee.tests.sync:replica_protocol_test": [
+    0.929,
+    0.084,
+    0.08,
+    0.078,
+    0.074,
+    0.083
+  ],
+  "bee.tests.sync:replicas_test": [
+    1.026,
+    0.114,
+    0.108,
+    0.115,
+    0.105,
+    0.106
+  ],
+  "bee.tests.sync:store_test": [
+    1.007,
+    0.129,
+    0.086,
+    0.088,
+    0.085,
+    0.144
+  ],
+  "bee.tests.sync:version_test": [
+    0.903,
+    0.086,
+    0.073,
+    0.083,
+    0.088,
+    0.087
+  ],
+  "bee.tests.threads.sessions.binding:close_on_exit_test": [
+    0.101,
+    0.132,
+    0.134,
+    0.137,
+    0.118
+  ],
+  "bee.tests.threads.sessions.binding:listing_dependencies_test": [
+    0.083,
+    0.073,
+    0.078,
+    0.08,
+    0.084
+  ],
+  "bee.tests.threads.sessions:allowance_form_test": [
+    0.08,
+    0.082,
+    0.084,
+    0.1,
+    0.08
+  ],
+  "bee.tests.threads.sessions:attention_test": [
+    0.934,
+    0.093,
+    0.09,
+    0.092,
+    0.102,
+    0.096
+  ],
+  "bee.tests.threads.sessions:await_test": [
+    1.361,
+    0.485,
+    0.478,
+    0.477,
+    0.492,
+    0.474
+  ],
+  "bee.tests.threads.sessions:catalog_consumers_test": [
+    16.351,
+    8.219,
+    7.1,
+    7.056,
+    7.042,
+    9.432
+  ],
+  "bee.tests.threads.sessions:catalog_service_test": [
+    17.664,
+    6.371,
+    6.37,
+    6.408,
+    6.473,
+    6.63
+  ],
+  "bee.tests.threads.sessions:catalog_test": [
+    0.205,
+    0.18,
+    0.177,
+    0.167,
+    0.181
+  ],
+  "bee.tests.threads.sessions:client_test": [
+    0.978,
+    0.134,
+    0.105,
+    0.103,
+    0.101,
+    0.108
+  ],
+  "bee.tests.threads.sessions:driver_window_contract_test": [
+    2.762,
+    2.973,
+    2.551,
+    2.415,
+    2.378,
+    29.326
+  ],
+  "bee.tests.threads.sessions:hive_authorization_test": [
+    5.626,
+    2.354,
+    2.155,
+    2.17,
+    2.168,
+    2.2
+  ],
+  "bee.tests.threads.sessions:hook_latency_test": [
+    0.694,
+    0.643,
+    0.643,
+    0.622,
+    0.66
+  ],
+  "bee.tests.threads.sessions:interactive_test": [
+    3.201,
+    1.896,
+    1.609,
+    1.588,
+    1.455
+  ],
+  "bee.tests.threads.sessions:locate_test": [
+    0.98,
+    0.092,
+    0.082,
+    0.078,
+    0.08,
+    0.25
+  ],
+  "bee.tests.threads.sessions:owner_boundary_test": [
+    1.19,
+    0.215,
+    0.195,
+    0.191,
+    0.22,
+    0.225
+  ],
+  "bee.tests.threads.sessions:peer_correlation_test": [
+    1.076,
+    0.156,
+    0.175,
+    0.139,
+    0.171,
+    0.147
+  ],
+  "bee.tests.threads.sessions:protocol_test": [
+    0.945,
+    0.089,
+    0.108,
+    0.077,
+    0.084,
+    0.079
+  ],
+  "bee.tests.threads.sessions:remove_test": [
+    0.741,
+    0.679,
+    0.678,
+    0.705,
+    12.889
+  ],
+  "bee.tests.threads.sessions:rename_test": [
+    0.138,
+    0.151,
+    0.139,
+    0.143,
+    0.151
+  ],
+  "bee.tests.threads.sessions:wiring_test": [
+    0.933,
+    0.133,
+    0.135,
+    0.121,
+    0.115,
+    0.152
+  ],
+  "bee.tests.threads:addressing_test": [
+    0.903,
+    0.257,
+    0.089,
+    0.088,
+    0.096,
+    0.106
+  ],
+  "bee.tests.threads:app_alias_test": [
+    0.934,
+    0.119,
+    0.126,
+    0.102,
+    0.097,
+    0.304
+  ],
+  "bee.tests.threads:app_identity_test": [
+    0.846,
+    0.09,
+    0.075,
+    0.073,
+    0.106,
+    0.077
+  ],
+  "bee.tests.threads:approvals_test": [
+    0.957,
+    0.133,
+    0.132,
+    0.096,
+    0.112,
+    0.139
+  ],
+  "bee.tests.threads:authority_test": [
+    1.484,
+    0.495,
+    0.439,
+    0.501,
+    0.417,
+    29.554
+  ],
+  "bee.tests.threads:canonical_test": [
+    0.896,
+    0.077,
+    0.085,
+    0.081,
+    0.091,
+    0.078
+  ],
+  "bee.tests.threads:capabilities_test": [
+    0.999,
+    0.079,
+    0.087,
+    0.1,
+    0.084,
+    0.081
+  ],
+  "bee.tests.threads:carrier_test": [
+    1.142,
+    0.293,
+    0.229,
+    0.248,
+    0.236,
+    1.465
+  ],
+  "bee.tests.threads:delivery_test": [
+    1.139,
+    0.165,
+    0.187,
+    0.186,
+    0.183,
+    0.18
+  ],
+  "bee.tests.threads:hook_declaration_test": [
+    0.231,
+    0.18,
+    0.169,
+    0.15,
+    0.252
+  ],
+  "bee.tests.threads:hooks_agy_test": [
+    1.433,
+    0.434,
+    0.393,
+    0.435,
+    0.378,
+    24.535
+  ],
+  "bee.tests.threads:hooks_boundaries_test": [
+    3.314,
+    1.403,
+    1.282,
+    1.312,
+    1.298,
+    1.246
+  ],
+  "bee.tests.threads:hooks_budget_test": [
+    3.463,
+    2.401,
+    2.435,
+    2.36,
+    2.382,
+    5.678
+  ],
+  "bee.tests.threads:hooks_capabilities_test": [
+    1.551,
+    0.461,
+    0.601,
+    0.567,
+    0.472
+  ],
+  "bee.tests.threads:hooks_claude_test": [
+    1.62,
+    2.245,
+    2.453,
+    2.282,
+    2.058
+  ],
+  "bee.tests.threads:hooks_codex_test": [
+    1.634,
+    2.825,
+    2.875,
+    2.534,
+    2.529
+  ],
+  "bee.tests.threads:hooks_grok_test": [
+    1.605,
+    0.488,
+    0.444,
+    0.412,
+    0.471,
+    0.437
+  ],
+  "bee.tests.threads:hooks_muse_test": [
+    1.634,
+    0.518,
+    0.524,
+    0.481,
+    0.58
+  ],
+  "bee.tests.threads:hooks_replay_test": [
+    18.297,
+    17.04,
+    16.781,
+    16.876,
+    16.826,
+    16.987
+  ],
+  "bee.tests.threads:hooks_test": [
+    8.015,
+    7.216,
+    6.627,
+    6.383,
+    6.264
+  ],
+  "bee.tests.threads:inbox_test": [
+    1.039,
+    0.431,
+    0.175,
+    0.208,
+    0.252
+  ],
+  "bee.tests.threads:ledger_test": [
+    1.014,
+    0.262,
+    0.177,
+    0.154,
+    0.155,
+    0.152
+  ],
+  "bee.tests.threads:lifecycle_test": [
+    1.461,
+    0.625,
+    0.382,
+    0.517,
+    0.445,
+    0.906
+  ],
+  "bee.tests.threads:listen_test": [
+    11.199,
+    5.475,
+    4.732,
+    4.917,
+    4.741,
+    11.232
+  ],
+  "bee.tests.threads:listen_upgrade_test": [
+    3.436,
+    2.033,
+    1.947,
+    1.753,
+    1.794,
+    1.627
+  ],
+  "bee.tests.threads:notice_test": [
+    1.7,
+    1.562,
+    0.917,
+    0.796,
+    0.872,
+    0.876
+  ],
+  "bee.tests.threads:pump_deadline_test": [
+    1.021,
+    0.128,
+    0.114,
+    0.094,
+    0.104,
+    0.16
+  ],
+  "bee.tests.threads:pump_fixture_test": [
+    0.878,
+    0.12,
+    0.085,
+    0.077,
+    0.097,
+    0.084
+  ],
+  "bee.tests.threads:pump_test": [
+    0.972,
+    0.11,
+    0.122,
+    0.085,
+    0.087,
+    0.112
+  ],
+  "bee.tests.threads:recap_test": [
+    1.164,
+    0.389,
+    0.311,
+    0.283,
+    0.275,
+    0.492
+  ],
+  "bee.tests.threads:records_test": [
+    0.853,
+    0.111,
+    0.105,
+    0.107,
+    0.122,
+    0.105
+  ],
+  "bee.tests.threads:recovery_test": [
+    0.997,
+    0.119,
+    0.105,
+    0.081,
+    0.09,
+    0.095
+  ],
+  "bee.tests.threads:schema_test": [
+    1.073,
+    0.167,
+    0.101,
+    0.096,
+    0.109,
+    0.082
+  ],
+  "bee.tests.threads:search_test": [
+    1.67,
+    0.717,
+    0.697,
+    0.551,
+    0.571,
+    0.672
+  ],
+  "bee.tests.threads:send_test": [
+    1.092,
+    0.161,
+    0.137,
+    0.118,
+    0.112,
+    0.093
+  ],
+  "bee.tests.threads:service_test": [
+    1.046,
+    0.183,
+    0.113,
+    0.097,
+    0.109,
+    0.087
+  ],
+  "bee.tests.threads:session_test": [
+    0.976,
+    0.18,
+    0.089,
+    0.077,
+    0.104,
+    0.073
+  ],
+  "bee.tests.threads:status_test": [
+    1.148,
+    0.256,
+    0.173,
+    0.173,
+    0.173,
+    0.119
+  ],
+  "bee.tests.threads:subscription_lifecycle_test": [
+    1.737,
+    0.958,
+    0.777,
+    0.624,
+    0.689,
+    0.508
+  ],
+  "bee.tests.threads:subscription_test": [
+    1.295,
+    0.387,
+    0.4,
+    0.316,
+    0.313,
+    0.423
+  ],
+  "bee.tests.threads:usage_test": [
+    1.29,
+    0.433,
+    0.386,
+    0.274,
+    0.305,
+    0.256
+  ],
+  "bee.tests.threads:wait_test": [
+    1.349,
+    1.85,
+    0.51,
+    0.502,
+    0.512,
+    0.526
+  ],
+  "bee.tests.threads:work_store_test": [
+    2.014,
+    1.185,
+    0.996,
+    1.029,
+    0.989,
+    0.86
+  ],
+  "bee.tests.threads:workspace_test": [
+    0.887,
+    0.117,
+    0.12,
+    0.136,
+    0.107,
+    0.181
+  ],
+  "bee.tests.ui:appearance_test": [
+    0.914,
+    0.093,
+    0.077,
+    0.101,
+    0.098,
+    0.074
+  ],
+  "bee.tests.ui:footer_apps_test": [
+    0.974,
+    0.114,
+    0.125,
+    0.095,
+    0.117,
+    0.238
+  ],
+  "bee.tests.ui:frame_test": [
+    0.937,
+    0.125,
+    0.117,
+    0.097,
+    0.124,
+    0.122
+  ],
+  "bee.tests.ui:glyphs_test": [
+    0.888,
+    0.091,
+    0.08,
+    0.082,
+    0.084,
+    0.078
+  ],
+  "bee.tests.ui:native_theme_test": [
+    0.925,
+    0.114,
+    0.106,
+    0.086,
+    0.096,
+    0.103
+  ],
+  "bee.tests.ui:profile_discovery_test": [
+    0.973,
+    0.253,
+    0.149,
+    0.159,
+    0.149,
+    0.201
+  ],
+  "bee.tests.ui:viz_test": [
+    1.112,
+    0.181,
+    0.188,
+    0.149,
+    0.203,
+    0.184
+  ],
+  "bee.tests.values:bounds_test": [
+    0.985,
+    0.112,
+    0.096,
+    0.09,
+    0.09,
+    0.104
+  ],
+  "bee.tests.values:canonical_test": [
+    1.045,
+    0.128,
+    0.117,
+    0.131,
+    0.128,
+    0.114
+  ]
 }

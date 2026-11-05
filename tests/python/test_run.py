@@ -67,7 +67,7 @@ class RunnerTests(unittest.TestCase):
             {"name": "a", "meta": {"type": "test", "suite": "bee", "timeout": "10s"}},
             {"name": "b", "meta": {"type": "test", "suite": "bee"}},
             {"name": "helper", "meta": {"type": "test_support", "suite": "bee"}}]}
-        self.assertTrue(run.declare_deadlines(document, {"fixture:a": .2}, {"bee": 50}))
+        self.assertTrue(run.declare_deadlines(document, {"fixture:a": [.2] * 5}, {"bee": 50}))
         first, second, helper = [item['meta'] for item in document['entries']]
         self.assertEqual((first['timeout'], second['timeout']), ('6s', '30s'))
         self.assertEqual((first['suite_timeout'], second['suite_timeout']), ('50s', '50s'))
@@ -138,6 +138,14 @@ class RunnerTests(unittest.TestCase):
         _, durations, cases = run.measure(output, selected)
         self.assertEqual(durations, {"b:shared_test": 2.3, "a:shared_test": .4})
         self.assertEqual(len(cases), 3)
+
+    def test_failures_name_entries_with_failed_cases_or_timeouts_but_not_the_group_total(self):
+        selected = {"a:first_test": ("bee", None, 0), "a:second_test": ("bee", None, 1), "a:third_test": ("bee", None, 2)}
+        output = ("\x1b[2K\r  spinner bee (1/3) first_test  0%    o fine case  300ms\n"
+                  "\x1b[2K\r  spinner bee (2/3) second_test  33%    x broken case\n"
+                  "\x1b[2K\r  spinner bee (3/3) third_test  66%    x third_test\n"
+                  "  x bee (3) 2 failed  9.0s\n")
+        self.assertEqual(run.failures(output, selected), {"a:second_test", "a:third_test"})
 
     def test_partial_log_filters_duplicate_short_names_before_measuring(self):
         selected = {"a:shared_test": ("bee", None, 0), "b:shared_test": ("bee", None, 0)}

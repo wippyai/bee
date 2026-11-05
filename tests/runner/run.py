@@ -120,6 +120,28 @@ def measure(output, selected):
 
 
 
+FAILED_CASE = re.compile(r"^\s+x (.+)$")
+GROUP_TOTAL = re.compile(r"^\s+x \S+ \(\d+\)")
+
+
+def failures(output, selected):
+    """The entries a runner log reports a failed case or a failed entry for."""
+    clean = ANSI.sub("", output).replace("\r", "\n")
+    filters = re.search(r"^  Filter: (.+)$", clean, re.M)
+    if filters:
+        patterns = filters[1].split(", ")
+        selected = {name: entry for name, entry in selected.items() if any(pattern in name for pattern in patterns)}
+    progress = Progress(selected)
+    failed = set()
+    for line in clean.splitlines():
+        if PROGRESS.match(line):
+            progress.advance(line)
+            line = line.rsplit("%", 1)[-1]
+        if FAILED_CASE.match(line) and not GROUP_TOTAL.match(line) and progress.current:
+            failed.add(progress.current)
+    return failed
+
+
 def entry_durations(timeline, cases, completed=None):
     values = {name: max(timeline.get(name, 0), cases.get(name, 0))
               for name in timeline.keys() | cases.keys()}
@@ -197,7 +219,7 @@ def wrap_suites(document, source):
     document["entries"].extend(generated)
     return bool(generated)
 
-def copy_workspace(root, address, identities=()):
+def copy_workspace(root, address, identities=(), costs=None):
     root.mkdir()
     for name in ("lua", "fixtures"):
         shutil.copytree(TESTS / name, root / name)
@@ -211,7 +233,7 @@ def copy_workspace(root, address, identities=()):
     shutil.copy2(TESTS / ".wippy.yaml", root / ".wippy.yaml")
     (root / ".wippy/vendor").symlink_to(TESTS / ".wippy/vendor", target_is_directory=True)
     original = str(TESTS / "fixtures")
-    costs = budgets.load()
+    costs = budgets.load() if costs is None else costs
     indices = list((root / "lua").rglob("_index.yaml")) + list(composition.rglob("_index.yaml")) + list(drivers_composition.rglob("_index.yaml"))
     suite_limits = budgets.suites([yaml.safe_load(index.read_text()) for index in indices], set(identities), costs)
     for index in indices:
@@ -249,18 +271,18 @@ def copy_workspace(root, address, identities=()):
     return fixture
 
 
-def workspace(root, address, identities=()):
+def workspace(root, address, identities=(), costs=None):
     with (TESTS / ".wippy/composition.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_SH)
-        return copy_workspace(root, address, identities)
+        return copy_workspace(root, address, identities, costs)
 
 
-def run_shard(number, identities, run_root, toolchain, cores, count, discovered, reservation, lua_cache, lua_cache_mode='readwrite'):
+def run_shard(number, identities, run_root, toolchain, cores, count, discovered, reservation, lua_cache, lua_cache_mode='readwrite', costs=None):
     started = time.monotonic()
     root = run_root / f"shard-{number:02d}"
     with reservation:
         address = f"127.0.0.1:{reservation.getsockname()[1]}"
-        fixture = workspace(root, address, identities)
+        fixture = workspace(root, address, identities, costs)
     home = fixture / "home"
     binaries = root / "fixtures/harness/bin"
     environment = {"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"),
@@ -293,6 +315,7 @@ def run_shard(number, identities, run_root, toolchain, cores, count, discovered,
         code = process.wait()
     timeline.finish(time.monotonic())
     clean, case_durations, cases = measure(log.read_text(), {name: discovered[name] for name in identities})
+    failed = failures(log.read_text(), {name: discovered[name] for name in identities})
     summaries = SUMMARY.findall(clean)
     counts = tuple(int(value or 0) for value in summaries[-1][:3]) if summaries else (0, 0, 0)
     failure = clean.split("  Failures\n", 1)[1].split("\n  FAILED", 1)[0].strip() if "  Failures\n" in clean else ""
@@ -318,7 +341,7 @@ def run_shard(number, identities, run_root, toolchain, cores, count, discovered,
     if code and not failure:
         failure = clean[-8000:]
     return {"shard": number, "code": code, "counts": counts, "seconds": elapsed, "durations": measured,
-            "case_seconds": case_durations, "cases": cases, "timing_breakdown": breakdown,
+            "case_seconds": case_durations, "cases": cases, "failed": sorted(failed), "timing_breakdown": breakdown,
             "failure": failure, "summary_found": bool(summaries)}
 
 
@@ -332,6 +355,10 @@ def main():
     parser.add_argument("--tests", nargs="*", default=[])
     parser.add_argument("--measure", type=Path, nargs="+")
     parser.add_argument("--update-durations", action="store_true")
+    parser.add_argument("--ceilings", action="store_true",
+                        help="Bound every entry by its declared ceiling instead of its measured budget, for budget measurement runs")
+    parser.add_argument("--record-budgets", action="store_true",
+                        help="Append the passing entries' costs to the budget samples")
     args = parser.parse_args()
     discovered = entries()
     durations = json.loads(DURATIONS.read_text()) if DURATIONS.exists() else {}
@@ -354,6 +381,8 @@ def main():
         return 0
     if args.shards < 1:
         parser.error("--shards must be positive")
+    if args.record_budgets and not args.ceilings:
+        parser.error("--record-budgets measures under --ceilings, so measured budgets never censor their own samples")
     selected = {}
     for pattern in args.tests or [""]:
         matched = {name: value for name, value in discovered.items() if pattern in name}
@@ -367,7 +396,8 @@ def main():
         parser.error(str(error))
     active_entries = {name for _, group in active for name in group}
     indices = {discovered[name][1].parent / '_index.yaml' for name in active_entries}
-    fixture_seconds = docker_fixture.prepare([yaml.safe_load(index.read_text()) for index in sorted(indices)], active_entries)
+    documents = [yaml.safe_load(index.read_text()) for index in sorted(indices)]
+    fixture_seconds = docker_fixture.prepare(documents, active_entries)
     run_root = TESTS / ".wippy/runs" / uuid.uuid4().hex
     run_root.mkdir(parents=True)
     (run_root / "plan.json").write_text(json.dumps(groups, indent=2) + "\n")
@@ -382,7 +412,8 @@ def main():
             port.bind(("127.0.0.1", 0))
             ports.append(port)
         futures = {pool.submit(run_shard, index, group, run_root, args.wippy.resolve(),
-                               len(os.sched_getaffinity(0)), len(active), discovered, port, args.lua_cache, args.lua_cache_mode): index
+                               len(os.sched_getaffinity(0)), len(active), discovered, port, args.lua_cache, args.lua_cache_mode,
+                               {} if args.ceilings else None): index
                    for (index, group), port in zip(active, ports)}
         completed = {}
         for future in as_completed(futures):
@@ -400,6 +431,8 @@ def main():
     print("FAILED" if bad else "PASSED")
     print(f"{passed} passed" + (f"  {failed} failed" if failed else "") +
           (f"  {skipped} skipped" if skipped else "") + f"  {elapsed:.1f}s", flush=True)
+    if args.record_budgets:
+        budgets.PATH.write_text(json.dumps(budgets.record(budgets.load(), [{"results": results}]), indent=2) + "\n")
     if args.update_durations and not bad:
         for result in results:
             durations.update(result["durations"])

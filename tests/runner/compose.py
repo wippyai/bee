@@ -45,14 +45,6 @@ def compose():
     shutil.copy(ROOT / "wippy.yaml", COMPOSITION / "wippy.yaml")
     shutil.copytree(TESTS / "fixtures/memory", src / "test_memory")
     shutil.copytree(TESTS / "fixtures/persist/retained", src / "test_retained")
-    shutil.copy2(ROOT / "src/placement/native/service/materialization.lua",
-                 TESTS / "lua/placement/native/service/materialization.lua")
-    shutil.copy2(ROOT / "src/placement/docker/service/image_owner.lua",
-                 TESTS / "lua/placement/docker/service/image_owner.lua")
-    shutil.copy2(ROOT / "src/gov/service/activation_worker.lua",
-                 TESTS / "lua/gov/activation_worker.lua")
-    shutil.copy2(ROOT / "src/process/demand_owner.lua",
-                 TESTS / "lua/process/demand_owner.lua")
     host_environment()
 
 

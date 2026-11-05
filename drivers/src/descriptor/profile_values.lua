@@ -4,10 +4,12 @@ local bounds = require("bounds")
 local descriptors = require("descriptors")
 local resolver = require("resolver")
 local effective = require("effective")
+local seam = require("seam")
 local M = {}
 type Object = {[string]: unknown}
 type Stored = {schema_ref: string, schema_revision: string, values: Object}
 function M.schema(binding_ref: string, snapshot: registry.Snapshot?): (descriptors.Descriptor?, string?, string?)
+    seam.call("bee.drivers.descriptor.profile_values.schema", {binding_ref = binding_ref})
     local pinned, err = snapshot, nil
     if not pinned then pinned, err = registry.snapshot() end
     if not pinned then return nil, nil, tostring(err) end

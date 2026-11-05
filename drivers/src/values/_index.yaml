@@ -1,6 +1,9 @@
 version: '1.0'
 namespace: bee.drivers.values
 entries:
+- name: seam
+  kind: library.lua
+  source: file://seam.lua
 - name: clock
   kind: library.lua
   source: file://clock.lua

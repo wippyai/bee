@@ -52,6 +52,7 @@ entries:
     bounds: bee.drivers.values:bounds
     descriptors: bee.drivers.descriptor:descriptor
     effective: bee.drivers.descriptor:effective
+    seam: bee.drivers.values:seam
 - name: placement
   kind: library.lua
   source: file://placement.lua

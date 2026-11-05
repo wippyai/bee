@@ -3101,3 +3101,4 @@ entries:
   imports:
     bounds: bee.drivers.values:bounds
     measure_clock: bee.tests.harness:measure_clock
+    controllers: bee.tests.support:controllers

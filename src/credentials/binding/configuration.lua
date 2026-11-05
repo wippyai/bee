@@ -17,12 +17,17 @@ local funcs = require("funcs")
 local configuration_admission = require("configuration_admission")
 local configuration_check = require("configuration_check")
 local identity = require("identity")
+local seam = require("seam")
 local M = {}
 local ATTENTION = "bee.attention"
 M.MANAGE = "bee.credentials.manage"
 M.MATERIALIZE = "bee.credentials.materialize"
 M.MAX_FILE_BYTES = credential_protocol.MAX_FILE_BYTES
 type Row = {[string]: unknown}
+type TransactionResult = {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean, commit: boolean?}
+local function milliseconds(): integer
+    return math.floor(seam.now("bee.credentials.binding.clock"):unix_nano() / 1000000)
+end
 type AvailabilityRequest = {workspace_id: string, name: string}
 type Availability = {workspace_id: string, name: string, definition_id: string, revision: integer, provider: string, source_kind: string, projection_kind: string, destination: string, format: unknown, present: boolean, optional: boolean}
 local function fail(code: string, message: string): credential_protocol.Reply
@@ -381,6 +386,7 @@ function M.configuration_effects(): string?
     return nil
 end
 
+M.milliseconds = milliseconds
 M.fail = fail
 M.succeed = succeed
 M.actor = actor

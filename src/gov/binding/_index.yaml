@@ -321,42 +321,31 @@ entries:
   source: file://destination_service.lua
   modules:
   - events
-  - hash
   - logger
-  - registry
   - security
   - system
   imports:
-    state_guard: bee.persist:state_guard
     follow_store: bee.gov.persist:follow_store
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake
     artifact: bee.gov.types:artifact
     bounds: bee.drivers.values:bounds
-    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
-    resources: bee.gov.binding:staging_resources
     replicas: bee.sync.persist:replicas
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
     lease_store: bee.gov.persist:lease_store
-    lease_grants: bee.gov.binding:lease_grants
     activation_owner: bee.gov.binding:activation_owner
     hub_package: bee.gov.binding:hub_package
     package_requirements: bee.hub.package:requirements
     delivery: bee.gov.types:delivery
     destination: bee.gov.binding:destination
-    materializer: bee.gov.binding:materializer
-    activation_profiles: bee.gov.types:activation_profile_decoder
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    capability_files: bee.gov.types:capability_files
-    workspace_applications: bee.gov.types:workspace_applications
-    headless_revert: bee.gov.binding:headless_revert
     activation_uninstall: bee.gov.binding:activation_uninstall
     preflight: bee.gov.binding:preflight
-    part_destination_policy: bee.gov.binding:destination_policy
-    part_destination_inspection: bee.gov.binding:destination_inspection
+    part_destination_policy: bee.gov.binding.destination:policy
+    part_destination_inspection: bee.gov.binding.destination:inspection
+    part_destination_stores: bee.gov.binding.destination:stores
+    part_destination_operations: bee.gov.binding.destination:operations
 - name: destination_backend_call
   kind: function.lua
   source: file://destination_backend.lua
@@ -404,42 +393,31 @@ entries:
   method: driver_bindings
   modules:
   - events
-  - hash
   - logger
-  - registry
   - security
   - system
   imports:
-    state_guard: bee.persist:state_guard
     follow_store: bee.gov.persist:follow_store
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake
     artifact: bee.gov.types:artifact
     bounds: bee.drivers.values:bounds
-    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
-    resources: bee.gov.binding:staging_resources
     replicas: bee.sync.persist:replicas
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
     lease_store: bee.gov.persist:lease_store
-    lease_grants: bee.gov.binding:lease_grants
     activation_owner: bee.gov.binding:activation_owner
     hub_package: bee.gov.binding:hub_package
     package_requirements: bee.hub.package:requirements
     delivery: bee.gov.types:delivery
     destination: bee.gov.binding:destination
-    materializer: bee.gov.binding:materializer
-    activation_profiles: bee.gov.types:activation_profile_decoder
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    capability_files: bee.gov.types:capability_files
-    workspace_applications: bee.gov.types:workspace_applications
-    headless_revert: bee.gov.binding:headless_revert
     activation_uninstall: bee.gov.binding:activation_uninstall
     preflight: bee.gov.binding:preflight
-    part_destination_policy: bee.gov.binding:destination_policy
-    part_destination_inspection: bee.gov.binding:destination_inspection
+    part_destination_policy: bee.gov.binding.destination:policy
+    part_destination_inspection: bee.gov.binding.destination:inspection
+    part_destination_stores: bee.gov.binding.destination:stores
+    part_destination_operations: bee.gov.binding.destination:operations
   security:
     policies:
     - bee.gov.security:driver_bindings_policy
@@ -449,42 +427,31 @@ entries:
   method: driver_logins
   modules:
   - events
-  - hash
   - logger
-  - registry
   - security
   - system
   imports:
-    state_guard: bee.persist:state_guard
     follow_store: bee.gov.persist:follow_store
     follow_source: bee.gov.binding:follow_source
     follow_wake: bee.gov.service:follow_wake
     artifact: bee.gov.types:artifact
     bounds: bee.drivers.values:bounds
-    canonical: bee.drivers.values:canonical
     transaction: bee.persist:transaction
-    resources: bee.gov.binding:staging_resources
     replicas: bee.sync.persist:replicas
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
     lease_store: bee.gov.persist:lease_store
-    lease_grants: bee.gov.binding:lease_grants
     activation_owner: bee.gov.binding:activation_owner
     hub_package: bee.gov.binding:hub_package
     package_requirements: bee.hub.package:requirements
     delivery: bee.gov.types:delivery
     destination: bee.gov.binding:destination
-    materializer: bee.gov.binding:materializer
-    activation_profiles: bee.gov.types:activation_profile_decoder
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    capability_files: bee.gov.types:capability_files
-    workspace_applications: bee.gov.types:workspace_applications
-    headless_revert: bee.gov.binding:headless_revert
     activation_uninstall: bee.gov.binding:activation_uninstall
     preflight: bee.gov.binding:preflight
-    part_destination_policy: bee.gov.binding:destination_policy
-    part_destination_inspection: bee.gov.binding:destination_inspection
+    part_destination_policy: bee.gov.binding.destination:policy
+    part_destination_inspection: bee.gov.binding.destination:inspection
+    part_destination_stores: bee.gov.binding.destination:stores
+    part_destination_operations: bee.gov.binding.destination:operations
   security:
     policies:
     - bee.gov.security:driver_bindings_policy
@@ -690,51 +657,3 @@ entries:
 - name: comparison
   kind: library.lua
   source: file://comparison.lua
-- name: destination_policy
-  kind: library.lua
-  source: file://destination_policy.lua
-  modules:
-  - fs
-  - funcs
-  - registry
-  - security
-  - system
-  - time
-  imports:
-    driver_admission: bee.gov.types:driver_admission
-    drivers: bee.gov.types:drivers
-    artifact: bee.gov.types:artifact
-    bounds: bee.drivers.values:bounds
-    resources: bee.gov.binding:staging_resources
-    plan_store: bee.gov.persist:plan_store
-    activation_store: bee.gov.persist:activation_store
-    lease_store: bee.gov.persist:lease_store
-    activation_owner: bee.gov.binding:activation_owner
-    hub_resolver: bee.gov.binding:hub_resolver
-    package_requirements: bee.hub.package:requirements
-    overlay_resolver: bee.gov.binding:overlay_resolver
-    materializer: bee.gov.binding:materializer
-    migration_effect: bee.gov.binding:migration_effect
-    migration_runner: bee.hub.binding:migration_runner
-    activation_profiles: bee.gov.types:activation_profile_decoder
-    capability_grants: bee.gov.types:capability_grants
-    capability_model: bee.capability:model
-    capability_files: bee.gov.types:capability_files
-    workspace_applications: bee.gov.types:workspace_applications
-    preflight: bee.gov.binding:preflight
-    migration_work: bee.gov.types:migration_work
-- name: destination_inspection
-  kind: library.lua
-  source: file://destination_inspection.lua
-  modules:
-  - registry
-  imports:
-    follow_store: bee.gov.persist:follow_store
-    artifact: bee.gov.types:artifact
-    bounds: bee.drivers.values:bounds
-    transaction: bee.persist:transaction
-    plan_store: bee.gov.persist:plan_store
-    activation_store: bee.gov.persist:activation_store
-    workspace_applications: bee.gov.types:workspace_applications
-    preflight: bee.gov.binding:preflight
-    part_destination_policy: bee.gov.binding:destination_policy

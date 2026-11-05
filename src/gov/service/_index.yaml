@@ -26,7 +26,7 @@ entries:
   modules:
   - logger
   imports:
-    service: bee.gov.binding:destination_service
+    service: bee.gov.binding.destination:reconcile
     seam: bee.process:seam
 - name: recovery_service
   meta:
@@ -60,7 +60,7 @@ entries:
   - logger
   imports:
     worker: bee.process:worker
-    service: bee.gov.binding:destination_service
+    service: bee.gov.binding.destination:reconcile
     bounds: bee.drivers.values:bounds
     pass: bee.gov.service:activation_pass
   meta:
@@ -106,5 +106,5 @@ entries:
   method: pending
   imports:
     pass: bee.gov.service:activation_pass
-    service: bee.gov.binding:destination_service
+    service: bee.gov.binding.destination:reconcile
     seam: bee.process:seam

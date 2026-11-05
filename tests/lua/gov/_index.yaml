@@ -1182,7 +1182,7 @@ entries:
     policies:
     - bee.gov.security:destination_service_policy
   imports:
-    service: bee.gov.binding:destination_service
+    service: bee.gov.binding.destination:reconcile
 - name: delivery_harness
   kind: library.lua
   source: file://delivery_harness.lua

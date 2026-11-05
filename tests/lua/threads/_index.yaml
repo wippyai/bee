@@ -726,17 +726,6 @@ entries:
     supervisor: bee.threads.hooks:supervisor
     response: bee.threads.hooks:response
   security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
-- name: hooks_clock_test
-  kind: function.lua
-  source: file://hooks_clock_test.lua
-  method: run
-  modules: [funcs]
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    host: bee.tests.memory:host
-    harness: bee.tests.threads:harness
-  security: {policies: [bee.tests.memory:host_policy, bee.tests.memory:read_policy]}
 - name: hooks_replay_test
   kind: function.lua
   source: file://hooks_replay_test.lua

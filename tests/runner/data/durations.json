@@ -333,7 +333,6 @@
   "bee.tests.threads:hooks_budget_test": 3.463,
   "bee.tests.threads:hooks_capabilities_test": 1.551,
   "bee.tests.threads:hooks_claude_test": 1.62,
-  "bee.tests.threads:hooks_clock_test": 1.443,
   "bee.tests.threads:hooks_codex_test": 1.634,
   "bee.tests.threads:hooks_grok_test": 1.605,
   "bee.tests.threads:hooks_muse_test": 1.634,

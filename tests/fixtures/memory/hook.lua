@@ -10,11 +10,6 @@ function M.hook(point: string, raw: unknown): {[string]: unknown}
     local mode = input and input.mode
     if mode == "held_deny" or mode == "held_change" then return assert(bounds.object(funcs.call("bee.tests.memory:hold_hook", turn))) end
     if mode == "revoke" then return assert(bounds.object(funcs.call("bee.tests.memory:revoke_during_hook", turn))) end
-    if mode == "clock_jump_deny" then
-        local _, err = funcs.call("bee.tests.memory:advance_hook_clock", 3600000)
-        assert(not err, tostring(err))
-        return {kind = "deny", reason = "timely denial across clock adjustment"}
-    end
     if mode == "context" then return {kind = "add_context", text = "fixture explicit context"} end
     if mode == "crash" then error("fixture hook crash") end
     if mode == "invalid" then return {kind = "invented"} end

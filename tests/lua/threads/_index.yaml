@@ -794,6 +794,6 @@ entries:
   kind: library.lua
   source: file://seams.lua
   meta: {type: test_support}
-  modules: [events, ctx]
+  modules: [events, ctx, registry]
   imports:
     controllers: bee.tests.support:controllers

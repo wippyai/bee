@@ -566,6 +566,7 @@ entries:
     - security.policy.get
     - funcs.call
     - cdc.subscribe
+    - events.subscribe
     - process.monitor
     - process.unmonitor
     - process.registry.register
@@ -582,7 +583,7 @@ entries:
       == "bee.gateway.security:external_withdraw_policy")) || (action == "funcs.call"
       && (resource == "bee.threads.binding:create" || resource == "bee.threads.binding:admit_action"
       || resource == "bee.threads.binding:prepare_attempt" || resource == "bee.approvals.binding:read" || resource == "bee.approvals.binding:withdraw"))
-      || (action == "cdc.subscribe" && resource == "bee:changes") || (action == "process.registry.register"
+      || (action == "cdc.subscribe" && resource == "bee:changes") || (action == "events.subscribe" && resource == "bee.attention") || (action == "process.registry.register"
       && resource == "bee.gateway.external") || (action == "process.registry.lookup"
       && resource == "bee.hive.supervisor") || (action == "system.read" && resource
       == "node") || (action == "process.monitor") || (action == "process.unmonitor") || (action == "env.get" && resource == "bee:role")

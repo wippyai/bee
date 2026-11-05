@@ -320,12 +320,16 @@ entries:
   kind: function.lua
   source: file://demand_test.lua
   method: run
-  modules: [registry, system, events, channel, time, process]
+  modules: [registry, system, events, channel, time, process, funcs, security, uuid]
   meta: {type: test, suite: bee, timeout: 15s}
   imports:
     test: wippy.test:test
     protocol: bee.hive:protocol
     effects: bee.gateway.service:effects
+    demand: bee.process:demand
+    owner_observer: bee.tests.support:owner_observer
+    bounds: bee.drivers.values:bounds
+    gateway: bee.gateway.binding:gateway
 - name: grants_migration_db
   kind: db.sql.sqlite
   file: .wippy/gateway-grants-migration.db

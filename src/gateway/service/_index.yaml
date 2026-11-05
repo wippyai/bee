@@ -61,6 +61,7 @@ entries:
   - channel
   - time
   - cdc
+  - events
   - env
   - system
   imports:
@@ -109,8 +110,6 @@ entries:
     demand:
       name: bee.gateway.external
       probe: bee.gateway.service:backlog
-      tables:
-      - bee_approval_requests
 - name: installation_scope
   kind: registry.entry
   meta:

@@ -3,6 +3,7 @@ local process = require("process")
 local channel = require("channel")
 local time = require("time")
 local cdc = require("cdc")
+local events = require("events")
 local env = require("env")
 local system = require("system")
 local node_client = require("node_client")
@@ -15,14 +16,18 @@ local effects = require("effects")
 local seam = require("seam")
 local logger = require("logger")
 local NAME = "bee.gateway.external"
+-- The approval owner announces every committed change of a request here.
+local ATTENTION = "bee.attention"
 type Waiting = {request: protocol.Forwarded, client: string}
 local function main()
     if env.get("bee:role") == "client" then return end
     assert(process.registry.register(NAME))
     local requests = assert(process.listen(protocol.FORWARD, {message = true}))
     local lifecycle = assert(process.events())
-    local stream = assert(cdc.stream("bee:changes", {tables = {"bee_approval_requests", "bee_gateway_bindings"}, ops = {"update"}}))
+    local stream = assert(cdc.stream("bee:changes", {tables = {"bee_gateway_bindings"}, ops = {"update"}}))
     local changes = assert(stream:channel())
+    local attention = assert(events.subscribe(ATTENTION))
+    local announcements = attention:channel()
     local waiting: {Waiting} = {}
     local callers: {[string]: boolean} = {}
     local demanded = assert(process.listen(demand.WAKE, {message = true}))
@@ -79,7 +84,7 @@ local function main()
         task.advance(installation)
         task.advance(publication)
         if #waiting == 0 and task.quiet(installation) and task.quiet(publication) then demand.quiet(NAME, generation) end
-        local cases = {lifecycle:case_receive(), requests:case_receive(), changes:case_receive(), demanded:case_receive(),
+        local cases = {lifecycle:case_receive(), requests:case_receive(), changes:case_receive(), announcements:case_receive(), demanded:case_receive(),
             installation.completed:case_receive(), publication.completed:case_receive()}
         local install_retry = task.deadline(installation)
         local publish_retry = task.deadline(publication)

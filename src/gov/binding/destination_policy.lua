@@ -1,5 +1,6 @@
 -- MIT. Destination policy selection, resolver composition and admitted drivers.
 local registry = require("registry")
+local fs = require("fs")
 local security = require("security")
 local time = require("time")
 local system = require("system")
@@ -438,7 +439,34 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         intent.artifact_digest, intent.version)
     if not record then return nil, record_error end
     return {policies = proposed.policies, capabilities = proposed.capabilities, record = record,
-        volumes = proposed.volumes, databases = proposed.databases, executors = proposed.executors}, nil
+        volumes = proposed.volumes, databases = proposed.databases, executors = proposed.executors,
+        folder = proposed.folder}, nil
+end
+
+-- The first folder a generated grant opens as it stands that is missing from
+-- the workspace, as the person reads it; nil when each one is in place.
+local function folder_missing(generated: Object): (string?, string?)
+    local volumes = bounds.array(generated.volumes, 16)
+    if not volumes or #volumes == 0 then return nil, nil end
+    local required, required_error = capability_files.required(generated.folder, volumes)
+    if not required then return nil, required_error end
+    for _, item in ipairs(required) do
+        local volume, volume_error = fs.get(item.root_ref)
+        if not volume then return nil, "workspace root " .. item.root_ref .. " is unavailable: " .. tostring(volume_error) end
+        if not volume:isdir(item.path) then
+            return "folder " .. item.subpath .. "/ is missing; restore it or remove the grant", nil
+        end
+    end
+    return nil, nil
+end
+
+-- missing_folder answers the folder an installed intent's grant opens that
+-- is missing from the workspace.
+local function missing_folder(profile_value: Profile, intent_raw: unknown): (string?, string?)
+    local generated, generated_error = generated_install(profile_value, intent_raw)
+    if generated_error then return nil, generated_error end
+    if not generated then return nil, nil end
+    return folder_missing(generated)
 end
 
 local function visit_slot(config: Configuration, resource: string, workspace: string, owner_id: string, visit: ({Object}) -> string?): string?
@@ -602,10 +630,16 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
         approvals = executor, actor_id = ACTOR, consumer_id = ACTOR, leases = lease_handle,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
         super_edit = profile_value.super_edit == true,
-        apply = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): ({[string]: unknown}?, string?, boolean?)
+        apply = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
             local generated, generated_error = generated_install(profile_value, intent)
             if generated_error then return nil, generated_error, true end
-            return materializer.reconcile_composed(overlay_owner, entries, admission, generated)
+            if generated then
+                local missing, missing_error = folder_missing(generated)
+                if missing_error then return nil, missing_error end
+                if missing then return nil, missing, true, true end
+            end
+            local applied, apply_error, definite = materializer.reconcile_composed(overlay_owner, entries, admission, generated)
+            return applied, apply_error, definite
         end, matches = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): (boolean?, string?, boolean?)
             local generated, generated_error, refused = generated_install(profile_value, intent)
             if generated_error then return nil, generated_error, refused end
@@ -625,6 +659,7 @@ M.migration_binding = migration_binding
 M.approval_executor = approval_executor
 M.destination_resolver = destination_resolver
 M.generated_install = generated_install
+M.missing_folder = missing_folder
 M.approved_drivers = approved_drivers
 M.approved_driver_bindings = approved_driver_bindings
 M.owner_config = owner_config

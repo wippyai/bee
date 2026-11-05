@@ -233,7 +233,7 @@ local function definite_failure_test(broken_source: boolean?)
         actor_id = "host-a", consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
         approval_policy = "local-install", migrations = migration_effect(),
         matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return false, nil end,
-        apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+        apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
             attempts = attempts + 1
             return nil, "failed to add library node: demo:run:5:19: syntax error", true
         end}
@@ -273,7 +273,7 @@ local function queued_failure_test()
         actor_id = "host-a", consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
         approval_policy = "local-install", migrations = migration_effect(),
         matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?, boolean?) return installed, nil end,
-        apply = function(_overlay: string, _entries: unknown, _admission: unknown?, raw: unknown): ({[string]: unknown}?, string?, boolean?)
+        apply = function(_overlay: string, _entries: unknown, _admission: unknown?, raw: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
             if assert(bounds.object(raw)).version == "v1" then return nil, "demo:run:5:19: syntax error", true end
             installed = true
             return {changed = true}, nil, nil
@@ -333,7 +333,7 @@ local function lease_config(workspace: string, capability: preflight.CapabilityE
         matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
             _intent: unknown): (boolean?, string?, boolean?) return flags.applied, nil end,
         apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
-            _intent: unknown): ({[string]: unknown}?, string?, boolean?)
+            _intent: unknown): ({[string]: unknown}?, string?, boolean?, boolean?)
             flags.applied = true
             return {changed = true}, nil
         end}

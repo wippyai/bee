@@ -26,7 +26,7 @@ local function drain(): boolean
             else
                 logger:warn(item.kind == "approved" and "Approved activation was not applied" or "Ended activation was not settled",
                     {approval_id = item.approval_id, code = item.code, reason = item.message})
-                retry = retry or (item.code ~= "UNCERTAIN" and item.code ~= "CONFLICT")
+                retry = retry or (item.code ~= "UNCERTAIN" and item.code ~= "CONFLICT" and item.code ~= "MISSING")
             end
         end
     until not progressed or not pass.pending()

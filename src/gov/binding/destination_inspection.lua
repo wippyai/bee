@@ -1,5 +1,6 @@
 -- MIT. Destination plan changes and installed application inspection.
 local bounds = require("bounds")
+local registry = require("registry")
 local transaction = require("transaction")
 local plans = require("plan_store")
 local activations = require("activation_store")
@@ -14,6 +15,7 @@ type Object = part_destination_policy.Object
 type Set = part_destination_policy.Set
 local load = part_destination_policy.load
 local selected = part_destination_policy.selected
+local missing_folder = part_destination_policy.missing_folder
 local destination_resolver = part_destination_policy.destination_resolver
 type Result = transaction.Result
 local function failure(code: string, message: string): Result
@@ -128,8 +130,16 @@ function M.application_of(bytes: unknown, digest: unknown): (string?, string?)
     return id, nil
 end
 
+-- Whether an activation is the one its slot wants running: approved and
+-- applying, applied, or uncertain whether it applied.
+local function wanted(row: Object): boolean
+    return row.intent_id ~= nil and row.intent_id == row.desired_intent_id
+        and (row.phase == "applying" or (row.phase == "settled" and (row.outcome == "applied" or row.outcome == "uncertain")))
+end
+
 -- Each applied activation says which application it runs; one that cannot be
--- read says nothing.
+-- read says nothing. A wanted activation whose application is not running
+-- because a folder its grant opens is missing says so as left_out.
 local function annotate(store: activations.Store, listing: Result): Result
     local value = listing.ok and bounds.object(listing.value) or nil
     local rows = value and value.activations
@@ -137,14 +147,20 @@ local function annotate(store: activations.Store, listing: Result): Result
     local config = load()
     for _, raw in ipairs(rows) do
         local row = bounds.object(raw)
-        if row and row.intent_id ~= nil and row.intent_id == row.observed_intent_id then
-            local read = activations.get(store, row.intent_id)
-            local intent = read.ok and bounds.object(read.value) or nil
-            if intent then row.application, row.title = M.application_of(intent.artifact_bytes, intent.artifact_digest) end
-        end
         local source_node = row and bounds.id(row.source_node) or nil
         local source_workspace = row and bounds.id(row.source_workspace) or nil
         local chosen = config and source_node and source_workspace and selected(config, store.workspace, source_node, source_workspace, store) or nil
+        local observed = row ~= nil and row.intent_id ~= nil and row.intent_id == row.observed_intent_id
+        if row and (observed or (chosen and wanted(row))) then
+            local read = activations.get(store, row.intent_id)
+            local intent = read.ok and bounds.object(read.value) or nil
+            local application, title = nil, nil
+            if intent then application, title = M.application_of(intent.artifact_bytes, intent.artifact_digest) end
+            if observed then row.application, row.title = application, title end
+            if intent and chosen and application and wanted(row) and registry.get(application) == nil then
+                row.left_out = missing_folder(chosen, intent)
+            end
+        end
         if row and chosen and source_node and source_workspace then
             row.component = chosen.component
             local following = follows.get(store, {source_node = source_node, source_workspace = source_workspace, component = chosen.component})

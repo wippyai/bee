@@ -276,7 +276,12 @@ function M.new(state: model.State, review: confirmation.State, wake: () -> (), c
         local answer = invoke(governed.recover_request(gov, item, key))
         local applied = governed.apply_activation(gov, answer)
         if answer and (applied or not answer.ok) then gov.pending_recover_key = nil end
-        if applied then gov.restored_intent_id = gov.intent and gov.intent.intent_id or nil end
+        if applied then
+            gov.restored_intent_id = gov.intent and gov.intent.intent_id or nil
+            -- A restoration changes what runs, not what the store records, so
+            -- the list reads the slots again.
+            refresh_activations()
+        end
         state.notice = gov.notice
     end
     -- open_version selects the plan a governed row stands for and reads it.

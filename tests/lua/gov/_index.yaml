@@ -1846,3 +1846,39 @@ entries:
   method: run
   meta: {type: migration, target_db: 'bee:db', timestamp: '2026-10-12T00:00:00Z', test_support: true}
   imports: {migration: 'wippy.migration:migration'}
+- name: granted_folder_recovery_test
+  kind: function.lua
+  source: file://granted_folder_recovery_test.lua
+  method: run
+  modules:
+  - tty
+  - channel
+  - funcs
+  - security
+  - registry
+  - json
+  - sql
+  - time
+  - uuid
+  - cdc
+  - env
+  - system
+  - process
+  - fs
+  meta:
+    type: test
+    suite: bee
+    timeout: 240s
+  security:
+    policies:
+    - bee.tests.gov:app_expiry_test_policy
+    - bee.tests.gov:bundle_files_policy
+  imports:
+    bounds: bee.drivers.values:bounds
+    test: wippy.test:test
+    harness: bee.tests.gov:delivery_harness
+    guide: bee.gov.traits:guide
+    test_fixtures: bee.tests.support:fixtures
+    library: bee.apps.library.app:model
+    governed: bee.gov.client:governed
+    workspace_applications: bee.gov.types:workspace_applications

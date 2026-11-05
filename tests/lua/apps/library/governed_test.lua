@@ -379,6 +379,21 @@ local function define_tests()
             test.is_false(model.apply_activation(state, reply(malformed)))
         end)
 
+        test.it("reads an activation Recover restored and one left out for a missing folder", function()
+            local state = model.new("workspace-destination")
+            local restored = activation()
+            restored.phase, restored.outcome, restored.recovered = "settled", "applied", true
+            test.is_true(model.apply_activation(state, reply(restored)))
+            test.eq(state.notice, "Installed")
+            restored.recovered = "yes"
+            test.is_false(model.apply_activation(state, reply(restored)))
+            local held = activation()
+            held.phase, held.outcome = "settled", "applied"
+            held.left_out = "folder cmd/ is missing; restore it or remove the grant"
+            test.is_true(model.apply_activations(state, reply({workspace_id = "workspace-destination", activations = {held}})))
+            test.eq(state.activations[1].left_out, "folder cmd/ is missing; restore it or remove the grant")
+        end)
+
         test.it("accepts an activation carrying its application admission as the store records it", function()
             local state = model.new("workspace-destination")
             local admitted = activation()

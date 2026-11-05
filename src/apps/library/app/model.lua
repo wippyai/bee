@@ -22,12 +22,12 @@ type RowKind = "app" | "driver" | "package" | "platform" | "section"
 -- application is the definition that opens an installed application and
 -- baseline the version a removal goes back to; removable says a Hub package
 -- nothing else needs may be removed; replaced_by names the version a Replaced
--- row gave way to.
+-- row gave way to; held_back says a Left out row waits for a missing folder.
 type Row = {key: string, origin: Origin, kind: RowKind, name: string, version: string, status: Status, update: string?,
     replaced_by: string?,
     source: string, note: string, component: string?, available_key: string?, intent_id: string?,
     operation: string?, app: string?, application: string?, baseline: string?, removable: boolean, made_here: boolean?, source_node: string?,
-    follow_state: string?, follow_outcome: string?, follow_message: string?}
+    follow_state: string?, follow_outcome: string?, follow_message: string?, held_back: boolean?}
 -- What a row needs to say; the rest is empty.
 type Spec = {key: string, origin: Origin, kind: RowKind, name: string, version: string, status: Status, source: string,
     update: string?, replaced_by: string?, note: string?, component: string?, available_key: string?, intent_id: string?,
@@ -130,7 +130,7 @@ type App = {name: string, owner: string, installed: governed.Intent?, flight: go
 -- The applications this workspace holds, newest activity first: an application
 -- is installed when its slot observed an applied activation, on its way while
 -- its newest activation has not settled, and left out when the current host
--- rules block its newest one.
+-- rules block its newest one or a folder its grant opens is missing.
 local function apps(state: State): {App}
     local order: {string} = {}
     local found: {[string]: App} = {}
@@ -140,7 +140,8 @@ local function apps(state: State): {App}
             entry = {name = item.source_workspace, owner = item.overlay_owner, installed = nil, flight = nil}
             found[item.overlay_owner] = entry
             order[#order + 1] = item.overlay_owner
-            if item.phase ~= "settled" or item.outcome == "uncertain" then entry.flight = item end
+            if item.left_out then entry.left_out = item
+            elseif item.phase ~= "settled" or item.outcome == "uncertain" then entry.flight = item end
             if item.phase == "settled" and item.outcome == "blocked" and item.intent_id == item.desired_intent_id then
                 entry.left_out = item
             end
@@ -266,7 +267,8 @@ local function installed_rows(state: State): {Row}
             if flight then
                 row.status = waiting(flight) and M.STATUS_WAITING or M.STATUS_INSTALLING
             elseif left_out then
-                row.status, row.note = M.STATUS_LEFT_OUT, tostring(left_out.diagnostics or "")
+                row.status, row.note = M.STATUS_LEFT_OUT, tostring(left_out.left_out or left_out.diagnostics or "")
+                row.held_back = left_out.left_out ~= nil
                 row.application, row.baseline = nil, nil
                 local latest = newest(state, app.name)
                 if latest and M.compare(latest.version, left_out.version) > 0 then
@@ -615,7 +617,8 @@ function M.version_lines(state: State, row: Row): {Line}
         lines[#lines + 1] = {label = "Next", value = "Approved; installing now"}
     elseif row.status == M.STATUS_LEFT_OUT then
         lines[#lines + 1] = {label = "Left out", value = row.note}
-        lines[#lines + 1] = {label = "Next", value = "This Bee does not run this version; install a newer one or remove it"}
+        lines[#lines + 1] = {label = "Next", value = row.held_back and "Once the folder is back, Enter recovers it; so does the next start of Bee"
+            or "This Bee does not run this version; install a newer one or remove it"}
     end
     return lines
 end

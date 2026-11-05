@@ -324,6 +324,27 @@ local function define_tests()
             test.is_true(advancing.status.enabled)
         end)
 
+        test.it("shows an application left out for a missing folder with Recover as its next move", function()
+            local state = fresh()
+            local reason = "folder cmd/ is missing; restore it or remove the grant"
+            test.is_true(governed.apply_activations(state.governed, reply({workspace_id = WORKSPACE, activations = {
+                {owner_node = NODE, workspace_id = WORKSPACE, intent_id = "intent-1", overlay_owner = "owner",
+                    source_node = NODE, source_workspace = "dirmap", version = "1.0.1", phase = "settled", outcome = "applied",
+                    revision = 3, desired_intent_id = "intent-1", observed_intent_id = "intent-1", observed_outcome = "applied",
+                    left_out = reason}}})))
+            local rows = model.rows(state, "installed")
+            test.eq(rows[1].status, model.STATUS_LEFT_OUT)
+            test.eq(rows[1].note, reason)
+            model.select(state, rows[1].key)
+            model.show_version(state, true)
+            local primary = view.actions(state, model.selected_row(state))[1]
+            test.eq(primary.kind, "recover")
+            test.is_true(primary.primary == true and primary.enabled)
+            local text = table.concat(plain(view.draw(140, 30, appearance.defaults(), state, ui()).rows), "\n")
+            test.is_true(text:find(reason, 1, true) ~= nil)
+            test.is_true(text:find("Once the folder is back", 1, true) ~= nil)
+        end)
+
         test.it("does not offer to ask for approval of a locally rejected version", function()
             local state = staged("tally", "2.0.0", true, "reviewed")
             local plan = assert(governed.selected(state.governed))

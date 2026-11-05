@@ -163,10 +163,10 @@ local function define_tests()
             test.is_false(protected_kernel.names(manifest, "bee.apps.settings.app:app"))
             test.is_false(protected_kernel.names(manifest, "bee.shell:main"))
             local opened = super_edit.enable({profiles = {}}, workspace, "node-local", {"app.tally", "bee.apps.settings.app", "bee.shell"},
-                "2050-01-01T00:00:00.000Z", manifest)
+                "2050-01-01T00:00:00.000Z", manifest, nil, {"app.tally", "bee.apps.settings.app", "bee.shell"})
             test.not_nil(opened)
             local refused, refusal = super_edit.enable({profiles = {}}, workspace, "node-local", {"bee.gov.binding"},
-                "2050-01-01T00:00:00.000Z", manifest)
+                "2050-01-01T00:00:00.000Z", manifest, nil, {"bee.gov.binding"})
             test.is_nil(refused)
             test.eq(refusal, "kernel namespace is protected: bee.gov.binding")
         end)

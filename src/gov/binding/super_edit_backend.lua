@@ -87,6 +87,7 @@ function M.handle(raw: unknown): {[string]: unknown}
     if not data then return failure("INVALID", "host activation profiles are malformed") end
     local manifest: protected_kernel.Manifest? = nil
     local areas: {Object} = {}
+    local present: {string} = {}
     if operation == "status" or operation == "enable" then
         local state, state_error = snapshot:state()
         if not state then return failure("UNAVAILABLE", tostring(state_error or "read host registry state")) end
@@ -94,13 +95,17 @@ function M.handle(raw: unknown): {[string]: unknown}
         if not built then return failure("UNAVAILABLE", tostring(build_error or "protected kernel is unavailable")) end
         manifest = built
         -- A component names the area its entries form for edit mode with a
-        -- bee.gov.edit_area entry in that namespace.
+        -- bee.gov.edit_area entry listing the namespaces the area covers,
+        -- each with its child namespaces.
+        local seen: {[string]: boolean} = {}
         for _, raw_entry in ipairs(state.entries) do
             local declared = bounds.object(raw_entry)
             local meta = declared and bounds.object(declared.meta)
             local namespace = declared and bounds.id(declared.id) and tostring(declared.id):match("^([^:]+):")
+            if namespace and not seen[namespace] then seen[namespace] = true; present[#present + 1] = namespace end
             local title = meta and meta.type == M.EDIT_AREA and bounds.line(meta.title, 160) or nil
-            if namespace and title then areas[#areas + 1] = {namespace = namespace, title = title} end
+            local covered = namespace and title and super_edit.area(namespace, declared and declared.data) or nil
+            if covered then areas[#areas + 1] = {namespaces = covered, title = title} end
         end
     end
     if operation == "status" then
@@ -129,7 +134,7 @@ function M.handle(raw: unknown): {[string]: unknown}
         local owners, owner_error = owner_ids(namespaces, assert(workspace_id))
         if not owners then return failure("UNAVAILABLE", owner_error or "allocate overlay identities") end
         local expires = time.now():add(duration):utc():format(FORMAT)
-        updated, parse_error = super_edit.enable(data, workspace_id, node, namespaces, expires, manifest, owners)
+        updated, parse_error = super_edit.enable(data, workspace_id, node, namespaces, expires, manifest, owners, present)
         if not updated then return failure("INVALID", parse_error or "super-edit profile is invalid") end
         local decoded, decode_error = activation_profiles.decode(updated)
         if not decoded then return failure("INVALID", tostring(decode_error or "activation profiles are invalid")) end

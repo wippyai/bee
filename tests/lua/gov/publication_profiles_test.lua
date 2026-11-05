@@ -23,7 +23,7 @@ local function define_tests()
         test.it("publishes from the existing Settings edit grant and withdraws it on expiry", function()
             local grant = assert(super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"bee.settings.app"},
                 "2050-01-01T00:00:00.000Z", {revision = 1, super_edit = {},
-                    entries = {"bee.gov:protected_kernel"}}))
+                    entries = {"bee.gov:protected_kernel"}}, nil, {"bee.settings.app"}))
             local activation = assert(activation_profiles.decode(grant))
             local config = assert(profiles.configuration({profiles = {}}, activation, "node-local"))
             local selected = assert((profiles.for_source(config, WORKSPACE, "bee.settings.app")))
@@ -39,7 +39,7 @@ local function define_tests()
         test.it("retains host-enabled application and driver publication alongside a Settings edit grant", function()
             local grant = assert(super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"bee.settings.app"},
                 "2050-01-01T00:00:00.000Z", {revision = 1, super_edit = {},
-                    entries = {"bee.gov:protected_kernel"}}))
+                    entries = {"bee.gov:protected_kernel"}}, nil, {"bee.settings.app"}))
             local activation = assert(activation_profiles.decode(grant))
             local config = assert(profiles.configuration({profiles = {}, workspace_applications = true,
                 workspace_drivers = true}, activation, "node-local"))

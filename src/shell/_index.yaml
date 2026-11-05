@@ -6,7 +6,9 @@ entries:
   meta:
     type: bee.gov.edit_area
     title: Desktop
-    comment: Edit mode offers the desktop shell's entries as one area
+    comment: Edit mode offers the desktop shell and its display, bee.shell with its child namespaces, as one area
+  data:
+    namespaces: [bee.shell]
 - name: model
   kind: library.lua
   source: file://model.lua

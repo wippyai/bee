@@ -1,12 +1,6 @@
 version: '1.0'
 namespace: bee.shell.display
 entries:
-- name: edit_area
-  kind: registry.entry
-  meta:
-    type: bee.gov.edit_area
-    title: Desktop display
-    comment: Edit mode offers the desktop display state, node calls, event handling and input routing as one area
 - name: handover
   kind: library.lua
   source: file://handover.lua

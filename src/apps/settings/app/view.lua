@@ -160,7 +160,7 @@ function M.confirm_message(input: string, disabling: boolean?): (string?, string
     end
     local areas, duration, problem = super_edit.parse_enable(input)
     if not areas or not duration then return nil, problem end
-    return "Allow changes to " .. table.concat(areas, ", ") .. " for " .. duration .. "? Changes to these areas affect the apps that use them.", nil
+    return "Allow changes to " .. table.concat(areas, ", ") .. " (with child namespaces) for " .. duration .. "? Changes to these areas affect the apps that use them.", nil
 end
 -- count is the number of cards pane shows.
 function M.count(pane: Pane, themes: {appearance.Theme}): integer

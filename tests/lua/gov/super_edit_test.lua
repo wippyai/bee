@@ -83,9 +83,11 @@ local function define_tests()
             local desktop = false
             for _, raw in ipairs(assert(bounds.array(assert(bounds.object(inactive_reply.value)).areas, 64))) do
                 local area = assert(bounds.object(raw))
-                if area.namespace == "bee.shell" and area.title == "Desktop" then desktop = true end
+                local listed = principals.strings(area.namespaces)
+                if area.title == "Desktop" then desktop = #listed == 1 and listed[1] == "bee.shell" end
+                test.is_false(area.title == "Desktop display")
             end
-            test.is_true(desktop, "status names the declared desktop edit area")
+            test.is_true(desktop, "status names the declared desktop edit area with its listed namespace")
         end)
         test.it("reports malformed host profiles instead of calling edit mode disabled", function()
             local original = assert(registry.get("bee.gov:activation_profiles"))
@@ -158,7 +160,7 @@ local function define_tests()
         test.it("writes one bounded profile per exact non-kernel namespace", function()
             local namespaces = {"vendor.alpha", "app.clock"}
             local changed, err = super_edit.enable({profiles = {}, workspace_applications = true}, WORKSPACE,
-                "node-local", namespaces, "2030-01-01T00:00:00.000Z", KERNEL)
+                "node-local", namespaces, "2030-01-01T00:00:00.000Z", KERNEL, nil, namespaces)
             if not changed then error(tostring(err)) end
             local rows = principals.objects(changed.profiles)
             test.eq(#rows, 2)
@@ -176,10 +178,47 @@ local function define_tests()
             test.eq(changed.workspace_applications, true)
         end)
 
+        test.it("grants a listed namespace together with its child namespaces", function()
+            local changed, err = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"vendor.alpha"},
+                "2030-01-01T00:00:00.000Z", KERNEL, nil, {"vendor", "vendor.alpha", "vendor.alpha.panel", "vendor.alpha.panel.parts"})
+            if not changed then error(tostring(err)) end
+            local rows = principals.objects(changed.profiles)
+            test.eq(#rows, 1)
+            test.eq(rows[1].source_workspace, "vendor.alpha")
+            local granted = principals.strings(assert(bounds.object(rows[1].allow)).namespaces)
+            test.eq(table.concat(granted, ","), "vendor.alpha,vendor.alpha.panel,vendor.alpha.panel.parts")
+            test.is_true(super_edit.covers("bee.shell", "bee.shell.display"))
+            test.is_true(super_edit.covers("bee.shell", "bee.shell"))
+        end)
+
+        test.it("never grants a sibling namespace that shares the listed name as a prefix", function()
+            local changed, err = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"vendor.alpha"},
+                "2030-01-01T00:00:00.000Z", KERNEL, nil, {"vendor.alpha", "vendor.alphabet", "vendor.alphabet.panel", "vendor.alpha_x"})
+            if not changed then error(tostring(err)) end
+            local granted = principals.strings(assert(bounds.object(principals.objects(changed.profiles)[1].allow)).namespaces)
+            test.eq(table.concat(granted, ","), "vendor.alpha")
+            test.is_false(super_edit.covers("bee.shell", "bee.shellx"))
+            test.is_false(super_edit.covers("bee.shell", "bee.shellx.display"))
+            test.is_false(super_edit.covers("bee.shell", "bee"))
+        end)
+
+        test.it("keeps a kernel namespace under a listed namespace protected", function()
+            local kernel = {revision = 1, super_edit = {}, entries = {"bee.gov:protected_kernel", "vendor.alpha.core:engine"}}
+            local changed, err = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"vendor.alpha"},
+                "2030-01-01T00:00:00.000Z", kernel, nil, {"vendor.alpha", "vendor.alpha.core", "vendor.alpha.core.parts", "vendor.alpha.panel"})
+            if not changed then error(tostring(err)) end
+            local granted = principals.strings(assert(bounds.object(principals.objects(changed.profiles)[1].allow)).namespaces)
+            test.eq(table.concat(granted, ","), "vendor.alpha,vendor.alpha.core.parts,vendor.alpha.panel")
+            local refused, refusal = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {"vendor.alpha.core"},
+                "2030-01-01T00:00:00.000Z", kernel, nil, {"vendor.alpha.core"})
+            test.is_nil(refused)
+            test.not_nil((string.find(tostring(refusal), "kernel namespace", 1, true)))
+        end)
+
         test.it("refuses areas containing exact protected entries", function()
             for _, namespace in ipairs({"bee.gov", "bee.security"}) do
                 local changed, err = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {namespace},
-                    "2030-01-01T00:00:00.000Z", KERNEL)
+                    "2030-01-01T00:00:00.000Z", KERNEL, nil, {namespace})
                 test.is_nil(changed)
                 test.not_nil((string.find(tostring(err), "kernel namespace", 1, true)))
             end
@@ -190,12 +229,12 @@ local function define_tests()
                 super_edit = {"bee.settings.app:app", "bee.desktop:main"}, entries = {"bee.gov:protected_kernel", "bee.settings:private", "bee:db"}}
             for _, namespace in ipairs({"bee.settings.app", "bee.desktop"}) do
                 local changed, err = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {namespace},
-                    "2030-01-01T00:00:00.000Z", opened)
+                    "2030-01-01T00:00:00.000Z", opened, nil, {namespace})
                 test.not_nil(changed, tostring(err))
             end
             for _, namespace in ipairs({"bee", "bee.settings", "bee.gov"}) do
                 local changed = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {namespace},
-                    "2030-01-01T00:00:00.000Z", opened)
+                    "2030-01-01T00:00:00.000Z", opened, nil, {namespace})
                 test.is_nil(changed)
             end
         end)
@@ -203,7 +242,7 @@ local function define_tests()
             local changed, err = super_edit.enable({profiles = {
                 {workspace_id = WORKSPACE, source_node = "node-local", source_workspace = "vendor.alpha",
                     expires_at = "2030-01-01T00:00:00.000Z", overlay_owner = "bee.super_edit:old"}}},
-                WORKSPACE, "node-local", {"vendor.alpha"}, "2030-02-01T00:00:00.000Z", KERNEL)
+                WORKSPACE, "node-local", {"vendor.alpha"}, "2030-02-01T00:00:00.000Z", KERNEL, nil, {"vendor.alpha"})
             test.is_nil(changed)
             test.not_nil((string.find(tostring(err), "disable edit mode", 1, true)))
         end)

@@ -25,9 +25,9 @@ local function define_tests()
                 super_edit = {"bee.apps.settings.app:app", "bee.shell:main"}, entries = {"bee.gov:protected_kernel", "bee.approvals.inbox.app:app"}}
             local workspace = string.rep("a", 32)
             local configuration = assert(super_edit.enable({profiles = {}}, workspace, "node", {"bee.apps.settings.app"},
-                "2099-01-01T00:00:00.000Z", protection))
+                "2099-01-01T00:00:00.000Z", protection, nil, {"bee.apps.settings.app"}))
             test.is_nil(model.load(state, workspace, {{id = "bee.apps.settings.app:app", title = "Settings"},
-                {id = "bee.approvals.inbox.app:app", title = "Needs you"}}, configuration, protection, {{namespace = "bee.shell", title = "Desktop"}}))
+                {id = "bee.approvals.inbox.app:app", title = "Needs you"}}, configuration, protection, {{namespaces = {"bee.shell"}, title = "Desktop"}}))
             test.eq(#state.areas, 2)
             test.eq(state.areas[1].title, "Desktop")
             test.eq(#state.grants, 1)
@@ -55,10 +55,28 @@ local function define_tests()
             local protection = {revision = 1, super_edit = {"bee.demo:main"}, entries = {"bee.gov:protected_kernel"}}
             local configuration = {profiles = {}}
             test.is_nil(model.load(state, string.rep("a", 32), {}, configuration, protection,
-                {{namespace = "bee.demo", title = "Demo"}, {namespace = "bee.closed", title = "Closed"}}))
+                {{namespaces = {"bee.demo"}, title = "Demo"}, {namespaces = {"bee.closed"}, title = "Closed"}}))
             test.eq(#state.areas, 1)
             test.eq(state.areas[1].id, "bee.demo")
             test.eq(state.areas[1].title, "Demo")
+        end)
+        test.it("offers an area through an opened entry in a child of its listed namespace, never a prefix sibling", function()
+            local state = model.new()
+            local protection = {revision = 1, super_edit = {"bee.shell.display:state", "bee.shellx:main"}, entries = {"bee.gov:protected_kernel"}}
+            test.is_nil(model.load(state, string.rep("a", 32), {}, {profiles = {}}, protection,
+                {{namespaces = {"bee.shell"}, title = "Desktop"}, {namespaces = {"bee.shel"}, title = "Prefix"}}))
+            test.eq(#state.areas, 1)
+            test.eq(state.areas[1].title, "Desktop")
+            model.enable(state)
+            forms.select_set(assert(assert(state.form).fields[2].select), "1h")
+            test.eq(model.request(state), "bee.shell --for 1h")
+        end)
+        test.it("leaves an area out while one of its listed namespaces is in the protected kernel", function()
+            local state = model.new()
+            local protection = {revision = 1, super_edit = {"bee.shell.display:state"}, entries = {"bee.gov:protected_kernel", "bee.shell:core"}}
+            test.is_nil(model.load(state, string.rep("a", 32), {}, {profiles = {}}, protection,
+                {{namespaces = {"bee.shell"}, title = "Desktop"}}))
+            test.eq(#state.areas, 0)
         end)
         test.it("feeds form area and duration through the exact-area confirmation validator", function()
             for _, values in ipairs({{"bee.*", "1h"}, {"bee.demo?", "8h"}, {"bee.demo", "25h"}, {"bee.demo", "0h"}}) do

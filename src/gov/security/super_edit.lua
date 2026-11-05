@@ -82,19 +82,69 @@ function M.is_kernel(namespace_raw: unknown, kernel_raw: unknown): boolean
     return protected_kernel.area(manifest, requested) == "protected"
 end
 
+-- covers is the one rule an edit area follows: a listed namespace covers
+-- itself and its child namespaces, matched at a dot boundary, so bee.shell
+-- covers bee.shell.display and never bee.shellx.
+function M.covers(listed: string, candidate: string): boolean
+    return candidate == listed or candidate:sub(1, #listed + 1) == listed .. "."
+end
+
+-- coverage is what enabling listed grants among the present namespaces: the
+-- listed namespace and each present child namespace outside the protected
+-- kernel, in order.
+function M.coverage(listed: string, present: {unknown}, kernel_raw: unknown): {string}
+    local result: {string} = {listed}
+    local seen: {[string]: boolean} = {[listed] = true}
+    for _, raw in ipairs(present) do
+        local candidate = namespace(raw)
+        if candidate and not seen[candidate] and M.covers(listed, candidate) and not M.is_kernel(candidate, kernel_raw) then
+            seen[candidate] = true
+            result[#result + 1] = candidate
+        end
+    end
+    table.sort(result)
+    return result
+end
+
+local MAX_AREA_NAMESPACES = 8
+
+-- area reads a bee.gov.edit_area declaration in namespace owner: the
+-- namespaces data.namespaces lists, each owner or one of its child
+-- namespaces, sorted; nil when the list is absent, empty, repeated or
+-- reaches outside owner.
+function M.area(owner: string, data_raw: unknown): {string}?
+    local data = type(data_raw) == "table" and data_raw or nil
+    local listed = list(data and data.namespaces, "edit area namespaces")
+    if not listed or #listed == 0 or #listed > MAX_AREA_NAMESPACES then return nil end
+    local result: {string} = {}
+    local seen: {[string]: boolean} = {}
+    for _, raw in ipairs(listed) do
+        local item = namespace(raw)
+        if not item or seen[item] or not M.covers(owner, item) then return nil end
+        seen[item] = true
+        result[#result + 1] = item
+    end
+    table.sort(result)
+    return result
+end
+
 local function workspace_id(value: unknown): string?
     if type(value) == "string" and #value == 32 and not value:find("[^0-9a-f]") then return value end
     return nil
 end
 
+-- enable writes one profile per requested area namespace; each grants the
+-- coverage of that namespace among the present namespaces.
 function M.enable(configuration_raw: unknown, workspace_raw: unknown, node_raw: unknown,
-    namespaces_raw: unknown, expires_raw: unknown, kernel_raw: unknown, owner_ids_raw: unknown?): (Object?, string?)
+    namespaces_raw: unknown, expires_raw: unknown, kernel_raw: unknown, owner_ids_raw: unknown?, present_raw: unknown): (Object?, string?)
     local configuration = type(configuration_raw) == "table" and configuration_raw or nil
     local workspace, node = workspace_id(workspace_raw), type(node_raw) == "string" and node_raw or nil
     local expires = type(expires_raw) == "string" and expires_raw or nil
     local namespaces, namespaces_error = list(namespaces_raw, "namespace list")
     local rows, rows_error = list(configuration and configuration.profiles, "activation profiles")
     local owner_ids = type(owner_ids_raw) == "table" and owner_ids_raw or nil
+    local present, present_error = list(present_raw, "installed namespaces")
+    if not present then return nil, present_error end
     if not configuration or not workspace or not node or node == "" or not expires or not namespaces or not rows then
         return nil, namespaces_error or rows_error or "super-edit request is invalid"
     end
@@ -136,7 +186,7 @@ function M.enable(configuration_raw: unknown, workspace_raw: unknown, node_raw: 
         result[#result + 1] = {workspace_id = workspace, source_node = node, source_workspace = item,
             component = item, overlay_owner = overlay_owner,
             approval_policy = APPROVAL_POLICY, resolver = "overlay", parameters = {}, expires_at = expires,
-            allow = {packages = {item}, namespaces = {item}, kinds = ALLOWED_KINDS,
+            allow = {packages = {item}, namespaces = M.coverage(item, present, kernel_raw), kinds = ALLOWED_KINDS,
                 databases = {}, grants = {}, modules = {"tty"}, auto_start = false}}
     end
     if #result > MAX_PROFILES then return nil, "activation profile limit would be exceeded" end

@@ -338,9 +338,16 @@ governance builds the protected set from the registry at decision time. The
 host trust map `bee.gov:protected_kernel` keeps the `super_edit` list of exact
 entries the host opens to a super-edit profile; Bee selects the
 `bee.apps.settings` and `bee.shell` entries. Settings offers an installed
-application's namespace as an edit area, and any namespace that declares a
-`bee.gov.edit_area` entry (`meta.title`, as `bee.shell:edit_area` names the
-Desktop) once one of its entries is opened. Each driver's own
+application's namespace as an edit area, and each `bee.gov.edit_area` entry
+(`meta.title` and `data.namespaces`, the namespaces the area covers: the
+declaring namespace or its child namespaces) once an entry in a covered
+namespace is opened; `bee.shell:edit_area` names the Desktop and lists
+`[bee.shell]`. A listed namespace covers itself and its child namespaces,
+matched at a dot boundary (`bee.shell` covers `bee.shell.display`, never
+`bee.shellx`). Enabling an area writes one profile per listed namespace whose
+`allow.namespaces` is exactly that coverage among the installed namespaces;
+a covered namespace holding a protected kernel entry stays out of the grant,
+and an area whose listed namespace holds one is not offered. Each driver's own
 `bee.driver.<name>` and `bee.drivers.<name>` namespaces stay under governance.
 A super-edit profile row carries `expires_at`; it is admitted only
 while unexpired, must set `allow.auto_start: false`, must name a dedicated

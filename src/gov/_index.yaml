@@ -113,7 +113,6 @@ entries:
     - bee.apps.settings:hub_updates
     - bee.apps.settings:registry_commits
     - bee.shell.display:actions
-    - bee.shell.display:edit_area
     - bee.shell.display:handover
     - bee.shell.display:input
     - bee.shell.display:jobs

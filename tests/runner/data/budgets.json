@@ -249,7 +249,7 @@
   "bee.tests.placement.docker:cleanup_test": 1.876,
   "bee.tests.placement.docker:environment_test": 0.9430000000000001,
   "bee.tests.placement.docker:image_test": 6.874,
-  "bee.tests.placement.docker:lifecycle_test": 2.472,
+  "bee.tests.placement.docker:lifecycle_test": 9.515,
   "bee.tests.placement.docker:profile_test": 0.833,
   "bee.tests.placement.docker:projection_test": 0.855,
   "bee.tests.placement.docker:readiness_test": 0.87,

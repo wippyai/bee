@@ -500,20 +500,7 @@ local function define_tests()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
             local pid = spawn_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_HOOKS = "1", BEE_FIXTURE_HOOKS_FLOOD = "80"}), "open", nil, "attempt_started")
-            local binding_id = ""
-            for _ = 1, 200 do
-                local reply = raw_call("bee.gateway.binding:check", {attempt_id = attempt_id, carrier_epoch = 1})
-                if reply.ok then
-                    binding_id = tostring((assert(bounds.object(reply.value))).binding_id)
-                    local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding_id})
-                    local queued = 0
-                    for _, item in ipairs(principals.objects(queue.hooks)) do
-                        if item.status == "queued" then queued = queued + 1 end
-                    end
-                    if queued >= 64 then break end
-                end
-                time.sleep("50ms")
-            end
+            local binding_id = support.await_queued_hooks(attempt_id, 1, 64)
             test.neq(binding_id, "")
             continue_carrier(pid)
             local outcome = await_exit(pid, "flooded carrier")

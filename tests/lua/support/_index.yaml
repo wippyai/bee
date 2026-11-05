@@ -149,3 +149,8 @@ entries:
   modules: [registry]
   imports:
     test: wippy.test:test
+- name: await
+  kind: library.lua
+  source: file://await.lua
+  meta: {type: test_support, comment: Database-state waits that wake on the node change stream}
+  modules: [cdc, channel, time]

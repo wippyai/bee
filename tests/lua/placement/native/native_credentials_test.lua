@@ -193,7 +193,8 @@ local function credentials_tests()
             local unsafe_projection = native_fixture.credential_call("issue_projection", {workspace_id = workspace, name = "codex_ambient", audience = native_fixture.OWNER,
                 attempt_id = unsafe_attempt, profile_id = "batch", profile_digest = native_fixture.DIGEST, binding_digest = native_fixture.DIGEST,
                 launch_policy_digest = native_fixture.DIGEST, idempotency_key = native_fixture.fresh("private-provider-descendant-key")})
-            local unsafe_request = native_fixture.launch({"sh", "-c", "printf %s " .. quote.posix(refreshed_login)
+            local holders = native_fixture.holder_watch()
+            local unsafe_request = native_fixture.launch({"sh", "-c", "exec 9>" .. quote.posix(holders.path) .. "; printf %s " .. quote.posix(refreshed_login)
                 .. " > \"$CODEX_HOME/auth.json\"; (sleep 2) >/dev/null 2>&1 &"}, "direct_process")
             unsafe_request.attempt_id = unsafe_attempt
             unsafe_request.projections = {unsafe_projection.projection_id}
@@ -208,7 +209,7 @@ local function credentials_tests()
             test.is_true(native_fixture.has(native_fixture.kinds(unsafe_attempt), "credential.write_back_failed"))
             test.eq(native_fixture.shell("test \"$(cat " .. quote.posix(source_root .. "/.codex/auth.json") .. ")\" = "
                 .. quote.posix(original_login) .. " && printf unchanged"), "unchanged")
-            time.sleep("2200ms")
+            test.is_true(holders.wait(8000), "the descendant ends")
             native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "cleanup", {attempt_id = unsafe_attempt}))
         end)
         test.it("starts with an absent optional machine login and permits private CLI sign-in", function()
@@ -656,7 +657,7 @@ local function credentials_tests()
             local revoked_attempt = native_fixture.fresh("attempt")
             local revocable = native_fixture.credential_call("issue_projection", {workspace_id = workspace, name = "anthropic", audience = native_fixture.OWNER, attempt_id = revoked_attempt, profile_id = "batch",
                 profile_digest = native_fixture.DIGEST, binding_digest = native_fixture.DIGEST, launch_policy_digest = native_fixture.DIGEST, idempotency_key = native_fixture.fresh("key")})
-            local sleeping = native_fixture.launch({"sh", "-c", "sleep 8"}, "direct_process")
+            local sleeping = native_fixture.launch({"sh", "-c", "exec tail -f /dev/null"}, "direct_process")
             sleeping.attempt_id = revoked_attempt
             sleeping.projections = {revocable.projection_id}
             local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
@@ -666,6 +667,16 @@ local function credentials_tests()
             test.eq(started.execution_state, "running")
             native_fixture.credential_call("revoke", {projection_id = revocable.projection_id})
             service.wake_supervision("native")
+            local function reconciled_kinds(): boolean
+                for _, kind in ipairs(native_fixture.kinds(revoked_attempt)) do
+                    if kind == "credential.revoked" or kind:sub(1, 10) == "reconcile." then return true end
+                end
+                return false
+            end
+            test.is_true(native_fixture.wait_for(reconciled_kinds, 30000), "the supervised sweeper did not reconcile the attempt")
+            if capability ~= "process_group" then
+                native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = revoked_attempt, mode = "forced"}))
+            end
             while true do
                 local message = assert((exits:receive()))
                 local outcome = assert(bounds.object(message:payload():data()))
@@ -677,18 +688,11 @@ local function credentials_tests()
             end
             process.unlisten(exits)
             local recorded = native_fixture.kinds(revoked_attempt)
-            local reconciled = false
-            for _, kind in ipairs(recorded) do
-                if kind == "credential.revoked" or kind:sub(1, 10) == "reconcile." then reconciled = true end
-            end
-            test.is_true(reconciled, "the supervised sweeper did not reconcile the attempt")
             test.is_true(native_fixture.has(recorded, "child.exited"))
             if capability == "process_group" then
                 test.is_true(native_fixture.has(recorded, "credential.revoked"))
                 test.is_false(native_fixture.has(recorded, "grant.revoked"), "credential revocation was also recorded as a resource grant revocation")
                 test.is_true(native_fixture.has(recorded, "stop.requested"))
-            else
-                native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "stop", {attempt_id = revoked_attempt, mode = "forced"}))
             end
             local reported = native_fixture.value(service.capabilities())
             local enforcement = assert(bounds.object(reported.revocation_enforcement))

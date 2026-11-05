@@ -277,7 +277,7 @@ def workspace(root, address, identities=(), costs=None):
         return copy_workspace(root, address, identities, costs)
 
 
-def run_shard(number, identities, run_root, toolchain, cores, count, discovered, reservation, lua_cache, lua_cache_mode='readwrite', costs=None):
+def run_shard(number, identities, run_root, toolchain, cores, count, discovered, reservation, lua_cache, lua_cache_mode='readwrite', costs=None, docker=False):
     started = time.monotonic()
     root = run_root / f"shard-{number:02d}"
     with reservation:
@@ -314,6 +314,7 @@ def run_shard(number, identities, run_root, toolchain, cores, count, discovered,
                 timeline.line(line, now)
         code = process.wait()
     timeline.finish(time.monotonic())
+    leaked = docker_fixture.teardown(root) if docker else []
     clean, case_durations, cases = measure(log.read_text(), {name: discovered[name] for name in identities})
     failed = failures(log.read_text(), {name: discovered[name] for name in identities})
     summaries = SUMMARY.findall(clean)
@@ -335,6 +336,9 @@ def run_shard(number, identities, run_root, toolchain, cores, count, discovered,
     if code == 0 and any(name not in completed for name in identities):
         code = 1
         failure = "missing suite hygiene completion"
+    if code == 0 and leaked:
+        code = 1
+        failure = "the shard's node left Docker containers, removed at teardown: " + ", ".join(leaked)
     (root / "timings.json").write_text(json.dumps(measured, indent=2) + "\n")
     elapsed = time.monotonic() - started
     print(f"Shard {number:02d}: {counts[0]} passed, {counts[1]} failed, {elapsed:.1f}s ({log.relative_to(REPO)})", flush=True)
@@ -413,7 +417,7 @@ def main():
             ports.append(port)
         futures = {pool.submit(run_shard, index, group, run_root, args.wippy.resolve(),
                                len(os.sched_getaffinity(0)), len(active), discovered, port, args.lua_cache, args.lua_cache_mode,
-                               {} if args.ceilings else None): index
+                               {} if args.ceilings else None, docker_fixture.required(documents, set(group))): index
                    for (index, group), port in zip(active, ports)}
         completed = {}
         for future in as_completed(futures):

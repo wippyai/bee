@@ -1,5 +1,8 @@
-"""Install selected Docker fixture images outside timed test entries."""
+"""Install selected Docker fixture images outside timed test entries, and remove
+the containers a shard's node leaves when it ends."""
 import http.client
+import json
+import os
 import re
 import socket
 import subprocess
@@ -28,6 +31,45 @@ def present(image):
         raise RuntimeError(f'Docker fixture inspection HTTP {response.status}: {body.decode(errors="replace")}')
     finally:
         client.close()
+
+
+def request(method, path):
+    client = Connection('docker')
+    try:
+        client.request(method, path)
+        response = client.getresponse()
+        body = response.read()
+        if response.status >= 300:
+            raise RuntimeError(f'Docker HTTP {response.status} for {method} {path}: {body.decode(errors="replace")}')
+        return json.loads(body) if body else None
+    finally:
+        client.close()
+
+
+def teardown(root):
+    """Remove the containers whose bind mounts lie under a shard root.
+
+    A shard's node owns the containers of its attempts. A node that ends with
+    an attempt in flight (an entry that timed out, a create that completed
+    after its runner ended) leaves them behind, and no later boot of that node
+    reconciles them, so the shard removes them when its node has exited.
+    """
+    prefix = os.path.join(str(root), '')
+    removed = []
+    for container in request('GET', '/containers/json?all=true') or []:
+        if any(mount.get('Type') == 'bind' and os.path.join(mount.get('Source', ''), '').startswith(prefix)
+               for mount in container.get('Mounts') or []):
+            request('DELETE', '/containers/' + container['Id'] + '?force=true')
+            removed.append(container['Id'])
+    return removed
+
+
+def required(documents, selected):
+    """Whether a selected entry drives the Docker daemon."""
+    return any(document['namespace'] + ':' + entry['name'] in selected
+               and entry.get('meta', {}).get('type') == 'test'
+               and 'docker_daemon' in entry['meta'].get('resources', [])
+               for document in documents for entry in document.get('entries', []))
 
 
 def images(documents, selected):

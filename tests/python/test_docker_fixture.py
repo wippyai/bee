@@ -63,5 +63,47 @@ class DockerFixtureTests(unittest.TestCase):
                 client.close.assert_called_once()
 
 
+    def test_teardown_removes_only_the_containers_that_mount_the_shard(self):
+        shard = '/work/tests/.wippy/runs/run/shard-01'
+        listed = [
+            {'Id': 'a' * 64, 'Mounts': [{'Type': 'bind', 'Source': shard + '/.wippy/placement-project'}]},
+            {'Id': 'b' * 64, 'Mounts': [{'Type': 'bind', 'Source': shard + '-other/.wippy/placement-project'}]},
+            {'Id': 'c' * 64, 'Mounts': [{'Type': 'volume', 'Source': '/var/lib/docker/volumes/pg/_data'}]},
+            {'Id': 'd' * 64, 'Mounts': []},
+        ]
+        calls = []
+
+        def request(method, path):
+            calls.append((method, path))
+            return listed if method == 'GET' else None
+        with mock.patch.object(docker, 'request', side_effect=request):
+            removed = docker.teardown(shard)
+        self.assertEqual(removed, ['a' * 64])
+        self.assertEqual(calls, [('GET', '/containers/json?all=true'), ('DELETE', '/containers/' + 'a' * 64 + '?force=true')])
+
+    def test_teardown_reports_a_refused_removal(self):
+        shard = '/work/shard-01'
+        listed = [{'Id': 'a' * 64, 'Mounts': [{'Type': 'bind', 'Source': shard + '/x'}]}]
+
+        def request(method, path):
+            if method == 'GET':
+                return listed
+            raise RuntimeError('Docker HTTP 409: removal refused')
+        with mock.patch.object(docker, 'request', side_effect=request), \
+                self.assertRaisesRegex(RuntimeError, '409: removal refused'):
+            docker.teardown(shard)
+
+    def test_requests_report_daemon_failures_with_their_body(self):
+        with mock.patch.object(docker, 'Connection') as connection:
+            response = connection.return_value.getresponse.return_value
+            response.status = 409
+            response.read.return_value = b'{"message":"container is in use"}'
+            with self.assertRaisesRegex(RuntimeError, '409.*container is in use'):
+                docker.request('DELETE', '/containers/x?force=true')
+            response.status = 204
+            response.read.return_value = b''
+            self.assertIsNone(docker.request('DELETE', '/containers/x?force=true'))
+
+
 if __name__ == '__main__':
     unittest.main()

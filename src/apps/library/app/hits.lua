@@ -124,7 +124,7 @@ function M.new(ctx: session.Session, base: session.Base, actions: delivery_actio
         elseif kind == "developer_packages" then hub.toggle_developer_packages(hubs); changed()
         elseif kind == "technical" then model.toggle_technical(state); changed()
         elseif kind == "refresh" then
-            for node in pairs(asked) do if gov.names[node] == nil then asked[node] = nil end end
+            actions.forget_unnamed()
             load_tab()
         elseif kind == "operations_previous" then hub.set_operation_page(hubs, hubs.operation_page - 1); operation_history()
         elseif kind == "operations_next" then hub.set_operation_page(hubs, hubs.operation_page + 1); operation_history()

@@ -20,6 +20,7 @@ type Actions = {
     share_now: (model.Row) -> (), review_transition: (boolean) -> boolean, select_transition: () -> boolean,
     prepare_transition: (boolean?) -> boolean, install_now: (model.Row, boolean?) -> (), review_hub_now: (Object) -> (),
     confirm_hub_now: () -> (), step_now: () -> (), status_now: () -> (), recover_now: () -> (), open_version_now: (model.Row) -> (),
+    forget_unnamed: () -> (),
 }
 function M.new(state: model.State, review: confirmation.State, wake: () -> (), callbacks: Callbacks): Actions
     local gov, hubs = state.governed, state.hub
@@ -47,6 +48,10 @@ function M.new(state: model.State, review: confirmation.State, wake: () -> (), c
         if #wanted == 0 then return end
         local raw, err = funcs.new():call(governed.NAMES, governed.names_request(wanted))
         if not err then governed.apply_names(gov, governed.reply(raw)) end
+    end
+    -- forget_unnamed lets the next read ask again the bees that did not answer.
+    local function forget_unnamed()
+        for node in pairs(asked) do if gov.names[node] == nil then asked[node] = nil end end
     end
     local function refresh_governed()
         local failures: {string} = {}
@@ -311,7 +316,7 @@ function M.new(state: model.State, review: confirmation.State, wake: () -> (), c
         end
     end
 
-    return {invoke = invoke, refresh_activations = refresh_activations, refresh_governed = refresh_governed, remove_now = remove_now, share_now = share_now, review_transition = review_transition, select_transition = select_transition, prepare_transition = prepare_transition, install_now = install_now, review_hub_now = review_hub_now, confirm_hub_now = confirm_hub_now, step_now = step_now, status_now = status_now, recover_now = recover_now, open_version_now = open_version_now}
+    return {invoke = invoke, refresh_activations = refresh_activations, refresh_governed = refresh_governed, remove_now = remove_now, share_now = share_now, review_transition = review_transition, select_transition = select_transition, prepare_transition = prepare_transition, install_now = install_now, review_hub_now = review_hub_now, confirm_hub_now = confirm_hub_now, step_now = step_now, status_now = status_now, recover_now = recover_now, open_version_now = open_version_now, forget_unnamed = forget_unnamed}
 end
 M.new_key = new_key
 return M

@@ -120,3 +120,21 @@ entries:
   imports:
     test: wippy.test:test
     form: bee.apps.library.app:form
+- name: flow_test
+  kind: function.lua
+  source: file://flow_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [channel]
+  imports:
+    test: wippy.test:test
+    confirmation: bee.approvals.app:confirmation
+    caller: bee.app:caller
+    model: bee.apps.library.app:model
+    hub: bee.apps.library.app:hub
+    contents: bee.apps.library.app:contents
+    session: bee.apps.library.app:session
+    reads: bee.apps.library.app:reads
+    delivery_actions: bee.apps.library.app:delivery_actions
+    package_flow: bee.apps.library.app:package_flow
+    hits: bee.apps.library.app:hits

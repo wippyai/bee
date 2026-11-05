@@ -1,6 +1,6 @@
 [
   {
-    "path": "src/approvals/inbox/app/model.lua",
+    "path": "src/approvals/inbox/app/review_lines.lua",
     "text": "-- other request. Each statement appears once; \"Now also\" appears only for an",
     "reason": "Quotes the UI wording whose deduplication the code guarantees."
   },

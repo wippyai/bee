@@ -6,6 +6,7 @@ local registry = require("registry")
 local bounds = require("bounds")
 local tty = require("tty")
 local model = require("model")
+local wire = require("wire")
 local leases = require("leases")
 local view = require("view")
 local question_form = require("question_form")
@@ -13,7 +14,7 @@ local frames = require("frames")
 local appearance = require("appearance")
 type Object = {[string]: unknown}
 local function reply(raw: Object): model.Reply
-    local decoded = model.decode_reply(raw)
+    local decoded = wire.decode_reply(raw)
     if not decoded then error("invalid approval reply fixture") end
     return decoded
 end

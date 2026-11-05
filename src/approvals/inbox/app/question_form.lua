@@ -4,6 +4,7 @@ local frame = require("frame")
 local forms = require("forms")
 local typed_form = require("typed_form")
 local model = require("model")
+local wire = require("wire")
 local lease_form = require("lease_form")
 local M = {}
 type State = {form: forms.Form, fields: {typed_form.Field}, view: model.ApprovalView, status: string}
@@ -14,18 +15,18 @@ function M.new(view: model.ApprovalView): State
     for _, field in ipairs(declared) do
         if field.kind ~= "object" or #field.choices > 0 then
             fields[#fields + 1] = field
-            local label = model.text(field.id:gsub("^answer%.", ""), 64)
+            local label = wire.text(field.id:gsub("^answer%.", ""), 64)
             if field.required then label = label .. " *" end
             local choices: {{label: string, value: string}} = {{label = "Choose", value = ""}}
             if #field.choices > 0 then
-                for index, value in ipairs(field.choices) do choices[#choices + 1] = {label = model.text(typed_form.label(value)), value = tostring(index)} end
+                for index, value in ipairs(field.choices) do choices[#choices + 1] = {label = wire.text(typed_form.label(value)), value = tostring(index)} end
                 widgets[#widgets + 1] = forms.field_select(field.id, label, choices, "")
             elseif field.kind == "boolean" then
                 choices[#choices + 1] = {label = "Yes", value = "true"}
                 choices[#choices + 1] = {label = "No", value = "false"}
                 widgets[#widgets + 1] = forms.field_select(field.id, label, choices, "")
             else
-                widgets[#widgets + 1] = forms.field_text(field.id, label, typed_form.buffer(field), {hint = model.text(field.description), max_length = 4096})
+                widgets[#widgets + 1] = forms.field_text(field.id, label, typed_form.buffer(field), {hint = wire.text(field.description), max_length = 4096})
             end
         end
     end
@@ -50,9 +51,9 @@ end
 
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: State): lease_form.Frame
     local painter = frame.new(width, height, preferences)
-    frame.header(painter, "QUESTION", model.text(state.view.requester_id))
+    frame.header(painter, "QUESTION", wire.text(state.view.requester_id))
     local prompt: {string} = {}
-    local remaining = model.text(state.view.prompt.text, 4096)
+    local remaining = wire.text(state.view.prompt.text, 4096)
     local room = math.floor(math.max(1, width - 4))
     while remaining ~= "" do
         local line = tty.text.cut(remaining, 0, room)

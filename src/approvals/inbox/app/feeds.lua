@@ -5,6 +5,7 @@ local bounds = require("bounds")
 local sync = require("sync")
 local source_config = require("source_config")
 local model = require("model")
+local wire = require("wire")
 local M = {}
 type Object = {[string]: unknown}
 type Source = source_config.Source
@@ -23,7 +24,7 @@ local function failure(code: string, message: string, purged: boolean?): model.R
     return {kind = "failure", code = code, message = message, replayed = false, purged = purged}
 end
 local function view_for(self: Client, source: Source, raw: unknown, addresses: AddressBook?): (ApprovalView?, string?)
-    local decoded, err = model.decode_view(raw)
+    local decoded, err = wire.decode_view(raw)
     if not decoded then return nil, err end
     if decoded.owner_node ~= source.node_id or decoded.workspace_id ~= source.workspace_id then return nil, "approval projection belongs to another owner" end
     local real_id = decoded.approval_id
@@ -32,7 +33,7 @@ local function view_for(self: Client, source: Source, raw: unknown, addresses: A
     for key, value in pairs(decoded) do result[key] = value end
     result.approval_id, result.workspace_id = ui_id, source.id
     result.source_approval_id, result.source_workspace_id = real_id, source.workspace_id
-    local qualified, qualify_error = model.decode_view(result)
+    local qualified, qualify_error = wire.decode_view(result)
     if not qualified then return nil, qualify_error end
     local address_book = addresses or self.addresses
     address_book[ui_id] = {source = source, approval_id = real_id}
@@ -41,7 +42,7 @@ end
 local function invoke_owner(self: Client, source: Source, target: string, request: unknown): model.Reply?
     local raw, err = self.call(source, target, request)
     if err then return failure("UNKNOWN_OUTCOME", err) end
-    local reply = model.decode_reply(raw)
+    local reply = wire.decode_reply(raw)
     if not reply then return failure("INVALID_REPLY", "approval owner returned a malformed reply") end
     return reply
 end
@@ -71,7 +72,7 @@ local function decode_event_payload(value: unknown): (unknown?, string?)
     local extra = bounds.fields(payload, {"schema_revision", "request"})
     if extra then return nil, extra end
     if payload.schema_revision ~= "bee.approval-projection@1" then return nil, "approval event payload schema is unsupported" end
-    local request, request_error = model.decode_view(payload.request)
+    local request, request_error = wire.decode_view(payload.request)
     if not request then return nil, request_error or "approval event request is invalid" end
     return {request = request}, nil
 end
@@ -89,7 +90,7 @@ local function snapshot(self: Client, source: Source): model.Reply
         local reply = invoke_owner(self, source, "bee.approvals.binding:feed_snapshot", request)
         if not reply then return failure("UNAVAILABLE", "approval owner did not answer") end
         if reply.kind ~= "success" then return reject_source(self, source, reply) end
-        local page, decode_error = sync.snapshot(reply.value, source.node_id, source.feed, model.decode_view)
+        local page, decode_error = sync.snapshot(reply.value, source.node_id, source.feed, wire.decode_view)
         if not page then
             purge_source(self, source)
             return failure("UNAVAILABLE", decode_error or "invalid snapshot", true)
@@ -101,7 +102,7 @@ local function snapshot(self: Client, source: Source): model.Reply
                     return failure("UNAVAILABLE", "approval tombstone has a value", true)
                 end
             else
-                local body = model.decode_view(item.value)
+                local body = wire.decode_view(item.value)
                 if not body or body.owner_node ~= source.node_id or body.workspace_id ~= source.workspace_id
                 or body.approval_id ~= item.key or body.revision ~= item.revision then
                     purge_source(self, source)
@@ -159,7 +160,7 @@ local function catchup(self: Client, source: Source, state: sync.State): Catchup
     for _, event in ipairs(page.events) do
         if event.tombstone then return {reply = failure("RESET_REQUIRED", "approval feed does not carry tombstones"), reset = true} end
         local payload = bounds.object(event.payload)
-        local view = payload and model.decode_view(payload.request) or nil
+        local view = payload and wire.decode_view(payload.request) or nil
         if not view or view.owner_node ~= source.node_id or view.workspace_id ~= source.workspace_id
             or view.approval_id ~= event.projection_key or view.revision ~= event.revision then
             return {reply = failure("RESET_REQUIRED", "approval feed identity or revision mismatch"), reset = true}
@@ -173,7 +174,7 @@ local function catchup(self: Client, source: Source, state: sync.State): Catchup
     local changed, fold_error = sync.apply_page(state, page, function(current: sync.State, event: sync.Event): (boolean?, string?)
         local payload = bounds.object(event.payload)
         if not payload then return nil, "approval event payload is invalid" end
-        local body, view_error = model.decode_view(payload.request)
+        local body, view_error = wire.decode_view(payload.request)
         if not body then return nil, view_error or "approval feed request is invalid" end
         local original = body
         if original.approval_id ~= event.projection_key or original.revision ~= event.revision then return nil, "approval feed revision does not match event" end

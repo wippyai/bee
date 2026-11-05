@@ -27,6 +27,8 @@ entries:
     bounds: bee.drivers.values:bounds
     clock: bee.drivers.values:clock
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
+    review_lines: bee.approvals.inbox.app:review_lines
     view: bee.approvals.inbox.app:view
     inbox: bee.approvals.inbox.app:client
     feeds: bee.approvals.inbox.app:feeds
@@ -77,11 +79,28 @@ entries:
     states: bee.approvals.types:states
     windows: bee.approvals.types:windows
     grants: bee.approvals.grants:store
-    text: bee.ui:text
     glyphs: bee.ui:glyphs
     bounds: bee.drivers.values:bounds
-    caller: bee.app:caller
     typed_form: bee.apps.library.app:form
+    wire: bee.approvals.inbox.app:wire
+- name: wire
+  kind: library.lua
+  source: file://wire.lua
+  imports:
+    states: bee.approvals.types:states
+    windows: bee.approvals.types:windows
+    text: bee.ui:text
+    bounds: bee.drivers.values:bounds
+    caller: bee.app:caller
+- name: review_lines
+  kind: library.lua
+  source: file://review_lines.lua
+  modules:
+  - json
+  imports:
+    glyphs: bee.ui:glyphs
+    bounds: bee.drivers.values:bounds
+    wire: bee.approvals.inbox.app:wire
 - name: leases
   kind: library.lua
   source: file://leases.lua
@@ -91,6 +110,8 @@ entries:
     clock: bee.drivers.values:clock
     bounds: bee.drivers.values:bounds
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
+    review_lines: bee.approvals.inbox.app:review_lines
 - name: lease_form
   kind: library.lua
   source: file://lease_form.lua
@@ -101,6 +122,7 @@ entries:
     frame: bee.ui:frame
     forms: bee.ui.forms:forms
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
     leases: bee.approvals.inbox.app:leases
 - name: feeds
   kind: library.lua
@@ -110,6 +132,7 @@ entries:
     sync: bee.sync:protocol
     source_config: bee.approvals.inbox.app:source_config
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
 - name: view
   kind: library.lua
   source: file://view.lua
@@ -120,6 +143,8 @@ entries:
     appearance: bee.ui:appearance
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
+    review_lines: bee.approvals.inbox.app:review_lines
     windows: bee.approvals.types:windows
     clock: bee.drivers.values:clock
     names: bee.app:names
@@ -167,6 +192,7 @@ entries:
     forms: bee.ui.forms:forms
     typed_form: bee.apps.library.app:form
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
     lease_form: bee.approvals.inbox.app:lease_form
 - name: start_menu
   kind: registry.entry

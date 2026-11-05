@@ -5,6 +5,8 @@
 local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
+local review_lines = require("review_lines")
+local wire = require("wire")
 local leases = require("leases")
 local names = require("names")
 local tty = require("tty")
@@ -83,7 +85,7 @@ local function draw_windows(width: integer, height: integer, preferences: appear
     if state.grant_detail then
         local lines: {string} = {}
         for _, line in ipairs(state.grant_detail) do
-            for _, wrapped in ipairs(frame.flow({{value = model.text(line,8192)}},math.floor(math.max(1,width - 4)),0)) do lines[#lines + 1] = wrapped.value or "" end
+            for _, wrapped in ipairs(frame.flow({{value = wire.text(line,8192)}},math.floor(math.max(1,width - 4)),0)) do lines[#lines + 1] = wrapped.value or "" end
         end
         state.grant_line_count = #lines
         local visible = math.floor(math.max(1,height - 5))
@@ -122,7 +124,7 @@ local function draw_windows(width: integer, height: integer, preferences: appear
 end
 -- The install card as lines: the title, who made it, each fact once and the
 -- scope.
-local function card_lines(card: model.Card): {string}
+local function card_lines(card: review_lines.Card): {string}
     local lines: {string} = {card.glyph .. " " .. card.title}
     if card.maker then lines[#lines + 1] = "  " .. card.maker end
     for _, section in ipairs(card.sections) do
@@ -147,7 +149,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
     local lines: {string} = {}
     local readable = width > 2 and detail.prompt.text ~= nil
     for _, item in ipairs(group) do
-        local card = model.card(item)
+        local card = review_lines.card(item)
         local source: {string} = {}
         if card then
             for _, line in ipairs(card_lines(card)) do source[#source + 1] = line end
@@ -163,8 +165,8 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
             if facts.reason then source[#source + 1] = "Reason: " .. facts.reason end
             if facts.exposure and facts.exposure ~= "" then source[#source + 1] = facts.exposure end
             local command = item.proposal.payload.command
-            if type(command) == "string" then source[#source + 1] = "Command: " .. model.text(command, 8192) end
-            for _, line in ipairs(model.permission_lines(item)) do source[#source + 1] = line end
+            if type(command) == "string" then source[#source + 1] = "Command: " .. wire.text(command, 8192) end
+            for _, line in ipairs(review_lines.permission_lines(item)) do source[#source + 1] = line end
             source[#source + 1] = "Lasts: " .. model.duration(item, state.displays)
         end
         source[#source + 1] = timing(item, state.displays)
@@ -172,12 +174,12 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
             source[#source + 1] = ""
             local consequence = item.proposal.payload.consequence
             local display = model.display(item, state.displays)
-            source[#source + 1] = type(consequence) == "string" and model.text(consequence, 2048)
+            source[#source + 1] = type(consequence) == "string" and wire.text(consequence, 2048)
                 or (display and display.consequence)
                 or "Approval lets this action proceed. Its changes may remain after access ends."
         end
         local result = type(item.effect_result) == "table" and item.effect_result or (item.effect and item.effect.receipt)
-        if type(result) == "table" and type(result.error) == "string" then source[#source + 1] = model.decision_line(item, state.displays) .. ": " .. model.text(result.error, 2048) end
+        if type(result) == "table" and type(result.error) == "string" then source[#source + 1] = model.decision_line(item, state.displays) .. ": " .. wire.text(result.error, 2048) end
         for _, line in ipairs(source) do
             for _, wrapped in ipairs(prompt_lines(line, width, "")) do
                 if tty.text.width(wrapped) > width - 2 then readable = false end
@@ -216,7 +218,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
         review_first = top + 1, review_last = math.min(#lines, top + visible), review_total = readable and #lines or nil}
 end
 
-function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice, workspace_names: {[string]: model.Workspace}?): Frame
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice, workspace_names: {[string]: wire.Workspace}?): Frame
     if state.grants_view then return draw_windows(width, height, preferences, state, offset, status) end
     local open = state.detail
     local chosen = model.selected_row(state)
@@ -241,8 +243,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local assurance = model.assurance(open)
         if assurance then lines[#lines + 1] = "Confirmed gesture: " .. assurance end
         if open.requesting_session then lines[#lines + 1] = "Source session: " .. open.requesting_session end
-        for _, value in ipairs(model.permission_lines(open)) do lines[#lines + 1] = value end
-        for _, value in ipairs(model.payload_lines(open)) do lines[#lines + 1] = value end
+        for _, value in ipairs(review_lines.permission_lines(open)) do lines[#lines + 1] = value end
+        for _, value in ipairs(review_lines.payload_lines(open)) do lines[#lines + 1] = value end
         local wrapped: {string} = {}
         for _, value in ipairs(lines) do for _, row in ipairs(prompt_lines(value, width, "")) do wrapped[#wrapped + 1] = row end end
         local visible = math.floor(math.max(1, height - 5))
@@ -255,7 +257,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
     local theme = painter.theme
-    local locations: {[string]: model.Workspace} = workspace_names or {}
+    local locations: {[string]: wire.Workspace} = workspace_names or {}
     local pending_total = 0
     for _, row in ipairs(rows) do if row.state == "pending" then pending_total = pending_total + 1 end end
     frame.header(painter, "NEEDS YOU", #rows == 0 and "" or (tostring(pending_total) .. " pending · " .. tostring(#rows) .. " shown"))
@@ -278,10 +280,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     for slot = 1, window.capacity do
         local row = rows[window.offset + slot]
         if not row then break end
-        local card = model.card(row.view)
+        local card = review_lines.card(row.view)
         local review = model.review(row.view)
         local title = card and card.title or review.title
-        local facts = model.permission_lines(row.view)
+        local facts = review_lines.permission_lines(row.view)
         if card then
             facts = {}
             for _, section in ipairs(card.sections) do

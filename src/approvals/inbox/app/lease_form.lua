@@ -7,6 +7,7 @@ local appearance = require("appearance")
 local frame = require("frame")
 local forms = require("forms")
 local model = require("model")
+local wire = require("wire")
 local leases = require("leases")
 local M = {}
 M.EXTRAS = 3
@@ -90,7 +91,7 @@ end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: State): Frame
     local painter = frame.new(width, height, preferences)
     local footer_buttons: {frame.Button} = {}
-    frame.header(painter, "LEASE REQUEST", model.text(state.view.proposal.ref, 60))
+    frame.header(painter, "LEASE REQUEST", wire.text(state.view.proposal.ref, 60))
     local sizes: {integer} = {}
     for index, field in ipairs(state.form.fields) do sizes[index] = forms.rows(field) end
     local rects = frame.stack({x = 2, y = 3, width = math.floor(math.max(1, width - 2)), height = math.floor(math.max(1, height - 5))}, sizes, 0)

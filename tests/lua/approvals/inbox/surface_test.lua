@@ -12,6 +12,7 @@ local uuid = require("uuid")
 local json = require("json")
 local bounds = require("bounds")
 local model = require("model")
+local wire = require("wire")
 local feeds = require("feeds")
 local source_config = require("source_config")
 local leases = require("leases")
@@ -72,7 +73,7 @@ local function file(workspace: string, prompt: string, ttl_ms: integer?): string
     return tostring(typed.value.approval_id)
 end
 local function unknown_answer(): model.Reply
-    return model.unknown_reply()
+    return wire.unknown_reply()
 end
 local function refresh(state: model.State, owner: Owner)
     for _, workspace in ipairs(state.workspaces) do
@@ -80,7 +81,7 @@ local function refresh(state: model.State, owner: Owner)
         local pages = 0
         while more and pages < 8 do
             local intent = model.inbox_intent(state, workspace)
-            more = model.apply_inbox(state, workspace, model.decode_reply(owner:invoke(intent.target, intent.request)) or unknown_answer())
+            more = model.apply_inbox(state, workspace, wire.decode_reply(owner:invoke(intent.target, intent.request)) or unknown_answer())
             pages = pages + 1
         end
     end
@@ -89,13 +90,13 @@ local function open(state: model.State, owner: Owner, approval_id: string)
     model.select(state, approval_id)
     local intent = model.read_intent(state)
     if not intent then error("no read intent") end
-    model.apply_read(state, approval_id, model.decode_reply(owner:invoke(intent.target, intent.request)) or unknown_answer())
+    model.apply_read(state, approval_id, wire.decode_reply(owner:invoke(intent.target, intent.request)) or unknown_answer())
 end
 local function decide(state: model.State, owner: Owner, decision: string): string
     local request_id = key()
     local intent, refused = model.decision_intent(state, request_id, decision)
     if not intent then error("decision refused: " .. tostring(refused)) end
-    model.apply_answer(state, request_id, model.decode_reply(owner:invoke(intent.target, intent.request)))
+    model.apply_answer(state, request_id, wire.decode_reply(owner:invoke(intent.target, intent.request)))
     return request_id
 end
 local function frame_text(state: model.State): string
@@ -197,7 +198,7 @@ local function define_tests()
                 local request_id = key()
                 local intent = model.decision_intent(state, request_id, "approved")
                 if not intent then error("the viewed request was pending") end
-                model.apply_answer(state, request_id, model.decode_reply(owner:invoke(intent.target, intent.request)))
+                model.apply_answer(state, request_id, wire.decode_reply(owner:invoke(intent.target, intent.request)))
                 test.is_nil(state.pending)
                 test.eq((assert(bounds.object(state.detail))).state, "expired")
                 test.is_true(state.notice:find("expired", 1, true) ~= nil)
@@ -229,11 +230,11 @@ local function define_tests()
             local request_id = key()
             local intent = model.decision_intent(state, request_id, "approved")
             if not intent then error("no intent") end
-            model.apply_answer(state, request_id, model.decode_reply(lossy:invoke(intent.target, intent.request)))
+            model.apply_answer(state, request_id, wire.decode_reply(lossy:invoke(intent.target, intent.request)))
             test.not_nil(state.pending)
             local recovery = model.recovery_intent(state)
             if not recovery then error("no recovery") end
-            model.apply_recovery(state, model.decode_reply(owner:invoke(recovery.target, recovery.request)) or unknown_answer())
+            model.apply_recovery(state, wire.decode_reply(owner:invoke(recovery.target, recovery.request)) or unknown_answer())
             test.is_nil(state.pending)
             test.eq((assert(bounds.object(state.detail))).decision, "approved")
             test.eq(state.notice, "Recovered: approved by " .. ALICE)
@@ -272,7 +273,7 @@ local function define_tests()
             test.is_nil((text:find("\7", 1, true)))
             test.is_nil((text:find("\r", 1, true)))
             test.is_true(text:find("touch proof.txt", 1, true) ~= nil)
-            test.is_true(#state.rows[approval_id].prompt <= model.TEXT_LIMIT + 3)
+            test.is_true(#state.rows[approval_id].prompt <= wire.TEXT_LIMIT + 3)
             local record = json.encode(state.rows[approval_id].view)
             test.is_true(record ~= nil)
         end)

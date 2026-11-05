@@ -5,6 +5,8 @@ local principals = require("principals")
 local bounds = require("bounds")
 local appearance = require("appearance")
 local model = require("model")
+local review_lines = require("review_lines")
+local wire = require("wire")
 local leases = require("leases")
 local lease_form = require("lease_form")
 local forms = require("forms")
@@ -18,7 +20,7 @@ local function approval(id: string, state: string, ref: string, payload: Object,
         owner_node = "node-1", owner_incarnation = 3, expires_at = "2026-09-09T10:00:00.000Z",
         created_at = "2026-09-09T09:0" .. tostring(#id % 10) .. ":00.000Z"}
     for key, value in pairs(extra or {}) do item[key] = value end
-    return assert(model.decode_view(item))
+    return assert(wire.decode_view(item))
 end
 local function grants_reply(raw: Object): Object
     if raw.ok ~= true then return raw end
@@ -226,13 +228,13 @@ local function define_tests()
         test.it("states the lease terms from typed values, apart from the request's own expiry", function()
             local granting = approval("g1", "pending", leases.PROPOSAL, {target = "bee.gov:notes", ttl_seconds = 2592000, max_applies = 3,
                 resolved_capabilities = {"Write docs"}, permission_changes = {"ignored free text"}})
-            local text = table.concat(model.permission_lines(granting), "\n")
+            local text = table.concat(review_lines.permission_lines(granting), "\n")
             test.is_true(text:find("App updates: notes", 1, true) ~= nil)
             test.is_true(text:find("30 days from the moment it is granted", 1, true) ~= nil)
             test.is_true(text:find("Maximum updates: 3", 1, true) ~= nil)
             test.is_true(text:find("Allows: Write docs", 1, true) ~= nil)
             test.is_nil((text:find("ignored free text", 1, true)))
-            local open = model.permission_lines(approval("g2", "pending", leases.PROPOSAL, {target = "bee.gov:notes", resolved_capabilities = {"Write docs"}}))
+            local open = review_lines.permission_lines(approval("g2", "pending", leases.PROPOSAL, {target = "bee.gov:notes", resolved_capabilities = {"Write docs"}}))
             test.is_true(table.concat(open, "\n"):find("Lasts: no expiry", 1, true) ~= nil)
         end)
     end)
@@ -241,7 +243,7 @@ local function define_tests()
             local install = approval("a1", "pending", "bee.gov:establish-overlay", {source_workspace = "notes", version = "1.0.0",
                 permission_changes = {"added: Use an isolated application database named notes"},
                 migrations = {{id = "app.notes:create_notes", target_db = "notes"}}})
-            local text = table.concat(model.permission_lines(install), "\n")
+            local text = table.concat(review_lines.permission_lines(install), "\n")
             test.is_true(text:find("Change: added: Use an isolated application database named notes", 1, true) ~= nil)
             test.is_true(text:find("Migration: app.notes:create_notes on notes, changes the database for good", 1, true) ~= nil)
         end)
@@ -262,10 +264,10 @@ local function define_tests()
             for index = 1, 16 do caps[index] = "Write workspace files under directory-number-" .. tostring(index) .. " " .. string.rep("long ", 30) end
             local granting = approval("g9", "pending", leases.PROPOSAL, {target = "bee.gov:notes", ttl_seconds = 3600, max_applies = 3, resolved_capabilities = caps})
             local state = model.new({"ws-1"})
-            model.apply_inbox(state, "ws-1", assert(model.decode_reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "g9", revision = 1, request = granting}},
+            model.apply_inbox(state, "ws-1", assert(wire.decode_reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "g9", revision = 1, request = granting}},
                 next_seq = 1, more = false}, replayed = false})))
             model.select(state, "g9")
-            model.apply_read(state, "g9", assert(model.decode_reply({ok = true, error = nil, value = granting, replayed = false})))
+            model.apply_read(state, "g9", assert(wire.decode_reply({ok = true, error = nil, value = granting, replayed = false})))
             local slice = leases.new()
             local seen = ""
             local function page(): {string}
@@ -336,10 +338,10 @@ local function define_tests()
         test.it("gives the lease action and the lease rows different hit kinds", function()
             local state = model.new({"ws-1"})
             local pending = approval("r1", "pending", leases.ACTIVATION, ACTIVATION)
-            model.apply_inbox(state, "ws-1", assert(model.decode_reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "r1", revision = 1, request = pending}},
+            model.apply_inbox(state, "ws-1", assert(wire.decode_reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "r1", revision = 1, request = pending}},
                 next_seq = 1, more = false}, replayed = false})))
             model.select(state, "r1")
-            model.apply_read(state, "r1", assert(model.decode_reply({ok = true, error = nil, value = pending, replayed = false})))
+            model.apply_read(state, "r1", assert(wire.decode_reply({ok = true, error = nil, value = pending, replayed = false})))
             local slice = leases.new()
             local drawn = view.draw(140, 30, appearance.defaults(), state, model.rows(state), 0, "", slice)
             local action = false
@@ -383,7 +385,7 @@ local function define_tests()
         test.it("keeps bulk decisions out of the request list", function()
             local state = model.new({"ws-1"})
             local one = approval("b1", "pending", "bee.x:op", {})
-            model.apply_inbox(state, "ws-1", assert(model.decode_reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "b1", revision = 1, request = one}},
+            model.apply_inbox(state, "ws-1", assert(wire.decode_reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "b1", revision = 1, request = one}},
                 next_seq = 1, more = false}, replayed = false})))
             local slice = leases.new()
             leases.toggle_mark(slice, state.rows, "b1")

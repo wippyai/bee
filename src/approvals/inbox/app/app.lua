@@ -18,6 +18,8 @@ local registry = require("registry")
 local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
+local review_lines = require("review_lines")
+local wire = require("wire")
 local windows = require("windows")
 local grants = require("grants")
 local bounds = require("bounds")
@@ -39,7 +41,7 @@ local WORKSPACES = "bee.approvals.inbox.app:workspaces"
 local CHANGED = "bee.approvals.changed"
 type FeedSource = {id: string, node_id: string, workspace_id: string, local_owner: boolean, feed: string}
 local function unknown_answer(): model.Reply
-    return model.unknown_reply()
+    return wire.unknown_reply()
 end
 local function admitted_workspaces(): unknown
     local entry = registry.get(WORKSPACES)
@@ -98,7 +100,7 @@ local function main(value: unknown)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid inbox checkpoint") end
     state.technical = false
     local rows: {model.Row} = {}
-    local workspace_names: {[string]: model.Workspace} = {}
+    local workspace_names: {[string]: wire.Workspace} = {}
     local offset = 0
     local capacity = 0
     local hits: {frame.Hit} = {}
@@ -183,7 +185,7 @@ local function main(value: unknown)
         seam.hold("bee.approvals.inbox.app.refresh")
         for _, workspace in ipairs(local_workspaces) do
             local raw = funcs.call("bee.node.binding:read", {workspace_id = workspace})
-            workspace_names[workspace] = model.workspace(raw, workspace)
+            workspace_names[workspace] = wire.workspace(raw, workspace)
         end
         for _, workspace in ipairs(state.workspaces) do
             if not running then return end
@@ -285,7 +287,7 @@ local function main(value: unknown)
                 local reply = owner:invoke("bee.approvals.binding:read", {approval_id = item.approval_id})
                 if not reply then state.notice = "Batch outcome unknown: owner did not answer"; return end
                 if reply.kind ~= "success" then state.notice = reply.message; return end
-                local view, err = model.decode_view(reply.value)
+                local view, err = wire.decode_view(reply.value)
                 if not view or view.approval_id ~= item.approval_id then state.notice = "INVALID_REPLY: " .. tostring(err or "batch identity differs"); return end
                 model.apply_read(state, view.approval_id, reply)
                 if view.state == "pending" then state.notice = "Batch outcome unknown: decision may remain in flight"; return end
@@ -374,11 +376,11 @@ local function main(value: unknown)
             if grant.max_uses then lines[#lines + 1] = tostring(grant.used) .. " of " .. tostring(grant.max_uses) .. " uses" end
             if grant.approval_id then
                 local source = owner:invoke("bee.approvals.binding:read", {approval_id = grant.approval_id})
-                local request = source and source.kind == "success" and model.decode_view(source.value) or nil
+                local request = source and source.kind == "success" and wire.decode_view(source.value) or nil
                 if request then
                     lines[#lines + 1] = model.prompt(request)
                     lines[#lines + 1] = "Lasts: " .. model.duration(request, state.displays)
-                    for _, line in ipairs(model.permission_lines(request)) do lines[#lines + 1] = line end
+                    for _, line in ipairs(review_lines.permission_lines(request)) do lines[#lines + 1] = line end
                 end
             end
             lines[#lines + 1] = "History"
@@ -394,7 +396,7 @@ local function main(value: unknown)
                     local events: {[string]: string} = {["grant.created"] = "Granted", ["grant.revoked"] = "Access removed", ["grant.migrated"] = "Saved", ["grant.superseded"] = "Replaced"}
                     local recorded = type(row.body_json) == "string" and bounds.object(json.decode(row.body_json)) or nil
                     local actor = recorded and bounds.id(recorded.actor_definition) and "you" or "Bee"
-                    lines[#lines + 1] = model.text(row.at,64) .. " · " .. (events[tostring(row.kind)] or "Updated") .. " by " .. actor
+                    lines[#lines + 1] = wire.text(row.at,64) .. " · " .. (events[tostring(row.kind)] or "Updated") .. " by " .. actor
                 end
                 if body.more ~= true then break end
                 local next_revision = bounds.integer(body.next_revision)
@@ -453,7 +455,7 @@ local function main(value: unknown)
             return
         end
         local title = "Withdraw this request?"
-        local message = model.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
+        local message = wire.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
         local accept = "Withdraw"
         local request_id, err = client.query(launch, {kind = "confirm", title = title, message = message, accept = accept,
             target = {approval_id = confirmation.approval_id, revision = confirmation.revision, proposal_digest = confirmation.proposal_digest}})

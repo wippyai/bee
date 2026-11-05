@@ -25,6 +25,8 @@ entries:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
+    review_lines: bee.approvals.inbox.app:review_lines
     caller: bee.app:caller
     inbox: bee.approvals.inbox.app:client
     question_form: bee.approvals.inbox.app:question_form
@@ -53,6 +55,7 @@ entries:
     test: wippy.test:test
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
     view: bee.approvals.inbox.app:view
     appearance: bee.ui:appearance
 - name: surface_test
@@ -70,6 +73,7 @@ entries:
     test: wippy.test:test
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
     feeds: bee.approvals.inbox.app:feeds
     source_config: bee.approvals.inbox.app:source_config
     caller: bee.app:caller
@@ -124,6 +128,7 @@ entries:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
     caller: bee.app:caller
     thread_harness: bee.tests.threads:harness
     shared_authority: bee.tests.support:authority
@@ -140,6 +145,8 @@ entries:
     bounds: bee.drivers.values:bounds
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
+    review_lines: bee.approvals.inbox.app:review_lines
     caller: bee.app:caller
     shared_authority: bee.tests.support:authority
 - name: leases_test
@@ -153,6 +160,8 @@ entries:
     test: wippy.test:test
     appearance: bee.ui:appearance
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
+    review_lines: bee.approvals.inbox.app:review_lines
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form
     forms: bee.ui.forms:forms
@@ -171,6 +180,7 @@ entries:
   imports:
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
+    wire: bee.approvals.inbox.app:wire
     view: bee.approvals.inbox.app:view
     leases: bee.approvals.inbox.app:leases
     appearance: bee.ui:appearance

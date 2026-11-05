@@ -2,6 +2,7 @@ local test = require("test")
 local fs = require("fs")
 local tty = require("tty")
 local model = require("model")
+local wire = require("wire")
 local view = require("view")
 local leases = require("leases")
 local appearance = require("appearance")
@@ -17,7 +18,7 @@ local function define_tests()
         test.it("captures the list, card, empty state and arrival notice through their renderers", function()
             local state = model.new({"workspace"})
             capture("empty", view.draw(120, 40, appearance.defaults(), state, {}, 0, "", leases.new()).rows)
-            local item = assert(model.decode_view({approval_id = "request", workspace_id = "workspace", requester_id = "bs:node:workspace:session",
+            local item = assert(wire.decode_view({approval_id = "request", workspace_id = "workspace", requester_id = "bs:node:workspace:session",
                 requesting_session = "bs:node:workspace:session", request_kind = "permission", policy = "agent-access", owner_node = "node", owner_incarnation = 1,
                 proposal = {kind = "operation", ref = "bee.gateway:access", revision = "1", payload = {review = {title = "Let this agent session use Hub and Library?", access = "Hub and Library", reason = "Find and install a clock for my desktop."}, requester_name = "Clock helper", duration = "For this agent session", access_summary = "Find and install apps", consequence = "Installed apps can change this workspace."}},
                 proposal_digest = string.rep("a", 64), prompt = {text = "Let this agent session use Hub and Library? It asks: Find and install a clock for my desktop."},

@@ -4,6 +4,8 @@ local grants = require("grants")
 local clock = require("clock")
 local bounds = require("bounds")
 local model = require("model")
+local review_lines = require("review_lines")
+local wire = require("wire")
 local M = {}
 M.MAX_MARKS = 16
 M.MAX_EXTRAS = 8
@@ -102,7 +104,7 @@ function M.review_lines(view: model.ApprovalView, width: integer, names: {[strin
     local lines: {string} = {facts.title, "", "From: " .. model.requester_name(view, names, displays)}
     if facts.access then lines[#lines + 1] = "Access: " .. facts.access end
     if facts.reason then lines[#lines + 1] = "Reason: " .. facts.reason end
-    for _, line in ipairs(model.permission_lines(view)) do lines[#lines + 1] = line end
+    for _, line in ipairs(review_lines.permission_lines(view)) do lines[#lines + 1] = line end
     lines[#lines + 1] = "Decide by: " .. clock.local_deadline(view.expires_at)
     local wrapped: {string} = {}
     local room = math.floor(math.max(10, width - 4))
@@ -174,7 +176,7 @@ local function fault(raw: unknown): string?
     if not reply then return "no answer from governance" end
     if reply.ok == true then return nil end
     local detail = bounds.object(reply.error) or reply
-    return model.text(tostring(detail.code or "FAILED") .. ": " .. tostring(detail.message or "governance refused the request"), model.LINE_LIMIT)
+    return wire.text(tostring(detail.code or "FAILED") .. ": " .. tostring(detail.message or "governance refused the request"), wire.LINE_LIMIT)
 end
 
 local function envelope_lines(envelope: unknown): {string}
@@ -184,7 +186,7 @@ local function envelope_lines(envelope: unknown): {string}
         local grant = bounds.object(raw)
         if grant and #lines < 8 then
             local scope = json.encode(grant.scope) or "{}"
-            lines[#lines + 1] = model.text(tostring(grant.capability) .. " " .. tostring(scope), model.LINE_LIMIT)
+            lines[#lines + 1] = wire.text(tostring(grant.capability) .. " " .. tostring(scope), wire.LINE_LIMIT)
         end
     end
     return lines
@@ -322,14 +324,14 @@ function M.apply_batch(slice: Slice, reply: model.Reply?, fold: (model.ApprovalV
     if reply.kind ~= "success" then
         local code = reply.code
         local message = reply.message
-        return model.text(code .. ": " .. message, model.LINE_LIMIT)
+        return wire.text(code .. ": " .. message, wire.LINE_LIMIT)
     end
     local value = bounds.object(reply.value)
     local views = value and value.decisions
     if type(views) ~= "table" then return "INVALID_REPLY: batch result is malformed" end
     local decided = 0
     for _, raw in ipairs(views) do
-        local view = model.decode_view(raw)
+        local view = wire.decode_view(raw)
         if view then fold(view); decided = decided + 1 end
     end
     slice.marked = {}

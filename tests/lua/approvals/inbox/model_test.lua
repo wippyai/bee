@@ -8,6 +8,8 @@ local registry = require("registry")
 local bounds = require("bounds")
 local json = require("json")
 local model = require("model")
+local review_lines = require("review_lines")
+local wire = require("wire")
 local inbox = require("inbox")
 local caller = require("caller")
 local question_form = require("question_form")
@@ -21,7 +23,7 @@ local function view(id: string, revision: integer, state: string, extra: Object?
     return item
 end
 local function reply(raw: Object): model.Reply
-    local decoded = model.decode_reply(raw)
+    local decoded = wire.decode_reply(raw)
     if not decoded then error("invalid approval reply fixture") end
     return decoded
 end
@@ -35,7 +37,7 @@ local function define_tests()
                 data = {requester = "Agent", duration = "For this agent session", consequence = "Other requests still need you.", lasting = true,
                     subject = "Access", approved = "Granted", form = "allowance"}}})
             local function decoded(extra: Object): model.ApprovalView
-                local value, err = model.decode_view(view("label-1", 1, "pending", extra))
+                local value, err = wire.decode_view(view("label-1", 1, "pending", extra))
                 if not value then error(tostring(err)) end
                 return value
             end
@@ -60,23 +62,23 @@ local function define_tests()
                     revision = string.rep("a", 64), input_digest = string.rep("a", 64), payload = payload}})
             end
             local sparse = install({title = "Notes", version = "1.0.0", resolved_capabilities = {[2] = "Read threads"}})
-            local card = assert(model.card(sparse))
+            local card = assert(review_lines.card(sparse))
             test.eq(card.sections[1].heading, "Review unavailable")
             test.eq(card.sections[1].lines[1], "resolved_capabilities must be a dense list")
-            local lines = model.permission_lines(sparse)
+            local lines = review_lines.permission_lines(sparse)
             test.eq(lines[1], "Review unavailable: resolved_capabilities must be a dense list")
             local foreign = install({title = "Notes", version = "1.0.0", migrations = {"app.notes:create"}})
-            test.eq(model.permission_lines(foreign)[1], "Review unavailable: migrations item 1 must be an object")
+            test.eq(review_lines.permission_lines(foreign)[1], "Review unavailable: migrations item 1 must be an object")
             local long: {string} = {}
             for index = 1, 129 do long[index] = "Change " .. tostring(index) end
             local bounded = install({title = "Notes", version = "1.0.0", permission_changes = long})
-            test.eq(model.permission_lines(bounded)[1], "Review unavailable: permission_changes exceeds 128 items")
+            test.eq(review_lines.permission_lines(bounded)[1], "Review unavailable: permission_changes exceeds 128 items")
         end)
         test.it("names the part of Bee a self-edit replaces instead of an app's screen", function()
             local edit = view("self-edit-1", 1, "pending", {proposal = {kind = "operation", ref = "bee.gov:establish-overlay",
                 revision = string.rep("a", 64), input_digest = string.rep("a", 64), payload = {source_workspace = "bee.shell",
                     version = "1.0.0", subject = "self_edit", replaces = {"bee.shell:chrome"}}}})
-            local card = assert(model.card(edit))
+            local card = assert(review_lines.card(edit))
             test.eq(card.title, "Change Bee's bee.shell 1.0.0")
             test.eq(card.sections[1].heading, "It replaces part of Bee")
             test.contains(card.sections[1].lines[1], "bee.shell:chrome")
@@ -110,13 +112,13 @@ local function define_tests()
             test.eq(intent.request.expected_revision, 1)
         end)
         test.it("keeps scalar false and object enum answers typed", function()
-            local boolean = question_form.new(assert(model.decode_view(view("boolean", 1, "pending", {
+            local boolean = question_form.new(assert(wire.decode_view(view("boolean", 1, "pending", {
                 request_kind = "question", response_schema = {type = "boolean"}}))))
             assert(boolean.form.fields[1].select).selected = 3
             local answer, problem = question_form.answer(boolean)
             test.is_nil(problem)
             test.eq(answer, false)
-            local object = question_form.new(assert(model.decode_view(view("enum-object", 1, "pending", {
+            local object = question_form.new(assert(wire.decode_view(view("enum-object", 1, "pending", {
                 request_kind = "question", response_schema = {type = "object", enum = {{count = 1}, {count = 2}}}}))))
             assert(object.form.fields[1].select).selected = 3
             local selected, invalid = question_form.answer(object)
@@ -168,7 +170,7 @@ local function define_tests()
 
         test.it("decodes inbox-specific reset and conflict data without widening generic caller replies", function()
             local reset_raw: Object = {ok = false, error = {code = "RESET_REQUIRED", message = "compacted", retryable = true}, value = {oldest_seq = 7}, replayed = false}
-            local reset = model.decode_reply(reset_raw)
+            local reset = wire.decode_reply(reset_raw)
             test.not_nil(reset)
             if not reset then error("reset reply was rejected") end
             test.eq(reset.kind, "reset")
@@ -179,7 +181,7 @@ local function define_tests()
 
             local conflict_raw: Object = {ok = false, error = {code = "CONFLICT", message = "already decided", retryable = false},
                 value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.alice"}), replayed = false}
-            local conflict = model.decode_reply(conflict_raw)
+            local conflict = wire.decode_reply(conflict_raw)
             test.not_nil(conflict)
             if not conflict then error("conflict reply was rejected") end
             test.eq(conflict.kind, "conflict")
@@ -189,7 +191,7 @@ local function define_tests()
             end
             test.is_nil(caller.decode(conflict_raw))
 
-            local settled = model.decode_reply({ok = false, error = {code = "INVALID_STATE", message = "request expired"},
+            local settled = wire.decode_reply({ok = false, error = {code = "INVALID_STATE", message = "request expired"},
                 value = view("r1", 3, "expired"), replayed = false})
             test.not_nil(settled)
             if settled and settled.kind == "settled" then
@@ -198,10 +200,10 @@ local function define_tests()
                 error("settled reply was not decoded")
             end
 
-            test.is_nil(model.decode_reply({ok = false, error = {code = "DENIED", message = "no"}, value = {oldest_seq = 7}}))
-            test.is_nil(model.decode_reply({ok = false, error = {code = "DENIED", message = "no", retryable = "yes"}, value = nil}))
-            test.is_nil(model.decode_reply({ok = false, error = {code = "RESET_REQUIRED", message = "compacted"}, value = {oldest_seq = 1, cursor = 4}}))
-            test.is_nil(model.decode_reply({ok = true, error = nil, value = view("r1", 1, "pending"), unknown = true}))
+            test.is_nil(wire.decode_reply({ok = false, error = {code = "DENIED", message = "no"}, value = {oldest_seq = 7}}))
+            test.is_nil(wire.decode_reply({ok = false, error = {code = "DENIED", message = "no", retryable = "yes"}, value = nil}))
+            test.is_nil(wire.decode_reply({ok = false, error = {code = "RESET_REQUIRED", message = "compacted"}, value = {oldest_seq = 1, cursor = 4}}))
+            test.is_nil(wire.decode_reply({ok = true, error = nil, value = view("r1", 1, "pending"), unknown = true}))
         end)
         test.it("preserves a decision's uncertain outcome and exact transport cause", function()
             local state = model.new({"ws-1"})
@@ -216,14 +218,14 @@ local function define_tests()
         end)
         test.it("bounds text and replaces every control character, cutting on a character boundary", function()
             local hostile = "run \27[31mred\27[0m\r\nnow\7 " .. string.rep("é", 400)
-            local cleaned = model.text(hostile, 64)
+            local cleaned = wire.text(hostile, 64)
             test.is_nil((cleaned:find("\27", 1, true)))
             test.is_nil((cleaned:find("[%c]")))
             test.is_true(#cleaned <= 64 + 3)
             test.eq(cleaned:sub(-3), "…")
             test.is_true(cleaned:sub(1, 4) == "run ")
-            test.eq(model.text(nil), "")
-            test.eq(model.text("plain"), "plain")
+            test.eq(wire.text(nil), "")
+            test.eq(wire.text("plain"), "plain")
         end)
         test.it("folds pages in by revision, restarts a compacted cursor and marks a refused workspace unavailable", function()
             local state = model.new({"ws-1"})
@@ -343,7 +345,7 @@ local function define_tests()
                 proposal = {kind = "operation", ref = "bee.approvals:confirmation", revision = "1",
                     payload = {action = "app.stop", target = {instance_id = "exact-instance"}}},
                 lifecycle_records = {decisions = {{assurance_json = '{"kind":"explicit_gesture","gesture":"enter","presentation":"inline"}'}}}})
-            local decoded = assert(model.decode_view(record))
+            local decoded = assert(wire.decode_view(record))
             local displays = model.displays(registry.find({["meta.type"] = model.DISPLAY}))
             local row = model.summary(decoded, 1, displays)
             test.eq(row.effect, "app.stop")
@@ -403,7 +405,7 @@ local function define_tests()
             test.is_nil(state.pending)
         end)
         test.it("renders a proposal payload only as bounded sorted lines and keeps the checkpoint to selection", function()
-            local lines = model.payload_lines(view("r1", 1, "pending", {proposal = {kind = "attempt", ref = "a", revision = "r1", payload = {zeta = "\27[2Jz", alpha = {nested = true}, mid = 7}}}))
+            local lines = review_lines.payload_lines(view("r1", 1, "pending", {proposal = {kind = "attempt", ref = "a", revision = "r1", payload = {zeta = "\27[2Jz", alpha = {nested = true}, mid = 7}}}))
             test.eq(#lines, 3)
             test.eq(lines[1], 'alpha: {"nested":true}')
             test.eq(lines[2], "mid: 7")

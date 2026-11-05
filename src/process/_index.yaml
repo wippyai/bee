@@ -67,6 +67,10 @@ entries:
     path: .imports.seam
   - entry: bee.node.service:owner
     path: .imports.seam
+  - entry: bee.node.service.owner:apps
+    path: .imports.seam
+  - entry: bee.node.service.owner:desktops
+    path: .imports.seam
   - entry: bee.shell:main
     path: .imports.seam
   - entry: bee.shell:client

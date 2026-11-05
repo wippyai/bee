@@ -143,7 +143,7 @@ local function define_tests()
             local manifest = shipped()
             for _, id in ipairs({"bee.node.persist:workspaces", "bee.threads.persist:session_store",
                 "bee.hive.persist:receipts", "bee.docs:manuals", "bee.ui:markdown", "bee.process:worker",
-                "bee.harness:classification", "bee.node.service:instance"}) do
+                "bee.harness:classification", "bee.node.service.owner:instance"}) do
                 test.is_true(protected_kernel.names(manifest, id), id)
             end
         end)

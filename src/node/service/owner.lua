@@ -10,56 +10,27 @@ local worker = require("worker")
 local process = require("process")
 local channel = require("channel")
 local system = require("system")
-local registry = require("registry")
-local tty = require("tty")
-local uuid = require("uuid")
 local logger = require("logger")
 local protocol = require("protocol")
 local workspaces = require("workspaces")
-local settings = require("settings")
-local appearance = require("appearance")
 local client = require("client")
 local eventbus = require("events")
-local application = require("application")
 local broker = require("broker")
 local command = require("command")
 local arguments = require("arguments")
 local env = require("env")
-local confirmation = require("confirmation")
-local funcs = require("funcs")
-local bounds = require("bounds")
-local waiting = require("waiting")
-local app_identity = require("app_identity")
-local canonical = require("canonical")
 local seam = require("seam")
-local part_instance = require("part_instance")
 local part_catalog = require("part_catalog")
 local part_handover = require("part_handover")
-local part_desktops = require("part_desktops")
-type Dialog = part_handover.Dialog
-type AppAlias = part_handover.AppAlias
-type Instance = part_handover.Instance
-type SavedInstance = part_handover.SavedInstance
-type SavedWatcher = part_handover.SavedWatcher
-type Saved = part_handover.Saved
-local words = part_handover.words
-local saved_dialog = part_handover.saved_dialog
-local restored = part_handover.restored
-local describe = part_handover.describe
-local dialog_of = part_handover.dialog_of
-type Menu = part_catalog.Menu
-type CatalogApp = part_catalog.CatalogApp
-type Theme = part_catalog.Theme
-local role_app = part_catalog.role_app
-local catalog = part_catalog.catalog
-local themes = part_catalog.themes
-local stored_appearance = part_catalog.stored_appearance
-local same_palette = part_catalog.same_palette
+local node_state = require("node_state")
+local apps = require("apps")
+local desktops = require("desktops")
+local attention_events = require("attention_events")
+type State = node_state.State
 local NAME = "bee.node"
 -- Bee components announce what needs the person on this event system: a
 -- request waiting for a decision, or an application the person approved.
 local ATTENTION = "bee.attention"
-local APPROVALS_ROLE = "approvals"
 
 -- idle keeps a client's owner service without serving: an in-memory client
 -- displays another node and has no desktops of its own.
@@ -96,492 +67,8 @@ local function main(saved: unknown)
     -- The installed apps and themes, refreshed when a registry change commits.
     local registry_changes = assert(eventbus.subscribe("registry", "registry.commit")):channel()
     local attention = assert(eventbus.subscribe(ATTENTION)):channel()
-    local installed_apps, catalog_error = catalog()
-    if not installed_apps then error("installed apps: " .. tostring(catalog_error)) end
-    local installed_themes, default_theme, themes_error = themes()
-    if not installed_themes then error("installed themes: " .. tostring(themes_error)) end
-    local current = stored_appearance(installed_themes, default_theme)
-    -- catalog_problem is why the installed apps and themes could not be refreshed; they are out of date while it is set.
-    local catalog_problem: string? = nil
-    local instances: {[string]: Instance} = {}
-    local by_pid: {[string]: string} = {}
-    -- watchers maps each watching display to the desktop it shows.
-    local watchers: {[string]: string} = {}
-    local alerts: {[string]: client.Alert} = {}
-    local update_problems: {[string]: part_handover.UpdateProblem} = {}
-
-    local function problem(): string?
-        local problems: {string} = {}
-        if catalog_problem then problems[#problems + 1] = catalog_problem end
-        for _, item in pairs(update_problems) do problems[#problems + 1] = item.reason end
-        table.sort(problems)
-        return #problems > 0 and table.concat(problems, "; ") or nil
-    end
-
-    -- revision counts the node's events; a display applies a snapshot and the
-    -- events after its revision, and a gap tells it to watch again.
-    local revision = 0
-
-    local function broadcast(event: {[string]: unknown})
-        revision = revision + 1
-        event.revision = revision
-        for pid, desktop_id in pairs(watchers) do
-            local outgoing = event
-            if event.kind == "catalog" then
-                local desktop = workspaces.desktop(desktop_id)
-                local apps, err = part_catalog.admitted(installed_apps, desktop and desktop.workspace_id or home_id)
-                outgoing = {kind = "catalog", revision = revision, apps = apps or {}, problem = event.problem or err}
-            end
-            process.send(pid, client.EVENTS, outgoing)
-        end
-    end
-
-    local function update_problem(instance: Instance, reason: string?)
-        update_problems[instance.id] = reason and {app = instance.app,
-            definition = instance.update_target or instance.definition, reason = reason} or nil
-        if reason then logger:warn("Application update incomplete", {id = instance.id, app = instance.app, error = reason}) end
-        broadcast({kind = "catalog", apps = installed_apps, problem = problem()})
-    end
-
-    -- restyle applies the current appearance to every app and display.
-    local function restyle()
-        for _, instance in pairs(instances) do
-            instance.view:set_page(appearance.page(current.theme, instance.terminal))
-            process.send(instance.pid, appearance.TOPIC, {appearance = current})
-        end
-        broadcast({kind = "appearance", appearance = current})
-    end
-
-    -- shown_elsewhere reports whether a display other than caller shows desktop.
-    local function shown_elsewhere(desktop: string, caller: string): boolean
-        for pid, shown in pairs(watchers) do
-            if shown == desktop and pid ~= caller then return true end
-        end
-        return false
-    end
-
-    -- workspace_catalog lists the workspaces and the desktops, each with the
-    -- workspace it works in and whether a display shows it.
-    local function workspace_catalog(): ({[string]: unknown}?, string?)
-        local found, err = workspaces.list()
-        if not found then return nil, err end
-        local desktops, desktops_error = workspaces.desktops()
-        if not desktops then return nil, desktops_error end
-        local listed_workspaces: {{[string]: unknown}} = {}
-        for _, workspace in ipairs(found) do
-            listed_workspaces[#listed_workspaces + 1] = {id = workspace.id, path = workspace.path, label = workspace.label}
-        end
-        local listed_desktops: {{[string]: unknown}} = {}
-        for _, desktop in ipairs(desktops) do
-            listed_desktops[#listed_desktops + 1] = {id = desktop.id, title = desktop.title, workspace = desktop.workspace_id,
-                shown = shown_elsewhere(desktop.id, "")}
-        end
-        return {workspaces = listed_workspaces, desktops = listed_desktops}, nil
-    end
-
-    local function announce_workspaces()
-        local listed, err = workspace_catalog()
-        if listed then broadcast({kind = "workspaces", workspaces = listed.workspaces, desktops = listed.desktops})
-        else logger:warn("Workspace catalog unavailable", {error = err}) end
-    end
-
-    -- dialogs lists the dialogs apps wait on, for a display that starts watching.
-    local function dialogs(): {{[string]: unknown}}
-        local found: {{[string]: unknown}} = {}
-        for _, instance in pairs(instances) do
-            local dialog = dialog_of(instance)
-            if dialog then found[#found + 1] = dialog end
-        end
-        table.sort(found, function(a, b) return tostring(a.id) < tostring(b.id) end)
-        return found
-    end
-
-    local function state(caller: string?): {[string]: unknown}
-        local running: {{[string]: unknown}} = {}
-        for _, instance in pairs(instances) do running[#running + 1] = describe(instance) end
-        table.sort(running, function(a, b) return tostring(a.id) < tostring(b.id) end)
-        local listed = workspace_catalog() or {}
-        local desktop = caller and watchers[caller] and workspaces.desktop(watchers[caller]) or nil
-        local visible_apps, visible_error = part_catalog.admitted(installed_apps, desktop and desktop.workspace_id or home_id)
-        local pending_alerts: {client.Alert} = {}
-        for _, alert in pairs(alerts) do if alert.count > 0 or alert.failed or alert.installed then pending_alerts[#pending_alerts + 1] = alert end end
-        return {node = node, owner = tostring(process.pid()), supervisor = protocol.supervisor_pid() or "",
-            revision = revision, home = home_id, appearance = current, running = running,
-            apps = visible_apps or {}, workspaces = listed.workspaces, desktops = listed.desktops, dialogs = dialogs(), alerts = pending_alerts,
-            problem = visible_error or problem()}
-    end
-
-    local function register_alias(alias: AppAlias): (AppAlias?, string?)
-        local raw, err = funcs.call("bee.threads.binding:register_app_alias", alias)
-        local reply = bounds.object(raw)
-        if err or not reply or reply.ok ~= true then return nil, "application membership attestation failed: " .. tostring(err or raw) end
-        return alias, nil
-    end
-
-    local function attest(app: string, workspace: string, instance: string, saved_alias: unknown?): (AppAlias?, string?)
-        if saved_alias ~= nil then
-            local saved = bounds.object(saved_alias)
-            if not saved or type(saved.stable) ~= "string" or saved.workspace_id ~= workspace
-                or saved.definition_id ~= app or saved.instance ~= instance then return nil, "saved application membership is invalid" end
-            return register_alias({stable = saved.stable, instance = instance, workspace_id = workspace, definition_id = app})
-        end
-        local _, admission, admission_error = application.admission(app, workspace)
-        if admission_error then return nil, admission_error end
-        local stable = app_identity.stable(workspace, app, admission and admission.overlay_owner)
-        if not stable then return nil, "application membership identity is unavailable" end
-        return register_alias({stable = stable.id, instance = instance, workspace_id = workspace, definition_id = app})
-    end
-
-    local function retire(alias: AppAlias)
-        local recorded, problem = workspaces.retire(alias)
-        if not recorded then logger:error("Application retirement intent not stored", {instance = alias.instance, error = problem}) end
-    end
-
-    local function start(id: string, app: string, desktop: string, args: {[string]: unknown}, workspace: string?, retained: Instance?): (Instance?, string?)
-        local instance, err = part_instance.start(id, app, desktop, args, workspace, retained, current, attest, retire)
-        if instance then
-            instances[id] = instance
-            by_pid[instance.pid] = id
-        end
-        return instance, err
-    end
-
-    -- restore reattaches the instances and watchers an upgraded predecessor
-    -- handed over; monitors belong to the process and survive the upgrade.
-    local function restore(value: unknown): boolean
-        if type(value) ~= "table" then return false end
-        if type(value.instances) == "table" then
-            for _, item in ipairs(value.instances) do
-                if type(item) == "table" and type(item.id) == "string" and type(item.handle) == "string"
-                    and type(item.pid) == "string" and type(item.app) == "string" and type(item.title) == "string"
-                    and type(item.desktop) == "string" then
-                    local dialog, dialog_ok = saved_dialog(item.dialog)
-                    local view, err = nil, nil
-                    if dialog_ok then view, err = tty.attach(item.handle) else err = "dialog record is malformed" end
-                    if view then
-                        local workspace = type(item.workspace) == "string" and item.workspace or ""
-                        local alias, alias_error = attest(item.app, workspace, "bee.application:" .. workspace .. ":" .. item.id, item.alias)
-                        if not alias then error(alias_error or "restored application membership is unavailable") end
-                        instances[item.id] = restored(item, view, alias, dialog)
-                        by_pid[item.pid] = item.id
-                    else
-                        logger:warn("App instance lost across upgrade", {id = item.id, error = tostring(err)})
-                    end
-                end
-            end
-        end
-        if type(value.alerts) == "table" then
-            for _, item in ipairs(value.alerts) do
-                local alert = client.alert(item)
-                if alert and (instances[alert.id] or (alert.app and alert.desktop and alert.workspace)) then alerts[alert.id] = alert end
-            end
-        end
-        if type(value.revision) == "number" then revision = math.floor(value.revision) end
-        if type(value.update_problems) == "table" then
-            for id, item in pairs(value.update_problems) do
-                if type(id) == "string" and type(item) == "table" and type(item.app) == "string" and type(item.reason) == "string" then
-                    update_problems[id] = {app = item.app, reason = item.reason,
-                        definition = type(item.definition) == "string" and item.definition or nil}
-                end
-            end
-        end
-        if type(value.watchers) == "table" then
-            for _, item in ipairs(value.watchers) do
-                if type(item) == "table" and type(item.pid) == "string" and type(item.desktop) == "string" then
-                    watchers[item.pid] = item.desktop
-                end
-            end
-        end
-        return true
-    end
-
-    -- reopen starts the instances the node kept when it last ran.
-    local function reopen()
-        local kept, err = workspaces.instances()
-        if not kept then logger:warn("Kept apps unreadable", {error = err}); return end
-        for _, item in ipairs(kept) do
-            local _, problem = start(item.id, item.app, item.desktop_id, item.args, item.workspace_id)
-            if problem then
-                logger:warn("Kept app not reopened", {id = item.id, app = item.app, error = problem})
-                workspaces.forget(item.id)
-            end
-        end
-    end
-
-    -- node_desktops returns the node's desktops, creating the first, working
-    -- in the folder the node runs in, when it has none.
-    local function node_desktops(): ({workspaces.Desktop}?, string?)
-        local desktops, err = workspaces.desktops()
-        if not desktops then return nil, err end
-        if #desktops > 0 then return desktops, nil end
-        local created, create_error = workspaces.create_desktop(home_id, nil)
-        if not created then return nil, create_error end
-        return {created}, nil
-    end
-
-    -- free_desktop returns a desktop no display shows, creating one when every
-    -- desktop is shown, so each new display starts on its own desktop.
-    local function free_desktop(): (string?, string?)
-        local desktops, err = node_desktops()
-        if not desktops then return nil, err end
-        local shown: {[string]: boolean} = {}
-        for _, desktop in pairs(watchers) do shown[desktop] = true end
-        for _, desktop in ipairs(desktops) do
-            if not shown[desktop.id] then return desktop.id, nil end
-        end
-        local created, create_error = workspaces.create_desktop(home_id, nil)
-        if not created then return nil, create_error end
-        return created.id, nil
-    end
-
-    -- watch starts sending node events to caller and chooses the desktop it
-    -- shows: the one it asks for unless another display shows that, else a
-    -- free one.
-    local function watch(caller: string, desktop: unknown): protocol.Reply
-        local chosen: string? = nil
-        if type(desktop) == "string" and workspaces.desktop(desktop) and not shown_elsewhere(desktop, caller) then
-            chosen = desktop
-        end
-        if not chosen then
-            local free, err = free_desktop()
-            if not free then return protocol.fail("choose desktop: " .. tostring(err)) end
-            chosen = free
-        end
-        if not watchers[caller] then
-            local monitored, monitor_error = process.monitor(caller)
-            if not monitored then return protocol.fail("watch: " .. tostring(monitor_error)) end
-        end
-        watchers[caller] = chosen or ""
-        announce_workspaces()
-        local value = state(caller)
-        value.desktop = chosen
-        seam.hold("bee.node.service.desktop_chosen")
-        return protocol.ok(value)
-    end
-
-    -- leave forgets a display that stops watching this node.
-    local function leave(caller: string): protocol.Reply
-        if watchers[caller] then
-            watchers[caller] = nil
-            process.unmonitor(caller)
-            announce_workspaces()
-        end
-        return protocol.ok({})
-    end
-
-    local function show(caller: string, desktop: unknown): protocol.Reply
-        if not watchers[caller] then return protocol.fail("show needs a watching display") end
-        if type(desktop) ~= "string" or not workspaces.desktop(desktop) then return protocol.fail("no such desktop") end
-        if shown_elsewhere(desktop, caller) then return protocol.fail("that desktop is shown on another display") end
-        watchers[caller] = desktop
-        broadcast({kind = "catalog"})
-        announce_workspaces()
-        return protocol.ok({desktop = desktop})
-    end
-
-    -- navigate gives a running app the arguments it is opened with again.
-    local function navigate(instance: Instance, given: {string})
-        process.send(instance.pid, broker.NAVIGATE, {version = 1, instance_id = instance.id, view_id = instance.id,
-            execution_generation = 1, launch_token = instance.token, arguments = given})
-    end
-
-    -- open starts app on desktop; attention marks an app opened to ask for the
-    -- person, which displays bring forward without taking the keyboard;
-    -- request names the agent open request that starts it.
-    local function open(app: unknown, desktop: unknown, app_args: unknown, attention: boolean?, request: string?): protocol.Reply
-        if type(app) ~= "string" then return protocol.fail("open needs an app id") end
-        if type(desktop) ~= "string" then return protocol.fail("open needs a desktop") end
-        local opened_args: {[string]: unknown} = {}
-        if app_args ~= nil then
-            if type(app_args) ~= "table" then return protocol.fail("open args must be a table") end
-            opened_args = app_args
-        end
-        -- A singleton app already running on the desktop is the one opened;
-        -- the arguments it is opened with reach it as navigation.
-        local definition = application.definition(app)
-        if definition and definition.singleton then
-            for _, running in pairs(instances) do
-                if running.app == app and running.desktop == desktop then
-                    local given = words(opened_args)
-                    if #given > 0 then navigate(running, given) end
-                    local value = describe(running)
-                    value.existing = true
-                    return protocol.ok(value)
-                end
-            end
-        end
-        local instance, problem = start(tostring(uuid.v7()), app, desktop, opened_args)
-        if not instance then return protocol.fail(problem or "open failed") end
-        instance.request = request
-        local kept, keep_error = workspaces.keep({id = instance.id, desktop_id = instance.desktop, workspace_id = instance.workspace,
-            app = instance.app, args = opened_args})
-        if not kept then logger:warn("App instance not kept", {id = instance.id, error = keep_error}) end
-        broadcast({kind = "opened", instance = describe(instance), attention = attention == true or nil})
-        return protocol.ok(describe(instance))
-    end
-
-    local function attach(caller: string, id: unknown): protocol.Reply
-        if type(id) ~= "string" then return protocol.fail("attach needs an instance id") end
-        local instance = instances[id]
-        if not instance then return protocol.fail("no running instance " .. id) end
-        local ref, mount_error = instance.view:mount(caller, {observe = true, input = true, resize = true})
-        if not ref then return protocol.fail("mount: " .. tostring(mount_error)) end
-        local value: {[string]: unknown} = {ref = ref, title = instance.title}
-        return protocol.ok(value)
-    end
-
-    local function stop(instance: Instance): protocol.Reply
-        seam.hold("bee.node.service.stop", instance)
-        local cancelled, cancel_error = process.cancel(instance.pid)
-        if not cancelled and not errors.is(cancel_error, errors.NOT_FOUND) then
-            return protocol.fail("stop " .. instance.title .. ": " .. tostring(cancel_error))
-        end
-        return protocol.ok({id = instance.id})
-    end
-
-    -- drop_dialog forgets an instance's dialog and tells the displays.
-    local function drop_dialog(instance: Instance)
-        if not instance.dialog then return end
-        local pending = instance.dialog.confirmation
-        if pending then
-            local review = confirmation.new({workspace_id = instance.workspace, origin = {app_id = instance.app, instance_id = instance.id}})
-            review.pending = pending
-            local canceled, err = confirmation.cancel(review)
-            if not canceled then error(err) end
-        end
-        instance.dialog = nil
-        broadcast({kind = "dialog_closed", id = instance.id})
-    end
-
-    -- show_dialog puts a dialog an app asked for to the displays.
-    local function show_dialog(instance: Instance, dialog: Dialog): (boolean, string?)
-        if dialog.kind == "confirm" then
-            local review = confirmation.new({workspace_id = instance.workspace, origin = {app_id = instance.app, instance_id = instance.id}})
-            local opened, err = confirmation.open(review, dialog.closing and "app.close" or "app.query",
-                {instance_id = instance.id, execution_id = instance.execution_id, definition_id = instance.app, revision = instance.revision,
-                    request_id = dialog.client_request_id, title = dialog.title, message = dialog.message, target = dialog.target}, "dialog", dialog.title, dialog.message)
-            if not opened then return false, err end
-            dialog.confirmation = review.pending
-        end
-        instance.dialog = dialog
-        broadcast({kind = "dialog", dialog = dialog_of(instance)})
-        return true, nil
-    end
-
-    -- close stops an app; an app that negotiates its close is asked first and
-    -- answers with accept, cancel or a confirmation for the person. force
-    -- stops it without asking.
-    local function close(id: unknown, force: unknown, expected_execution: unknown): protocol.Reply
-        if type(id) ~= "string" then return protocol.fail("close needs an instance id") end
-        local instance = instances[id]
-        if not instance then return protocol.ok({id = id}) end
-        if expected_execution ~= nil and expected_execution ~= instance.execution_id then return protocol.fail("application execution changed") end
-        if force == true or not instance.negotiate then return stop(instance) end
-        if not instance.closing then
-            local request_id = tostring(uuid.v7())
-            instance.closing = request_id
-            drop_dialog(instance)
-            local sent, err = process.send(instance.pid, broker.CLOSE, {version = 1, request_id = request_id, id = id, instance_id = id})
-            if not sent then
-                instance.closing = nil
-                if errors.is(err, errors.NOT_FOUND) then return protocol.ok({id = id}) end
-                return protocol.fail("ask " .. instance.title .. " to close: " .. tostring(err))
-            end
-        end
-        return protocol.ok({id = id, closing = true})
-    end
-
-    -- cancel_close tells an app its close was cancelled.
-    local function cancel_close(instance: Instance)
-        local request_id = instance.closing
-        instance.closing = nil
-        if request_id then
-            process.send(instance.pid, broker.CLOSE_RESULT, {version = 1, request_id = request_id, id = instance.id,
-                instance_id = instance.id, action = "cancel"})
-        end
-        if instance.relaunch then
-            instance.relaunch = nil
-            update_problem(instance, instance.title .. " declined its live update")
-        end
-    end
-
-    -- app_message applies a bee.app message from an app's own process; one
-    -- that does not carry the instance's launch token is refused.
-    local function app_message(topic: string, from: string, data: unknown)
-        local id = by_pid[from]
-        local instance = id and instances[id] or nil
-        if not instance or not broker.authentic(data, instance.id, instance.token) then
-            logger:warn("Broker message refused", {topic = topic, from = from})
-            return
-        end
-        if topic == broker.READY then
-            instance.negotiate = broker.ready(data) == true
-        elseif topic == broker.REVIEW then
-            local body = bounds.object(data)
-            local review = body and client.review(body.review)
-            if review or (body and body.review == false) then
-                instance.review = review
-                broadcast({kind = "review", id = instance.id, review = review or false})
-            end
-        elseif topic == broker.TITLE then
-            local title = broker.title(data)
-            if title and title ~= instance.title then
-                instance.title = title
-                broadcast({kind = "title", id = instance.id, title = title})
-            end
-        elseif topic == broker.CLOSE_REPLY then
-            local reply = broker.close_reply(data)
-            if not reply or reply.request_id ~= instance.closing then return end
-            if reply.action == "accept" then
-                instance.closing = nil
-                stop(instance)
-            elseif reply.action == "cancel" then
-                cancel_close(instance)
-            else
-                local shown, err = show_dialog(instance, {request_id = tostring(uuid.v7()), client_request_id = reply.request_id, kind = "confirm",
-                    title = reply.title, message = reply.message, accept = reply.accept, initial = "", closing = true})
-                if not shown then
-                    logger:warn("Close confirmation failed", {id = instance.id, error = err})
-                    cancel_close(instance)
-                end
-            end
-        elseif topic == broker.QUERY then
-            local spec = broker.query(data)
-            if not spec or spec.id ~= instance.id then return end
-            if instance.dialog or instance.closing then
-                process.send(instance.pid, broker.QUERY_RESULT, {version = 1, request_id = spec.request_id, id = instance.id,
-                    instance_id = instance.id, action = "cancel", value = "", error = "busy"})
-                return
-            end
-            local shown, err = show_dialog(instance, {request_id = tostring(uuid.v7()), client_request_id = spec.request_id, kind = spec.kind,
-                title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial, closing = false, target = spec.target})
-            if not shown then
-                logger:warn("Application confirmation failed", {id = instance.id, error = err})
-                process.send(instance.pid, broker.QUERY_RESULT, {version = 1, request_id = spec.request_id, id = instance.id,
-                    instance_id = instance.id, action = "cancel", value = "", error = "unavailable"})
-            end
-        elseif topic == broker.CHECKPOINT then
-            local checkpoint = broker.checkpoint(data)
-            if not checkpoint then return end
-            local result: {[string]: unknown} = {version = 1, request_id = checkpoint.request_id, error_code = "", error = ""}
-            if instance.resume_schema == "" or checkpoint.resume_schema ~= instance.resume_schema then
-                result.error_code, result.error = "invalid_checkpoint", "Checkpoint does not match the application contract"
-            else
-                local args: {[string]: unknown} = {}
-                for key, value in pairs(instance.args) do args[key] = value end
-                args.resume_state = checkpoint.resume_state
-                local kept, keep_error = workspaces.remember(instance.id, args)
-                if kept then instance.args = args
-                else result.error_code, result.error = "storage", tostring(keep_error) end
-            end
-            process.send(instance.pid, broker.CHECKPOINT_RESULT, result)
-        elseif topic == broker.REQUEST then
-            local request = broker.open(data)
-            if not request then return end
-            local reply = open(request.definition_id, instance.desktop, {arguments = request.arguments})
-            if not reply.ok then logger:warn("App navigation failed", {from = instance.id, to = request.definition_id, error = tostring(reply.error)}) end
-        end
-    end
+    local state = node_state.new(node, home_id)
+    local instances, watchers = state.instances, state.watchers
 
     -- stats reports this node's runtime numbers and what it runs, for a
     -- hive view that samples it while it is open.
@@ -592,12 +79,12 @@ local function main(saved: unknown)
         if not goroutines then return protocol.fail("goroutines: " .. tostring(goroutines_error)) end
         local cpu_count, cpu_error = system.runtime.cpu_count()
         if not cpu_count then return protocol.fail("cpu count: " .. tostring(cpu_error)) end
-        local apps = 0
-        for _ in pairs(instances) do apps = apps + 1 end
+        local app_count = 0
+        for _ in pairs(instances) do app_count = app_count + 1 end
         local listed = workspaces.list() or {}
         local home = workspaces.workspace(home_id)
         return protocol.ok({node = node, name = home and home.label or node, heap = memory.heap_alloc, reserved = memory.sys, gc_cycles = memory.num_gc,
-            goroutines = goroutines, cpu_count = cpu_count, apps = apps, workspaces = #listed})
+            goroutines = goroutines, cpu_count = cpu_count, apps = app_count, workspaces = #listed})
     end
 
     -- resolve_command finds the installed app a `bee NAME` command opens and
@@ -608,499 +95,65 @@ local function main(saved: unknown)
         if not words_given then return protocol.fail("command arguments must be a list of words") end
         local installed: {[string]: boolean} = {}
         local desktop = watchers[caller] and workspaces.desktop(watchers[caller]) or nil
-        local apps, err = part_catalog.admitted(installed_apps, desktop and desktop.workspace_id or home_id)
-        if not apps then return protocol.fail(err or "application admission unavailable") end
-        for _, app in ipairs(apps) do installed[tostring(app.id)] = true end
+        local admitted, err = part_catalog.admitted(state.installed_apps, desktop and desktop.workspace_id or home_id)
+        if not admitted then return protocol.fail(err or "application admission unavailable") end
+        for _, app in ipairs(admitted) do installed[tostring(app.id)] = true end
         local launch, problem = command.resolve(name, words_given, installed)
         if not launch then return protocol.fail(problem or "Unknown Bee command: " .. name) end
         return protocol.ok({app = launch.definition_id, arguments = launch.arguments, fullscreen = launch.fullscreen})
     end
 
-    -- answer applies a display's answer to the dialog an app waits on.
-    local function answer(args: {[string]: unknown}): protocol.Reply
-        local id = args.id
-        if type(id) ~= "string" then return protocol.fail("answer needs an instance id") end
-        local instance = instances[id]
-        if not instance then return protocol.fail("no running instance " .. id) end
-        local dialog = instance.dialog
-        if not dialog or args.request_id ~= dialog.request_id then return protocol.fail("no such dialog for " .. id) end
-        local action = args.action
-        if action ~= "accept" and action ~= "cancel" then return protocol.fail("answer must accept or cancel") end
-        local value = args.value
-        if value == nil then value = "" end
-        if type(value) ~= "string" or #value > 256 or value:find("%c") or (action == "cancel" and value ~= "") then
-            return protocol.fail("answer value is invalid")
-        end
-        if dialog.confirmation then
-            local review = confirmation.new({workspace_id = instance.workspace, origin = {app_id = instance.app, instance_id = instance.id}})
-            review.pending = dialog.confirmation
-            local confirmed: boolean
-            local err: string?
-            if action == "accept" then
-                local gesture = args.gesture
-                if gesture ~= "enter" and gesture ~= "space" and gesture ~= "click" and gesture ~= "shortcut" then return protocol.fail("answer needs its confirmed gesture") end
-                confirmed, err = confirmation.accept(review, {instance_id = instance.id, execution_id = instance.execution_id, definition_id = instance.app, revision = instance.revision,
-                    request_id = dialog.client_request_id, title = dialog.title, message = dialog.message, target = dialog.target}, gesture)
-            else confirmed, err = confirmation.cancel(review) end
-            if not confirmed then return protocol.fail(err or "confirmation failed") end
-            dialog.confirmation = nil
-        end
-        drop_dialog(instance)
-        if dialog.closing then
-            if action == "accept" then
-                instance.closing = nil
-                return stop(instance)
-            end
-            cancel_close(instance)
-            return protocol.ok({id = id})
-        end
-        process.send(instance.pid, broker.QUERY_RESULT, {version = 1, request_id = dialog.client_request_id, id = id,
-            instance_id = id, action = action, value = value, error = ""})
-        return protocol.ok({id = id})
-    end
-
-    -- move puts a running app on another desktop; displays showing either
-    -- desktop follow it.
-    local function move(id: unknown, desktop: unknown): protocol.Reply
-        if type(id) ~= "string" then return protocol.fail("move needs an instance id") end
-        local instance = instances[id]
-        if not instance then return protocol.fail("no running instance " .. id) end
-        if type(desktop) ~= "string" or not workspaces.desktop(desktop) then return protocol.fail("no such desktop") end
-        local moved, err = workspaces.move_instance(id, desktop)
-        if not moved then return protocol.fail(err or "app not moved") end
-        instance.desktop = desktop
-        broadcast({kind = "moved", instance = describe(instance)})
-        return protocol.ok(describe(instance))
-    end
-
-    local function theme_list(): protocol.Reply
-        local listed: {{[string]: unknown}} = {}
-        for _, item in ipairs(installed_themes) do listed[#listed + 1] = item end
-        return protocol.ok({themes = listed, current = current.theme.id, backgrounds = appearance.backgrounds()})
-    end
-
-    -- set_appearance stores the theme, background and taskbar style given and
-    -- restyles every app viewport, app and display.
-    local function set_appearance(args: {[string]: unknown}): protocol.Reply
-        local next_value: appearance.Preferences = {theme = current.theme, background = current.background, taskbar = current.taskbar}
-        if args.theme ~= nil then
-            if type(args.theme) ~= "string" then return protocol.fail("theme must be a theme id") end
-            local chosen: appearance.Theme? = nil
-            for _, item in ipairs(installed_themes) do
-                if item.id == args.theme then chosen = item end
-            end
-            if not chosen then return protocol.fail("theme " .. args.theme .. " is not installed") end
-            next_value.theme = chosen
-        end
-        if args.background ~= nil then
-            if type(args.background) ~= "string" or not appearance.background_known(args.background) then
-                return protocol.fail("unknown background " .. tostring(args.background))
-            end
-            next_value.background = args.background
-        end
-        if args.taskbar ~= nil then
-            if args.taskbar ~= "labels" and args.taskbar ~= "icons" then return protocol.fail("taskbar must be labels or icons") end
-            next_value.taskbar = tostring(args.taskbar)
-        end
-        local done, store_error = settings.set({theme = next_value.theme.id, background = next_value.background, taskbar = next_value.taskbar})
-        if not done then return protocol.fail("store appearance: " .. tostring(store_error)) end
-        current = next_value
-        restyle()
-        return protocol.ok({appearance = current})
-    end
-
-    local function add_workspace(path: unknown, label: unknown): protocol.Reply
-        if type(path) ~= "string" or not workspaces.absolute(path) then return protocol.fail("a workspace needs an absolute path") end
-        local name: string? = nil
-        if type(label) == "string" and label ~= "" then name = label end
-        local workspace, err = workspaces.ensure(path, name)
-        if not workspace then return protocol.fail(err or "workspace not added") end
-        announce_workspaces()
-        return protocol.ok({workspace = workspace.id})
-    end
-
-    -- remove_workspace forgets a workspace no desktop works in; the folder the
-    -- node runs in stays.
-    local function remove_workspace(id: unknown): protocol.Reply
-        if type(id) ~= "string" or not workspaces.workspace(id) then return protocol.fail("no such workspace") end
-        if id == home_id then return protocol.fail("the node's own folder stays a workspace") end
-        for _, desktop in ipairs(workspaces.desktops() or {}) do
-            if desktop.workspace_id == id then return protocol.fail(desktop.title .. " works in that workspace") end
-        end
-        local removed, err = workspaces.remove_workspace(id)
-        if not removed then return protocol.fail(err or "workspace not removed") end
-        announce_workspaces()
-        return protocol.ok({workspace = id})
-    end
-
-    -- create_desktop adds a desktop working in workspace_id, or in the folder
-    -- the node runs in.
-    local function create_desktop(workspace_id: unknown, title: unknown): protocol.Reply
-        local folder = home_id
-        if workspace_id ~= nil then
-            if type(workspace_id) ~= "string" or not workspaces.workspace(workspace_id) then return protocol.fail("no such workspace") end
-            folder = workspace_id
-        end
-        local name: string? = nil
-        if type(title) == "string" and title ~= "" then name = title end
-        local desktop, err = workspaces.create_desktop(folder, name)
-        if not desktop then return protocol.fail(err or "desktop not added") end
-        announce_workspaces()
-        return protocol.ok({desktop = desktop.id, title = desktop.title})
-    end
-
-    local function use_workspace(id: unknown, workspace_id: unknown): protocol.Reply
-        local reply = part_desktops.use_workspace(id, workspace_id)
-        if reply.ok then broadcast({kind = "catalog"}); announce_workspaces() end
-        return reply
-    end
-
-    local function rename_desktop(id: unknown, title: unknown): protocol.Reply
-        local reply = part_desktops.rename(id, title)
-        if reply.ok then announce_workspaces() end
-        return reply
-    end
-
-    -- close_desktop stops a desktop's apps and removes it; a desktop a display
-    -- shows stays.
-    local desktop_reviews: {[string]: confirmation.State} = {}
-    local function desktop_target(id: string): {[string]: unknown}?
-        local desktop = workspaces.desktop(id)
-        if not desktop then return nil end
-        local apps: {{[string]: unknown}} = {}
-        for _, instance in pairs(instances) do
-            if instance.desktop == id then apps[#apps + 1] = {instance_id = instance.id, execution_id = instance.execution_id, definition_id = instance.app, revision = instance.revision} end
-        end
-        table.sort(apps, function(a, b) return tostring(a.instance_id) < tostring(b.instance_id) end)
-        return {desktop_id = id, workspace_id = desktop.workspace_id, title = desktop.title, apps = apps}
-    end
-    local function desktop_confirmation(args: {[string]: unknown}): protocol.Reply
-        local id = args.id
-        if type(id) ~= "string" then return protocol.fail("confirmation needs a desktop") end
-        if args.operation == "cancel" then
-            local review = type(args.approval_id) == "string" and desktop_reviews[args.approval_id] or nil
-            if not review then return protocol.fail("no such desktop confirmation") end
-            local canceled, err = confirmation.cancel(review)
-            if not canceled then return protocol.fail(err or "withdrawal failed") end
-            desktop_reviews[tostring(args.approval_id)] = nil
-            return protocol.ok({})
-        end
-        local target = desktop_target(id)
-        local desktop = workspaces.desktop(id)
-        if not target or not desktop then return protocol.fail("no such desktop") end
-        local review = confirmation.new({workspace_id = desktop.workspace_id, origin = {app_id = "bee.shell:shell", instance_id = id}})
-        local opened, err = confirmation.open(review, "desktop.close", target, "dialog", "Close desktop", "Close " .. desktop.title .. " and stop its apps?")
-        if not opened then return protocol.fail(err or "confirmation failed") end
-        local approval_id = assert(review.pending).view.approval_id
-        desktop_reviews[tostring(approval_id)] = review
-        return protocol.ok({approval_id = approval_id})
-    end
-    local function confirm_desktop(args: {[string]: unknown}): protocol.Reply
-        local id, approval_id, gesture = args.id, args.approval_id, args.gesture
-        if type(id) ~= "string" or type(approval_id) ~= "string" then return protocol.fail("confirmation identity is invalid") end
-        local review, target = desktop_reviews[approval_id], desktop_target(id)
-        if not review or not target then return protocol.fail("desktop confirmation is unavailable") end
-        if gesture ~= "enter" and gesture ~= "space" and gesture ~= "click" then return protocol.fail("confirmation gesture is invalid") end
-        local accepted, err = confirmation.accept(review, target, gesture)
-        if not accepted then return protocol.fail(err or "confirmation failed") end
-        desktop_reviews[approval_id] = nil
-        return protocol.ok({})
-    end
-    local function close_desktop(id: unknown): protocol.Reply
-        if type(id) ~= "string" or not workspaces.desktop(id) then return protocol.fail("no such desktop") end
-        for _, desktop in pairs(watchers) do
-            if desktop == id then return protocol.fail("a display shows that desktop") end
-        end
-        for _, instance in pairs(instances) do
-            if instance.desktop == id then
-                local stopped = stop(instance)
-                if not stopped.ok then return stopped end
-            end
-        end
-        local removed, err = workspaces.remove_desktop(id)
-        if not removed then return protocol.fail(err or "desktop not removed") end
-        announce_workspaces()
-        return protocol.ok({desktop = id})
-    end
-
-    -- refresh reads the installed apps and themes after a registry change,
-    -- announces a changed app catalog and restyles with a changed theme.
-    local function refresh()
-        local apps, apps_error = catalog()
-        local found_themes, found_default, themes_failure = themes()
-        if not apps or not found_themes then
-            local reason = "App list is out of date: " .. tostring(apps_error or themes_failure)
-            logger:error("Installed apps and themes not refreshed", {error = reason})
-            if catalog_problem ~= reason then
-                catalog_problem = reason
-                broadcast({kind = "catalog", apps = installed_apps, problem = problem()})
-            end
-            return
-        end
-        installed_apps = apps
-        catalog_problem = nil
-        broadcast({kind = "catalog", apps = apps, problem = problem()})
-        installed_themes, default_theme = found_themes, found_default
-        local next_value = stored_appearance(installed_themes, default_theme)
-        if not same_palette(next_value.theme, current.theme) then
-            current = next_value
-            restyle()
-        end
-    end
-
-    local function update_instances()
-        local cleared = false
-        for id, item in pairs(update_problems) do
-            if not instances[id] then
-                local entry = registry.get(item.app)
-                local digest = entry and canonical.digest(entry) or nil
-                if digest ~= item.definition then update_problems[id] = nil; cleared = true end
-            end
-        end
-        if cleared then broadcast({kind = "catalog", apps = installed_apps, problem = problem()}) end
-        for _, instance in pairs(instances) do
-            local entry, entry_error = registry.get(instance.app)
-            local digest, digest_error = canonical.digest(entry)
-            if not entry or not digest then
-                update_problem(instance, instance.title .. " could not update: " .. tostring(entry_error or digest_error))
-            elseif digest == instance.definition and instance.update_target ~= digest and not instance.relaunch and update_problems[instance.id] then
-                instance.update_target = nil
-                update_problem(instance, nil)
-            elseif digest ~= instance.definition and digest ~= instance.update_target and not instance.relaunch then
-                instance.update_target = digest
-                instance.relaunch = true
-                update_problem(instance, instance.title .. " is waiting to finish its live update")
-                local stopped = close(instance.id, false, nil)
-                if not stopped.ok then
-                    instance.relaunch = nil
-                    update_problem(instance, instance.title .. " could not update: " .. tostring(stopped.error))
-                end
-            end
-        end
-    end
-
-    -- present opens app with arguments on every desktop a display shows that
-    -- works in workspace_id and asks those displays to bring it forward; it
-    -- returns what it opened and why an open failed.
-    local function present(workspace_id: string, app: string, arguments: {string}, pending: {count: integer, title: string, approval_id: string, failed: boolean?, installed: boolean?}?, request: string?): ({{[string]: unknown}}, string?)
-        local presented: {{[string]: unknown}} = {}
-        local problem: string? = nil
-        local seen: {[string]: boolean} = {}
-        for _, desktop_id in pairs(watchers) do
-            if desktop_id ~= "" and not seen[desktop_id] then
-                seen[desktop_id] = true
-                local desktop = workspaces.desktop(desktop_id)
-                if desktop and desktop.workspace_id == workspace_id then
-                    local opened = open(app, desktop_id, {arguments = arguments}, true, request)
-                    local value = opened.value
-                    if opened.ok and value then
-                        assert(type(value.id) == "string", "Presented app has no instance identity")
-                        local alert: client.Alert? = pending and {id = value.id, count = pending.count, title = pending.title,
-                            approval_id = pending.approval_id, failed = pending.failed, installed = pending.installed, app = app, desktop = desktop_id, workspace = workspace_id}
-                        for id, previous in pairs(alerts) do
-                            if previous.desktop == desktop_id and previous.app == app and id ~= value.id then alerts[id] = nil end
-                        end
-                        if alert then alerts[value.id] = alert end
-                        broadcast({kind = "attention", id = value.id, alert = alert})
-                        presented[#presented + 1] = value
-                    else
-                        logger:warn("App not presented", {app = app, desktop = desktop_id, error = opened.error})
-                        problem = tostring(opened.error)
-                    end
-                end
-            end
-        end
-        return presented, problem
-    end
-
-    -- open_requested serves an agent's open request: what an earlier attempt
-    -- started, else app presented on the desktops shown for workspace_id.
-    local function open_requested(workspace_id: unknown, app: unknown, given: unknown, request: unknown): protocol.Reply
-        if type(workspace_id) ~= "string" or type(app) ~= "string" or type(request) ~= "string" then
-            return protocol.fail("present needs a workspace, an app and a request")
-        end
-        local literal = arguments.decode(given)
-        if not literal then return protocol.fail("present arguments must be literal strings") end
-        local earlier: {{[string]: unknown}} = {}
-        for _, instance in pairs(instances) do
-            if instance.request == request and instance.workspace == workspace_id and instance.app == app then
-                local value = describe(instance)
-                value.existing = true
-                earlier[#earlier + 1] = value
-            end
-        end
-        if #earlier > 0 then return protocol.ok({opened = earlier}) end
-        local presented, problem = present(workspace_id, app, literal, nil, request)
-        if #presented > 0 then return protocol.ok({opened = presented}) end
-        return protocol.fail(problem or "no display shows a desktop of workspace " .. workspace_id)
-    end
-
-    -- A request waiting for the person opens Needs you; an application the
-    -- person approved opens once it is installed.
-    local function attend(event: {[string]: unknown})
-        local data = event.data
-        if type(event.path) ~= "string" or type(data) ~= "table" then return end
-        local workspace_id: string = event.path
-        local request = bounds.object(data.request)
-        if request and (event.kind == "approval.requested" or event.kind == "approval.changed") then
-            local title = event.kind == "approval.requested" and tostring(data.title or "Review request") or nil
-            for _, id in ipairs(waiting.mark(instances, workspace_id, request, title)) do
-                broadcast({kind = "review", id = id, review = instances[id].review or false})
-            end
-        end
-        if event.kind == "approval.requested" or event.kind == "approval.failed" then
-            local inbox, inbox_error = role_app(APPROVALS_ROLE, workspace_id)
-            if inbox_error then
-                logger:error("Approvals app not resolved", {error = inbox_error})
-                return
-            end
-            local approval_id = type(data.approval_id) == "string" and data.approval_id or nil
-            if not inbox then logger:warn("No installed app handles approvals")
-            elseif approval_id then
-                local count = type(data.count) == "number" and math.floor(data.count) or nil
-                local title = type(data.title) == "string" and data.title or "Review request"
-                present(workspace_id, inbox, {"--approval", approval_id}, count and {count = count, title = title, approval_id = approval_id, failed = data.failed == true} or nil)
-            else present(workspace_id, inbox, {}) end
-        elseif event.kind == "approval.changed" and type(data.count) == "number" then
-            for id, alert in pairs(alerts) do
-                local instance = instances[id]
-                if not alert.installed and (alert.workspace == workspace_id or (instance and instance.workspace == workspace_id)) then
-                    alert.count = math.floor(data.count)
-                    alert.failed = false
-                    if type(data.approval_id) == "string" then alert.approval_id = data.approval_id end
-                    if type(data.title) == "string" then alert.title = data.title end
-                    broadcast({kind = "attention", id = id, alert = alert, changed = true})
-                end
-            end
-        elseif event.kind == "application.applied" and type(data.component) == "string" then
-            refresh()
-            update_instances()
-            local prefix = tostring(data.component) .. ":"
-            -- A window already running an earlier revision of the application
-            -- restarts in place on the applied one; the others are presented.
-            local running: {[string]: boolean} = {}
-            for _, instance in pairs(instances) do
-                if instance.workspace == workspace_id and instance.app:sub(1, #prefix) == prefix then
-                    running[instance.app] = true
-                end
-            end
-            for _, app in ipairs(installed_apps) do
-                local id = app.id
-                if type(id) == "string" and id:sub(1, #prefix) == prefix and not running[id] then
-                    local approval_id = type(data.approval_id) == "string" and data.approval_id or nil
-                    present(workspace_id, id, {}, approval_id and {count = 0, title = app.title .. " installed", approval_id = approval_id, installed = true} or nil)
-                end
-            end
-        end
-    end
-
     local function handle(request: protocol.Forwarded): protocol.Reply
         local op, args = request.op, request.args
-        if op == "list" then return protocol.ok(state(request.caller)) end
-        if op == "watch" then return watch(request.caller, args.desktop) end
-        if op == "show" then return show(request.caller, args.desktop) end
-        if op == "leave" then return leave(request.caller) end
-        if op == "open" then return open(args.app, args.desktop, args.args) end
-        if op == "present" then return open_requested(args.workspace, args.app, args.arguments, args.request) end
-        if op == "attach" then return attach(request.caller, args.id) end
-        if op == "close" then return close(args.id, args.force, args.execution_id) end
-        if op == "answer" then return answer(args) end
+        if op == "list" then return protocol.ok(node_state.snapshot(state, request.caller)) end
+        if op == "watch" then return desktops.watch(state, request.caller, args.desktop) end
+        if op == "show" then return desktops.show(state, request.caller, args.desktop) end
+        if op == "leave" then return desktops.leave(state, request.caller) end
+        if op == "open" then return apps.open(state, args.app, args.desktop, args.args) end
+        if op == "present" then return attention_events.open_requested(state, args.workspace, args.app, args.arguments, args.request) end
+        if op == "attach" then return apps.attach(state, request.caller, args.id) end
+        if op == "close" then return apps.close(state, args.id, args.force, args.execution_id) end
+        if op == "answer" then return apps.answer(state, args) end
         if op == "command" then return resolve_command(args.name, args.arguments, request.caller) end
         if op == "stats" then return stats() end
         if op == "instances" then
             if type(args.app) ~= "string" or args.app == "" then return protocol.fail("instances needs an app") end
             return protocol.ok({instances = part_handover.app_instances(instances, args.app)})
         end
-        if op == "move" then return move(args.id, args.desktop) end
-        if op == "themes" then return theme_list() end
-        if op == "appearance" then return set_appearance(args) end
+        if op == "move" then return apps.move(state, args.id, args.desktop) end
+        if op == "themes" then return node_state.theme_list(state) end
+        if op == "appearance" then return node_state.set_appearance(state, args) end
         if op == "workspaces" then
-            local listed, err = workspace_catalog()
+            local listed, err = node_state.workspace_catalog(state)
             if not listed then return protocol.fail(err or "workspaces unavailable") end
             return protocol.ok({node = node, home = home_id, workspaces = listed.workspaces, desktops = listed.desktops})
         end
-        if op == "desktop_workspace" then return use_workspace(args.id, args.workspace) end
-        if op == "workspace_add" then return add_workspace(args.path, args.label) end
-        if op == "workspace_remove" then return remove_workspace(args.id) end
-        if op == "desktop_create" then return create_desktop(args.workspace, args.title) end
-        if op == "desktop_rename" then return rename_desktop(args.id, args.title) end
-        if op == "desktop_confirmation" then return desktop_confirmation(args) end
+        if op == "desktop_workspace" then return desktops.use_workspace(state, args.id, args.workspace) end
+        if op == "workspace_add" then return desktops.add_workspace(state, args.path, args.label) end
+        if op == "workspace_remove" then return desktops.remove_workspace(state, args.id) end
+        if op == "desktop_create" then return desktops.create(state, args.workspace, args.title) end
+        if op == "desktop_rename" then return desktops.rename(state, args.id, args.title) end
+        if op == "desktop_confirmation" then return desktops.confirmation(state, args) end
         if op == "desktop_close" then
             if args.approval_id ~= nil then
-                local confirmed = confirm_desktop(args)
+                local confirmed = desktops.confirm(state, args)
                 if not confirmed.ok then return confirmed end
             end
-            return close_desktop(args.id)
+            return desktops.close(state, args.id)
         end
         return protocol.fail("unknown node operation " .. op)
     end
 
-    -- exited forgets a display or an app whose process ended; problem is the
-    -- error an app failed with.
-    local function exited(pid: string, problem: string?)
-        if watchers[pid] then
-            watchers[pid] = nil
-            announce_workspaces()
-        end
-        local id = by_pid[pid]
-        if not id then return end
-        by_pid[pid] = nil
-        local instance = instances[id]
-        if instance and instance.relaunch then
-            drop_dialog(instance)
-            local restarted, restart_error = start(id, instance.app, instance.desktop, instance.args, instance.workspace, instance)
-            if restarted then
-                restarted.view:set_page(appearance.page(current.theme, restarted.terminal))
-                update_problem(restarted, nil)
-                broadcast({kind = "moved", instance = describe(restarted)})
-                if restarted.title ~= instance.title then broadcast({kind = "title", id = id, title = restarted.title}) end
-                return
-            end
-            update_problem(instance, instance.title .. " could not update: " .. tostring(restart_error))
-        end
-        local forgotten, forget_error = workspaces.forget(id, instance and instance.alias or nil)
-        if not forgotten then logger:error("App close not stored", {id = id, error = forget_error}) end
-        if instance then drop_dialog(instance) end
-        instances[id] = nil
-        if instance then
-            if problem and not instance.relaunch then logger:warn("App failed", {id = id, app = instance.app, error = problem}) end
-            if problem and instance.update_target and not instance.relaunch then
-                update_problem(instance, instance.title .. " failed after its live update: " .. problem)
-            elseif not problem and not instance.relaunch and update_problems[id] then
-                update_problem(instance, nil)
-            end
-            instance.view:close()
-            broadcast({kind = "closed", id = id})
-        end
+    if not apps.restore(state, saved) then
+        local node_desktops, desktops_error = desktops.node_desktops(state)
+        if not node_desktops then error("first desktop: " .. tostring(desktops_error)) end
+        apps.reopen(state)
     end
-
-    local function handover(): Saved
-        local saved_instances: {SavedInstance} = {}
-        for _, instance in pairs(instances) do
-            saved_instances[#saved_instances + 1] = {review = instance.review, id = instance.id, app = instance.app, title = instance.title,
-                desktop = instance.desktop, workspace = instance.workspace, handle = instance.view:handle(), pid = instance.pid, terminal = instance.terminal,
-                execution_id = instance.execution_id, token = instance.token, negotiate = instance.negotiate, closing = instance.closing, dialog = instance.dialog,
-                args = instance.args, resume_schema = instance.resume_schema, singleton = instance.singleton,
-                revision = instance.revision, definition = instance.definition, update_target = instance.update_target,
-                relaunch = instance.relaunch, alias = instance.alias, request = instance.request}
-        end
-        local saved_watchers: {SavedWatcher} = {}
-        for pid, desktop in pairs(watchers) do saved_watchers[#saved_watchers + 1] = {pid = pid, desktop = desktop} end
-        local saved_alerts: {client.Alert} = {}
-        for _, alert in pairs(alerts) do saved_alerts[#saved_alerts + 1] = alert end
-        return {instances = saved_instances, watchers = saved_watchers, revision = revision, alerts = saved_alerts, update_problems = update_problems}
-    end
-
-    if not restore(saved) then
-        local desktops, desktops_error = node_desktops()
-        if not desktops then error("first desktop: " .. tostring(desktops_error)) end
-        reopen()
-    end
-    update_instances()
+    apps.update_instances(state)
     local announced, announce_error = protocol.ready(NAME)
     if not announced then logger:warn("Hive supervisor not told the node is ready", {error = announce_error}) end
     seam.call("bee.node.service.ready")
-    logger:info("Node ready", {node = node, folder = folder, theme = current.theme.id})
+    logger:info("Node ready", {node = node, folder = folder, theme = state.current.theme.id})
     while true do
         local cases = {requests:case_receive(), events:case_receive(), registry_changes:case_receive(), attention:case_receive()}
         for _, app in ipairs(app_inboxes) do cases[#cases + 1] = app.inbox:case_receive() end
@@ -1112,30 +165,30 @@ local function main(saved: unknown)
         end
         if app_topic then
             local message = selected.value
-            app_message(app_topic, tostring(message:from()), message:payload():data())
+            apps.app_message(state, app_topic, tostring(message:from()), message:payload():data())
         elseif selected.channel == registry_changes then
-            refresh()
-            update_instances()
+            node_state.refresh(state)
+            apps.update_instances(state)
         elseif selected.channel == attention then
-            attend(selected.value)
+            attention_events.attend(state, selected.value)
         elseif selected.channel == events then
             local event = selected.value
             if event.kind == process.event.CANCEL then
                 for _, instance in pairs(instances) do
-                    retire(instance.alias)
+                    apps.retire(instance.alias)
                     instance.view:close()
                 end
                 return
             end
             if event.kind == process.event.OUTDATED then
-                process.upgrade("", handover())
+                process.upgrade("", node_state.handover(state))
                 return
             end
             if event.kind == process.event.EXIT or event.kind == process.event.MONITOR_DOWN or event.kind == process.event.LINK_DOWN then
                 local result: unknown = event.result
                 local problem: string? = nil
                 if type(result) == "table" and result.error ~= nil then problem = tostring(result.error) end
-                exited(tostring(event.from), problem)
+                apps.exited(state, tostring(event.from), problem)
             end
         else
             local message = selected.value

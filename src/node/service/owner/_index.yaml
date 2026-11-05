@@ -1,0 +1,89 @@
+version: '1.0'
+namespace: bee.node.service.owner
+entries:
+- name: handover
+  kind: library.lua
+  source: file://handover.lua
+  modules:
+  - tty
+  - uuid
+  imports:
+    client: bee.node:client
+    confirmation: bee.approvals.app:confirmation
+
+- name: waiting
+  kind: library.lua
+  source: file://waiting.lua
+  imports:
+    bounds: bee.drivers.values:bounds
+    principal: bee.node:principal
+    part_handover: bee.node.service.owner:handover
+- name: instance
+  kind: library.lua
+  source: file://instance.lua
+  modules: [process, registry, tty, uuid, funcs]
+  imports:
+    application: bee.node:application
+    workspaces: bee.node.persist:workspaces
+    appearance: bee.ui:appearance
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    handover: bee.node.service.owner:handover
+- name: state
+  kind: library.lua
+  source: file://state.lua
+  modules: [process, logger]
+  imports:
+    protocol: bee.hive:protocol
+    workspaces: bee.node.persist:workspaces
+    settings: bee.node.persist:settings
+    appearance: bee.ui:appearance
+    client: bee.node:client
+    confirmation: bee.approvals.app:confirmation
+    part_catalog: bee.node.service:catalog
+    part_handover: bee.node.service.owner:handover
+- name: apps
+  kind: library.lua
+  source: file://apps.lua
+  modules: [process, registry, tty, uuid, logger, funcs]
+  imports:
+    protocol: bee.hive:protocol
+    workspaces: bee.node.persist:workspaces
+    appearance: bee.ui:appearance
+    client: bee.node:client
+    application: bee.node:application
+    broker: bee.node:broker
+    confirmation: bee.approvals.app:confirmation
+    bounds: bee.drivers.values:bounds
+    app_identity: bee.drivers.records:app_identity
+    canonical: bee.drivers.values:canonical
+    seam: bee.process:seam
+    part_instance: bee.node.service.owner:instance
+    part_handover: bee.node.service.owner:handover
+    node_state: bee.node.service.owner:state
+- name: desktops
+  kind: library.lua
+  source: file://desktops.lua
+  modules: [process]
+  imports:
+    workspaces: bee.node.persist:workspaces
+    protocol: bee.hive:protocol
+    confirmation: bee.approvals.app:confirmation
+    seam: bee.process:seam
+    node_state: bee.node.service.owner:state
+    apps: bee.node.service.owner:apps
+- name: attention
+  kind: library.lua
+  source: file://attention.lua
+  modules: [logger]
+  imports:
+    protocol: bee.hive:protocol
+    workspaces: bee.node.persist:workspaces
+    client: bee.node:client
+    arguments: bee.app:arguments
+    bounds: bee.drivers.values:bounds
+    waiting: bee.node.service.owner:waiting
+    part_catalog: bee.node.service:catalog
+    part_handover: bee.node.service.owner:handover
+    node_state: bee.node.service.owner:state
+    apps: bee.node.service.owner:apps

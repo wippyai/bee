@@ -51,7 +51,7 @@ entries:
   source: file://catalog_service_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: '120s'}
-  modules: [funcs, registry, json]
+  modules: [funcs, registry, json, env]
   security:
     policies: [bee.tests.threads.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.security:carrier_environment_policy, bee.tests.harness.profiles:test_read, bee.tests.harness.profiles:test_write]
   imports:

@@ -8,9 +8,11 @@ local funcs = require("funcs")
 local machine = require("machine")
 local materialization = require("materialization")
 local json = require("json")
+local env = require("env")
 
 type Object = {[string]: unknown}
-type Candidate = {ref: string, kind: string, status: string, reasons: {string}, features: {string}}
+type Candidate = {ref: string, kind: string, status: string, reasons: {string}, features: {string},
+    hook_capabilities: {{point: string, supported: boolean, allowed_results: {string}, reason: string}}?}
 type Page = {items: {Candidate}, next: string?, complete: boolean, unavailable_count: integer,
     diagnostics: {Object}}
 
@@ -182,6 +184,49 @@ local function define_tests()
             if not plan then error(tostring(plan_error)) end
             test.eq(plan.placement_request.environment_refs.HOME, "bee.env:machine_home")
             test.is_nil(materialization.prepare_login_notice(plan.placement_request, "/unused-private-home"))
+        end)
+        test.it("lists a driver declared by its descriptor, launch definition and policy alone ready, with no hook points", function()
+            local namespace = "bee.tests.threads.sessions.solo"
+            local descriptor = namespace .. ".descriptor:cli"
+            local activation_ref = "bee.harness.launch:harness_activation"
+            local original = assert(registry.get(activation_ref))
+            local activation = assert(registry.get(activation_ref))
+            local activation_data = assert(bounds.object(activation.data))
+            local bindings = assert(bounds.array(activation_data.bindings))
+            bindings[#bindings + 1] = descriptor
+            activation_data.bindings = bindings
+            local search = assert(env.get("bee.placement.native.env:placement_path"))
+            local fixture_bin = assert(tostring(search):match("([^:]+/harness/bin)"))
+            local declared = assert(registry.snapshot()):changes()
+            declared:create({id = descriptor, kind = "registry.entry", meta = {type = "bee.driver.cli_descriptor"}, data = {
+                schema_revision = "bee.driver.cli-descriptor@4", provider = "solo", executable = "opencode",
+                version_probe = {argv = {"--version"}}, configure = "plain", options = {profiles = {"window"}, fields = {}},
+                argv_templates = {window = {argv = {}, readiness = "none"}}}})
+            declared:create({id = namespace .. ".profiles:window", kind = "registry.entry", meta = {type = "bee.launch_definition"}, data = {
+                title = "Solo agent", binding_ref = descriptor, profile_id = "window", default_mode = "window",
+                policy_ref = namespace .. ".security:window", workdir_policy = {kind = "declared_resource", resource_ref = "project"}}})
+            declared:create({id = namespace .. ".security:window", kind = "registry.entry", meta = {type = "bee.launch_policy"},
+                data = {executables = {opencode = fixture_bin .. "/opencode"}}})
+            declared:update(activation)
+            assert(declared:apply())
+            local ok, failure = pcall(function()
+                local found: Candidate? = nil
+                for _, candidate in ipairs(listed(true).items) do
+                    if candidate.ref == namespace .. ".profiles:window" then found = candidate end
+                end
+                local solo = assert(found, "the declaration-only driver is not listed")
+                test.eq(solo.status, "ready", table.concat(solo.reasons, "; "))
+                local capabilities = assert(solo.hook_capabilities)
+                test.eq(#capabilities, 4)
+                for _, capability in ipairs(capabilities) do test.is_false(capability.supported) end
+            end)
+            local restore = assert(registry.snapshot()):changes()
+            restore:delete(descriptor)
+            restore:delete(namespace .. ".profiles:window")
+            restore:delete(namespace .. ".security:window")
+            restore:update(original)
+            assert(restore:apply())
+            if not ok then error(tostring(failure)) end
         end)
         test.it("hides unavailable definitions by default and explains them when requested", function()
             local ready = listed(nil)

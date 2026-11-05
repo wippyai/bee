@@ -17,6 +17,9 @@ return {
         return controllers.registered("bee.test.retired.cancel", "bee.test.retired.release", "bee.test.retired.held",
             {id = (instance :: {id: string}).id})
     end,
+    ["bee.node.service.desktop_chosen"] = function()
+        return controllers.registered("bee.test.display.snapshot", "bee.test.display.release", nil, {})
+    end,
     ["bee.node.service.ready"] = function()
         controllers.notify("bee.test.node.ready")
         return nil

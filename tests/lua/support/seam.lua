@@ -1,37 +1,21 @@
 -- SPDX-License-Identifier: MIT
 -- The test composition's binding of bee.process:seams. Each point resolves to
--- a function an area's seams library exports under the point name; a point no
--- library names passes through as in the host.
+-- the function one of its areas exports under the point name; a point no area
+-- names passes through as in the host.
 --
 -- call returns the point function's value. hold and after expect nil (pass)
 -- or a Hold: the component sends report to controller from its own process
 -- and waits for release from that controller.
-local process_points = require("process_points")
+local process = require("process")
 local channel = require("channel")
 local time = require("time")
-local placement_native_points = require("placement_native_points")
-local placement_docker_points = require("placement_docker_points")
-local harness_points = require("harness_points")
-local process_points = require("process_points")
-local hive_points = require("hive_points")
-local approvals_points = require("approvals_points")
-local inbox_points = require("inbox_points")
-local node_points = require("node_points")
-local shell_points = require("shell_points")
-local gov_points = require("gov_points")
-local sync_points = require("sync_points")
-local gateway_points = require("gateway_points")
-local credentials_points = require("credentials_points")
-local resources_points = require("resources_points")
-local hub_points = require("hub_points")
-local threads_points = require("threads_points")
+local areas = require("areas")
 
 type Hold = {controller: string, report: string?, release: string, payload: unknown?}
 type Point = (unknown?) -> unknown
 
 local POINTS: {[string]: Point} = {}
-local AREAS = {placement_native_points, placement_docker_points, harness_points, process_points, hive_points, approvals_points, inbox_points, node_points, shell_points, gov_points, sync_points, gateway_points, credentials_points, resources_points, hub_points, threads_points}
-for _, area in ipairs(AREAS) do
+for _, area in ipairs(areas) do
     for point, fn in pairs(area) do
         assert(POINTS[point] == nil, "seam point named twice: " .. point)
         POINTS[point] = fn

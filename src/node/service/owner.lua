@@ -354,6 +354,7 @@ local function main(saved: unknown)
         announce_workspaces()
         local value = state(caller)
         value.desktop = chosen
+        seam.hold("bee.node.service.desktop_chosen")
         return protocol.ok(value)
     end
 

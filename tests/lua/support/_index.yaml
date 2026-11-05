@@ -125,22 +125,28 @@ entries:
   meta: {type: test_support, comment: The test composition's binding of bee.process:seams}
   modules: [process, channel, time]
   imports:
-    placement_native_points: bee.tests.placement.native:seams
-    placement_docker_points: bee.tests.placement.docker:seams
-    harness_points: bee.tests.harness:seams
-    process_points: bee.tests.process:seams
-    hive_points: bee.tests.hive:seams
-    approvals_points: bee.tests.approvals:seams
-    inbox_points: bee.tests.approvals.inbox:seams
-    node_points: bee.tests.node:seams
-    shell_points: bee.tests.shell:seams
-    gov_points: bee.tests.gov:seams
-    sync_points: bee.tests.sync:seams
-    gateway_points: bee.tests.gateway:seams
-    credentials_points: bee.tests.credentials:seams
-    resources_points: bee.tests.resources:seams
-    hub_points: bee.tests.hub:seams
-    threads_points: bee.tests.threads:seams
+    areas: bee.tests.support:seam_areas
+- name: seam_areas
+  kind: library.lua
+  source: file://seam_areas.lua
+  meta: {type: test_support}
+  imports:
+    placement_native: bee.tests.placement.native:seams
+    placement_docker: bee.tests.placement.docker:seams
+    harness: bee.tests.harness:seams
+    process: bee.tests.process:seams
+    hive: bee.tests.hive:seams
+    approvals: bee.tests.approvals:seams
+    inbox: bee.tests.approvals.inbox:seams
+    node: bee.tests.node:seams
+    shell: bee.tests.shell:seams
+    gov: bee.tests.gov:seams
+    sync: bee.tests.sync:seams
+    gateway: bee.tests.gateway:seams
+    credentials: bee.tests.credentials:seams
+    resources: bee.tests.resources:seams
+    hub: bee.tests.hub:seams
+    threads: bee.tests.threads:seams
 - name: seam_binding_test
   kind: function.lua
   source: file://seam_binding_test.lua
@@ -154,3 +160,9 @@ entries:
   source: file://await.lua
   meta: {type: test_support, comment: Database-state waits that wake on the node change stream}
   modules: [cdc, channel, time]
+- name: boot_seam_areas
+  kind: library.lua
+  source: file://boot_seam_areas.lua
+  meta: {type: test_support, comment: The areas tests/runner/boot.py binds its seam binding to}
+  imports:
+    node: bee.tests.node:seams

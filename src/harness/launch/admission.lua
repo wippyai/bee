@@ -335,16 +335,18 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         if not route then return nil, fail(route_code or "UNAVAILABLE", route_error or "agent route") end
         checked = route
         local policy_data = bounds.object(policy_entry.data) or {}
+        if route.model then
+            local restrictions, restrictions_error = effective_schema.decode_profile_restrictions(policy_data.profile_restrictions)
+            if not restrictions then return nil, fail("NOT_FOUND", restrictions_error or "policy") end
+            if restrictions[effective_schema.path("model")] == nil then
+                return nil, fail("UNSUPPORTED_CAPABILITY", "host policy declares no model option for the mapped agent model")
+            end
+        end
         local agent_prefs, prefs_refused = agent_preferences(selected, closure, route, host_policy, policy_data.profile_instructions == true)
         if not agent_prefs then return nil, prefs_refused end
         effective = agent_prefs
         local measured, measure_error = policy.decode(launch.policy_ref, policy_entry, nil, agent_prefs)
-        if not measured then
-            if measure_error and measure_error:find("option model", 1, true) then
-                return nil, fail("UNSUPPORTED_CAPABILITY", "host policy declares no model option for the mapped agent model")
-            end
-            return nil, fail("NOT_FOUND", measure_error or "policy")
-        end
+        if not measured then return nil, fail("NOT_FOUND", measure_error or "policy") end
         launch_policy = measured
     else
         local saved_preferences: placement_types.Preferences? = nil

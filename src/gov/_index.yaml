@@ -10,6 +10,7 @@ entries:
   data:
     duration: Until the app is replaced or removed
     subject: Installation
+    announce_failure: true
 - name: lease_display
   kind: registry.entry
   meta:

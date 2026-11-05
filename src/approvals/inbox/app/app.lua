@@ -299,7 +299,8 @@ local function main(value: unknown)
         if not intent then status = refused or ""; dirty = true; return end
         status = ""
         dirty = true
-        if kind ~= "withdraw" and state.detail and state.detail.proposal.ref == "bee.approvals:confirmation" then
+        local detail_display = state.detail and model.display(state.detail, state.displays)
+        if kind ~= "withdraw" and detail_display and detail_display.answered_where_asked then
             intent.request.assurance = {kind = "explicit_gesture", gesture = gesture or "shortcut", presentation = "inbox"}
         end
         local reply = owner:invoke(intent.target, intent.request)

@@ -479,6 +479,7 @@ entries:
   - process
   - events
   - logger
+  - registry
   imports:
     bounds: bee.drivers.values:bounds
     node_database: bee.persist:database

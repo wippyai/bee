@@ -40,8 +40,9 @@ local function prompt_lines(prompt: string, width: integer, prefix: string?): {s
     until rest == ""
     return lines
 end
-local function state_label(row: model.Row): string
-    if model.history(row.view) then return model.history(row.view) or "approved" end
+local function state_label(row: model.Row, displays: {[string]: model.Display}?): string
+    local history = model.history(row.view, displays)
+    if history then return history end
     if row.state == "decided" then return row.decision or "decided" end
     return row.state
 end
@@ -156,7 +157,7 @@ local function draw_prompt(width: integer, height: integer, preferences: appeara
             source[#source + 1] = facts.title
             source[#source + 1] = ""
             source[#source + 1] = "From: " .. model.requester_name(item, state.requester_names, state.displays)
-            local summary = model.summary(item, 0)
+            local summary = model.summary(item, 0, state.displays)
             source[#source + 1] = "Access: " .. (facts.access
                 or (summary.effect ~= "operation" and summary.effect ~= "attempt" and summary.effect or "This action"))
             if facts.reason then source[#source + 1] = "Reason: " .. facts.reason end
@@ -231,7 +232,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local lines = {"Request: " .. open.approval_id, "Requester: " .. open.requester_id, "Owner: " .. open.owner_node,
             "Digest: " .. open.proposal_digest, "Revision: " .. tostring(open.revision)}
         if open.decider_id then lines[#lines + 1] = "Decided by: " .. open.decider_id end
-        local selected = model.summary(open, 0)
+        local selected = model.summary(open, 0, state.displays)
         lines[#lines + 1] = "Effect: " .. selected.effect
         lines[#lines + 1] = "Target: " .. selected.target
         lines[#lines + 1] = "Policy: " .. selected.policy
@@ -300,7 +301,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local separator = width < 60 and " " or " · "
         local shown = model.display(row.view, state.displays)
         local lasting = shown and shown.lasting and model.duration(row.view, state.displays) or scope
-        local label = row.state == "pending" and state_label(row) or (row.view.allowed_by_grant and model.history(row.view))
+        local label = row.state == "pending" and state_label(row, state.displays) or (row.view.allowed_by_grant and model.history(row.view, state.displays))
         local meta = (label and (label .. separator) or "") .. lasting .. separator .. timing(row.view, state.displays)
         if card and width >= 100 then meta = meta .. " · " .. card.scope end
         frame.list_card(painter, list_first + (slot - 1) * (card_height + 1), card_height,

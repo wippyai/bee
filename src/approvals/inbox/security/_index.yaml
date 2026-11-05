@@ -30,9 +30,9 @@ entries:
   meta:
     comment: The inbox finds the bee.approvals.display declarations operation owners publish to word their requests
   policy:
-    actions: [registry.find]
     resources: '*'
-    expression: action == "registry.find" && resource == "*"
+    actions: [registry.find, registry.get]
+    expression: (action == "registry.find" && resource == "*") || (action == "registry.get" && resource matches "^bee[.][a-z.]+:[a-z_]*display$")
     effect: allow
 
 - name: remote_watch_policy

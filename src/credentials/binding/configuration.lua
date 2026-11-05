@@ -322,7 +322,7 @@ function M.configuration_setup(raw: unknown): credential_protocol.Reply
     return succeed({needs_setup = false, path = base.path})
 end
 function M.configuration_effects(): string?
-    local raw, err = funcs.call("bee.approvals.binding:effect_queue", {destination = "credentials.configuration", limit = 64})
+    local raw, err = funcs.call("bee.approvals.binding:effect_queue", {destination = configuration_admission.DESTINATION, limit = 64})
     local reply = bounds.object(raw)
     local page = reply and reply.ok == true and bounds.object(reply.value)
     local effects = page and bounds.array(page.effects, 64)
@@ -343,7 +343,7 @@ function M.configuration_effects(): string?
     end
     local cursor = 0
     while true do
-        local events_raw, events_error = funcs.call("bee.approvals.binding:events", {destination = "credentials.configuration", cursor = cursor, limit = 64})
+        local events_raw, events_error = funcs.call("bee.approvals.binding:events", {destination = configuration_admission.DESTINATION, cursor = cursor, limit = 64})
         local events_reply = bounds.object(events_raw)
         local events_page = events_reply and events_reply.ok == true and bounds.object(events_reply.value)
         local events = events_page and bounds.array(events_page.events, 64)
@@ -371,7 +371,7 @@ function M.configuration_effects(): string?
         end
         db:release()
         if #acknowledgments > 0 then
-            local acknowledged, acknowledge_error = funcs.call("bee.approvals.binding:events", {destination = "credentials.configuration", acknowledge = acknowledgments})
+            local acknowledged, acknowledge_error = funcs.call("bee.approvals.binding:events", {destination = configuration_admission.DESTINATION, acknowledge = acknowledgments})
             local result = bounds.object(acknowledged)
             if acknowledge_error or not result or result.ok ~= true then return "Configuration setup events could not be acknowledged." end
         end

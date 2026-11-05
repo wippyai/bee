@@ -344,13 +344,15 @@ local function define_tests()
                     payload = {action = "app.stop", target = {instance_id = "exact-instance"}}},
                 lifecycle_records = {decisions = {{assurance_json = '{"kind":"explicit_gesture","gesture":"enter","presentation":"inline"}'}}}})
             local decoded = assert(model.decode_view(record))
-            local row = model.summary(decoded, 1)
+            local displays = model.displays(registry.find({["meta.type"] = model.DISPLAY}))
+            local row = model.summary(decoded, 1, displays)
             test.eq(row.effect, "app.stop")
             test.eq(row.target, "exact-instance")
-            test.eq(model.history(decoded), "confirmed")
-            test.eq(model.decision_line(decoded, model.displays(registry.find({["meta.type"] = model.DISPLAY}))), "Confirmed by bee.node")
+            test.eq(model.history(decoded, displays), "confirmed")
+            test.eq(model.decision_line(decoded, displays), "Confirmed by bee.node")
             test.eq(model.assurance(decoded), "enter · inline")
             local state = model.new({"ws-1"})
+            state.displays = displays
             record.state, record.decision, record.decider_id = "pending", nil, nil
             model.apply_read(state, "confirmed", reply({ok = true, value = record}))
             test.eq(#model.rows(state), 0)
@@ -360,6 +362,7 @@ local function define_tests()
         end)
         test.it("reviews an inbox folder confirmation while keeping local confirmations out", function()
             local state = model.new({"ws-1"})
+            state.displays = model.displays(registry.find({["meta.type"] = model.DISPLAY}))
             local request = view("folder", 1, "pending", {contract = {presentation = "inbox"},
                 proposal = {kind = "operation", ref = "bee.approvals:confirmation", revision = "1",
                     payload = {action = "profile.folder_trust", target = {canonical_workdir = "/work"}}}})

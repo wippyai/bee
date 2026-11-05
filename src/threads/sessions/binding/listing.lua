@@ -3,20 +3,20 @@ local journal = require("journal")
 local json = require("json")
 local remote = require("remote")
 local system = require("system")
-local part_observation = require("part_observation")
+local replies = require("replies")
 local M = {}
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value?: unknown, error?: Object}
 
-local object = part_observation.object
-local fail = part_observation.fail
-local unavailable = part_observation.unavailable
-local succeed = part_observation.succeed
-local request_input = part_observation.request_input
-local identity = part_observation.identity
-local key = part_observation.key
-local ref = part_observation.ref
-local describe = part_observation.describe
+local object = replies.object
+local fail = replies.fail
+local unavailable = replies.unavailable
+local succeed = replies.succeed
+local request_input = replies.request_input
+local identity = replies.identity
+local key = replies.key
+local ref = replies.ref
+local describe = replies.describe
 -- LIST_PAGE_BYTES is the published bound of one reply value; a page carries
 -- as many sessions as fit under it with its cursor.
 M.LIST_PAGE_BYTES = 65536

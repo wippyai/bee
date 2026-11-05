@@ -2,7 +2,6 @@
 local bounds = require("bounds")
 local journal = require("journal")
 local hash = require("hash")
-local security = require("security")
 local cancellation = require("cancellation")
 local time = require("time")
 local session_protocol = require("session_protocol")
@@ -10,65 +9,23 @@ local record_values = require("record_values")
 local removal = require("removal")
 local snapshot = require("snapshot").decode
 local admission = require("admission")
+local replies = require("replies")
 
 local M = {}
-type Object = {[string]: unknown}
-type Reply = {ok: boolean, value?: unknown, error?: Object}
+type Object = replies.Object
+type Reply = replies.Reply
 
-local function object(value: unknown): Object?
-    return bounds.object(value)
-end
-
-local function fail(code: string, message: string, operation_key: string?): Reply
-    local error: Object = {code = code, message = message, retry = "never"}
-    if operation_key then error.operation_key = operation_key end
-    return {ok = false, error = error}
-end
-
-local function unavailable(message: string, operation_key: string?): Reply
-    local reply = fail("UNAVAILABLE", message, operation_key)
-    local failure = reply.error
-    if failure then failure.retry = "refresh" end
-    return reply
-end
-
-local function succeed(value: unknown): Reply
-    return {ok = true, value = value}
-end
-
-local function request_input(request: unknown): (Object?, Reply?)
-    local input = object(request)
-    if not input then return nil, fail("INVALID", "request must be an object", nil) end
-    return input, nil
-end
-
-local function identity(): (string?, string?)
-    local caller = security.actor()
-    if not caller then return nil, nil end
-    local id = bounds.id(caller:id())
-    local meta = object(caller:meta())
-    local workspace = meta and bounds.id(meta.workspace_id)
-    if not id or not workspace then return nil, nil end
-    return id, workspace
-end
-
-local function key(value: unknown): string?
-    if type(value) ~= "string" or #value < 1 or #value > 128 or value:find("%c") then return nil end
-    return value
-end
-
-local function ref(value: unknown): string?
-    if type(value) ~= "string" or #value < 1 or #value > 256 or value:find("%c") then return nil end
-    return value
-end
+local object = replies.object
+local fail = replies.fail
+local unavailable = replies.unavailable
+local succeed = replies.succeed
+local request_input = replies.request_input
+local identity = replies.identity
+local key = replies.key
+local ref = replies.ref
+local describe = replies.describe
 
 local finish_closing: (string, string) -> string?
-local function describe(session: string): (Object?, string?)
-    local value, err = journal.invoke("session_describe", {session = session})
-    if err or not value then return nil, err or "Threads returned no session" end
-    return snapshot(value)
-end
-
 -- admission_refusal is the step the person takes before an active terminal
 -- session's agent may use its tools again: the hook refuses each tool call
 -- of a session whose admitted choices stand changed.
@@ -529,17 +486,8 @@ function M.history(raw_request: unknown): Reply
     return succeed(page)
 end
 
-M.object = object
-M.fail = fail
-M.unavailable = unavailable
-M.succeed = succeed
-M.request_input = request_input
-M.identity = identity
-M.key = key
-M.ref = ref
 M.finish_closing = finish_closing
 M.finish_removal = finish_removal
-M.describe = describe
 M.internal_key = internal_key
 M.cancel_settle_key = cancel_settle_key
 return M

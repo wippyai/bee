@@ -18,6 +18,7 @@ local requester = fixture.requester
 local other_requester = fixture.other_requester
 local alice = fixture.alice
 local outsider = fixture.outsider
+local owner = fixture.owner
 local call = fixture.call
 local value = fixture.value
 local code = fixture.code
@@ -97,9 +98,7 @@ local function define_tests()
                     proposal_digest = unrelated.proposal_digest, reviewed_digest = unrelated.reviewed_digest, decision = "denied"}))
                 value(call(requester, "withdraw", {approval_id = withdrawn.approval_id, expected_revision = withdrawn.revision, proposal_digest = withdrawn.proposal_digest}))
                 advance(5)
-                local store = open_test_store()
-                executed(service.execute(store, OUTBOX, "reconcile", {}, nil, nil))
-                store:release()
+                value(call(owner, "reconcile", {}))
                 local worker = caller("bee.test.activation_worker", {"bee.security.approvals:approval_activation_effects_policy"})
                 local function listed(): {[string]: string}
                     local found: {[string]: string} = {}

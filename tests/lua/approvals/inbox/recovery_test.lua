@@ -153,16 +153,22 @@ local function restart(name: string)
         if not selected.ok or selected.channel == deadline then error(name .. " did not come back") end
     end
 end
-local function stop(name: string)
-    local pid = process.registry.lookup(name)
-    if not pid then error(name .. " is not registered") end
-    local pid_id = tostring(pid)
-    local events = assert(process.events())
-    local monitored, monitor_error = process.monitor(pid_id)
-    if not monitored then error("monitor " .. name .. ": " .. tostring(monitor_error)) end
-    local terminated, terminate_error = process.terminate(pid_id)
-    if not terminated then error("terminate " .. name .. ": " .. tostring(terminate_error)) end
-    await_exit(events, pid_id, name)
+-- While the test holds PAUSED, the delivery worker, which its supervisor
+-- restarts after every interruption, delivers nothing.
+local PAUSED = "bee.test.approvals.delivery_paused"
+local function interrupt_delivery()
+    assert(process.registry.register(PAUSED))
+    restart(WORKER)
+end
+local function resume_delivery()
+    process.registry.unregister(PAUSED)
+    restart(WORKER)
+end
+local function interrupted(body: () -> ())
+    interrupt_delivery()
+    local ok, failure = pcall(body)
+    resume_delivery()
+    if not ok then error(failure) end
 end
 local function wait_for_no_more_records(thread_id: string, expected: integer)
     local page = value(call(requester, "bee.threads.binding:read_after", {thread_id = thread_id, cursor = 0, limit = 64,
@@ -217,28 +223,28 @@ local function define_tests()
             local state = model.new({workspace})
             refresh(state, owner)
             open(state, owner, approval_id)
-            -- The delivery worker is gone when the decision commits.
-            stop(WORKER)
-            decide(state, owner, "approved")
-            test.eq((assert(bounds.object(state.detail))).decision, "approved")
-            test.eq(#thread_records(thread_id), 1)
-            -- The owner authority and the inbox both restart.
-            restart(AUTHORITY)
             local reopened = model.new({workspace})
-            refresh(reopened, owner)
-            open(reopened, owner, approval_id)
-            local detail = assert(bounds.object(reopened.detail))
-            test.eq(detail.state, "decided")
-            test.eq(detail.decision, "approved")
-            test.eq(detail.decider_id, ALICE)
-            test.eq(detail.revision, (assert(bounds.object(state.detail))).revision)
+            -- Delivery is interrupted when the decision commits.
+            interrupted(function()
+                decide(state, owner, "approved")
+                test.eq((assert(bounds.object(state.detail))).decision, "approved")
+                wait_for_no_more_records(thread_id, 1)
+                -- The owner authority and the inbox both restart.
+                restart(AUTHORITY)
+                refresh(reopened, owner)
+                open(reopened, owner, approval_id)
+                local detail = assert(bounds.object(reopened.detail))
+                test.eq(detail.state, "decided")
+                test.eq(detail.decision, "approved")
+                test.eq(detail.decider_id, ALICE)
+                test.eq(detail.revision, (assert(bounds.object(state.detail))).revision)
+            end)
             local records = until_records(thread_id, 2, approval_id)
             test.eq(#records, 2)
             test.eq((assert(bounds.object(records[2].body))).state, "approved")
             local _, refused = model.decision_intent(reopened, key(), "denied")
             test.eq(refused, "the request is decided")
             wait_for_no_more_records(thread_id, 2)
-            restart(WORKER)
         end)
         test.it("advances no cursor past a page that never arrived and repeats nothing on replayed pages", function()
             local workspace = "ws-" .. key():sub(1, 8)
@@ -299,10 +305,12 @@ local function define_tests()
         end)
         test.it("recovers requests, decisions and pending delivery after a headless owner restart with no inbox open", function()
             local workspace = "ws-" .. key():sub(1, 8)
-            stop(WORKER)
-            local approval_id, digest, thread_id = file_on_thread(workspace)
-            test.eq(#thread_records(thread_id), 0)
-            restart(AUTHORITY)
+            local approval_id, digest, thread_id = "", "", ""
+            interrupted(function()
+                approval_id, digest, thread_id = file_on_thread(workspace)
+                wait_for_no_more_records(thread_id, 0)
+                restart(AUTHORITY)
+            end)
             local records = until_records(thread_id, 1, approval_id)
             test.eq(#records, 1)
             test.eq(records[1].kind, "approval.request")
@@ -320,7 +328,6 @@ local function define_tests()
             value(call(requester, "bee.approvals.binding:revalidate", {approval_id = approval_id, proposal_digest = digest, owner_incarnation = current}))
             test.eq(value(call(requester, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = current})).consumed_effect, "e1")
             test.eq(#until_records(thread_id, 2, approval_id), 2)
-            restart(WORKER)
         end)
     end)
 end

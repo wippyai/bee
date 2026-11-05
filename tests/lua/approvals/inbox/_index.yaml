@@ -84,6 +84,13 @@ entries:
   modules: [sql, funcs]
   imports: {principals: bee.tests.support.principals:bound, bounds: bee.drivers.values:bounds}
 
+- name: delivery_pause_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.registry.register, process.registry.unregister]
+    resources: [bee.test.approvals.delivery_paused]
+    effect: allow
 - name: spawn_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -111,7 +118,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "180s"}
   modules: [funcs, security, registry, process, channel, time, uuid]
   security:
-    policies: [bee.tests.approvals.inbox:spawn_test_policy, bee.tests.approvals.inbox:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy]
+    policies: [bee.tests.approvals.inbox:spawn_test_policy, bee.tests.approvals.inbox:delivery_pause_policy, bee.tests.approvals.inbox:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy]
   imports:
     principals: bee.tests.support.principals:bound
     bounds: bee.drivers.values:bounds

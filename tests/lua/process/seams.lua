@@ -86,7 +86,12 @@ M["bee.process.worker.ready"] = function(payload: any): unknown
     return controllers.registered("bee.test.access.start", "bee.test.access.release")
 end
 
+-- The approval delivery worker skips its passes while a test holds the
+-- local name bee.test.approvals.delivery_paused.
 M["bee.process.worker.pass"] = function(payload: any): unknown
+    if payload.name == "bee.approvals.outbox" then
+        return process.registry.lookup("bee.test.approvals.delivery_paused", process.registry.LOCAL) ~= nil
+    end
     return payload.name == "bee.approvals.configuration_effect_worker" or payload.name == "bee.gov.activation_worker"
 end
 

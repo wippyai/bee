@@ -10,7 +10,7 @@ local json = require("json")
 local time = require("time")
 local uuid = require("uuid")
 local bounds = require("bounds")
-local admission = require("admission")
+local resolution = require("resolution")
 local catalog = require("catalog")
 local adapter = require("adapter")
 local configuration = require("configuration")
@@ -33,7 +33,7 @@ end
 -- with_host admits the provider's window on the fixture executable. Bee
 -- answers its permissions through the accepted exchange unless answers is
 -- "provider", which leaves them to the provider's own prompt.
-function M.with_host(provider: string, body: (admission.Plan?) -> (), answers: string?)
+function M.with_host(provider: string, body: (resolution.Plan?) -> (), answers: string?)
     local POLICY = "bee.driver." .. provider .. ".security:launch_policy_" .. provider .. "_window"
     local DEFINITION = "bee.driver." .. provider .. ".profiles:default_window"
     local BINDING = "bee.drivers." .. provider .. ".binding:binding"
@@ -70,7 +70,7 @@ function M.with_host(provider: string, body: (admission.Plan?) -> (), answers: s
     local changes = assert(registry.snapshot()):changes()
     assert(changes:create(acceptance)); assert(changes:update(changed)); assert(changes:apply())
     local ok, failure = pcall(function()
-        local plan, refused = admission.resolve(DEFINITION, "window", WORKSPACE)
+        local plan, refused = resolution.resolve(DEFINITION, "window", WORKSPACE)
         assert(plan, tostring(refused and refused.error and refused.error.message))
         body(plan)
     end)
@@ -80,9 +80,9 @@ function M.with_host(provider: string, body: (admission.Plan?) -> (), answers: s
 end
 -- route is the hook-delivered session route the sessions owner records for
 -- a window admitted under plan.
-function M.route(plan: admission.Plan): Object
+function M.route(plan: resolution.Plan): Object
     local route: Object = {delivery = "hook"}
-    for name, field in pairs(admission.session_admission(plan)) do route[name] = field end
+    for name, field in pairs(resolution.session_admission(plan)) do route[name] = field end
     return route
 end
 -- permission sends one PermissionRequest hook of the session's native attempt

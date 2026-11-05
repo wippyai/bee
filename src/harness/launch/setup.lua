@@ -2,10 +2,10 @@
 local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
-local admission = require("admission")
+local resolution = require("resolution")
 local folder_consent = require("folder_consent")
 local M = {}
-function M.run(plan: admission.Plan, workspace: string, workdir: unknown): {[string]: unknown}
+function M.run(plan: resolution.Plan, workspace: string, workdir: unknown): {[string]: unknown}
     if not security.can("bee.harness.setup", workspace) then return {ok = false, error = "setup is not authorized"} end
     -- A folder under an admitted root becomes the working directory only
     -- where the definition and its launch policy both allow the override: the
@@ -16,7 +16,7 @@ function M.run(plan: admission.Plan, workspace: string, workdir: unknown): {[str
     local folder: unknown = workdir
     if folder == nil and plan.effective_profile then folder = plan.effective_profile.workdir end
     if folder ~= nil then
-        if not admission.overrides(plan, "workdir") then return {ok = false, error = "the launch does not allow a workdir override"} end
+        if not resolution.overrides(plan, "workdir") then return {ok = false, error = "the launch does not allow a workdir override"} end
         backend_request.workdir = folder
     end
     local scope, scope_error = security.named_scope("bee.harness.launch:harness_setup_execution_scope")

@@ -6,6 +6,7 @@ local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
 local admission = require("admission")
+local resolution = require("resolution")
 local machine = require("machine")
 local part_launch = require("part_launch")
 local checkpoint = require("checkpoint")
@@ -178,7 +179,7 @@ local function define_tests()
             request.continuation.reauthorize = true
             local refused_resume = call("bee.tests.harness.launch:admit", request)
             test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
-            local current, current_error = admission.resolve(RETAINED_DEFINITION, "window")
+            local current, current_error = resolution.resolve(RETAINED_DEFINITION, "window")
             if not current then error(tostring(current_error)) end
             request.expected_plan_digest = current.plan_digest
             local reviewed = value(call("bee.tests.harness.launch:admit", request))

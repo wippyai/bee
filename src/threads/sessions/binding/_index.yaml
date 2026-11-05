@@ -62,7 +62,7 @@ entries:
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -229,13 +229,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -413,13 +413,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -563,13 +563,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -704,13 +704,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -865,13 +865,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -1141,13 +1141,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -1266,13 +1266,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -1400,13 +1400,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -1531,13 +1531,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -1682,13 +1682,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -1838,13 +1838,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -1977,13 +1977,13 @@ entries:
   source: file://owner.lua
   method: attach
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -2004,13 +2004,13 @@ entries:
   source: file://owner.lua
   method: restore
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -2089,13 +2089,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -2140,7 +2140,7 @@ entries:
     bounds: bee.drivers.values:bounds
     harness_catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     profile_protocol: bee.harness.profiles:protocol
     locate: bee.threads.sessions.binding:locate
     locate_driver: bee.drivers.locate:locate
@@ -2252,13 +2252,13 @@ entries:
   - security
   - system
   imports:
+    resolution: bee.harness.launch:resolution
     snapshot: bee.threads.sessions.binding:snapshot
     listing: bee.threads.sessions.binding:listing
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     journal: bee.threads.sessions.binding:threads_journal
     cancellation: bee.threads.sessions.binding:cancellation
-    admission: bee.harness.launch:admission
     catalog_service: bee.threads.sessions.binding:catalog_service
     profile_values: bee.harness.profiles:protocol
     part_observation: bee.threads.sessions.binding:observation
@@ -2312,7 +2312,7 @@ entries:
     session_protocol: bee.threads.sessions.types:protocol
     record_values: bee.drivers.records:values
     removal: bee.threads.sessions.binding:removal
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
 - name: removal
   kind: library.lua
   source: file://removal.lua

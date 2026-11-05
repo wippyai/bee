@@ -8,7 +8,7 @@ local session_protocol = require("session_protocol")
 local record_values = require("record_values")
 local removal = require("removal")
 local snapshot = require("snapshot").decode
-local admission = require("admission")
+local resolution = require("resolution")
 local replies = require("replies")
 
 local M = {}
@@ -36,7 +36,7 @@ local function admission_refusal(raw: unknown): string?
     local definition, driver, profile = ref(route.definition), ref(route.driver_binding_ref), ref(route.profile_id)
     local workspace = bounds.id(row.workspace)
     if not definition or not driver or not profile or not workspace then return nil end
-    local _, _, refusal = admission.standing({definition_ref = definition, binding_ref = driver, profile_id = profile, workspace_id = workspace,
+    local _, _, refusal = resolution.standing({definition_ref = definition, binding_ref = driver, profile_id = profile, workspace_id = workspace,
         saved_profile_id = ref(route.saved_profile_id), saved_profile_revision = bounds.integer(route.saved_profile_revision)})
     return refusal
 end

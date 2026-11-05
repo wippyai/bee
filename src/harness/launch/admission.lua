@@ -3,31 +3,21 @@
 -- attempt-bound grants and credential projections in that requester's own
 -- authority, and start the carrier with a durable identity so a retry
 -- after an ambiguous start recovers the same attempt.
-local policy_types = require("policy_types")
-local ctx = require("ctx")
 local registry = require("registry")
 local funcs = require("funcs")
 local process = require("process")
-local security = require("security")
 local time = require("time")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local catalog = require("catalog")
-local policy = require("policy")
 local definition = require("definition")
-local agent_resolver = require("agent_resolver")
 local carrier = require("carrier")
 local placement_types = require("placement_types")
-local placement_resolver = require("placement_resolver")
-local placement_profiles = require("placement_profiles")
 local continuation = require("continuation")
 local interrupted = require("interrupted")
-local profiles = require("profiles")
-local profile_validation = require("profile_validation")
-local descriptors = require("descriptors")
-local effective_schema = require("effective_schema")
 local identity = require("identity")
 local M = {}
+local resolution = require("resolution")
 local part_request = require("part_request")
 M.MAX_BRIEF_BYTES = part_request.MAX_BRIEF_BYTES
 type OriginView = part_request.OriginView
@@ -40,77 +30,28 @@ M.THREADS = "bee.threads.binding"
 M.CARRIER_OPS = "bee.threads.binding"
 M.RESOURCES = "bee.resources.binding"
 M.CREDENTIALS = "bee.credentials.binding"
-M.MAX_AGENT_INSTRUCTIONS_BYTES = 4096
--- A saved window that can never be resumed; recovery ends it instead of
--- retrying or asking for review.
-type Fault = {code: string, message: string}
-type Reply = {ok: boolean, error: Fault?, value: unknown}
-type Plan = {trait_ceiling: {string}?, spawn_overrides: profiles.Overrides?,
-    effective_profile: profiles.Profile?,
-    effective_profile_digest: string?,
-    saved_profile_id: string?,
-    saved_profile_revision: integer?,
-    owner_component_revision: integer?,
-    title: string,
-    definition_ref: string,
-    definition_digest: string,
-    launch_id: string,
-    binding_ref: string,
-    binding_digest: string,
-    driver_id: string,
-    profile_id: string,
-    profile_digest: string,
-    session_resource: string?,
-    policy_ref: string,
-    policy_digest: string,
-    placement_profile_ref: string?,
-    placement_profile_digest: string?,
-    permission_answers: string,
-    placement_binding_ref: string,
-    placement_binding_digest: string,
-    placement_methods: {[string]: string},
-    executables: {[string]: string},
-    placement_kind: string,
-    -- The overrides a request may make: the definition's own, with workdir,
-    -- thread and placement kept only where the launch policy admits them too.
-    overrides: {string},
-    catalog_generation: integer,
-    mode: string,
-    plan_digest: string,
-    -- The admitted framework agent closure, pinned by digest, when the
-    -- launch names an agent.
-    agent_ref: string?,
-    agent_digest: string?,
-    spec_digest: string?,
-    agent_tools: {string}?,
-    agent_model: string?,
-    declined_tuning: {string}?,
-}
 type Admitted = {
-    plan: Plan, request: carrier.Request, requester: string,
+    plan: resolution.Plan, request: carrier.Request, requester: string,
     request_id: string, thread_id: string, action_id: string, attempt_id: string,
     session_ref: string?,
     carrier: string?, mode: string?, started_at: string?,
     saved_profile_revision: integer?,
     owner_component_revision: integer?,
 }
-local function fail(code: string, message: string): Reply
-    return {ok = false, error = {code = code, message = message}, value = nil}
-end
-local function succeed(value: unknown): Reply
+local function succeed(value: unknown): resolution.Reply
     return {ok = true, error = nil, value = value}
 end
 local actor = identity.actor
 
-local function call(target: string, request: unknown): ({[string]: unknown}?, Reply?)
+local function call(target: string, request: unknown): ({[string]: unknown}?, resolution.Reply?)
     local raw, err = funcs.call(target, request)
-    if err or type(raw) ~= "table" then return nil, fail("UNAVAILABLE", target .. " did not answer") end
+    if err or type(raw) ~= "table" then return nil, resolution.fail("UNAVAILABLE", target .. " did not answer") end
     local reply = bounds.object(raw)
-    if not reply then return nil, fail("UNAVAILABLE", target .. " did not answer") end
+    if not reply then return nil, resolution.fail("UNAVAILABLE", target .. " did not answer") end
     if not reply.ok then
         local fault = bounds.object(reply.error)
         local code = fault and bounds.id(fault.code) or "DENIED"
-        return nil, fail(code or "DENIED", target .. ": " .. tostring(fault and fault.message))
+        return nil, resolution.fail(code or "DENIED", target .. ": " .. tostring(fault and fault.message))
     end
     local value = reply.value
     if type(value) ~= "table" then return {}, nil end
@@ -131,526 +72,6 @@ local function resource_grant(value: {[string]: unknown}, workspace_id: string, 
     end
     return {name = returned_name, grant_ref = grant_id, root_ref = root_ref, subpath = subpath, access = "write", purpose = purpose}, nil
 end
--- resolve: the measured plan for a definition, with no effects. The plan
--- digest pins the definition, the binding and profile measurements and
--- the launch policy at one catalog generation.
-local function read_definition(pinned: catalog.Pinned, definition_ref: string): (definition.Definition?, string?)
-    local entry = catalog.entry(pinned, definition_ref)
-    if not entry then return nil, "launch definition " .. definition_ref .. " is not in the registry" end
-    return definition.decode(definition_ref, entry)
-end
-type Selected = {grant_id: string, profile_id: string, revision: integer, profile: profiles.Profile}
--- The reasons a person reads when a session's saved profile stops admitting
--- it, the same for its hooks, its restore and its session view.
-local PROFILE_DELETED = "The saved profile this session uses was deleted; start a new session."
-local function profile_authority(state: unknown): string
-    return "The saved profile's authority is " .. tostring(state) .. "; approve it again, then restart this session."
-end
-local function saved_record(workspace: string, id: string): ({[string]: unknown}?, Reply?)
-    local raw, err = funcs.call("bee.harness.binding:call", {operation = "get", workspace_id = workspace, profile_id = id})
-    if err then return nil, fail("UNAVAILABLE", "saved profile did not answer") end
-    local reply = bounds.object(raw)
-    if not reply then return nil, fail("UNAVAILABLE", "invalid saved profile reply") end
-    if reply.ok ~= true then
-        local code = bounds.id(reply.code) or "DENIED"
-        return nil, fail(code, code == "NOT_FOUND" and PROFILE_DELETED or "saved profile is unavailable")
-    end
-    local value = bounds.object(reply.value)
-    if not value or value.workspace_id ~= workspace or value.profile_id ~= id then return nil, fail("UNAVAILABLE", "saved profile identity differs") end
-    return value, nil
-end
-local function selected_profile(workspace: string, id: string, revision: integer, definition_ref: string): (Selected?, Reply?)
-    local value, refused = saved_record(workspace, id)
-    if not value then return nil, refused end
-    if value.tombstone ~= false then return nil, fail("NOT_FOUND", PROFILE_DELETED) end
-    if value.revision ~= revision then return nil, fail("CONFLICT", "saved profile changed; select it again") end
-    local profile, profile_error = profiles.profile(value.profile)
-    if not profile then return nil, fail("UNAVAILABLE", profile_error or "invalid saved profile") end
-    if profile.definition_ref ~= definition_ref then return nil, fail("CONFLICT", "saved profile selects a different launch definition") end
-    local grant_id = bounds.id(value.grant_id)
-    if not grant_id or value.grant_state ~= "active" then return nil, fail("DENIED", profile_authority(value.grant_state)) end
-    return {grant_id = grant_id,profile_id = id, revision = revision, profile = profile}, nil
-end
-local function preference_value(selected: Selected?): placement_types.Preferences?
-    if not selected then return nil end
-    local value = profiles.preferences(selected.profile)
-    if not value then return nil end
-    return {context = value.context, requestable = value.requestable or {}, active_traits = value.active_traits or {},authority_grant_id = selected.grant_id,docker_overrides = value.docker_overrides,home = value.home,bee = value.bee,options = value.options,mcp_tools = value.mcp_tools,instructions = value.instructions}
-end
--- agent_preferences: the carrier preferences for one admitted agent closure.
--- The run offers exactly the closure's tool aliases through the gateway and
--- carries its composed prompt and context as instructions; a saved profile
--- may narrow neither outward. The host-approved model mapping owns the
--- model option.
-local function agent_preferences(selected: Selected?, closure: agent_resolver.Closure, checked: agent_resolver.Checked,
-    launch_policy: policy_types.Policy, profile_instructions: boolean): (placement_types.Preferences?, Reply?)
-    local options: {[string]: string | number | boolean} = {}
-    local saved_instructions = ""
-    if selected then
-        local narrowed, narrow_error = profiles.agent_preferences(selected.profile, closure.tool_names)
-        if not narrowed then return nil, fail("FORBIDDEN", narrow_error or "saved profile is outside the admitted agent") end
-        for name, item in pairs(narrowed.options) do options[name] = item end
-        saved_instructions = narrowed.instructions
-    end
-    if checked.model then options.model = checked.model end
-    local host_tools: {[string]: boolean} = {}
-    for _, name in ipairs(launch_policy.gateway_tools) do host_tools[name] = true end
-    for _, name in ipairs(closure.tool_names) do
-        if not host_tools[name] then
-            return nil, fail("FORBIDDEN", "host policy admits no gateway tool " .. name .. " for agent definition " .. closure.ref)
-        end
-    end
-    local instructions = closure.instructions
-    if saved_instructions ~= "" then
-        if not profile_instructions then
-            return nil, fail("FORBIDDEN", "profile instructions are disabled by the host policy")
-        end
-        instructions = instructions .. "\n\n" .. saved_instructions
-    end
-    if #instructions > M.MAX_AGENT_INSTRUCTIONS_BYTES then
-        return nil, fail("INVALID", "agent instructions exceed " .. tostring(M.MAX_AGENT_INSTRUCTIONS_BYTES) .. " bytes for this route")
-    end
-    return {context = selected and selected.profile.context or nil, requestable = selected and selected.profile.requestable or nil, active_traits = selected and selected.profile.active_traits or nil,authority_grant_id = selected and selected.grant_id or nil,bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
-end
-local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, placement_override: profiles.Placement?, spawn_overrides: profiles.Overrides?): (Plan?, Reply?, placement_types.Preferences?)
-    local binding_entry = catalog.binding(pinned, launch.binding_ref)
-    local binding_meta = binding_entry and bounds.object(binding_entry.meta)
-    local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
-    local descriptor = descriptor_ref and descriptors.load_from(pinned, descriptor_ref)
-    if selected then
-        local invalid = profile_validation.check(pinned, selected.profile, descriptor)
-        if invalid then return nil, fail("UNSUPPORTED_CAPABILITY", invalid) end
-    end
-    local requested, override_error = profiles.overrides(spawn_overrides)
-    if not requested then return nil, fail("INVALID", override_error or "invalid spawn overrides") end
-    local parent = bounds.ids(ctx.get("bee.agent.trait_ceiling"), true)
-    if selected then
-        local profile = assert(profiles.profile(selected.profile))
-        local allowed: {[string]: boolean} = {}
-        for _, id in ipairs(profile.active_traits or {}) do allowed[id] = true end
-        for _, id in ipairs(profile.requestable or {}) do allowed[id] = true end
-        for _, id in ipairs(requested.traits or profile.active_traits or {}) do
-            if not allowed[id] then return nil, fail("DENIED", "trait outside profile ceiling: " .. id) end
-            if parent and not bounds.member(id, parent) then return nil, fail("DENIED", "trait outside parent ceiling: " .. id) end
-        end
-        if parent then
-            local narrowed: {string} = {}
-            for _, id in ipairs(profile.requestable or {}) do if bounds.member(id, parent) then narrowed[#narrowed + 1] = id end end
-            profile.requestable = narrowed
-        end
-        profile.name = requested.name or profile.name
-        profile.role = requested.role or profile.role
-        if requested.traits then profile.active_traits = requested.traits end
-        local context: profiles.Context = {}
-        for key, item in pairs(profile.context or {}) do context[key] = item end
-        for key, item in pairs(requested.context or {}) do context[key] = item end
-        if profile.context or requested.context then
-            local merged, err = profiles.context(context)
-            if not merged then return nil, fail("INVALID", err or "combined context exceeds its bound") end
-            profile.context = merged
-        end
-        selected = {grant_id = selected.grant_id, profile_id = selected.profile_id, revision = selected.revision, profile = profile}
-
-    end
-    local definition_ref = launch.ref
-    local chosen = launch.default_mode
-    if mode and mode ~= chosen then
-        if not definition.allows(launch, "mode") then return nil, fail("FORBIDDEN", "definition " .. definition_ref .. " does not allow a mode override") end
-        if not bounds.member(mode, definition.MODES) then return nil, fail("INVALID", "mode must be window, session or batch") end
-        chosen = mode
-    end
-    local snapshot, snapshot_error = catalog.read(pinned, nil, launch.binding_ref)
-    if not snapshot then return nil, fail("UNAVAILABLE", snapshot_error or "catalog") end
-    for _, candidate in ipairs(snapshot.bindings) do
-        if candidate.binding_id == launch.binding_ref and not candidate.activated then
-            return nil, fail("FORBIDDEN", "binding " .. launch.binding_ref .. " is not activated")
-        end
-    end
-    local usable, usable_error = catalog.usable(snapshot)
-    if not usable then return nil, fail("UNAVAILABLE", usable_error or "catalog") end
-    local binding_digest, profile_digest = "", ""
-    local binding = nil
-    local supported = false
-    local default_private_home = true
-    for _, candidate in ipairs(usable) do
-        if candidate.binding_id == launch.binding_ref then
-            binding = candidate
-            binding_digest = candidate.binding_digest.entry
-            profile_digest = candidate.profile_digest.entry
-            for _, profile in ipairs(candidate.profiles) do
-                if profile.id == launch.profile_id and profile.supported and profile.mode == chosen then supported = true; default_private_home = profile.private_home end
-            end
-        end
-    end
-    if binding_digest == "" then return nil, fail("UNAVAILABLE", "binding " .. launch.binding_ref .. " is not usable on this host") end
-    if not supported then return nil, fail("UNSUPPORTED_CAPABILITY", "profile " .. launch.profile_id .. " of " .. launch.binding_ref .. " does not run in mode " .. chosen) end
-    local policy_entry = catalog.entry(pinned, launch.policy_ref)
-    if not policy_entry then return nil, fail("NOT_FOUND", "launch policy " .. launch.policy_ref .. " is not in the registry") end
-    -- A framework agent route resolves its agent.gen1 closure from this same
-    -- snapshot, checks the CLI parity of the selected driver, and measures
-    -- the policy under the closure's exact preferences before admission. The
-    -- closure's composed prompt and context travel through the profile
-    -- instruction channel, so an agent route needs profile_instructions;
-    -- admission supplies that text, never the caller's profile.
-    local agent: agent_resolver.Closure? = nil
-    local checked: agent_resolver.Checked? = nil
-    local effective: placement_types.Preferences? = preference_value(selected)
-    local launch_policy: policy_types.Policy
-    local effective_agent_ref = (selected and selected.profile and selected.profile.agent_ref) or launch.agent_ref or req_agent_ref
-    if selected and selected.profile and selected.profile.agent_ref then
-        if launch.agent_ref and selected.profile.agent_ref ~= launch.agent_ref then
-            return nil, fail("CONFLICT", "saved profile agent reference differs from launch definition")
-        end
-        if req_agent_ref and selected.profile.agent_ref ~= req_agent_ref then
-            return nil, fail("CONFLICT", "requested agent reference differs from saved profile")
-        end
-    elseif launch.agent_ref and req_agent_ref and launch.agent_ref ~= req_agent_ref then
-        return nil, fail("CONFLICT", "requested agent reference differs from launch definition")
-    end
-
-    local effective_owner_rev = (selected and selected.profile and selected.profile.owner_component_revision) or req_owner_rev
-    if selected and selected.profile and selected.profile.owner_component_revision and req_owner_rev then
-        if selected.profile.owner_component_revision ~= req_owner_rev then
-            return nil, fail("CONFLICT", "requested owner component revision differs from saved profile")
-        end
-    end
-
-    if effective_agent_ref then
-        local host_policy, host_error = policy.decode(launch.policy_ref, policy_entry, nil, nil)
-        if not host_policy then return nil, fail("NOT_FOUND", host_error or "policy") end
-        local closure, closure_code, closure_error = agent_resolver.resolve(pinned, effective_agent_ref)
-        if not closure then return nil, fail(closure_code or "UNAVAILABLE", closure_error or "agent definition") end
-        if selected and selected.profile and selected.profile.spec_digest then
-            if selected.profile.spec_digest ~= closure.digest then
-                return nil, fail("CONFLICT", "saved profile spec digest differs from resolved agent closure")
-            end
-        end
-        if req_spec_digest and req_spec_digest ~= closure.digest then
-            return nil, fail("CONFLICT", "requested spec digest differs from resolved agent closure")
-        end
-        agent = closure
-        local route, route_code, route_error = agent_resolver.check_route(pinned, closure,
-            {driver_id = binding and binding.driver_id or "", model_map = host_policy.agent_model_map,
-                admitted_delegates = host_policy.agent_delegates})
-        if not route then return nil, fail(route_code or "UNAVAILABLE", route_error or "agent route") end
-        checked = route
-        local policy_data = bounds.object(policy_entry.data) or {}
-        if route.model then
-            local restrictions, restrictions_error = effective_schema.decode_profile_restrictions(policy_data.profile_restrictions)
-            if not restrictions then return nil, fail("NOT_FOUND", restrictions_error or "policy") end
-            if restrictions[effective_schema.path("model")] == nil then
-                return nil, fail("UNSUPPORTED_CAPABILITY", "host policy declares no model option for the mapped agent model")
-            end
-        end
-        local agent_prefs, prefs_refused = agent_preferences(selected, closure, route, host_policy, policy_data.profile_instructions == true)
-        if not agent_prefs then return nil, prefs_refused end
-        effective = agent_prefs
-        local measured, measure_error = policy.decode(launch.policy_ref, policy_entry, nil, agent_prefs)
-        if not measured then return nil, fail("NOT_FOUND", measure_error or "policy") end
-        launch_policy = measured
-    else
-        local saved_preferences: placement_types.Preferences? = nil
-        if selected then
-            local validated, preference_error = profiles.preferences(selected.profile)
-            if not validated then return nil, fail("UNSUPPORTED_CAPABILITY", preference_error or "Profile preferences cannot be rendered") end
-            saved_preferences = validated
-        end
-        local decoded, policy_error = policy.decode(launch.policy_ref, policy_entry, nil, saved_preferences)
-        if not decoded then return nil, fail(saved_preferences and "UNSUPPORTED_CAPABILITY" or "INVALID", policy_error or "policy") end
-        launch_policy = decoded
-    end
-    -- Resolve placement alongside the driver and policy from this immutable
-    -- registry snapshot. The policy may select an implementation; absent that
-    -- field the resolver's native host default is used.
-    if placement_override and (not definition.allows(launch, "placement") or not definition.policy_admits(launch_policy.allowed_overrides, "placement")) then
-        return nil, fail("FORBIDDEN", "The definition and host policy must both admit a placement override")
-    end
-    if not selected and (requested.traits or requested.context or parent) then
-        local raw_surface = launch_policy.gateway_surface or {}
-        local ceiling: {string} = {}
-        for _, raw in ipairs(bounds.array(raw_surface.traits, 64) or {}) do
-            local trait = bounds.object(raw)
-            local id = trait and bounds.id(trait.id)
-            if id then ceiling[#ceiling + 1] = id end
-        end
-        local access = bounds.object(raw_surface.access)
-        for _, id in ipairs(access and bounds.ids(access.traits, true) or {}) do if not bounds.member(id, ceiling) then ceiling[#ceiling + 1] = id end end
-        local active = requested.traits or bounds.ids(raw_surface.active_traits, true) or {}
-        for _, id in ipairs(active) do
-            if not bounds.member(id, ceiling) then return nil, fail("DENIED", "trait outside launch ceiling: " .. id) end
-            if parent and not bounds.member(id, parent) then return nil, fail("DENIED", "trait outside parent ceiling: " .. id) end
-        end
-        local requestable: {string} = {}
-        for _, id in ipairs(ceiling) do if not parent or bounds.member(id, parent) then requestable[#requestable + 1] = id end end
-        effective = effective or {options = {}, mcp_tools = launch_policy.gateway_tools, instructions = ""}
-        effective.active_traits, effective.requestable, effective.context = active, requestable, requested.context
-        local configured, err = policy.decode(launch.policy_ref, policy_entry, nil, effective)
-        if not configured then return nil, fail("DENIED", err or "spawn exceeds launch ceiling") end
-        launch_policy = configured
-    end
-    local profile_placement = placement_override or (selected and selected.profile.placement or nil)
-    if placement_override then
-        local stock_options: {[string]: string | number | boolean} = {}
-        local stock_preferences: placement_types.Preferences = {options = stock_options, mcp_tools = launch_policy.gateway_tools, instructions = ""}
-        local override_preferences: placement_types.Preferences = effective or stock_preferences
-        if placement_override.kind == "native" then
-            override_preferences.home = placement_override.home
-            override_preferences.docker_overrides = nil
-        else
-            override_preferences.home = nil
-            override_preferences.docker_overrides = placement_override.overrides
-        end
-        effective = override_preferences
-    end
-    local selected_profile_ref: string? = nil
-    if profile_placement and profile_placement.kind == "docker" then selected_profile_ref = profile_placement.profile_ref
-    elseif profile_placement then selected_profile_ref = placement_profiles.DEFAULT end
-    if selected and selected.profile.driver_binding_ref ~= launch.binding_ref then return nil, fail("CONFLICT", "Profile driver binding differs from the admitted definition") end
-    if profile_placement and profile_placement.kind == "native" and profile_placement.home == "machine" and not launch_policy.allow_host_home then
-        return nil, fail("FORBIDDEN", "Host policy does not admit machine home")
-    end
-    local resolved_profile: placement_profiles.Resolved? = nil
-    if selected_profile_ref then
-        if not bounds.member(selected_profile_ref, launch_policy.placement_profiles) then return nil, fail("FORBIDDEN", "launch policy does not admit this placement profile") end
-        local resolved, profile_error = placement_profiles.resolve(pinned, selected_profile_ref)
-        if not resolved then return nil, fail("UNAVAILABLE", profile_error or "placement profile") end
-        local tuned, tune_error = placement_profiles.tune(resolved, profile_placement and profile_placement.kind == "docker" and profile_placement.overrides or nil)
-        if not tuned then return nil, fail("FORBIDDEN", tune_error or "Docker override is outside the host template") end
-        resolved_profile = tuned
-    end
-    local selected_binding = launch_policy.placement_binding
-    if resolved_profile then selected_binding = resolved_profile.profile.placement_binding end
-    local placement, placement_error = placement_resolver.resolve(pinned, selected_binding)
-    if not placement then return nil, fail("UNAVAILABLE", placement_error or "placement binding") end
-    -- A container shares no home with the host, so its CLI login travels as
-    -- the definition's Docker credentials.
-    local private_home = default_private_home
-    if profile_placement and profile_placement.kind == "native" then private_home = profile_placement.home == "private" end
-    launch.credentials = definition.credential_names(launch, placement.placement_kind, private_home)
-    if selected and selected.profile.bee.credential_refs then
-        local admitted: {string} = {}
-        for _, ref in ipairs(selected.profile.bee.credential_refs) do
-            if not bounds.member(ref, launch.credentials) then return nil, fail("DENIED", "bee.credential_refs: definition does not admit " .. ref) end
-            admitted[#admitted + 1] = ref
-        end
-        launch.credentials = admitted
-    end
-    if selected then
-        for name, value in pairs(selected.profile.provider.env or {}) do
-            if value.kind == "credential" and not bounds.member(value.credential_ref, launch.credentials) then return nil, fail("DENIED", "provider.env." .. name .. ": credential reference is outside the selected definition/credential_refs") end
-        end
-    end
-    if selected then
-        for _, destination in ipairs(selected.profile.bee.workspaces or {}) do
-            for _, operation in ipairs(destination.operations) do
-                if not security.can("funcs.call", operation) then return nil, fail("DENIED", "bee.workspaces: host does not admit owner operation " .. operation .. " for destination " .. destination.workspace_id) end
-            end
-        end
-    end
-    if not binding then return nil, fail("UNAVAILABLE", "binding " .. launch.binding_ref .. " is not usable on this host") end
-    -- A listed profile needs a host-selected executable, but this passive
-    -- read cannot know the driver's eventual launch.executable. The carrier
-    -- binds that prepared name to this policy's exact key before placement.
-    local has_absolute_executable = false
-    for _, executable in pairs(launch_policy.executables) do
-        if executable:sub(1, 1) == "/" then has_absolute_executable = true end
-    end
-    if not has_absolute_executable and placement.placement_kind ~= "docker" then
-        return nil, fail("UNAVAILABLE", "launch policy " .. launch.policy_ref .. " has no absolute executable binding")
-    end
-    -- Provider data selects part of the generated private-home configuration.
-    -- Its exact registry entry therefore belongs to the displayed plan fence,
-    -- even though the driver decodes it only after a user selects the plan.
-    local provider_digest: string? = nil
-    if launch_policy.provider_ref then
-        local provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
-        if not provider_entry then return nil, fail("NOT_FOUND", "provider " .. launch_policy.provider_ref .. " is not in the registry") end
-        local measured, provider_error = digest_of(provider_entry)
-        if not measured then return nil, fail("INVALID", "provider " .. launch_policy.provider_ref .. ": " .. tostring(provider_error)) end
-        provider_digest = measured
-    end
-    local overrides: {string} = {}
-    for _, name in ipairs(launch.allowed_overrides) do
-        if not bounds.member(name, policy.OVERRIDES) or definition.policy_admits(launch_policy.allowed_overrides, name) then overrides[#overrides + 1] = name end
-    end
-    local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
-        placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
-        placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest, placement_methods = placement.methods,
-        provider = provider_digest, mode = chosen, saved_profile = selected, placement_override = placement_override, spawn_overrides = next(requested) ~= nil and requested or nil,
-        agent = agent and agent.digest or nil, agent_model = checked and checked.model or nil,
-        declined_tuning = checked and checked.declined or nil,
-        owner_component_revision = effective_owner_rev})
-    if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
-    local effective_profile: profiles.Profile = selected and assert(profiles.profile(selected.profile)) or {
-        schema_revision = profiles.SCHEMA, name = launch.title, definition_ref = definition_ref,
-        driver_binding_ref = launch.binding_ref, provider = {}, bee = {}}
-    if not selected then
-        effective_profile.name = requested.name or effective_profile.name
-        effective_profile.role = requested.role
-        effective_profile.context = requested.context
-        effective_profile.active_traits = effective and effective.active_traits or nil
-        effective_profile.requestable = effective and effective.requestable or nil
-        if requested.context then
-            effective = effective or {options = launch_policy.prepare_options, mcp_tools = launch_policy.gateway_tools, instructions = launch_policy.instructions or ""}
-            effective.context = requested.context
-        end
-    end
-    if placement_override then effective_profile.placement = placement_override end
-    local fields = descriptor and bounds.object(descriptor.options.fields) or {}
-    local compiled_values = launch_policy.prepare_options
-    if descriptor then
-        local option_placement, placement_error = placement_profiles.placement(resolved_profile and resolved_profile.ref or nil)
-        if not option_placement then return nil, fail("UNAVAILABLE", placement_error or "placement profile unavailable") end
-        local compiled, compile_error = effective_schema.compile(descriptor, bounds.object(policy_entry.data), nil, effective and effective.options or {}, nil, nil, nil, option_placement)
-        if not compiled then return nil, fail("INVALID", compile_error or "Driver option schema unavailable") end
-        compiled_values = compiled.values
-    end
-    for name, raw in pairs(fields) do
-        local field = bounds.object(raw)
-        local path = field and bounds.id(field.path)
-        local value = compiled_values[name]
-        if path and value ~= nil then
-            if path == "provider.model" and type(value) == "string" then effective_profile.provider.model = value
-            elseif path == "provider.effort" and type(value) == "string" then effective_profile.provider.effort = value
-            elseif path == "provider.permission_mode" and type(value) == "string" then effective_profile.provider.permission_mode = value
-            elseif path:match("^provider.options%.") then
-                effective_profile.provider.options = effective_profile.provider.options or {}
-                effective_profile.provider.options[name] = value
-            end
-        end
-    end
-    if launch_policy.instructions then effective_profile.provider.system_prompt_append = launch_policy.instructions end
-    local tools: {profiles.Mcp} = {}
-    for _, tool in ipairs(launch_policy.gateway_tools) do tools[#tools + 1] = {tool = tool, scope = {}} end
-    if effective_profile.bee.mcp == nil then effective_profile.bee.mcp = tools end
-    if bounds.member(launch_policy.permission_answers, {"provider", "ask", "deny"}) then
-        if launch_policy.permission_answers == "ask" then effective_profile.bee.permission_answers = "ask"
-        elseif launch_policy.permission_answers == "deny" then effective_profile.bee.permission_answers = "deny"
-        else effective_profile.bee.permission_answers = "provider" end
-    end
-    if not effective_profile.placement then
-        if resolved_profile and placement.placement_kind == "docker" then effective_profile.placement = {kind = "docker", profile_ref = resolved_profile.ref}
-        else effective_profile.placement = {kind = "native", home = default_private_home and "private" or "machine"} end
-    end
-    return {trait_ceiling = parent, spawn_overrides = spawn_overrides, effective_profile = effective_profile,
-        effective_profile_digest = digest_of(effective_profile),
-        title = effective_profile.name .. (effective_profile.role and effective_profile.role ~= "" and (" · " .. effective_profile.role) or ""), definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest, driver_id = binding.driver_id,
-        profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest, permission_answers = launch_policy.permission_answers,
-        placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
-        session_resource = launch.session_resource,
-        placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest,
-        placement_methods = placement.methods, executables = launch_policy.executables,
-        placement_kind = placement.placement_kind, overrides = overrides,
-        catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest,
-        saved_profile_id = selected and selected.profile_id or nil, saved_profile_revision = selected and selected.revision or nil,
-        owner_component_revision = effective_owner_rev,
-        agent_ref = agent and agent.ref or nil, agent_digest = agent and agent.digest or nil,
-        spec_digest = agent and agent.digest or nil,
-        agent_tools = agent and agent.tool_names or nil, agent_model = checked and checked.model or nil,
-        declined_tuning = checked and checked.declined or nil}, nil, effective
-end
--- A caller composing a larger host plan can retain the same snapshot for
--- its other declarations; this read performs no registry mutation or admission.
-function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?): (Plan?, Reply?)
-    local launch, definition_error = read_definition(pinned, definition_ref)
-    if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, refused = resolve(pinned, launch, mode, nil, nil, nil, nil)
-    if not plan then return nil, refused end
-    return plan, nil
-end
-function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?, placement_override: profiles.Placement?, spawn_overrides: profiles.Overrides?): (Plan?, Reply?)
-    local selected: Selected? = nil
-    if saved_id or saved_revision then
-        if not workspace or not saved_id or not saved_revision or saved_revision < 1 then return nil, fail("INVALID", "saved profile needs workspace, identity and revision") end
-        local found, refused = selected_profile(workspace, saved_id, saved_revision, definition_ref)
-        if not found then return nil, refused end
-        selected = found
-    end
-    local pinned, pin_error = catalog.pin()
-    if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
-    local launch, definition_error = read_definition(pinned, definition_ref)
-    if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest, placement_override, spawn_overrides)
-    if not plan then return nil, refused end
-    return plan, nil
-end
--- saved_revision is the saved profile's current revision, the one a new or
--- resumed carrier is admitted under.
-function M.saved_revision(workspace: string, id: string): (integer?, Reply?)
-    local value, refused = saved_record(workspace, id)
-    if not value then return nil, refused end
-    local revision = bounds.integer(value.revision)
-    if value.tombstone ~= false or not revision or revision < 1 then return nil, fail("NOT_FOUND", PROFILE_DELETED) end
-    return revision, nil
-end
--- The admitted facts a window session keeps for its current attempt. Its
--- hooks are judged under them until its carrier starts again.
-type SessionAdmission = {definition: string, plan_digest: string, driver_binding_ref: string, provider: string,
-    profile_id: string, effective_profile: profiles.Profile?, profile_digest: string?, overrides: profiles.Overrides?,
-    saved_profile_id: string?, saved_profile_revision: integer?, placement_methods: {[string]: string}, trait_ceiling: {string}?}
-function M.session_admission(plan: Plan): SessionAdmission
-    return {definition = plan.definition_ref, plan_digest = plan.plan_digest, driver_binding_ref = plan.binding_ref, provider = plan.driver_id,
-        profile_id = plan.profile_id, effective_profile = plan.effective_profile, profile_digest = plan.effective_profile_digest,
-        overrides = plan.spawn_overrides, saved_profile_id = plan.saved_profile_id, saved_profile_revision = plan.saved_profile_revision,
-        placement_methods = plan.placement_methods, trait_ceiling = plan.trait_ceiling}
-end
-type Standing = {definition_ref: string, binding_ref: string, profile_id: string, workspace_id: string,
-    saved_profile_id: string?, saved_profile_revision: integer?}
--- stands is why the choices a session runs under stop admitting it, as the
--- step the person takes: a removed launch definition, an unusable driver, a
--- deleted saved profile or inactive profile authority. A running carrier
--- also refuses a definition that selects another driver profile and a saved
--- profile past its admitted revision; a resumed carrier is admitted under
--- the definition's driver and the profile's current revision.
-local function stands(pinned: catalog.Pinned, definition_ref: string, workspace: string, saved_id: string?, running: Standing?): (definition.Definition?, string?)
-    local launch = read_definition(pinned, definition_ref)
-    if not launch then return nil, "This session's launch definition " .. definition_ref .. " is no longer installed; start a new session." end
-    if running and (launch.binding_ref ~= running.binding_ref or launch.profile_id ~= running.profile_id) then
-        return nil, "This session's launch definition now selects another driver; restart this session to apply it."
-    end
-    local snapshot = catalog.read(pinned, nil, launch.binding_ref)
-    local usable = snapshot and catalog.usable(snapshot)
-    local found = false
-    for _, candidate in ipairs(usable or {}) do
-        if candidate.binding_id == launch.binding_ref and candidate.activated then found = true end
-    end
-    if not found then
-        return nil, "This session's driver " .. launch.binding_ref .. " is no longer usable on this host; install it again, then restart this session."
-    end
-    if saved_id then
-        local value, refused = saved_record(workspace, saved_id)
-        if not value then return nil, refused and refused.error and refused.error.message or "saved profile is unavailable" end
-        if value.tombstone ~= false then return nil, PROFILE_DELETED end
-        if running and value.revision ~= running.saved_profile_revision then
-            return nil, "The saved profile this session uses changed; restart this session to apply the changed profile."
-        end
-        if value.grant_state ~= "active" then return nil, profile_authority(value.grant_state) end
-    end
-    return launch, nil
-end
--- standing: a running session's admission stands while the choices it was
--- admitted under hold. Changed measurements of the same choices, as an
--- upgrade makes, leave it standing; they apply when its carrier next starts.
-function M.standing(admitted: Standing): (definition.Definition?, catalog.Pinned?, string?)
-    local pinned, pin_error = catalog.pin()
-    if not pinned then return nil, nil, pin_error or "pin the registry" end
-    local launch, refusal = stands(pinned, admitted.definition_ref, admitted.workspace_id, admitted.saved_profile_id, admitted)
-    if not launch then return nil, nil, refusal end
-    return launch, pinned, nil
-end
--- resumable is why a session whose carrier is gone cannot resume under its
--- definition and saved profile, or nil when it can.
-function M.resumable(definition_ref: string, workspace: string, saved_id: string?): string?
-    local pinned, pin_error = catalog.pin()
-    if not pinned then return pin_error or "pin the registry" end
-    local _, refusal = stands(pinned, definition_ref, workspace, saved_id, nil)
-    return refusal
-end
--- The durable identities of a request: the same request id always names
--- the same action and attempt.
-function M.overrides(plan: Plan, name: string): boolean
-    return bounds.member(name, plan.overrides) ~= nil
-end
 function M.identities(request_id: string): {action_id: string, attempt_id: string}
     return {action_id = "action:" .. request_id, attempt_id = "attempt:" .. request_id}
 end
@@ -662,41 +83,41 @@ end
 -- thread, obtain the attempt-bound resource grant and credential
 -- projections in the requester's own authority, and return the carrier
 -- request. Every acquisition keys on the request id, so a retry replays.
-function M.admit_request(value: unknown, session_operation_key: string?): (Admitted?, Reply?)
+function M.admit_request(value: unknown, session_operation_key: string?): (Admitted?, resolution.Reply?)
     local request, decode_error = M.decode_request(value)
-    if not request then return nil, fail("INVALID", decode_error or "invalid request") end
+    if not request then return nil, resolution.fail("INVALID", decode_error or "invalid request") end
     local requester = actor()
-    if not requester then return nil, fail("UNAUTHENTICATED", "no actor") end
-    local selected: Selected? = nil
+    if not requester then return nil, resolution.fail("UNAUTHENTICATED", "no actor") end
+    local selected: resolution.Selected? = nil
     if request.saved_profile_id and request.saved_profile_revision then
-        local found, refused = selected_profile(request.workspace_id, request.saved_profile_id, request.saved_profile_revision, request.definition_ref)
+        local found, refused = resolution.selected_profile(request.workspace_id, request.saved_profile_id, request.saved_profile_revision, request.definition_ref)
         if not found then return nil, refused end
         if request.owner_component_revision and found.profile.owner_component_revision and found.profile.owner_component_revision ~= request.owner_component_revision then
-            return nil, fail("CONFLICT", "saved profile owner component revision changed; select it again")
+            return nil, resolution.fail("CONFLICT", "saved profile owner component revision changed; select it again")
         end
         if request.spec_digest and found.profile.spec_digest and found.profile.spec_digest ~= request.spec_digest then
-            return nil, fail("CONFLICT", "saved profile spec digest changed; select it again")
+            return nil, resolution.fail("CONFLICT", "saved profile spec digest changed; select it again")
         end
         selected = found
     end
     local pinned, pin_error = catalog.pin()
-    if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
-    local launch, definition_error = read_definition(pinned, request.definition_ref)
-    if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest, request.placement_override, request.overrides)
+    if not pinned then return nil, resolution.fail("UNAVAILABLE", pin_error or "pin the registry") end
+    local launch, definition_error = resolution.read_definition(pinned, request.definition_ref)
+    if not launch then return nil, resolution.fail("NOT_FOUND", definition_error or "definition") end
+    local plan, plan_refused, preferences = resolution.resolve_pinned(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest, request.placement_override, request.overrides)
     if not plan then return nil, plan_refused end
     if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
-        return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
+        return nil, resolution.fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
     end
-    if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
-    if request.workdir and not M.overrides(plan, "workdir") then return nil, fail("FORBIDDEN", "the launch does not allow a workdir override") end
+    if request.brief == "" and plan.mode ~= "window" then return nil, resolution.fail("INVALID", "a structured launch needs a nonempty brief") end
+    if request.workdir and not resolution.overrides(plan, "workdir") then return nil, resolution.fail("FORBIDDEN", "the launch does not allow a workdir override") end
     local defined_thread = launch.thread_policy.kind == "named" and request.thread_id == launch.thread_policy.thread_ref
     local thread_override = request.thread_title ~= nil
         or (request.thread_id ~= nil and launch.thread_policy.kind ~= "caller" and not defined_thread)
-    if thread_override and not M.overrides(plan, "thread") then return nil, fail("FORBIDDEN", "the launch does not allow a thread override") end
+    if thread_override and not resolution.overrides(plan, "thread") then return nil, resolution.fail("FORBIDDEN", "the launch does not allow a thread override") end
     if request.placement and request.placement ~= plan.placement_kind then
-        if not M.overrides(plan, "placement") then return nil, fail("FORBIDDEN", "the launch does not allow a placement override") end
-        return nil, fail("PLACEMENT_UNAVAILABLE", "this host admits no " .. request.placement .. " placement for " .. launch.ref .. "; it places it " .. plan.placement_kind)
+        if not resolution.overrides(plan, "placement") then return nil, resolution.fail("FORBIDDEN", "the launch does not allow a placement override") end
+        return nil, resolution.fail("PLACEMENT_UNAVAILABLE", "this host admits no " .. request.placement .. " placement for " .. launch.ref .. "; it places it " .. plan.placement_kind)
     end
     if plan.placement_kind == "docker" and plan.placement_profile_ref then
         local prepared, prepare_error = call("bee.placement.docker.binding:prepare_environment", {placement_profile_ref = plan.placement_profile_ref,
@@ -706,24 +127,24 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
     local ids = M.identities(request.request_id)
     local previous = request.continuation
     if previous and (#request.workspace_id ~= 32 or request.workspace_id:find("[^0-9a-f]")) then
-        return nil, fail("CONFLICT", "saved windows belong to their canonical home workspace")
+        return nil, resolution.fail("CONFLICT", "saved windows belong to their canonical home workspace")
     end
-    if previous and plan.mode ~= "window" then return nil, fail("INVALID", "launch continuation requires a window profile") end
+    if previous and plan.mode ~= "window" then return nil, resolution.fail("INVALID", "launch continuation requires a window profile") end
     local thread_id = request.thread_id
     if launch.thread_policy.kind == "named" and not thread_override then thread_id = launch.thread_policy.thread_ref end
     if previous then
-        if thread_id and thread_id ~= previous.thread_id then return nil, fail("CONFLICT", "the saved thread differs from the launch definition") end
+        if thread_id and thread_id ~= previous.thread_id then return nil, resolution.fail("CONFLICT", "the saved thread differs from the launch definition") end
         thread_id = previous.thread_id
         ids.action_id = M.identities(previous.origin_request_id).action_id
     end
-    if not thread_id and not request.thread_title and launch.thread_policy.kind == "caller" then return nil, fail("INVALID", "definition expects the caller's thread") end
+    if not thread_id and not request.thread_title and launch.thread_policy.kind == "caller" then return nil, resolution.fail("INVALID", "definition expects the caller's thread") end
     local workdir_name = request.workdir
     if not workdir_name and launch.workdir_policy.kind == "declared_resource" then workdir_name = launch.workdir_policy.resource_ref end
-    if launch.workdir_policy.kind == "required" and not workdir_name then return nil, fail("INVALID", "definition requires a working directory resource") end
+    if launch.workdir_policy.kind == "required" and not workdir_name then return nil, resolution.fail("INVALID", "definition requires a working directory resource") end
     local session_resource = launch.session_resource
-    if previous and not session_resource then return nil, fail("CONFLICT", "the launch definition has no retained session resource") end
+    if previous and not session_resource then return nil, resolution.fail("CONFLICT", "the launch definition has no retained session resource") end
     if session_resource and workdir_name == session_resource then
-        return nil, fail("INVALID", "workdir resource duplicates the session resource")
+        return nil, resolution.fail("INVALID", "workdir resource duplicates the session resource")
     end
     -- A caller-selected or host-named existing thread is useful for fan-out,
     -- but it must be authorized before any session, project or credential
@@ -731,11 +152,11 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
     -- earlier read prevents a refused launch from leaving admission effects.
     if thread_id and not previous then
         local visible, thread_refused = call(M.THREADS .. ":get", {thread_id = thread_id})
-        if not visible then return nil, thread_refused or fail("DENIED", "caller is not a member of the selected thread") end
+        if not visible then return nil, thread_refused or resolution.fail("DENIED", "caller is not a member of the selected thread") end
         local membership = bounds.object(visible.membership)
         -- Threads authenticates this read as the caller and may resolve an attested application family to its active member.
         if not membership or membership.active ~= true then
-            return nil, fail("DENIED", "caller is not an active member of the selected thread")
+            return nil, resolution.fail("DENIED", "caller is not an active member of the selected thread")
         end
     end
     -- Session authority is selected by the host definition. A retained
@@ -749,7 +170,7 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
             operation_key = session_operation_key or "window-session:" .. previous.origin_request_id})
         if not attached then return nil, attach_error end
         interactive_session = bounds.id(attached.session)
-        if not interactive_session then return nil, fail("UNAVAILABLE", "interactive session owner omitted its ref") end
+        if not interactive_session then return nil, resolution.fail("UNAVAILABLE", "interactive session owner omitted its ref") end
     end
     local resources: {placement_types.ResourceGrant} = {}
     local session_ref: string? = nil
@@ -759,7 +180,7 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
     if session_resource then
         local session_digest, session_error = digest_of({workspace_id = request.workspace_id,
             request_id = previous and previous.origin_request_id or request.request_id})
-        if not session_digest then return nil, fail("UNAVAILABLE", tostring(session_error or "derive retained session identity")) end
+        if not session_digest then return nil, resolution.fail("UNAVAILABLE", tostring(session_error or "derive retained session identity")) end
         session_ref = interactive_session or "session:" .. session_digest
         if previous then
             -- Saved references grant nothing. Existing owner operations verify
@@ -772,7 +193,7 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
                 placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest,
                 placement_methods = plan.placement_methods, reauthorize = previous.reauthorize}
             local recovered, recovery_error = interrupted.recover(recovery_request)
-            if not recovered then return nil, fail("CONFLICT", "cannot recover saved window: " .. tostring(recovery_error)) end
+            if not recovered then return nil, resolution.fail("CONFLICT", "cannot recover saved window: " .. tostring(recovery_error)) end
             local resume, resume_error = continuation.resolve_window(function(target: string, input: unknown): (unknown, string?)
                 local reply, err = funcs.call(target, input)
                 if err then return nil, tostring(err) end
@@ -780,14 +201,14 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
             end, recovery_request)
             first_start = resume_error == continuation.NEVER_RECORDED
             if not resume and resume_error ~= continuation.NO_CONVERSATION and not first_start then
-                return nil, fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error))
+                return nil, resolution.fail("CONFLICT", "cannot resume saved window: " .. tostring(resume_error))
             end
         end
         local granted, grant_refused = call(M.RESOURCES .. ":grant", {workspace_id = request.workspace_id, name = session_resource, access = "write", purpose = "session",
             audience = requester, attempt_id = ids.attempt_id, idempotency_key = "launch:" .. request.request_id .. ":session"})
         if not granted then return nil, grant_refused end
         local typed, grant_error = resource_grant(granted, request.workspace_id, session_resource, "session", requester, ids.attempt_id)
-        if not typed then return nil, fail("UNAVAILABLE", grant_error or "resource grant is invalid") end
+        if not typed then return nil, resolution.fail("UNAVAILABLE", grant_error or "resource grant is invalid") end
         resources[#resources + 1] = typed
     end
     for _, ref in ipairs(plan.effective_profile and plan.effective_profile.bee.approval_leases or {}) do
@@ -806,7 +227,7 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
             operation_key = session_operation_key or "window-session:" .. (previous and previous.origin_request_id or request.request_id)})
         if not attached then return nil, attach_error end
         interactive_session = bounds.id(attached.session)
-        if not interactive_session then return nil, fail("UNAVAILABLE", "interactive session owner omitted its ref") end
+        if not interactive_session then return nil, resolution.fail("UNAVAILABLE", "interactive session owner omitted its ref") end
         session_ref = interactive_session
     end
     local working: string? = nil
@@ -815,7 +236,7 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
             audience = requester, attempt_id = ids.attempt_id, idempotency_key = "launch:" .. request.request_id .. ":workdir"})
         if not granted then return nil, grant_refused end
         local typed, grant_error = resource_grant(granted, request.workspace_id, workdir_name, "project", requester, ids.attempt_id)
-        if not typed then return nil, fail("UNAVAILABLE", grant_error or "resource grant is invalid") end
+        if not typed then return nil, resolution.fail("UNAVAILABLE", grant_error or "resource grant is invalid") end
         resources[#resources + 1] = typed
         working = workdir_name
     end
@@ -827,7 +248,7 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
         if not granted then return nil, refused end
         local grant_id, root = bounds.id(granted.grant_id), bounds.id(granted.root_ref)
         if not grant_id or not root or granted.subpath ~= file.subpath or granted.workspace_id ~= file.workspace_id or granted.name ~= file.resource
-            or granted.access ~= file.access or granted.attempt_id ~= ids.attempt_id or granted.audience ~= requester then return nil, fail("UNAVAILABLE", "bee.files: owner returned a different grant") end
+            or granted.access ~= file.access or granted.attempt_id ~= ids.attempt_id or granted.audience ~= requester then return nil, resolution.fail("UNAVAILABLE", "bee.files: owner returned a different grant") end
         profile_grants[#profile_grants + 1] = {workspace_id = file.workspace_id, name = file.resource, subpath = file.subpath, access = file.access, grant_ref = grant_id}
     end
     local projections: {string} = {}
@@ -840,16 +261,16 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
         if selected then
             for name, value in pairs(selected.profile.provider.env or {}) do
                 if value.kind == "credential" and value.credential_ref == credential and (issued.projection_kind ~= "environment" or issued.destination ~= name) then
-                    return nil, fail("DENIED", "provider.env." .. name .. ": credential broker destination differs; references cannot retarget credentials")
+                    return nil, resolution.fail("DENIED", "provider.env." .. name .. ": credential broker destination differs; references cannot retarget credentials")
                 elseif value.kind == "literal" and issued.projection_kind == "environment" and issued.destination == name then
-                    return nil, fail("DENIED", "provider.env." .. name .. ": literal conflicts with an admitted credential projection")
+                    return nil, resolution.fail("DENIED", "provider.env." .. name .. ": literal conflicts with an admitted credential projection")
                 end
             end
         end
         projections[index] = tostring(issued.projection_id)
     end
     local carrier_request: carrier.Request = {profile_grants = profile_grants, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1, parent_action_id = request.parent_action_id,
-        preferences = preferences or preference_value(selected),
+        preferences = preferences or resolution.preference_value(selected),
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_profile_ref = plan.placement_profile_ref, placement_profile_digest = plan.placement_profile_digest, placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
@@ -862,28 +283,28 @@ function M.admit_request(value: unknown, session_operation_key: string?): (Admit
 end
 -- External callers keep the operation reply; local execution paths consume
 -- the typed admitted request without decoding our own value a second time.
-function M.admit(value: unknown): Reply
+function M.admit(value: unknown): resolution.Reply
     local admitted, refused = M.admit_request(value)
-    if not admitted then return refused or fail("UNAVAILABLE", "launch admission did not return a result") end
+    if not admitted then return refused or resolution.fail("UNAVAILABLE", "launch admission did not return a result") end
     return succeed(admitted)
 end
-local function carrier_host(): (string?, Reply?)
+local function carrier_host(): (string?, resolution.Reply?)
     local linked = registry.get(M.CARRIER_HOST_REF)
     local data = linked and bounds.object(linked.data) or nil
     local host = data and bounds.id(data.host_ref) or nil
-    if not host then return nil, fail("UNAVAILABLE", "carrier process host is not linked") end
+    if not host then return nil, resolution.fail("UNAVAILABLE", "carrier process host is not linked") end
     local target = registry.get(host)
-    if not target or target.kind ~= "process.host" then return nil, fail("UNAVAILABLE", "carrier process host is unavailable") end
+    if not target or target.kind ~= "process.host" then return nil, resolution.fail("UNAVAILABLE", "carrier process host is unavailable") end
     return host, nil
 end
-local function start_admitted(outcome: Admitted, host: string): Reply
+local function start_admitted(outcome: Admitted, host: string): resolution.Reply
     local carrier_request = outcome.request
     local stored = call(M.CARRIER_OPS .. ":checkpoint", {thread_id = outcome.thread_id, attempt_id = outcome.attempt_id})
     local mode = "open"
     if stored then
         if stored.attempt_state == "ended" then
             if carrier_request.brief == "" then
-                return fail("CONFLICT", "request " .. tostring(outcome.attempt_id) .. " already settled")
+                return resolution.fail("CONFLICT", "request " .. tostring(outcome.attempt_id) .. " already settled")
             end
             local grant_refs: {string} = {}
             for index, grant in ipairs(carrier_request.resources) do grant_refs[index] = grant.grant_ref end
@@ -893,7 +314,7 @@ local function start_admitted(outcome: Admitted, host: string): Reply
                 idempotency_key = "launch:" .. outcome.attempt_id .. ":admit",
                 action_id = outcome.action_id, admitted = admitted})
             if not checked then
-                return replay_refused or fail("CONFLICT", "settled launch does not match this request")
+                return replay_refused or resolution.fail("CONFLICT", "settled launch does not match this request")
             end
             outcome.mode = "settled"
             return succeed(outcome)
@@ -902,22 +323,22 @@ local function start_admitted(outcome: Admitted, host: string): Reply
     end
     -- The carrier outlives this call; whoever routes the launch monitors it.
     local pid, spawn_error = process.with_context({}):spawn(M.CARRIER, host, carrier_request, mode, process.pid())
-    if not pid then return fail("UNAVAILABLE", "spawn carrier: " .. tostring(spawn_error)) end
+    if not pid then return resolution.fail("UNAVAILABLE", "spawn carrier: " .. tostring(spawn_error)) end
     outcome.carrier = tostring(pid)
     outcome.mode = mode
     outcome.started_at = time.now():utc():format("2006-01-02T15:04:05.000Z07:00")
     return succeed(outcome)
 end
-function M.start_admitted(outcome: Admitted): Reply
+function M.start_admitted(outcome: Admitted): resolution.Reply
     local host, refused = carrier_host()
-    if not host then return refused or fail("UNAVAILABLE", "carrier process host is unavailable") end
+    if not host then return refused or resolution.fail("UNAVAILABLE", "carrier process host is unavailable") end
     return start_admitted(outcome, host)
 end
-function M.start(value: unknown): Reply
+function M.start(value: unknown): resolution.Reply
     local host, host_error = carrier_host()
-    if not host then return host_error or fail("UNAVAILABLE", "carrier process host is unavailable") end
+    if not host then return host_error or resolution.fail("UNAVAILABLE", "carrier process host is unavailable") end
     local outcome, refused = M.admit_request(value)
-    if not outcome then return refused or fail("UNAVAILABLE", "launch admission did not return a result") end
+    if not outcome then return refused or resolution.fail("UNAVAILABLE", "launch admission did not return a result") end
     return start_admitted(outcome, host)
 end
 return M

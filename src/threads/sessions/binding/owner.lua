@@ -3,7 +3,7 @@
 local bounds = require("bounds")
 local json = require("json")
 local journal = require("journal")
-local admission = require("admission")
+local resolution = require("resolution")
 local catalog_service = require("catalog_service")
 local hash = require("hash")
 local canonical = require("canonical")
@@ -158,13 +158,13 @@ function M.attach(raw_request: unknown): Reply
     if not workspace then return fail("DENIED", "interactive attach has no workspace", operation_key) end
     local profile_id = request.saved_profile_id == nil and nil or ref(request.saved_profile_id)
     local revision = request.saved_profile_revision == nil and nil or bounds.integer(request.saved_profile_revision)
-    local plan, refused = admission.resolve(definition, "window", workspace, profile_id, revision, nil, nil, nil, nil, request.overrides)
+    local plan, refused = resolution.resolve(definition, "window", workspace, profile_id, revision, nil, nil, nil, nil, request.overrides)
     if not plan then return unavailable(tostring(refused and refused.error and refused.error.message or "interactive plan is unavailable"), operation_key) end
     if plan.plan_digest ~= request.plan_digest or plan.mode ~= "window" then return fail("CONFLICT", "interactive attach plan changed", operation_key) end
     local driver = plan.binding_ref
     -- The session records the admission of each attempt it attaches; its
     -- hooks are judged under the attempt's own plan.
-    local admitted = admission.session_admission(plan)
+    local admitted = resolution.session_admission(plan)
     local prior_raw, lookup_error = journal.invoke("operation_lookup", {operation_key = operation_key})
     local prior = object(prior_raw)
     if lookup_error or not prior then return unavailable(lookup_error or "interactive operation lookup unavailable", operation_key) end

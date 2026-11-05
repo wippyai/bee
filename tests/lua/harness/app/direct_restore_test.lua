@@ -2,6 +2,7 @@ local test = require("test")
 local bounds = require("bounds")
 local direct = require("direct")
 local admission = require("admission")
+local resolution = require("resolution")
 local WORKSPACE = "0123456789abcdef0123456789abcdef"
 local DIGEST = string.rep("a", 64)
 local function request(): admission.Request
@@ -20,7 +21,7 @@ return test.run_cases(function()
                 setup_request = bounds.object(input)
                 return {ok = true, resources = {"session"}, credentials = {}}, nil
             end
-            local function admit(candidate: admission.Request, operation_key: string?): (admission.Admitted?, admission.Reply?)
+            local function admit(candidate: admission.Request, operation_key: string?): (admission.Admitted?, resolution.Reply?)
                 order[#order + 1] = "admit"
                 admitted_key = operation_key
                 test.eq(candidate.request_id, "resume-1")
@@ -44,7 +45,7 @@ return test.run_cases(function()
             local function call(target: string, input: unknown): (unknown, string?)
                 return {ok = false, error = "host setup has no root for session"}, nil
             end
-            local function admit(candidate: admission.Request, operation_key: string?): (admission.Admitted?, admission.Reply?)
+            local function admit(candidate: admission.Request, operation_key: string?): (admission.Admitted?, resolution.Reply?)
                 admitted = true
                 return nil, nil
             end

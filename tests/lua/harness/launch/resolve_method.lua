@@ -1,11 +1,11 @@
 -- MIT. Resolve a measured definition or an authorized saved profile without effects.
-local admission = require("admission")
+local resolution = require("resolution")
 local bounds = require("bounds")
 local profiles = require("profiles")
-local function invalid(message: string): admission.Reply
+local function invalid(message: string): resolution.Reply
     return {ok = false, error = {code = "INVALID", message = message}, value = nil}
 end
-local function handle(request: unknown): admission.Reply
+local function handle(request: unknown): resolution.Reply
     local object = bounds.object(request)
     if not object then return invalid("request must be an object") end
     local extra = bounds.fields(object, {"definition_ref", "mode", "workspace_id", "saved_profile_id", "saved_profile_revision", "agent_ref", "owner_component_revision", "spec_digest", "placement_override", "overrides"})
@@ -42,7 +42,7 @@ local function handle(request: unknown): admission.Reply
     end
     local placement, placement_error = profiles.placement(object.placement_override)
     if placement_error then return invalid(placement_error) end
-    local plan, refused = admission.resolve(definition_ref, mode, workspace, saved_id, revision, agent_ref, owner_component_revision, spec_digest, placement, object.overrides)
+    local plan, refused = resolution.resolve(definition_ref, mode, workspace, saved_id, revision, agent_ref, owner_component_revision, spec_digest, placement, object.overrides)
     if not plan then return refused or invalid("launch plan unavailable") end
     return {ok = true, error = nil, value = plan}
 end

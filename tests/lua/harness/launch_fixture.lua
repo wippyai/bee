@@ -11,7 +11,7 @@ local env = require("env")
 local exec = require("exec")
 local time = require("time")
 local hash = require("hash")
-local admission = require("admission")
+local resolution = require("resolution")
 local machine = require("machine")
 local checkpoint = require("checkpoint")
 local bounds = require("bounds")
@@ -58,7 +58,7 @@ local function scope(extra: {string}?): security.Scope
     end
     return security.new_scope(policies)
 end
-local function call(target: string, request: unknown): admission.Reply
+local function call(target: string, request: unknown): resolution.Reply
     local result, err = funcs.new():with_actor(principals.actor(REQUESTER, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return principals.reply(result)
@@ -77,19 +77,19 @@ local function call_setup(request: unknown): {[string]: unknown}
     return reply
 end
 local function call_as_bound(actor_id: string, target: string, request: unknown, workspace_id: unknown,
-    extra_policies: {string}?): admission.Reply
+    extra_policies: {string}?): resolution.Reply
     local result, err = funcs.new():with_actor(principals.actor(actor_id, workspace_id))
         :with_scope(scope(extra_policies)):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return principals.reply(result)
 end
-local function call_as_with_policies(actor_id: string, target: string, request: unknown, extra_policies: {string}): admission.Reply
+local function call_as_with_policies(actor_id: string, target: string, request: unknown, extra_policies: {string}): resolution.Reply
     return call_as_bound(actor_id, target, request, principals.workspace(request), extra_policies)
 end
-local function call_as(actor_id: string, target: string, request: unknown): admission.Reply
+local function call_as(actor_id: string, target: string, request: unknown): resolution.Reply
     return call_as_with_policies(actor_id, target, request, {})
 end
-local function value(reply: admission.Reply): {[string]: unknown}
+local function value(reply: resolution.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return assert(bounds.object(reply.value))
 end
@@ -110,7 +110,7 @@ local function open_gateway()
     if err then error("bee.gateway.binding:open: " .. tostring(err)) end
     value(principals.reply(reply))
 end
-local function code(reply: admission.Reply): string
+local function code(reply: resolution.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return reply.error and reply.error.code or ""
 end
@@ -167,7 +167,7 @@ local function with_provider_source(provider: string, body: () -> ())
         end, body)
     end)
 end
-local function refusal_message(reply: admission.Reply): string
+local function refusal_message(reply: resolution.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return tostring(reply.error and reply.error.message)
 end

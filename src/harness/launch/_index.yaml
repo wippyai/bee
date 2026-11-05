@@ -16,12 +16,30 @@ entries:
   kind: library.lua
   source: file://admission.lua
   modules:
-  - ctx
   - funcs
   - process
   - registry
-  - security
   - time
+  imports:
+    bounds: bee.drivers.values:bounds
+    canonical: bee.drivers.values:canonical
+    catalog: bee.harness.catalog:catalog
+    definition: bee.harness.launch:definitions
+    carrier: bee.harness:request
+    placement_types: bee.placement:types
+    continuation: bee.harness.carrier:continuation
+    interrupted: bee.harness.carrier:interrupted
+    identity: bee.security.identity:identity
+    resolution: bee.harness.launch:resolution
+    part_request: bee.harness.launch:request
+- name: resolution
+  kind: library.lua
+  source: file://resolution.lua
+  modules:
+  - ctx
+  - funcs
+  - registry
+  - security
   imports:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
@@ -29,18 +47,13 @@ entries:
     policy: bee.harness.carrier:policy
     definition: bee.harness.launch:definitions
     agent_resolver: bee.harness.launch:agent_resolver
-    carrier: bee.harness:request
     placement_types: bee.placement:types
     placement_resolver: bee.placement.binding:resolver
-    continuation: bee.harness.carrier:continuation
-    interrupted: bee.harness.carrier:interrupted
     profiles: bee.harness.profiles:protocol
     profile_validation: bee.harness.profiles.binding:validation
     effective_schema: bee.drivers.descriptor:effective
     descriptors: bee.drivers.descriptor:descriptor
     placement_profiles: bee.placement.profiles:profiles
-    identity: bee.security.identity:identity
-    part_request: bee.harness.launch:request
     policy_types: bee.harness:policy_types
 - name: agent_resolver
   kind: library.lua
@@ -262,7 +275,7 @@ entries:
   - uuid
   - time
   imports:
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     definitions: bee.harness.launch:definitions
     profile_values: bee.drivers.descriptor:profile_values
     profiles: bee.harness.profiles:protocol
@@ -303,5 +316,5 @@ entries:
   modules: [funcs, security]
   imports:
     bounds: bee.drivers.values:bounds
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     folder_consent: bee.harness.launch:folder_consent

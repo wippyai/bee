@@ -17,6 +17,7 @@ local confirmation = require("confirmation")
 local window_request = require("window_request")
 local input_event = require("input_event")
 local admission = require("admission")
+local resolution = require("resolution")
 local machine = require("machine")
 local part_launch = require("part_launch")
 local picker = require("picker")
@@ -71,7 +72,7 @@ local function io(): machine.IO
     }
 end
 
-local function failure(reply: admission.Reply?): string
+local function failure(reply: resolution.Reply?): string
     if not reply then return "launch admission did not return a result" end
     local fault = reply.error
     if not fault then return "launch admission refused" end
@@ -79,7 +80,7 @@ local function failure(reply: admission.Reply?): string
 end
 
 -- A person reads why a restore was refused; the reply code stays in the log.
-local function refusal(reply: admission.Reply?): (string, string?)
+local function refusal(reply: resolution.Reply?): (string, string?)
     if not reply then return "launch admission did not return a result", nil end
     local fault = reply.error
     if not fault then return "launch admission refused", nil end
@@ -489,8 +490,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local menu = overlay.menu()
         local cancelled = false
         local states = assert(process.listen(appearance.TOPIC, {message = true}))
-        type Completion = {kind: "resolve" | "admission", serial: integer, plan: admission.Plan?, choice: admission.Admitted?,
-            refused: admission.Reply?, admission_refusal: admission.Reply?}
+        type Completion = {kind: "resolve" | "admission", serial: integer, plan: resolution.Plan?, choice: admission.Admitted?,
+            refused: resolution.Reply?, admission_refusal: resolution.Reply?}
         local completed = channel.new(1)
         local completed_pending: {[integer]: Completion} = {}
         local function send_completed(value: Completion)
@@ -519,7 +520,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
             phase = phase == "initial" and "initializing" or "admitting"
             coroutine.spawn(function()
                 local choice: admission.Admitted? = nil
-                local refused: admission.Reply? = nil
+                local refused: resolution.Reply? = nil
                 local ok, unexpected = pcall(function()
                     choice, refused = direct_launch.restore(candidate, session_operation_key)
                 end)
@@ -532,17 +533,17 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 send_completed(sent)
             end)
         end
-        local function start_resolve(refusal: admission.Reply?)
+        local function start_resolve(refusal: resolution.Reply?)
             operation = operation + 1
             local serial = operation
             phase = "resolving"
             status = refusal and "Checking the current launch plan…" or "Checking the saved launch plan…"
             dirty = true
             coroutine.spawn(function()
-                local plan: admission.Plan? = nil
-                local refused: admission.Reply? = nil
+                local plan: resolution.Plan? = nil
+                local refused: resolution.Reply? = nil
                 local ok, unexpected = pcall(function()
-                    local reason = admission.resumable(restored.definition_ref, launch.workspace_id, restored.saved_profile_id)
+                    local reason = resolution.resumable(restored.definition_ref, launch.workspace_id, restored.saved_profile_id)
                     if reason then
                         refused = {ok = false, error = {code = "DENIED", message = reason}, value = nil}
                         return
@@ -551,10 +552,10 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                     -- current revision, as a new session would be.
                     local revision: integer? = nil
                     if restored.saved_profile_id then
-                        revision, refused = admission.saved_revision(launch.workspace_id, restored.saved_profile_id)
+                        revision, refused = resolution.saved_revision(launch.workspace_id, restored.saved_profile_id)
                         if not revision then return end
                     end
-                    plan, refused = admission.resolve(restored.definition_ref, "window", launch.workspace_id,
+                    plan, refused = resolution.resolve(restored.definition_ref, "window", launch.workspace_id,
                         restored.saved_profile_id, revision, nil, nil, nil, nil, restored.overrides)
                 end)
                 if not ok then refused = {ok = false, error = {code = "UNAVAILABLE", message = tostring(unexpected)}, value = nil} end
@@ -682,7 +683,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         assert(retained and supplied.request_id == launch.instance_id
             and supplied.request.workspace_id == launch.workspace_id, "Invalid retained admission")
         local prior = supplied.plan
-        local current, refused = admission.resolve(prior.definition_ref, prior.mode, launch.workspace_id,
+        local current, refused = resolution.resolve(prior.definition_ref, prior.mode, launch.workspace_id,
             prior.saved_profile_id, prior.saved_profile_revision, prior.agent_ref,
             prior.owner_component_revision, prior.spec_digest, nil, prior.spawn_overrides)
         if not current or current.plan_digest ~= prior.plan_digest then

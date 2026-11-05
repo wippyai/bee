@@ -4,7 +4,7 @@ local bounds = require("bounds")
 local funcs = require("funcs")
 local harness_catalog = require("harness_catalog")
 local definition = require("definition")
-local admission = require("admission")
+local resolution = require("resolution")
 local profile_protocol = require("profile_protocol")
 local locate = require("locate")
 local readiness = require("readiness")
@@ -249,9 +249,9 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
     local plan: unknown = nil
     local refused: unknown = nil
     if kind == "profile" and profile_id and revision then
-        plan, refused = admission.resolve(ref, nil, workspace, profile_id, revision)
+        plan, refused = resolution.resolve(ref, nil, workspace, profile_id, revision)
     else
-        plan, refused = admission.read(pinned, ref, decoded.default_mode)
+        plan, refused = resolution.read(pinned, ref, decoded.default_mode)
     end
     local candidate, candidate_error = measured_candidate(cache, readiness_cache, kind, candidate_ref, title, revision, decoded, plan, refused, generation)
     if not candidate then return nil, candidate_error end

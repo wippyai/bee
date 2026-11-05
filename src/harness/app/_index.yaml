@@ -58,6 +58,7 @@ entries:
     placement_decode: bee.placement:decode
     input_event: bee.harness.app:input
     admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     machine: bee.harness.carrier:machine
     part_launch: bee.harness.carrier:launch
     picker: bee.harness.app:picker
@@ -353,4 +354,5 @@ entries:
   modules: [funcs, uuid]
   imports:
     admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     bounds: bee.drivers.values:bounds

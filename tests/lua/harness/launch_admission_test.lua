@@ -2,7 +2,7 @@
 local test = require("test")
 local principals = require("principals")
 local registry = require("registry")
-local admission = require("admission")
+local resolution = require("resolution")
 local bounds = require("bounds")
 local fixture = require("fixture")
 local DEFINITION = fixture.DEFINITION
@@ -178,7 +178,7 @@ local function define_tests()
         test.it("keeps definition and policy measurements in the selected registry generation", function()
             local pinned, pin_error = registry.snapshot()
             if not pinned then error(tostring(pin_error)) end
-            local before, before_error = admission.read(pinned, DEFINITION, nil)
+            local before, before_error = resolution.read(pinned, DEFINITION, nil)
             if not before then error(tostring(before_error and before_error.error and before_error.error.message)) end
             local definition_entry = registry.get(DEFINITION)
             local policy_entry = registry.get(POLICY)
@@ -199,13 +199,13 @@ local function define_tests()
                 changes:update(policy_entry)
                 local applied, apply_error = changes:apply()
                 if not applied then error(tostring(apply_error)) end
-                local retained, retained_error = admission.read(pinned, DEFINITION, nil)
+                local retained, retained_error = resolution.read(pinned, DEFINITION, nil)
                 if not retained then error(tostring(retained_error and retained_error.error and retained_error.error.message)) end
                 test.eq(retained.definition_digest, before.definition_digest)
                 test.eq(retained.policy_digest, before.policy_digest)
                 test.eq(retained.plan_digest, before.plan_digest)
                 test.eq(retained.catalog_generation, before.catalog_generation)
-                local current, current_error = admission.resolve(DEFINITION, nil)
+                local current, current_error = resolution.resolve(DEFINITION, nil)
                 if not current then error(tostring(current_error and current_error.error and current_error.error.message)) end
                 test.is_true(current.definition_digest ~= before.definition_digest)
                 test.is_true(current.policy_digest ~= before.policy_digest)

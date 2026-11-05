@@ -2685,7 +2685,7 @@ entries:
     test: wippy.test:test
     carrier_fixtures: bee.tests.harness:carrier_fixtures
     principals: bee.tests.support.principals:bound
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     definitions: bee.harness.launch:definitions
     trait_access: bee.gateway.security:traits
     machine: bee.harness.carrier:machine
@@ -2713,7 +2713,7 @@ entries:
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     definitions: bee.harness.launch:definitions
     bounds: bee.drivers.values:bounds
     fixture: bee.tests.harness:launch_fixture
@@ -2764,7 +2764,7 @@ entries:
   imports:
     test: wippy.test:test
     principals: bee.tests.support.principals:bound
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     bounds: bee.drivers.values:bounds
     fixture: bee.tests.harness:launch_fixture
 - name: launch_provider_test
@@ -2863,6 +2863,7 @@ entries:
     carrier_fixtures: bee.tests.harness:carrier_fixtures
     principals: bee.tests.support.principals:bound
     admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     machine: bee.harness.carrier:machine
     part_launch: bee.harness.carrier:launch
     checkpoint: bee.harness.carrier:checkpoint
@@ -2908,7 +2909,7 @@ entries:
     test: wippy.test:test
     completion: bee.tests.placement.native:completion
     principals: bee.tests.support.principals:bound
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     machine: bee.harness.carrier:machine
     checkpoint: bee.harness.carrier:checkpoint
     bounds: bee.drivers.values:bounds

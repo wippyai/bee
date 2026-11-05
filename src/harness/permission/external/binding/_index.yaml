@@ -41,7 +41,7 @@ entries:
     canonical: bee.drivers.values:canonical
     exchange: bee.harness.permission:exchange
     checkpoint: bee.harness.carrier:checkpoint
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     catalog: bee.harness.catalog:catalog
     profiles: bee.harness.profiles:protocol
     classify: bee.harness:classification

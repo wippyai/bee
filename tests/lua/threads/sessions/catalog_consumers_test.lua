@@ -12,7 +12,7 @@ local session_tools = require("session_tools")
 local protocol = require("protocol")
 local form = require("form")
 local direct = require("direct")
-local admission = require("admission")
+local resolution = require("resolution")
 local M = {}
 type Object = {[string]: unknown}
 
@@ -21,10 +21,10 @@ function M.probe(path: string): Object
     local workspace = assert(bounds.id(actor:meta().workspace_id))
     if path == "modes" then
         local ref = "bee.driver.codex.profiles:research_batch"
-        local resolved, resolve_error = admission.resolve(ref, nil, workspace)
+        local resolved, resolve_error = resolution.resolve(ref, nil, workspace)
         local plan = assert(resolved, tostring(resolve_error and resolve_error.error and resolve_error.error.message))
         test.eq(plan.mode, "batch")
-        local forced, refusal = admission.resolve(ref, "window", workspace)
+        local forced, refusal = resolution.resolve(ref, "window", workspace)
         test.is_nil(forced)
         test.eq(assert(assert(refusal).error).code, "FORBIDDEN")
         local listing = agents.visible_profiles(assert(agents.list(sessions.client(), true)), false, "")

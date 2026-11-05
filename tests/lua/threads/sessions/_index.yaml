@@ -27,7 +27,7 @@ entries:
     test: wippy.test:test
     harness: bee.tests.threads:harness
     bounds: bee.drivers.values:bounds
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     session_tools: bee.gateway.catalog:session_tools
     protocol: bee.threads.sessions.types:protocol
 - name: locate_test
@@ -82,7 +82,7 @@ entries:
   imports:
     form: bee.harness.app:profile_form
     direct: bee.harness.app:direct
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     test: wippy.test:test
     bounds: bee.drivers.values:bounds
     sessions: bee.threads.sessions.client:sessions
@@ -97,9 +97,9 @@ entries:
   modules: [registry, funcs, security, env]
   policy: {actions: ['*'], resources: '*', effect: allow}
   imports:
+    resolution: bee.harness.launch:resolution
     form: bee.harness.app:profile_form
     direct: bee.harness.app:direct
-    admission: bee.harness.launch:admission
     test: wippy.test:test
     bounds: bee.drivers.values:bounds
     sessions: bee.threads.sessions.client:sessions
@@ -459,7 +459,7 @@ entries:
     bounds: bee.drivers.values:bounds
     hooks: bee.gateway.hooks:hooks
     resolver: bee.drivers.binding:resolver
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     muse: bee.tests.threads.sessions:muse_permission_fixture
 - name: muse_permission_fixture
   kind: library.lua
@@ -467,7 +467,7 @@ entries:
   modules: [registry, funcs, security, env, time, exec, json, uuid, events, channel]
   imports:
     bounds: bee.drivers.values:bounds
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     catalog: bee.harness.catalog:catalog
     adapter: bee.harness.permission:adapter
     configuration: bee.gateway.env:configuration

@@ -73,7 +73,7 @@ entries:
   - security
   imports:
     bounds: bee.drivers.values:bounds
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     profiles: bee.harness.profiles:protocol
     setup: bee.harness.launch:setup
   security:
@@ -186,8 +186,8 @@ entries:
   - funcs
   - security
   imports:
+    resolution: bee.harness.launch:resolution
     bounds: bee.drivers.values:bounds
-    admission: bee.harness.launch:admission
     profiles: bee.harness.profiles:protocol
     setup: bee.harness.launch:setup
   security:

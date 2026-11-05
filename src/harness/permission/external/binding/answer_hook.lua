@@ -7,7 +7,7 @@ local hash = require("hash")
 local canonical = require("canonical")
 local exchange = require("exchange")
 local checkpoint = require("checkpoint")
-local admission = require("admission")
+local resolution = require("resolution")
 local catalog = require("catalog")
 local policy = require("policy")
 local machine = require("machine")
@@ -74,9 +74,9 @@ local function handle(raw: unknown): Reply
     if not effective_profile then return fail("session records no admitted profile: " .. tostring(profile_error)) end
     local answers = effective_profile.bee.permission_answers
     if not answers then return fail("session's admitted profile records no permission answer mode") end
-    local admitted: admission.Standing = {definition_ref = definition, binding_ref = binding_ref, profile_id = profile_id, workspace_id = workspace,
+    local admitted: resolution.Standing = {definition_ref = definition, binding_ref = binding_ref, profile_id = profile_id, workspace_id = workspace,
         saved_profile_id = saved_profile_id, saved_profile_revision = saved_profile_revision}
-    local launch, snapshot, standing_refusal = admission.standing(admitted)
+    local launch, snapshot, standing_refusal = resolution.standing(admitted)
     if not launch or not snapshot then return fail(tostring(standing_refusal)) end
     if answers == "provider" then return {ok = true, value = {}} end
     if not turn or not claim then return fail("Bee answers this permission only within the session's current turn") end
@@ -105,7 +105,7 @@ local function handle(raw: unknown): Reply
     local executable = selected_policy.executables[capabilities.executable]
     if not executable then return fail("accepted hook executable is unavailable") end
     local function revalidate(): string?
-        local standing, _, refusal = admission.standing(admitted)
+        local standing, _, refusal = resolution.standing(admitted)
         if not standing then return refusal end
         local bound, bound_error = value("bee.gateway.binding:check", {binding_id = binding_id})
         if not bound then return bound_error end

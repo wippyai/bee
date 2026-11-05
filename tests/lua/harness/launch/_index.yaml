@@ -36,7 +36,7 @@ entries:
   source: file://resolve_method.lua
   method: handle
   imports:
-    admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
     bounds: bee.drivers.values:bounds
     profiles: bee.harness.profiles:protocol
 - name: admit
@@ -45,12 +45,14 @@ entries:
   method: handle
   imports:
     admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
 - name: start
   kind: function.lua
   source: file://start_method.lua
   method: handle
   imports:
     admission: bee.harness.launch:admission
+    resolution: bee.harness.launch:resolution
   security:
     policies:
     - bee.harness.security:launch_spawn_policy

@@ -3,7 +3,7 @@
 local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
-local admission = require("admission")
+local resolution = require("resolution")
 local profiles = require("profiles")
 local setup = require("setup")
 local SCOPE = "bee.harness.launch:harness_setup_execution_scope"
@@ -27,7 +27,7 @@ local function handle(raw: unknown): {[string]: unknown}
     end
     local placement, placement_error = profiles.placement(request.placement_override)
     if placement_error then return {ok = false, error = placement_error} end
-    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, placement, request.overrides)
+    local plan, plan_error = resolution.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, placement, request.overrides)
     if not plan then return {ok = false, error = tostring(plan_error and plan_error.error and plan_error.error.message or "launch plan unavailable")} end
     if plan.plan_digest ~= request.expected_plan_digest then return {ok = false, error = "selected launch plan changed"} end
     return setup.run(plan, workspace, request.workdir)

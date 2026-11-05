@@ -4,7 +4,7 @@ local ctx = require("ctx")
 local uuid = require("uuid")
 local time = require("time")
 local bounds = require("bounds")
-local admission = require("admission")
+local resolution = require("resolution")
 local profile_values = require("profile_values")
 local profiles = require("profiles")
 local definitions = require("definitions")
@@ -27,7 +27,7 @@ end
 function M.prompt(driver: string, profile: string, folder: string): string
     return "Trust this folder for " .. driver .. " · " .. profile .. "?\n" .. folder .. "\nBee remembers your approval for this profile and folder until you revoke it."
 end
-function M.run(plan: admission.Plan, workspace: string, workdir: string?, executor: funcs.Executor): string?
+function M.run(plan: resolution.Plan, workspace: string, workdir: string?, executor: funcs.Executor): string?
     local profile = plan.effective_profile
     local placement = profile and profile.placement
     if plan.mode ~= "window" or not plan.saved_profile_id or not placement or placement.kind ~= "native" or placement.home ~= "private" then return nil end

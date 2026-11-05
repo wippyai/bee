@@ -12,6 +12,7 @@ local tty = require("tty")
 local eventbus = require("events")
 local bounds = require("bounds")
 local admission = require("admission")
+local resolution = require("resolution")
 local setup = require("setup")
 local canonical = require("canonical")
 local recovery = require("recovery")
@@ -62,7 +63,7 @@ function M.open(value: unknown): Object
     if not body or not spec or not actor or not workspace or type(operation_key) ~= "string" then return fail("window admission identity is missing") end
     local digest = assert(hash.sha256(actor:id() .. "\n" .. workspace .. "\n" .. operation_key))
     local profile = bounds.object(spec.profile)
-    local plan, refused = admission.resolve(tostring(spec.definition), "window", workspace,
+    local plan, refused = resolution.resolve(tostring(spec.definition), "window", workspace,
         profile and bounds.id(profile.id), profile and bounds.integer(profile.revision), nil, nil, nil, nil, spec.overrides)
     if not plan then return refused or fail("window plan unavailable") end
     local prepared = setup.run(plan, workspace, spec.workdir)

@@ -1,12 +1,13 @@
 -- SPDX-License-Identifier: MIT
 local admission = require("admission")
+local resolution = require("resolution")
 local funcs = require("funcs")
 local bounds = require("bounds")
 local uuid = require("uuid")
 local M = {}
 type Call = (string, unknown) -> (unknown, string?)
-type Admit = (admission.Request, string?) -> (admission.Admitted?, admission.Reply?)
-local function fault(reply: admission.Reply?): string
+type Admit = (admission.Request, string?) -> (admission.Admitted?, resolution.Reply?)
+local function fault(reply: resolution.Reply?): string
     local value = reply and reply.error
     if not value then return "Agent launch was not admitted" end
     return value.code .. ": " .. value.message
@@ -32,7 +33,7 @@ end
 function M.run(workspace_id: string, definition_ref: string, thread_id: string?,
     origin_view: {view_id: string, instance_id: string}?, phase: ((string) -> ())?, brief: string?): (admission.Admitted?, string?)
     if phase then phase("Checking installed driver") end
-    local plan, refused = admission.resolve(definition_ref, nil, workspace_id)
+    local plan, refused = resolution.resolve(definition_ref, nil, workspace_id)
     if not plan then return nil, fault(refused) end
     if phase then phase("Preparing agent resources") end
     local prepared, setup_error = setup(call_function, {workspace_id = workspace_id, definition_ref = definition_ref,
@@ -50,7 +51,7 @@ end
 
 -- restore admits a saved window's continuation after the same host setup a
 -- new launch of its definition runs.
-function M.restore(request: admission.Request, operation_key: string?, call: Call?, admit: Admit?): (admission.Admitted?, admission.Reply?)
+function M.restore(request: admission.Request, operation_key: string?, call: Call?, admit: Admit?): (admission.Admitted?, resolution.Reply?)
     local prepared, setup_error = setup(call or call_function, {workspace_id = request.workspace_id, definition_ref = request.definition_ref,
         expected_plan_digest = request.expected_plan_digest, saved_profile_id = request.saved_profile_id,
         saved_profile_revision = request.saved_profile_revision, overrides = request.overrides})

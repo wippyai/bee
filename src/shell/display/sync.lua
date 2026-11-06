@@ -22,6 +22,13 @@ local function node_event(state: State, event: client.Event)
         if event.attention then state.attention_pending[instance.id] = true end
         state.running[#state.running + 1] = instance
         if instance.desktop == state.desktop then actions.attach(state, instance.id) end
+    elseif event.kind == "attention" and event.id and event.focus then
+        if state.views[event.id] then
+            display_state.focus(state, event.id)
+            for _, instance in ipairs(state.running) do
+                if instance.id == event.id then state.status = "Already open in " .. instance.title end
+            end
+        end
     elseif event.kind == "attention" and event.id then
         local alerts = state.alerts
         if event.alert then

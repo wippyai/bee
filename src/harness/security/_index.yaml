@@ -209,8 +209,11 @@ entries:
     - env.get
     - funcs.call
     - events.subscribe
+    - events.send
+    - process.monitor
+    - process.unmonitor
     resources: '*'
-    expression: (action == "events.subscribe" && resource == "bee.attention") || (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action == "funcs.call" && resource == "bee.threads.sessions.binding:idle_check") || (action in ["process.spawn", "process.spawn.monitored", "process.spawn.linked"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
+    expression: (action in ["events.subscribe", "events.send"] && resource == "bee.attention") || action in ["process.monitor", "process.unmonitor"] || (action == "env.get" && resource == "bee.harness.service:session_idle_stop") || (action == "funcs.call" && resource == "bee.threads.sessions.binding:idle_check") || (action in ["process.spawn", "process.spawn.monitored", "process.spawn.linked"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in
       ["process.context", "process.cancel", "tty.create", "tty.mount", "tty.observe", "tty.input", "tty.resize"] || ((action == "process.registry.register" || action == "process.registry.unregister") &&
       resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$")
     effect: allow

@@ -74,11 +74,17 @@ function M.open_requested(state: State, workspace_id: unknown, app: unknown, giv
 end
 
 -- A request waiting for the person opens Needs you; an application the
--- person approved opens once it is installed.
+-- person approved opens once it is installed; a window asked to show a
+-- session another window already shows brings that window forward.
 function M.attend(state: State, event: {[string]: unknown})
     local data = event.data
     if type(event.path) ~= "string" or type(data) ~= "table" then return end
     local workspace_id: string = event.path
+    if event.kind == "session.viewed" then
+        local viewer = type(data.viewer) == "string" and state.by_pid[data.viewer] or nil
+        if viewer then node_state.broadcast(state, {kind = "attention", id = viewer, focus = true}) end
+        return
+    end
     local request = bounds.object(data.request)
     if request and (event.kind == "approval.requested" or event.kind == "approval.changed") then
         local title = event.kind == "approval.requested" and tostring(data.title or "Review request") or nil

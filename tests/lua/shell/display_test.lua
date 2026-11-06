@@ -598,6 +598,30 @@ local function define_tests()
             exits(lifecycle, {pid})
         end)
 
+        display_case("focuses the window that shows a session another window asks for", function(fixture: Fixture)
+            local lifecycle = assert(process.events())
+            local view, pid = fixture:start()
+            expect(view, "the display shows its desktop", " BEE ", true)
+            local node = assert(system.node.id())
+            local desktop = ""
+            local title = assert(bar(view):match("Desktop %d+"))
+            for _, item in ipairs(assert(client.state(assert(client.call(node, "list", {})))).desktops) do
+                if item.title == title then desktop = item.id end
+            end
+            assert(desktop ~= "")
+            key(view, "esc")
+            local lower = assert(client.call(node, "open", {app = "bee.tests.node:probe_app", desktop = desktop, args = {label = "lower"}}))
+            expect(view, "the first probe opens", "label lower", true)
+            assert(client.call(node, "open", {app = "bee.tests.node:probe_app", desktop = desktop, args = {label = "upper"}}))
+            expect(view, "the second probe covers the first", "label lower", false)
+            assert(events.send("bee.attention", "session.viewed", "bs:viewed-session", {viewer = tostring(lower.pid)}))
+            expect(view, "the window showing the session comes forward", "label lower", true)
+            expect(view, "the bar names the window", "Already open in Probe", true)
+            key(view, "x")
+            expect(view, "the forward window holds the keyboard", "key x", true)
+            exits(lifecycle, {pid})
+        end)
+
         display_case("routes decisions only to the deliberately opened card while preserving a typing window", function(fixture: Fixture)
             local lifecycle = assert(process.events())
             local viewport, pid = fixture:start()

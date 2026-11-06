@@ -27,10 +27,11 @@ type Desktop = {id: string, title: string, workspace: string, shown: boolean}
 -- id, "dialog" a dialog an app asks, "dialog_closed" the id of the app
 -- whose dialog is gone, problem on "catalog" and in a snapshot the reason the
 -- app list could not be refreshed and is out of date, and "attention" the id of an app that needs the
--- person, which a display brings forward.
+-- person, which a display brings forward; with focus it is the window the person asked for, which a
+-- display gives the keyboard.
 type Alert = {id: string, count: integer, title: string, approval_id: string, failed: boolean?, installed: boolean?, app: string?, desktop: string?, workspace: string?}
 type Event = {review: Review?, changed: boolean?, alert: Alert?, kind: string, revision: integer, instance: Instance?, id: string?, appearance: appearance.Preferences?,
-    workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?, attention: boolean?, problem: string?}
+    workspaces: {Workspace}?, desktops: {Desktop}?, apps: {App}?, title: string?, dialog: Dialog?, attention: boolean?, problem: string?, focus: boolean?}
 -- What a node reports to list and watch; owner is the PID of the node's
 -- owner process, which a watcher monitors to learn that the node stopped,
 -- supervisor is the node's Hive supervisor, whose exit means the node
@@ -220,6 +221,7 @@ function M.event(data: unknown): Event?
         event.id = data.id
         if data.alert ~= nil then event.alert = M.alert(data.alert); if not event.alert then return nil end end
         if data.changed == true then event.changed = true end
+        if data.focus == true then event.focus = true end
         if data.kind == "closed" and type(data.problem) == "string" then event.problem = data.problem end
     elseif data.kind == "review" then
         if type(data.id) ~= "string" then return nil end

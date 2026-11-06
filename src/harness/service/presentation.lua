@@ -288,6 +288,11 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
             attend(event.value)
         elseif event.channel == events then
             if pid and event.value.kind == process.event.EXIT and tostring(event.value.from) == pid then break end
+            if recipient and tostring(event.value.from) == recipient
+                and (event.value.kind == process.event.EXIT or event.value.kind == process.event.MONITOR_DOWN) then
+                mount, recipient = nil, nil
+                arm()
+            end
             if event.value.kind == process.event.CANCEL then
                 if not pid then break end
                 process.cancel(pid, "session owner stopping")
@@ -318,6 +323,12 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 disarm()
                 ensure_started()
                 reply = {ok = true, value = {}}
+            elseif body.op == "attach" and recipient and recipient ~= sender then
+                -- A session has one viewer; another window asking for it
+                -- brings the viewing window forward.
+                local announced, announce_error = eventbus.send("bee.attention", "session.viewed", session_ref or "", {viewer = recipient})
+                if not announced then logger:warn("Viewing window not announced", {session = session_ref, cause = tostring(announce_error)}) end
+                reply = fail("the session is open in another window")
             elseif body.op == "attach" then
                 idle = false
                 disarm()
@@ -325,6 +336,7 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 local current = assert(view)
                 if mount then assert(current:revoke(mount)) end
                 mount = assert(current:mount(sender, {observe = true, input = true, resize = true}))
+                if recipient ~= sender then assert(process.monitor(sender)) end
                 recipient = sender
                 reply = {ok = true, value = {mount = mount}}
             elseif body.op == "type" and bounds.text(body.text, 65536) then
@@ -346,13 +358,14 @@ local function run(value: unknown, name: unknown, initial_token: string, operati
                 end
             elseif body.op == "detach" and recipient == sender then
                 if mount and view then assert(view:revoke(mount)) end
+                process.unmonitor(sender)
                 mount, recipient = nil, nil
                 arm()
                 reply = {ok = true, value = {}}
             else reply = fail("invalid window operation") end
             reply.caller_token = token
             process.send(sender, REPLY, reply)
-            if body.op == "attach" and viewer.shown(reviews) then show_review() end
+            if body.op == "attach" and reply.ok == true and viewer.shown(reviews) then show_review() end
         end
         ::next_request::
     end

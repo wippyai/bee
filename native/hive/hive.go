@@ -300,7 +300,7 @@ func (h *Host) finish() error {
 func (h *Host) clientPlan(dir, state string, hive *Hive, owned bool, command []string) (app.Plan, error) {
 	if hive == nil {
 		if owned {
-			return app.Plan{}, errors.New("bee is already running in this folder and is not in a hive; run bee hive init and restart it to open more displays")
+			return app.Plan{}, errors.New("bee is already running in this folder and is not in a hive; run bee hive init and restart it")
 		}
 		return app.Plan{}, errors.New("bee client: this machine is in no hive; run bee hive init")
 	}

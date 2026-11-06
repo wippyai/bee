@@ -5,7 +5,11 @@ type Review = {approval_id: string, title: string}
 function M.read(thread_id: string): (Review?, string?)
     local raw, err = funcs.call("bee.approvals.binding:waiting", {thread_id = thread_id})
     local reply = bounds.object(raw)
-    if err or not reply or reply.ok ~= true then return nil, tostring(err or (reply and reply.error) or "waiting request unavailable") end
+    if err then return nil, tostring(err) end
+    if not reply or reply.ok ~= true then
+        local fault = reply and bounds.object(reply.error)
+        return nil, fault and bounds.text(fault.message, 512) or "waiting request unavailable"
+    end
     local value = bounds.object(reply.value)
     if value and value.request == false then return nil, nil end
     local review = value and bounds.object(value.request)

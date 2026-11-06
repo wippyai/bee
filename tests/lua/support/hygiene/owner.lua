@@ -242,9 +242,6 @@ function M.main()
                 -- demand service. Settle it before deciding children are idle.
                 sync_idle()
                 after = snapshot()
-                local pending = false
-                for name in pairs(after.pending) do if not assert(baseline).pending[name] then pending = true end end
-                if pending then break end
                 local live = M.owner_processes(assert(baseline).processes, after.processes, owner_sources())
                 local ran = M.retire(assert(baseline), reported, updates)
                 M.await_exit(live)

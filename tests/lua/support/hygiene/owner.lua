@@ -129,6 +129,45 @@ function M.retire(baseline: Snapshot, reported: {[string]: boolean}, updates: ev
     return ran
 end
 
+-- owner_processes names the processes in after, absent from before, that run a
+-- demand owner's process entry. A host lists such a process while it starts or
+-- finishes exiting, when its service already reads stopped.
+function M.owner_processes(before: {[string]: Object}, after: {[string]: Object}, sources: {[string]: boolean}): {string}
+    local pids: {string} = {}
+    for pid, actor in pairs(after) do
+        if not before[pid] and sources[tostring(actor.source)] then pids[#pids + 1] = pid end
+    end
+    table.sort(pids)
+    return pids
+end
+
+local function owner_sources(): {[string]: boolean}
+    local sources: {[string]: boolean} = {}
+    for _, entry in ipairs(assert(registry.find({["meta.type"] = "bee.process.demand"}))) do
+        local data = assert(bounds.object(entry.data))
+        if type(data.process) == "string" then sources[data.process] = true end
+    end
+    return sources
+end
+
+-- await_exit returns once each process has ended, as its monitor reports.
+function M.await_exit(pids: {string})
+    local lifecycle = assert(process.events())
+    local waiting: {[string]: boolean} = {}
+    for _, pid in ipairs(pids) do
+        local observed, problem = process.monitor(pid)
+        if observed then waiting[pid] = true else assert(processes.vanished(problem), tostring(problem)) end
+    end
+    while next(waiting) do
+        local event = assert((lifecycle:receive()))
+        assert(event.kind ~= process.event.CANCEL, "owner exit observation cancelled")
+        if event.kind == process.event.MONITOR_DOWN or event.kind == process.event.EXIT or event.kind == process.event.LINK_DOWN then
+            local from = tostring(event.from)
+            if waiting[from] then waiting[from] = nil; process.unmonitor(from) end
+        end
+    end
+end
+
 function M.compare(before: Snapshot, after: Snapshot, reported: {[string]: boolean}?): {string}
     local leaks: {string} = {}
     local used: {[string]: boolean} = {}
@@ -205,10 +244,13 @@ function M.main()
                 after = snapshot()
                 local pending = false
                 for name in pairs(after.pending) do if not assert(baseline).pending[name] then pending = true end end
-                if pending or not M.retire(assert(baseline), reported, updates) then break end
+                if pending then break end
+                local live = M.owner_processes(assert(baseline).processes, after.processes, owner_sources())
+                local ran = M.retire(assert(baseline), reported, updates)
+                M.await_exit(live)
+                if not ran and #live == 0 then break end
             end
             updates:close()
-            after = snapshot()
         end
         local leaks = after and M.compare(assert(baseline), after, reported) or {}
         if request.operation == "check" then

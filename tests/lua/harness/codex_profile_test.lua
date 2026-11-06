@@ -129,6 +129,17 @@ local function define_tests()
             end
         end)
 
+        test.it("a default Codex window can write its workspace and ask the person for more", function()
+            local entry = assert(registry.get(CODEX_WINDOW))
+            local data = entry.data :: {[string]: unknown}
+            local prepared = data.prepare_options :: {[string]: unknown}
+            test.eq(prepared.sandbox, "workspace-write")
+            test.eq(prepared.approval_policy, "on-request")
+            local hooks = data.gateway_hooks :: {string}
+            local forwarded = false
+            for _, hook in ipairs(hooks) do if hook == "PermissionRequest" then forwarded = true end end
+            test.is_true(forwarded, "the window forwards the approval it asks for")
+        end)
         test.it("plans the named flag and routes its file through the selected home", function()
             local codex, codex_error = launch.decode({profile_id = "named_batch", brief = "work", sandbox = "read-only", config_profile = PROFILE})
             if not codex then error(tostring(codex_error)) end

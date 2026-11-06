@@ -201,7 +201,9 @@ entries:
     - PermissionRequest
     - Stop
     profile_instructions: true
-    prepare_options: {}
+    prepare_options:
+      sandbox: workspace-write
+      approval_policy: on-request
     placement_profiles:
     - bee.placement.profiles:native
     - bee.placement.docker.profiles:coding

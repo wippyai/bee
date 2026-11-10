@@ -18,6 +18,9 @@ type State = {
     started: boolean,
     resumed: boolean,
     api_error: string?,
+    message_id: string?,
+    rate_limits: types.RateLimits?,
+    usage: types.Usage?,
     terminal: types.Terminal?,
 }
 type Step = {observations: {Observation}, terminal: types.Terminal?}
@@ -27,7 +30,7 @@ end
 function M.decode_state(value: unknown): (State?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state must be an object" end
-    local unknown = bounds.fields(object, {"session_id", "started", "resumed", "api_error", "terminal"})
+    local unknown = bounds.fields(object, {"session_id", "started", "resumed", "api_error", "terminal", "message_id", "rate_limits", "usage"})
     if unknown then return nil, "state: " .. unknown end
     if type(object.started) ~= "boolean" or type(object.resumed) ~= "boolean" then return nil, "state flags must be booleans" end
     local session_id: string? = nil
@@ -40,13 +43,22 @@ function M.decode_state(value: unknown): (State?, string?)
         api_error = bounds.id(object.api_error)
         if not api_error then return nil, "state.api_error is not an identifier" end
     end
+    local message_id: string? = nil
+    if object.message_id ~= nil then
+        message_id = bounds.id(object.message_id)
+        if not message_id then return nil, "state.message_id is invalid" end
+    end
+    local usage, usage_error = events.decode_usage(object.usage)
+    if usage_error then return nil, usage_error end
+    local rate_limits, limits_error = events.decode_limits(object.rate_limits)
+    if limits_error then return nil, limits_error end
     local terminal: types.Terminal? = nil
     if object.terminal ~= nil then
         local decoded, terminal_error = types.decode_terminal(object.terminal)
         if not decoded then return nil, terminal_error end
         terminal = decoded
     end
-    return {session_id = session_id, started = object.started, resumed = object.resumed, api_error = api_error, terminal = terminal}, nil
+    return {session_id = session_id, started = object.started, resumed = object.resumed, api_error = api_error, terminal = terminal, message_id = message_id, rate_limits = rate_limits, usage = usage}, nil
 end
 -- retryable reports whether a failed turn may succeed when repeated: the
 -- HTTP status of the failed API call decides when Claude Code reports one -
@@ -75,12 +87,52 @@ local function text_of(value: unknown): string
     end
     return tostring(value)
 end
-local function usage_of(value: unknown): events_types.Usage?
-    if type(value) ~= "table" then return nil end
-    local usage = value
-    return events.usage(usage.input_tokens, usage.output_tokens, usage.cache_read_input_tokens)
+local function usage_of(value: unknown, cost: unknown, model_usage: unknown): events_types.Usage?
+    local usage = bounds.object(value) or {}
+    local details = bounds.object(usage.output_tokens_details) or {}
+    local total = events.usage(usage.input_tokens, usage.output_tokens, usage.cache_read_input_tokens,
+        usage.cache_creation_input_tokens, details.thinking_tokens, cost)
+    local models = bounds.object(model_usage)
+    if models then
+        local decoded: {[string]: events_types.ModelUsage} = {}
+        for model, raw in pairs(models) do
+            local item = bounds.object(raw)
+            if item and bounds.model(model) then
+                local mapped = events.usage(item.inputTokens, item.outputTokens, item.cacheReadInputTokens,
+                    item.cacheCreationInputTokens, item.thinkingTokens, item.costUSD)
+                if mapped then decoded[model] = mapped end
+            end
+        end
+        if next(decoded) then total = total or {}; total.models = decoded end
+    end
+    return total
 end
-local function content_blocks(state: State, index: integer, message: unknown, out: {Observation})
+local function rate_limits_of(value: unknown): types.RateLimits?
+    local info = bounds.object(value)
+    if not info then return nil end
+    local limits: types.RateLimits = {windows = {}}
+    local windows = bounds.object(info.unifiedWindows)
+    if windows then
+        local names: {string} = {}
+        for name in pairs(windows) do names[#names + 1] = name end
+        table.sort(names)
+        for _, name in ipairs(names) do
+            local item = bounds.object(windows[name])
+            if item then
+                local window = events.limit_window(name, item.utilization, item.status or (name == info.rateLimitType and info.status or nil), item.resetsAt, nil)
+                if window then limits.windows[#limits.windows + 1] = window end
+            end
+        end
+    elseif type(info.rateLimitType) == "string" then
+        local window = events.limit_window(info.rateLimitType, info.utilization, info.status, info.resetsAt, nil)
+        if window then limits.windows[1] = window end
+    end
+    limits.overage_status = events.limit_status(info.overageStatus)
+    limits.overage_disabled_reason = bounds.id(info.overageDisabledReason)
+    if type(info.isUsingOverage) == "boolean" then limits.is_using_overage = info.isUsingOverage end
+    return limits
+end
+local function content_blocks(state: State, index: integer, message: unknown, assistant: boolean, out: {Observation})
     if type(message) ~= "table" then return end
     local content: unknown = (message).content
     if type(content) ~= "table" then return end
@@ -90,6 +142,10 @@ local function content_blocks(state: State, index: integer, message: unknown, ou
             local suffix = "block" .. tostring(position)
             if item.type == "text" and type(item.text) == "string" then
                 local segment = "assistant:" .. tostring(index) .. ":" .. tostring(position)
+                if assistant then
+                    local id = bounds.id(message.id) or state.message_id
+                    if id then segment = events.segment_id(id, tostring(position - 1)) end
+                end
                 for _, piece in ipairs(events.text(key(index, suffix), segment, "complete", item.text, "answer")) do out[#out + 1] = piece end
             elseif item.type == "tool_use" and type(item.id) == "string" and type(item.name) == "string" then
                 local input_text = "{}"
@@ -107,7 +163,7 @@ local function content_blocks(state: State, index: integer, message: unknown, ou
             elseif item.type == "thinking" then
                 local summary: unknown = item.thinking
                 if type(summary) == "string" and #summary > 0 then
-                    for _, piece in ipairs(events.text(key(index, suffix), "thinking:" .. tostring(index), "complete", summary, "reasoning_summary")) do out[#out + 1] = piece end
+                    for _, piece in ipairs(events.text(key(index, suffix), events.segment_id(bounds.id(message.id) or state.message_id or ("thinking:" .. tostring(index)), tostring(position - 1)), "complete", summary, "reasoning_summary")) do out[#out + 1] = piece end
                 end
             end
         end
@@ -149,18 +205,35 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         if kind == "assistant" and envelope.is_api_error_message == true and type(envelope.error) == "string" then
             state.api_error = bounds.id(envelope.error)
         end
-        content_blocks(state, index, envelope.message, out)
+        content_blocks(state, index, envelope.message, kind == "assistant", out)
+        if kind == "assistant" then
+            local message = bounds.object(envelope.message)
+            if message then state.usage = events.add_usage(state.usage, events.model_usage(usage_of(message.usage, nil, nil), message.model)) end
+            state.message_id = nil
+        end
     elseif kind == "stream_event" then
         local event: unknown = envelope.event
         if type(event) == "table" then
             local inner = event
-            if inner.type == "content_block_delta" and type(inner.delta) == "table" then
+            if inner.type == "message_start" then
+                local message = bounds.object(inner.message)
+                state.message_id = (message and bounds.id(message.id)) or ("message:" .. tostring(index))
+            elseif inner.type == "content_block_delta" and type(inner.delta) == "table" then
                 local delta = inner.delta
-                if delta.type == "text_delta" and type(delta.text) == "string" then
-                    local segment = "stream:" .. tostring(inner.index)
-                    for _, piece in ipairs(events.text(key(index, "delta"), segment, "append", delta.text, "answer")) do out[#out + 1] = piece end
+                local text = delta.type == "text_delta" and delta.text or delta.type == "thinking_delta" and delta.thinking or nil
+                if type(text) == "string" then
+                    state.message_id = state.message_id or ("message:" .. tostring(index))
+                    local segment = events.segment_id(state.message_id, tostring(inner.index))
+                    local channel = delta.type == "text_delta" and "answer" or "reasoning_summary"
+                    for _, piece in ipairs(events.text(key(index, "delta"), segment, "append", text, channel)) do out[#out + 1] = piece end
                 end
             end
+        end
+    elseif kind == "rate_limit_event" then
+        local limits = rate_limits_of(envelope.rate_limit_info)
+        if limits then
+            state.rate_limits = limits
+            out[#out + 1] = events.rate_limit(key(index, "limits"), limits)
         end
     elseif kind == "result" then
         local session: unknown = path_reader.read(envelope, paths, "resume_id")
@@ -175,6 +248,8 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             local reason = tostring(raw_reason or subtype or "error")
             fault = events.fault(state.api_error or reason, text_of(path_reader.read(envelope, paths, "result_text")),
                 retryable(reason, envelope.api_error_status))
+            local status = tonumber(envelope.api_error_status)
+            if events.rejected(state.rate_limits) and (status == nil or status == 429) and (not state.api_error or state.api_error == "rate_limit") then fault = events.fault("rate_limit", text_of(path_reader.read(envelope, paths, "result_text")), true) end
         end
         local denials: unknown = envelope.permission_denials
         if type(denials) == "table" then
@@ -185,12 +260,12 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
                 end
             end
         end
-        local usage = usage_of(path_reader.read(envelope, paths, "usage"))
+        local usage = events.merge_usage(state.usage, usage_of(path_reader.read(envelope, paths, "usage"), envelope.total_cost_usd, envelope.modelUsage))
         out[#out + 1] = events.turn(key(index, "turn"), "ended", outcome, usage)
         local answer: string? = nil
         local result = path_reader.read(envelope, paths, "result_text")
         if outcome == "succeeded" and type(result) == "string" and #result <= M.MAX_ANSWER_BYTES then answer = result end
-        state.terminal = {outcome = outcome, answer = answer, resume_ref = state.session_id, usage = usage, error = fault}
+        state.terminal = {outcome = outcome, answer = answer, resume_ref = state.session_id, usage = usage, error = fault, rate_limits = state.rate_limits}
         return {observations = out, terminal = state.terminal}
     else
         local encoded, err = json.encode(envelope)
@@ -206,8 +281,8 @@ function M.finish(state: State, index: integer): Step
         local quiet: Step = {observations = none}
         return quiet
     end
-    local out: {Observation} = {events.turn(key(index, "eof"), "ended", "uncertain", nil)}
-    local terminal: types.Terminal = {outcome = "uncertain", resume_ref = state.session_id, error = events.fault("stream_ended", "the stream ended without a result envelope", false)}
+    local out: {Observation} = {events.turn(key(index, "eof"), "ended", "uncertain", state.usage)}
+    local terminal: types.Terminal = {outcome = "uncertain", resume_ref = state.session_id, rate_limits = state.rate_limits, usage = state.usage, error = events.fault("stream_ended", "the stream ended without a result envelope", false)}
     state.terminal = terminal
     return {observations = out, terminal = terminal}
 end

@@ -1,0 +1,35 @@
+{
+  "description": "Secret-free synthetic regression streams. Protocol-correct event projections; not live captures. Recorded live controls remain in each harness directory.",
+  "sources": {
+    "claude": [
+      "../claude/stream-json-2/plain.jsonl",
+      "../claude/stream-json-2/probe.jsonl",
+      "https://platform.claude.com/docs/en/agent-sdk/streaming-output (message_start.id and zero-based content blocks)"
+    ],
+    "codex": [
+      "https://github.com/openai/codex/blob/main/codex-rs/exec/src/exec_events.rs (ItemUpdatedEvent, ItemCompletedEvent, AgentMessageItem, Usage)",
+      "https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs (TokenCountEvent, TokenUsageInfo, RateLimitSnapshot, RateLimitWindow; native token_count payload and rollout event_msg wrapper)",
+      "../codex/exec-json-1/plain.jsonl"
+    ],
+    "grok": [
+      "../../../src/grok/protocol_test.lua (existing streaming-json protocol cases: text.data chunks, usage, end.stopReason)",
+      "https://docs.x.ai/docs/api-reference/chat-completions (OpenAI-compatible usage.prompt_tokens_details.cached_tokens and completion_tokens_details.reasoning_tokens; synthetic detail fields on the existing CLI usage event)"
+    ],
+    "pi": [
+      "../pi/json-1/schema.json",
+      "../pi/json-1/plain.jsonl",
+      "@mariozechner/pi-ai/dist/types.d.ts: AssistantMessageEvent.contentIndex, AssistantMessage.model, Usage.cacheWrite and Usage.cost.total; @mariozechner/pi-agent-core/dist/types.d.ts: message_start/update/end"
+    ]
+  },
+  "cases": {
+    "claude_messages": "Two distinct message IDs with identical text; full snapshots correct short deltas.",
+    "claude_rejected": "Rejected five_hour window and failed result; retryable rate-limit error.",
+    "claude_warning": "allowed_warning normalization, explicit per-window status and overage.",
+    "codex_stream": "Two cumulative token-count observations must not double count; item.updated corrected by item.completed. Exec final counters omit reasoning retained from token_count.",
+    "codex_rejected": "100 percent primary window and turn.failed.",
+    "grok_stream": "Delta-only protocol, OpenAI usage detail fields, no reported cost/model/limits.",
+    "pi_stream": "Short delta corrected by message_end, cost and model usage.",
+    "pi_messages": "Distinct messages with identical text, two models; reported zeros retained and unreported reasoning stays absent.",
+    "pi_nonstream": "message_end without preceding partial messages still emits full content."
+  }
+}

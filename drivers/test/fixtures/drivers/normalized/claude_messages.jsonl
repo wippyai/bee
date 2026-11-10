@@ -1,0 +1,7 @@
+{"type":"stream_event","event":{"type":"message_start","message":{"id":"message-a","role":"assistant","content":[]}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"po"}}}
+{"type":"assistant","message":{"id":"message-a","role":"assistant","content":[{"type":"text","text":"pong"}]}}
+{"type":"stream_event","event":{"type":"message_start","message":{"id":"message-b","role":"assistant","content":[]}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"po"}}}
+{"type":"assistant","message":{"id":"message-b","role":"assistant","content":[{"type":"text","text":"pong"}]}}
+{"type":"result","subtype":"success","result":"pong"}

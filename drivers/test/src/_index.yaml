@@ -1,6 +1,33 @@
 version: '1.0'
 namespace: bee.drivers.tests
 entries:
+- name: codec_contract_test
+  kind: function.lua
+  source: file://codec_contract_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [fs, funcs, json]
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    stream_json: bee.drivers.transport:stream_json
+    observation: bee.drivers.records:observation
+    driver_types: bee.drivers:types
+    records: bee.drivers.records:record
+    values: bee.drivers.records:values
+    events: bee.drivers.codec:events
+- name: claude_stream_test
+  kind: function.lua
+  source: file://claude_stream_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [fs, funcs]
+  imports:
+    test: wippy.test:test
+    bounds: bee.drivers.values:bounds
+    stream_json: bee.drivers.transport:stream_json
+    observation: bee.drivers.records:observation
+    driver_types: bee.drivers:types
 - name: profile_test
   kind: function.lua
   source: file://profile_test.lua

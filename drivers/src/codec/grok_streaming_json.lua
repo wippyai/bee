@@ -50,7 +50,7 @@ end
 
 local function decode_terminal(value: unknown): types.Terminal?
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"}) then return nil end
+    if not object or bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error", "rate_limits"}) then return nil end
     local outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
     if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil end
     local terminal_outcome: types.Outcome = outcome
@@ -75,7 +75,9 @@ local function decode_terminal(value: unknown): types.Terminal?
         if not code or not message or type(error_object.retryable) ~= "boolean" then return nil end
         fault = {code = code, message = message, retryable = error_object.retryable}
     end
-    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}
+    local rate_limits, limits_error = events.decode_limits(object.rate_limits)
+    if limits_error then return nil end
+    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault, rate_limits = rate_limits}
 end
 
 -- Normalizer state is persisted by the carrier and returns as untrusted input.
@@ -129,7 +131,10 @@ local function usage_of(value: unknown): events_types.Usage?
     local input = usage.input_tokens or usage.prompt_tokens
     local output = usage.output_tokens or usage.completion_tokens
     local cached = usage.cache_read_input_tokens or usage.cached_input_tokens or usage.cached_tokens
-    return events.usage(input, output, cached)
+    local details = bounds.object(usage.completion_tokens_details) or {}
+    local prompt = bounds.object(usage.prompt_tokens_details) or {}
+    return events.model_usage(events.usage(input, output, cached or prompt.cached_tokens,
+        usage.cache_creation_input_tokens, usage.reasoning_tokens or details.reasoning_tokens, usage.cost_usd), usage.model)
 end
 
 local function ensure_started(state: State, index: integer, out: {Observation})
@@ -290,11 +295,12 @@ function M.finish(state: State, index: integer): Step
         return quiet
     end
     ensure_started(state, index, {})
-    local out: {Observation} = {events.turn(key(index, "eof"), "ended", "uncertain", nil)}
+    local out: {Observation} = {events.turn(key(index, "eof"), "ended", "uncertain", state.usage)}
     local terminal: types.Terminal = {
         outcome = "uncertain",
         answer = retained_answer(state),
         resume_ref = state.session_id,
+        usage = state.usage,
         error = events.fault("stream_ended", "the stream ended without an end envelope", false),
     }
     state.terminal = terminal

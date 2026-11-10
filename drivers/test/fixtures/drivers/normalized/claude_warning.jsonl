@@ -1,0 +1,2 @@
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.92,"resetsAt":1794528000},"seven_day":{"utilization":0.15,"status":"allowed","resetsAt":1795000000}},"overageStatus":"allowed","isUsingOverage":true}}
+{"type":"result","subtype":"success","result":"pong"}

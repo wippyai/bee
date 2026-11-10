@@ -19,6 +19,8 @@ M.MAX_ANSWER_BYTES = events.MAX_TEXT_BYTES
 
 type Observation = {[string]: unknown}
 type State = {
+    usage: types.Usage?,
+    model: string?,
     session_id: string?,
     started: boolean,
     resumed: boolean,
@@ -32,10 +34,15 @@ local function decode_usage(value: unknown, field: string, provider_wire: boolea
     if value == nil then return nil, nil end
     local object = bounds.object(value)
     if not object then return nil, field .. " must be an object" end
-    local allowed_fields = {"input_tokens", "output_tokens", "cached_tokens", "cost_decimal", "currency"}
+    local allowed_fields = {"input_tokens", "output_tokens", "cached_tokens", "cache_write_tokens", "reasoning_tokens", "cost_usd", "models", "cost_decimal", "currency"}
+    if not provider_wire then
+        local decoded, err = values.usage(value)
+        if err then return nil, field .. "." .. err:gsub("^usage ", "") end
+        return decoded, nil
+    end
     if provider_wire then
-        -- These counters occur in Agy's captured result frames but are not
-        -- part of Bee's portable usage record. Validate them before dropping.
+        -- Provider aliases are validated before projecting onto portable fields.
+        -- total_tokens has no portable counterpart.
         allowed_fields[#allowed_fields + 1] = "cache_read_tokens"
         allowed_fields[#allowed_fields + 1] = "thinking_tokens"
         allowed_fields[#allowed_fields + 1] = "total_tokens"
@@ -89,7 +96,9 @@ local function decode_usage(value: unknown, field: string, provider_wire: boolea
         cost, currency = selected_cost, selected_currency
     end
     local normalized: {[string]: unknown} = {input_tokens = input_tokens, output_tokens = output_tokens,
-        cached_tokens = cached_tokens, cost_decimal = cost, currency = currency}
+        cached_tokens = cached_tokens, cost_decimal = cost, currency = currency,
+        cache_write_tokens = object.cache_write_tokens, reasoning_tokens = object.thinking_tokens or object.reasoning_tokens,
+        cost_usd = object.cost_usd or (currency == "USD" and tonumber(cost) or nil), models = object.models}
     local decoded, usage_error = values.usage(normalized)
     if not decoded then return nil, field .. ": " .. tostring(usage_error) end
     return decoded, nil
@@ -98,7 +107,7 @@ end
 local function decode_terminal(value: unknown): (types.Terminal?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state.terminal must be an object" end
-    local unknown_field = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
+    local unknown_field = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error", "rate_limits"})
     if unknown_field then return nil, "state.terminal: " .. unknown_field end
     local declared_outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
     if declared_outcome ~= "succeeded" and declared_outcome ~= "failed" and declared_outcome ~= "cancelled" and declared_outcome ~= "uncertain" then return nil, "state.terminal.outcome is not one outcome Bee admits" end
@@ -118,11 +127,14 @@ local function decode_terminal(value: unknown): (types.Terminal?, string?)
     if usage_error then return nil, usage_error end
     local fault, fault_error = events.decode_fault(object.error, "state.terminal.error", record_bounds.MAX_FAULT_MESSAGE_BYTES)
     if fault_error then return nil, fault_error end
+    local rate_limits, limits_error = events.decode_limits(object.rate_limits)
+    if limits_error then return nil, limits_error end
     local terminal: types.Terminal = {
         outcome = outcome,
         answer = answer,
         resume_ref = resume_ref,
         usage = usage,
+        rate_limits = rate_limits,
         error = fault,
     }
     return terminal, nil
@@ -139,9 +151,13 @@ end
 function M.decode_state(value: unknown): (State?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state must be an object" end
-    local unknown_field = bounds.fields(object, {"session_id", "started", "resumed", "terminal", "answer", "answer_truncated"})
+    local unknown_field = bounds.fields(object, {"usage", "model", "session_id", "started", "resumed", "terminal", "answer", "answer_truncated"})
     if unknown_field then return nil, "state: " .. unknown_field end
 
+    local usage, usage_error = events.decode_usage(object.usage)
+    if usage_error then return nil, usage_error end
+    local model = object.model == nil and nil or bounds.model(object.model)
+    if object.model ~= nil and not model then return nil, "state.model is invalid" end
     local session_id: string? = nil
     if object.session_id ~= nil then
         session_id = bounds.id(object.session_id)
@@ -177,6 +193,8 @@ function M.decode_state(value: unknown): (State?, string?)
     end
 
     return {
+        usage = usage,
+        model = model,
         session_id = session_id,
         started = object.started,
         resumed = object.resumed,
@@ -263,6 +281,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             out[#out + 1] = events.notice(key(index, "conflict"), "warning", "conflicting_conversation_id", "init conversation_id " .. envelope_cid .. " does not match pinned " .. state.session_id)
             return {observations = out}
         end
+        state.model = bounds.model(body.model) or state.model
         state.session_id = envelope_cid
         state.started = true
         local phase = state.resumed and "resumed" or "started"
@@ -366,6 +385,11 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             end
         end
 
+        -- Per-step usage is disjoint. The result below is an aggregate snapshot.
+        if body.state == "DONE" then
+            local usage = decode_usage(body.usage, "step_update.usage", true)
+            state.usage = events.add_usage(state.usage, events.model_usage(usage, state.model))
+        end
         if body.permission_denials ~= nil then
             out[#out + 1] = events.notice(key(index, "denied"), "warning", "permission_denied", text_of(body.permission_denials))
         end
@@ -426,7 +450,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             fault = events.fault("unknown_status", "unexpected terminal status: " .. raw_status, false)
         end
 
-        local usage = decoded_usage
+        local usage = events.model_usage(decoded_usage, state.model) or state.usage
         out[#out + 1] = events.turn(key(index, "turn"), "ended", outcome, usage)
 
         local answer: string? = nil
@@ -466,9 +490,10 @@ function M.finish(state: State, index: integer): Step
         local quiet: Step = {observations = none}
         return quiet
     end
-    local out: {Observation} = {events.turn(key(index, "eof"), "ended", "uncertain", nil)}
+    local out: {Observation} = {events.turn(key(index, "eof"), "ended", "uncertain", state.usage)}
     local terminal: types.Terminal = {
         outcome = "uncertain",
+        usage = state.usage,
         resume_ref = state.session_id,
         error = events.fault("stream_ended", "the stream ended without a result envelope", false),
     }

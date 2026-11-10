@@ -1,0 +1,3 @@
+{"type":"agent_start"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"pong"}],"model":"model-a","stopReason":"stop","usage":{"input":12,"output":7,"cacheRead":3,"cacheWrite":4,"cost":{"total":0.25,"input":0.1,"output":0.1,"cacheRead":0.02,"cacheWrite":0.03},"totalTokens":26},"api":"anthropic-messages","provider":"anthropic","timestamp":1794528000000}}
+{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"pong"}],"model":"model-a","stopReason":"stop","usage":{"input":12,"output":7,"cacheRead":3,"cacheWrite":4,"cost":{"total":0.25,"input":0.1,"output":0.1,"cacheRead":0.02,"cacheWrite":0.03},"totalTokens":26},"api":"anthropic-messages","provider":"anthropic","timestamp":1794528000000}]}

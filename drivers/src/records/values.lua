@@ -41,31 +41,101 @@ function M.fault(value: unknown): (types.Fault?, string?)
     if type(retryable) ~= "boolean" then return nil, "fault retryable must be a boolean" end
     return {code = code, message = message, retryable = retryable}, nil
 end
-function M.usage(value: unknown): (types.Usage?, string?)
+function M.nonnegative(value: unknown): number?
+    if type(value) ~= "number" or value ~= value or value < 0 or value > bounds.MAX_SAFE_INTEGER then return nil end
+    return value
+end
+local function usage_fields(value: unknown, models: boolean): (types.Usage?, string?)
     local object = bounds.object(value)
     if not object then return nil, "usage must be an object" end
-    local unknown_field = bounds.fields(object, {"input_tokens", "output_tokens", "cached_tokens", "cost_decimal", "currency"})
+    local allowed = {"input_tokens", "output_tokens", "cached_tokens", "cache_write_tokens", "reasoning_tokens", "cost_usd", "cost_decimal", "currency"}
+    if models then allowed[#allowed + 1] = "models" end
+    local unknown_field = bounds.fields(object, allowed)
     if unknown_field then return nil, unknown_field end
-    local usage: types.Usage = table.create(0, 1)
-    for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
-        local raw: unknown = object[name]
-        if raw ~= nil then
-            local count = bounds.count(raw)
+    local usage: types.Usage = {}
+    for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens", "cache_write_tokens", "reasoning_tokens"}) do
+        if object[name] ~= nil then
+            local count = bounds.count(object[name])
             if not count then return nil, "usage " .. name .. " must be a nonnegative integer" end
-            if name == "input_tokens" then usage.input_tokens = count
-            elseif name == "output_tokens" then usage.output_tokens = count
-            else usage.cached_tokens = count end
+            usage[name] = count
         end
+    end
+    if object.cost_usd ~= nil then
+        local cost = M.nonnegative(object.cost_usd)
+        if not cost then return nil, "usage cost_usd must be a finite nonnegative number" end
+        usage.cost_usd = cost
     end
     local cost: unknown, currency: unknown = object.cost_decimal, object.currency
     if (cost == nil) ~= (currency == nil) then return nil, "usage cost_decimal and currency come together" end
     if cost ~= nil then
         if type(cost) ~= "string" or not cost:match("^%d+%.?%d*$") or #cost > 40 then return nil, "usage cost_decimal must be a decimal string" end
         if type(currency) ~= "string" or not currency:match("^%u%u%u$") then return nil, "usage currency must be a three-letter code" end
-        usage.cost_decimal = cost
-        usage.currency = currency
+        usage.cost_decimal, usage.currency = cost, currency
     end
     return usage, nil
+end
+function M.usage(value: unknown): (types.Usage?, string?)
+    local usage, err = usage_fields(value, true)
+    if not usage then return nil, err end
+    local object = assert(bounds.object(value))
+    if object.models ~= nil then
+        local models = bounds.object(object.models)
+        if not models then return nil, "usage models must be an object" end
+        local decoded: {[string]: types.ModelUsage} = {}
+        local count = 0
+        for model, raw in pairs(models) do
+            count = count + 1
+            if count > 64 or not bounds.model(model) then return nil, "usage models exceeds its bound or has an invalid model" end
+            local item, item_error = usage_fields(raw, false)
+            if not item then return nil, "usage models " .. model .. ": " .. tostring(item_error) end
+            decoded[model] = item
+        end
+        usage.models = decoded
+    end
+    return usage, nil
+end
+function M.limit_status(value: unknown): types.LimitStatus?
+    if value == "allowed" or value == "warning" or value == "rejected" then return value end
+    return nil
+end
+function M.rate_limits(value: unknown): (types.RateLimits?, string?)
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"windows", "overage_status", "overage_disabled_reason", "is_using_overage"}) then return nil, "rate_limits has invalid fields" end
+    local windows = bounds.array(object.windows, 64)
+    if not windows then return nil, "rate_limits.windows must be a bounded list" end
+    local result: types.RateLimits = {windows = {}}
+    local seen: {[string]: boolean} = {}
+    for _, raw in ipairs(windows) do
+        local item = bounds.object(raw)
+        if not item or bounds.fields(item, {"window", "utilization", "status", "resets_at"}) then return nil, "rate limit window has invalid fields" end
+        local window, status = bounds.id(item.window), M.limit_status(item.status)
+        if not window or not status or seen[window] then return nil, "rate limit window identity or status is invalid" end
+        seen[window] = true
+        local utilization: number? = nil
+        if item.utilization ~= nil then
+            utilization = M.nonnegative(item.utilization)
+            if not utilization or utilization > 1 then return nil, "rate limit utilization must be in 0..1" end
+        end
+        local resets_at: integer? = nil
+        if item.resets_at ~= nil then
+            resets_at = bounds.count(item.resets_at)
+            if not resets_at then return nil, "rate limit resets_at must be epoch seconds" end
+        end
+        result.windows[#result.windows + 1] = {window = window, status = status, utilization = utilization, resets_at = resets_at}
+    end
+    if object.overage_status ~= nil then
+        result.overage_status = M.limit_status(object.overage_status)
+        if not result.overage_status then return nil, "rate limit overage_status is invalid" end
+    end
+    if object.overage_disabled_reason ~= nil then
+        result.overage_disabled_reason = bounds.id(object.overage_disabled_reason)
+        if not result.overage_disabled_reason then return nil, "rate limit overage_disabled_reason is invalid" end
+    end
+    if object.is_using_overage ~= nil then
+        if type(object.is_using_overage) ~= "boolean" then return nil, "rate limit is_using_overage must be boolean" end
+        result.is_using_overage = object.is_using_overage
+    end
+    return result, nil
 end
 -- Content names exactly one carrier: inline text or a stored artifact.
 function M.content(value: unknown): (types.Content?, string?)

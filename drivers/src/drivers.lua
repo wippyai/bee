@@ -30,6 +30,8 @@ type Gateway = configuration_types.GatewayInput
 type DeliveredFile = configuration_types.Configuration
 type Observation = record_types.Observation
 type Terminal = driver_types.Terminal
+type Usage = driver_types.Usage
+type RateLimits = driver_types.RateLimits
 type Option = {name: string, label: string, description: string, section: string, group: string, order: number,
     type: string, values: {unknown}?, schema: Object?, default: unknown, profiles: {string}?}
 type Profile = {id: string, mode: string}

@@ -86,10 +86,12 @@ entries:
 - name: events
   kind: library.lua
   source: file://events.lua
+  modules: [hash]
   imports:
     bounds: bee.drivers.values:bounds
     record_types: bee.drivers.records:record_types
     vocabulary: bee.drivers:event_types
+    values: bee.drivers.records:values
 - name: normalize
   kind: library.lua
   source: file://normalize.lua

@@ -4,6 +4,8 @@
 local vocabulary = require("vocabulary")
 local bounds = require("bounds")
 local record_types = require("record_types")
+local values = require("values")
+local hash = require("hash")
 local M = {}
 M.MAX_TEXT_BYTES = 12288
 M.MAX_ESCAPED_BYTES = 14336
@@ -38,7 +40,9 @@ function M.turn(event_key: string, phase: string, reported_outcome: string?, usa
     if usage then data.usage = usage end
     return {type = "turn.signal", event_key = event_key, data = data}
 end
--- Splits long text into bounded segments so every observation fits a record.
+-- Splits long text into bounded observations on one segment. A large full
+-- snapshot replaces on its first piece and appends the rest; never repeatedly
+-- replace/complete with pieces, which would discard all but the final piece.
 function M.text(event_key: string, segment_id: string, operation: string, text: string, channel: string): {vocabulary.Observation}
     local pieces: {vocabulary.Observation} = {}
     local total = #text
@@ -50,7 +54,8 @@ function M.text(event_key: string, segment_id: string, operation: string, text: 
         local key = event_key
         if index > 0 then key = event_key .. "#" .. tostring(index) end
         local op = operation
-        if index > 0 and operation == "replace" then op = "append" end
+        if operation == "complete" and finish < total and index == 0 then op = "replace" end
+        if index > 0 and (operation == "replace" or operation == "complete") then op = "append" end
         pieces[#pieces + 1] = {type = "text", event_key = key, data = {type = "text", segment_id = segment_id, operation = op, text = piece, channel = channel}}
         offset = finish + 1
         index = index + 1
@@ -76,12 +81,87 @@ function M.extension(event_key: string, event_name: string, event_revision: stri
     return {type = "extension", event_key = event_key, data = {type = "extension", event_name = event_name, event_revision = event_revision, payload_json = payload}}
 end
 -- vocabulary.Usage as the records contract expects it; unknown counters stay absent.
-function M.usage(input_tokens: unknown, output_tokens: unknown, cached_tokens: unknown): vocabulary.Usage?
-    local input = bounds.count(input_tokens)
-    local output = bounds.count(output_tokens)
-    local cached = bounds.count(cached_tokens)
-    if input == nil and output == nil and cached == nil then return nil end
-    return {input_tokens = input, output_tokens = output, cached_tokens = cached}
+-- cached_tokens remains the compatible cache-read counter. Never invent zeros.
+function M.usage(input_tokens: unknown, output_tokens: unknown, cached_tokens: unknown,
+    cache_write_tokens: unknown?, reasoning_tokens: unknown?, cost_usd: unknown?): vocabulary.Usage?
+    local usage: vocabulary.Usage = {
+        input_tokens = bounds.count(input_tokens), output_tokens = bounds.count(output_tokens),
+        cached_tokens = bounds.count(cached_tokens), cache_write_tokens = bounds.count(cache_write_tokens),
+        reasoning_tokens = bounds.count(reasoning_tokens), cost_usd = values.nonnegative(cost_usd),
+    }
+    if next(usage) == nil then return nil end
+    return usage
+end
+-- Attach only a model the protocol actually identifies; never infer pricing.
+function M.model_usage(usage: vocabulary.Usage?, model: unknown): vocabulary.Usage?
+    if not usage then return nil end
+    local name = bounds.model(model)
+    if name then
+        local item: vocabulary.ModelUsage = {}
+        for _, field in ipairs({"input_tokens", "output_tokens", "cached_tokens", "cache_write_tokens", "reasoning_tokens", "cost_usd", "cost_decimal", "currency"}) do
+            item[field] = usage[field]
+        end
+        usage.models = {[name] = item}
+    end
+    return usage
+end
+-- Overlay a later snapshot without losing counters it does not report.
+function M.merge_usage(previous: vocabulary.Usage?, current: vocabulary.Usage?): vocabulary.Usage?
+    if not current then return previous end
+    local total = previous or {}
+    for key, value in pairs(current) do total[key] = value end
+    return total
+end
+-- Sum disjoint messages/steps. Snapshots must replace, not pass through here.
+function M.add_usage(previous: vocabulary.Usage?, current: vocabulary.Usage?): vocabulary.Usage?
+    if not current then return previous end
+    local total = previous or {}
+    for _, field in ipairs({"input_tokens", "output_tokens", "cached_tokens", "cache_write_tokens", "reasoning_tokens", "cost_usd"}) do
+        local value = values.nonnegative(current[field])
+        if value ~= nil then total[field] = math.min((values.nonnegative(total[field]) or 0) + value, bounds.MAX_SAFE_INTEGER) end
+    end
+    if current.models then
+        local models = total.models or {}
+        for name, item in pairs(current.models) do models[name] = M.add_usage(models[name], item) end
+        total.models = models
+    end
+    return total
+end
+-- Length-prefix message identity so delimiters inside protocol IDs cannot alias.
+function M.segment_id(message_id: string, block_id: string): string
+    local id = tostring(#message_id) .. ":" .. message_id .. ":" .. block_id
+    if #id > bounds.MAX_ID_BYTES then return "segment:" .. assert(hash.sha256(id)) end
+    return id
+end
+function M.limit_window(window: string, utilization: unknown, status: unknown, resets_at: unknown, percent: boolean?): vocabulary.RateLimitWindow?
+    local name = bounds.id(window)
+    if not name then return nil end
+    local used = values.nonnegative(utilization)
+    if used and (percent == true or (percent == nil and used > 1)) then used = used / 100 end
+    if used then used = math.min(used, 1) end
+    local selected = values.limit_status(status)
+    if status == "allowed_warning" then selected = "warning" end
+    if not selected then selected = used and used >= 1 and "rejected" or "allowed" end
+    return {window = name, utilization = used, status = selected, resets_at = bounds.count(resets_at)}
+end
+function M.decode_usage(value: unknown): (vocabulary.Usage?, string?)
+    if value == nil then return nil, nil end
+    return values.usage(value)
+end
+function M.limit_status(value: unknown): vocabulary.LimitStatus?
+    if value == "allowed_warning" then return "warning" end
+    return values.limit_status(value)
+end
+function M.decode_limits(value: unknown): (vocabulary.RateLimits?, string?)
+    if value == nil then return nil, nil end
+    return values.rate_limits(value)
+end
+function M.rate_limit(event_key: string, limits: vocabulary.RateLimits): vocabulary.Observation
+    return {type = "rate_limit", event_key = event_key, data = {type = "rate_limit", limits = limits}}
+end
+function M.rejected(limits: vocabulary.RateLimits?): boolean
+    if limits then for _, window in ipairs(limits.windows) do if window.status == "rejected" then return true end end end
+    return false
 end
 function M.fault(code: string, message: string, retryable: boolean): vocabulary.Fault
     return {code = bounds.id(code) or "unknown", message = bounded(message, 2048), retryable = retryable}

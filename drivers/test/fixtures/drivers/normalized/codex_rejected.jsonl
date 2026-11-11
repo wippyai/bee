@@ -1,0 +1,2 @@
+{"type":"token_count","info":null,"rate_limits":{"primary":{"used_percent":100,"window_minutes":300,"resets_at":1794528000}}}
+{"type":"turn.failed","error":{"message":"Usage limit reached"}}

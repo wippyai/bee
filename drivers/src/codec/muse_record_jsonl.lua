@@ -42,7 +42,7 @@ end
 local function decode_terminal(value: unknown): (types.Terminal?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state.terminal must be an object" end
-    local unknown_field = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
+    local unknown_field = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error", "rate_limits"})
     if unknown_field then return nil, "state.terminal: " .. unknown_field end
     local outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
     if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "state.terminal.outcome is not one outcome Bee admits" end
@@ -66,7 +66,9 @@ local function decode_terminal(value: unknown): (types.Terminal?, string?)
     end
     local fault, fault_error = events.decode_fault(object.error, "state.terminal.error", record_bounds.MAX_FAULT_MESSAGE_BYTES)
     if fault_error then return nil, fault_error end
-    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
+    local rate_limits, limits_error = events.decode_limits(object.rate_limits)
+    if limits_error then return nil, limits_error end
+    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault, rate_limits = rate_limits}, nil
 end
 
 -- Normalizer state is persisted by the carrier and returns as untrusted input.
@@ -279,6 +281,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             outcome = "uncertain"
             fault = events.fault("run_terminal_unknown", "muse reported an unknown terminal: " .. tostring(terminal), false)
         end
+        -- payload.text is a run summary repeating output deltas, not a new message.
         local answer: string? = nil
         if outcome == "succeeded" then answer = retained_answer(state) end
         out[#out + 1] = events.turn(key(index, "turn"), "ended", outcome, nil)

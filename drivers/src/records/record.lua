@@ -64,8 +64,31 @@ local function encode_usage(usage: types.Usage?): string?
     field(fields, "input_tokens", optional_integer(usage.input_tokens))
     field(fields, "output_tokens", optional_integer(usage.output_tokens))
     field(fields, "cached_tokens", optional_integer(usage.cached_tokens))
+    field(fields, "cache_write_tokens", optional_integer(usage.cache_write_tokens))
+    field(fields, "reasoning_tokens", optional_integer(usage.reasoning_tokens))
+    if usage.cost_usd ~= nil then field(fields, "cost_usd", string.format("%.17g", usage.cost_usd)) end
+    if usage.models then
+        local models: {Field} = {}
+        for name, model in pairs(usage.models) do field(models, name, encode_usage(model)) end
+        field(fields, "models", encode_object(models))
+    end
     field(fields, "cost_decimal", optional_string(usage.cost_decimal))
     field(fields, "currency", optional_string(usage.currency))
+    return encode_object(fields)
+end
+local function encode_limits(limits: types.RateLimits): string
+    local fields: {Field} = {}
+    local windows: {string} = {}
+    for _, window in ipairs(limits.windows) do
+        local item: {Field} = {{key = "window", json = encode_string(window.window)}, {key = "status", json = encode_string(window.status)}}
+        if window.utilization ~= nil then field(item, "utilization", string.format("%.17g", window.utilization)) end
+        field(item, "resets_at", optional_integer(window.resets_at))
+        windows[#windows + 1] = encode_object(item)
+    end
+    field(fields, "windows", "[" .. table.concat(windows, ",") .. "]")
+    field(fields, "overage_status", optional_string(limits.overage_status))
+    field(fields, "overage_disabled_reason", optional_string(limits.overage_disabled_reason))
+    if limits.is_using_overage ~= nil then field(fields, "is_using_overage", limits.is_using_overage and "true" or "false") end
     return encode_object(fields)
 end
 local function encode_data(data: types.ObservationData): string
@@ -77,6 +100,8 @@ local function encode_data(data: types.ObservationData): string
         field(fields, "phase", encode_string(data.phase))
         field(fields, "reported_outcome", optional_string(data.reported_outcome))
         field(fields, "usage", encode_usage(data.usage))
+    elseif data.type == "rate_limit" then
+        field(fields, "limits", encode_limits(data.limits))
     elseif data.type == "text" then
         field(fields, "segment_id", encode_string(data.segment_id))
         field(fields, "operation", encode_string(data.operation))

@@ -13,7 +13,6 @@ entries:
     bounds: bee.drivers.values:bounds
     canonical: bee.drivers.values:canonical
     driver_types: bee.drivers:types
-    record_values: bee.drivers.records:values
     vocabulary: bee.harness:checkpoint_types
 - name: prestart
   kind: library.lua

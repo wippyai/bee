@@ -44,6 +44,12 @@ local function decode_data(value: unknown): (types.ObservationData?, string?)
             signal.usage = usage
         end
         return signal, nil
+    elseif tag == "rate_limit" then
+        local unknown_field = bounds.fields(object, {"type", "limits"})
+        if unknown_field then return nil, unknown_field end
+        local limits, err = values.rate_limits(object.limits)
+        if not limits then return nil, err end
+        return {type = "rate_limit", limits = limits}, nil
     elseif tag == "text" then
         local unknown_field = bounds.fields(object, {"type", "segment_id", "operation", "text", "channel"})
         if unknown_field then return nil, unknown_field end

@@ -1,0 +1,4 @@
+{"type":"text","data":"po","sessionId":"session-a"}
+{"type":"text","data":"ng"}
+{"type":"usage","usage":{"prompt_tokens":12,"completion_tokens":7,"prompt_tokens_details":{"cached_tokens":3},"completion_tokens_details":{"reasoning_tokens":2}}}
+{"type":"end","stopReason":"end_turn"}

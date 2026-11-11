@@ -38,20 +38,11 @@ local function text_of(value: unknown): string
 end
 -- Step tokens are provider counters: input and output token counts with an
 -- optional prompt-cache read count. Steps accumulate across one run.
-local function accumulate_usage(state: State, value: unknown)
-    if type(value) ~= "table" then return end
-    local tokens = value
-    local cache: {[string]: unknown}? = nil
-    if type(tokens.cache) == "table" then cache = tokens.cache end
-    local usage = events.usage(tokens.input, tokens.output, cache and cache.read)
-    if not usage then return end
-    local total = state.usage or {}
-    for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
-        local previous = bounds.count(total[name]) or 0
-        local current = bounds.count(usage[name]) or 0
-        total[name] = previous + current
-    end
-    state.usage = total
+local function accumulate_usage(state: State, value: unknown, cost: unknown)
+    local tokens = bounds.object(value) or {}
+    local cache = bounds.object(tokens.cache) or {}
+    state.usage = events.add_usage(state.usage, events.usage(tokens.input, tokens.output, cache.read,
+        cache.write, tokens.reasoning, cost))
 end
 local function observe_session(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?, out: {Observation})
     local raw = path_reader.read(envelope, paths, "resume_id")
@@ -159,7 +150,7 @@ function M.decode_state(value: unknown): (State?, string?)
     if object.terminal ~= nil then
         local terminal_object = bounds.object(object.terminal)
         if not terminal_object then return nil, "state.terminal must be an object" end
-        local terminal_unknown = bounds.fields(terminal_object, {"outcome", "answer", "resume_ref", "usage", "error"})
+        local terminal_unknown = bounds.fields(terminal_object, {"outcome", "answer", "resume_ref", "usage", "error", "rate_limits"})
         if terminal_unknown then return nil, "state.terminal: " .. terminal_unknown end
         local outcome = bounds.member(terminal_object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
         if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "state.terminal.outcome is not one outcome Bee admits" end
@@ -189,7 +180,9 @@ function M.decode_state(value: unknown): (State?, string?)
             if not code or not message or type(error_object.retryable) ~= "boolean" then return nil, "state.terminal.error is invalid" end
             terminal_fault = {code = code, message = message, retryable = error_object.retryable}
         end
-        terminal = {outcome = terminal_outcome, answer = terminal_answer, resume_ref = resume_ref, usage = terminal_usage, error = terminal_fault}
+        local rate_limits, limits_error = events.decode_limits(terminal_object.rate_limits)
+        if limits_error then return nil, limits_error end
+        terminal = {outcome = terminal_outcome, answer = terminal_answer, resume_ref = resume_ref, usage = terminal_usage, error = terminal_fault, rate_limits = rate_limits}
     end
     return {session_id = session_id, started = object.started, completed = object.completed == true, resumed = object.resumed,
         answer = answer, answer_truncated = object.answer_truncated, usage = usage, error = fault,
@@ -222,7 +215,9 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
                     out[#out + 1] = events.notice(key(index, "answer-bound"), "warning", "answer_truncated", "OpenCode answer exceeded the retained answer bound; text observations remain complete")
                 end
             end
-            for _, piece in ipairs(events.text(key(index, "text"), "answer", "append", text, "answer")) do out[#out + 1] = piece end
+            local part = bounds.object(envelope.part) or {}
+            local segment = events.segment_id(bounds.id(part.messageID) or ("message:" .. tostring(index)), bounds.id(part.id) or "text")
+            for _, piece in ipairs(events.text(key(index, "text"), segment, "complete", text, "answer")) do out[#out + 1] = piece end
         end
     elseif kind == "tool_use" then
         state.completed = false
@@ -232,7 +227,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         local part = bounds.object(envelope.part)
         state.completed = part ~= nil and part.reason == "stop"
         ensure_started(state, index, out)
-        accumulate_usage(state, path_reader.read(envelope, paths, "usage"))
+        accumulate_usage(state, path_reader.read(envelope, paths, "usage"), part and part.cost)
     elseif kind == "error" then
         ensure_started(state, index, out)
         local fault = error_fault(path_reader.read(envelope, paths, "errors"))
@@ -257,8 +252,8 @@ function M.finish(state: State, index: integer): Step
         out[#out + 1] = events.turn(key(index, "eof"), "ended", "failed", state.usage)
         terminal = {outcome = "failed", resume_ref = state.session_id, usage = state.usage, error = state.error}
     elseif not state.completed then
-        out[#out + 1] = events.turn(key(index, "eof"), "ended", "uncertain", nil)
-        terminal = {outcome = "uncertain", resume_ref = state.session_id,
+        out[#out + 1] = events.turn(key(index, "eof"), "ended", "uncertain", state.usage)
+        terminal = {outcome = "uncertain", resume_ref = state.session_id, usage = state.usage,
             error = events.fault("stream_ended", "the stream ended without a completed step", false)}
     else
         out[#out + 1] = events.turn(key(index, "eof"), "ended", "succeeded", state.usage)

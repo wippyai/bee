@@ -102,12 +102,14 @@ type Launch = {
 -- What a normalizer reports when the protocol says the turn is over.
 type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
 type Usage = events.Usage
+type RateLimits = events.RateLimits
 type Fault = {code: string, message: string, retryable: boolean}
 type Terminal = {
     outcome: Outcome,
     answer: string?,
     resume_ref: string?,
     usage: Usage?,
+    rate_limits: RateLimits?,
     error: Fault?,
 }
 local bounds = require("bounds")
@@ -121,7 +123,7 @@ M.AUTHENTICATION_STATUS = "unproven"
 function M.decode_terminal(value: unknown): (Terminal?, string?)
     local object = bounds.object(value)
     if not object then return nil, "terminal must be an object" end
-    local unknown = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
+    local unknown = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error", "rate_limits"})
     if unknown then return nil, "terminal: " .. unknown end
     local outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
     if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "terminal.outcome is not a carrier outcome" end
@@ -144,6 +146,12 @@ function M.decode_terminal(value: unknown): (Terminal?, string?)
         if usage_error then return nil, "terminal." .. tostring(usage_error) end
         usage = decoded
     end
+    local rate_limits: RateLimits? = nil
+    if object.rate_limits ~= nil then
+        local decoded, err = values.rate_limits(object.rate_limits)
+        if not decoded then return nil, err end
+        rate_limits = decoded
+    end
     local fault: Fault? = nil
     if object.error ~= nil then
         local raw_fault = bounds.object(object.error)
@@ -156,6 +164,6 @@ function M.decode_terminal(value: unknown): (Terminal?, string?)
         fault = {code = code, message = message, retryable = raw_fault.retryable}
     end
     if outcome == "failed" and not fault then return nil, "failed terminal must include an error" end
-    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
+    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault, rate_limits = rate_limits}, nil
 end
 return M

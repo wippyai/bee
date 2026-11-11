@@ -6,13 +6,25 @@ type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
 type Kind = "observation" | "message" | "action.admitted" | "attempt.prepared" | "attempt.started" | "turn.request" | "turn.end" | "receipt" | "delivery.mark" | "request.answered" | "approval.request" | "approval.transition"
 type Ref = {thread_id: string, record_id: string}
 type Fault = {code: string, message: string, retryable: boolean}
-type Usage = {
+type ModelUsage = {
     input_tokens: integer?,
     output_tokens: integer?,
     cached_tokens: integer?,
+    cache_write_tokens: integer?,
+    reasoning_tokens: integer?,
+    cost_usd: number?,
     cost_decimal: string?,
     currency: string?,
 }
+type Usage = {
+    input_tokens: integer?, output_tokens: integer?, cached_tokens: integer?,
+    cache_write_tokens: integer?, reasoning_tokens: integer?, cost_usd: number?,
+    cost_decimal: string?, currency: string?, models: {[string]: ModelUsage}?,
+}
+type LimitStatus = "allowed" | "warning" | "rejected"
+type RateLimitWindow = {window: string, utilization: number?, status: LimitStatus, resets_at: integer?}
+type RateLimits = {windows: {RateLimitWindow}, overage_status: LimitStatus?, overage_disabled_reason: string?, is_using_overage: boolean?}
+type RateLimit = {type: "rate_limit", limits: RateLimits}
 type Content = {text: string?, artifact_ref: string?}
 type SessionPhase = "started" | "resumed" | "ended"
 type SessionState = {type: "session.state", state: SessionPhase, resume_ref: string?}
@@ -27,7 +39,7 @@ type NoticeLevel = "info" | "warning" | "error"
 type Notice = {type: "notice", level: NoticeLevel, code: string, content: Content}
 type ExecutionExit = {type: "execution.exit", exit_code: integer?, signal: string?}
 type Extension = {type: "extension", event_name: string, event_revision: string, payload_json: string}
-type ObservationData = SessionState | TurnSignal | Text | ToolCall | ToolResult | Notice | ExecutionExit | Extension
+type ObservationData = SessionState | TurnSignal | Text | ToolCall | ToolResult | Notice | ExecutionExit | Extension | RateLimit
 type Observation = {
     type: string,
     event_key: string,

@@ -10,7 +10,7 @@ local path_reader = require("paths")
 local M = {}
 M.PROTOCOL_REVISION = "exec-json-1"
 type Observation = {[string]: unknown}
-type State = {thread_id: string?, resumed: boolean, answer: string?, terminal: types.Terminal?}
+type State = {thread_id: string?, resumed: boolean, answer: string?, usage: types.Usage?, rate_limits: types.RateLimits?, terminal: types.Terminal?}
 type Step = {observations: {Observation}, terminal: types.Terminal?}
 M.MAX_ANSWER_BYTES = 32768
 function M.new(resumed: boolean): State
@@ -19,7 +19,7 @@ end
 function M.decode_state(value: unknown): (State?, string?)
     local object = bounds.object(value)
     if not object then return nil, "state must be an object" end
-    local unknown = bounds.fields(object, {"thread_id", "resumed", "answer", "terminal"})
+    local unknown = bounds.fields(object, {"thread_id", "resumed", "answer", "terminal", "usage", "rate_limits"})
     if unknown then return nil, "state: " .. unknown end
     if type(object.resumed) ~= "boolean" then return nil, "state.resumed must be a boolean" end
     local thread_id: string? = nil
@@ -32,13 +32,17 @@ function M.decode_state(value: unknown): (State?, string?)
         answer = bounds.text(object.answer, M.MAX_ANSWER_BYTES)
         if not answer then return nil, "state.answer exceeds the retained answer bound" end
     end
+    local usage, usage_error = events.decode_usage(object.usage)
+    if usage_error then return nil, usage_error end
+    local rate_limits, limits_error = events.decode_limits(object.rate_limits)
+    if limits_error then return nil, limits_error end
     local terminal: types.Terminal? = nil
     if object.terminal ~= nil then
         local decoded, terminal_error = types.decode_terminal(object.terminal)
         if not decoded then return nil, terminal_error end
         terminal = decoded
     end
-    return {thread_id = thread_id, resumed = object.resumed, answer = answer, terminal = terminal}, nil
+    return {thread_id = thread_id, resumed = object.resumed, answer = answer, terminal = terminal, usage = usage, rate_limits = rate_limits}, nil
 end
 local function key(index: integer, suffix: string): string
     return "codex:" .. tostring(index) .. ":" .. suffix
@@ -46,20 +50,21 @@ end
 local function usage_of(value: unknown): events_types.Usage?
     if type(value) ~= "table" then return nil end
     local usage = value
-    return events.usage(usage.input_tokens, usage.output_tokens, usage.cached_input_tokens)
+    return events.model_usage(events.usage(usage.input_tokens, usage.output_tokens, usage.cached_input_tokens,
+        usage.cache_write_input_tokens or usage.cache_write_tokens, usage.reasoning_output_tokens or usage.reasoning_tokens, usage.cost_usd), usage.model)
 end
 local function item_observations(state: State, index: integer, phase: string, item: {[string]: unknown}, envelope: {[string]: unknown}, paths: {[string]: unknown}?, out: {Observation})
     local id = tostring(item.id or ("item-" .. tostring(index)))
     local kind: unknown = item.type
     if kind == "agent_message" then
         local answer = path_reader.read(envelope, paths, "result_text")
-        if phase == "completed" and type(answer) == "string" then
+        if type(answer) == "string" then
             state.answer = bounds.text(answer, M.MAX_ANSWER_BYTES)
-            for _, piece in ipairs(events.text(key(index, "message"), id, "complete", answer, "answer")) do out[#out + 1] = piece end
+            for _, piece in ipairs(events.text(key(index, "message"), id, phase == "completed" and "complete" or "replace", answer, "answer")) do out[#out + 1] = piece end
         end
     elseif kind == "reasoning" then
         if type(item.text) == "string" and #item.text > 0 then
-            for _, piece in ipairs(events.text(key(index, "reasoning"), id, "complete", item.text, "reasoning_summary")) do out[#out + 1] = piece end
+            for _, piece in ipairs(events.text(key(index, "reasoning"), id, phase == "completed" and "complete" or "replace", item.text, "reasoning_summary")) do out[#out + 1] = piece end
         end
     elseif kind == "command_execution" then
         if phase == "started" then
@@ -77,6 +82,25 @@ local function item_observations(state: State, index: integer, phase: string, it
     else
         local encoded, err = json.encode(item)
         out[#out + 1] = events.extension(key(index, "item"), "codex.item." .. tostring(kind), M.PROTOCOL_REVISION, (not err and encoded) or "{}")
+    end
+end
+-- TokenCountEvent/RateLimitSnapshot from codex-rs/protocol/src/protocol.rs.
+-- total_token_usage is cumulative; last_token_usage is only a fallback.
+local function token_count(state: State, value: {[string]: unknown}, index: integer, out: {Observation})
+    local info = bounds.object(value.info)
+    if info then state.usage = usage_of(info.total_token_usage or info.last_token_usage) or state.usage end
+    local raw = bounds.object(value.rate_limits)
+    if raw then
+        local limits: types.RateLimits = {windows = {}}
+        for _, name in ipairs({"primary", "secondary"}) do
+            local item = bounds.object(raw[name])
+            if item then
+                local window = events.limit_window(name, item.used_percent, item.status, item.resets_at, true)
+                if window then limits.windows[#limits.windows + 1] = window end
+            end
+        end
+        state.rate_limits = limits
+        out[#out + 1] = events.rate_limit(key(index, "limits"), limits)
     end
 end
 function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?): Step
@@ -97,6 +121,11 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     elseif kind == "item.started" or kind == "item.updated" or kind == "item.completed" then
         local item: unknown = envelope.item
         if type(item) == "table" then item_observations(state, index, tostring(kind):sub(6), item, envelope, paths, out) end
+    elseif kind == "token_count" then
+        token_count(state, envelope, index, out)
+    elseif kind == "event_msg" then
+        local payload = bounds.object(envelope.payload)
+        if payload and payload.type == "token_count" then token_count(state, payload, index, out) end
     elseif kind == "error" then
         -- A transient provider error carries its text in the event's own
         -- message; the errors path names the detail of a failed turn.
@@ -104,16 +133,19 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         if type(message) ~= "string" then message = "provider error" end
         out[#out + 1] = events.notice(key(index, "error"), "warning", "provider_error", message :: string)
     elseif kind == "turn.completed" then
-        local usage = usage_of(path_reader.read(envelope, paths, "usage"))
+        local usage = events.merge_usage(state.usage, usage_of(path_reader.read(envelope, paths, "usage")))
         out[#out + 1] = events.turn(key(index, "turn"), "ended", "succeeded", usage)
-        state.terminal = {outcome = "succeeded", answer = state.answer, resume_ref = state.thread_id, usage = usage}
+        state.terminal = {outcome = "succeeded", answer = state.answer, resume_ref = state.thread_id, usage = usage, rate_limits = state.rate_limits}
         return {observations = out, terminal = state.terminal}
     elseif kind == "turn.failed" then
         local message = "turn failed"
         local detail: unknown = path_reader.read(envelope, paths, "errors")
         if type(detail) == "string" then message = detail end
-        out[#out + 1] = events.turn(key(index, "turn"), "ended", "failed", usage_of(path_reader.read(envelope, paths, "usage")))
-        state.terminal = {outcome = "failed", resume_ref = state.thread_id, error = events.fault("turn_failed", message, false)}
+        local usage = events.merge_usage(state.usage, usage_of(path_reader.read(envelope, paths, "usage")))
+        out[#out + 1] = events.turn(key(index, "turn"), "ended", "failed", usage)
+        local rejected = events.rejected(state.rate_limits)
+        state.terminal = {outcome = "failed", resume_ref = state.thread_id, usage = usage, rate_limits = state.rate_limits,
+            error = events.fault(rejected and "rate_limit" or "turn_failed", message, rejected)}
         return {observations = out, terminal = state.terminal}
     else
         local encoded, err = json.encode(envelope)
@@ -128,7 +160,7 @@ function M.finish(state: State, index: integer): Step
         return quiet
     end
     local out: {Observation} = {events.turn(key(index, "eof"), "ended", "uncertain", nil)}
-    local terminal: types.Terminal = {outcome = "uncertain", resume_ref = state.thread_id, error = events.fault("stream_ended", "the stream ended without turn.completed", false)}
+    local terminal: types.Terminal = {outcome = "uncertain", resume_ref = state.thread_id, usage = state.usage, rate_limits = state.rate_limits, error = events.fault("stream_ended", "the stream ended without turn.completed", false)}
     state.terminal = terminal
     return {observations = out, terminal = terminal}
 end

@@ -4,7 +4,6 @@ local vocabulary = require("vocabulary")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local driver_types = require("driver_types")
-local record_values = require("record_values")
 local M = {}
 M.REVISION = "bee.carrier.checkpoint@1"
 -- vocabulary.Carry bytes per stream: a frame the carrier cannot checkpoint is never
@@ -47,33 +46,7 @@ end
 local function terminal(value: unknown): (driver_types.Terminal?, string?)
     local object, object_error = bounded_json_object(value, "terminal", M.MAX_TERMINAL_BYTES)
     if not object then return nil, object_error end
-    local unknown_field = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
-    if unknown_field then return nil, "terminal: " .. unknown_field end
-    local outcome = record_values.outcome(object.outcome)
-    if not outcome then return nil, "terminal outcome is invalid" end
-    local answer: string? = nil
-    if object.answer ~= nil then
-        answer = bounds.text(object.answer, M.MAX_TERMINAL_BYTES)
-        if answer == nil then return nil, "terminal answer is invalid" end
-    end
-    local resume_ref: string? = nil
-    if object.resume_ref ~= nil then
-        resume_ref = bounds.id(object.resume_ref)
-        if resume_ref == nil then return nil, "terminal resume_ref is invalid" end
-    end
-    local usage: driver_types.Usage? = nil
-    if object.usage ~= nil then
-        local decoded_usage, usage_error = record_values.usage(object.usage)
-        if not decoded_usage then return nil, "terminal usage is malformed: " .. tostring(usage_error) end
-        usage = decoded_usage
-    end
-    local terminal_error: driver_types.Fault? = nil
-    if object.error ~= nil then
-        local decoded_error, fault_error = record_values.fault(object.error)
-        if not decoded_error then return nil, "terminal error is malformed: " .. tostring(fault_error) end
-        terminal_error = decoded_error
-    end
-    return {outcome = outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = terminal_error}, nil
+    return driver_types.decode_terminal(object)
 end
 function M.decode_terminal(value: unknown): (driver_types.Terminal?, string?)
     return terminal(value)

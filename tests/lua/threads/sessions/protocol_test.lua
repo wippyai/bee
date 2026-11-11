@@ -1,6 +1,8 @@
 local test = require("test")
 local protocol = require("protocol")
 local json = require("json")
+local canonical = require("canonical")
+local session_tools = require("session_tools")
 
 local function succeeded(): {[string]: unknown}
     return {outcome = "succeeded", schema = "bee:Text@1", value = {text = "done"}, artifacts = {}, usage = {}}
@@ -48,6 +50,22 @@ local function define_tests()
             test.is_nil(protocol.decode_result(result))
             result.usage = {cost_decimal = "1.2"}
             test.is_nil(protocol.decode_result(result))
+        end)
+        test.it("preserves extended usage in the public schema", function()
+            local result = succeeded()
+            result.usage = {cache_write_tokens = 3, reasoning_tokens = 2, cost_usd = 0.25,
+                models = {fixture = {input_tokens = 7}}}
+            local decoded = assert(protocol.decode_result(result))
+            local valid, failure = json.validate_string(assert(json.encode(session_tools.OUTPUT_SCHEMAS.session_await)),
+                assert(json.encode({ok = true, value = {subject_kind = "work", subject = "bw:n:w:w1", cursor = "c1", tag = "ready", result = decoded}})))
+            test.is_true(valid, tostring(failure))
+        end)
+        test.it("preserves empty model objects in canonical JSON", function()
+            local result = succeeded()
+            result.usage = {models = {empty = {}}}
+            test.eq(assert(canonical.encode(assert(protocol.decode_result(result)).usage)), '{"models":{"empty":{}}}')
+            result.usage = {models = {}}
+            test.eq(assert(canonical.encode(assert(protocol.decode_result(result)).usage)), '{"models":{}}')
         end)
         test.it("accepts only the optional work budget fields", function()
             local decoded = assert(protocol.decode_budget({provider_steps = 8, tokens = 12000, wall_time_ms = 90000}))

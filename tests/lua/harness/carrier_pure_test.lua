@@ -144,6 +144,22 @@ local function define_tests()
             test.is_nil(bounded)
             test.eq(bounded_error, "pending_writes must be a bounded dense list: list exceeds 8 items")
         end)
+        test.it("preserves extended driver terminals across checkpoint recovery", function()
+            local raw = {outcome = "succeeded", usage = {cache_write_tokens = 3, reasoning_tokens = 2,
+                cost_usd = 0.25, models = {fixture = {input_tokens = 7}}},
+                rate_limits = {windows = {{window = "five_hour", status = "warning", utilization = 0.8, resets_at = 123}},
+                    overage_status = "allowed", is_using_overage = false}}
+            local terminal, failure = checkpoint.decode_terminal(raw)
+            assert(terminal, tostring(failure))
+            local point = checkpoint.new({binding_ref = "b", binding_digest = "d", profile_id = "batch", profile_digest = "p"}, 1)
+            point.terminal = terminal
+            local restored = assert(checkpoint.decode(point))
+            test.eq(canonical.encode(restored.terminal), canonical.encode(assert(driver_types.decode_terminal(raw))))
+            local malformed = {outcome = "succeeded", rate_limits = {windows = {{window = "five_hour", status = "warning", utilization = 2}}}}
+            test.is_nil(checkpoint.decode_terminal(malformed))
+            test.is_nil(checkpoint.decode_terminal({outcome = "failed"}))
+            test.is_nil(checkpoint.decode_terminal({outcome = "succeeded", extra = true}))
+        end)
         test.it("decodes checkpoint terminals through shared fault and usage types", function()
             local raw: {[string]: unknown} = {outcome = "failed", answer = "failed", resume_ref = "session",
                 usage = {input_tokens = 7, cost_decimal = "0.25", currency = "USD"},
@@ -157,11 +173,11 @@ local function define_tests()
             local malformed_usage: {[string]: unknown} = {outcome = "succeeded", usage = {unexpected = true}}
             local invalid_usage, usage_error = checkpoint.decode_terminal(malformed_usage)
             test.is_nil(invalid_usage)
-            test.eq(usage_error, "terminal usage is malformed: unknown field unexpected")
+            test.eq(usage_error, "terminal.unknown field unexpected")
             local malformed_fault: {[string]: unknown} = {outcome = "failed", error = {code = "driver_failed", message = "failure", retryable = "no"}}
             local invalid_fault, fault_error = checkpoint.decode_terminal(malformed_fault)
             test.is_nil(invalid_fault)
-            test.eq(fault_error, "terminal error is malformed: fault retryable must be a boolean")
+            test.eq(fault_error, "terminal.error is malformed")
         end)
         test.it("rejects malformed gateway materialization credentials and nested bindings", function()
             local binding: {[string]: unknown} = {binding_id = "binding", subject = "owner", action_id = "action", attempt_id = "attempt",

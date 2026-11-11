@@ -103,6 +103,100 @@ environment variables.
 the named environment values at those JSON paths; a file with `composition`
 merges onto the existing file at `composition.base_path`.
 
+## Normalized stream records
+
+Text consumers fold observations by `data.segment_id`: `append` adds text;
+`replace` and `complete` set its full text. A completed message reuses its
+streamed message/block identity. Distinct messages remain distinct even when
+their text is identical. IDs are opaque: do not depend on their spelling.
+Claude uses the API message ID and zero-based content block index. Pi uses
+its `message_start` occurrence and `contentIndex` (the protocol has no stable
+message ID at the start). Codex uses item IDs; OpenCode uses message/part IDs.
+Agy's step deltas, Grok's text chunks, and Muse's run deltas already have a
+single stream identity; their terminal answer summaries do not open segments.
+Large full snapshots use a bounded `replace` followed by `append` pieces on
+the same ID, preserving every byte. The terminal signal settles the turn.
+
+Every driver's optional `terminal.usage`, and the optional `usage` in an
+ended `turn.signal`, have this shape (`?` means optional):
+
+```text
+Usage = {
+  input_tokens?: integer,
+  output_tokens?: integer,
+  cached_tokens?: integer,       // cache reads; existing meaning unchanged
+  cache_write_tokens?: integer,
+  reasoning_tokens?: integer,
+  cost_usd?: number,
+  cost_decimal?: string, currency?: string,  // existing paired fields
+  models?: { [model: string]: ModelUsage }
+}
+ModelUsage = Usage without models
+```
+
+Counters are nonnegative safe integers. Cost is a finite, nonnegative reported
+USD amount; drivers do not estimate prices. Reasoning tokens may be a subset
+of output tokens; do not add them to output. Unreported fields stay absent;
+reported zero values stay present. Models are included only when the stream
+identifies them. Totals and per-model usage reflect the provider's respective
+reports and need not sum identically (for example, ancillary Claude models).
+The existing `cost_decimal`/`currency` contract remains supported.
+Usage, its `models` map and each model's usage encode as JSON objects even
+when empty; canonical encoding preserves that shape. Sessions publishes this
+same usage contract. Carrier checkpoints decode terminals through
+`bee.drivers:types.decode_terminal`, including optional `rate_limits`, while
+retaining their own encoded terminal byte bound.
+
+| Harness | Usage source and aggregation |
+|---|---|
+| Claude | `result.usage`, `total_cost_usd`, `modelUsage`; completed assistant usage is retained if the result is missing |
+| Codex | `turn.completed.usage`; native `token_count` and rollout `event_msg` token-count snapshots supply additional counters and limits; cumulative snapshots replace previous totals |
+| Agy | Result aggregate, including `cache_read_tokens` and `thinking_tokens`; completed step usage is retained if the result is missing; `init.model` supplies the model name |
+| Grok | Latest `usage`/`end.usage`, including OpenAI-compatible cache and reasoning detail counters |
+| Muse | The recorded MSP stream reports no token usage or cost; these stay absent |
+| OpenCode | Sum of `step_finish.part.tokens` and `part.cost`, including cache write and reasoning counts; run JSON reports no model identity |
+| Pi | Sum of assistant `message_end.message.usage`, including `cacheWrite`, `cost.total`, and `message.model` |
+
+Provider limit observations use one tag and payload:
+
+```text
+{
+  type: "rate_limit", event_key: string,
+  data: { type: "rate_limit", limits: RateLimits }
+}
+RateLimits = {
+  windows: [{
+    window: string,
+    utilization?: number,       // 0..1, including percentage inputs converted
+    status: "allowed" | "warning" | "rejected",
+    resets_at?: integer        // epoch seconds
+  }],
+  overage_status?: "allowed" | "warning" | "rejected",
+  overage_disabled_reason?: string,
+  is_using_overage?: boolean
+}
+```
+
+`terminal.rate_limits?: RateLimits` retains the latest provider snapshot,
+including on failure or incomplete EOF. Window names follow the provider:
+Claude's `five_hour`, `seven_day`, etc., and Codex's `primary`/`secondary`.
+`allowed_warning` becomes `warning`; Codex's `used_percent` is divided by
+100 (so 1 percent becomes 0.01). Without an explicit status, a fully used
+window is rejected and a less used window is allowed. A rejected window
+preserves a retryable `rate_limit` failure when the turn fails; an allowed
+turn or a rejected overage facility alone does not imply a failed turn.
+Other codecs omit rate limits because their admitted streams do not report
+provider windows. The same builders and strict decoders serve every codec.
+
+The complete terminal shape is `{outcome, answer?, resume_ref?, usage?,
+rate_limits?, error?}`. Existing outcome and fault shapes are unchanged.
+`drivers.Usage` and `drivers.RateLimits` export the typed contracts. Both
+usage and limit observations also survive the canonical record encoder.
+Replay coverage and protocol provenance are in
+`test/src/codec_contract_test.lua` and
+`test/fixtures/drivers/normalized/manifest.json`, alongside the existing
+recorded streams for each harness.
+
 ## Endpoints
 
 A host can send a CLI's model traffic to an endpoint it chooses instead of the

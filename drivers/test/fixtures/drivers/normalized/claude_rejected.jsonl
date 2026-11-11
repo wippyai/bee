@@ -1,0 +1,2 @@
+{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":1,"resetsAt":1794528000}},"overageStatus":"rejected"}}
+{"type":"result","subtype":"error_during_execution","is_error":true,"result":"rate limit","api_error_status":429}

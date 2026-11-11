@@ -12,6 +12,7 @@ M.PROTOCOL_REVISION = "pi-json-1"
 M.MAX_ANSWER_BYTES = events.MAX_TEXT_BYTES
 type Observation = {[string]: unknown}
 type State = {
+    message_id: string?,
     session_id: string?, started: boolean, resumed: boolean, completed: boolean,
     answer: string?, answer_truncated: boolean, stop: string?,
     error: types.Fault?, usage: types.Usage?, terminal: types.Terminal?,
@@ -22,12 +23,14 @@ function M.new(resumed: boolean): State
 end
 function M.decode_state(value: unknown): (State?, string?)
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"session_id", "started", "resumed", "completed", "answer", "answer_truncated", "stop", "error", "usage", "terminal"}) then
+    if not object or bounds.fields(object, {"message_id", "session_id", "started", "resumed", "completed", "answer", "answer_truncated", "stop", "error", "usage", "terminal"}) then
         return nil, "state has invalid fields"
     end
     if type(object.started) ~= "boolean" or type(object.resumed) ~= "boolean" or type(object.completed) ~= "boolean" or type(object.answer_truncated) ~= "boolean" then
         return nil, "state flags must be booleans"
     end
+    local message_id = object.message_id == nil and nil or bounds.id(object.message_id)
+    if object.message_id ~= nil and not message_id then return nil, "state.message_id is invalid" end
     local session_id: string? = nil
     if object.session_id ~= nil then
         session_id = bounds.id(object.session_id)
@@ -60,7 +63,7 @@ function M.decode_state(value: unknown): (State?, string?)
         end
         terminal = decoded
     end
-    return {session_id = session_id, started = object.started, resumed = object.resumed, completed = object.completed,
+    return {message_id = message_id, session_id = session_id, started = object.started, resumed = object.resumed, completed = object.completed,
         answer = answer, answer_truncated = object.answer_truncated, stop = stop, error = fault, usage = usage, terminal = terminal}, nil
 end
 local function key(index: integer, suffix: string): string return "pi:" .. tostring(index) .. ":" .. suffix end
@@ -93,8 +96,16 @@ local function summary(state: State, index: integer, message: {[string]: unknown
     -- The last assistant message is the answer, not the tool preambles.
     state.answer, state.answer_truncated = nil, false
     local content = bounds.array(message.content, 65536) or {}
-    for _, raw in ipairs(content) do
+    local message_id = state.message_id or bounds.id(message.responseId) or ("message:" .. tostring(index))
+    for position, raw in ipairs(content) do
         local block = bounds.object(raw)
+        if block then
+            local text = block.type == "text" and block.text or block.type == "thinking" and block.thinking or nil
+            if type(text) == "string" then
+                local channel = block.type == "text" and "answer" or "reasoning_summary"
+                for _, piece in ipairs(events.text(key(index, "block" .. tostring(position)), events.segment_id(message_id, tostring(position - 1)), "complete", text, channel)) do out[#out + 1] = piece end
+            end
+        end
         if block and block.type == "text" and type(block.text) == "string" and not state.answer_truncated then
             local current = state.answer or ""
             if #current + #block.text <= M.MAX_ANSWER_BYTES then state.answer = current .. block.text
@@ -106,15 +117,10 @@ local function summary(state: State, index: integer, message: {[string]: unknown
     end
     local raw_usage = bounds.object(message.usage)
     if raw_usage then
-        local usage = events.usage(raw_usage.input, raw_usage.output, raw_usage.cacheRead)
-        if usage then
-            local total = state.usage or {}
-            for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens"}) do
-                local previous, current = bounds.count(total[name]) or 0, bounds.count(usage[name]) or 0
-                total[name] = math.min(previous + current, bounds.MAX_SAFE_INTEGER)
-            end
-            state.usage = total
-        end
+        local cost = bounds.object(raw_usage.cost)
+        local usage = events.model_usage(events.usage(raw_usage.input, raw_usage.output, raw_usage.cacheRead,
+            raw_usage.cacheWrite, raw_usage.reasoning, cost and cost.total), message.model)
+        state.usage = events.add_usage(state.usage, usage)
     end
 end
 function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?): Step
@@ -138,15 +144,23 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             out[#out + 1] = events.session(key(index, "session"), state.resumed and "resumed" or "started", state.session_id)
             out[#out + 1] = events.turn(key(index, "turn"), "started", nil, nil)
         end
+    elseif kind == "message_start" then
+        local message = bounds.object(envelope.message)
+        if message and message.role == "assistant" then state.message_id = "message:" .. tostring(index) end
     elseif kind == "message_update" then
         local update = bounds.object(envelope.assistantMessageEvent)
         if update and (update.type == "text_delta" or update.type == "thinking_delta") and type(update.delta) == "string" and #update.delta > 0 then
             local channel = update.type == "text_delta" and "answer" or "reasoning_summary"
-            for _, piece in ipairs(events.text(key(index, "delta"), channel, "append", update.delta, channel)) do out[#out + 1] = piece end
+            state.message_id = state.message_id or ("message:" .. tostring(index))
+            local segment = events.segment_id(state.message_id, tostring(update.contentIndex or 0))
+            for _, piece in ipairs(events.text(key(index, "delta"), segment, "append", update.delta, channel)) do out[#out + 1] = piece end
         end
     elseif kind == "message_end" then
         local message = bounds.object(envelope.message)
-        if message and message.role == "assistant" then summary(state, index, message, out) end
+        if message and message.role == "assistant" then
+            summary(state, index, message, out)
+            state.message_id = nil
+        end
     elseif kind == "tool_execution_start" then
         local id, name = bounds.id(envelope.toolCallId), bounds.id(envelope.toolName)
         if id and name then out[#out + 1] = events.tool_call(key(index, "call"), id, name, encoded(envelope.args))

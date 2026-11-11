@@ -52,7 +52,7 @@ local function usage_fields(value: unknown, models: boolean): (types.Usage?, str
     if models then allowed[#allowed + 1] = "models" end
     local unknown_field = bounds.fields(object, allowed)
     if unknown_field then return nil, unknown_field end
-    local usage: types.Usage = {}
+    local usage: types.Usage = table.create(0, 1)
     for _, name in ipairs({"input_tokens", "output_tokens", "cached_tokens", "cache_write_tokens", "reasoning_tokens"}) do
         if object[name] ~= nil then
             local count = bounds.count(object[name])
@@ -81,7 +81,7 @@ function M.usage(value: unknown): (types.Usage?, string?)
     if object.models ~= nil then
         local models = bounds.object(object.models)
         if not models then return nil, "usage models must be an object" end
-        local decoded: {[string]: types.ModelUsage} = {}
+        local decoded: {[string]: types.ModelUsage} = table.create(0, 1)
         local count = 0
         for model, raw in pairs(models) do
             count = count + 1

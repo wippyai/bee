@@ -141,6 +141,11 @@ reported zero values stay present. Models are included only when the stream
 identifies them. Totals and per-model usage reflect the provider's respective
 reports and need not sum identically (for example, ancillary Claude models).
 The existing `cost_decimal`/`currency` contract remains supported.
+Usage, its `models` map and each model's usage encode as JSON objects even
+when empty; canonical encoding preserves that shape. Sessions publishes this
+same usage contract. Carrier checkpoints decode terminals through
+`bee.drivers:types.decode_terminal`, including optional `rate_limits`, while
+retaining their own encoded terminal byte bound.
 
 | Harness | Usage source and aggregation |
 |---|---|

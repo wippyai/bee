@@ -264,6 +264,8 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.threads.sessions.types:protocol
+    canonical: bee.drivers.values:canonical
+    session_tools: bee.gateway.catalog:session_tools
 - name: client_test
   kind: function.lua
   source: file://client_test.lua

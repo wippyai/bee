@@ -73,6 +73,16 @@ local function one_answer(run: Run, expected: string)
 end
 local function define_tests()
     test.describe("Common codec contract", function()
+        test.it("encodes empty usage and model maps as objects", function()
+            for _, raw in ipairs({{}, {models = {}}, {models = {empty = {}}}}) do
+                local usage = assert(values.usage(raw))
+                local encoded = assert(json.encode(usage))
+                test.is_true(encoded:sub(1, 1) == "{")
+                if raw.models then
+                    test.eq(assert(json.encode(usage.models)), next(raw.models) == nil and "{}" or '{"empty":{}}')
+                end
+            end
+        end)
         test.it("replays every harness into exactly one complete answer segment", function()
             local cases = {
                 {provider = "claude", path = "claude/stream-json-2/plain", answer = "pong"},

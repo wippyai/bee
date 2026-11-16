@@ -19,7 +19,7 @@ M.MAX_DELIVERY_ARGUMENTS = 32
 M.MAX_DELIVERY_ARGUMENT_BYTES = 16384
 M.MAX_DELIVERY_FILES = 8
 M.MAX_DELIVERY_FILE_BYTES = 24576
-M.MAX_GATEWAY_TOOLS = 32
+M.MAX_GATEWAY_TOOLS = 128
 M.MAX_GATEWAY_HOOKS = 32
 M.MAX_HOME_DIRECTORY_BYTES = 4096
 M.MAX_ENDPOINT_BYTES = 512
@@ -85,7 +85,7 @@ local function decode_gateway(value: unknown): (vocabulary.GatewayInput?, string
     if not endpoint or endpoint == "" or endpoint:find("%c") then return nil, "configuration request.gateway.endpoint must be bounded text" end
     local action_id = bounds.id(item.action_id)
     if not action_id or action_id:find("[/?#%s]") then return nil, "configuration request.gateway.action_id is not a path segment" end
-    local declared_tools = bounds.ids(item.tools, true)
+    local declared_tools = bounds.ids(item.tools, true, M.MAX_GATEWAY_TOOLS)
     if not declared_tools or #declared_tools > M.MAX_GATEWAY_TOOLS then return nil, "configuration request.gateway.tools exceeds " .. tostring(M.MAX_GATEWAY_TOOLS) .. " tools or is invalid" end
     local tools: {string} = {}
     for index, tool in ipairs(declared_tools) do tools[index] = tool end

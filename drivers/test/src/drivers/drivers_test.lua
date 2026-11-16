@@ -55,6 +55,21 @@ end
 
 local function define_tests()
     test.describe("Driver library", function()
+        test.it("prepares every MCP driver with 128 tools without growing its configuration", function()
+            local tools: {string} = {}
+            for index = 1, 128 do tools[index] = "tool_" .. string.rep("a", index // 26 + 1) .. string.char(97 + index % 26) end
+            for _, id in ipairs({"claude", "codex", "agy", "grok", "muse", "opencode"}) do
+                local gateway: configuration_types.GatewayInput = {endpoint = "127.0.0.1:4100", action_id = "action", tools = {tools[1]}, hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}
+                local small, small_error = drivers.launch(id, {brief = "work", home = CLAUDE_HOME, placement = placements.DOCKER, gateway = gateway})
+                if not small then error(id .. ": " .. tostring(small_error)) end
+                gateway.tools = tools
+                local large, large_error = drivers.launch(id, {brief = "work", home = CLAUDE_HOME, placement = placements.DOCKER, gateway = gateway})
+                if not large then error(id .. ": " .. tostring(large_error)) end
+                test.eq(#large.argv, #small.argv, id)
+                test.eq(#large.files, #small.files, id)
+                for index, file in ipairs(large.files) do test.eq(file.content, small.files[index].content, id) end
+            end
+        end)
         test.it("lists the activated drivers with their options, profiles and credentials", function()
             local list = assert(drivers.list())
             local ids: {string} = {}

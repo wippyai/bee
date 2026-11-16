@@ -32,6 +32,14 @@ local function define_tests()
             test.eq(bad, nil)
             test.eq(bad_reason, "list item 2 is not an identifier")
         end)
+        test.it("uses explicit identifier list bounds while keeping the 64-item default", function()
+            local ids: {string} = {}
+            for index = 1, 128 do ids[index] = "id_" .. tostring(index) end
+            test.is_nil(bounds.ids(ids, true))
+            test.eq(#assert(bounds.ids(ids, true, 128)), 128)
+            ids[129] = "id_129"
+            test.is_nil(bounds.ids(ids, true, 128))
+        end)
         test.it("reads distinct bounded single-line strings under the caller's limits", function()
             local rows = assert(bounds.unique_lines({"a", "b"}, "tools", 2, 4))
             test.eq(#rows, 2)

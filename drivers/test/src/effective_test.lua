@@ -8,6 +8,18 @@ local placements = require("placements")
 local json = require("json")
 local function define_tests()
     test.describe("Effective driver option schema", function()
+        test.it("inherits or narrows gateway surfaces up to 128 tools", function()
+            local cli = assert(descriptors.load("bee.drivers.claude.descriptor:cli"))
+            local tools: {string} = {}
+            for index = 1, 128 do tools[index] = "tool_" .. tostring(index) end
+            local inherited = assert(effective.compile(cli, {gateway_tools = tools}))
+            test.eq(#inherited.gateway_tools, 128)
+            local selected = assert(effective.decode({mcp_tools = tools}))
+            test.eq(#assert(effective.compile(cli, {gateway_tools = tools}, nil, {}, nil, selected)).gateway_tools, 128)
+            tools[129] = "tool_129"
+            test.is_nil(effective.compile(cli, {gateway_tools = tools}))
+            test.is_nil(effective.decode({mcp_tools = tools}))
+        end)
         test.it("preserves host gateway tools for absent preferences and narrows explicit empty selections", function()
             local cli = assert(descriptors.load("bee.drivers.claude.descriptor:cli"))
             local host = {gateway_tools = {"thread_read", "capabilities"}}

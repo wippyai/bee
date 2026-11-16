@@ -178,7 +178,7 @@ function M.decode_option(field: string, declaration: Object, value: unknown): (O
         if not selected or not selected:match("^[1-9][0-9]*[smh]$") then return nil, field_error(spec, field, "must be a positive duration string") end
         return selected, nil
     elseif spec.type == "ids" then
-        local selected, ids_error = bounds.ids(value, true)
+        local selected, ids_error = bounds.ids(value, true, bounds.count(spec.max))
         if not selected then return nil, field .. ": " .. tostring(ids_error) end
         if type(spec.pattern) == "string" then
             for _, entry in ipairs(selected) do

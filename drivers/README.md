@@ -68,6 +68,16 @@ local step = reader:feed(chunk)            -- {observations, terminal?, problems
 local last = reader:finish()               -- settles the stream at its end
 ```
 
+**Gateway bounds.** `gateway.tools` accepts a dense list of up to 128 distinct
+identifiers, each containing 1–160 bytes with no control characters. This
+matches the host trait surface bound; the drivers pass one MCP endpoint to
+the CLI, so its configuration size is independent of the number of tools.
+Gateway tool protocol fields and saved `mcp_tools` selections use the same
+128-tool bound. Hooks remain limited to 32. Generated configuration remains
+limited to 8,192 bytes per file and 24,576 bytes across at most eight files;
+delivery arguments remain limited to 32 and 16,384 bytes in total. Pi has no
+gateway adapter.
+
 **Access.** The library runs under its caller's scope. The `access_scope`
 requirement names the host group whose members use it; that group receives
 `bee.drivers.security:host_access` for the shipped drivers. The host also

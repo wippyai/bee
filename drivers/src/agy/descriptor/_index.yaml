@@ -399,6 +399,7 @@ entries:
           invalid: resume_ref must not be a command-line option
         gateway_tools:
           type: ids
+          max: 128
         gateway_hooks:
           type: ids
         system_prompt_append:

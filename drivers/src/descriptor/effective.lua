@@ -12,7 +12,7 @@ local M = {}
 M.MAX_OPTIONS = 128
 M.MAX_OPTION_VALUES = 32
 M.MAX_OPTION_VALUE_BYTES = 512
-M.MAX_MCP_TOOLS = 64
+M.MAX_MCP_TOOLS = 128
 M.MAX_INSTRUCTIONS_BYTES = instructions.MAX_BYTES
 
 type Object = {[string]: unknown}
@@ -175,9 +175,8 @@ end
 
 local function dense_tools(value: unknown, label: string): ({string}?, string?)
     if value == nil then return {}, nil end
-    local tools, tools_error = bounds.ids(value, true)
+    local tools, tools_error = bounds.ids(value, true, M.MAX_MCP_TOOLS)
     if not tools then return nil, label .. ": " .. tostring(tools_error) end
-    if #tools > M.MAX_MCP_TOOLS then return nil, label .. " exceeds 64 tools" end
     table.sort(tools)
     return tools, nil
 end

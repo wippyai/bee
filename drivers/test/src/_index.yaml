@@ -1,6 +1,16 @@
 version: '1.0'
 namespace: bee.drivers.tests
 entries:
+- name: configuration_test
+  kind: function.lua
+  source: file://configuration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [hash]
+  imports:
+    test: wippy.test:test
+    configuration: bee.drivers.binding:configuration
+    configuration_types: bee.drivers:configuration_types
 - name: codec_contract_test
   kind: function.lua
   source: file://codec_contract_test.lua

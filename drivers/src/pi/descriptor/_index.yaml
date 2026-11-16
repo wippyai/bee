@@ -145,6 +145,7 @@ entries:
           unsupported: Pi batch runs use no-session and cannot resume
         gateway_tools:
           type: ids
+          max: 128
           default: []
         gateway_hooks:
           type: ids

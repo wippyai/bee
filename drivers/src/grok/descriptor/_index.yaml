@@ -248,6 +248,7 @@ entries:
           invalid: resume_ref must not be a command-line option
         gateway_tools:
           type: ids
+          max: 128
           pattern: ^[a-z_]+$
           default: []
           transform: sorted

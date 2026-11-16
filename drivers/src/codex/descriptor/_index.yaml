@@ -211,6 +211,7 @@ entries:
           invalid: resume_ref is not an identifier
         gateway_tools:
           type: ids
+          max: 128
           default: []
         gateway_hooks:
           type: ids

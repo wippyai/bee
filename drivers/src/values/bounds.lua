@@ -96,8 +96,8 @@ function M.dense_list(value: unknown, maximum: integer, label: string): ({unknow
     return M.array(value, maximum, label)
 end
 
-function M.ids(value: unknown, distinct: boolean?): ({string}?, string?)
-    local rows, array_error = M.array(value, M.MAX_ARRAY_ITEMS)
+function M.ids(value: unknown, distinct: boolean?, maximum: integer?): ({string}?, string?)
+    local rows, array_error = M.array(value, maximum or M.MAX_ARRAY_ITEMS)
     if not rows then return nil, array_error end
     local result: {string} = {}
     local seen: {[string]: boolean} = {}

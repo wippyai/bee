@@ -110,7 +110,7 @@ local function define_tests()
                     binding = "bee.drivers.codex.binding:binding", credential = "codex_login", executable = "bee.drivers.codex.env:executable",
                     config = "bee.drivers.codex.env:config_home", option = "sandbox", expected = "workspace-write"},
                 {definition = "bee.driver.claude.profiles:research_batch", policy = "bee.driver.claude.security:launch_policy_claude_batch",
-                    binding = "bee.drivers.claude.binding:binding", credential = "claude_api_key", executable = "bee.drivers.claude.env:executable",
+                    binding = "bee.drivers.claude.binding:binding", credential = "claude_login", executable = "bee.drivers.claude.env:executable",
                     config = "bee.drivers.claude.env:config_home", option = "permission_mode", expected = "manual"},
                 {definition = "bee.driver.agy.profiles:research_batch", policy = "bee.driver.agy.security:launch_policy_agy_batch",
                     binding = "bee.drivers.agy.binding:binding", credential = "agy_login", executable = "bee.drivers.agy.env:executable",

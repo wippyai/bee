@@ -39,12 +39,12 @@ local ACTOR = "bee.test.gateway_harness"
 local CLAUDE_POLICY = "bee.tests.harness:claude_gateway_policy"
 local CODEX_POLICY = "bee.tests.harness:codex_gateway_policy"
 local PROVIDER = "bee.tests.harness:codex_fixture_provider"
-local CLAUDE_SOURCE = "bee.tests.harness:claude_sentinel_key"
+local CLAUDE_SOURCE = "bee.tests.harness:claude_sentinel_token"
 local CODEX_SOURCE = "bee.tests.harness:codex_sentinel_key"
 local ROOT = "bee.tests.harness:project_fixture"
 local CLAUDE_BINDING = "bee.drivers.claude.binding:binding"
 local CODEX_BINDING = "bee.drivers.codex.binding:binding"
-local CLAUDE_SENTINEL = "sk-ant-sentinel-bee-000"
+local CLAUDE_SENTINEL = "fixture-claude-subscription-token"
 local CODEX_SENTINEL = "sk-sentinel-bee-000"
 local GATEWAY_TOKEN = "BEE_GATEWAY_TOKEN"
 local HOOK_TOKEN = "BEE_GATEWAY_HOOK_TOKEN"
@@ -262,14 +262,14 @@ end
 local has = shared_fixtures.contains
 
 -- No bearer value other than the environment reference, no destination
--- assignment, and no sentinel key anywhere a token or key could leak.
+-- assignment, and no sentinel credential in protected records.
 local function leak_free(text: string, label: string, sentinel_allowed: boolean?)
     for bearer in text:gmatch("Bearer%s+([^%s\\\"]+)") do
         local sentinel = bearer == CLAUDE_SENTINEL or bearer == CODEX_SENTINEL
         if bearer ~= "${" .. GATEWAY_TOKEN .. "}" and not (sentinel_allowed and sentinel) then error(label .. " carries a bearer value") end
     end
     if text:find(GATEWAY_TOKEN .. "=", 1, true) then error(label .. " carries the token destination assignment") end
-    if not sentinel_allowed and (text:find(CLAUDE_SENTINEL, 1, true) or text:find(CODEX_SENTINEL, 1, true)) then error(label .. " carries a sentinel key") end
+    if not sentinel_allowed and (text:find(CLAUDE_SENTINEL, 1, true) or text:find(CODEX_SENTINEL, 1, true)) then error(label .. " carries a sentinel credential") end
 end
 type Harness = {name: string, bin: string, binding: string, policy: string, source: string, provider: string, credential: string, sentinel: string}
 -- The host side for one harness: the executable bound in the policy, the
@@ -369,7 +369,7 @@ local function through_placement(harness: Harness)
     for _, item in ipairs(evidence) do leak_free(json.encode(item), harness.name .. " evidence") end
     for _, item in ipairs(records_of(thread_id)) do leak_free(json.encode(item), harness.name .. " record") end
     leak_free(json.encode(outcome.value), harness.name .. " outcome")
-    -- The model endpoint records the sentinel key it was sent by design;
+    -- The model endpoint records the sentinel credential it was sent by design;
     -- the gateway token must not be there.
     leak_free(recorded, harness.name .. " endpoint record", true)
     shell("rm -rf " .. root)
@@ -401,7 +401,7 @@ local function without_variable(harness: Harness)
         argv[1] = harness.bin
         append_delivery(argv, delivery)
         for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
-        environment.ANTHROPIC_API_KEY = CLAUDE_SENTINEL
+        environment.CLAUDE_CODE_OAUTH_TOKEN = CLAUDE_SENTINEL
         environment.ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port
     else
         local provider_entry = registry.get(PROVIDER)
@@ -531,7 +531,7 @@ local function hooks_through_gateway(harness: Harness)
         argv[1] = harness.bin
         append_delivery(argv, delivery)
         for _, item in ipairs(specification.argv) do argv[#argv + 1] = item end
-        environment.ANTHROPIC_API_KEY = CLAUDE_SENTINEL
+        environment.CLAUDE_CODE_OAUTH_TOKEN = CLAUDE_SENTINEL
         environment.ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port
     else
         local provider_entry = registry.get(PROVIDER)

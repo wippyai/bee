@@ -18,7 +18,8 @@ case "${BEE_PROFILE_PROBE_NAME:-}" in
   *) exit 41 ;;
 esac
 
-[ "${ANTHROPIC_API_KEY:-}" = "launch-sentinel-2b3c4d" ]
+[ -z "${ANTHROPIC_API_KEY+x}" ]
+[ "${CLAUDE_CODE_OAUTH_TOKEN:-}" = "launch-sentinel-2b3c4d" ]
 [ -n "${HOME:-}" ]
 [ "${CLAUDE_CONFIG_DIR:-}" = "$HOME/.claude" ]
 [ -n "${BEE_FIXTURE_STREAM:-}" ]
@@ -28,7 +29,7 @@ esac
 # broker projection. Bash adds these interpreter bookkeeping names itself.
 for name in $(compgen -e); do
   case "$name" in
-    ANTHROPIC_API_KEY|BEE_FIXTURE_STREAM|BEE_PROFILE_PROBE_HOLD|BEE_PROFILE_PROBE_NAME|BEE_PROFILE_PROBE_ALPHA_ONLY|BEE_PROFILE_PROBE_BETA_ONLY|CLAUDE_CONFIG_DIR|HOME|PATH|PWD|SHLVL|_) ;;
+    BEE_FIXTURE_STREAM|BEE_PROFILE_PROBE_HOLD|BEE_PROFILE_PROBE_NAME|BEE_PROFILE_PROBE_ALPHA_ONLY|BEE_PROFILE_PROBE_BETA_ONLY|CLAUDE_CODE_OAUTH_TOKEN|CLAUDE_CONFIG_DIR|HOME|PATH|PWD|SHLVL|_) ;;
     *) exit 42 ;;
   esac
 done

@@ -1,6 +1,6 @@
--- MIT. API-key authentication-path selection for Claude, settings-free and
+-- MIT. Subscription token authentication for Claude, settings-free and
 -- environment-only, through the real placement runner: the driver-prepared
--- launch, the broker-projected sentinel ANTHROPIC_API_KEY, the host-selected
+-- launch, the broker-projected CLAUDE_CODE_OAUTH_TOKEN, the host-selected
 -- loopback endpoint in the policy environment, an isolated private home
 -- with no login state, and the version-recorded pinned executable. The
 -- endpoint answers 400, so a passing run proves path selection only, never
@@ -26,10 +26,10 @@ local placement_fixture = require("placement_fixture")
 local principals = require("principals")
 local ACTOR = "bee.test.claude_carrier"
 local POLICY = "bee.tests.harness:claude_auth_fixture_policy"
-local SOURCE = "bee.tests.harness:claude_sentinel_key"
+local SOURCE = "bee.tests.harness:claude_sentinel_token"
 local ROOT = "bee.tests.harness:project_fixture"
 local BINDING = "bee.drivers.claude.binding:binding"
-local SENTINEL = "sk-ant-sentinel-bee-000"
+local SENTINEL = "fixture-claude-subscription-token"
 type Object = {[string]: unknown}
 type Outcome = {value: Object?, error: string?}
 local counter = 0
@@ -266,7 +266,7 @@ local function define_tests()
             shell("rm -rf " .. root)
             if not ok then error(tostring(err)) end
         end)
-        test.it("selects the API-key path with the environment projection and the host-selected endpoint, when the executable is available", function()
+        test.it("uses the subscription token from the environment projection and the host-selected endpoint, when the executable is available", function()
             local claude = claude_bin()
             if not claude then
                 test.eq(driver_types.AUTHENTICATION_STATUS, "unproven")
@@ -290,8 +290,8 @@ local function define_tests()
             local evidence = evidence_of(attempt_id)
             local kinds: {string} = {}
             for _, item in ipairs(evidence) do kinds[#kinds + 1] = tostring(item.kind) end
-            if not recorded:find('"path":"/v1/messages', 1, true) or not recorded:find('"x_api_key":"' .. SENTINEL .. '"', 1, true) then
-                error("endpoint saw no api key: [" .. recorded:sub(1, 300):gsub(SENTINEL, "<sentinel>") .. "]; settlement " .. tostring(settlement.outcome) .. " " .. tostring(settlement.reason) .. "; evidence " .. table.concat(kinds, ","))
+            if not recorded:find('"path":"/v1/messages', 1, true) or not recorded:find('"authorization":"Bearer ' .. SENTINEL .. '"', 1, true) then
+                error("endpoint saw no subscription token: [" .. recorded:sub(1, 300):gsub(SENTINEL, "<sentinel>") .. "]; settlement " .. tostring(settlement.outcome) .. " " .. tostring(settlement.reason) .. "; evidence " .. table.concat(kinds, ","))
             end
             local materialized = false
             for _, item in ipairs(evidence) do

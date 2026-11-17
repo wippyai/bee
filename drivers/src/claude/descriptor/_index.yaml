@@ -24,7 +24,6 @@ entries:
         directory: .claude
       - kind: env_present
         names:
-        - ANTHROPIC_API_KEY
         - CLAUDE_CODE_OAUTH_TOKEN
       - kind: auth_status
         argv:
@@ -62,10 +61,6 @@ entries:
       - usage
     configure: claude
     subscription_variables: [CLAUDE_CODE_OAUTH_TOKEN]
-    endpoints:
-    - protocol: anthropic-messages
-      environment:
-        ANTHROPIC_BASE_URL: base_url
     capabilities:
       permission_answers:
         window:

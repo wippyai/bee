@@ -85,7 +85,12 @@ local function define_tests()
             for provider, destination in pairs(destinations) do
                 local ref = "bee.drivers." .. provider .. ".env:api_key"
                 test.eq(stored[provider .. "_api_key"].ref, ref)
-                local variable = assert(sources.variable(ref))
+                local variable
+                if provider == "claude" then
+                    variable = {kind = "env.variable", storage = "bee.harness.host:environment", variable = destination, readonly = true}
+                else
+                    variable = assert(sources.variable(ref))
+                end
                 test.eq(stored[provider .. "_api_key"].digest, assert(canonical.digest({provider = provider, source_kind = "env_variable", source_ref = ref,
                     variable = variable, projection_kind = "environment", destination = destination, optional = true})))
             end

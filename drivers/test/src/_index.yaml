@@ -180,7 +180,7 @@ entries:
   kind: function.lua
   source: file://host_values_test.lua
   method: run
-  modules: [env]
+  modules: [env, registry]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -191,7 +191,7 @@ entries:
   meta: {comment: The host values test reads the driver override variables}
   policy:
     actions: [env.get]
-    resources: [bee.drivers.claude.env:config_home, bee.drivers.claude.env:api_key, bee.drivers.codex.env:config_home]
+    resources: [bee.drivers.claude.env:config_home, bee.drivers.codex.env:config_home]
     effect: allow
 - name: effective_test
   modules: [registry, json]

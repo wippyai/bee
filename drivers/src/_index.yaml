@@ -25,8 +25,6 @@ entries:
   targets:
   - entry: bee.drivers.agy.env:executable
     path: .storage
-  - entry: bee.drivers.claude.env:api_key
-    path: .storage
   - entry: bee.drivers.claude.env:config_home
     path: .storage
   - entry: bee.drivers.claude.env:executable

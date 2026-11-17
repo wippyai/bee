@@ -46,8 +46,9 @@ optional projection too.
 
 The host's `data.formats` map selects reviewed component-owned registry entries
 whose data declares an environment destination or a relative login layout.
-Claude and Codex declare their API-key destinations and JSON login files;
-Agy declares an opaque file. File sources name a host-selected `fs.directory`
+Claude declares a subscription token destination and a JSON login file.
+Codex declares an API-key destination and a JSON login file. Agy declares an
+opaque file. File sources name a host-selected `fs.directory`
 using `source.kind: fs_directory`. The host source row selects the source path;
 when omitted, it uses the declared login basename.
 Callers cannot choose a path, filename or mount. A file source may also carry one

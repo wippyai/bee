@@ -3,8 +3,8 @@ directories:
     src: ./src
 modules:
     - name: bee/drivers
-      version: 0.1.25
-      hash: 7d38762375ca0672b80a530e6f99f41108128b791fe2ec553b8724357ca40430
+      version: 0.1.26
+      hash: 4d92a28a4f8403f3cbf82b4e68fc37dcea4da1da5fe2eed35501d158068487bb
     - name: wippy/bootloader
       version: 0.3.17
       hash: d4506b7733ba079fb05f5e055c0e58b3f89905f7d627ac2244a819164a0507a0

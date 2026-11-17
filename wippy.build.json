@@ -30,9 +30,9 @@
       },
       {
         "module": "bee/drivers",
-        "version": "0.1.25",
-        "path": ".wippy/vendor/bee/drivers-0.1.25.wapp",
-        "sha256": "7d38762375ca0672b80a530e6f99f41108128b791fe2ec553b8724357ca40430"
+        "version": "0.1.26",
+        "path": ".wippy/vendor/bee/drivers-0.1.26.wapp",
+        "sha256": "4d92a28a4f8403f3cbf82b4e68fc37dcea4da1da5fe2eed35501d158068487bb"
       },
       {
         "module": "wippy/bootloader",

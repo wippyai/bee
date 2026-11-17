@@ -1947,13 +1947,13 @@ entries:
   variable: BEE_CLAUDE_BIN
   default: ''
   readonly: true
-- name: claude_sentinel_key
+- name: claude_sentinel_token
   kind: env.variable
   meta:
     type: test_support
   storage: bee.tests.harness:codex_sentinel_storage
   variable: BEE_TEST_CLAUDE_SENTINEL
-  default: sk-ant-sentinel-bee-000
+  default: fixture-claude-subscription-token
   readonly: true
 - name: claude_auth_fixture_policy
   kind: registry.entry

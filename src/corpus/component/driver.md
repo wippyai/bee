@@ -116,7 +116,7 @@ unobserved.
 
 | CLI | Declared evidence | Provider home variable |
 |---|---|---|
-| Claude | `.claude/.credentials.json` under `CLAUDE_CONFIG_DIR`; `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`; `auth status` exit 0 | `CLAUDE_CONFIG_DIR` |
+| Claude | Subscription login via `.claude/.credentials.json` under `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`, or `auth status` exit 0 | `CLAUDE_CONFIG_DIR` |
 | Codex | `.codex/auth.json` under `CODEX_HOME`; `CODEX_API_KEY`; `login status` exit 0 | `CODEX_HOME` |
 | Agy | `.gemini/antigravity-cli/antigravity-oauth-token`; `GEMINI_API_KEY` | none |
 | Grok | `.grok/auth.json` under `GROK_HOME`; `XAI_API_KEY`, `GROK_CODE_XAI_API_KEY` | `GROK_HOME` |

@@ -39,7 +39,7 @@ local APPROVER_POLICY = "claude-control"
 local ROOT = "bee.tests.harness:project_fixture"
 local PROJECT = ".wippy/carrier-project"
 local BINDING = "bee.drivers.claude.binding:binding"
-local SENTINEL = "sk-ant-sentinel-bee-000"
+local SENTINEL = "fixture-claude-subscription-token"
 local counter = 0
 type Object = {[string]: unknown}
 type Outcome = {value: Object?, error: string?}
@@ -212,7 +212,7 @@ local function request(thread_id: string, attempt_id: string, workspace: string)
     local placement = placement_fixture.resolve()
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = ACTOR, owner_incarnation = 1, binding_ref = BINDING,
         profile_id = "batch", brief = "leave a marker", policy_ref = POLICY, resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = {PATH = "/usr/bin:/bin", ANTHROPIC_API_KEY = SENTINEL}, working_directory = "project", workspace_id = workspace,
+        environment = {PATH = "/usr/bin:/bin", CLAUDE_CODE_OAUTH_TOKEN = SENTINEL}, working_directory = "project", workspace_id = workspace,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
 local function spawn_carrier(request_value: Object): string
@@ -364,7 +364,7 @@ local function define_tests()
                     test.is_nil((json.encode(item):find(SENTINEL, 1, true)))
                 end
                 local recorded = shell("cat " .. record)
-                if not recorded:find('"x_api_key":"' .. SENTINEL .. '"', 1, true) then error(name .. ": the endpoint saw no api key") end
+                if not recorded:find('"authorization":"Bearer ' .. SENTINEL .. '"', 1, true) then error(name .. ": the endpoint saw no subscription token") end
                 settlement.effects = marker_count(marker)
                 shell("rm -f " .. PROJECT .. "/" .. marker)
                 local evidence: {string} = {}

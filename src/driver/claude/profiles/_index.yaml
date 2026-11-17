@@ -13,10 +13,8 @@ entries:
     binding_ref: bee.drivers.claude.binding:binding
     profile_id: window
     private_credentials:
-    - claude_api_key
     - claude_login
     docker_credentials:
-    - claude_api_key
     - claude_login
     policy_ref: bee.driver.claude.security:launch_policy_claude_window
     default_mode: window
@@ -29,8 +27,6 @@ entries:
     thread_policy:
       kind: new
     session_resource: session
-    credentials:
-    - claude_api_key
     presentation:
       start_menu: true
       fullscreen: true
@@ -58,7 +54,6 @@ entries:
       kind: caller
     session_resource: session
     credentials:
-    - claude_api_key
     - claude_login
     presentation:
       start_menu: false

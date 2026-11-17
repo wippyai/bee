@@ -242,7 +242,7 @@ local function define_tests()
 
         test.it("declares real login sources for all six CLIs", function()
             local cases = {
-                {provider = "claude", path = ".claude/.credentials.json", variable = "ANTHROPIC_API_KEY", status = "auth"},
+                {provider = "claude", path = ".claude/.credentials.json", variable = "CLAUDE_CODE_OAUTH_TOKEN", status = "auth"},
                 {provider = "codex", path = ".codex/auth.json", variable = "CODEX_API_KEY", status = "login"},
                 {provider = "agy", path = ".gemini/antigravity-cli/antigravity-oauth-token", variable = "GEMINI_API_KEY"},
                 {provider = "grok", path = ".grok/auth.json", variable = "XAI_API_KEY"},
@@ -269,6 +269,17 @@ local function define_tests()
                 test.is_true(names)
                 test.eq(status, case.status ~= nil)
             end
+        end)
+
+        test.it("does not count an Anthropic API key as Claude login evidence", function()
+            local selected = assert(descriptor.load("bee.drivers.claude.descriptor:cli"))
+            local declaration = assert(login_evidence.decode(selected.login_evidence))
+            local key_only = login_evidence.probe(declaration, {
+                file = function(_path, _variable, _directory) return false, nil end,
+                environment = function(name) return name == "ANTHROPIC_API_KEY" end,
+                status = function(_argv, _timeout) return 1 end,
+            })
+            test.eq(login_evidence.present(declaration, key_only), false)
         end)
 
         test.it("does not treat Grok configuration alone as a signed-in login", function()

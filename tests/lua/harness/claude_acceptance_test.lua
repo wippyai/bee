@@ -1,7 +1,7 @@
 -- MIT. Interactive acceptance of the real Claude permission exchange: the
 -- version-recorded executable runs with the driver's exchange launch
 -- shape against a scripted loopback endpoint that answers one Bash
--- tool_use, with an isolated home, a sentinel key and no provider. The
+-- tool_use, with an isolated home, a sentinel subscription token and a loopback model fixture. The
 -- proof is behavioral: a typed request appears and the harness waits; a
 -- correlated allow executes the action once; a deny prevents it and is
 -- acknowledged by a correlated failed tool result; a wrong correlation and
@@ -23,7 +23,7 @@ local protocol = require("protocol")
 local adapter = require("adapter")
 local launch = require("launch")
 local ADAPTER = "bee.drivers.claude.permission:permission_adapter"
-local SENTINEL = "sk-ant-sentinel-bee-000"
+local SENTINEL = "fixture-claude-subscription-token"
 type Object = {[string]: unknown}
 type Run = {observations: {Object}, request: adapter_types.Request?, boundary: integer}
 local counter = 0
@@ -81,7 +81,7 @@ local function open(pinned: adapter_types.Adapter, claude: string, port: string,
     local executor = assert(exec.get("bee.placement.native.env:placement_executor"))
     local command = claude
     for _, argument in ipairs(specification.argv) do command = command .. " " .. argument end
-    local proc, err = executor:exec(command, {work_dir = work, env = {PATH = "/usr/bin:/bin", HOME = home, ANTHROPIC_API_KEY = SENTINEL, ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port}})
+    local proc, err = executor:exec(command, {work_dir = work, env = {PATH = "/usr/bin:/bin", HOME = home, CLAUDE_CODE_OAUTH_TOKEN = SENTINEL, ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port}})
     if not proc then error("exec claude: " .. tostring(err)) end
     local stdout = proc:stdout_stream()
     assert(proc:start())
@@ -191,7 +191,7 @@ local function define_tests()
                 endpoint:close(true)
                 endpoint_executor:release()
                 local recorded = shell("cat " .. record)
-                if not recorded:find('"x_api_key":"' .. SENTINEL .. '"', 1, true) then error(name .. ": the endpoint saw no api key") end
+                if not recorded:find('"authorization":"Bearer ' .. SENTINEL .. '"', 1, true) then error(name .. ": the endpoint saw no subscription token") end
                 for _, observation in ipairs(session.run.observations) do
                     test.is_nil((json.encode(observation):find(SENTINEL, 1, true)))
                 end

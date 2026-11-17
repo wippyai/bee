@@ -617,7 +617,7 @@ local function credentials_tests()
             local attempt_id = native_fixture.fresh("attempt")
             local projection = native_fixture.credential_call("issue_projection", {workspace_id = workspace, name = "anthropic", audience = native_fixture.OWNER, attempt_id = attempt_id, profile_id = "batch",
                 profile_digest = native_fixture.DIGEST, binding_digest = native_fixture.DIGEST, launch_policy_digest = native_fixture.DIGEST, idempotency_key = native_fixture.fresh("key")})
-            local request = native_fixture.launch({"sh", "-c", "echo credential:${#ANTHROPIC_API_KEY}"}, "direct_process")
+            local request = native_fixture.launch({"sh", "-c", 'test -z "${ANTHROPIC_API_KEY+x}" && echo credential:${#CLAUDE_CODE_OAUTH_TOKEN}'}, "direct_process")
             request.attempt_id = attempt_id
             request.projections = {projection.projection_id}
             local prepared = native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
@@ -751,14 +751,14 @@ local function credentials_tests()
                 end
                 request.projections = projections
                 if not duplicate_projection then
-                    (request.environment).ANTHROPIC_API_KEY = "policy-value"
+                    (request.environment).CLAUDE_CODE_OAUTH_TOKEN = "policy-value"
                 end
                 native_fixture.attempt_of(native_fixture.call(native_fixture.OWNER, "prepare", request))
                 local failed = native_fixture.call(native_fixture.OWNER, "start", {attempt_id = attempt_id})
                 test.is_true(failed.ok)
                 test.eq(native_fixture.attempt_of(failed).execution_state, "start_failed")
                 local message = tostring(native_fixture.attempt_of(failed).start_failure)
-                test.is_true(message:find("ANTHROPIC_API_KEY is already assigned", 1, true) ~= nil)
+                test.is_true(message:find("CLAUDE_CODE_OAUTH_TOKEN is already assigned", 1, true) ~= nil)
                 test.is_nil((message:find(native_fixture.SENTINEL, 1, true)))
                 local page = native_fixture.value(native_fixture.call(native_fixture.OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
                 local refused = false

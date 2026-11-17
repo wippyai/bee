@@ -6,7 +6,8 @@ entries:
   source: file://drivers_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [fs, funcs, security]
+  modules: [exec, fs, funcs, security]
+  security: {policies: [bee.drivers.tests.drivers:launch_executor_policy]}
   imports:
     test: wippy.test:test
     drivers: bee.drivers:drivers
@@ -14,6 +15,17 @@ entries:
     placement: bee.drivers.descriptor:placement
     configuration_types: bee.drivers:configuration_types
     driver_types: bee.drivers:types
+- name: launch_executor
+  kind: exec.native
+  meta: {type: test_support}
+  default_env: {PATH: '/usr/bin:/bin'}
+- name: launch_executor_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [exec.get, exec.run]
+    resources: [bee.drivers.tests.drivers:launch_executor]
+    effect: allow
 - name: launch_probe
   kind: function.lua
   meta: {type: test_support}

@@ -26,9 +26,11 @@ variable the descriptor lists in `subscription_variables`. Running a
 subscription login through a tool like this is not compliant with the
 provider's terms except for that person's own, personal use. Do not use it to
 serve other people, to run a production service, or to share one subscription
-among users: providers may restrict or suspend the account. For production or
-multi-user hosts, use an official API key, or point the driver at an endpoint
-you operate (see Endpoints). `drivers.list()` reports which credentials are
+among users: providers may restrict or suspend the account. Claude Code uses
+the subscription login from `claude auth login` in `CLAUDE_CONFIG_DIR`, or a
+`CLAUDE_CODE_OAUTH_TOKEN` supplied by the host. For production or multi-user
+hosts, choose a driver that supports an official API key or an endpoint you
+operate (see Endpoints). `drivers.list()` reports which credentials are
 subscription logins (`credentials.files` and `credentials.subscriptions`) so a
 host can say so where a person enters one.
 
@@ -224,7 +226,6 @@ local launch = drivers.launch("codex", {
 
 | Driver | Protocol | How the CLI reaches it |
 |---|---|---|
-| claude | `anthropic-messages` | `ANTHROPIC_BASE_URL`; key in `ANTHROPIC_API_KEY` |
 | codex | `openai-responses` (needs `model`) | a generated `model_providers` entry with `env_key = "OPENAI_API_KEY"` |
 | pi | `anthropic-messages` | a generated `models.json` provider override; key in `ANTHROPIC_API_KEY` |
 
